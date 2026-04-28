@@ -44,7 +44,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { Employee } from "./TeamPanel";
 
-type RoleTemplate = "Dono" | "Gerente" | "Vendedor" | "Caixa";
+type RoleTemplate = "Dono" | "Gerente" | "Marketing" | "Operador" | "Vendedor";
 
 interface PermissionDef {
   id: string;
@@ -112,15 +112,20 @@ const templates: Record<RoleTemplate, { perms: string[]; icon: typeof Crown; ton
     icon: Briefcase,
     tone: "text-info",
   },
+  Marketing: {
+    perms: ["dashboard", "clientes", "ia", "mkt"],
+    icon: Megaphone,
+    tone: "text-pink",
+  },
+  Operador: {
+    perms: ["dashboard", "pdv", "caixa", "os", "estoque", "clientes"],
+    icon: UserCog,
+    tone: "text-muted-foreground",
+  },
   Vendedor: {
     perms: ["dashboard", "pdv", "os", "clientes"],
     icon: UserCog,
     tone: "text-warning",
-  },
-  Caixa: {
-    perms: ["pdv", "caixa"],
-    icon: UserCog,
-    tone: "text-success",
   },
 };
 
@@ -140,6 +145,8 @@ export function EmployeeAccessSheet({ employee, open, onOpenChange }: EmployeeAc
     if (!employee) return "Vendedor";
     if (employee.role === "Dono") return "Dono";
     if (employee.role === "Gerente") return "Gerente";
+    if (employee.role === "Marketing") return "Marketing";
+    if (employee.role === "Operador") return "Operador";
     return "Vendedor";
   }, [employee]);
 

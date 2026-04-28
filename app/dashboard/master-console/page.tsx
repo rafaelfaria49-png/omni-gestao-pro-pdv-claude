@@ -47,12 +47,12 @@ const employeesByStore: Record<string, Employee[]> = {
     { id: "e1", name: "Rafael Souza", initials: "RS", role: "Dono" },
     { id: "e2", name: "Marina Costa", initials: "MC", role: "Gerente" },
     { id: "e3", name: "João Pereira", initials: "JP", role: "Operador" },
-    { id: "e4", name: "Ana Paula", initials: "AP", role: "Caixa" },
+    { id: "e4", name: "Ana Paula", initials: "AP", role: "Vendedor" },
   ],
   s2: [
     { id: "e5", name: "Marina Costa", initials: "MC", role: "Gerente" },
     { id: "e6", name: "Diego Alves", initials: "DA", role: "Operador" },
-    { id: "e7", name: "Larissa Nunes", initials: "LN", role: "Caixa" },
+    { id: "e7", name: "Larissa Nunes", initials: "LN", role: "Marketing" },
   ],
   s3: [
     { id: "e8", name: "Bruno Lima", initials: "BL", role: "Gerente" },

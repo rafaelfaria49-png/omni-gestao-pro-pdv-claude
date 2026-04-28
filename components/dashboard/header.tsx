@@ -1,6 +1,6 @@
 "use client"
 
-import { Zap, Bell, User, Settings, CreditCard, LogOut } from "lucide-react"
+import { Zap, Bell, User, Settings, CreditCard, LogOut, Store, Repeat2 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -17,13 +17,18 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useStaffSession } from "@/components/auth/AccessGate"
 
 export function Header() {
   const { config } = useConfigEmpresa()
   const { empresaDocumentos, lojas, lojaAtivaId, setLojaAtivaId, storesRefreshNonce } = useLojaAtiva()
+  const staffSession = useStaffSession()
   const [storesRemote, setStoresRemote] = useState<Array<{ id: string; name: string; cnpj: string }>>([])
   const [isAdmin, setIsAdmin] = useState(false)
 
@@ -97,6 +102,7 @@ export function Header() {
     (empresaDocumentos.nomeFantasia || config.empresa.nomeFantasia || "").trim() || tituloMarca
 
   const handleSair = async () => {
+    staffSession.logout()
     try {
       await fetch("/api/auth/staff", { method: "DELETE", credentials: "include" })
     } catch {
@@ -107,7 +113,6 @@ export function Header() {
     } catch {
       /* legado */
     }
-    window.location.href = "/"
   }
 
   return (
@@ -203,19 +208,42 @@ export function Header() {
         </Popover>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" type="button" aria-label="Menu do perfil">
-              <User className="w-5 h-5" />
+            <Button variant="ghost" className="h-10 gap-2 rounded-xl px-2.5" type="button" aria-label="Menu do perfil">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary text-primary-foreground">
+                <User className="w-4 h-4" />
+              </span>
+              <span className="hidden text-left leading-tight md:block">
+                <span className="block text-xs font-semibold text-foreground">{staffSession.profileName}</span>
+                <span className="block text-[10px] text-muted-foreground">{staffSession.cargo}</span>
+              </span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="end">
+          <DropdownMenuContent className="w-72 rounded-xl border-border bg-popover shadow-card" align="end">
             <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-sm font-semibold text-foreground">Administrador</span>
-                <span className="text-xs text-muted-foreground truncate" title={perfilSubtitulo}>
-                  {perfilSubtitulo}
+              <div className="flex items-start gap-3">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-primary text-primary-foreground shadow-glow">
+                  <User className="h-5 w-5" />
                 </span>
+                <div className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-foreground">{staffSession.profileName} - {staffSession.cargo}</span>
+                  <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground" title={staffSession.lojaStatus}>
+                    <Store className="h-3.5 w-3.5 shrink-0" />
+                    {staffSession.lojaStatus}
+                  </span>
+                </div>
               </div>
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="cursor-pointer rounded-lg">
+                <Repeat2 className="mr-2 h-4 w-4" />
+                Alternar Loja
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-48 rounded-xl border-border bg-popover shadow-card">
+                <DropdownMenuItem className="cursor-pointer rounded-lg">Loja 1 - Matriz</DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer rounded-lg">Loja 2 - Filial</DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href="/?page=config-empresa" className="cursor-pointer">
@@ -238,7 +266,7 @@ export function Header() {
               }}
             >
               <LogOut className="mr-2 h-4 w-4" />
-              Sair do Sistema
+              Sair (Logout)
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

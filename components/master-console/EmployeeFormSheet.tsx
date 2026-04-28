@@ -15,9 +15,21 @@ interface EmployeeFormSheetProps {
   employee?: Employee | null;
 }
 
+type EmployeeFormValues = {
+  name: string;
+  email: string;
+  role: Employee["role"];
+  store: string;
+};
+
 export function EmployeeFormSheet({ open, onOpenChange, mode, employee }: EmployeeFormSheetProps) {
-  const form = useForm({
-    defaultValues: employee || { name: "", email: "", role: "vendedor", store: "" }
+  const form = useForm<EmployeeFormValues>({
+    defaultValues: {
+      name: employee?.name ?? "",
+      email: "",
+      role: employee?.role ?? "Vendedor",
+      store: "",
+    },
   });
 
   return (
@@ -42,7 +54,9 @@ export function EmployeeFormSheet({ open, onOpenChange, mode, employee }: Employ
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl><SelectTrigger><SelectValue placeholder="Selecione o cargo" /></SelectTrigger></FormControl>
                   <SelectContent>
+                    <SelectItem value="Dono">Dono</SelectItem>
                     <SelectItem value="Gerente">Gerente</SelectItem>
+                    <SelectItem value="Marketing">Marketing</SelectItem>
                     <SelectItem value="Operador">Operador</SelectItem>
                     <SelectItem value="Vendedor">Vendedor</SelectItem>
                   </SelectContent>
