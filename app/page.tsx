@@ -36,7 +36,6 @@ import { useOperationsStore } from "@/lib/operations-store"
 import { useToast } from "@/hooks/use-toast"
 import type { VoiceIntent } from "@/lib/voice-intents"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
-import { useStudioTheme } from "@/components/theme/ThemeProvider"
 import { cn } from "@/lib/utils"
 
 const VendasPDV = dynamic(
@@ -139,9 +138,6 @@ function DashboardContent() {
   const { ordens, setOrdens } = useOperationsStore()
   const isBronze = config.assinatura.plano === "bronze"
   const { toast } = useToast()
-  const { mode } = useStudioTheme()
-  const isBlack = mode === "black"
-  const shellSurface = isBlack ? "bg-[#000000]" : "bg-slate-50"
 
   // UX PDV: ao entrar no PDV, recolher a sidebar automaticamente para maximizar área do caixa.
   useEffect(() => {
@@ -356,13 +352,7 @@ function DashboardContent() {
 
   if (subscriptionGate === "loading") {
     return (
-      <div
-        className={cn(
-          "flex min-h-screen min-h-[100dvh] w-full items-center justify-center text-sm",
-          shellSurface,
-          isBlack ? "text-white/70" : "text-slate-600"
-        )}
-      >
+      <div className="flex min-h-screen min-h-[100dvh] w-full items-center justify-center bg-background text-sm text-muted-foreground">
         Verificando assinatura…
       </div>
     )
@@ -370,13 +360,7 @@ function DashboardContent() {
 
   if (subscriptionGate === "blocked") {
     return (
-      <div
-        className={cn(
-          "flex min-h-screen min-h-[100dvh] w-full items-center justify-center text-sm",
-          shellSurface,
-          isBlack ? "text-white/70" : "text-slate-600"
-        )}
-      >
+      <div className="flex min-h-screen min-h-[100dvh] w-full items-center justify-center bg-background text-sm text-muted-foreground">
         Redirecionando para renovação…
       </div>
     )
@@ -388,7 +372,7 @@ function DashboardContent() {
         currentPage === "vendas"
           ? "flex h-screen max-h-screen w-full min-h-0 overflow-hidden"
           : "flex min-h-screen min-h-[100dvh] w-full",
-        shellSurface
+        "bg-background text-foreground"
       )}
     >
       <FirstAccessWizard />

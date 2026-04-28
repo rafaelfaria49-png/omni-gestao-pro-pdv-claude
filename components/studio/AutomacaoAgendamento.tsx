@@ -139,8 +139,8 @@ export function AutomacaoAgendamento({ classic, lojaId, brandVoice }: Props) {
       className={cn(
         "border transition-colors duration-300",
         classic
-          ? "border-slate-200 bg-white shadow-sm"
-          : "border-cyan-500/20 bg-white/[0.03] backdrop-blur-md shadow-[0_0_0_1px_rgba(34,211,238,0.18)_inset,0_0_40px_rgba(34,211,238,0.10)]"
+          ? "border-border bg-card shadow-sm"
+          : "border-border bg-card backdrop-blur-md shadow-card"
       )}
     >
       <CardHeader className="space-y-1">
@@ -171,7 +171,7 @@ export function AutomacaoAgendamento({ classic, lojaId, brandVoice }: Props) {
           <Button type="button" variant="outline" onClick={() => void fetchQueue()} disabled={busy || loading}>
             Atualizar fila
           </Button>
-          <Button type="button" onClick={() => void publishMock()} disabled={busy || !latest} className={cn(classic ? "bg-slate-900 text-white hover:bg-slate-800" : "bg-white/10 text-white hover:bg-white/15")}>
+          <Button type="button" onClick={() => void publishMock()} disabled={busy || !latest} className={cn(classic ? "bg-slate-900 text-white hover:bg-slate-800" : "bg-card/10 text-white hover:bg-card/15")}>
             <Send className="mr-2 h-4 w-4" />
             Publicar (mock)
           </Button>
@@ -184,7 +184,7 @@ export function AutomacaoAgendamento({ classic, lojaId, brandVoice }: Props) {
               "h-2",
               classic
                 ? "bg-slate-200 [&_[data-slot=progress-indicator]]:bg-blue-600"
-                : "bg-white/10 [&_[data-slot=progress-indicator]]:bg-cyan-400"
+                : "bg-card/10 [&_[data-slot=progress-indicator]]:bg-cyan-400"
             )}
           />
           <div className={cn("flex items-center justify-between text-[11px]", classic ? "text-slate-600" : "text-white/55")}>
@@ -210,7 +210,7 @@ export function AutomacaoAgendamento({ classic, lojaId, brandVoice }: Props) {
                       key={c}
                       className={cn(
                         "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold",
-                        classic ? "border-slate-200 bg-white text-slate-700" : "border-white/10 bg-black/40 text-white/75"
+                        classic ? "border-border bg-card text-foreground" : "border-white/10 bg-black/40 text-white/75"
                       )}
                     >
                       <Icon className={cn("h-3.5 w-3.5", classic ? "text-blue-600" : "text-cyan-300")} />
@@ -246,7 +246,7 @@ export function AutomacaoAgendamento({ classic, lojaId, brandVoice }: Props) {
                     value={adaptedText || "Ainda sem texto adaptado — rode a rotina."}
                     className={cn(
                       "rounded-2xl border text-sm",
-                      classic ? "border-slate-200 bg-white text-slate-800" : "border-white/10 bg-black/50 text-white/90"
+                      classic ? "border-border bg-card text-foreground" : "border-white/10 bg-black/50 text-white/90"
                     )}
                   />
                 </div>

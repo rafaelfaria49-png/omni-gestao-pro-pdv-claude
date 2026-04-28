@@ -8,8 +8,6 @@ import { Header } from "@/components/dashboard/header"
 import { MobileNav } from "@/components/dashboard/mobile-nav"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { FirstAccessWizard } from "@/components/onboarding/first-access-wizard"
-import { useStudioTheme } from "@/components/theme/ThemeProvider"
-import { cn } from "@/lib/utils"
 
 /**
  * Shell compartilhado das rotas `/dashboard/*` (mesma navegação do painel principal em `/`).
@@ -18,8 +16,6 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
   const router = useRouter()
   const pathname = usePathname()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const { mode } = useStudioTheme()
-  const isBlack = mode === "black"
 
   const currentPage =
     pathname === "/dashboard" || pathname === "/dashboard/"
@@ -54,12 +50,7 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
   return (
     <AppOpsProviders>
       <AccessGate>
-      <div
-        className={cn(
-          "flex min-h-screen min-h-[100dvh] w-full transition-colors duration-300",
-          isBlack ? "bg-[#000000]" : "bg-slate-50"
-        )}
-      >
+      <div className="flex min-h-screen min-h-[100dvh] w-full bg-background text-foreground transition-colors duration-300">
         <FirstAccessWizard />
         <Sidebar
           onNavigate={goToPage}

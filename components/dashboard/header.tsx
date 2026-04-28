@@ -20,12 +20,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useStudioTheme } from "@/components/theme/ThemeProvider"
-import { cn } from "@/lib/utils"
 
 export function Header() {
-  const { mode } = useStudioTheme()
-  const isBlack = mode === "black"
   const { config } = useConfigEmpresa()
   const { empresaDocumentos, lojas, lojaAtivaId, setLojaAtivaId, storesRefreshNonce } = useLojaAtiva()
   const [storesRemote, setStoresRemote] = useState<Array<{ id: string; name: string; cnpj: string }>>([])
@@ -117,22 +113,14 @@ export function Header() {
   return (
     <div className="w-full">
       <header
-        className={cn(
-          "flex items-center justify-between px-6 py-4 border-b transition-colors duration-300",
-          isBlack ? "border-white/10 bg-[#000000] text-white" : "border-slate-200/90 bg-slate-50 text-foreground"
-        )}
+        className="flex items-center justify-between border-b border-border bg-background px-6 py-4 text-foreground transition-colors duration-300"
       >
       <div className="flex items-center gap-3 min-w-0">
         {logoUrl ? (
           <img
             src={logoUrl}
             alt={`Logo ${tituloMarca}`}
-            className={cn(
-              "w-10 h-10 shrink-0 rounded-lg object-contain border p-1",
-              isBlack
-                ? "border-white/10 bg-[#000000]"
-                : "border-slate-200 bg-white"
-            )}
+            className="w-10 h-10 shrink-0 rounded-lg border border-border bg-card object-contain p-1"
           />
         ) : (
           <div className="flex shrink-0 items-center justify-center w-10 h-10 rounded-lg bg-primary">
@@ -142,19 +130,13 @@ export function Header() {
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1
-              className={cn(
-                "text-xl font-bold tracking-tight truncate",
-                isBlack ? "text-white" : "text-foreground"
-              )}
+              className="truncate text-xl font-bold tracking-tight text-foreground"
             >
               {tituloMarca}
             </h1>
           </div>
           <p
-            className={cn(
-              "text-xs",
-              isBlack ? "text-white/60" : "text-slate-600"
-            )}
+            className="text-xs text-muted-foreground"
           >
             {APP_DISPLAY_NAME} · ERP
           </p>
@@ -175,12 +157,7 @@ export function Header() {
               }}
             >
               <SelectTrigger
-                className={cn(
-                  "h-9 w-[min(18rem,calc(100vw-12rem))] max-w-[280px] border",
-                  isBlack
-                    ? "border-white/20 bg-[#000000] text-white"
-                    : "border-slate-200 bg-white"
-                )}
+                className="h-9 w-[min(18rem,calc(100vw-12rem))] max-w-[280px] border border-border bg-card text-foreground"
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1 text-left">
                   <span className="truncate font-medium">
@@ -270,12 +247,7 @@ export function Header() {
 
       {isAdmin && cnpjMissing ? (
         <div
-          className={cn(
-            "border-b px-6 py-2 text-xs transition-colors duration-300",
-            isBlack
-              ? "border-white/10 bg-white/[0.03] text-white/80"
-              : "border-slate-200/80 bg-white text-slate-700"
-          )}
+          className="border-b border-border bg-card px-6 py-2 text-xs text-muted-foreground transition-colors duration-300"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span>
@@ -283,10 +255,7 @@ export function Header() {
             </span>
             <Link
               href="/?page=config-empresa"
-              className={cn(
-                "font-semibold underline underline-offset-4",
-                isBlack ? "text-cyan-200 hover:text-cyan-100" : "text-blue-700 hover:text-blue-600"
-              )}
+              className="font-semibold text-primary underline underline-offset-4 hover:text-primary/80"
             >
               Cadastrar agora
             </Link>

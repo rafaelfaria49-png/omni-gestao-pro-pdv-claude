@@ -104,6 +104,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
   const [imageAssistStyle, setImageAssistStyle] = useState<ImageAssistStyleKind>("realismo")
   const [imageFormat, setImageFormat] = useState<ImageFormatKind>("square")
   const [imageBusy, setImageBusy] = useState(false)
+  const [mascotPrompt, setMascotPrompt] = useState("Mascote 3D simpático segurando um smartphone reparado, expressão confiante, visual premium")
   const [generatedImages, setGeneratedImages] = useState<
     Array<{
       id: string
@@ -280,15 +281,14 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
     toast({ title: "Prompt automático criado", description: "Ajuste se quiser e clique em Gerar Imagem." })
   }
 
-  const handleGenerateImage = async () => {
-    const prompt = imagePrompt.trim()
+  const generateImageWithPrompt = async (prompt: string, style: ImageAssistStyleKind, format: ImageFormatKind) => {
     if (!prompt) {
       toast({ title: "Prompt vazio", description: "Descreva a imagem (ou gere do Pack).", variant: "destructive" })
       return
     }
     const pendingId = `pending-${Date.now()}`
     setGeneratedImages((prev) => [
-      { id: pendingId, url: "", prompt: "Pintando a arte…", style: imageAssistStyle, format: imageFormat, createdAt: Date.now(), pending: true },
+      { id: pendingId, url: "", prompt: "Pintando a arte…", style, format, createdAt: Date.now(), pending: true },
       ...prev,
     ])
     setImageBusy(true)
@@ -300,7 +300,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
           "Content-Type": "application/json",
           [ASSISTEC_LOJA_HEADER]: lojaId,
         },
-        body: JSON.stringify({ prompt, style: imageAssistStyle, format: imageFormat }),
+        body: JSON.stringify({ prompt, style, format }),
       })
       const data = (await res.json().catch(() => ({}))) as {
         ok?: boolean
@@ -325,7 +325,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
       if (!url) throw new Error("Sem imagem na resposta.")
       const id = String(data.jobId || `image-${Date.now()}`)
       setGeneratedImages((prev) => [
-        { id, url, prompt: prompt.slice(0, 700), style: imageAssistStyle, format: imageFormat, createdAt: Date.now() },
+        { id, url, prompt: prompt.slice(0, 700), style, format, createdAt: Date.now() },
         ...prev.filter((p) => p.id !== pendingId),
       ])
       void refreshImageGallery()
@@ -340,6 +340,27 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
     } finally {
       setImageBusy(false)
     }
+  }
+
+  const handleGenerateImage = async () => {
+    await generateImageWithPrompt(imagePrompt.trim(), imageAssistStyle, imageFormat)
+  }
+
+  const handleGenerateMascot = async () => {
+    const prompt = mascotPrompt.trim()
+    if (!prompt) {
+      toast({ title: "Prompt vazio", description: "Descreva a semente do mascote 3D.", variant: "destructive" })
+      return
+    }
+    const fullPrompt = [
+      "Render 3D premium para mascote de assistência técnica, personagem simpático, alta definição, sem texto na imagem.",
+      "Estilo: personagem 3D comercial, iluminação cinematográfica, acabamento limpo e moderno.",
+      `Semente/prompt: ${prompt}`,
+    ].join("\n")
+    setImageAssistStyle("personagem3d")
+    setImageFormat("vertical")
+    setImagePrompt(fullPrompt)
+    await generateImageWithPrompt(fullPrompt, "personagem3d", "vertical")
   }
 
   const onImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -379,7 +400,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
     v === "tecnico" ? "Foco Técnico (Lo-fi)" : v === "venda" ? "Energia de Venda (Upbeat)" : "Urgência (Fast)"
 
   const captionColor = useMemo(() => {
-    if (!captionsEnabled) return classic ? "bg-slate-900" : "bg-white"
+    if (!captionsEnabled) return classic ? "bg-slate-900" : "bg-card"
     if (videoVibe === "urgencia") return classic ? "bg-red-600" : "bg-red-500"
     if (videoVibe === "venda") return classic ? "bg-emerald-600" : "bg-emerald-400"
     return classic ? "bg-blue-600" : "bg-cyan-300"
@@ -712,9 +733,16 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
   }, [])
 
   const sectionTitle = cn(
-    "text-[10px] font-semibold uppercase tracking-[0.2em]",
-    classic ? "text-slate-500" : "text-white/45"
+    "text-sm font-semibold uppercase tracking-[0.18em]",
+    "text-muted-foreground"
   )
+  const mediaCardClass = cn(
+    "rounded-xl border p-5 shadow-sm transition-colors duration-300",
+    classic ? "border-border bg-card" : "border-border bg-card/70 shadow-card"
+  )
+  const mediaInputClass =
+    "min-h-11 rounded-xl border-border bg-card text-base text-foreground placeholder:text-muted-foreground"
+  const mediaHelpClass = "text-sm leading-relaxed text-muted-foreground"
 
   return (
     <div className="space-y-4">
@@ -730,13 +758,13 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
       `}</style>
       <div
         className={cn(
-          "flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3",
-          classic ? "border-slate-200 bg-slate-50" : "border-white/10 bg-white/[0.04]"
+          "flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-5 py-4",
+          classic ? "border-slate-200 bg-slate-50" : "border-border bg-card/[0.04]"
         )}
       >
         <div className="flex items-center gap-2">
-          <Sparkles className={cn("h-4 w-4", classic ? "text-fuchsia-600" : "text-fuchsia-400")} />
-          <span className={cn("text-xs font-semibold", classic ? "text-slate-800" : "text-white/90")}>
+          <Sparkles className={cn("h-5 w-5", classic ? "text-fuchsia-600" : "text-fuchsia-400")} />
+          <span className={cn("text-base font-semibold", classic ? "text-slate-800" : "text-white/90")}>
             Créditos de Mídia
           </span>
         </div>
@@ -744,19 +772,162 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
           <span
             className={cn(
               "rounded-full border px-3 py-1 text-sm font-bold tabular-nums",
-              classic ? "border-slate-200 bg-white text-slate-900" : "border-white/15 bg-black/50 text-white"
+              classic ? "border-border bg-card text-foreground" : "border-white/15 bg-black/50 text-white"
             )}
           >
             {credits === null ? "—" : credits}
           </span>
-          <span className={cn("text-[11px]", classic ? "text-slate-600" : "text-white/55")}>
+          <span className={cn("text-sm", classic ? "text-slate-600" : "text-white/55")}>
             Base: 1 · Premium: 5
           </span>
         </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className={mediaCardClass}>
+          <div className="flex items-start gap-3">
+            <Sparkles className={cn("mt-1 h-5 w-5", classic ? "text-fuchsia-600" : "text-fuchsia-300")} />
+            <div className="min-w-0 flex-1 space-y-3">
+              <div>
+                <p className="text-base font-semibold text-foreground">Fábrica de Mascotes 3D</p>
+                <p className={mediaHelpClass}>Defina uma semente visual e gere um mascote consistente para campanhas.</p>
+              </div>
+              <Textarea
+                value={mascotPrompt}
+                onChange={(e) => setMascotPrompt(e.target.value)}
+                rows={3}
+                className={mediaInputClass}
+                placeholder="Ex.: mascote técnico 3D, simpático, com smartphone reparado..."
+              />
+              <Button type="button" className="h-11 rounded-xl text-base" onClick={() => void handleGenerateMascot()} disabled={imageBusy}>
+                {imageBusy ? "Gerando..." : "Gerar mascote"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className={mediaCardClass}>
+          <div className="flex items-start gap-3">
+            <UserRound className={cn("mt-1 h-5 w-5", classic ? "text-blue-600" : "text-violet-300")} />
+            <div className="min-w-0 flex-1 space-y-3">
+              <div>
+                <p className="text-base font-semibold text-foreground">Criador de Avatar Falante</p>
+                <p className={mediaHelpClass}>Envie a foto do técnico e sincronize a boca com a locução gerada.</p>
+              </div>
+              <Input type="file" accept="image/*" onChange={onAvatarPhotoChange} className={cn(mediaInputClass, "cursor-pointer")} />
+              <Button
+                type="button"
+                className="h-11 rounded-xl text-base"
+                onClick={() => void handleSyncAvatarWithVoice()}
+                disabled={avatarBusy}
+              >
+                {avatarBusy ? "Sincronizando..." : "Sincronizar lip-sync"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className={mediaCardClass}>
+          <div className="flex items-start gap-3">
+            <ImageIcon className={cn("mt-1 h-5 w-5", classic ? "text-amber-600" : "text-amber-300")} />
+            <div className="min-w-0 flex-1 space-y-3">
+              <div>
+                <p className="text-base font-semibold text-foreground">Gerador de Imagens IA</p>
+                <p className={mediaHelpClass}>Crie imagens de bancada, produtos, banners e posts promocionais.</p>
+              </div>
+              <Textarea
+                value={imagePrompt}
+                onChange={(e) => setImagePrompt(e.target.value)}
+                rows={3}
+                className={mediaInputClass}
+                placeholder="Descreva a imagem de bancada/produto..."
+              />
+              <Button type="button" className="h-11 rounded-xl text-base" onClick={() => void handleGenerateImage()} disabled={imageBusy}>
+                {imageBusy ? "Gerando..." : "Gerar imagem"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className={mediaCardClass}>
+          <div className="flex items-start gap-3">
+            <Globe2 className={cn("mt-1 h-5 w-5", classic ? "text-emerald-600" : "text-emerald-300")} />
+            <div className="min-w-0 flex-1 space-y-3">
+              <div>
+                <p className="text-base font-semibold text-foreground">Google Meu Negócio</p>
+                <p className={mediaHelpClass}>Cole uma avaliação e gere uma resposta otimizada com IA.</p>
+              </div>
+              <Textarea
+                value={reviewText}
+                onChange={(e) => setReviewText(e.target.value)}
+                rows={3}
+                className={mediaInputClass}
+                placeholder="Cole aqui a avaliação do cliente..."
+              />
+              <Button type="button" className="h-11 rounded-xl text-base" onClick={() => void handleReviewReply()} disabled={reviewBusy}>
+                {reviewBusy ? "Gerando..." : "Gerar resposta"}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className={mediaCardClass}>
+          <div className="flex items-start gap-3">
+            <Mic2 className={cn("mt-1 h-5 w-5", classic ? "text-violet-600" : "text-violet-300")} />
+            <div className="min-w-0 flex-1 space-y-3">
+              <div>
+                <p className="text-base font-semibold text-foreground">Locução / Vídeo</p>
+                <p className={mediaHelpClass}>Clone voz, gere locução do pack e transforme imagem base em vídeo.</p>
+              </div>
+              <Input type="file" accept="image/*" onChange={onImageChange} className={cn(mediaInputClass, "cursor-pointer")} />
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" className="h-11 rounded-xl text-base" onClick={() => setCloneOpen(true)}>
+                  Clonar voz
+                </Button>
+                <Button type="button" className="h-11 rounded-xl text-base" onClick={() => void handleGenerateVoice()} disabled={voiceBusy}>
+                  {voiceBusy ? "Gerando..." : "Gerar locução"}
+                </Button>
+                <Button type="button" variant="secondary" className="h-11 rounded-xl text-base" onClick={() => void handleGenerateVideo()} disabled={videoBusy}>
+                  {videoBusy ? "Renderizando..." : "Gerar vídeo"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={mediaCardClass}>
+          <div className="flex items-start gap-3">
+            <Video className={cn("mt-1 h-5 w-5", classic ? "text-cyan-600" : "text-cyan-300")} />
+            <div className="min-w-0 flex-1 space-y-3">
+              <div>
+                <p className="text-base font-semibold text-foreground">Diretor Omnicanal</p>
+                <p className={mediaHelpClass}>Adapte o conteúdo para Instagram, TikTok, Facebook e Google.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" variant={channels.instagram ? "default" : "outline"} className="h-11 rounded-xl text-base" onClick={() => toggleChannel("instagram")}>
+                  <Instagram className="mr-2 h-4 w-4" />
+                  Instagram
+                </Button>
+                <Button type="button" variant={channels.tiktok ? "default" : "outline"} className="h-11 rounded-xl text-base" onClick={() => toggleChannel("tiktok")}>
+                  <Video className="mr-2 h-4 w-4" />
+                  TikTok
+                </Button>
+                <Button type="button" variant={channels.facebook ? "default" : "outline"} className="h-11 rounded-xl text-base" onClick={() => toggleChannel("facebook")}>
+                  <Facebook className="mr-2 h-4 w-4" />
+                  Facebook
+                </Button>
+                <Button type="button" variant={channels.gmb ? "default" : "outline"} className="h-11 rounded-xl text-base" onClick={() => toggleChannel("gmb")}>
+                  <Globe2 className="mr-2 h-4 w-4" />
+                  Google
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <Tabs value={studioSection} onValueChange={(v) => setStudioSection(v as any)} className="w-full">
-        <TabsList className={cn("grid w-full grid-cols-3", classic ? "" : "bg-black/40 border border-white/10")}>
+        <TabsList className={cn("grid h-auto w-full grid-cols-3 p-1", classic ? "" : "bg-black/40 border border-white/10")}>
           <TabsTrigger value="criacao">Criação</TabsTrigger>
           <TabsTrigger value="calendario">Calendário</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
@@ -770,8 +941,8 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
             className={cn(
               "space-y-4 rounded-2xl border p-4",
               classic
-                ? "border-slate-200 bg-white shadow-sm"
-                : "border-cyan-500/20 bg-white/[0.03] backdrop-blur-md shadow-[0_0_0_1px_rgba(34,211,238,0.18)_inset,0_0_40px_rgba(34,211,238,0.10)]"
+                ? "border-border bg-card shadow-sm"
+                : "border-border bg-card/[0.03] backdrop-blur-md shadow-card"
             )}
           >
             <div className="flex items-start justify-between gap-3">
@@ -818,8 +989,8 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
                       ? "border-slate-900 bg-slate-900 text-white"
                       : "border-cyan-400/30 bg-cyan-400/15 text-white"
                     : classic
-                      ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                      : "border-white/10 bg-black/40 text-white/70 hover:bg-white/5"
+                      ? "border-border bg-card text-foreground hover:bg-muted/60"
+                      : "border-white/10 bg-black/40 text-white/70 hover:bg-card/5"
                 )}
               >
                 <Icon className={cn("h-4 w-4", has ? "text-emerald-400" : classic ? "text-slate-400" : "text-white/30")} />
@@ -880,7 +1051,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
           </span>
         </div>
 
-        <div className={cn("rounded-xl border p-3", classic ? "border-slate-200 bg-white" : "border-white/10 bg-black/40")}>
+        <div className={cn("rounded-xl border p-3", classic ? "border-border bg-card" : "border-white/10 bg-black/40")}>
           <p className={cn("text-xs font-semibold", classic ? "text-slate-800" : "text-white/85")}>Responder Avaliações com IA (Google Maps)</p>
           <p className={cn("mt-1 text-[11px]", classic ? "text-slate-600" : "text-white/55")}>
             Usa o tom de voz da marca + SEO local. Custo: 1 crédito.
@@ -895,7 +1066,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
                 disabled={reviewBusy}
                 className={cn(
                   "rounded-2xl border text-sm",
-                  classic ? "border-slate-200 bg-white text-slate-800" : "border-white/10 bg-black/50 text-white/90"
+                  classic ? "border-border bg-card text-foreground" : "border-white/10 bg-black/50 text-white/90"
                 )}
               />
               {reviewReply ? (
@@ -911,7 +1082,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
               ) : null}
             </div>
             <div className="flex flex-col gap-2">
-              <Button type="button" onClick={() => void handleReviewReply()} disabled={reviewBusy} className={cn(!classic && "bg-white/10 text-white hover:bg-white/15")}>
+              <Button type="button" onClick={() => void handleReviewReply()} disabled={reviewBusy} className={cn(!classic && "bg-card/10 text-white hover:bg-card/15")}>
                 {reviewBusy ? "Gerando…" : "Responder com IA"}
               </Button>
               <Button
@@ -935,7 +1106,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
         <div
           className={cn(
             "space-y-4 rounded-2xl border p-4",
-            classic ? "border-slate-200 bg-white" : "border-white/10 bg-black/30"
+            classic ? "border-border bg-card" : "border-white/10 bg-black/30"
           )}
         >
           <div className="flex items-center gap-2">
@@ -1012,7 +1183,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
         <div
           className={cn(
             "space-y-4 rounded-2xl border p-4",
-            classic ? "border-slate-200 bg-white" : "border-white/10 bg-black/30"
+            classic ? "border-border bg-card" : "border-white/10 bg-black/30"
           )}
         >
           <div className="flex items-center gap-2">
@@ -1151,8 +1322,8 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
         className={cn(
           "space-y-4 rounded-2xl border p-4",
           classic
-            ? "border-slate-200 bg-white shadow-sm"
-            : "border-violet-500/25 bg-white/[0.03] backdrop-blur-md shadow-[0_0_0_1px_rgba(217,70,239,0.18)_inset,0_0_36px_rgba(168,85,247,0.14)]"
+            ? "border-border bg-card shadow-sm"
+            : "border-border bg-card/[0.03] backdrop-blur-md shadow-card"
         )}
       >
         <div className="flex items-center justify-between gap-3">
@@ -1254,7 +1425,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
                 value={avatarProgress}
                 className={cn(
                   "h-2",
-                  classic ? "bg-slate-200 [&_[data-slot=progress-indicator]]:bg-blue-600" : "bg-white/10 [&_[data-slot=progress-indicator]]:bg-cyan-400"
+                  classic ? "bg-slate-200 [&_[data-slot=progress-indicator]]:bg-blue-600" : "bg-card/10 [&_[data-slot=progress-indicator]]:bg-cyan-400"
                 )}
               />
               <p className={cn("text-[11px]", classic ? "text-slate-600" : "text-white/55")}>
@@ -1292,7 +1463,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
       <div
         className={cn(
           "space-y-4 rounded-2xl border p-4",
-          classic ? "border-slate-200 bg-white shadow-sm" : "border-fuchsia-500/20 bg-black/30 shadow-[0_0_0_1px_rgba(34,211,238,0.10)_inset,0_0_40px_rgba(217,70,239,0.10)]"
+          classic ? "border-border bg-card shadow-sm" : "border-fuchsia-500/20 bg-black/30 shadow-[0_0_0_1px_rgba(34,211,238,0.10)_inset,0_0_40px_rgba(217,70,239,0.10)]"
         )}
       >
         <div className="flex items-center gap-2">
@@ -1316,7 +1487,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
               placeholder="Ex.: Foto realista de um técnico trocando tela em bancada limpa, iluminação natural…"
               className={cn(
                 "rounded-2xl border text-sm",
-                classic ? "border-slate-200 bg-white text-slate-800" : "border-white/10 bg-black/50 text-white/90 placeholder:text-white/30"
+                classic ? "border-border bg-card text-foreground" : "border-white/10 bg-black/50 text-white/90 placeholder:text-white/30"
               )}
             />
             <div className={cn("flex items-center justify-between text-[10px]", classic ? "text-slate-500" : "text-white/35")}>
@@ -1332,7 +1503,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
                 <Button
                   type="button"
                   variant={imageAssistStyle === "realismo" ? (classic ? "default" : "secondary") : "outline"}
-                  className={cn(!classic && imageAssistStyle === "realismo" && "bg-white/10 text-white hover:bg-white/15")}
+                  className={cn(!classic && imageAssistStyle === "realismo" && "bg-card/10 text-white hover:bg-card/15")}
                   onClick={() => setImageAssistStyle("realismo")}
                 >
                   Realismo de Bancada
@@ -1340,7 +1511,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
                 <Button
                   type="button"
                   variant={imageAssistStyle === "banner" ? (classic ? "default" : "secondary") : "outline"}
-                  className={cn(!classic && imageAssistStyle === "banner" && "bg-white/10 text-white hover:bg-white/15")}
+                  className={cn(!classic && imageAssistStyle === "banner" && "bg-card/10 text-white hover:bg-card/15")}
                   onClick={() => setImageAssistStyle("banner")}
                 >
                   Banner de Oferta
@@ -1348,7 +1519,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
                 <Button
                   type="button"
                   variant={imageAssistStyle === "personagem3d" ? (classic ? "default" : "secondary") : "outline"}
-                  className={cn(!classic && imageAssistStyle === "personagem3d" && "bg-white/10 text-white hover:bg-white/15")}
+                  className={cn(!classic && imageAssistStyle === "personagem3d" && "bg-card/10 text-white hover:bg-card/15")}
                   onClick={() => setImageAssistStyle("personagem3d")}
                 >
                   3D Personagem
@@ -1402,7 +1573,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
                   className={cn(
                     "overflow-hidden rounded-2xl border",
                     classic
-                      ? "border-slate-200 bg-white shadow-sm"
+                      ? "border-border bg-card shadow-sm"
                       : "border-fuchsia-500/25 bg-black/40 shadow-[0_0_0_1px_rgba(34,211,238,0.12)_inset,0_0_28px_rgba(217,70,239,0.16)]"
                   )}
                 >
@@ -1423,7 +1594,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
                         <div
                           className={cn(
                             "absolute inset-0 animate-pulse",
-                            classic ? "bg-slate-200/60" : "bg-white/5"
+                            classic ? "bg-slate-200/60" : "bg-card/5"
                           )}
                         />
                         <div
@@ -1467,7 +1638,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
           <div
             className={cn(
               "rounded-2xl border p-4",
-              classic ? "border-slate-200 bg-white shadow-sm" : "border-white/10 bg-black/40"
+              classic ? "border-border bg-card shadow-sm" : "border-white/10 bg-black/40"
             )}
           >
             <p className={cn("text-sm font-semibold", classic ? "text-slate-900" : "text-white")}>Performance</p>

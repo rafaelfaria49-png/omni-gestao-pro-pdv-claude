@@ -42,10 +42,10 @@ function ColorDot({
 
 export function BrandHeader({ palette, onPaletteChange, onSync }: BrandHeaderProps) {
   const { mode } = useStudioTheme()
-  const classic = mode === "classic"
+  const classic = mode === "classic" || mode === "light" || mode === "soft-ice"
 
   return (
-    <GlassCard className="rounded-3xl px-5 py-4 shadow-sm dark:shadow-none md:px-5 md:py-4">
+    <GlassCard className="rounded-3xl px-5 py-5 shadow-sm dark:shadow-none md:px-6 md:py-5">
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -63,15 +63,14 @@ export function BrandHeader({ palette, onPaletteChange, onSync }: BrandHeaderPro
               <p
                 className={cn(
                   "text-[10px] font-semibold uppercase tracking-[0.22em] transition-colors duration-300",
-                  classic ? "text-slate-600" : "text-white/55"
+                  "text-muted-foreground"
                 )}
               >
                 {classic ? "Aurora Studio" : "BLACK EDITION"}
               </p>
               <h1
                 className={cn(
-                  "text-lg font-semibold tracking-tight transition-colors duration-300 dark:font-black dark:text-white",
-                  classic ? "text-slate-900" : "text-white"
+                  "text-lg font-semibold tracking-tight text-foreground transition-colors duration-300"
                 )}
               >
                 Estúdio de Marketing{" "}
@@ -85,16 +84,16 @@ export function BrandHeader({ palette, onPaletteChange, onSync }: BrandHeaderPro
           <nav
             className={cn(
               "hidden items-center gap-6 text-xs font-medium transition-colors duration-300 md:flex",
-              classic ? "text-slate-600" : "text-white/60"
+              "text-muted-foreground"
             )}
           >
-            <a className="transition-colors duration-300 hover:text-slate-900 dark:hover:text-white" href="#">
+            <a className="transition-colors duration-300 hover:text-foreground" href="#">
               Criação
             </a>
-            <a className="transition-colors duration-300 hover:text-slate-900 dark:hover:text-white" href="#">
+            <a className="transition-colors duration-300 hover:text-foreground" href="#">
               Calendário
             </a>
-            <a className="transition-colors duration-300 hover:text-slate-900 dark:hover:text-white" href="#">
+            <a className="transition-colors duration-300 hover:text-foreground" href="#">
               Performance
             </a>
           </nav>
@@ -104,21 +103,19 @@ export function BrandHeader({ palette, onPaletteChange, onSync }: BrandHeaderPro
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-slate-200/80 pt-4 transition-colors duration-300 dark:border-white/10 dark:pt-4 lg:flex-row lg:items-center">
+        <div className="flex flex-col gap-3 border-t border-border pt-4 transition-colors duration-300 lg:flex-row lg:items-center">
           <div className="relative flex-1">
             <Link2
               className={cn(
                 "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transition-colors duration-300",
-                classic ? "text-slate-400" : "text-white/35"
+                "text-muted-foreground"
               )}
             />
             <Input
               defaultValue="https://instagram.com/aurora.store"
               className={cn(
                 "h-10 w-full rounded-xl border pl-10 text-sm backdrop-blur-xl transition-colors duration-300 focus-visible:ring-0 focus-visible:ring-offset-0",
-                classic
-                  ? "border-slate-200 bg-white text-slate-800 placeholder:text-slate-400"
-                  : "border-white/10 bg-white/5 text-white/80 placeholder:text-white/30"
+                "border-border bg-card text-foreground placeholder:text-muted-foreground"
               )}
             />
           </div>
@@ -128,20 +125,18 @@ export function BrandHeader({ palette, onPaletteChange, onSync }: BrandHeaderPro
               variant="outline"
               className={cn(
                 "h-10 rounded-xl transition-colors duration-300",
-                classic
-                  ? "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
-                  : "border-white/10 bg-white/5 text-white/80 hover:bg-white/10"
+                "border-border bg-card text-foreground hover:bg-muted/60"
               )}
               onClick={() => onSync?.()}
             >
               <RefreshCw className="mr-2 h-4 w-4" />
               Sincronizar
             </Button>
-            <div className="flex items-center gap-3 border-l border-slate-200/80 pl-3 dark:border-white/10">
+            <div className="flex items-center gap-3 border-l border-border pl-3">
               <div
                 className={cn(
                   "h-9 w-9 shrink-0 rounded-full border transition-colors duration-300",
-                  classic ? "border-slate-200" : "border-white/10"
+                  "border-border"
                 )}
                 style={{
                   background: `linear-gradient(135deg, ${palette.a}55, ${palette.b}33, ${palette.c}22)`,
@@ -151,7 +146,7 @@ export function BrandHeader({ palette, onPaletteChange, onSync }: BrandHeaderPro
                 <p
                   className={cn(
                     "truncate text-xs font-semibold transition-colors duration-300 dark:font-black dark:text-white",
-                    classic ? "text-slate-900" : "text-white"
+                    "text-foreground"
                   )}
                 >
                   Aurora Store
@@ -163,7 +158,7 @@ export function BrandHeader({ palette, onPaletteChange, onSync }: BrandHeaderPro
                   <span
                     className={cn(
                       "ml-1 hidden text-[10px] font-semibold tracking-wide transition-colors duration-300 sm:inline",
-                      classic ? "text-slate-500" : "text-white/40"
+                      "text-muted-foreground"
                     )}
                   >
                     PALETA

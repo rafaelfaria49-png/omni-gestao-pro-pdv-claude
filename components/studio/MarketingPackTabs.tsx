@@ -21,18 +21,16 @@ export function MarketingPackTabs({ pack, tab, onTabChange, classic, lojaId, ini
   const safe = pack ?? { feed: "", reels: "", stories: "" }
 
   const area = cn(
-    "min-h-[240px] w-full resize-y rounded-2xl border px-4 py-3 text-sm leading-relaxed outline-none",
-    classic
-      ? "border-slate-200 bg-white text-slate-800 placeholder:text-slate-400"
-      : "border-white/10 bg-black/50 text-white/90 placeholder:text-white/30"
+    "min-h-[280px] w-full resize-y rounded-2xl border px-5 py-4 text-base leading-relaxed outline-none",
+    "border-border bg-card text-foreground placeholder:text-muted-foreground"
   )
 
   return (
     <div className="space-y-3">
       <p
         className={cn(
-          "text-[10px] font-semibold uppercase tracking-[0.2em]",
-          classic ? "text-slate-500" : "text-white/45"
+          "text-sm font-semibold uppercase tracking-[0.18em]",
+          "text-muted-foreground"
         )}
       >
         Resultado · Pack de Crescimento
@@ -41,14 +39,14 @@ export function MarketingPackTabs({ pack, tab, onTabChange, classic, lojaId, ini
         <TabsList
           className={cn(
             "grid h-auto w-full grid-cols-2 gap-1 p-1 sm:grid-cols-4",
-            classic ? "bg-slate-100" : "bg-white/5"
+            "bg-muted/60"
           )}
         >
           <TabsTrigger
             value="feed"
             className={cn(
-              "text-xs sm:text-sm",
-              classic ? "data-[state=active]:bg-white" : "data-[state=active]:bg-white/10 data-[state=active]:text-white"
+              "h-10 text-sm sm:text-base",
+              "data-[state=active]:bg-card data-[state=active]:text-foreground"
             )}
           >
             Feed
@@ -56,8 +54,8 @@ export function MarketingPackTabs({ pack, tab, onTabChange, classic, lojaId, ini
           <TabsTrigger
             value="reels"
             className={cn(
-              "text-xs sm:text-sm",
-              classic ? "data-[state=active]:bg-white" : "data-[state=active]:bg-white/10 data-[state=active]:text-white"
+              "h-10 text-sm sm:text-base",
+              "data-[state=active]:bg-card data-[state=active]:text-foreground"
             )}
           >
             Reels
@@ -65,8 +63,8 @@ export function MarketingPackTabs({ pack, tab, onTabChange, classic, lojaId, ini
           <TabsTrigger
             value="stories"
             className={cn(
-              "text-xs sm:text-sm",
-              classic ? "data-[state=active]:bg-white" : "data-[state=active]:bg-white/10 data-[state=active]:text-white"
+              "h-10 text-sm sm:text-base",
+              "data-[state=active]:bg-card data-[state=active]:text-foreground"
             )}
           >
             Stories
@@ -74,8 +72,8 @@ export function MarketingPackTabs({ pack, tab, onTabChange, classic, lojaId, ini
           <TabsTrigger
             value="media"
             className={cn(
-              "col-span-2 text-xs sm:col-span-1 sm:text-sm",
-              classic ? "data-[state=active]:bg-white" : "data-[state=active]:bg-white/10 data-[state=active]:text-white"
+              "col-span-2 h-10 text-sm sm:col-span-1 sm:text-base",
+              "data-[state=active]:bg-card data-[state=active]:text-foreground"
             )}
           >
             Estúdio de Mídia

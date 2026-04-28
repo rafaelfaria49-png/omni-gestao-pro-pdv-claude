@@ -28,7 +28,7 @@ export function EditorialCalendar({
   onWhatsApp,
 }: Props) {
   const { mode } = useStudioTheme()
-  const classic = mode === "classic"
+  const classic = mode === "classic" || mode === "light" || mode === "soft-ice"
 
   const openWhatsAppWithCaption = () => {
     const text = (getWhatsAppText ? getWhatsAppText() : captionForWhatsApp || "").trim()
@@ -71,8 +71,8 @@ export function EditorialCalendar({
             className={cn(
               "h-10 transition-colors duration-300",
               classic
-                ? "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
-                : "border-white/10 bg-black/50 text-white/80 hover:bg-white/10"
+                ? "border-border bg-card text-foreground hover:bg-muted/60"
+                : "border-border bg-card text-foreground hover:bg-muted/60"
             )}
             onClick={() => void onSchedule?.()}
             disabled={!!loading}
@@ -95,8 +95,8 @@ export function EditorialCalendar({
             className={cn(
               "h-10 transition-colors duration-300",
               classic
-                ? "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
-                : "border-white/10 bg-black/50 text-white/70 hover:bg-white/5"
+                ? "border-border bg-card text-foreground hover:bg-muted/60"
+                : "border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground"
             )}
             disabled
             title="Em breve"
@@ -148,7 +148,7 @@ export function EditorialCalendar({
               key={m.id}
               className={cn(
                 "rounded-2xl border p-4 backdrop-blur-xl transition-colors duration-300",
-                classic ? "border-slate-200 bg-white text-slate-900" : "border-white/10 bg-black/35"
+                classic ? "border-border bg-card text-foreground" : "border-white/10 bg-black/35"
               )}
             >
               <div className="flex items-start justify-between gap-3">

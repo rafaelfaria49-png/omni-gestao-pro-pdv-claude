@@ -11,7 +11,7 @@ import {
 } from "react"
 import { useTheme as useNextThemes } from "next-themes"
 
-export type StudioThemeMode = "black" | "classic"
+export type StudioThemeMode = "light" | "soft-ice" | "midnight" | "black" | "classic"
 
 const STORAGE_KEY = "omni-studio-dual-theme"
 
@@ -23,27 +23,40 @@ type StudioThemeContextValue = {
 }
 
 const StudioThemeContext = createContext<StudioThemeContextValue | null>(null)
-
 function readInitialMode(): StudioThemeMode {
   if (typeof window === "undefined") return "black"
   try {
     const v = String(localStorage.getItem(STORAGE_KEY) || "").trim()
-    return v === "classic" ? "classic" : "black"
+    if (v === "light" || v === "soft-ice" || v === "midnight" || v === "black" || v === "classic") return v
+    return "black"
   } catch {
     return "black"
   }
 }
 
-function persistAndSyncDom(m: StudioThemeMode, setTheme: (t: string) => void) {
+function applyTheme(m: StudioThemeMode, setTheme: (t: string) => void) {
+  const next = m === "classic" ? "light" : m
   try {
-    localStorage.setItem(STORAGE_KEY, m)
+    localStorage.setItem(STORAGE_KEY, next)
   } catch {
     /* ignore */
   }
   if (typeof document !== "undefined") {
-    document.documentElement.setAttribute("data-studio-theme", m)
+    const root = document.documentElement
+    root.classList.remove("theme-light", "theme-softice", "theme-midnight", "theme-black")
+    root.classList.remove("light", "soft-ice", "midnight", "black-edition", "dark")
+    root.setAttribute("data-studio-theme", next)
+    if (next === "black") {
+      root.classList.add("black-edition", "theme-black")
+    } else if (next === "soft-ice") {
+      root.classList.add("soft-ice", "theme-softice")
+    } else if (next === "midnight") {
+      root.classList.add("midnight", "theme-midnight")
+    } else {
+      root.classList.add("light", "theme-light")
+    }
   }
-  setTheme(m === "classic" ? "light" : "dark")
+  setTheme(next === "black" ? "black-edition" : next)
 }
 
 /**
@@ -57,21 +70,21 @@ export function StudioThemeProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     const initial = readInitialMode()
     setModeState(initial)
-    persistAndSyncDom(initial, setTheme)
+    applyTheme(initial, setTheme)
   }, [setTheme])
 
   const setMode = useCallback(
     (m: StudioThemeMode) => {
       setModeState(m)
-      persistAndSyncDom(m, setTheme)
+      applyTheme(m, setTheme)
     },
     [setTheme]
   )
 
   const toggle = useCallback(() => {
     setModeState((prev) => {
-      const next = prev === "black" ? "classic" : "black"
-      persistAndSyncDom(next, setTheme)
+      const next = prev === "black" ? "light" : "black"
+      applyTheme(next, setTheme)
       return next
     })
   }, [setTheme])
@@ -99,10 +112,11 @@ export function useStudioTheme(): StudioThemeContextValue {
 /** API compatível com o snippet Lovable (`theme === "dark"` = Black Edition). */
 export function useTheme() {
   const { mode, setMode, toggle } = useStudioTheme()
+  const theme = mode === "classic" ? "light" : mode
   return {
-    theme: mode === "black" ? ("dark" as const) : ("light" as const),
+    theme,
     mode,
-    setTheme: (t: "dark" | "light") => setMode(t === "dark" ? "black" : "classic"),
+    setTheme: (t: "light" | "soft-ice" | "midnight" | "black" | "dark") => setMode(t === "dark" ? "black" : t),
     toggle,
   }
 }

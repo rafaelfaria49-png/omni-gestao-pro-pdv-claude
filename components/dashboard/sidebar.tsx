@@ -1,7 +1,6 @@
 "use client"
 
 import { 
-  Home, 
   LayoutDashboard,
   ShoppingCart, 
   FileText, 
@@ -15,135 +14,32 @@ import {
   Settings,
   Store,
   Zap,
-  ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
-  Calculator,
+  ShieldCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
-import { useEffect, useState } from "react"
-import { useConfigEmpresa } from "@/lib/config-empresa"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { useStoreSettings } from "@/lib/store-settings-provider"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import {
   nomeFantasiaOuFallbackUnidadePorOrdem,
 } from "@/lib/store-display-name"
 import { usePerfilLoja } from "@/lib/perfil-loja-provider"
-import type { UserRole } from "@/types"
-import { useStudioTheme } from "@/components/theme/ThemeProvider"
-import { useStaffAccess } from "@/components/auth/AccessGate"
 
-const ROLE_CACHE_KEY = "assistec-admin-role-cache-v1"
-
-type SubMenuItem = { 
-  label: string
-  href: string
-  page?: string
-  /** Se definido, navega para esta URL (ex.: área isolada). */
-  externalPath?: string
-}
-
-type MenuItem = {
+type PremiumNavLink = {
   icon: React.ElementType
   label: string
-  href: string
   page?: string
   externalPath?: string
-  submenu?: SubMenuItem[]
 }
 
-const menuItems: MenuItem[] = [
-  { icon: Sparkles, label: "IA Mestre", href: "#", externalPath: "/dashboard/ia-mestre" },
-  { icon: Bot, label: "Marketing IA", href: "#", externalPath: "/dashboard/marketing" },
-  { icon: LayoutDashboard, label: "Painel inicial", href: "#", page: "dashboard-omni", externalPath: "/dashboard" },
-  { icon: FileText, label: "Orçamentos", href: "#", page: "orcamentos" },
-  {
-    icon: ShoppingCart,
-    label: "Vendas",
-    href: "#",
-    submenu: [
-      { label: "PDV / Caixa", href: "#", page: "vendas", externalPath: "/dashboard/vendas" },
-      { label: "Histórico de Vendas", href: "#", page: "vendas-arquivo" },
-      { label: "Controle de Consumo (mesas)", href: "#", page: "controle-consumo" },
-      { label: "Trocas e devolução", href: "#", page: "trocas" },
-    ],
-  },
-  {
-    icon: ClipboardList,
-    label: "Ordens de Serviço",
-    href: "#",
-    submenu: [
-      { label: "Painel integrado", href: "#", page: "os", externalPath: "/dashboard/os" },
-    ],
-  },
-  { 
-    icon: Package, 
-    label: "Estoque", 
-    href: "#",
-    submenu: [
-      { label: "Produtos", href: "#", page: "produtos" },
-      { label: "Serviços", href: "#", page: "servicos" },
-      { label: "Planejamento de Compras", href: "#", page: "planejamento-compras" },
-    ]
-  },
-  { 
-    icon: Wallet, 
-    label: "Financeiro", 
-    href: "#",
-    submenu: [
-      { label: "Carteiras", href: "#", page: "carteiras" },
-      { label: "Fluxo de Caixa", href: "#", page: "fluxo-caixa" },
-      { label: "Contas a Pagar", href: "#", page: "contas-pagar" },
-      { label: "Contas a Receber", href: "#", page: "contas-receber" },
-      { label: "Relatórios Financeiros", href: "#", page: "relatorios-financeiros" },
-      { label: "Área do Contador", href: "#", externalPath: "/contador" },
-    ]
-  },
-  { 
-    icon: Users, 
-    label: "Clientes", 
-    href: "#",
-    submenu: [
-      { label: "Gestão de Clientes", href: "#", page: "clientes-gestao", externalPath: "/dashboard/clientes" },
-      { label: "Cadastro de Clientes", href: "#", page: "clientes" },
-      { label: "Consulta de Crédito", href: "#", page: "credito" },
-    ]
-  },
-  {
-    icon: BarChart3,
-    label: "Relatórios",
-    href: "#",
-    submenu: [
-      { label: "Relatórios gerenciais", href: "#", page: "relatorios" },
-      { label: "Dashboard 360", href: "#", page: "dashboard-360" },
-    ],
-  },
-  {
-    icon: Store,
-    label: "Gestão da Rede",
-    href: "#",
-    submenu: [{ label: "Gestão de Unidades", href: "#", page: "config-multilojas" }],
-  },
-  { 
-    icon: Settings, 
-    label: "Configurações", 
-    href: "#",
-    submenu: [
-      { label: "Dados da Empresa", href: "#", page: "config-empresa" },
-      { label: "Ajustes", href: "#", page: "config-ajustes" },
-      { label: "Financeiro (cartões)", href: "#", page: "config-pdv" },
-      { label: "Marca/Logo", href: "#", page: "config-marca" },
-      { label: "Certificado Digital", href: "#", page: "config-certificado" },
-      { label: "Termos de Garantia", href: "#", page: "config-garantia" },
-      { label: "Backup", href: "#", page: "config-backup" },
-      { label: "Conexão WhatsApp", href: "#", page: "whatsapp" },
-      { label: "Meu Plano", href: "#", page: "plano" },
-      { label: "Suporte", href: "#", page: "suporte" },
-    ]
-  },
-]
+type PremiumNavGroup = {
+  icon: React.ElementType
+  label: string
+  items: PremiumNavLink[]
+}
 
 interface SidebarProps {
   onNavigate?: (page: string) => void
@@ -153,136 +49,54 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = false, onToggleCollapse }: SidebarProps) {
-  const staffRole = useStaffAccess()
-  const { mode } = useStudioTheme()
-  const classic = mode === "classic"
-  const { config } = useConfigEmpresa()
-  const { lojas, lojaAtivaId, setLojaAtivaId, cadastroBasicoIncompleto } = useLojaAtiva()
-  const { pdvParams } = useStoreSettings()
+  const { lojas, lojaAtivaId, setLojaAtivaId } = useLojaAtiva()
   const { perfilLoja } = usePerfilLoja()
-  const [caixaPerms, setCaixaPerms] = useState<{ permitirFinanceiro: boolean; permitirEstoque: boolean; permitirMarketingIA: boolean }>({
-    permitirFinanceiro: false,
-    permitirEstoque: false,
-    permitirMarketingIA: false,
-  })
-  const [role, setRole] = useState<UserRole>(() => {
-    try {
-      const raw = String(localStorage.getItem(ROLE_CACHE_KEY) || "").trim()
-      return raw === "ADMIN" ? "ADMIN" : "CAIXA"
-    } catch {
-      return "CAIXA"
-    }
-  })
-  // UX: iniciar recolhido e deixar o usuário abrir o que quiser.
-  const [openMenus, setOpenMenus] = useState<string[]>([])
-  const isBronze = config.assinatura.plano === "bronze"
   const hideOsMenus = perfilLoja === "variedades" || perfilLoja === "supermercado"
-
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const r = await fetch("/api/auth/admin", { method: "GET", credentials: "include", cache: "no-store" })
-        const j = (await r.json().catch(() => null)) as { authenticated?: boolean }
-        // Importante: se a API falhar (503/transiente), NÃO derrubar ADMIN para CAIXA.
-        if (!r.ok || !j) return
-        if (cancelled) return
-        const next: UserRole = j.authenticated === true ? "ADMIN" : "CAIXA"
-        setRole(next)
-        try {
-          localStorage.setItem(ROLE_CACHE_KEY, next)
-        } catch {
-          /* ignore */
-        }
-      } catch {
-        // Falha de rede/servidor: manter o último role conhecido (evita “fim de sessão” falso-positivo).
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  useEffect(() => {
-    if (role !== "CAIXA") return
-    const id = String(lojaAtivaId || "").trim()
-    if (!id) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const r = await fetch(`/api/stores/${encodeURIComponent(id)}/settings`, { credentials: "include", cache: "no-store" })
-        const j = (await r.json().catch(() => null)) as { settings?: any } | null
-        if (!r.ok || !j?.settings) return
-        const pc = j.settings?.printerConfig && typeof j.settings.printerConfig === "object" ? j.settings.printerConfig : {}
-        const p = (pc as any)?.permissionsCaixa
-        const next = {
-          permitirFinanceiro: p?.permitirFinanceiro === true,
-          permitirEstoque: p?.permitirEstoque === true,
-          permitirMarketingIA: p?.permitirMarketingIA === true,
-        }
-        if (!cancelled) setCaixaPerms(next)
-      } catch {
-        // fallback: mantém tudo bloqueado
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [lojaAtivaId, role])
-
-  const visibleItems = menuItems
-    .filter((item) => {
-      if (staffRole === "VENDEDOR" && (item.label === "Financeiro" || item.label === "Configurações")) return false
-      if (role !== "CAIXA") return true
-      if (item.label === "Painel inicial") return true
-      if (item.label === "Vendas") return true
-      if (item.label === "Financeiro") return caixaPerms.permitirFinanceiro === true
-      if (item.label === "Estoque") return caixaPerms.permitirEstoque === true
-      if (item.label === "Marketing IA") return caixaPerms.permitirMarketingIA === true
-      return false
-    })
-    .map((item) => {
-    if (!item.submenu) return item
-    if (hideOsMenus && item.label === "Ordens de Serviço") {
-      return { ...item, submenu: [] }
-    }
-    if (item.label === "Clientes") {
-      return {
-        ...item,
-        submenu: item.submenu.filter((s) => (isBronze ? s.page !== "credito" : true)),
-      }
-    }
-    if (item.label === "Configurações") {
-      return {
-        ...item,
-        submenu: item.submenu.filter((s) => (isBronze ? s.page !== "config-multilojas" : true)),
-      }
-    }
-    if (item.label === "Gestão da Rede") {
-      return {
-        ...item,
-        submenu: item.submenu.filter((s) => (isBronze ? s.page !== "config-multilojas" : true)),
-      }
-    }
-    if (item.label === "Vendas") {
-      return {
-        ...item,
-        submenu: item.submenu?.filter(
-          (s) => (s.page === "controle-consumo" ? pdvParams.moduloControleConsumo === true : true)
-        ),
-      }
-    }
-    return item
-  })
-  .filter((it) => !(hideOsMenus && it.label === "Ordens de Serviço"))
-
-  const toggleSubmenu = (label: string) => {
-    setOpenMenus(prev => 
-      prev.includes(label) 
-        ? prev.filter(item => item !== label)
-        : [...prev, label]
-    )
-  }
+  const mainNavItems: PremiumNavLink[] = [
+    { icon: Sparkles, label: "IA Mestre", externalPath: "/dashboard/ia-mestre" },
+    { icon: Bot, label: "Marketing IA", externalPath: "/dashboard/marketing" },
+    { icon: LayoutDashboard, label: "Painel Inicial", page: "dashboard-omni", externalPath: "/dashboard" },
+  ]
+  const standaloneNavItems: PremiumNavLink[] = [
+    { icon: Users, label: "Clientes", page: "clientes-gestao", externalPath: "/dashboard/clientes" },
+    { icon: BarChart3, label: "Relatórios", page: "relatorios" },
+  ]
+  const navGroups: PremiumNavGroup[] = [
+    {
+      icon: ShoppingCart,
+      label: "Operacional",
+      items: [
+        { icon: ShoppingCart, label: "Vendas", page: "vendas", externalPath: "/dashboard/vendas" },
+        { icon: FileText, label: "Orçamentos", page: "orcamentos" },
+        ...(hideOsMenus ? [] : [{ icon: ClipboardList, label: "Ordens de Serviço", page: "os", externalPath: "/dashboard/os" }]),
+      ],
+    },
+    {
+      icon: Package,
+      label: "Estoque",
+      items: [
+        { icon: Package, label: "Cadastro de Produtos", page: "produtos" },
+        { icon: Store, label: "Movimentação/Inventário", page: "planejamento-compras" },
+      ],
+    },
+    {
+      icon: Wallet,
+      label: "Financeiro",
+      items: [
+        { icon: Wallet, label: "Contas a Pagar", page: "contas-pagar" },
+        { icon: Wallet, label: "Contas a Receber", page: "contas-receber" },
+        { icon: Wallet, label: "Fluxo de Caixa", page: "fluxo-caixa" },
+      ],
+    },
+    {
+      icon: Settings,
+      label: "Configurações",
+      items: [
+        { icon: Settings, label: "Geral", page: "config-empresa" },
+        { icon: ShieldCheck, label: "Master Console", externalPath: "/dashboard/master-console" },
+      ],
+    },
+  ]
 
   const handleNavigation = (page?: string, externalPath?: string) => {
     if (externalPath) {
@@ -295,21 +109,52 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
   }
 
   const isActive = (page?: string) => page === currentPage
+  const isExternalActive = (externalPath?: string) => {
+    if (!externalPath || typeof window === "undefined") return false
+    const path = window.location.pathname
+    return path === externalPath || path.startsWith(`${externalPath}/`)
+  }
+  const isNavActive = (item: PremiumNavLink) => isActive(item.page) || isExternalActive(item.externalPath)
+  const navButtonClass = (active: boolean, highlighted = false) =>
+    cn(
+      "group relative flex items-center gap-3 w-full overflow-hidden rounded-xl border px-3 py-3 text-sm font-semibold transition-smooth",
+      collapsed && "justify-center px-3",
+      highlighted
+        ? "border-primary/40 bg-gradient-primary text-primary-foreground shadow-elegant hover:shadow-glow"
+        : active
+          ? "border-primary/40 bg-primary/15 text-foreground shadow-elegant"
+          : "border-border bg-muted/40 text-foreground/85 hover:border-primary/25 hover:bg-muted/60 hover:text-foreground"
+    )
+  const submenuButtonClass = (active: boolean) =>
+    cn(
+      "group relative flex items-center gap-2 w-full overflow-hidden rounded-xl border px-3 py-2.5 pl-8 text-left text-sm font-semibold transition-smooth",
+      active
+        ? "border-primary/35 bg-primary/15 text-foreground shadow-elegant"
+        : "border-border bg-muted/30 text-foreground/75 hover:border-primary/25 hover:bg-muted/60 hover:text-foreground"
+    )
+  const iconTileClass = (active: boolean, highlighted = false) =>
+    cn(
+      "grid h-7 w-7 shrink-0 place-items-center rounded-md transition-smooth",
+      highlighted
+        ? "bg-primary-foreground/15 text-primary-foreground"
+        : active
+          ? "bg-primary/20 text-primary"
+          : "bg-muted/60 text-foreground/70 group-hover:bg-primary/10 group-hover:text-primary"
+    )
+  const activeGlow = (active: boolean, highlighted = false) =>
+    active || highlighted ? <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-primary shadow-glow" /> : null
 
   return (
     <aside
       className={cn(
-        "hidden lg:flex flex-col border-r backdrop-blur-xl transition-all duration-300 ease-out",
-        classic
-          ? "border-slate-200 bg-slate-50"
-          : "border-white/10 bg-[#000000]",
+        "hidden lg:flex flex-col border-r border-border bg-card text-foreground backdrop-blur-xl transition-all duration-300 ease-out",
         collapsed ? "w-20" : "w-64"
       )}
     >
       <div
         className={cn(
           "flex items-center border-b transition-colors duration-300",
-          classic ? "border-slate-200" : "border-white/10",
+          "border-border",
           collapsed ? "justify-center p-3" : "justify-between p-4"
         )}
       >
@@ -322,7 +167,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
               <h1
                 className={cn(
                   "text-lg font-bold transition-colors duration-300",
-                  classic ? "text-slate-900" : "text-sidebar-foreground"
+                  "text-foreground"
                 )}
               >
                 {APP_DISPLAY_NAME}
@@ -330,7 +175,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
               <p
                 className={cn(
                   "text-xs transition-colors duration-300",
-                  classic ? "text-slate-600" : "text-white/55"
+                  "text-muted-foreground"
                 )}
               >
                 ERP · gestão empresarial
@@ -343,7 +188,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
             onClick={onToggleCollapse}
             className={cn(
               "p-2 rounded-md transition-colors duration-300",
-              classic ? "text-slate-800 hover:bg-slate-100" : "hover:bg-sidebar-accent text-sidebar-foreground"
+              "text-foreground hover:bg-muted/60"
             )}
           >
             <PanelLeftClose className="w-4 h-4" />
@@ -354,7 +199,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
             onClick={onToggleCollapse}
             className={cn(
               "absolute top-4 right-2 p-1 rounded-md transition-colors duration-300",
-              classic ? "text-slate-800 hover:bg-slate-100" : "hover:bg-sidebar-accent text-sidebar-foreground"
+              "text-foreground hover:bg-muted/60"
             )}
           >
             <PanelLeftOpen className="w-4 h-4" />
@@ -366,13 +211,13 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
         <div
           className={cn(
             "px-4 pb-3 border-b transition-colors duration-300",
-            classic ? "border-slate-200" : "border-white/10"
+            "border-border"
           )}
         >
           <p
             className={cn(
               "text-xs mb-1.5 transition-colors duration-300",
-              classic ? "text-slate-600" : "text-white/55"
+              "text-muted-foreground"
             )}
           >
             Unidade ativa
@@ -384,9 +229,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
             <SelectTrigger
               className={cn(
                 "w-full h-9 transition-colors duration-300",
-                classic
-                  ? "border-slate-200 bg-white text-slate-900"
-                  : "bg-sidebar-accent/30 border-sidebar-border"
+                "border-border bg-muted/40 text-foreground"
               )}
             >
               {(() => {
@@ -399,7 +242,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
                     <span
                       className={cn(
                         "truncate text-sm font-medium transition-colors duration-300",
-                        classic ? "text-slate-900" : "text-sidebar-foreground"
+                        "text-foreground"
                       )}
                     >
                       {nome}
@@ -424,98 +267,139 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
       )}
       
       <nav className="flex-1 p-4 overflow-y-auto min-h-0">
-        <ul className="space-y-1">
-          {visibleItems.map((item) => (
-            <li key={item.label}>
-              {item.submenu ? (
-                <div>
-                  <button
-                    onClick={() => toggleSubmenu(item.label)}
-                    className={cn(
-                      "flex items-center justify-between w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-300",
-                      classic
-                        ? "border border-slate-200 bg-slate-50 text-slate-800 hover:bg-slate-100"
-                        : "border border-white/10 bg-white/5 text-white/85 hover:bg-white/10"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <item.icon className="w-5 h-5" />
-                      {!collapsed && item.label}
-                    </div>
-                    {!collapsed && <ChevronDown 
-                      className={cn(
-                        "w-4 h-4 transition-transform duration-200",
-                        openMenus.includes(item.label) && "rotate-180"
-                      )} 
-                    />}
-                  </button>
-                  <ul className={cn(
-                    "overflow-hidden transition-all duration-200",
-                    openMenus.includes(item.label) ? "max-h-[min(28rem,75vh)] mt-1" : "max-h-0"
-                  )}>
-                    {item.submenu.map((subitem) => (
-                      <li key={subitem.label}>
+        <div className="space-y-2">
+          {mainNavItems.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => handleNavigation(item.page, item.externalPath)}
+              className={navButtonClass(isNavActive(item))}
+            >
+              {activeGlow(isNavActive(item))}
+              <span className={iconTileClass(isNavActive(item))}>
+                <item.icon className="h-4 w-4 shrink-0" />
+              </span>
+              {!collapsed && <span className="truncate">{item.label}</span>}
+            </button>
+          ))}
+        </div>
+
+        {!collapsed ? (
+          <Accordion type="multiple" defaultValue={[]} className="mt-4 space-y-2">
+            {navGroups.filter((group) => group.label !== "Configurações").map((group) => (
+              <AccordionItem key={group.label} value={group.label} className="border-0">
+                <AccordionTrigger className="rounded-xl border border-border bg-muted/40 px-3 py-3 text-foreground transition-smooth hover:border-primary/25 hover:bg-muted/60 hover:no-underline">
+                  <span className="flex items-center gap-3 text-sm font-semibold">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted/60 text-foreground/75">
+                      <group.icon className="h-4 w-4 shrink-0" />
+                    </span>
+                    {group.label}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="pb-1 pt-2">
+                  <ul className="space-y-1">
+                    {group.items.map((item) => (
+                      <li key={item.label}>
                         <button
-                          onClick={() => handleNavigation(subitem.page, subitem.externalPath)}
-                          className={cn(
-                            "flex items-center gap-3 w-full text-left px-4 py-2 pl-12 rounded-lg text-sm transition-colors duration-300",
-                            collapsed && "hidden",
-                            isActive(subitem.page)
-                              ? classic
-                                ? "bg-slate-900 text-white font-semibold"
-                                : "bg-white/10 text-white font-semibold"
-                              : classic
-                                ? "bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
-                                : "bg-white/5 text-white/75 hover:bg-white/10 hover:text-white disabled:opacity-50"
-                          )}
+                          onClick={() => handleNavigation(item.page, item.externalPath)}
+                          className={submenuButtonClass(isNavActive(item))}
                         >
-                          {subitem.externalPath ? (
-                            <>
-                              <Calculator className="w-4 h-4 shrink-0 opacity-70" />
-                              {subitem.label}
-                            </>
-                          ) : (
-                            subitem.label
-                          )}
+                          {activeGlow(isNavActive(item))}
+                          <span className={iconTileClass(isNavActive(item))}>
+                            <item.icon className="h-4 w-4 shrink-0" />
+                          </span>
+                          <span className="truncate">{item.label}</span>
                         </button>
                       </li>
                     ))}
                   </ul>
-                </div>
-              ) : (
-                <button
-                  onClick={() => handleNavigation(item.page, item.externalPath)}
-                  className={cn(
-                    "flex items-center gap-3 w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-300",
-                    collapsed && "justify-center",
-                    isActive(item.page)
-                      ? classic
-                        ? "bg-slate-900 text-white"
-                        : "bg-white/10 text-white"
-                      : classic
-                        ? "border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 disabled:opacity-50"
-                        : "border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 disabled:opacity-50"
-                  )}
-                >
-                  <item.icon className="w-5 h-5" />
-                  {!collapsed && item.label}
-                </button>
-              )}
-            </li>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {navGroups.filter((group) => group.label !== "Configurações").map((group) => (
+              <button key={group.label} className={navButtonClass(false)} title={group.label}>
+                <span className={iconTileClass(false)}>
+                  <group.icon className="h-4 w-4 shrink-0" />
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-4 space-y-2">
+          {standaloneNavItems.map((item) => (
+            <button
+              key={item.label}
+              onClick={() => handleNavigation(item.page, item.externalPath)}
+              className={navButtonClass(isNavActive(item))}
+            >
+              {activeGlow(isNavActive(item))}
+              <span className={iconTileClass(isNavActive(item))}>
+                <item.icon className="h-4 w-4 shrink-0" />
+              </span>
+              {!collapsed && <span className="truncate">{item.label}</span>}
+            </button>
           ))}
-        </ul>
+        </div>
+
+        {!collapsed ? (
+          <Accordion type="multiple" defaultValue={[]} className="mt-4 space-y-2">
+            {navGroups.filter((group) => group.label === "Configurações").map((group) => (
+              <AccordionItem key={group.label} value={group.label} className="border-0">
+                <AccordionTrigger className="rounded-xl border border-border bg-muted/40 px-3 py-3 text-foreground transition-smooth hover:border-primary/25 hover:bg-muted/60 hover:no-underline">
+                  <span className="flex items-center gap-3 text-sm font-semibold">
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted/60 text-foreground/75">
+                      <group.icon className="h-4 w-4 shrink-0" />
+                    </span>
+                    {group.label}
+                  </span>
+                </AccordionTrigger>
+                <AccordionContent className="pb-1 pt-2">
+                  <ul className="space-y-1">
+                    {group.items.map((item) => (
+                      <li key={item.label}>
+                        <button
+                          onClick={() => handleNavigation(item.page, item.externalPath)}
+                          className={submenuButtonClass(isNavActive(item))}
+                        >
+                          {activeGlow(isNavActive(item))}
+                          <span className={iconTileClass(isNavActive(item))}>
+                            <item.icon className="h-4 w-4 shrink-0" />
+                          </span>
+                          <span className="truncate">{item.label}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {navGroups.filter((group) => group.label === "Configurações").map((group) => (
+              <button key={group.label} className={navButtonClass(false)} title={group.label}>
+                <span className={iconTileClass(false)}>
+                  <group.icon className="h-4 w-4 shrink-0" />
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </nav>
       
       <div
         className={cn(
           "p-4 border-t transition-colors duration-300",
-          classic ? "border-slate-200" : "border-sidebar-border"
+          "border-border"
         )}
       >
         <div
           className={cn(
             "flex items-center gap-3 px-4 py-3 rounded-lg transition-colors duration-300",
-            classic ? "bg-slate-50" : "bg-secondary/50",
+            "bg-muted/40",
             collapsed && "justify-center px-2"
           )}
         >
@@ -527,7 +411,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
               <p
                 className={cn(
                   "text-sm font-medium truncate transition-colors duration-300",
-                  classic ? "text-slate-900" : "text-sidebar-foreground"
+                  "text-foreground"
                 )}
               >
                 Admin
@@ -535,7 +419,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
               <p
                 className={cn(
                   "text-xs truncate transition-colors duration-300",
-                  classic ? "text-slate-600" : "text-white/55"
+                  "text-muted-foreground"
                 )}
               >
                 admin@seudominio.com

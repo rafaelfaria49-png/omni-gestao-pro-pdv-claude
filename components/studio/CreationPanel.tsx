@@ -31,7 +31,7 @@ const PRODUCTS = [
 export function CreationPanel({ onGenerate, generating, selectedProduct, onSelectProduct, onDbStatus }: Props) {
   const { toast } = useToast()
   const { mode } = useStudioTheme()
-  const classic = mode === "classic"
+  const classic = mode === "classic" || mode === "light" || mode === "soft-ice"
   const [tone, setTone] = useState<"pro" | "irr" | "urg">("pro")
   const [extraPrompt, setExtraPrompt] = useState(
     "Lançamento da nova coleção de smartwatches premium. Destacar bateria de 14 dias e design minimalista."
@@ -86,22 +86,21 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
   }, [onDbStatus, onSelectProduct, selectedProduct])
 
   return (
-    <GlassCard className="rounded-3xl p-4 md:p-5">
+    <GlassCard className="rounded-3xl p-5 md:p-6">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <div
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-xl border transition-colors duration-300",
-                classic ? "border-slate-200 bg-slate-50" : "border-white/10 bg-white/5"
+                "border-border bg-panel"
               )}
             >
               <Wand2 className="h-4 w-4 text-fuchsia-600 dark:text-fuchsia-300" />
             </div>
             <h2
               className={cn(
-                "text-sm font-semibold tracking-tight transition-colors duration-300 dark:font-black dark:text-white",
-                classic ? "text-slate-900" : "text-white"
+                  "text-base font-semibold tracking-tight text-foreground transition-colors duration-300"
               )}
             >
               Painel de Criação IA
@@ -109,8 +108,8 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
           </div>
           <p
             className={cn(
-              "mt-1 text-xs transition-colors duration-300",
-              classic ? "text-slate-600" : "text-white/45"
+              "mt-1 text-sm transition-colors duration-300",
+              "text-muted-foreground"
             )}
           >
             Descreva o post — a IA cuida da arte e legenda
@@ -119,8 +118,7 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
 
         <div
           className={cn(
-            "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-semibold tracking-wide transition-colors duration-300 dark:font-black dark:text-white/60",
-            classic ? "border-slate-200 bg-slate-50 text-slate-600" : "border-white/10 bg-black/40 text-white/60"
+            "inline-flex items-center gap-2 rounded-full border border-border bg-panel px-3 py-1.5 text-xs font-semibold tracking-wide text-muted-foreground transition-colors duration-300"
           )}
         >
           GPT • 50x
@@ -135,16 +133,14 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
           maxLength={500}
           disabled={!!generating}
           className={cn(
-            "min-h-[220px] resize-none rounded-2xl border px-4 py-3 text-sm leading-relaxed backdrop-blur-xl transition-colors duration-300 focus-visible:ring-0 focus-visible:ring-offset-0",
-            classic
-              ? "border-slate-200 bg-white text-slate-800 placeholder:text-slate-400"
-              : "border-white/10 bg-black/50 text-white/85 placeholder:text-white/25"
+            "min-h-[240px] resize-none rounded-2xl border px-5 py-4 text-base leading-relaxed backdrop-blur-xl transition-colors duration-300 focus-visible:ring-0 focus-visible:ring-offset-0",
+            "border-border bg-card text-foreground placeholder:text-muted-foreground"
           )}
         />
         <div
           className={cn(
             "mt-2 flex items-center justify-end gap-2 text-[10px] transition-colors duration-300",
-            classic ? "text-slate-500" : "text-white/35"
+              "text-muted-foreground"
           )}
         >
           <Wand2 className="h-3.5 w-3.5 text-fuchsia-500/90 dark:text-fuchsia-400/80" />
@@ -155,8 +151,7 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
       <div className="mt-4">
         <p
           className={cn(
-            "text-[10px] font-semibold uppercase tracking-[0.28em] transition-colors duration-300 dark:font-black dark:text-white/45",
-            classic ? "text-slate-500" : "text-white/45"
+            "text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground transition-colors duration-300"
           )}
         >
           TOM DE VOZ
@@ -173,14 +168,14 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
                 onClick={() => setTone(t.id as "pro" | "irr" | "urg")}
                 disabled={!!generating}
                 className={cn(
-                  "h-11 rounded-xl transition-colors duration-300",
+                  "h-12 rounded-xl text-base transition-colors duration-300",
                   active
                     ? classic
                       ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
-                      : "border-white/10 bg-white text-black hover:bg-white"
+                      : "border-primary/40 bg-primary text-primary-foreground hover:bg-primary/90"
                     : classic
-                      ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                      : "border-white/10 bg-black/40 text-white/75 hover:bg-white/10"
+                      ? "border-border bg-card text-foreground hover:bg-muted/60"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted/60 hover:text-foreground"
                 )}
               >
                 <Icon
@@ -189,7 +184,7 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
                     active
                       ? classic
                         ? "text-white"
-                        : "text-black"
+                        : "text-primary-foreground"
                       : classic
                         ? "text-slate-500"
                         : "text-white/70"
@@ -205,8 +200,7 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
       <div className="mt-4">
         <p
           className={cn(
-            "text-[10px] font-semibold uppercase tracking-[0.28em] transition-colors duration-300 dark:font-black dark:text-white/45",
-            classic ? "text-slate-500" : "text-white/45"
+            "text-sm font-semibold uppercase tracking-[0.22em] text-muted-foreground transition-colors duration-300"
           )}
         >
           PRODUTO
@@ -215,10 +209,8 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
           <Select value={productValue} onValueChange={(v) => onSelectProduct(v)} disabled={!!generating}>
             <SelectTrigger
               className={cn(
-                "h-12 rounded-2xl backdrop-blur-xl transition-colors duration-300",
-                classic
-                  ? "border-slate-200 bg-white text-slate-900"
-                  : "border-white/10 bg-black/40 text-white"
+                "h-12 rounded-2xl text-base backdrop-blur-xl transition-colors duration-300",
+                "border-border bg-card text-foreground"
               )}
             >
               <SelectValue placeholder="Selecione um produto" />
@@ -234,7 +226,7 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
           <p
             className={cn(
               "mt-1 text-[11px] transition-colors duration-300",
-              classic ? "text-slate-500" : "text-white/35"
+              "text-muted-foreground"
             )}
           >
             {productsBusy ? "Sincronizando produtos…" : "Clique para alternar"}
@@ -247,8 +239,8 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
           <span
             key={label}
             className={cn(
-              "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-bold transition-colors duration-300",
-              classic ? "border-slate-200 bg-slate-50 text-slate-600" : "border-white/10 bg-black/40 text-white/60"
+              "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold transition-colors duration-300",
+              "border-border bg-panel text-muted-foreground"
             )}
           >
             {label}
@@ -268,7 +260,7 @@ export function CreationPanel({ onGenerate, generating, selectedProduct, onSelec
             }
             await onGenerate({ tone, product: productValue, prompt: p })
           }}
-          className="h-12 w-full rounded-2xl bg-gradient-to-r from-fuchsia-600 via-fuchsia-500 to-pink-500 text-sm font-semibold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset,0_0_42px_rgba(236,72,153,0.45),0_0_80px_rgba(217,70,239,0.35),0_18px_50px_rgba(0,0,0,0.55)] transition-[filter,transform,colors] duration-300 hover:from-fuchsia-500 hover:via-fuchsia-400 hover:to-pink-400 hover:brightness-[1.03] active:scale-[0.99] disabled:opacity-60 dark:font-black"
+          className="h-14 w-full rounded-2xl bg-gradient-to-r from-fuchsia-600 via-fuchsia-500 to-pink-500 text-base font-semibold text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset,0_0_42px_rgba(236,72,153,0.45),0_0_80px_rgba(217,70,239,0.35),0_18px_50px_rgba(0,0,0,0.55)] transition-[filter,transform,colors] duration-300 hover:from-fuchsia-500 hover:via-fuchsia-400 hover:to-pink-400 hover:brightness-[1.03] active:scale-[0.99] disabled:opacity-60 dark:font-black"
         >
           <Wand2 className="mr-2 h-4 w-4" />
           {generating ? "Gerando Pack…" : "Gerar Pack de Crescimento"}

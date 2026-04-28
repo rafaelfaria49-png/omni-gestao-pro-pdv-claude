@@ -15,13 +15,13 @@ type Props = {
 
 export function PhonePreview({ brand, product, caption, palette }: Props) {
   const { mode } = useStudioTheme()
-  const classic = mode === "classic"
+  const classic = mode === "classic" || mode === "light" || mode === "soft-ice"
   const p = palette ?? { a: "#d946ef", b: "#22d3ee", c: "#34d399" }
   const heroBg = `linear-gradient(135deg, ${p.a} 0%, ${p.b} 48%, ${p.c} 100%)`
   const productLine = (product || "Produto").trim()
 
   return (
-    <div className="relative mx-auto w-full max-w-[300px] transition-colors duration-300">
+    <div className="relative mx-auto w-full max-w-[420px] origin-top transition-colors duration-300 lg:mr-0 xl:scale-105 2xl:max-w-[450px] 2xl:scale-110">
       {!classic && (
         <div
           className="pointer-events-none absolute inset-0 -z-10 translate-y-6 rounded-[3rem] opacity-30 blur-3xl"
@@ -53,13 +53,13 @@ export function PhonePreview({ brand, product, caption, palette }: Props) {
 
           <div
             className={cn(
-              "flex flex-col gap-3 px-3 pb-4 pt-9 transition-colors duration-300",
+              "flex flex-col gap-4 px-4 pb-5 pt-10 transition-colors duration-300",
               classic ? "text-slate-900" : "text-white"
             )}
           >
             <div
               className={cn(
-                "flex items-center justify-between text-[10px] font-semibold transition-colors duration-300",
+                "flex items-center justify-between text-xs font-semibold transition-colors duration-300",
                 classic ? "text-slate-800" : "text-white"
               )}
             >
@@ -74,10 +74,10 @@ export function PhonePreview({ brand, product, caption, palette }: Props) {
                   style={{ background: `linear-gradient(135deg, ${p.a}, ${p.b})` }}
                 />
                 <div className="leading-tight">
-                  <p className="text-[11px] font-semibold">{brand.replace(/^@/, "")}</p>
+                  <p className="text-sm font-semibold">{brand.replace(/^@/, "")}</p>
                   <p
                     className={cn(
-                      "text-[9px] transition-colors duration-300",
+                      "text-xs transition-colors duration-300",
                       classic ? "text-slate-600" : "text-white/55"
                     )}
                   >
@@ -97,14 +97,14 @@ export function PhonePreview({ brand, product, caption, palette }: Props) {
               />
               <div
                 className={cn(
-                  "absolute inset-x-0 bottom-0 flex flex-col gap-1 p-3 transition-colors duration-300",
+                  "absolute inset-x-0 bottom-0 flex flex-col gap-1.5 p-4 transition-colors duration-300",
                   classic ? "text-white" : "text-white"
                 )}
               >
-                <span className="w-fit rounded-full bg-black/25 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider backdrop-blur dark:bg-background/20">
+                <span className="w-fit rounded-full bg-black/25 px-2.5 py-1 text-xs font-semibold uppercase tracking-wider backdrop-blur dark:bg-background/20">
                   Coleção Aurora
                 </span>
-                <p className="text-sm font-semibold leading-tight drop-shadow">{productLine}</p>
+                <p className="text-lg font-semibold leading-tight drop-shadow">{productLine}</p>
               </div>
             </div>
 
@@ -117,11 +117,11 @@ export function PhonePreview({ brand, product, caption, palette }: Props) {
               <Bookmark className={cn("h-5 w-5", classic ? "text-slate-500" : "text-white/55")} />
             </div>
 
-            <p className={cn("text-[10px] font-semibold", classic ? "text-slate-700" : "text-white/90")}>
+            <p className={cn("text-sm font-semibold", classic ? "text-slate-700" : "text-white/90")}>
               2.847 curtidas
             </p>
 
-            <p className={cn("text-[11px] leading-snug", classic ? "text-slate-800" : "text-white/90")}>
+            <p className={cn("text-sm leading-snug", classic ? "text-slate-800" : "text-white/90")}>
               <span className="font-semibold">{brand.replace(/^@/, "")}</span>{" "}
               <span className={classic ? "text-slate-700" : "text-white/80"}>
                 {caption.trim() ? caption : "\u00a0"}
@@ -133,7 +133,7 @@ export function PhonePreview({ brand, product, caption, palette }: Props) {
 
       <p
         className={cn(
-          "mt-3 text-center text-[10px] uppercase tracking-[0.22em] transition-colors duration-300",
+          "mt-4 text-center text-xs uppercase tracking-[0.22em] transition-colors duration-300",
           classic ? "text-slate-500" : "text-white/45"
         )}
       >

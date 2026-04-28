@@ -163,10 +163,10 @@ export function MascoteStudio({ classic, lojaId }: Props) {
   return (
     <Card
       className={cn(
-        "rounded-3xl border p-4 transition-colors duration-300 md:p-5",
+        "rounded-3xl border p-5 transition-colors duration-300 md:p-6",
         classic
-          ? "border-slate-200 bg-white shadow-sm"
-          : "border-fuchsia-500/20 bg-white/[0.03] backdrop-blur-md shadow-[0_0_0_1px_rgba(217,70,239,0.18)_inset,0_0_40px_rgba(217,70,239,0.10)]"
+          ? "border-border bg-card shadow-sm"
+          : "border-border bg-card backdrop-blur-md shadow-card"
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -262,7 +262,7 @@ export function MascoteStudio({ classic, lojaId }: Props) {
               rows={4}
               className={cn(
                 "rounded-2xl border text-sm",
-                classic ? "border-slate-200 bg-white text-slate-800" : "border-white/10 bg-black/50 text-white/90"
+                classic ? "border-border bg-card text-foreground" : "border-white/10 bg-black/50 text-white/90"
               )}
             />
           </div>

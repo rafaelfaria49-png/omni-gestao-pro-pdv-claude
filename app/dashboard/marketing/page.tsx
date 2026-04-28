@@ -42,7 +42,7 @@ import {
 export default function MarketingStudioPage() {
   const { toast } = useToast()
   const { mode } = useStudioTheme()
-  const classic = mode === "classic"
+  const classic = mode === "classic" || mode === "light" || mode === "soft-ice"
   const { lojaAtivaId } = useLojaAtiva()
   const [growthPack, setGrowthPack] = useState<GrowthPackV2>({ feed: "", reels: "", stories: "" })
   const [packMainTab, setPackMainTab] = useState<MarketingPackMainTab>("feed")
@@ -293,20 +293,20 @@ export default function MarketingStudioPage() {
   }
 
   const tipCard = cn(
-    "flex gap-3 rounded-2xl border p-4 transition-colors duration-300",
-    classic ? "border-slate-200 bg-slate-50/90" : "border-white/10 bg-white/[0.04]"
+    "flex gap-3 rounded-2xl border p-5 transition-colors duration-300 md:p-6",
+    "border-border bg-card"
   )
 
   const voiceRow = cn(
-    "flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-end sm:justify-between transition-colors duration-300",
-    classic ? "border-slate-200 bg-white" : "border-white/10 bg-black/40"
+    "flex flex-col gap-3 rounded-2xl border p-5 sm:flex-row sm:items-end sm:justify-between transition-colors duration-300 md:p-6",
+    "border-border bg-card"
   )
 
   return (
     <main
       className={cn(
-        "relative min-h-[calc(100vh-4rem)] w-full px-4 py-6 transition-colors duration-300 md:px-8 md:py-8",
-        classic ? "bg-white text-slate-900" : "bg-black text-white"
+        "relative min-h-[calc(100vh-4rem)] w-full py-6 text-base transition-colors duration-300 md:py-8",
+        "bg-background text-foreground"
       )}
     >
       <div
@@ -320,13 +320,13 @@ export default function MarketingStudioPage() {
 
       {!classic && (
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-[15%] -top-[25%] h-[60%] w-[55%] rounded-full bg-fuchsia-600/12 blur-[140px]" />
-          <div className="absolute -right-[10%] -top-[20%] h-[55%] w-[45%] rounded-full bg-cyan-500/10 blur-[140px]" />
-          <div className="absolute -bottom-[25%] left-[20%] h-[60%] w-[60%] rounded-full bg-indigo-600/10 blur-[160px]" />
+          <div className="absolute -left-[15%] -top-[25%] h-[60%] w-[55%] rounded-full bg-primary/10 blur-[140px]" />
+          <div className="absolute -right-[10%] -top-[20%] h-[55%] w-[45%] rounded-full bg-info/10 blur-[140px]" />
+          <div className="absolute -bottom-[25%] left-[20%] h-[60%] w-[60%] rounded-full bg-purple/10 blur-[160px]" />
         </div>
       )}
 
-      <div className="relative mx-auto flex max-w-7xl flex-col gap-6">
+      <div className="relative mx-auto flex w-full max-w-full flex-col gap-6 px-4 lg:px-8 xl:px-12">
         <BrandHeader
           palette={palette}
           onPaletteChange={setPalette}
@@ -341,21 +341,21 @@ export default function MarketingStudioPage() {
             <div
               className={cn(
                 "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
-                classic ? "border-slate-200 bg-white" : "border-white/10 bg-white/5"
+                "border-border bg-panel"
               )}
             >
-              <Sparkles className="h-5 w-5 text-fuchsia-600 dark:text-fuchsia-400" />
+              <Sparkles className="h-5 w-5 text-primary" />
             </div>
             <div className="min-w-0">
               <p
                 className={cn(
                   "text-[10px] font-semibold uppercase tracking-[0.2em]",
-                  classic ? "text-slate-500" : "text-white/45"
+                  "text-muted-foreground"
                 )}
               >
                 Sugestão de postagem do dia
               </p>
-              <p className={cn("mt-1 text-sm leading-snug", classic ? "text-slate-800" : "text-white/90")}>
+              <p className="mt-1 text-sm leading-snug text-foreground">
                 {dailyTip}
               </p>
             </div>
@@ -367,12 +367,12 @@ export default function MarketingStudioPage() {
                 htmlFor="brand-voice"
                 className={cn(
                   "text-[10px] font-semibold uppercase tracking-[0.2em]",
-                  classic ? "text-slate-500" : "text-white/45"
+                  "text-muted-foreground"
                 )}
               >
                 Tom de voz da marca
               </Label>
-              <p className={cn("text-xs", classic ? "text-slate-600" : "text-white/50")}>
+              <p className="text-xs text-muted-foreground">
                 A IA ajusta vocabulário no Pack de Crescimento e nas respostas do Google.
               </p>
             </div>
@@ -385,7 +385,7 @@ export default function MarketingStudioPage() {
                 id="brand-voice"
                 className={cn(
                   "h-11 w-full min-w-[200px] rounded-xl sm:w-[260px]",
-                  classic ? "border-slate-200 bg-white" : "border-white/10 bg-black/50"
+                  "border-border bg-card text-foreground"
                 )}
               >
                 <SelectValue placeholder="Tom de voz" />
@@ -400,7 +400,7 @@ export default function MarketingStudioPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-10">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
           <div className="space-y-6 lg:col-span-7">
             <CreationPanel
               onGenerate={handleGenerate}
@@ -410,7 +410,7 @@ export default function MarketingStudioPage() {
               onDbStatus={setMarketingDbStatus}
             />
 
-            <GlassCard className="rounded-3xl p-5 shadow-sm dark:shadow-none">
+            <GlassCard className="rounded-3xl p-6 shadow-sm dark:shadow-none">
               <MarketingPackTabs
                 pack={growthPack}
                 tab={packMainTab}
@@ -422,22 +422,22 @@ export default function MarketingStudioPage() {
               />
             </GlassCard>
 
-            <GlassCard className="rounded-3xl p-5 shadow-sm dark:shadow-none">
+            <GlassCard className="rounded-3xl p-6 shadow-sm dark:shadow-none">
               <div className="flex items-start gap-3">
                 <div
                   className={cn(
                     "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border",
-                    classic ? "border-slate-200 bg-slate-50" : "border-white/10 bg-white/5"
+                    "border-border bg-panel"
                   )}
                 >
-                  <MessageSquareReply className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
+                  <MessageSquareReply className="h-5 w-5 text-info" />
                 </div>
                 <div className="min-w-0 flex-1 space-y-3">
                   <div>
-                    <h3 className={cn("text-sm font-semibold", classic ? "text-slate-900" : "text-white")}>
+                    <h3 className="text-base font-semibold text-foreground">
                       Google Meu Negócio
                     </h3>
-                    <p className={cn("mt-1 text-xs", classic ? "text-slate-600" : "text-white/50")}>
+                    <p className="mt-1 text-sm text-muted-foreground">
                       Cole o comentário da avaliação; a IA gera uma resposta cordial com termos úteis para SEO local.
                     </p>
                   </div>
@@ -448,24 +448,21 @@ export default function MarketingStudioPage() {
                     placeholder="Ex.: Ótimo atendimento, recomendo a loja…"
                     disabled={googleReplyBusy}
                     className={cn(
-                      "rounded-2xl border text-sm",
-                      classic
-                        ? "border-slate-200 bg-white text-slate-800"
-                        : "border-white/10 bg-black/50 text-white/90 placeholder:text-white/30"
+                      "rounded-2xl border text-base",
+                      "border-border bg-card text-foreground placeholder:text-muted-foreground"
                     )}
                   />
                   <Button
                     type="button"
                     onClick={() => void handleGenerateGoogleReply()}
                     disabled={googleReplyBusy}
-                    variant={classic ? "default" : "secondary"}
-                    className={cn(!classic && "bg-white/10 text-white hover:bg-white/15")}
+                    variant="default"
                   >
                     {googleReplyBusy ? "Gerando…" : "Gerar resposta para avaliação"}
                   </Button>
                   {googleReply ? (
                     <div className="space-y-2">
-                      <Label className={cn("text-xs", classic ? "text-slate-600" : "text-white/50")}>
+                      <Label className="text-xs text-muted-foreground">
                         Resposta sugerida
                       </Label>
                       <Textarea
@@ -473,10 +470,8 @@ export default function MarketingStudioPage() {
                         value={googleReply}
                         rows={8}
                         className={cn(
-                          "rounded-2xl border text-sm",
-                          classic
-                            ? "border-slate-200 bg-slate-50 text-slate-800"
-                            : "border-white/10 bg-black/40 text-white/90"
+                          "rounded-2xl border text-base",
+                          "border-border bg-panel text-foreground"
                         )}
                       />
                     </div>
@@ -486,8 +481,8 @@ export default function MarketingStudioPage() {
             </GlassCard>
           </div>
 
-          <aside className="flex flex-col gap-6 lg:col-span-3">
-            <GlassCard className="rounded-3xl p-5 shadow-sm dark:shadow-none">
+          <aside className="flex flex-col items-stretch gap-6 lg:col-span-5 lg:items-end">
+            <GlassCard className="w-full rounded-3xl p-6 shadow-sm dark:shadow-none">
               <PhonePreview
                 brand="aurorastore"
                 product={selectedProduct}
@@ -510,7 +505,7 @@ export default function MarketingStudioPage() {
         <footer
           className={cn(
             "pt-2 text-center text-[10px] uppercase tracking-[0.28em] transition-colors duration-300",
-            classic ? "text-slate-600" : "text-white/55"
+            "text-muted-foreground"
           )}
         >
           Estúdio de Marketing IA · {classic ? "Classic Elegance" : "Black Edition"} · Banco:{" "}
