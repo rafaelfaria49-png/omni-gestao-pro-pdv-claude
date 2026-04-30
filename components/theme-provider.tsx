@@ -1,16 +1,15 @@
-'use client'
+"use client";
 
-import * as React from 'react'
 import {
   ThemeProvider as NextThemesProvider,
   type ThemeProviderProps,
-} from 'next-themes'
-import { StudioThemeProvider } from '@/components/theme/ThemeProvider'
+} from "next-themes";
+import { ThemeProvider as IAMestreThemeProvider } from "@/components/ia-mestre/ThemeProvider";
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return (
     <NextThemesProvider {...props}>
-      <StudioThemeProvider>{children}</StudioThemeProvider>
+      <IAMestreThemeProvider>{children}</IAMestreThemeProvider>
     </NextThemesProvider>
-  )
+  );
 }

@@ -235,7 +235,13 @@ export function Header() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="cursor-pointer rounded-lg">
+              <DropdownMenuSubTrigger
+                className="cursor-pointer rounded-lg"
+                onSelect={(e) => {
+                  // Evita o menu principal fechar no clique e bloqueiar o submenu.
+                  e.preventDefault()
+                }}
+              >
                 <Repeat2 className="mr-2 h-4 w-4" />
                 Alternar Loja
               </DropdownMenuSubTrigger>

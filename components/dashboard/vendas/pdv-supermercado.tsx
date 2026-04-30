@@ -177,7 +177,11 @@ export function PdvSupermercado({
       const term = raw.trim().toLowerCase()
       if (!term) return [...quickItems, ...products].slice(0, 60)
       const list = [...quickItems, ...products]
-      return list.filter((p) => p.name.toLowerCase().includes(term) || p.category.toLowerCase().includes(term)).slice(0, 80)
+      return list.filter((p) =>
+        p.name.toLowerCase().includes(term) ||
+        p.category.toLowerCase().includes(term) ||
+        (p.barcode ? p.barcode.toLowerCase().includes(term) : false)
+      ).slice(0, 80)
     },
     [products, quickItems]
   )

@@ -17,6 +17,9 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ShieldCheck,
+  ShoppingBag,
+  Truck,
+  Receipt,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
@@ -54,7 +57,9 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
   const hideOsMenus = perfilLoja === "variedades" || perfilLoja === "supermercado"
   const mainNavItems: PremiumNavLink[] = [
     { icon: Sparkles, label: "IA Mestre", externalPath: "/dashboard/ia-mestre" },
-    { icon: Bot, label: "Marketing IA", externalPath: "/dashboard/marketing" },
+    { icon: Bot, label: "Marketing IA", externalPath: "/dashboard/marketing-ia" },
+    { icon: ShoppingBag, label: "Marketplaces", externalPath: "/dashboard/marketplaces" },
+    { icon: Truck, label: "Expedição", externalPath: "/dashboard/expedicao" },
     { icon: LayoutDashboard, label: "Painel Inicial", page: "dashboard-omni", externalPath: "/dashboard" },
   ]
   const standaloneNavItems: PremiumNavLink[] = [
@@ -66,7 +71,8 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
       icon: ShoppingCart,
       label: "Operacional",
       items: [
-        { icon: ShoppingCart, label: "Vendas", page: "vendas", externalPath: "/dashboard/vendas" },
+        { icon: ShoppingCart, label: "PDV (Caixa)", page: "vendas", externalPath: "/dashboard/vendas" },
+        { icon: Receipt, label: "Histórico de Vendas", externalPath: "/dashboard/historico-vendas" },
         { icon: FileText, label: "Orçamentos", page: "orcamentos" },
         ...(hideOsMenus ? [] : [{ icon: ClipboardList, label: "Ordens de Serviço", page: "os", externalPath: "/dashboard/os" }]),
       ],
@@ -122,15 +128,15 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
       highlighted
         ? "border-primary/40 bg-gradient-primary text-primary-foreground shadow-elegant hover:shadow-glow"
         : active
-          ? "border-primary/40 bg-primary/15 text-foreground shadow-elegant"
-          : "border-border bg-muted/40 text-foreground/85 hover:border-primary/25 hover:bg-muted/60 hover:text-foreground"
+          ? "border-primary/40 bg-primary/15 text-primary shadow-elegant border-r-2"
+          : "border-border bg-muted/40 text-foreground/85 hover:bg-primary/10 hover:text-primary"
     )
   const submenuButtonClass = (active: boolean) =>
     cn(
       "group relative flex items-center gap-2 w-full overflow-hidden rounded-xl border px-3 py-2.5 pl-8 text-left text-sm font-semibold transition-smooth",
       active
-        ? "border-primary/35 bg-primary/15 text-foreground shadow-elegant"
-        : "border-border bg-muted/30 text-foreground/75 hover:border-primary/25 hover:bg-muted/60 hover:text-foreground"
+        ? "border-primary/35 bg-primary/15 text-primary shadow-elegant border-r-2"
+        : "border-border bg-muted/30 text-foreground/75 hover:bg-primary/10 hover:text-primary"
     )
   const iconTileClass = (active: boolean, highlighted = false) =>
     cn(

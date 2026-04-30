@@ -15,17 +15,35 @@ export type ModelId =
   | "meta-llama/llama-3-70b-instruct"
   | "mistralai/mixtral-8x22b-instruct";
 
-const MODELS: { id: ModelId; name: string; provider: string; tag: string; auto?: boolean }[] = [
-  { id: "openai/gpt-5.5-pro", name: "ChatGPT-5.5 Pro (Novo)", provider: "OpenAI", tag: "ChatGPT" },
-  { id: "openai/gpt-5.5-thinking", name: "ChatGPT-5.5 Thinking", provider: "OpenAI", tag: "ChatGPT" },
-  { id: "openai/gpt-5", name: "ChatGPT-5 (Omni)", provider: "OpenAI", tag: "ChatGPT" },
-  { id: "openai/gpt-4o", name: "ChatGPT-4o", provider: "OpenAI", tag: "ChatGPT" },
-  { id: "anthropic/claude-opus-4.7", name: "Claude 4.7 Opus (Ultra Premium)", provider: "Anthropic", tag: "Claude" },
-  { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", provider: "Anthropic", tag: "Claude" },
-  { id: "google/gemini-3.1-pro", name: "Gemini 3.1 Pro", provider: "Google", tag: "Gemini" },
-  { id: "google/gemini-1.5-flash", name: "Gemini 1.5 Flash", provider: "Google", tag: "Gemini" },
-  { id: "meta-llama/llama-3-70b-instruct", name: "Llama 3 (70B)", provider: "Meta & Open Source", tag: "Open Source" },
-  { id: "mistralai/mixtral-8x22b-instruct", name: "Mixtral 8x22B", provider: "Meta & Open Source", tag: "Open Source" },
+const MODELS: {
+  id: ModelId;
+  name: string;
+  provider: string;
+  tag: string;
+  description: string;
+  auto?: boolean;
+}[] = [
+  {
+    id: "anthropic/claude-3.5-sonnet",
+    name: "Claude Sonnet 4.6",
+    provider: "Anthropic",
+    tag: "Criatividade",
+    description: "Especialista em Criatividade e Copywriting Humano.",
+  },
+  {
+    id: "openai/gpt-4o",
+    name: "GPT-o1 Pro",
+    provider: "OpenAI",
+    tag: "Estratégia",
+    description: "Especialista em Lógica, Estratégia e ROI.",
+  },
+  {
+    id: "google/gemini-1.5-flash",
+    name: "DeepSeek V4 Flash",
+    provider: "DeepSeek",
+    tag: "Flash",
+    description: "Ultra-velocidade para tarefas rápidas e automações.",
+  },
 ];
 
 export function ModelSelect({ value, onChange }: { value: ModelId; onChange: (v: ModelId) => void; }) {
@@ -52,7 +70,7 @@ export function ModelSelect({ value, onChange }: { value: ModelId; onChange: (v:
                   </span>
                   <div className="flex flex-col">
                     <Select.ItemText><span className="font-medium">{m.name}</span></Select.ItemText>
-                    <span className="text-xs text-muted-foreground">{m.provider} · {m.tag}</span>
+                    <span className="text-xs text-muted-foreground">{m.description}</span>
                   </div>
                 </div>
                 <Select.ItemIndicator><Check className="h-4 w-4 text-primary" /></Select.ItemIndicator>

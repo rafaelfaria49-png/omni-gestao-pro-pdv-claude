@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { PdvClassic, type VendasPDVProps } from "./pdv-classic"
 import { PdvSupermercado } from "./pdv-supermercado"
+import { PdvAssistenciaEnterprise } from "./pdv-assistencia-enterprise"
 import { usePerfilLoja } from "@/lib/perfil-loja-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
@@ -89,6 +90,6 @@ export function VendasPDV(props: VendasPDVProps) {
   }, [hydrated, pdvParams.pdvClassicLayout])
 
   if (layout === "supermercado") return <PdvSupermercado {...props} />
-  const uiShell = classicLayout === "services" ? "default" : "omni-smart"
-  return <PdvClassic {...props} uiShell={uiShell} />
+  if (classicLayout === "services") return <PdvAssistenciaEnterprise />
+  return <PdvClassic {...props} uiShell="omni-smart" />
 }

@@ -213,10 +213,8 @@ export function ConfiguracoesSistema({ initialTab = "geral" }: ConfiguracoesSist
   const [deleteTermoId, setDeleteTermoId] = useState<string | null>(null)
   const { perfilLoja } = usePerfilLoja()
 
-  // Atualizar aba quando prop mudar
-  useEffect(() => {
-    setActiveTab(normalizeConfigTab(initialTab))
-  }, [initialTab])
+  // initialTab é lido apenas pelo useState acima — não reativamente —
+  // para evitar que re-renders do pai resetem a aba que o usuário já navegou.
 
   useEffect(() => {
     try {

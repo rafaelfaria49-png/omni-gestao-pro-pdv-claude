@@ -338,9 +338,11 @@ export function PdvClassic({
   const hiddenCategoriesSet = new Set((pdvParams.categoriasOcultasNoPdv ?? []).map((c) => c.toLowerCase()))
   const filteredProducts = products.filter((p) => {
     const catLower = p.category.toLowerCase()
-    const matchName = p.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchCat = catLower.includes(searchTerm.toLowerCase())
-    if (!matchName && !matchCat) return false
+    const term = searchTerm.toLowerCase()
+    const matchName = p.name.toLowerCase().includes(term)
+    const matchCat = catLower.includes(term)
+    const matchBarcode = p.barcode ? p.barcode.toLowerCase().includes(term) : false
+    if (!matchName && !matchCat && !matchBarcode) return false
     if (searchTrim.length === 0 && PDV_CATEGORIAS_OCULTAS_ATE_BUSCA.has(catLower)) return false
     if (searchTrim.length > 0) return true
     if (hideCategoriesPdv && hiddenCategoriesSet.has(catLower)) return false
@@ -1056,12 +1058,7 @@ export function PdvClassic({
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden text-[17px] text-foreground antialiased sm:text-[18px]">
       {uiShell === "omni-smart" ? (
         <div
-          className={cn(
-            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t transition-colors duration-300",
-            classicStudio
-              ? "border-slate-200/90 bg-slate-50"
-              : "border-white/10 bg-[#000000]"
-          )}
+          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border bg-background transition-colors duration-300"
         >
           <CaixaStatusBar
             variant="pdv"
@@ -1178,18 +1175,10 @@ export function PdvClassic({
         </div>
       ) : (
         <div
-          className={cn(
-            "flex min-h-0 w-full min-w-0 flex-1 flex-col gap-0 overflow-hidden border-t px-0 py-0 lg:flex-row transition-colors duration-300",
-            classicStudio
-              ? "border-slate-200/90 bg-slate-50"
-              : "border-white/10 bg-[#000000]"
-          )}
+          className="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-0 overflow-hidden border-t border-border bg-background px-0 py-0 lg:flex-row transition-colors duration-300"
         >
           <div
-            className={cn(
-              "flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r-0 lg:border-r",
-              classicStudio ? "lg:border-slate-200/90" : "lg:border-white/10"
-            )}
+            className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r-0 lg:border-r lg:border-border"
           >
             <CaixaStatusBar
               variant="pdv"
@@ -1198,10 +1187,7 @@ export function PdvClassic({
             />
 
             <div
-              className={cn(
-                "shrink-0 border-b py-2.5",
-                classicStudio ? "border-slate-200/90 bg-slate-50" : "border-white/10 bg-[#000000]"
-              )}
+              className="shrink-0 border-b border-border bg-background py-2.5"
             >
               <div className="px-1 sm:px-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1214,7 +1200,7 @@ export function PdvClassic({
                     className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-base font-semibold transition-all sm:flex-none ${
                       saleMode === "balcao"
                         ? "bg-primary text-primary-foreground shadow-lg"
-                        : "text-black/70 hover:text-black"
+                        : "text-foreground/70 hover:text-foreground"
                     }`}
                   >
                     <Zap className="h-5 w-5" />
@@ -1225,7 +1211,7 @@ export function PdvClassic({
                     className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-base font-semibold transition-all sm:flex-none ${
                       saleMode === "completa"
                         ? "bg-primary text-primary-foreground shadow-lg"
-                        : "text-black/70 hover:text-black"
+                        : "text-foreground/70 hover:text-foreground"
                     }`}
                   >
                     <FileText className="h-5 w-5" />
@@ -1240,7 +1226,7 @@ export function PdvClassic({
                   {saleMode === "balcao" ? "Modo Rapido" : "Modo Completo - Com NF-e"}
                 </Badge>
                 <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-end">
-                  <span className="mr-1 text-sm font-medium text-black">Interface:</span>
+                  <span className="mr-1 text-sm font-medium text-foreground">Interface:</span>
                   <Button type="button" size="sm" variant={pdvUiMode === "default" ? "default" : "outline"} className="h-10 text-sm" onClick={() => setPdvUiMode("default")}>
                     Padrão
                   </Button>
@@ -1494,7 +1480,7 @@ export function PdvClassic({
                 <button
                   type="button"
                   onClick={() => router.replace("/?page=os")}
-                  className="mt-3 flex h-16 w-full items-center justify-between gap-3 rounded-xl border-2 border-black bg-black px-4 text-left text-white shadow-lg transition-colors hover:bg-black/90"
+                  className="mt-3 flex h-16 w-full items-center justify-between gap-3 rounded-xl border-2 border-primary bg-primary px-4 text-left text-primary-foreground shadow-lg transition-colors hover:bg-primary/90"
                 >
                   <span className="flex min-w-0 items-center gap-2 text-lg font-extrabold tracking-wide">
                     <ClipboardList className="h-6 w-6 shrink-0" />
@@ -1577,12 +1563,7 @@ export function PdvClassic({
       </div>
 
         <div
-          className={cn(
-            "flex min-h-0 w-full min-w-0 flex-col overflow-hidden border-l-2 lg:h-full lg:w-[450px] lg:min-w-[450px] lg:max-w-[450px] lg:shrink-0 lg:grow-0",
-            classicStudio
-              ? "border-slate-200/90 bg-slate-50"
-              : "border-white/10 bg-[#000000]"
-          )}
+          className="flex min-h-0 w-full min-w-0 flex-col overflow-hidden border-l-2 border-border bg-card lg:h-full lg:w-[450px] lg:min-w-[450px] lg:max-w-[450px] lg:shrink-0 lg:grow-0"
         >
           {cart.length === 0 ? (
             <div className="flex min-h-0 flex-1 flex-col justify-center px-2 py-8 text-center sm:px-3">

@@ -11,6 +11,21 @@ import {
   QrCode,
   User,
   Wrench,
+  Plus,
+  Minus,
+  Settings2,
+  X,
+  RefreshCw,
+  Layers,
+  CalendarClock,
+  CheckCircle2,
+  AlertTriangle,
+  Lock,
+  Unlock,
+  RotateCcw,
+  Check,
+  ChevronDown,
+  Keyboard,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -18,285 +33,1282 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { PDV_PRODUCTS_BASE, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 
-type QuickItem = {
-  id: string
-  kind: "servico" | "produto"
-  title: string
-  price: number
-  hint?: string
+// ─── Catalog slices (defaults) ───────────────────────────────────────────────
+
+const ALL_SERVICES = PDV_PRODUCTS_BASE.filter((p) => p.category === "Servicos")
+
+const TOP_PRODUCT_CATEGORIES = ["Peliculas", "Cabos", "Capinhas", "Carregadores", "Fones"]
+const ALL_TOP_PRODUCTS: PdvCatalogProduct[] = []
+for (const cat of TOP_PRODUCT_CATEGORIES) {
+  const items = PDV_PRODUCTS_BASE.filter((p) => p.category === cat).slice(0, 2)
+  ALL_TOP_PRODUCTS.push(...items)
+  if (ALL_TOP_PRODUCTS.length >= 8) break
 }
 
-type CartLine = {
-  id: string
-  title: string
-  price: number
-  qty: number
-}
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const QUICK_SERVICOS: QuickItem[] = [
-  { id: "svc_tela", kind: "servico", title: "Troca de Tela", price: 350, hint: "iPhone / Android" },
-  { id: "svc_limpeza", kind: "servico", title: "Limpeza Técnica", price: 90, hint: "Preventiva" },
-  { id: "svc_software", kind: "servico", title: "Software / Desbloqueio", price: 120, hint: "Flash / Reset" },
-  { id: "svc_conector", kind: "servico", title: "Conector de Carga", price: 150, hint: "Troca / Reparo" },
+type CartLine = { id: string; title: string; price: number; qty: number }
+
+type PayMethod = "dinheiro" | "pix" | "credito" | "debito" | "a_prazo" | "multiplo"
+
+type CaixaState = "fechado" | "aberto"
+
+const PAY_METHODS: {
+  id: PayMethod
+  label: string
+  shortLabel: string
+  Icon: React.ElementType
+  color: string
+  hotkey?: string
+}[] = [
+  {
+    id: "dinheiro",
+    label: "Dinheiro",
+    shortLabel: "Dinheiro",
+    Icon: Banknote,
+    color: "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20",
+    hotkey: "F4",
+  },
+  {
+    id: "pix",
+    label: "PIX",
+    shortLabel: "PIX",
+    Icon: QrCode,
+    color: "bg-teal-600 hover:bg-teal-700 shadow-teal-600/20",
+    hotkey: "F7",
+  },
+  {
+    id: "credito",
+    label: "Cartão Crédito",
+    shortLabel: "Crédito",
+    Icon: CreditCard,
+    color: "bg-blue-600 hover:bg-blue-700 shadow-blue-600/20",
+    hotkey: "F6",
+  },
+  {
+    id: "debito",
+    label: "Cartão Débito",
+    shortLabel: "Débito",
+    Icon: CreditCard,
+    color: "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20",
+  },
+  {
+    id: "a_prazo",
+    label: "A Prazo (Fiado)",
+    shortLabel: "A Prazo",
+    Icon: CalendarClock,
+    color: "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20",
+    hotkey: "F8",
+  },
+  {
+    id: "multiplo",
+    label: "Pgto. Múltiplo",
+    shortLabel: "Múltiplo",
+    Icon: Layers,
+    color: "bg-violet-600 hover:bg-violet-700 shadow-violet-600/20",
+    hotkey: "F10",
+  },
 ]
 
-const QUICK_PRODUTOS: QuickItem[] = [
-  { id: "prd_capinha", kind: "produto", title: "Capinha Anti-impacto", price: 40, hint: "Acessório" },
-  { id: "prd_pelicula", kind: "produto", title: "Película 3D / Vidro", price: 25, hint: "Aplicação" },
-  { id: "prd_cabo", kind: "produto", title: "Carregador / Cabo", price: 45, hint: "Turbo / USB-C" },
-  { id: "prd_fone", kind: "produto", title: "Fone Bluetooth", price: 79.9, hint: "TWS" },
-]
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function brl(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
+}
+
+function parseBrl(s: string): number {
+  const v = Number(s.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, ""))
+  return Number.isFinite(v) && v >= 0 ? v : 0
 }
 
 function newLineId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+// ─── QuickCard ────────────────────────────────────────────────────────────────
+
+function QuickCard({
+  item,
+  onAdd,
+}: {
+  item: PdvCatalogProduct
+  onAdd: (item: PdvCatalogProduct) => void
+}) {
+  return (
+    <Card
+      className="group cursor-pointer rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:bg-accent hover:shadow-md active:scale-[0.98]"
+      onClick={() => onAdd(item)}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{item.category}</p>
+        </div>
+        <Badge
+          variant="secondary"
+          className="shrink-0 rounded-xl px-2 py-0.5 text-xs font-bold tabular-nums"
+        >
+          {brl(item.price)}
+        </Badge>
+      </div>
+      <div className="mt-3 flex items-center justify-between">
+        <span className="text-[10px] text-muted-foreground">
+          {item.stock < 999 ? (item.stock > 0 ? `${item.stock} em estoque` : "Sem estoque") : "Serviço"}
+        </span>
+        <span className="grid h-6 w-6 place-items-center rounded-lg bg-primary/10 text-primary opacity-0 transition group-hover:opacity-100">
+          <Plus className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    </Card>
+  )
+}
+
+// ─── PaymentModal ─────────────────────────────────────────────────────────────
+
+function PaymentModal({
+  open,
+  total,
+  customerName,
+  defaultMethod = "dinheiro",
+  onConfirm,
+  onClose,
+}: {
+  open: boolean
+  total: number
+  customerName: string
+  defaultMethod?: PayMethod
+  onConfirm: (method: PayMethod, notes: string) => void
+  onClose: () => void
+}) {
+  const [method, setMethod] = useState<PayMethod>(defaultMethod)
+
+  // Sync default method whenever the modal opens with a different key
+  useEffect(() => {
+    if (open) setMethod(defaultMethod)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, defaultMethod])
+  const [amountPaid, setAmountPaid] = useState("")
+  const [multiplo1, setMultiplo1] = useState<PayMethod>("dinheiro")
+  const [multiplo1Value, setMultiplo1Value] = useState("")
+  const [multiplo2, setMultiplo2] = useState<PayMethod>("pix")
+  const [notes, setNotes] = useState("")
+
+  const paid = parseBrl(amountPaid)
+  const troco = Math.max(0, paid - total)
+  const m1val = parseBrl(multiplo1Value)
+  const m2val = Math.max(0, total - m1val)
+
+  const missingCustomer = method === "a_prazo" && !customerName.trim()
+  const multiplo1Error = method === "multiplo" && m1val > total
+  const canConfirm =
+    !missingCustomer &&
+    !multiplo1Error &&
+    (method === "pix" ||
+      method === "credito" ||
+      method === "debito" ||
+      method === "a_prazo" ||
+      (method === "dinheiro" && paid >= total) ||
+      (method === "multiplo" && m1val > 0 && m1val < total))
+
+  function handleConfirm() {
+    if (!canConfirm) return
+    const notesLines: string[] = []
+    if (notes) notesLines.push(notes)
+    if (method === "multiplo") {
+      const m1 = PAY_METHODS.find((p) => p.id === multiplo1)!
+      const m2 = PAY_METHODS.find((p) => p.id === multiplo2)!
+      notesLines.push(
+        `Múltiplo: ${m1.label} ${brl(m1val)} + ${m2.label} ${brl(m2val)}`,
+      )
+    }
+    if (method === "dinheiro") notesLines.push(`Troco: ${brl(troco)}`)
+    onConfirm(method, notesLines.join(" | "))
+    setAmountPaid("")
+    setNotes("")
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg rounded-2xl border-border bg-card p-0 shadow-lg">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle className="flex items-center justify-between text-lg font-bold text-foreground">
+            <span>Finalizar Venda</span>
+            <span className="text-2xl font-black tabular-nums text-emerald-500">{brl(total)}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-5 px-6 py-5">
+          {/* Method grid */}
+          <div>
+            <Label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Forma de Pagamento
+            </Label>
+            <div className="grid grid-cols-3 gap-2">
+              {PAY_METHODS.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMethod(m.id)}
+                  className={cn(
+                    "flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-2.5 text-xs font-bold transition-all",
+                    method === m.id
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                  )}
+                >
+                  <m.Icon className="h-4 w-4" />
+                  {m.shortLabel}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Method-specific inputs */}
+          {method === "dinheiro" && (
+            <div className="space-y-3">
+              <div>
+                <Label className="mb-1 block text-sm text-muted-foreground">Valor recebido</Label>
+                <Input
+                  autoFocus
+                  value={amountPaid}
+                  onChange={(e) => setAmountPaid(e.target.value)}
+                  placeholder="R$ 0,00"
+                  className="h-12 rounded-xl text-right text-lg font-bold tabular-nums"
+                  inputMode="decimal"
+                />
+              </div>
+              {paid > 0 && (
+                <div
+                  className={cn(
+                    "flex items-center justify-between rounded-xl border px-4 py-3",
+                    troco > 0
+                      ? "border-emerald-500/30 bg-emerald-500/10"
+                      : paid < total
+                        ? "border-destructive/30 bg-destructive/10"
+                        : "border-border bg-muted/40",
+                  )}
+                >
+                  <span className="text-sm font-semibold text-muted-foreground">
+                    {troco > 0 ? "Troco" : paid < total ? "Faltam" : "Valor exato"}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-xl font-black tabular-nums",
+                      troco > 0
+                        ? "text-emerald-500"
+                        : paid < total
+                          ? "text-destructive"
+                          : "text-foreground",
+                    )}
+                  >
+                    {troco > 0 ? brl(troco) : paid < total ? brl(total - paid) : "✓"}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(method === "pix" || method === "credito" || method === "debito") && (
+            <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-4">
+              <span className="text-sm text-muted-foreground">Total a cobrar</span>
+              <span className="text-2xl font-black tabular-nums text-foreground">{brl(total)}</span>
+            </div>
+          )}
+
+          {method === "a_prazo" && (
+            <div className="space-y-3">
+              {missingCustomer && (
+                <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  Informe o nome do cliente no painel antes de usar esta forma.
+                </div>
+              )}
+              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Cliente</p>
+                  <p className="font-semibold text-foreground">
+                    {customerName.trim() || <span className="italic text-muted-foreground">Não informado</span>}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Total fiado</p>
+                  <p className="text-xl font-black tabular-nums text-amber-500">{brl(total)}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {method === "multiplo" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Método 1</Label>
+                  <select
+                    value={multiplo1}
+                    onChange={(e) => setMultiplo1(e.target.value as PayMethod)}
+                    className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
+                  >
+                    {PAY_METHODS.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    value={multiplo1Value}
+                    onChange={(e) => setMultiplo1Value(e.target.value)}
+                    placeholder="R$ 0,00"
+                    className="h-9 rounded-xl text-right text-sm tabular-nums"
+                    inputMode="decimal"
+                  />
+                  {multiplo1Error && (
+                    <p className="text-xs text-destructive">Valor maior que o total</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Método 2</Label>
+                  <select
+                    value={multiplo2}
+                    onChange={(e) => setMultiplo2(e.target.value as PayMethod)}
+                    className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
+                  >
+                    {PAY_METHODS.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex h-9 items-center justify-end rounded-xl border border-border bg-muted/50 px-3 text-sm font-bold tabular-nums text-foreground">
+                    {brl(m2val >= 0 ? m2val : 0)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <Label className="mb-1 block text-xs text-muted-foreground">Observações (opcional)</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ex: cliente solicitou nota, desconto autorizado…"
+              className="h-16 resize-none rounded-xl text-sm"
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="border-t border-border px-6 py-4">
+          <Button variant="outline" className="rounded-xl" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={!canConfirm}
+            className="rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+            onClick={handleConfirm}
+          >
+            <CheckCircle2 className="mr-2 h-4 w-4" />
+            Confirmar Venda
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── CaixaModal ───────────────────────────────────────────────────────────────
+
+function CaixaModal({
+  open,
+  estado,
+  salesCount,
+  salesTotal,
+  onAbrir,
+  onFechar,
+  onClose,
+}: {
+  open: boolean
+  estado: CaixaState
+  salesCount: number
+  salesTotal: number
+  onAbrir: (troco: number) => void
+  onFechar: () => void
+  onClose: () => void
+}) {
+  const [troco, setTroco] = useState("")
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm rounded-2xl border-border bg-card">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            {estado === "fechado" ? (
+              <>
+                <Unlock className="h-5 w-5 text-emerald-500" />
+                Abrir Caixa
+              </>
+            ) : (
+              <>
+                <Lock className="h-5 w-5 text-amber-500" />
+                Fechar Caixa
+              </>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+
+        {estado === "fechado" ? (
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Informe o valor do troco inicial (fundo de caixa) para iniciar o turno.
+            </p>
+            <div>
+              <Label className="mb-1 block text-sm">Troco inicial (R$)</Label>
+              <Input
+                autoFocus
+                value={troco}
+                onChange={(e) => setTroco(e.target.value)}
+                placeholder="Ex: 100,00"
+                className="h-12 rounded-xl text-right text-lg font-bold tabular-nums"
+                inputMode="decimal"
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">Resumo do turno atual:</p>
+            <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Vendas realizadas</span>
+                <span className="font-semibold text-foreground">{salesCount}</span>
+              </div>
+              <Separator className="bg-border" />
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">Total em vendas</span>
+                <span className="text-lg font-black tabular-nums text-emerald-500">
+                  {brl(salesTotal)}
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Ao fechar o caixa, o turno é encerrado e um relatório é gerado.
+            </p>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" className="rounded-xl" onClick={onClose}>
+            Cancelar
+          </Button>
+          {estado === "fechado" ? (
+            <Button
+              className="rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700"
+              onClick={() => {
+                onAbrir(parseBrl(troco))
+                setTroco("")
+              }}
+            >
+              <Unlock className="mr-2 h-4 w-4" />
+              Abrir Caixa
+            </Button>
+          ) : (
+            <Button
+              className="rounded-xl bg-amber-600 font-bold text-white hover:bg-amber-700"
+              onClick={onFechar}
+            >
+              <Lock className="mr-2 h-4 w-4" />
+              Fechar Caixa
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── TrocasModal ──────────────────────────────────────────────────────────────
+
+function TrocasModal({
+  open,
+  onClose,
+}: {
+  open: boolean
+  onClose: () => void
+}) {
+  const [itemDesc, setItemDesc] = useState("")
+  const [motivo, setMotivo] = useState("")
+  const [done, setDone] = useState(false)
+
+  function handleConfirm() {
+    if (!itemDesc.trim()) return
+    setDone(true)
+    setTimeout(() => {
+      setDone(false)
+      setItemDesc("")
+      setMotivo("")
+      onClose()
+    }, 1500)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm rounded-2xl border-border bg-card">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            <RotateCcw className="h-5 w-5 text-blue-500" />
+            Trocas e Devoluções
+          </DialogTitle>
+        </DialogHeader>
+
+        {done ? (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+            <p className="font-semibold text-foreground">Troca registrada com sucesso!</p>
+          </div>
+        ) : (
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="mb-1 block text-sm">Item devolvido / trocado</Label>
+              <Input
+                autoFocus
+                value={itemDesc}
+                onChange={(e) => setItemDesc(e.target.value)}
+                placeholder="Ex: Película Samsung A54"
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="mb-1 block text-sm">Motivo</Label>
+              <Textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Ex: Produto com defeito, tamanho errado…"
+                className="h-20 resize-none rounded-xl text-sm"
+              />
+            </div>
+          </div>
+        )}
+
+        {!done && (
+          <DialogFooter>
+            <Button variant="outline" className="rounded-xl" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!itemDesc.trim()}
+              className="rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+              onClick={handleConfirm}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Registrar Troca
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── EditarAtalhosModal ───────────────────────────────────────────────────────
+
+function EditarAtalhosModal({
+  open,
+  selectedServiceIds,
+  selectedProductIds,
+  onSave,
+  onClose,
+}: {
+  open: boolean
+  selectedServiceIds: string[]
+  selectedProductIds: string[]
+  onSave: (serviceIds: string[], productIds: string[]) => void
+  onClose: () => void
+}) {
+  const [svcIds, setSvcIds] = useState<string[]>(selectedServiceIds)
+  const [prdIds, setPrdIds] = useState<string[]>(selectedProductIds)
+
+  // Reset to props when modal opens
+  useEffect(() => {
+    if (open) {
+      setSvcIds(selectedServiceIds)
+      setPrdIds(selectedProductIds)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const toggleSvc = (id: string) =>
+    setSvcIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : prev.length < 8
+          ? [...prev, id]
+          : prev,
+    )
+
+  const togglePrd = (id: string) =>
+    setPrdIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : prev.length < 8
+          ? [...prev, id]
+          : prev,
+    )
+
+  const allProducts = PDV_PRODUCTS_BASE.filter((p) => p.category !== "Servicos")
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-xl rounded-2xl border-border bg-card p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            <Settings2 className="h-5 w-5 text-primary" />
+            Editar Atalhos do Grid Rápido
+          </DialogTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Selecione até 8 serviços e até 8 produtos para aparecer nos atalhos. O restante fica disponível pela busca.
+          </p>
+        </DialogHeader>
+
+        <ScrollArea className="max-h-[60vh]">
+          <div className="space-y-5 px-6 py-4">
+            {/* Services */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Serviços
+                </p>
+                <Badge variant="secondary" className="text-xs">
+                  {svcIds.length}/8
+                </Badge>
+              </div>
+              <div className="space-y-1.5">
+                {ALL_SERVICES.map((p) => {
+                  const selected = svcIds.includes(p.id)
+                  const disabled = !selected && svcIds.length >= 8
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => toggleSvc(p.id)}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm transition-all",
+                        selected
+                          ? "border-primary/40 bg-primary/10 text-foreground"
+                          : disabled
+                            ? "border-border bg-muted/20 text-muted-foreground opacity-50"
+                            : "border-border bg-background text-foreground hover:border-primary/30 hover:bg-muted/40",
+                      )}
+                    >
+                      <span>{p.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="tabular-nums text-muted-foreground">{brl(p.price)}</span>
+                        <span
+                          className={cn(
+                            "grid h-5 w-5 place-items-center rounded-md border",
+                            selected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-background",
+                          )}
+                        >
+                          {selected && <Check className="h-3 w-3" />}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <Separator className="bg-border" />
+
+            {/* Products */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Produtos
+                </p>
+                <Badge variant="secondary" className="text-xs">
+                  {prdIds.length}/8
+                </Badge>
+              </div>
+              <div className="space-y-1.5">
+                {allProducts.map((p) => {
+                  const selected = prdIds.includes(p.id)
+                  const disabled = !selected && prdIds.length >= 8
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => togglePrd(p.id)}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm transition-all",
+                        selected
+                          ? "border-primary/40 bg-primary/10 text-foreground"
+                          : disabled
+                            ? "border-border bg-muted/20 text-muted-foreground opacity-50"
+                            : "border-border bg-background text-foreground hover:border-primary/30 hover:bg-muted/40",
+                      )}
+                    >
+                      <span className="min-w-0 truncate">{p.name}</span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-xs text-muted-foreground">{p.category}</span>
+                        <span className="tabular-nums text-muted-foreground">{brl(p.price)}</span>
+                        <span
+                          className={cn(
+                            "grid h-5 w-5 place-items-center rounded-md border",
+                            selected
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-border bg-background",
+                          )}
+                        >
+                          {selected && <Check className="h-3 w-3" />}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
+
+        <DialogFooter className="border-t border-border px-6 py-4">
+          <Button variant="outline" className="rounded-xl" onClick={onClose}>
+            Cancelar
+          </Button>
+          <Button
+            className="rounded-xl"
+            onClick={() => {
+              onSave(svcIds, prdIds)
+              onClose()
+            }}
+          >
+            <Check className="mr-2 h-4 w-4" />
+            Salvar Atalhos
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export function PdvAssistenciaEnterprise() {
   const inputRef = useRef<HTMLInputElement | null>(null)
+  const customerInputRef = useRef<HTMLInputElement | null>(null)
 
+  // ── Time ────────────────────────────────────────────────────────────────────
   const [now, setNow] = useState(() => new Date())
-  const [operatorName] = useState("Operador")
-  const [search, setSearch] = useState("")
-  const [tab, setTab] = useState<"servicos" | "produtos">("servicos")
-  const [cart, setCart] = useState<CartLine[]>([])
-  const [discount, setDiscount] = useState(0)
-
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 1000)
     return () => window.clearInterval(t)
   }, [])
 
-  // Atalhos: F1 foco busca, F2/F3/F4 "pagamento"
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return
-      if (e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.key === "F1") {
-        e.preventDefault()
-        inputRef.current?.focus()
-        return
-      }
-      if (e.key !== "F2" && e.key !== "F3" && e.key !== "F4") return
-      if (cart.length === 0) return
-      e.preventDefault()
-      // visual-only: aqui seria abrir fluxo de pagamento
-    }
-    window.addEventListener("keydown", onKeyDown, { capture: true })
-    return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [cart.length])
+  // ── Search + catalog tab ─────────────────────────────────────────────────────
+  const [search, setSearch] = useState("")
+  const [tab, setTab] = useState<"servicos" | "produtos">("servicos")
 
+  // ── Cart ─────────────────────────────────────────────────────────────────────
+  const [cart, setCart] = useState<CartLine[]>([])
+  const [discount, setDiscount] = useState(0)
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+
+  // ── Customer (required for "A Prazo") ────────────────────────────────────────
+  const [customerName, setCustomerName] = useState("")
+
+  // ── Caixa ────────────────────────────────────────────────────────────────────
+  const [caixaEstado, setCaixaEstado] = useState<CaixaState>("fechado")
+  const [salesCount, setSalesCount] = useState(0)
+  const [salesTotal, setSalesTotal] = useState(0)
+  const [caixaModalOpen, setCaixaModalOpen] = useState(false)
+
+  // ── Modals ───────────────────────────────────────────────────────────────────
+  const [paymentOpen, setPaymentOpen] = useState(false)
+  const [paymentInitMethod, setPaymentInitMethod] = useState<PayMethod>("dinheiro")
+  const [trocasOpen, setTrocasOpen] = useState(false)
+  const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
+
+  // ── Custom atalhos ────────────────────────────────────────────────────────────
+  const [atalhosSvcIds, setAtalhosSvcIds] = useState<string[]>(() =>
+    ALL_SERVICES.slice(0, 8).map((p) => p.id),
+  )
+  const [atalhosPrdIds, setAtalhosPrdIds] = useState<string[]>(() =>
+    ALL_TOP_PRODUCTS.slice(0, 8).map((p) => p.id),
+  )
+
+  const quickServices = useMemo(
+    () => PDV_PRODUCTS_BASE.filter((p) => atalhosSvcIds.includes(p.id)),
+    [atalhosSvcIds],
+  )
+  const quickProducts = useMemo(
+    () => PDV_PRODUCTS_BASE.filter((p) => atalhosPrdIds.includes(p.id)),
+    [atalhosPrdIds],
+  )
+
+  // ── Computed totals ────────────────────────────────────────────────────────────
   const subtotal = useMemo(() => cart.reduce((s, l) => s + l.price * l.qty, 0), [cart])
   const desconto = useMemo(() => Math.min(Math.max(0, discount), subtotal), [discount, subtotal])
   const total = useMemo(() => Math.max(0, subtotal - desconto), [subtotal, desconto])
 
-  const quickList = tab === "servicos" ? QUICK_SERVICOS : QUICK_PRODUTOS
-  const filteredQuick = useMemo(() => {
+  // ── Full-catalog search ────────────────────────────────────────────────────────
+  const fullSearch = useMemo(() => {
     const term = search.trim().toLowerCase()
-    if (!term) return quickList
-    return quickList.filter((i) => i.title.toLowerCase().includes(term) || (i.hint ?? "").toLowerCase().includes(term))
-  }, [quickList, search])
+    if (!term) return []
+    return PDV_PRODUCTS_BASE.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        p.category.toLowerCase().includes(term) ||
+        (p.barcode ? p.barcode.includes(term) : false),
+    ).slice(0, 12)
+  }, [search])
 
-  const addQuick = (q: QuickItem) => {
+  // ── Global F-key hotkeys ──────────────────────────────────────────────────────
+  // Helper: open payment modal pre-selecting a method (only if cart isn't empty)
+  const openPayment = (method: PayMethod) => {
+    if (cart.length === 0) return
+    setPaymentInitMethod(method)
+    setPaymentOpen(true)
+  }
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Ignore modifier combos and held-key repeats
+      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
+      // Do not intercept F5 (browser refresh) or unregistered keys
+      const HANDLED = ["F1", "F2", "F3", "F4", "F6", "F7", "F8", "F9", "F10"]
+      if (!HANDLED.includes(e.key)) return
+      e.preventDefault()
+
+      switch (e.key) {
+        // F1 / F2 — focus search bar (both mapped for convenience)
+        case "F1":
+        case "F2":
+          inputRef.current?.focus()
+          break
+        // F3 — focus customer input
+        case "F3":
+          customerInputRef.current?.focus()
+          break
+        // F4 — Dinheiro
+        case "F4":
+          openPayment("dinheiro")
+          break
+        // F6 — Cartão Crédito
+        case "F6":
+          openPayment("credito")
+          break
+        // F7 — PIX
+        case "F7":
+          openPayment("pix")
+          break
+        // F8 — A Prazo
+        case "F8":
+          openPayment("a_prazo")
+          break
+        // F9 — Clear cart (with confirmation)
+        case "F9":
+          if (cart.length > 0) setClearConfirmOpen(true)
+          break
+        // F10 — Múltiplo
+        case "F10":
+          openPayment("multiplo")
+          break
+      }
+    }
+    window.addEventListener("keydown", onKeyDown, { capture: true })
+    return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.length])
+
+  // ── Cart actions ────────────────────────────────────────────────────────────────
+  const addItem = (item: PdvCatalogProduct) => {
     setCart((prev) => {
-      const hit = prev.find((l) => l.title === q.title && Math.abs(l.price - q.price) < 0.0001)
+      const hit = prev.find((l) => l.title === item.name && Math.abs(l.price - item.price) < 0.001)
       if (hit) return prev.map((l) => (l.id === hit.id ? { ...l, qty: l.qty + 1 } : l))
-      return [...prev, { id: newLineId(), title: q.title, price: q.price, qty: 1 }]
+      return [...prev, { id: newLineId(), title: item.name, price: item.price, qty: 1 }]
     })
     queueMicrotask(() => inputRef.current?.focus())
   }
 
+  const changeQty = (id: string, delta: number) => {
+    setCart((prev) =>
+      prev
+        .map((l) => (l.id === id ? { ...l, qty: Math.max(0, l.qty + delta) } : l))
+        .filter((l) => l.qty > 0),
+    )
+  }
+
   const removeLine = (id: string) => setCart((prev) => prev.filter((l) => l.id !== id))
 
-  return (
-    <div className="relative flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-slate-950 text-slate-100">
-      {/* Glows de fundo */}
-      <div className="pointer-events-none absolute -left-[10%] -top-[10%] h-[40%] w-[40%] rounded-full bg-violet-500/20 blur-[140px]" />
-      <div className="pointer-events-none absolute -bottom-[10%] -right-[10%] h-[40%] w-[40%] rounded-full bg-blue-500/20 blur-[140px]" />
+  // ── Payment confirm ────────────────────────────────────────────────────────────
+  const handlePaymentConfirm = (_method: PayMethod, _notes: string) => {
+    setSalesCount((c) => c + 1)
+    setSalesTotal((t) => t + total)
+    setCart([])
+    setDiscount(0)
+    setCustomerName("")
+    setPaymentOpen(false)
+    inputRef.current?.focus()
+  }
 
-      {/* Header */}
-      <header className="relative z-10 flex h-16 w-full items-center justify-between border-b border-white/10 bg-slate-950/40 px-4 backdrop-blur-2xl">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-primary via-primary/70 to-sky-500/40 shadow-lg shadow-primary/25">
-            <Wrench className="h-5 w-5 text-white" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-sm font-bold tracking-tight text-white">OmniGestão Pro - PDV</div>
-            <div className="text-xs text-slate-400">Alta Performance · Assistência Técnica</div>
+  // ── Caixa actions ──────────────────────────────────────────────────────────────
+  const handleAbrirCaixa = (_troco: number) => {
+    setCaixaEstado("aberto")
+    setCaixaModalOpen(false)
+  }
+
+  const handleFecharCaixa = () => {
+    setCaixaEstado("fechado")
+    setSalesCount(0)
+    setSalesTotal(0)
+    setCaixaModalOpen(false)
+  }
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="relative flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background text-foreground">
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute -left-[10%] -top-[10%] h-[35%] w-[35%] rounded-full bg-primary/8 blur-[120px]" />
+      <div className="pointer-events-none absolute -bottom-[10%] -right-[10%] h-[30%] w-[30%] rounded-full bg-primary/5 blur-[100px]" />
+
+      {/* ── Header ── */}
+      <header className="absolute inset-x-0 top-0 z-10 flex h-14 items-center justify-between gap-2 border-b border-border bg-card/80 px-4 backdrop-blur-xl">
+        {/* Left: brand */}
+        <div className="flex shrink-0 items-center gap-2.5">
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-primary text-primary-foreground shadow-md">
+            <Wrench className="h-4 w-4" />
+          </span>
+          <div className="hidden leading-tight sm:block">
+            <p className="text-sm font-bold tracking-tight text-foreground">OmniGestão PDV</p>
+            <p className="text-[10px] text-muted-foreground">Assistência Técnica</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70 opacity-75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-            </span>
-            <span className="text-xs font-semibold text-emerald-300">Caixa Aberto</span>
-          </div>
+        {/* Center: control buttons */}
+        <div className="flex flex-1 items-center justify-center gap-2">
+          {/* Caixa */}
+          <button
+            type="button"
+            onClick={() => setCaixaModalOpen(true)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all",
+              caixaEstado === "aberto"
+                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
+            )}
+          >
+            {caixaEstado === "aberto" ? (
+              <>
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                </span>
+                Caixa Aberto
+              </>
+            ) : (
+              <>
+                <Lock className="h-3.5 w-3.5" />
+                Caixa Fechado
+              </>
+            )}
+          </button>
 
-          <div className="hidden sm:flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur">
-            <User className="h-4 w-4 text-slate-300" />
-            <span className="text-xs text-slate-200">
-              Operador: <span className="font-semibold text-white">{operatorName}</span>
+          {/* Trocas */}
+          <button
+            type="button"
+            onClick={() => setTrocasOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Trocas
+          </button>
+        </div>
+
+        {/* Right: operator + clock */}
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="hidden items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 sm:flex">
+            <User className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">
+              Op: <span className="font-semibold text-foreground">Operador</span>
             </span>
           </div>
-
-          <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur">
-            <Clock className="h-4 w-4 text-slate-300" />
-            <span className="text-xs font-semibold tabular-nums text-white">
+          <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs font-semibold tabular-nums text-foreground">
               {now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </span>
           </div>
         </div>
       </header>
 
-      {/* Corpo */}
-      <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
-        {/* Centro: busca + catálogo */}
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-white/10 bg-slate-950/20 backdrop-blur-xl">
+      {/* ── Body ── */}
+      <div className="relative z-0 flex min-h-0 w-full flex-1 overflow-hidden pt-14">
+
+        {/* ── Center: search + catalog ── */}
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border bg-background/60 backdrop-blur-sm">
+
+          {/* Search */}
           <div className="shrink-0 p-4">
             <div className="relative">
-              <Barcode className="pointer-events-none absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-slate-400" />
+              <Barcode className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 ref={inputRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Bipe o produto ou busque por nome/serviço (F1)"
-                className="h-16 rounded-2xl border-white/10 bg-white/5 pl-14 text-lg font-semibold text-white placeholder:text-slate-400 backdrop-blur focus-visible:ring-2 focus-visible:ring-primary/40"
+                placeholder="Bipe o produto ou busque por nome / código (F1)"
+                className="h-14 rounded-2xl border-border bg-card pl-12 text-base font-medium placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
               />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              ) : (
+                <kbd className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                  F2
+                </kbd>
+              )}
             </div>
-            <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
-              <div className="flex items-center gap-2">
-                <CircleDot className="h-4 w-4 text-primary" />
-                <span>Dica: use F1 para focar na busca.</span>
-              </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Keyboard className="h-3 w-3" />
+                Atalhos:
+              </span>
+              {[
+                { key: "F2", label: "Busca" },
+                { key: "F3", label: "Cliente" },
+                { key: "F4", label: "Dinheiro" },
+                { key: "F6", label: "Cartão" },
+                { key: "F7", label: "PIX" },
+                { key: "F8", label: "A Prazo" },
+                { key: "F9", label: "Cancelar" },
+                { key: "F10", label: "Múltiplo" },
+              ].map(({ key, label }) => (
+                <span key={key} className="flex items-center gap-1">
+                  <kbd className="rounded border border-border bg-muted px-1 py-px font-bold">{key}</kbd>
+                  {label}
+                </span>
+              ))}
             </div>
           </div>
 
+          {/* Grid */}
           <div className="min-h-0 flex-1 overflow-hidden px-4 pb-4">
-            <Tabs value={tab} onValueChange={(v) => setTab(v === "produtos" ? "produtos" : "servicos")}>
-              <TabsList className="grid w-full grid-cols-2 rounded-2xl border border-white/10 bg-white/5 p-1 backdrop-blur">
-                <TabsTrigger value="servicos" className="rounded-xl data-[state=active]:bg-primary/20 data-[state=active]:text-white">
-                  Serviços
-                </TabsTrigger>
-                <TabsTrigger value="produtos" className="rounded-xl data-[state=active]:bg-primary/20 data-[state=active]:text-white">
-                  Produtos
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="servicos" className="mt-4 min-h-0">
-                <ScrollArea className="h-[calc(100vh-4rem-16rem)] min-h-0">
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {filteredQuick.map((q) => (
-                      <Card
-                        key={q.id}
-                        className="group cursor-pointer rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg shadow-black/20 backdrop-blur transition hover:border-primary/30 hover:bg-white/10"
-                        onClick={() => addQuick(q)}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-sm font-bold text-white">{q.title}</div>
-                            {q.hint ? <div className="mt-1 text-xs text-slate-400">{q.hint}</div> : null}
-                          </div>
-                          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-1 text-xs font-semibold text-slate-200">
-                            {brl(q.price)}
-                          </div>
-                        </div>
-                        <div className="mt-4 flex items-center justify-between">
-                          <div className="text-xs text-slate-400">Clique para adicionar</div>
-                          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary/30 to-sky-500/20 opacity-0 blur-[0px] transition group-hover:opacity-100" />
-                        </div>
-                      </Card>
+            {search.trim() ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  {fullSearch.length} resultado{fullSearch.length !== 1 ? "s" : ""} para &ldquo;{search}&rdquo;
+                </p>
+                <ScrollArea className="h-[calc(100vh-4rem-14rem)]">
+                  <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {fullSearch.map((p) => (
+                      <QuickCard key={p.id} item={p} onAdd={addItem} />
                     ))}
+                    {fullSearch.length === 0 && (
+                      <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
+                        Nenhum produto encontrado.
+                      </div>
+                    )}
                   </div>
                 </ScrollArea>
-              </TabsContent>
+              </div>
+            ) : (
+              <Tabs value={tab} onValueChange={(v) => setTab(v === "produtos" ? "produtos" : "servicos")}>
+                {/* Tab header + Editar Atalhos */}
+                <div className="flex items-center gap-2">
+                  <TabsList className="flex-1 grid grid-cols-2 rounded-2xl border border-border bg-muted/60 p-1">
+                    <TabsTrigger
+                      value="servicos"
+                      className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                    >
+                      Serviços ({quickServices.length})
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="produtos"
+                      className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                    >
+                      Produtos ({quickProducts.length})
+                    </TabsTrigger>
+                  </TabsList>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 shrink-0 rounded-xl border-border px-3 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setEditAtalhosOpen(true)}
+                    title="Editar Atalhos"
+                  >
+                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                    Editar Atalhos
+                  </Button>
+                </div>
 
-              <TabsContent value="produtos" className="mt-4 min-h-0">
-                <ScrollArea className="h-[calc(100vh-4rem-16rem)] min-h-0">
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {filteredQuick.map((q) => (
-                      <Card
-                        key={q.id}
-                        className="group cursor-pointer rounded-2xl border border-white/10 bg-white/5 p-4 shadow-lg shadow-black/20 backdrop-blur transition hover:border-primary/30 hover:bg-white/10"
-                        onClick={() => addQuick(q)}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="text-sm font-bold text-white">{q.title}</div>
-                            {q.hint ? <div className="mt-1 text-xs text-slate-400">{q.hint}</div> : null}
-                          </div>
-                          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-1 text-xs font-semibold text-slate-200">
-                            {brl(q.price)}
-                          </div>
+                <TabsContent value="servicos" className="mt-4 min-h-0">
+                  <ScrollArea className="h-[calc(100vh-4rem-20rem)]">
+                    <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {quickServices.length > 0 ? (
+                        quickServices.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)
+                      ) : (
+                        <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
+                          Nenhum atalho configurado. Clique em &ldquo;Editar Atalhos&rdquo;.
                         </div>
-                        <div className="mt-4 flex items-center justify-between">
-                          <div className="text-xs text-slate-400">Clique para adicionar</div>
-                          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-primary/30 to-sky-500/20 opacity-0 blur-[0px] transition group-hover:opacity-100" />
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                <TabsContent value="produtos" className="mt-4 min-h-0">
+                  <ScrollArea className="h-[calc(100vh-4rem-20rem)]">
+                    <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {quickProducts.length > 0 ? (
+                        quickProducts.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)
+                      ) : (
+                        <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
+                          Nenhum atalho configurado. Clique em &ldquo;Editar Atalhos&rdquo;.
                         </div>
-                      </Card>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </TabsContent>
-            </Tabs>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+              </Tabs>
+            )}
           </div>
         </main>
 
-        {/* Direita: carrinho */}
-        <aside className="flex h-full w-[520px] min-w-[520px] flex-col overflow-hidden bg-slate-950/35 backdrop-blur-2xl">
-          <div className="shrink-0 border-b border-white/10 px-4 py-4">
+        {/* ── Right: customer + cart + payment ── */}
+        <aside className="flex h-full w-[420px] min-w-[360px] max-w-[480px] flex-col overflow-hidden border-l border-border bg-card">
+
+          {/* Customer input */}
+          <div className="shrink-0 border-b border-border px-4 py-3">
+            <div className="relative">
+              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={customerInputRef}
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Cliente — A Prazo/Fiado  [F3]"
+                className="h-9 rounded-xl border-border bg-background pl-9 pr-14 text-sm"
+              />
+              <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
+                F3
+              </kbd>
+            </div>
+          </div>
+
+          {/* Cart header */}
+          <div className="shrink-0 border-b border-border px-4 py-2.5">
             <div className="flex items-center justify-between">
-              <div className="text-lg font-extrabold tracking-tight text-white">Carrinho</div>
+              <p className="font-bold text-foreground">
+                Carrinho
+                {cart.length > 0 && (
+                  <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                    {cart.length}
+                  </span>
+                )}
+              </p>
               <Button
                 type="button"
-                variant="outline"
-                className="h-10 rounded-xl border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
-                onClick={() => setCart([])}
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+                onClick={() => {
+                  if (cart.length > 0) setClearConfirmOpen(true)
+                }}
                 disabled={cart.length === 0}
               >
                 Limpar
+                <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[9px] font-bold">
+                  F9
+                </kbd>
               </Button>
             </div>
           </div>
 
+          {/* Cart lines */}
           <div className="min-h-0 flex-1 overflow-hidden">
             {cart.length === 0 ? (
               <div className="flex h-full items-center justify-center p-8 text-center">
-                <div className="max-w-sm space-y-2">
-                  <div className="text-lg font-semibold text-white">Sem itens</div>
-                  <div className="text-sm text-slate-400">Adicione serviços ou produtos pelos atalhos à esquerda.</div>
+                <div className="space-y-2">
+                  <p className="text-base font-semibold text-foreground">Carrinho vazio</p>
+                  <p className="text-sm text-muted-foreground">
+                    Selecione serviços ou produtos pela grade ou pela busca.
+                  </p>
                 </div>
               </div>
             ) : (
               <ScrollArea className="h-full">
-                <div className="divide-y divide-white/10 px-3 py-2">
+                <div className="divide-y divide-border px-3 py-1">
                   {cart.map((l) => (
-                    <div key={l.id} className="flex items-center gap-3 py-3">
+                    <div key={l.id} className="flex items-center gap-2 py-2.5">
+                      {/* Title — limited width so controls always show */}
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-white">{l.title}</div>
-                        <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
-                          <span>{brl(l.price)}</span>
-                          <span>×</span>
-                          <span className="font-semibold text-slate-200">{l.qty}</span>
-                        </div>
+                        <p className="truncate text-sm font-semibold text-foreground">{l.title}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{brl(l.price)} × {l.qty}</p>
                       </div>
-                      <div className="w-28 text-right text-sm font-bold tabular-nums text-white">{brl(l.price * l.qty)}</div>
-                      <Button
+
+                      {/* Qty controls — shrink-0 keeps them always visible */}
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => changeQty(l.id, -1)}
+                          className="grid h-6 w-6 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+                        >
+                          <Minus className="h-3 w-3" />
+                        </button>
+                        <span className="w-5 text-center text-xs font-bold tabular-nums text-foreground">
+                          {l.qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => changeQty(l.id, 1)}
+                          className="grid h-6 w-6 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </div>
+
+                      {/* Line total */}
+                      <p className="w-20 shrink-0 text-right text-sm font-bold tabular-nums text-foreground">
+                        {brl(l.price * l.qty)}
+                      </p>
+
+                      {/* Delete — always visible */}
+                      <button
                         type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10 rounded-xl text-red-400 hover:bg-red-500/10 hover:text-red-300"
                         onClick={() => removeLine(l.id)}
+                        className="shrink-0 grid h-7 w-7 place-items-center rounded-xl text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
                       >
-                        <Trash2 className="h-5 w-5" />
-                      </Button>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -304,74 +1316,127 @@ export function PdvAssistenciaEnterprise() {
             )}
           </div>
 
-          <div className="shrink-0 border-t border-white/10 bg-slate-950/40 p-4 backdrop-blur-xl">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm text-slate-300">
-                <span>Subtotal</span>
-                <span className="font-semibold tabular-nums text-white">{brl(subtotal)}</span>
+          {/* Totals + payment */}
+          <div className="shrink-0 space-y-3 border-t border-border bg-card p-4">
+            {/* Subtotal & discount */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-semibold tabular-nums text-foreground">{brl(subtotal)}</span>
               </div>
-
-              <div className="flex items-center justify-between text-sm text-slate-300">
-                <span>Desconto</span>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={discount ? String(discount) : ""}
-                    onChange={(e) => {
-                      const v = Number(String(e.target.value || "").replace(",", "."))
-                      setDiscount(Number.isFinite(v) ? v : 0)
-                    }}
-                    placeholder="0"
-                    className="h-9 w-28 rounded-xl border-white/10 bg-white/5 text-right text-sm text-white placeholder:text-slate-500"
-                    inputMode="decimal"
-                  />
-                  <span className="w-20 text-right font-semibold tabular-nums text-white">− {brl(desconto)}</span>
-                </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Desconto (R$)</span>
+                <Input
+                  value={discount ? String(discount) : ""}
+                  onChange={(e) => {
+                    const v = Number(String(e.target.value || "").replace(",", "."))
+                    setDiscount(Number.isFinite(v) ? v : 0)
+                  }}
+                  placeholder="0,00"
+                  className="h-7 w-24 rounded-xl border-border bg-background text-right text-sm tabular-nums"
+                  inputMode="decimal"
+                />
               </div>
-
-              <Separator className="bg-white/10" />
-
+              <Separator className="bg-border" />
               <div className="flex items-baseline justify-between">
-                <span className="text-sm font-semibold text-slate-300">Total a Pagar</span>
-                <span className="text-3xl font-black tabular-nums tracking-tight text-emerald-400">{brl(total)}</span>
+                <span className="text-sm font-semibold text-muted-foreground">TOTAL A PAGAR</span>
+                <span className="text-3xl font-black tabular-nums tracking-tight text-emerald-500">
+                  {brl(total)}
+                </span>
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <Button
-                type="button"
-                className={cn(
-                  "h-14 rounded-2xl bg-emerald-600 text-base font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700",
-                  cart.length === 0 && "opacity-50 pointer-events-none"
-                )}
-              >
-                <Banknote className="mr-2 h-5 w-5" />
-                Dinheiro <span className="ml-2 text-xs font-black opacity-90">[F2]</span>
-              </Button>
-              <Button
-                type="button"
-                className={cn(
-                  "h-14 rounded-2xl bg-teal-600 text-base font-black text-white shadow-lg shadow-teal-600/20 hover:bg-teal-700",
-                  cart.length === 0 && "opacity-50 pointer-events-none"
-                )}
-              >
-                <QrCode className="mr-2 h-5 w-5" />
-                PIX <span className="ml-2 text-xs font-black opacity-90">[F3]</span>
-              </Button>
-              <Button
-                type="button"
-                className={cn(
-                  "h-14 rounded-2xl bg-blue-600 text-base font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700",
-                  cart.length === 0 && "opacity-50 pointer-events-none"
-                )}
-              >
-                <CreditCard className="mr-2 h-5 w-5" />
-                Cartão <span className="ml-2 text-xs font-black opacity-90">[F4]</span>
-              </Button>
+            {/* Payment buttons — 3×2 grid */}
+            <div className="grid grid-cols-3 gap-2">
+              {PAY_METHODS.map((m) => (
+                <Button
+                  key={m.id}
+                  type="button"
+                  disabled={cart.length === 0}
+                  onClick={() => {
+                    setPaymentInitMethod(m.id)
+                    setPaymentOpen(true)
+                  }}
+                  className={cn(
+                    "relative h-12 rounded-2xl text-xs font-bold text-white shadow-md disabled:opacity-40",
+                    m.color,
+                  )}
+                >
+                  <span className="flex flex-col items-center gap-0.5 leading-tight">
+                    <span className="flex items-center gap-1">
+                      <m.Icon className="h-3.5 w-3.5 shrink-0" />
+                      {m.shortLabel}
+                    </span>
+                    {m.hotkey && (
+                      <span className="rounded border border-white/30 bg-black/20 px-1 py-px text-[9px] font-bold leading-none tracking-wider">
+                        {m.hotkey}
+                      </span>
+                    )}
+                  </span>
+                </Button>
+              ))}
             </div>
           </div>
         </aside>
       </div>
+
+      {/* ── Modals ── */}
+      <PaymentModal
+        open={paymentOpen}
+        total={total}
+        customerName={customerName}
+        defaultMethod={paymentInitMethod}
+        onConfirm={handlePaymentConfirm}
+        onClose={() => setPaymentOpen(false)}
+      />
+
+      {/* Clear-cart confirmation */}
+      <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
+        <AlertDialogContent className="max-w-sm rounded-2xl border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Cancelar venda atual?</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Todos os {cart.length} item{cart.length !== 1 ? "ns" : ""} do carrinho serão removidos. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Manter Venda</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                setCart([])
+                setDiscount(0)
+                setClearConfirmOpen(false)
+              }}
+            >
+              Cancelar Venda
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <CaixaModal
+        open={caixaModalOpen}
+        estado={caixaEstado}
+        salesCount={salesCount}
+        salesTotal={salesTotal}
+        onAbrir={handleAbrirCaixa}
+        onFechar={handleFecharCaixa}
+        onClose={() => setCaixaModalOpen(false)}
+      />
+
+      <TrocasModal open={trocasOpen} onClose={() => setTrocasOpen(false)} />
+
+      <EditarAtalhosModal
+        open={editAtalhosOpen}
+        selectedServiceIds={atalhosSvcIds}
+        selectedProductIds={atalhosPrdIds}
+        onSave={(svcIds, prdIds) => {
+          setAtalhosSvcIds(svcIds)
+          setAtalhosPrdIds(prdIds)
+        }}
+        onClose={() => setEditAtalhosOpen(false)}
+      />
     </div>
   )
 }
-
