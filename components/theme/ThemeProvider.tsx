@@ -9,9 +9,9 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { useTheme as useNextThemes } from "next-themes"
 
 export type StudioThemeMode = "light" | "soft-ice" | "midnight" | "black" | "classic"
+export type StudioThemeClass = "light" | "soft-ice" | "midnight" | "black-edition"
 
 const STORAGE_KEY = "omni-studio-dual-theme"
 
@@ -34,29 +34,30 @@ function readInitialMode(): StudioThemeMode {
   }
 }
 
+function modeToClass(m: StudioThemeMode): StudioThemeClass {
+  if (m === "black") return "black-edition"
+  if (m === "classic") return "light"
+  return m
+}
+
 function applyTheme(m: StudioThemeMode, setTheme: (t: string) => void) {
-  const next = m === "classic" ? "light" : m
+  const nextClass = modeToClass(m)
   try {
-    localStorage.setItem(STORAGE_KEY, next)
+    localStorage.setItem(STORAGE_KEY, m)
   } catch {
     /* ignore */
   }
   if (typeof document !== "undefined") {
     const root = document.documentElement
-    root.classList.remove("theme-light", "theme-softice", "theme-midnight", "theme-black")
-    root.classList.remove("light", "soft-ice", "midnight", "black-edition", "dark")
-    root.setAttribute("data-studio-theme", next)
-    if (next === "black") {
-      root.classList.add("black-edition", "theme-black")
-    } else if (next === "soft-ice") {
-      root.classList.add("soft-ice", "theme-softice")
-    } else if (next === "midnight") {
-      root.classList.add("midnight", "theme-midnight")
-    } else {
-      root.classList.add("light", "theme-light")
-    }
+    // Reset classes conhecidas
+    root.classList.remove("light", "soft-ice", "midnight", "black-edition")
+    // Fonte de verdade do shell (usado por CSS utilitário / alinhamento do body)
+    root.setAttribute("data-studio-theme", m === "classic" ? "classic" : m)
+    // Aplica a classe do tema (Tailwind + vars em globals.css)
+    if (nextClass !== "light") root.classList.add(nextClass)
+    else root.classList.add("light")
   }
-  setTheme(next === "black" ? "black-edition" : next)
+  setTheme(nextClass)
 }
 
 /**
@@ -64,30 +65,29 @@ function applyTheme(m: StudioThemeMode, setTheme: (t: string) => void) {
  * e espelha em `next-themes` (dark = Black, light = Classic) para tokens globais.
  */
 export function StudioThemeProvider({ children }: { children: ReactNode }) {
-  const { setTheme } = useNextThemes()
   const [mode, setModeState] = useState<StudioThemeMode>("black")
 
   useLayoutEffect(() => {
     const initial = readInitialMode()
     setModeState(initial)
-    applyTheme(initial, setTheme)
-  }, [setTheme])
+    applyTheme(initial, () => {})
+  }, [])
 
   const setMode = useCallback(
     (m: StudioThemeMode) => {
       setModeState(m)
-      applyTheme(m, setTheme)
+      applyTheme(m, () => {})
     },
-    [setTheme]
+    []
   )
 
   const toggle = useCallback(() => {
     setModeState((prev) => {
       const next = prev === "black" ? "light" : "black"
-      applyTheme(next, setTheme)
+      applyTheme(next, () => {})
       return next
     })
-  }, [setTheme])
+  }, [])
 
   const value = useMemo<StudioThemeContextValue>(
     () => ({
@@ -112,11 +112,12 @@ export function useStudioTheme(): StudioThemeContextValue {
 /** API compatível com o snippet Lovable (`theme === "dark"` = Black Edition). */
 export function useTheme() {
   const { mode, setMode, toggle } = useStudioTheme()
-  const theme = mode === "classic" ? "light" : mode
+  const theme: StudioThemeClass = modeToClass(mode)
   return {
     theme,
     mode,
-    setTheme: (t: "light" | "soft-ice" | "midnight" | "black" | "dark") => setMode(t === "dark" ? "black" : t),
+    setTheme: (t: StudioThemeClass | "dark" | "black") =>
+      setMode(t === "dark" || t === "black" || t === "black-edition" ? "black" : t),
     toggle,
   }
 }

@@ -19,11 +19,19 @@ const buttonVariants = cva(
         ghost:
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         link: 'text-primary underline-offset-4 hover:underline',
+        // Lovable landing variants (opt-in via explicit props)
+        neon:
+          'bg-[image:var(--gradient-neon)] text-neutral-950 shadow-[0_0_30px_-10px_oklch(0.85_0.25_145)] hover:opacity-95',
+        neonOutline:
+          'border border-neon-blue/40 bg-transparent text-foreground hover:bg-white/5 hover:border-neon-blue/60',
+        glass:
+          'border border-white/10 bg-white/5 text-foreground backdrop-blur hover:bg-white/10',
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
         sm: 'h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5',
         lg: 'h-10 rounded-md px-6 has-[>svg]:px-4',
+        xl: 'h-11 rounded-xl px-6 text-base has-[>svg]:px-5',
         icon: 'size-9',
         'icon-sm': 'size-8',
         'icon-lg': 'size-10',

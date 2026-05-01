@@ -335,6 +335,8 @@ export function useLojaAtiva(): LojaAtivaContextType {
       setLojaAtivaId: () => {},
       refreshStoresList: async () => {},
       storesRefreshNonce: 0,
+      lojaAtivaRaw: null,
+      cadastroBasicoIncompleto: false,
       empresaDocumentos: fallbackEmpresa,
       getEnderecoDocumentos: () => formatEnderecoEmpresa(fallbackEmpresa.endereco),
       opsStorageKey: OPS_KEY_LEGACY,

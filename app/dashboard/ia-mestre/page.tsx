@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import {
   BarChart3,
@@ -23,6 +23,12 @@ import { ChatMessage, type ChatMsg } from "@/components/ia-mestre/ChatMessage";
 import { ChatInput } from "@/components/ia-mestre/ChatInput";
 import { TypingIndicator } from "@/components/ia-mestre/TypingIndicator";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
+import { Button } from "@/components/ui/button";
+import { interpretAiApiError } from "@/lib/handleAiApiError";
+import { notifyCreditBalanceUpdated } from "@/lib/creditsEvents";
+import { getCreditCost } from "@/src/lib/ai/credit-costs";
+import { useUserCredits } from "@/hooks/useUserCredits";
 import {
   Sheet,
   SheetContent,
@@ -63,6 +69,25 @@ type MagicTemplate = {
   prompt: string;
   icon: LucideIcon;
 };
+
+function extractLogoText(message: string) {
+  const patterns: RegExp[] = [
+    /logo (?:para|da|do|de)\s+["“”']?([^"“”'\n]+)["“”']?/i,
+    /logotipo (?:para|da|do|de)\s+["“”']?([^"“”'\n]+)["“”']?/i,
+    /marca (?:para|da|do|de)\s+["“”']?([^"“”'\n]+)["“”']?/i,
+    /com o nome\s+["“”']?([^"“”'\n]+)["“”']?/i,
+    /nome\s+["“”']([^"“”']+)["“”']/i,
+  ]
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern)
+    if (match?.[1]) {
+      return match[1].trim()
+    }
+  }
+
+  return null
+}
 
 const MAGIC_TEMPLATE_CATEGORIES: Array<{
   id: TemplateCategoryId;
@@ -148,14 +173,40 @@ function toBackendModel(m: ModelId): string {
 
 function Shell() {
   const { toast } = useToast();
+  const { credits } = useUserCredits();
   const [model, setModel] = useState<ModelId>("openai/gpt-5.5-pro");
   const [identityOn, setIdentityOn] = useState(true);
   const [messages, setMessages] = useState<ChatMsg[]>(INITIAL_MESSAGES);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState("");
+  const [pendingImageRequest, setPendingImageRequest] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
 
-  const handleSend = async (text: string) => {
+  const isImageIntent = useCallback((text: string) => {
+    const t = (text || "").toLowerCase();
+    if (!t.trim()) return false;
+    return (
+      t.includes("logo") ||
+      t.includes("logotipo") ||
+      t.includes("marca") ||
+      t.includes("identidade visual") ||
+      t.includes("imagem") ||
+      t.includes("arte") ||
+      t.includes("banner") ||
+      t.includes("post") ||
+      t.includes("anúncio") ||
+      t.includes("anuncio") ||
+      t.includes("flyer") ||
+      t.includes("criar arte") ||
+      t.includes("foto")
+    );
+  }, []);
+
+  const isImageIntentDraft = useMemo(() => {
+    return isImageIntent(draft);
+  }, [draft, isImageIntent]);
+
+  const sendToApi = async (text: string) => {
     const userMsg: ChatMsg = { id: crypto.randomUUID(), role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setTyping(true);
@@ -170,17 +221,65 @@ function Shell() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command, model: toBackendModel(model), brandVoice: identityOn, messages: snapshot }),
       });
-      const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string; tool?: { type?: string; url?: string } };
-      if (!res.ok) throw new Error(String(data.error || `HTTP ${res.status}`));
+      const data = (await res.json().catch(() => ({}))) as {
+        type?: "text" | "image"
+        data?: { message?: string; imageUrl?: string }
+        message?: string
+        error?: string
+        tool?: { type?: string; url?: string }
+      };
+      if (!res.ok) {
+        const info = interpretAiApiError({
+          status: res.status,
+          message: String(data.error || data.message || "").trim(),
+        });
+        toast({
+          title: info.title,
+          description: info.description,
+          variant: "destructive",
+          duration: 8000,
+          action:
+            info.kind === "credits" ? (
+              <ToastAction
+                altText="Comprar créditos"
+                onClick={() =>
+                  toast({
+                    title: "Comprar créditos",
+                    description: "Compra de créditos em breve",
+                  })
+                }
+              >
+                Comprar créditos
+              </ToastAction>
+            ) : undefined,
+        });
+        return;
+      }
+      const isImage = data.type === "image" || data.tool?.type === "image";
+      const imageUrl = String(data?.data?.imageUrl || data?.tool?.url || "").trim();
       const reply: ChatMsg = {
         id: crypto.randomUUID(),
         role: "ai",
-        content: String(data.message || "").trim() || "Ok.",
-        ...(data.tool?.type === "image" && data.tool?.url
-          ? { image: { url: String(data.tool.url), tool: "Gerado com DALL·E 3" } }
-          : {}),
+        content: isImage
+          ? "Imagem gerada com sucesso."
+          : String(data?.data?.message || data.message || "").trim() || "Ok.",
+        type: isImage ? "image" : "text",
+        imageUrl: isImage ? imageUrl : undefined,
+        ...(isImage && imageUrl ? { image: { url: imageUrl, tool: "Gerado com DALL·E 3" } } : {}),
       };
       setMessages((prev) => [...prev, reply]);
+      if (isImage) {
+        const cost = getCreditCost("image");
+        const next =
+          typeof credits === "number" && Number.isFinite(credits)
+            ? Math.max(0, credits - cost)
+            : null;
+        toast({
+          title: "Imagem gerada com sucesso",
+          description: `${cost} créditos foram consumidos${next !== null ? ` • Saldo atual: ${next.toLocaleString("pt-BR")}` : ""}.`,
+        });
+        notifyCreditBalanceUpdated();
+      }
     } catch (e) {
       toast({
         title: "Falha ao enviar",
@@ -191,6 +290,15 @@ function Shell() {
     } finally {
       setTyping(false);
     }
+  };
+
+  const handleSend = async (text: string) => {
+    if (isImageIntent(text)) {
+      setPendingImageRequest(text);
+      setDraft("");
+      return;
+    }
+    await sendToApi(text);
   };
 
   return (
@@ -238,7 +346,61 @@ function Shell() {
 
         <footer className="flex-none border-t border-border bg-background/70 px-8 py-4 backdrop-blur-xl">
           <div className="mx-auto w-full max-w-6xl">
-            <ChatInput onSend={handleSend} disabled={typing} value={draft} onValueChange={setDraft} />
+            {pendingImageRequest ? (
+              <div className="mb-3 rounded-xl border border-border bg-background/60 p-3">
+                {(() => {
+                  const extracted = extractLogoText(pendingImageRequest)
+                  if (!extracted) return null
+                  return (
+                    <div className="mb-3 rounded-xl border border-border bg-muted/20 px-3 py-2">
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        Texto que será usado no logo
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-foreground">{extracted}</div>
+                      <div className="mt-1 text-[11px] text-muted-foreground">
+                        Confira se o nome está exatamente correto antes de confirmar.
+                      </div>
+                    </div>
+                  )
+                })()}
+                <div className="text-sm font-semibold text-foreground">Confirmação de geração de imagem</div>
+                <div className="mt-1 text-xs text-muted-foreground">Você quer gerar uma imagem com o seguinte pedido:</div>
+                <div className="mt-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-foreground">
+                  {pendingImageRequest}
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Essa ação vai consumir {getCreditCost("image")} créditos
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    className="h-9 rounded-lg"
+                    disabled={typing}
+                    onClick={() => {
+                      const v = pendingImageRequest;
+                      setPendingImageRequest(null);
+                      void sendToApi(v);
+                    }}
+                  >
+                    Confirmar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 rounded-lg"
+                    disabled={typing}
+                    onClick={() => setPendingImageRequest(null)}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : isImageIntentDraft ? (
+              <div className="mb-2 text-xs text-muted-foreground">
+                Essa ação vai consumir {getCreditCost("image")} créditos
+              </div>
+            ) : null}
+            <ChatInput onSend={handleSend} disabled={typing || !!pendingImageRequest} value={draft} onValueChange={setDraft} />
             <p className="mt-2 text-center text-[11px] text-muted-foreground">
               IA Mestre pode cometer erros. Sempre confirme dados financeiros importantes.
             </p>

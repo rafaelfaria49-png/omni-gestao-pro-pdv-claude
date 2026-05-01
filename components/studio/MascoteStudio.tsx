@@ -9,7 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import { ToastAction } from "@/components/ui/toast"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
+import { interpretAiApiError } from "@/lib/handleAiApiError"
+import { notifyCreditBalanceUpdated } from "@/lib/creditsEvents"
 import { cn } from "@/lib/utils"
 
 type MoodPreset = "heroi" | "triste" | "feliz"
@@ -114,7 +117,25 @@ export function MascoteStudio({ classic, lojaId }: Props) {
         message?: string
         error?: string
       }
-      if (!res.ok) throw new Error(j.message || j.error || `HTTP ${res.status}`)
+      if (!res.ok) {
+        const info = interpretAiApiError({ status: res.status, message: j.message || j.error })
+        toast({
+          title: info.title,
+          description: info.description,
+          variant: "destructive",
+          duration: 9000,
+          action:
+            info.kind === "credits" ? (
+              <ToastAction
+                altText="Comprar créditos"
+                onClick={() => toast({ title: "Comprar créditos", description: "Compra de créditos em breve" })}
+              >
+                Comprar créditos
+              </ToastAction>
+            ) : undefined,
+        })
+        return
+      }
       const url = String(j.imageUrl || "").trim()
       if (!url) throw new Error("Sem imagem retornada.")
       setImageUrl(url)
@@ -123,6 +144,7 @@ export function MascoteStudio({ classic, lojaId }: Props) {
         title: "Mascote gerado",
         description: useMascot ? "Consistência ativa (mascote fixado)." : "Seed capturada para consistência.",
       })
+      notifyCreditBalanceUpdated()
     } catch (e) {
       toast({ title: "Falha ao gerar mascote", description: e instanceof Error ? e.message : "Erro inesperado", variant: "destructive" })
     } finally {

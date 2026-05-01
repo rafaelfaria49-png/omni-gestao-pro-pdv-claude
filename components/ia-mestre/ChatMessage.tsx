@@ -4,11 +4,42 @@ import { Bot, Check, Copy, Download, FileSpreadsheet, FileText, ImageIcon, Pin, 
 import { motion } from "framer-motion";
 import { useState } from "react";
 
-export type ChatMsg = { id: string; role: "user" | "ai"; content: string; image?: { url: string; tool: string }; };
+export type ChatMsg = {
+  id: string
+  role: "user" | "ai"
+  content: string
+  /** Novo contrato do orquestrador: texto vs imagem. */
+  type?: "text" | "image"
+  imageUrl?: string
+  /** Legado/compat: já existia no chat (mock inicial). */
+  image?: { url: string; tool: string }
+}
 
 export function ChatMessage({ msg, index }: { msg: ChatMsg; index: number }) {
   const isUser = msg.role === "user";
   const [copied, setCopied] = useState(false);
+  const resolvedImageUrl = msg.imageUrl || msg.image?.url || ""
+  const shouldShowImage = (msg.type === "image" || !!msg.image) && !!resolvedImageUrl
+
+  const handleDownload = async (url: string) => {
+    if (!url) return
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+
+      const a = document.createElement("a")
+      a.href = blobUrl
+      a.download = "imagem-ia.png"
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+
+      window.URL.revokeObjectURL(blobUrl)
+    } catch (error) {
+      console.error("Erro ao baixar imagem:", error)
+    }
+  }
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(msg.content);
@@ -101,18 +132,25 @@ export function ChatMessage({ msg, index }: { msg: ChatMsg; index: number }) {
             </button>
           </div>
         )}
-        {msg.image && (
+        {shouldShowImage && (
           <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.4, delay: 0.15 }} className="overflow-hidden rounded-2xl border border-border bg-card shadow-elegant">
             <div className="relative aspect-[4/3] w-[320px] max-w-full overflow-hidden bg-muted">
-              <img src={msg.image.url} alt="Imagem gerada pela IA" className="h-full w-full object-cover transition duration-700 hover:scale-105" />
+              <img src={resolvedImageUrl} alt="Imagem gerada pela IA Mestre" className="h-full w-full object-cover transition duration-700 hover:scale-105" />
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-              <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md"><ImageIcon className="h-3 w-3" /> {msg.image.tool}</span>
+              <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-md"><ImageIcon className="h-3 w-3" /> {msg.image?.tool || "Gerado com IA"}</span>
             </div>
             <div className="flex items-center justify-between gap-2 px-3 py-2.5">
               <span className="text-xs text-muted-foreground">Mascote / Logo gerada</span>
               <div className="flex items-center gap-1">
                 <button className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"><Pin className="h-3.5 w-3.5" /> Fixar</button>
-                <button className="inline-flex items-center gap-1 rounded-full bg-gradient-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-elegant transition hover:opacity-90"><Download className="h-3.5 w-3.5" /> Baixar</button>
+                <button
+                  type="button"
+                  onClick={() => void handleDownload(resolvedImageUrl)}
+                  className="inline-flex items-center gap-1 rounded-full bg-gradient-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-elegant transition hover:opacity-90 disabled:opacity-50"
+                  disabled={!resolvedImageUrl}
+                >
+                  <Download className="h-3.5 w-3.5" /> Baixar
+                </button>
               </div>
             </div>
           </motion.div>

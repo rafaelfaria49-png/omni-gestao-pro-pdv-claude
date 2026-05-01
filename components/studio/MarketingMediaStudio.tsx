@@ -34,7 +34,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
+import { ToastAction } from "@/components/ui/toast"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
+import { interpretAiApiError } from "@/lib/handleAiApiError"
+import { notifyCreditBalanceUpdated } from "@/lib/creditsEvents"
+import { getCreditCost } from "@/src/lib/ai/credit-costs"
+import { useUserCredits } from "@/hooks/useUserCredits"
 import { cn } from "@/lib/utils"
 import type { BrandVoiceProfile, GrowthPackV2, MarketingContentTab } from "@/lib/marketing-growth-pack"
 import { MarketingMediaWaveform } from "@/components/studio/MarketingMediaWaveform"
@@ -57,6 +62,7 @@ type Props = {
 
 export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource, brandVoice }: Props) {
   const { toast } = useToast()
+  const { credits: userCredits } = useUserCredits()
   const [studioSection, setStudioSection] = useState<"criacao" | "calendario" | "performance">("criacao")
   const [credits, setCredits] = useState<number | null>(null)
   const [textSource, setTextSource] = useState<MarketingContentTab>(initialTextSource)
@@ -116,6 +122,37 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
       pending?: boolean
     }>
   >([])
+
+  const showBlockingToast = useCallback(
+    (status: number, message?: string) => {
+      const info = interpretAiApiError({ status, message })
+      toast({
+        title: info.title,
+        description: info.description,
+        variant: "destructive",
+        duration: 9000,
+        action:
+          info.kind === "credits" ? (
+            <ToastAction
+              altText="Comprar créditos"
+              onClick={() => toast({ title: "Comprar créditos", description: "Compra de créditos em breve" })}
+            >
+              Comprar créditos
+            </ToastAction>
+          ) : undefined,
+      })
+    },
+    [toast]
+  )
+
+  const formatBalanceSuffix = useCallback(
+    (cost: number) => {
+      if (typeof userCredits !== "number" || !Number.isFinite(userCredits)) return ""
+      const next = Math.max(0, userCredits - cost)
+      return ` • Saldo atual: ${next.toLocaleString("pt-BR")}`
+    },
+    [userCredits]
+  )
 
   const [cloneOpen, setCloneOpen] = useState(false)
   const [recording, setRecording] = useState(false)
@@ -310,12 +347,8 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
         message?: string
         jobId?: string
       }
-      if (res.status === 402 || data.error === "sem_creditos") {
-        toast({
-          title: "Sem créditos",
-          description: data.message || "Recarregue créditos para continuar.",
-          variant: "destructive",
-        })
+      if (res.status === 402 || res.status === 429 || data.error === "sem_creditos") {
+        showBlockingToast(res.status === 429 ? 429 : 402, data.message || data.error)
         if (typeof data.creditsRemaining === "number") setCredits(data.creditsRemaining)
         return
       }
@@ -329,7 +362,12 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
         ...prev.filter((p) => p.id !== pendingId),
       ])
       void refreshImageGallery()
-      toast({ title: "Imagem gerada", description: "Card adicionado na galeria." })
+      const cost = getCreditCost("image")
+      toast({
+        title: "Imagem gerada com sucesso",
+        description: `${cost} créditos foram consumidos${formatBalanceSuffix(cost)}.`,
+      })
+      notifyCreditBalanceUpdated()
     } catch (e) {
       setGeneratedImages((prev) => prev.filter((p) => p.id !== pendingId))
       toast({
@@ -437,12 +475,8 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
         error?: string
         message?: string
       }
-      if (res.status === 402 || data.error === "sem_creditos") {
-        toast({
-          title: "Sem créditos",
-          description: data.message || "Recarregue créditos para continuar.",
-          variant: "destructive",
-        })
+      if (res.status === 402 || res.status === 429 || data.error === "sem_creditos") {
+        showBlockingToast(res.status === 429 ? 429 : 402, data.message || data.error)
         if (typeof data.creditsRemaining === "number") setCredits(data.creditsRemaining)
         return
       }
@@ -450,10 +484,12 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
       if (typeof data.creditsRemaining === "number") setCredits(data.creditsRemaining)
       const url = typeof data.audioUrl === "string" ? data.audioUrl : "/api/marketing/voice/demo"
       setAudioUrl(url)
+      const cost = getCreditCost("voice")
       toast({
-        title: "Locução (mock)",
-        description: "Crédito debitado. Prévia de áudio carregada — integre TTS real quando disponível.",
+        title: "Voz gerada com sucesso",
+        description: `${cost} créditos foram consumidos${formatBalanceSuffix(cost)}.`,
       })
+      notifyCreditBalanceUpdated()
     } catch (e) {
       toast({
         title: "Falha na locução",
@@ -491,22 +527,20 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
         error?: string
         message?: string
       }
-      if (res.status === 402 || data.error === "sem_creditos") {
-        toast({
-          title: "Sem créditos",
-          description: data.message || "Recarregue créditos para continuar.",
-          variant: "destructive",
-        })
+      if (res.status === 402 || res.status === 429 || data.error === "sem_creditos") {
+        showBlockingToast(res.status === 429 ? 429 : 402, data.message || data.error)
         if (typeof data.creditsRemaining === "number") setCredits(data.creditsRemaining)
         return
       }
       if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`)
       if (typeof data.creditsRemaining === "number") setCredits(data.creditsRemaining)
       setVideoMockReady(true)
+      const cost = getCreditCost("video")
       toast({
-        title: "Vídeo IA (Beta · mock)",
-        description: data.message || "Job registrado. Player real quando o provedor for integrado.",
+        title: "Vídeo gerado com sucesso",
+        description: `${cost} créditos foram consumidos${formatBalanceSuffix(cost)}.`,
       })
+      notifyCreditBalanceUpdated()
     } catch (e) {
       toast({
         title: "Falha no vídeo",
@@ -558,8 +592,8 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
         body: JSON.stringify({ kind: "review_reply", brandVoice, reviewText: t }),
       })
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; reply?: string; message?: string; error?: string; creditsRemaining?: number }
-      if (r.status === 402 || j.error === "sem_creditos") {
-        toast({ title: "Sem créditos", description: j.message || "Recarregue créditos.", variant: "destructive" })
+      if (r.status === 402 || r.status === 429 || j.error === "sem_creditos") {
+        showBlockingToast(r.status === 429 ? 429 : 402, j.message || j.error)
         if (typeof j.creditsRemaining === "number") setCredits(j.creditsRemaining)
         return
       }
@@ -637,12 +671,8 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
         error?: string
         message?: string
       }
-      if (res.status === 402 || data.error === "sem_creditos") {
-        toast({
-          title: "Sem créditos",
-          description: data.message || "Recarregue créditos para continuar.",
-          variant: "destructive",
-        })
+      if (res.status === 402 || res.status === 429 || data.error === "sem_creditos") {
+        showBlockingToast(res.status === 429 ? 429 : 402, data.message || data.error)
         if (typeof data.creditsRemaining === "number") setCredits(data.creditsRemaining)
         return
       }
@@ -653,7 +683,12 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
       setAvatarVideoUrl(typeof data.videoUrl === "string" ? data.videoUrl : null)
       setAvatarProgress(100)
       setAvatarStage("Pronto para Reels/TikTok (9:16).")
-      toast({ title: "Avatar sincronizado (mock)", description: "Pipeline pronto — lip-sync real entra na integração do provider." })
+      const cost = getCreditCost("avatar")
+      toast({
+        title: "Avatar gerado com sucesso",
+        description: `${cost} créditos foram consumidos${formatBalanceSuffix(cost)}.`,
+      })
+      notifyCreditBalanceUpdated()
     } catch (e) {
       toast({
         title: "Falha no Avatar Mestre",
@@ -823,6 +858,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
               >
                 {avatarBusy ? "Sincronizando..." : "Sincronizar lip-sync"}
               </Button>
+              <p className="text-xs text-muted-foreground">Consome {getCreditCost("avatar")} créditos</p>
             </div>
           </div>
         </div>
@@ -845,6 +881,7 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
               <Button type="button" className="h-11 rounded-xl text-base" onClick={() => void handleGenerateImage()} disabled={imageBusy}>
                 {imageBusy ? "Gerando..." : "Gerar imagem"}
               </Button>
+              <p className="text-xs text-muted-foreground">Consome {getCreditCost("image")} créditos</p>
             </div>
           </div>
         </div>
@@ -890,6 +927,10 @@ export function MarketingMediaStudio({ pack, classic, lojaId, initialTextSource,
                 <Button type="button" variant="secondary" className="h-11 rounded-xl text-base" onClick={() => void handleGenerateVideo()} disabled={videoBusy}>
                   {videoBusy ? "Renderizando..." : "Gerar vídeo"}
                 </Button>
+              </div>
+              <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                <span>Voz: {getCreditCost("voice")} créditos</span>
+                <span>Vídeo: {getCreditCost("video")} créditos</span>
               </div>
             </div>
           </div>

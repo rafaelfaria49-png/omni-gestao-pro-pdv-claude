@@ -159,13 +159,16 @@ export function PdvSupermercado({
   }, [cart.length])
 
   const quickItems = useMemo(() => {
-    return (pdvParams.atalhosRapidos || []).map((a) => ({
+    return (pdvParams.atalhosRapidos || []).map(
+      (a): PdvCatalogProduct => ({
       id: a.id,
       name: a.nome,
+      barcode: undefined,
       price: a.preco,
       stock: 999,
       category: "Atalho",
-    }))
+      }),
+    )
   }, [pdvParams.atalhosRapidos])
 
   const products = useMemo(() => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory), [inventory])

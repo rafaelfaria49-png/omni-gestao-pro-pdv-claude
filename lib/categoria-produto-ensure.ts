@@ -29,8 +29,8 @@ export async function ensureCategoriasProduto(lojaId: string, displayBySlug: Cat
 
   for (const [slug, nome] of merged) {
     await prisma.categoriaProduto.upsert({
-      where: { lojaId_slug: { lojaId, slug } },
-      create: { lojaId, slug, nome },
+      where: { lojaId_slug: { storeId: lojaId, slug } },
+      create: { storeId: lojaId, slug, nome },
       update: { nome },
     })
   }

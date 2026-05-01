@@ -1,19 +1,9 @@
+"use client";
+
 import { useState } from "react";
 import { Sun, Wrench, Sparkles, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { BomDiaModal, type StudioTemplate } from "@/components/bom-dia-modal";
-
-const BANNERS: Array<{
-  id: StudioTemplate;
-  title: string;
-  tagline: string;
-  description: string;
-  icon: typeof Sun;
-  audience: string;
-  accent: string;
-}> = {
-  // typed as record-friendly array below
-} as never;
+import { BomDiaModal, type StudioTemplate } from "./bom-dia-modal";
 
 const ITEMS: Array<{
   id: StudioTemplate;

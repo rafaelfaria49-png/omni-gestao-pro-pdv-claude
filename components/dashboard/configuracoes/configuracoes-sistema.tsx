@@ -682,7 +682,11 @@ export function ConfiguracoesSistema({ initialTab = "geral" }: ConfiguracoesSist
     <>
     <div className="space-y-6 pb-28">
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as any)}
+        className="w-full"
+      >
         <TabsList
           className={cn(
             "grid w-full h-auto gap-1 bg-secondary p-1",

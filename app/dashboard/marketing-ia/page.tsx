@@ -30,11 +30,11 @@ export default function MarketingIAHub() {
         </div>
       </div>
 
-      {/* Conteúdo principal */}
+      {/* Conteúdo principal: editor à esquerda, preview celular à direita (mobile: coluna única) */}
       <div className="mx-auto max-w-[1600px] px-6 py-8">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-          {/* Abas */}
-          <section className="lg:col-span-8">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Abas / editor */}
+          <section className="min-w-0">
             <Tabs defaultValue="studio-ia" className="w-full">
               <TabsList className="mb-6 grid h-auto w-full grid-cols-2 gap-1 rounded-2xl border border-border bg-card/60 p-1.5 backdrop-blur-md sm:grid-cols-3 lg:grid-cols-5">
                 <TabsTrigger
@@ -77,17 +77,15 @@ export default function MarketingIAHub() {
             </Tabs>
           </section>
 
-          {/* Phone Preview */}
-          <aside className="lg:col-span-4">
-            <div className="lg:sticky lg:top-24">
-              <div className="mb-4 text-center">
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  Pré-visualização em tempo real
-                </p>
-                <h3 className="mt-1 text-xl font-bold text-primary">Seu próximo Reel</h3>
-              </div>
-              <PhonePreview />
+          {/* Preview celular */}
+          <aside className="min-w-0 lg:sticky lg:top-24 lg:self-start">
+            <div className="mb-4 text-center">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                Pré-visualização em tempo real
+              </p>
+              <h3 className="mt-1 text-xl font-bold text-primary">Instagram · WhatsApp · Anúncio</h3>
             </div>
+            <PhonePreview />
           </aside>
         </div>
       </div>

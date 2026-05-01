@@ -1,97 +1,55 @@
-"use client";
+"use client"
 
-import { LayoutDashboard, ShoppingCart, Wrench, AlertTriangle, Banknote } from "lucide-react";
-import { AppOpsProviders } from "@/components/dashboard/app-ops-providers";
-import { AccessGate } from "@/components/auth/AccessGate";
-import { FirstAccessWizard } from "@/components/onboarding/first-access-wizard";
-import { AppShell } from "@/components/painel-inicial/AppShell";
-import { QuickActions } from "@/components/painel-inicial/QuickActions";
-import { KpiCard } from "@/components/painel-inicial/KpiCard";
-import { RevenueChart } from "@/components/painel-inicial/RevenueChart";
-import { CategoryChart } from "@/components/painel-inicial/CategoryChart";
-import { AiInsights } from "@/components/painel-inicial/AiInsights";
-import { CriticalStock } from "@/components/painel-inicial/CriticalStock";
-import { RecentActivityTable } from "@/components/painel-inicial/RecentActivityTable";
+import { useCallback, useState } from "react"
+import "@/components/landing/lovable/landing.css"
+import { Navbar } from "@/components/landing/lovable/Navbar"
+import { Hero } from "@/components/landing/lovable/Hero"
+import { AIMarquee } from "@/components/landing/lovable/AIMarquee"
+import { ValueStack } from "@/components/landing/lovable/ValueStack"
+import { BeforeAfter } from "@/components/landing/lovable/BeforeAfter"
+import { Arsenal } from "@/components/landing/lovable/Arsenal"
+import { Testimonials } from "@/components/landing/lovable/Testimonials"
+import { Academy } from "@/components/landing/lovable/Academy"
+import { Pricing } from "@/components/landing/lovable/Pricing"
+import { CreditsExplainer } from "@/components/landing/lovable/CreditsExplainer"
+import { FAQ } from "@/components/landing/lovable/FAQ"
+import { FinalCTA } from "@/components/landing/lovable/FinalCTA"
+import { Footer } from "@/components/landing/lovable/Footer"
+import { SignupModal } from "@/components/landing/lovable/SignupModal"
+import { ComparisonModal } from "@/components/landing/lovable/ComparisonModal"
 
-export default function DashboardPage() {
+export default function Page() {
+  const [signupOpen, setSignupOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [planName, setPlanName] = useState<string | undefined>(undefined)
+
+  const openSignup = useCallback((plan?: string) => {
+    setPlanName(plan)
+    setSignupOpen(true)
+  }, [])
+
   return (
-    <AppOpsProviders>
-      <AccessGate>
-        <AppShell>
-          <FirstAccessWizard />
-          <div className="mx-auto w-full max-w-[1600px] space-y-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground">
-                  Painel Inicial
-                </p>
-                <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-foreground">
-                  Visão geral enterprise
-                </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Acompanhe operações, receita e alertas críticos em tempo real.
-                </p>
-              </div>
-              <div className="hidden sm:flex items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2 backdrop-blur-md">
-                <LayoutDashboard className="h-4 w-4 text-primary" />
-                <span className="text-xs font-medium text-muted-foreground">OmniGestão</span>
-              </div>
-            </div>
+    <div className="landing-page min-h-screen overflow-x-hidden bg-background text-foreground">
+      <Navbar onCta={() => openSignup()} />
+      <Hero onCta={() => openSignup()} />
+      <AIMarquee />
+      <ValueStack onCta={() => openSignup()} />
+      <BeforeAfter />
+      <Arsenal />
+      <Testimonials />
+      <Academy />
+      <Pricing
+        onSelect={(plan) => openSignup(plan)}
+        onCompare={() => setCompareOpen(true)}
+      />
+      <CreditsExplainer />
+      <FAQ />
+      <FinalCTA onCta={() => openSignup()} />
+      <Footer />
 
-            <QuickActions />
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <KpiCard
-                label="Faturamento"
-                value="R$ 128.490"
-                trend={12.4}
-                icon={ShoppingCart}
-                hint="Últimos 7 dias"
-                accent="primary"
-              />
-              <KpiCard
-                label="Ordens de Serviço"
-                value="38"
-                trend={-3.2}
-                icon={Wrench}
-                hint="Em andamento"
-                accent="warning"
-              />
-              <KpiCard
-                label="Estoque crítico"
-                value="12"
-                trend={4.1}
-                icon={AlertTriangle}
-                hint="Abaixo do mínimo"
-                accent="destructive"
-              />
-              <KpiCard
-                label="A receber"
-                value="R$ 18.920"
-                trend={2.7}
-                icon={Banknote}
-                hint="Hoje"
-                accent="success"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-              <div className="xl:col-span-2">
-                <RevenueChart />
-              </div>
-              <CategoryChart />
-            </div>
-
-            <AiInsights />
-
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-              <CriticalStock />
-              <RecentActivityTable />
-            </div>
-          </div>
-        </AppShell>
-      </AccessGate>
-    </AppOpsProviders>
-  );
+      <SignupModal open={signupOpen} onOpenChange={setSignupOpen} planName={planName} />
+      <ComparisonModal open={compareOpen} onOpenChange={setCompareOpen} />
+    </div>
+  )
 }
 

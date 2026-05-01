@@ -2,7 +2,10 @@
 
 import { motion } from "framer-motion"
 import { Moon, Snowflake, Sun, Terminal } from "lucide-react"
-import { useTheme, type Theme } from "./ThemeProvider"
+import { useTheme } from "@/components/theme/ThemeProvider"
+import { useEffect, useState } from "react"
+
+type Theme = "light" | "soft-ice" | "midnight" | "black-edition"
 
 const options: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Light", icon: Sun },
@@ -13,6 +16,15 @@ const options: { value: Theme; label: string; icon: typeof Sun }[] = [
 
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return <div className="h-9 w-[220px] rounded-full border border-border bg-surface/70 p-1 backdrop-blur-md" />
+  }
 
   return (
     <div className="relative inline-flex items-center gap-1 rounded-full border border-border bg-surface/70 p-1 backdrop-blur-md">

@@ -47,15 +47,18 @@ const MODELS: {
 ];
 
 export function ModelSelect({ value, onChange }: { value: ModelId; onChange: (v: ModelId) => void; }) {
-  const current = MODELS.find((m) => m.id === value)!;
+  const current = MODELS.find((m) => m.id === value);
+  if (!current) {
+    return <div className="h-10 w-40 animate-pulse rounded-md bg-muted" />;
+  }
   return (
     <Select.Root value={value} onValueChange={(v) => onChange(v as ModelId)}>
       <Select.Trigger className="group flex items-center gap-2 rounded-full border border-border bg-surface/70 px-3 py-1.5 text-sm font-medium backdrop-blur-md transition hover:border-primary/40 hover:shadow-elegant">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground">
-          {current.auto ? <Sparkles className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
+          {current?.auto ? <Sparkles className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
         </span>
         <Select.Value>
-          <span className="flex items-center gap-2"><span>{current.name}</span><span className="hidden text-xs text-muted-foreground sm:inline">· {current.provider}</span></span>
+          <span className="flex items-center gap-2"><span>{current?.name || "Selecionando..."}</span><span className="hidden text-xs text-muted-foreground sm:inline">· {current?.provider || ""}</span></span>
         </Select.Value>
         <Select.Icon><ChevronDown className="h-4 w-4 text-muted-foreground transition group-data-[state=open]:rotate-180" /></Select.Icon>
       </Select.Trigger>

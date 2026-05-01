@@ -1,19 +1,8 @@
 "use client";
 
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Music2, Volume2, BadgeCheck, Tag } from "lucide-react";
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, BadgeCheck, Tag } from "lucide-react";
 import { useStudioPreviewOptional } from "./studio-preview-context";
-import {
-  PREVIEW_CENTER_LABEL,
-  PREVIEW_HASHTAGS,
-  TEMPLATES,
-  type StudioMood,
-} from "./studio/studio-templates";
-
-const MOOD_TRACK: Record<StudioMood, string> = {
-  animado: "Pop energético · marca",
-  relaxante: "Lo-fi calmante · marca",
-  promocao: "Beat promocional · urgência",
-};
+import { PREVIEW_HASHTAGS } from "./studio/studio-templates";
 
 interface Props {
   brand?: string;
@@ -34,24 +23,15 @@ export const PhonePreview = ({
   const activeTake = preview?.activeTake ?? 0;
   const takeMedia = preview?.takeMedia ?? [null, null, null];
   const caption = preview ? preview.caption : captionProp;
-  const mood = preview?.mood ?? "animado";
   const showLogo = preview?.showLogo ?? true;
   const showPrice = preview?.showPrice ?? false;
 
-  const tpl = TEMPLATES[template];
-  const takeTitle = preview
-    ? tpl.takes[activeTake]?.title ?? "NOVA COLEÇÃO"
-    : "NOVA COLEÇÃO";
-  const centerLabel = preview ? PREVIEW_CENTER_LABEL[template] : "Bom dia";
-  const hashtags = preview ? PREVIEW_HASHTAGS[template] : hashtagsProp;
+  const hashtags = preview ? preview.liveHashtags || PREVIEW_HASHTAGS[template] : hashtagsProp;
+  const rawSurface = preview?.previewSurface ?? "instagram";
+  const surface: "instagram" | "whatsapp" | "ad" =
+    rawSurface === "whatsapp" ? "whatsapp" : rawSurface === "ad" ? "ad" : "instagram";
+  const campaignCta = preview?.campaignCta?.trim() || "Saiba mais";
   const currentMedia = preview ? takeMedia[activeTake] : null;
-  const trackLabel = preview ? MOOD_TRACK[mood] : "Áudio original · Marca";
-  const subline = preview
-    ? `Take ${activeTake + 1}/3 · ${tpl.title}`
-    : "15s · Story automático";
-
-  const headline =
-    takeTitle.length > 28 ? `${takeTitle.slice(0, 26).trim()}…` : takeTitle;
 
   return (
     <div className="relative mx-auto w-full max-w-[400px] animate-float">
@@ -67,83 +47,123 @@ export const PhonePreview = ({
 
         {/* Screen */}
         <div className="relative h-full w-full overflow-hidden rounded-[1.85rem] bg-background">
-          {/* Reel background + optional media */}
-          <div className="relative h-full w-full bg-gradient-to-br from-primary/40 via-accent/30 to-primary-glow/40">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,hsl(var(--primary-glow)/0.5),transparent_55%)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,hsl(var(--accent)/0.5),transparent_55%)]" />
-
-            {currentMedia ? (
-              <img
-                src={currentMedia}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-              />
-            ) : null}
-
-            {/* Top bar */}
-            <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-3 pt-8 text-primary-foreground">
-              <div className="flex items-center gap-2">
-                <div className="h-7 w-7 rounded-full bg-gradient-primary ring-2 ring-primary-foreground/80" />
-                <div className="leading-tight">
-                  <p className="text-[11px] font-semibold drop-shadow">{brand}</p>
-                  <p className="text-[9px] opacity-80">Patrocinado · Reels</p>
+          {surface === "instagram" ? (
+            <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
+              <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 pb-2 pt-8">
+                <div className="h-8 w-8 shrink-0 rounded-full bg-gradient-primary ring-2 ring-border" />
+                <div className="min-w-0 flex-1 leading-tight">
+                  <p className="truncate text-[12px] font-semibold">{brand}</p>
+                  <p className="text-[10px] text-muted-foreground">Publicação patrocinada</p>
+                </div>
+                <MoreHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
+              </div>
+              <div className="relative aspect-square w-full shrink-0 bg-muted">
+                {currentMedia ? (
+                  <img src={currentMedia} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-muted to-muted/50 px-4 text-center text-[11px] text-muted-foreground">
+                    Adicione uma imagem no editor
+                  </div>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-4 px-3 py-2 text-foreground">
+                <Heart className="h-6 w-6" />
+                <MessageCircle className="h-6 w-6" />
+                <Send className="h-6 w-6" />
+                <Bookmark className="ml-auto h-6 w-6" />
+              </div>
+              <p className="shrink-0 px-3 text-[11px] font-semibold">1.234 curtidas</p>
+              <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
+                <p className="text-[12px] leading-snug">
+                  <span className="font-semibold">{brand} </span>
+                  {caption}
+                </p>
+                <p className="mt-1 text-[11px] text-primary">{hashtags}</p>
+                {preview && showLogo ? (
+                  <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <BadgeCheck className="h-3 w-3 text-primary" />
+                    Conta verificada
+                  </div>
+                ) : null}
+              </div>
+              <div className="shrink-0 border-t border-border px-3 pb-5 pt-2">
+                <button
+                  type="button"
+                  className="w-full rounded-lg bg-primary py-2.5 text-center text-[12px] font-semibold text-primary-foreground shadow-sm"
+                >
+                  {campaignCta}
+                </button>
+              </div>
+            </div>
+          ) : surface === "whatsapp" ? (
+            <div className="flex h-full flex-col bg-[#0b141a] text-white">
+              <div className="flex shrink-0 items-center gap-2.5 bg-[#075e54] px-3 pb-2.5 pt-8">
+                <div className="h-8 w-8 rounded-full bg-white/25 ring-2 ring-white/30" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold leading-tight">{brand.replace(/^@/, "")}</p>
+                  <p className="text-[10px] text-white/80">online</p>
+                </div>
+                <MoreHorizontal className="h-4 w-4 shrink-0 opacity-90" />
+              </div>
+              <div
+                className="min-h-0 flex-1 overflow-y-auto px-2 py-3"
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(45deg, #0b141a 0, #0b141a 8px, #0d1a22 8px, #0d1a22 16px)",
+                }}
+              >
+                <div className="ml-auto max-w-[92%] overflow-hidden rounded-lg rounded-tr-sm bg-[#005c4b] shadow-md ring-1 ring-black/10">
+                  {currentMedia ? (
+                    <img src={currentMedia} alt="" className="max-h-40 w-full object-cover" />
+                  ) : (
+                    <div className="flex h-24 items-center justify-center bg-black/20 px-2 text-center text-[10px] text-white/70">
+                      Envie uma imagem no editor
+                    </div>
+                  )}
+                  <p className="px-2.5 py-2 text-[12px] leading-snug text-white/95">{caption}</p>
+                  <p className="px-2.5 text-[10px] text-white/60">{hashtags}</p>
+                  <div className="px-2.5 pb-2.5 pt-2">
+                    <span className="inline-flex rounded-md bg-white/15 px-2.5 py-1.5 text-[11px] font-semibold text-white ring-1 ring-white/20">
+                      {campaignCta}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <MoreHorizontal className="h-4 w-4 drop-shadow" />
             </div>
-
-            {preview && showLogo ? (
-              <div className="absolute left-3 top-16 z-20 flex items-center gap-1 rounded-full bg-card/90 px-2.5 py-1 text-[10px] font-semibold text-foreground shadow-md backdrop-blur-sm ring-1 ring-border">
-                <BadgeCheck className="h-3 w-3 text-primary" />
-                SUA MARCA
-              </div>
-            ) : null}
-
-            {preview && showPrice ? (
-              <div className="absolute bottom-28 right-3 z-20 flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground shadow-lg">
-                <Tag className="h-3 w-3" />
-                R$ 99,90
-              </div>
-            ) : null}
-
-            {/* Center content */}
-            <div className="absolute inset-0 flex items-center justify-center px-4 pointer-events-none">
-              <div className="rounded-2xl bg-background/15 px-4 py-3 text-center backdrop-blur-md ring-1 ring-primary-foreground/30 max-w-[90%]">
-                <p className="text-[9px] uppercase tracking-widest text-primary-foreground/80">
-                  {centerLabel}
-                </p>
-                <p className="mt-1 text-base font-black uppercase leading-tight text-primary-foreground drop-shadow-lg sm:text-lg">
-                  {headline}
-                </p>
-                <p className="text-[9px] text-primary-foreground/90">{subline}</p>
-              </div>
-            </div>
-
-            {/* Right action rail */}
-            <div className="absolute right-2 bottom-24 z-10 flex flex-col items-center gap-3 text-primary-foreground">
-              {[Heart, MessageCircle, Send, Bookmark].map((Icon, i) => (
-                <div key={i} className="flex flex-col items-center gap-0.5">
-                  <Icon className="h-5 w-5 drop-shadow" />
-                  <span className="text-[9px] font-semibold drop-shadow">
-                    {["12k", "284", "1.1k", ""][i]}
-                  </span>
+          ) : (
+            <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-muted/30 p-3 text-foreground">
+              <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Patrocinado · Meta
+              </p>
+              <p className="mt-0.5 text-[11px] font-semibold text-foreground">{brand}</p>
+              <div className="mt-2 overflow-hidden rounded-xl border border-border bg-card shadow-md">
+                {currentMedia ? (
+                  <img src={currentMedia} alt="" className="aspect-[4/3] w-full object-cover" />
+                ) : (
+                  <div className="flex aspect-[4/3] items-center justify-center bg-muted text-center text-[10px] text-muted-foreground px-2">
+                    Imagem do anúncio
+                  </div>
+                )}
+                <div className="space-y-1.5 p-2.5">
+                  <p className="text-[10px] font-bold leading-snug text-primary">Oferta · não perca</p>
+                  <p className="text-[11px] leading-snug text-foreground">{caption}</p>
+                  <p className="text-[10px] text-muted-foreground">{hashtags}</p>
+                  <div className="pt-1">
+                    <span className="inline-block w-full rounded-lg bg-primary py-2 text-center text-[11px] font-semibold text-primary-foreground">
+                      {campaignCta}
+                    </span>
+                  </div>
                 </div>
-              ))}
-            </div>
-
-            {/* Bottom caption */}
-            <div className="absolute inset-x-0 bottom-0 z-10 space-y-1.5 bg-gradient-to-t from-foreground/70 to-transparent px-3 pb-4 pt-8 text-primary-foreground">
-              <p className="text-[11px] font-semibold leading-snug drop-shadow">{caption}</p>
-              <p className="text-[10px] leading-snug opacity-90">{hashtags}</p>
-              <div className="flex items-center gap-1.5 text-[10px]">
-                <Music2 className="h-3 w-3 shrink-0" />
-                <span className="opacity-90 truncate">{trackLabel}</span>
-                <Volume2 className="ml-auto h-3 w-3 shrink-0" />
               </div>
+              {preview && showPrice ? (
+                <div className="mt-2 flex items-center justify-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">
+                  <Tag className="h-3 w-3" />
+                  R$ 99,90
+                </div>
+              ) : null}
             </div>
-          </div>
+          )}
 
-          {/* Home indicator */}
           <div className="absolute bottom-1 left-1/2 h-1 w-20 -translate-x-1/2 rounded-full bg-background/70" />
         </div>
       </div>

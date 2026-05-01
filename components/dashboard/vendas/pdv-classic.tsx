@@ -1015,8 +1015,12 @@ export function PdvClassic({
 
   const openPaymentModal = (intent: PaymentMethodType | null) => {
     if (intent === "a_prazo" && !selectedCustomer) {
-      // @ts-expect-error toast.error existe no runtime atual
-      toast.error("⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo.")
+      toast({
+        variant: "destructive",
+        title: "Cliente obrigatório",
+        description:
+          "⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo.",
+      })
       return
     }
     if (intent === "carne" && !selectedCustomer) {

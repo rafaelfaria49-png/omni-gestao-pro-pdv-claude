@@ -1,257 +1,199 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CalendarClock, Pencil, Trash2, Instagram, MessageCircle, Megaphone } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Sparkles,
-  Copy,
-  Check,
-  Instagram,
-  MessageCircle,
-  Music2,
-  Facebook,
-  Wand2,
-} from "lucide-react";
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useStudioPreview, type PreviewSurface } from "./studio-preview-context";
+import type { MarketingSavedPost, PostStatus } from "../lib/marketing-ia-types";
+import { cn } from "@/lib/utils";
 
-type Network = "instagram" | "whatsapp" | "tiktok" | "facebook";
-type Tone = "persuasivo" | "divertido" | "urgente";
+function surfaceLabel(s: PreviewSurface): string {
+  if (s === "whatsapp") return "WhatsApp";
+  if (s === "ad") return "Anúncio";
+  return "Instagram";
+}
 
-const MOCKS: Record<Network, Record<Tone, string>> = {
-  instagram: {
-    persuasivo:
-      "✨ Você merece o melhor — e ele acabou de chegar.\n\nNossa nova coleção foi pensada para quem não aceita menos do que excelência. Materiais premium, design exclusivo e aquele toque que faz toda a diferença.\n\n👉 Garanta o seu agora pelo link da bio. Estoque limitado!\n\n#novidade #premium #lancamento #estilo",
-    divertido:
-      "Alerta: produto novo na área 🚨🎉\n\nPrepara o coração (e o carrinho 🛒) porque chegou aquela novidade que vai bombar o seu feed!\n\nMarca aquela amiga que PRECISA ver isso 👇\n\n#vemver #novidade #amei #goals",
-    urgente:
-      "⏰ ÚLTIMAS UNIDADES! ⏰\n\nA promoção mais esperada do mês acaba HOJE às 23:59. Não fique de fora — quem deixou pra depois, ficou sem.\n\n🔥 Corre pro link da bio AGORA.\n\n#promocao #ultimasunidades #correle",
-  },
-  whatsapp: {
-    persuasivo:
-      "Olá! 👋 Tudo bem?\n\nSeparei uma novidade que combina muito com você. É um item que está saindo bastante e tenho certeza que vai amar.\n\nPosso te enviar mais detalhes e fotos? 😊",
-    divertido:
-      "Oieee! 💛 Adivinha o que chegou? 👀\n\nAquela novidade que você tava esperando! Já tá disponível e tô passando aqui só pra te avisar em primeira mão 🥳\n\nQuer dar uma espiadinha?",
-    urgente:
-      "🚨 Aviso rápido!\n\nA promoção que comentei termina HOJE. Restam pouquíssimas unidades e não quero que você perca.\n\nPosso reservar a sua agora? ✅",
-  },
-  tiktok: {
-    persuasivo:
-      "POV: você finalmente encontrou o produto perfeito 🤌\n\n✅ Qualidade premium\n✅ Design único\n✅ Preço que cabe no bolso\n\nLink na bio 🔗\n\n#fyp #achadinhos #pov #viral",
-    divertido:
-      "Ninguém:\nAbsolutamente ninguém:\nEu chegando com o lançamento do mês 💅✨\n\nSalva esse vídeo pra não esquecer 📌\n\n#fyp #foryou #trend #viralizou",
-    urgente:
-      "PARA TUDO 🛑 Última chamada!\n\nAcaba hoje e eu não vou avisar de novo 🫠\n\nCorre, corre, corre pro link da bio 🏃‍♀️💨\n\n#fyp #ultimodia #promo",
-  },
-  facebook: {
-    persuasivo:
-      "Novidade na loja! ✨\n\nSelecionamos uma oferta especial para quem acompanha nossa página: produto premium, acabamento impecável e pronta entrega.\n\nClique em Saiba Mais ou chame no Messenger para reservar o seu hoje.",
-    divertido:
-      "Passando no seu feed pra avisar: chegou novidade boa! 🎉\n\nÉ aquele tipo de produto que dá vontade de marcar todo mundo. Curtiu? Comenta EU QUERO que a gente te chama com os detalhes!",
-    urgente:
-      "Última chamada no Facebook! 🚨\n\nA campanha termina hoje e restam poucas unidades. Garanta pelo inbox ou clique em Saiba Mais antes que acabe.",
-  },
-};
+function surfaceIcon(s: PreviewSurface) {
+  if (s === "whatsapp") return MessageCircle;
+  if (s === "ad") return Megaphone;
+  return Instagram;
+}
 
-const NETWORK_META: Record<Network, { label: string; icon: typeof Instagram }> = {
-  instagram: { label: "Instagram", icon: Instagram },
-  whatsapp: { label: "WhatsApp", icon: MessageCircle },
-  tiktok: { label: "TikTok", icon: Music2 },
-  facebook: { label: "Facebook Feed e Stories", icon: Facebook },
-};
+function statusBadge(status: PostStatus) {
+  switch (status) {
+    case "published":
+      return <Badge className="bg-success/15 text-success border-success/30">Publicado</Badge>;
+    case "scheduled":
+      return <Badge variant="outline" className="border-primary/40 text-primary">Agendado</Badge>;
+    default:
+      return <Badge variant="secondary">Rascunho</Badge>;
+  }
+}
 
-export const PostGeneratorTab = () => {
+export function PostGeneratorTab() {
+  const { savedPosts, loadPostIntoPreview, deleteSavedPost, updatePostSchedule } = useStudioPreview();
   const { toast } = useToast();
-  const [network, setNetwork] = useState<Network>("instagram");
-  const [tone, setTone] = useState<Tone>("persuasivo");
-  const [topic, setTopic] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [schedulingId, setSchedulingId] = useState<string | null>(null);
+  const [scheduleDate, setScheduleDate] = useState("");
 
-  const handleGenerate = () => {
-    setLoading(true);
-    setResult(null);
-    setCopied(false);
-    setTimeout(() => {
-      const base = MOCKS[network][tone];
-      const final = topic.trim()
-        ? `${base}\n\n— Sobre: ${topic.trim()}`
-        : base;
-      setResult(final);
-      setLoading(false);
-    }, 1400);
-  };
-
-  const handleCopy = async () => {
-    if (!result) return;
-    try {
-      await navigator.clipboard.writeText(result);
-      setCopied(true);
-      toast({ title: "Copiado!", description: "Conteúdo na sua área de transferência." });
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast({ title: "Não foi possível copiar", variant: "destructive" });
+  const openSchedule = (id: string) => {
+    const p = savedPosts.find((x) => x.id === id);
+    setSchedulingId(id);
+    if (p?.scheduledAt) {
+      const d = new Date(p.scheduledAt);
+      setScheduleDate(d.toISOString().slice(0, 16));
+    } else {
+      setScheduleDate("");
     }
+    setScheduleOpen(true);
   };
 
-  const NetworkIcon = NETWORK_META[network].icon;
+  const confirmSchedule = () => {
+    if (!schedulingId || !scheduleDate) {
+      toast({ title: "Data obrigatória", description: "Escolha data e hora.", variant: "destructive" });
+      return;
+    }
+    const iso = new Date(scheduleDate).toISOString();
+    updatePostSchedule(schedulingId, iso);
+    setScheduleOpen(false);
+    toast({ title: "Post agendado", description: "Veja no Calendário." });
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      {/* Credits badge */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">
-            Gerador de Posts
-          </h2>
-          <p className="text-base text-muted-foreground">
-            Crie conteúdo persuasivo em segundos com IA.
-          </p>
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-bold text-foreground">Posts salvos</h2>
+        <p className="text-sm text-muted-foreground">
+          Conteúdos do Estúdio gravados neste navegador. Editar carrega no preview à direita.
+        </p>
+      </div>
+
+      {savedPosts.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            Nenhum post salvo ainda. Crie no Estúdio IA e clique em &quot;Salvar post&quot;.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {savedPosts.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              onEdit={() => {
+                loadPostIntoPreview(post.id);
+                toast({ title: "Post carregado", description: "Preview atualizado." });
+              }}
+              onSchedule={() => openSchedule(post.id)}
+              onDelete={() => {
+                deleteSavedPost(post.id);
+                toast({ title: "Post excluído" });
+              }}
+            />
+          ))}
         </div>
-        <Badge
-          variant="outline"
-          className="gap-2 border-primary/40 bg-muted/50 px-4 py-2 text-sm font-semibold text-foreground shadow-glow"
-        >
-          <span className="text-base">⚡</span>
-          Saldo Premium: <span className="neon-text">800 Créditos</span>
-        </Badge>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* LEFT: Configuration */}
-        <Card className="glass-card animate-scale-in">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Wand2 className="h-5 w-5 text-primary" />
-              Configuração do Post
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <div className="space-y-2">
-              <Label className="text-base font-medium">Rede Social</Label>
-              <Select value={network} onValueChange={(v) => setNetwork(v as Network)}>
-                <SelectTrigger className="h-11 text-base">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="instagram">📸 Instagram</SelectItem>
-                  <SelectItem value="whatsapp">💬 WhatsApp</SelectItem>
-                  <SelectItem value="tiktok">🎵 TikTok</SelectItem>
-                  <SelectItem value="facebook">📘 Facebook Feed e Stories</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-base font-medium">Tom de Voz</Label>
-              <Select value={tone} onValueChange={(v) => setTone(v as Tone)}>
-                <SelectTrigger className="h-11 text-base">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="persuasivo">🎯 Persuasivo</SelectItem>
-                  <SelectItem value="divertido">🎉 Divertido</SelectItem>
-                  <SelectItem value="urgente">⚡ Urgente</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-base font-medium">Sobre o que é o post?</Label>
-              <Textarea
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="Ex: Lançamento da nova coleção de inverno com 30% de desconto até domingo..."
-                className="min-h-[140px] text-base"
-              />
-            </div>
-
-            <Button
-              onClick={handleGenerate}
-              disabled={loading}
-              size="lg"
-              className="btn-glow w-full bg-gradient-primary text-base font-semibold text-primary-foreground hover:opacity-95"
-            >
-              <Sparkles className="h-5 w-5" />
-              {loading ? "Gerando conteúdo..." : "Gerar Conteúdo"}
+      <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Agendar post</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="sched-dt">Data e hora</Label>
+            <Input
+              id="sched-dt"
+              type="datetime-local"
+              value={scheduleDate}
+              onChange={(e) => setScheduleDate(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleOpen(false)}>
+              Cancelar
             </Button>
-          </CardContent>
-        </Card>
-
-        {/* RIGHT: Result */}
-        <Card className="glass-card animate-scale-in">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <NetworkIcon className="h-5 w-5 text-primary" />
-              Resultado · {NETWORK_META[network].label}
-            </CardTitle>
-            {result && !loading && (
-              <Button
-                onClick={handleCopy}
-                variant="outline"
-                size="sm"
-                className="gap-2"
-              >
-                {copied ? (
-                  <>
-                    <Check className="h-4 w-4 text-success" />
-                    Copiado
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" />
-                    Copiar
-                  </>
-                )}
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            {loading && (
-              <div className="space-y-3">
-                <Skeleton className="h-5 w-3/4" />
-                <Skeleton className="h-5 w-full" />
-                <Skeleton className="h-5 w-full" />
-                <Skeleton className="h-5 w-5/6" />
-                <Skeleton className="h-5 w-2/3" />
-                <Skeleton className="h-5 w-4/5" />
-              </div>
-            )}
-
-            {!loading && result && (
-              <div className="rounded-xl border border-border bg-background/40 p-5">
-                <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed text-foreground">
-                  {result}
-                </pre>
-              </div>
-            )}
-
-            {!loading && !result && (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16 text-center">
-                <Sparkles className="mb-3 h-10 w-10 text-muted-foreground/50" />
-                <p className="text-base font-medium text-foreground">
-                  Seu conteúdo aparecerá aqui
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Configure ao lado e clique em Gerar Conteúdo
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            <Button onClick={confirmSchedule}>Salvar agendamento</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-};
+}
+
+function PostCard({
+  post,
+  onEdit,
+  onSchedule,
+  onDelete,
+}: {
+  post: MarketingSavedPost;
+  onEdit: () => void;
+  onSchedule: () => void;
+  onDelete: () => void;
+}) {
+  const Icon = surfaceIcon(post.previewSurface);
+  const short = post.caption.length > 90 ? `${post.caption.slice(0, 88)}…` : post.caption;
+  const dateStr = post.scheduledAt
+    ? new Date(post.scheduledAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+    : new Date(post.createdAt).toLocaleString("pt-BR", { dateStyle: "short" });
+
+  return (
+    <Card className="overflow-hidden border-border/80">
+      <CardContent className="p-0">
+        <div className="flex gap-3 p-3">
+          <div
+            className={cn(
+              "relative h-20 w-14 shrink-0 overflow-hidden rounded-lg border bg-muted",
+              post.previewSurface === "whatsapp" && "bg-[#075e54]/20",
+              post.previewSurface === "ad" && "bg-primary/10",
+            )}
+          >
+            {post.imageUrl ? (
+              <img src={post.imageUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center p-1 text-center text-[8px] text-muted-foreground">
+                sem img
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium text-foreground">{surfaceLabel(post.previewSurface)}</span>
+              {statusBadge(post.status)}
+            </div>
+            <p className="text-xs text-muted-foreground line-clamp-2">{short}</p>
+            <p className="text-[10px] text-muted-foreground">{post.scheduledAt ? `Agendado: ${dateStr}` : `Criado: ${dateStr}`}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1 border-t border-border bg-muted/30 px-2 py-2">
+          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={onEdit}>
+            <Pencil className="mr-1 h-3 w-3" />
+            Editar
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={onSchedule}>
+            <CalendarClock className="mr-1 h-3 w-3" />
+            Agendar
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 text-xs text-destructive" onClick={onDelete}>
+            <Trash2 className="mr-1 h-3 w-3" />
+            Excluir
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

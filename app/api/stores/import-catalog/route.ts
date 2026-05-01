@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
     const [cats, prods] = await Promise.all([
       prisma.categoriaProduto.findMany({
-        where: { lojaId: fromStoreId },
+        where: { storeId: fromStoreId },
         select: { slug: true, nome: true },
       }),
       prisma.produto.findMany({
@@ -66,9 +66,9 @@ export async function POST(req: Request) {
         const slug = (c.slug || "").trim()
         if (!slug) continue
         await tx.categoriaProduto.upsert({
-          where: { lojaId_slug: { lojaId: toStoreId, slug } },
+          where: { lojaId_slug: { storeId: toStoreId, slug } },
           update: mode === "overwrite" ? { nome: c.nome } : {},
-          create: { lojaId: toStoreId, slug, nome: c.nome },
+          create: { storeId: toStoreId, slug, nome: c.nome },
         })
         categoriasCriadas += 1
       }

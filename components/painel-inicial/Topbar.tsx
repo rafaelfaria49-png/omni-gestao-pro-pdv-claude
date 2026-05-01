@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
+import { useUserCredits } from "@/hooks/useUserCredits";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +15,18 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export function Topbar() {
+  const { credits, loading, error } = useUserCredits();
+
+  const creditsValue = typeof credits === "number" ? credits : null;
+  const showLow = !loading && !error && creditsValue !== null && creditsValue <= 100;
+  const showNone = !loading && !error && creditsValue !== null && creditsValue <= 0;
+
+  const creditsLabel = loading
+    ? "Créditos..."
+    : error
+      ? null
+      : `Créditos: ${new Intl.NumberFormat("pt-BR").format(credits ?? 0)}`;
+
   return (
     <header className="h-14 shrink-0 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-30">
       <div className="h-full flex items-center gap-2 px-4 sm:px-6">
@@ -42,6 +56,37 @@ export function Topbar() {
 
         {/* Theme switcher */}
         <ThemeSwitcher />
+
+        {/* Credits */}
+        {creditsLabel ? (
+          <div className="hidden sm:inline-flex items-center rounded-full border border-border bg-surface/60 px-3 py-1.5 text-[12px] font-medium text-muted-foreground">
+            {creditsLabel}
+          </div>
+        ) : null}
+
+        {(showNone || showLow) && (
+          <Link
+            href="/dashboard/creditos"
+            className={[
+              "hidden sm:inline-flex h-8 items-center gap-2 rounded-full border px-3 text-[12px] font-semibold transition",
+              showNone
+                ? "border-destructive/25 bg-destructive/10 text-destructive hover:bg-destructive/15"
+                : "border-yellow-500/25 bg-yellow-500/10 text-yellow-700 hover:bg-yellow-500/15 dark:text-yellow-300",
+            ].join(" ")}
+          >
+            <span>{showNone ? "Sem créditos" : "Créditos baixos"}</span>
+            <span className="rounded-full bg-background/60 px-2 py-0.5 text-[11px] font-medium text-foreground/80">
+              Comprar
+            </span>
+          </Link>
+        )}
+
+        <Link
+          href="/dashboard/creditos"
+          className="hidden sm:inline-flex h-8 items-center rounded-full border border-border bg-background/60 px-3 text-[12px] font-medium text-foreground/80 transition hover:bg-muted/50 hover:text-foreground"
+        >
+          Comprar créditos
+        </Link>
 
         {/* Notifications */}
         <button className="relative h-8 w-8 rounded-md border border-border bg-panel hover:bg-muted/60 transition-colors grid place-items-center">

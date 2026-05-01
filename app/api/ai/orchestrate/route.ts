@@ -7,6 +7,7 @@ import { composeMestreUserMessage, type StockSummaryRow } from "@/services/ai-me
 import { pickMestreModel } from "@/lib/ai-model-policy"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
 import { requireAdmin } from "@/lib/require-admin"
+import { detectIntent } from "@/lib/aiOrchestrator"
 
 /** Prisma exige Node; a chamada Gemini em si é compatível com Edge, mas este handler não. */
 export const runtime = "nodejs"
@@ -24,6 +25,8 @@ type ClientMessage = { role?: string; content?: string }
 
 type Body = {
   command?: string
+  /** Alias simples para clientes que enviam apenas `{ prompt }`. */
+  prompt?: string
   /** Histórico opcional (cliente). */
   messages?: ClientMessage[]
   /** Liga/desliga tom e contexto de loja. */
@@ -70,6 +73,8 @@ function normalizeMessages(ms: ClientMessage[] | undefined): Array<{ role: "user
 }
 
 function lastUserText(body: Body): string {
+  const p = typeof body.prompt === "string" ? body.prompt.trim() : ""
+  if (p) return p
   const c = typeof body.command === "string" ? body.command.trim() : ""
   if (c) return c
   const hist = normalizeMessages(body.messages)
@@ -79,19 +84,49 @@ function lastUserText(body: Body): string {
   return ""
 }
 
-function isImageIntent(text: string): boolean {
-  const t = (text || "").toLowerCase()
-  return /\b(logo|imagem|foto|desenha|desenhe|mascote)\b/.test(t)
-}
-
 function buildConsultoraSystemPrompt(opts: { brandVoice: boolean }): string {
   return [
     "VOCÊ DEVE RESPONDER EXCLUSIVAMENTE EM PORTUGUÊS DO BRASIL (pt-BR). NUNCA RESPONDA EM INGLÊS.",
-    "Você é a IA Mestre: uma Consultora Estratégica Especialista em Lojas de Celulares (assistência técnica e varejo).",
+    "Você é a IA Mestre do OmniGestão Pro: assistente central do ERP para assistência técnica e varejo.",
+    "Você entende e dá respostas práticas sobre: vendas/PDV, estoque, financeiro, CRM/clientes, ordens de serviço, compras/fornecedores e marketing.",
     opts.brandVoice
       ? "TOM: premium, direto, confiante, com foco em execução e resultado. Use a identidade da loja."
       : "TOM: profissional, direto e útil. Não invente dados internos se não tiver contexto.",
-    "Você TEM acesso à ferramenta DALL·E 3. Regra: quando pedirem logo/imagem/foto/desenho/mascote, NÃO faça perguntas — invente o que faltar (moderno e tech) e gere imediatamente.",
+    "Ao responder, seja objetivo: entregue passos acionáveis, checklist curto e exemplos quando ajudar.",
+    "Quando o pedido envolver criação visual (logo/imagem/arte/banner/post/anúncio/flyer), você deve preparar um brief claro e consistente para geração de imagem.",
+  ].join("\n")
+}
+
+function isLogoRequest(text: string): boolean {
+  const t = text.toLowerCase()
+  return t.includes("logo") || t.includes("logotipo") || t.includes("marca") || t.includes("identidade visual")
+}
+
+function buildImageGenerationPrompt(userCommand: string): string {
+  const cmd = String(userCommand || "").trim()
+  const logo = isLogoRequest(cmd)
+  const header = logo
+    ? [
+        "Crie um LOGOTIPO profissional para uma empresa brasileira (estilo moderno, comercial e limpo).",
+        "Fundo limpo e alta qualidade. Alto contraste. Visual pronto para uso em site e redes sociais.",
+        "REGRA CRÍTICA DE TEXTO (NÃO QUEBRAR):",
+        "- Qualquer texto/nome no logo deve aparecer EXATAMENTE como informado pelo usuário (mesma grafia, maiúsculas/minúsculas, acentos e espaçamento).",
+        "- NÃO traduzir o nome. NÃO abreviar. NÃO corrigir automaticamente. NÃO inventar letras. NÃO adicionar palavras extras.",
+        "O texto do logo deve aparecer exatamente como informado pelo usuário.",
+      ]
+    : [
+        "Crie uma imagem/arte profissional para uma empresa brasileira (estilo moderno, comercial e limpo).",
+        "Fundo limpo, alta qualidade, composição clara.",
+        "REGRA DE TEXTO:",
+        "- Evite adicionar texto na imagem, a não ser que o usuário tenha pedido explicitamente.",
+        "- Se houver texto pedido, ele deve aparecer EXATAMENTE como informado (sem traduções, abreviações ou palavras extras).",
+      ]
+
+  return [
+    ...header,
+    "",
+    "BRIEF DO USUÁRIO (copiar fielmente; preserve nomes e textos):",
+    cmd || "(vazio)",
   ].join("\n")
 }
 
@@ -292,15 +327,11 @@ export async function POST(req: Request) {
   const brandVoice = !!body.brandVoice
   const history = normalizeMessages(body.messages)
 
-  // Tool Calling (imagem): determinístico e compatível com OpenRouter
-  if (isImageIntent(command)) {
+  // Tool Calling (imagem): determinístico (IA Mestre decide automaticamente)
+  const intent = detectIntent(command)
+  if (intent === "image") {
     try {
-      const prompt = [
-        "Gere uma imagem com estilo moderno e tech, limpa, premium e profissional.",
-        "Se for logo: minimalista, alto contraste, formas geométricas simples. Sem texto legível.",
-        "Brief do usuário:",
-        command,
-      ].join("\n")
+      const prompt = buildImageGenerationPrompt(command)
       let imageUrl = ""
       if (isLocalDevelopment) {
         imageUrl = await generateLocalDallEImage(prompt)
@@ -322,6 +353,8 @@ export async function POST(req: Request) {
       }
       return NextResponse.json({
         ...result,
+        type: "image",
+        data: { imageUrl },
         message: "Imagem gerada pela IA Mestre.",
         tool: { type: "image", url: imageUrl },
         integration: { llmConfigured: true, backend: "openai", stockRowsLoaded: stockRows.length > 0, toolUsed: "dalle3" },
@@ -376,6 +409,8 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ...result,
+    type: "text",
+    data: { message },
     message,
     integration: meta,
   })

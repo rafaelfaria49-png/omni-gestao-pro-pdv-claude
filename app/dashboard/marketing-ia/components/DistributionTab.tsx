@@ -18,16 +18,35 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { useStudioPreview } from "./studio-preview-context";
+import type { ConnectedAccount } from "../lib/marketing-ia-types";
 
-type Network = {
-  key: string;
+type NetKey = ConnectedAccount["network"];
+
+const NETWORKS: Array<{
+  key: NetKey;
   label: string;
   desc: string;
   icon: typeof Instagram;
   placeholder: string;
-};
-
-const NETWORKS: Network[] = [
+}> = [
   {
     key: "instagram",
     label: "Instagram",
@@ -58,15 +77,6 @@ const NETWORKS: Network[] = [
   },
 ];
 
-type Accounts = Record<string, string[]>;
-
-const INITIAL_ACCOUNTS: Accounts = {
-  instagram: ["@loja.matriz", "@loja.outlet"],
-  tiktok: ["@minha.loja"],
-  facebook: [],
-  whatsapp: ["Comercial · 11 9 9999-0000"],
-};
-
 const INBOX = [
   {
     name: "Mariana C.",
@@ -90,27 +100,56 @@ const INBOX = [
   },
 ];
 
-export const DistributionTab = () => {
+export function DistributionTab() {
   const [watermark, setWatermark] = useState(true);
   const [brand, setBrand] = useState(true);
-  const [accounts, setAccounts] = useState<Accounts>(INITIAL_ACCOUNTS);
+  const { connectedAccounts, setConnectedAccounts, publishNowSimulated } = useStudioPreview();
+  const { toast } = useToast();
+  const [addOpen, setAddOpen] = useState(false);
+  const [newNetwork, setNewNetwork] = useState<NetKey>("instagram");
+  const [newUsername, setNewUsername] = useState("");
 
-  const addAccount = (key: string, placeholder: string) => {
-    const value = window.prompt(`Adicionar nova conta (${placeholder}):`);
-    if (!value || !value.trim()) return;
-    setAccounts((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), value.trim()] }));
+  const accountsFor = (key: NetKey) => connectedAccounts.filter((a) => a.network === key);
+
+  const confirmAdd = () => {
+    const u = newUsername.trim();
+    if (!u) {
+      toast({ title: "Informe o usuário ou nome", variant: "destructive" });
+      return;
+    }
+    setConnectedAccounts((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), network: newNetwork, username: u },
+    ]);
+    setAddOpen(false);
+    toast({ title: "Conta adicionada (local)", description: "Dados salvos neste navegador." });
   };
 
-  const removeAccount = (key: string, index: number) => {
-    setAccounts((prev) => ({
-      ...prev,
-      [key]: prev[key].filter((_, i) => i !== index),
-    }));
+  const removeById = (id: string) => {
+    setConnectedAccounts((prev) => prev.filter((a) => a.id !== id));
+    toast({ title: "Conta removida" });
+  };
+
+  const handlePublishNow = () => {
+    const r = publishNowSimulated();
+    if (!r.ok) {
+      toast({
+        title: "Crie ou selecione um post primeiro",
+        description: "Use o Estúdio IA ou abra um post salvo.",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Publicação simulada com sucesso",
+      description: r.markedPublished
+        ? "Post salvo marcado como publicado. Integração real com redes será adicionada depois."
+        : "Função simulada por enquanto. Salve o post para registrar publicação no histórico.",
+    });
   };
 
   return (
     <div className="space-y-6">
-      {/* Brand config */}
       <div className="glass-card rounded-2xl p-6 animate-fade-in-up">
         <div className="flex items-center gap-4">
           <div className="rounded-xl bg-gradient-primary p-3 text-primary-foreground shadow-glow">
@@ -126,23 +165,22 @@ export const DistributionTab = () => {
         </div>
       </div>
 
-      {/* Multi-account distribution */}
       <div className="glass-card rounded-2xl p-6 animate-fade-in-up [animation-delay:80ms]">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-foreground">Contas Conectadas</h2>
+            <h2 className="text-2xl font-bold text-foreground">Contas conectadas</h2>
             <p className="mt-1 text-base text-muted-foreground">
-              Gerencie múltiplas contas por rede. Publique em todas com 1 clique.
+              Instagram, TikTok, Facebook e WhatsApp — armazenamento local (simulado).
             </p>
           </div>
           <Badge className="bg-gradient-primary text-primary-foreground border-0">
-            <Sparkles className="mr-1 h-3 w-3" /> Multi-conta
+            <Sparkles className="mr-1 h-3 w-3" /> {connectedAccounts.length} contas
           </Badge>
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           {NETWORKS.map(({ key, label, desc, icon: Icon, placeholder }) => {
-            const list = accounts[key] ?? [];
+            const list = accountsFor(key);
             return (
               <div
                 key={key}
@@ -164,11 +202,15 @@ export const DistributionTab = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => addAccount(key, placeholder)}
+                  onClick={() => {
+                    setNewNetwork(key);
+                    setNewUsername("");
+                    setAddOpen(true);
+                  }}
                   className="btn-glow mt-4 w-full gap-2 border-dashed border-primary/40 text-primary hover:bg-muted/50"
                 >
                   <Plus className="h-4 w-4" />
-                  Adicionar Conta
+                  Adicionar conta
                 </Button>
 
                 <div className="mt-3 space-y-2">
@@ -177,26 +219,23 @@ export const DistributionTab = () => {
                       Nenhuma conta conectada ainda.
                     </p>
                   )}
-                  {list.map((handle, i) => (
+                  {list.map((acc) => (
                     <div
-                      key={`${handle}-${i}`}
+                      key={acc.id}
                       className="flex items-center justify-between rounded-lg border border-border bg-background/60 px-3 py-2"
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
-                        <p className="truncate text-sm font-medium text-foreground">{handle}</p>
-                        <Badge
-                          variant="outline"
-                          className="border-success/40 text-[10px] text-success"
-                        >
+                        <p className="truncate text-sm font-medium text-foreground">{acc.username}</p>
+                        <Badge variant="outline" className="border-success/40 text-[10px] text-success">
                           Ativa
                         </Badge>
                       </div>
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => removeAccount(key, i)}
-                        aria-label={`Desconectar ${handle}`}
+                        onClick={() => removeById(acc.id)}
+                        aria-label={`Remover ${acc.username}`}
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -214,22 +253,60 @@ export const DistributionTab = () => {
             <Droplets className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <p className="text-base font-semibold text-foreground">
-              Aplicar marca d&apos;água da loja
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Logo discreto no canto inferior direito.
-            </p>
+            <p className="text-base font-semibold text-foreground">Aplicar marca d&apos;água da loja</p>
+            <p className="text-sm text-muted-foreground">Logo discreto no canto inferior direito.</p>
           </div>
           <Switch checked={watermark} onCheckedChange={setWatermark} />
         </div>
 
-        <Button className="btn-glow mt-5 w-full gap-2 bg-gradient-primary py-6 text-base text-primary-foreground hover:opacity-95 shadow-glow">
-          <Send className="h-5 w-5" /> Publicar agora em todas as contas
+        <Button
+          className="btn-glow mt-5 w-full gap-2 bg-gradient-primary py-6 text-base text-primary-foreground hover:opacity-95 shadow-glow"
+          onClick={handlePublishNow}
+        >
+          <Send className="h-5 w-5" /> Publicar agora
         </Button>
       </div>
 
-      {/* Unified Inbox */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adicionar conta</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              <Label>Rede</Label>
+              <Select value={newNetwork} onValueChange={(v) => setNewNetwork(v as NetKey)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {NETWORKS.map((n) => (
+                    <SelectItem key={n.key} value={n.key}>
+                      {n.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="acc-user">Nome / usuário</Label>
+              <Input
+                id="acc-user"
+                placeholder={NETWORKS.find((n) => n.key === newNetwork)?.placeholder}
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmAdd}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="glass-card rounded-2xl p-6 animate-fade-in-up [animation-delay:160ms]">
         <div className="flex items-center gap-3">
           <div className="rounded-xl bg-gradient-primary p-2.5 text-primary-foreground shadow-glow">
@@ -238,7 +315,7 @@ export const DistributionTab = () => {
           <div>
             <h2 className="text-2xl font-bold text-foreground">Central de Mensagens</h2>
             <p className="text-base text-muted-foreground">
-              Respostas sugeridas pela IA com base no estoque atual.
+              Respostas sugeridas (demonstração). Integração real depois.
             </p>
           </div>
           <Badge variant="outline" className="ml-auto border-success/40 text-success">
@@ -265,19 +342,22 @@ export const DistributionTab = () => {
                 </div>
                 <Badge variant="outline">há 2 min</Badge>
               </div>
-              <p className="mt-3 rounded-lg bg-muted/60 p-3 text-base text-foreground">
-                &ldquo;{m.msg}&rdquo;
-              </p>
+              <p className="mt-3 rounded-lg bg-muted/60 p-3 text-base text-foreground">&ldquo;{m.msg}&rdquo;</p>
               <div className="mt-3 rounded-lg border border-primary/30 bg-muted/50 p-3">
                 <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-primary">
-                  <Sparkles className="h-3 w-3" /> Sugestão de Resposta da IA (estoque
-                  verificado)
+                  <Sparkles className="h-3 w-3" /> Sugestão de resposta (simulada)
                 </div>
                 <p className="text-base text-foreground">{m.suggestion}</p>
                 <div className="mt-3 flex gap-2">
                   <Button
                     size="sm"
                     className="btn-glow bg-gradient-primary text-primary-foreground hover:opacity-95"
+                    onClick={() =>
+                      toast({
+                        title: "Função simulada",
+                        description: "Envio real será integrado depois.",
+                      })
+                    }
                   >
                     Enviar
                   </Button>
@@ -295,4 +375,4 @@ export const DistributionTab = () => {
       </div>
     </div>
   );
-};
+}

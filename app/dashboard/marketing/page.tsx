@@ -13,11 +13,13 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import { ToastAction } from "@/components/ui/toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
 import { cn } from "@/lib/utils"
+import { interpretAiApiError } from "@/lib/handleAiApiError"
 import {
   marketingPostsToCalendarItems,
   type MarketingPostRow,
@@ -172,7 +174,25 @@ export default function MarketingStudioPage() {
         body: JSON.stringify({ command, model: "auto", lojaId }),
       })
       const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      if (!res.ok) {
+        const info = interpretAiApiError({ status: res.status, message: data.error })
+        toast({
+          title: info.title,
+          description: info.description,
+          variant: "destructive",
+          duration: 9000,
+          action:
+            info.kind === "credits" ? (
+              <ToastAction
+                altText="Comprar créditos"
+                onClick={() => toast({ title: "Comprar créditos", description: "Compra de créditos em breve" })}
+              >
+                Comprar créditos
+              </ToastAction>
+            ) : undefined,
+        })
+        return
+      }
       const msg = String(data.message || "").trim()
       if (!msg) throw new Error("Sem resposta da IA.")
       const pack = parseGrowthPackFromAiMessage(msg)
@@ -227,7 +247,25 @@ export default function MarketingStudioPage() {
         body: JSON.stringify({ command, model: "auto", lojaId }),
       })
       const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string }
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+      if (!res.ok) {
+        const info = interpretAiApiError({ status: res.status, message: data.error })
+        toast({
+          title: info.title,
+          description: info.description,
+          variant: "destructive",
+          duration: 9000,
+          action:
+            info.kind === "credits" ? (
+              <ToastAction
+                altText="Comprar créditos"
+                onClick={() => toast({ title: "Comprar créditos", description: "Compra de créditos em breve" })}
+              >
+                Comprar créditos
+              </ToastAction>
+            ) : undefined,
+        })
+        return
+      }
       const msg = String(data.message || "").trim()
       if (!msg) throw new Error("Sem resposta da IA.")
       setGoogleReply(msg)

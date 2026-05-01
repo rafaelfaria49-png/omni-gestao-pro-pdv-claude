@@ -29,7 +29,7 @@ export async function GET(req: Request) {
   const rows = await withPrismaSafe(
     (db) =>
       db.categoriaProduto.findMany({
-        where: { lojaId },
+        where: { storeId: lojaId },
         orderBy: [{ nome: "asc" }],
         select: { slug: true, nome: true },
       }),

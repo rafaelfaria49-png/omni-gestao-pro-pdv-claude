@@ -40,8 +40,8 @@ const workspace: Item[] = [
   { to: "/dashboard/estoque", label: "Estoque", icon: Package },
   { to: "/dashboard/marketplaces", label: "Marketplaces", icon: Store },
   { to: "/dashboard/expedicao", label: "Expedição", icon: Truck },
-  { to: "/dashboard/contas-receber", label: "Financeiro", icon: Wallet },
-  { to: "/dashboard/clientes", label: "Cliente", icon: Users },
+  { to: "/dashboard/financeiro", label: "Financeiro", icon: Wallet },
+  { to: "/dashboard/clientes", label: "Clientes", icon: Users },
   { to: "/dashboard/relatorios", label: "Relatórios", icon: BarChart3 },
 ];
 

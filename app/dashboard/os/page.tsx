@@ -340,6 +340,10 @@ export default function DashboardOsPage() {
   const { toast } = useToast()
   const { lojaAtivaId } = useLojaAtiva()
   const lojaHeader = useMemo(() => resolveLojaIdParaConsultaClientes(lojaAtivaId), [lojaAtivaId])
+  const lojaId = useMemo(
+    () => (lojaAtivaId || "loja-1").trim() || "loja-1", // TODO: garantir loja ativa via contexto/sessão
+    [lojaAtivaId]
+  )
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [deleting, setDeleting] = useState(false)

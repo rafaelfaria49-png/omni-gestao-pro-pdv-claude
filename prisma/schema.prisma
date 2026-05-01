@@ -440,9 +440,36 @@ model User {
   pin       String   @unique @map("pin")
   /** "ADMIN" | "CAIXA" (mantido string para compatibilidade simples). */
   role      String   @default("CAIXA") @map("role")
+  credits   Int      @default(0)
+  usages    Usage[]
+  creditPurchases CreditPurchase[]
   createdAt DateTime @default(now()) @map("createdAt")
   updatedAt DateTime @updatedAt @map("updatedAt")
 
   @@index([role])
   @@map("users")
+}
+
+model Usage {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String
+  cost      Int
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model CreditPurchase {
+  id        String   @id @default(cuid())
+  userId    String
+  package   String
+  credits   Int
+  amount    Int
+  status    String   @default("PAID")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
 }
