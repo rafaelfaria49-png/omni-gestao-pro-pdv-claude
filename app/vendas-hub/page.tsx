@@ -1,5 +1,6 @@
-import VendasHubPage from "@/components/vendas-hub/VendasHubPage";
+import { redirect } from "next/navigation"
 
-export default function Page() {
-  return <VendasHubPage />;
+/** Entrada direta: mesma tela dos cards que em `/vendas-hub/vendas`. */
+export default function VendasHubRootPage() {
+  redirect("/vendas-hub/vendas")
 }

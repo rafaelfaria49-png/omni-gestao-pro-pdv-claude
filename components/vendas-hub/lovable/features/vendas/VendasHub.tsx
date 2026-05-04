@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
-import { Link } from "@tanstack/react-router";
+import type { CSSProperties } from "react"
+import { Link } from "@tanstack/react-router"
 import {
   Zap,
   FileText,
@@ -7,19 +7,20 @@ import {
   ArrowLeft,
   ArrowRight,
   type LucideIcon,
-} from "lucide-react";
-import ThemeSwitcher from "./ThemeSwitcher";
+} from "lucide-react"
+import ThemeSwitcher from "./ThemeSwitcher"
 
-type Status = "ativo" | "beta" | "em-breve";
+type Status = "ativo" | "beta" | "em-breve"
 
 type VendasCard = {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  badge?: string;
-  status?: Status;
-  href: string;
-};
+  title: string
+  description: string
+  icon: LucideIcon
+  badge?: string
+  status?: Status
+  /** Destino real no app Next (fora do SPA do Hub). */
+  dashboardHref: string
+}
 
 const cards: VendasCard[] = [
   {
@@ -28,7 +29,7 @@ const cards: VendasCard[] = [
     icon: Zap,
     badge: "Rápido",
     status: "ativo",
-    href: "/pdv",
+    dashboardHref: "/dashboard/vendas?modo=rapido",
   },
   {
     title: "Venda completa",
@@ -36,22 +37,22 @@ const cards: VendasCard[] = [
       "Venda detalhada para produtos de maior valor, emissão fiscal e dados completos do cliente.",
     icon: ShoppingCart,
     status: "ativo",
-    href: "/vendas/nova",
+    dashboardHref: "/dashboard/vendas",
   },
   {
     title: "Orçamentos",
     description: "Crie, acompanhe e converta orçamentos em vendas.",
     icon: FileText,
     status: "beta",
-    href: "/orcamentos",
+    dashboardHref: "/dashboard/orcamentos",
   },
-];
+]
 
 const STATUS_LABEL: Record<Status, string> = {
   ativo: "Ativo",
   beta: "Beta",
   "em-breve": "Em breve",
-};
+}
 
 export default function VendasHub() {
   return (
@@ -59,7 +60,7 @@ export default function VendasHub() {
       <div className="mx-auto w-full max-w-6xl">
         <div className="flex items-center justify-between mb-8">
           <Link
-            to="/"
+            to="/vendas"
             className="inline-flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -88,8 +89,8 @@ export default function VendasHub() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
           {cards.map((card) => {
-            const Icon = card.icon;
-            const statusLabel = card.status ? STATUS_LABEL[card.status] : undefined;
+            const Icon = card.icon
+            const statusLabel = card.status ? STATUS_LABEL[card.status] : undefined
             const statusTone =
               card.status === "em-breve"
                 ? {
@@ -104,16 +105,16 @@ export default function VendasHub() {
                   : {
                       bg: "hsl(var(--primary) / 0.12)",
                       fg: "hsl(var(--primary))",
-                    };
+                    }
             const cardClassName =
-              "group relative flex flex-col text-left rounded-2xl p-6 border cursor-pointer overflow-hidden transition-all duration-200 ease-out shadow-sm hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
+              "group relative flex flex-col text-left rounded-2xl p-6 border cursor-pointer overflow-hidden transition-all duration-200 ease-out shadow-sm hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             const cardStyle = {
               backgroundColor: "hsl(var(--card))",
               color: "hsl(var(--card-foreground))",
               borderColor: "hsl(var(--border))",
               ["--tw-ring-color" as string]: "hsl(var(--primary))",
               ["--tw-ring-offset-color" as string]: "hsl(var(--background))",
-            } as CSSProperties;
+            } as CSSProperties
 
             const cardInner = (
               <>
@@ -161,29 +162,16 @@ export default function VendasHub() {
                   <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1" />
                 </span>
               </>
-            );
+            )
 
-            const externalHref =
-              card.href === "/pdv"
-                ? "/dashboard/vendas?modo=rapido"
-                : card.href === "/vendas/nova"
-                  ? "/dashboard/vendas"
-                  : card.href === "/orcamentos"
-                    ? "/dashboard/orcamentos"
-                    : null;
-
-            return externalHref ? (
-              <a key={card.title} href={externalHref} className={cardClassName} style={cardStyle}>
+            return (
+              <a key={card.title} href={card.dashboardHref} className={cardClassName} style={cardStyle}>
                 {cardInner}
               </a>
-            ) : (
-              <Link key={card.title} to={card.href as string} className={cardClassName} style={cardStyle}>
-                {cardInner}
-              </Link>
-            );
+            )
           })}
         </div>
       </div>
     </div>
-  );
+  )
 }
