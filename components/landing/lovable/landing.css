@@ -187,41 +187,41 @@
 
 /* Border & background helpers for classnames with opacity suffixes (escaped) */
 /* Mesmo elemento: modais portaled com landing-page + border-neon-* no DialogContent */
-.landing-page.border-neon-blue\\/60,
-.landing-page .border-neon-blue\\/60 { border-color: color-mix(in oklch, var(--neon-blue) 60%, transparent); }
-.landing-page.border-neon-blue\\/40,
-.landing-page .border-neon-blue\\/40 { border-color: color-mix(in oklch, var(--neon-blue) 40%, transparent); }
-.landing-page.border-neon-blue\\/30,
-.landing-page .border-neon-blue\\/30 { border-color: color-mix(in oklch, var(--neon-blue) 30%, transparent); }
-.landing-page .border-neon-green\\/40 { border-color: color-mix(in oklch, var(--neon-green) 40%, transparent); }
-.landing-page .border-neon-green\\/30 { border-color: color-mix(in oklch, var(--neon-green) 30%, transparent); }
-.landing-page .border-neon-cyan\\/30 { border-color: color-mix(in oklch, var(--neon-cyan) 30%, transparent); }
-.landing-page .border-neon-violet\\/30 { border-color: color-mix(in oklch, var(--neon-violet) 30%, transparent); }
+.landing-page.border-neon-blue\/60,
+.landing-page .border-neon-blue\/60 { border-color: color-mix(in oklch, var(--neon-blue) 60%, transparent); }
+.landing-page.border-neon-blue\/40,
+.landing-page .border-neon-blue\/40 { border-color: color-mix(in oklch, var(--neon-blue) 40%, transparent); }
+.landing-page.border-neon-blue\/30,
+.landing-page .border-neon-blue\/30 { border-color: color-mix(in oklch, var(--neon-blue) 30%, transparent); }
+.landing-page .border-neon-green\/40 { border-color: color-mix(in oklch, var(--neon-green) 40%, transparent); }
+.landing-page .border-neon-green\/30 { border-color: color-mix(in oklch, var(--neon-green) 30%, transparent); }
+.landing-page .border-neon-cyan\/30 { border-color: color-mix(in oklch, var(--neon-cyan) 30%, transparent); }
+.landing-page .border-neon-violet\/30 { border-color: color-mix(in oklch, var(--neon-violet) 30%, transparent); }
 
-.landing-page .bg-neon-blue\\/10 { background-color: color-mix(in oklch, var(--neon-blue) 10%, transparent); }
-.landing-page .bg-neon-blue\\/15 { background-color: color-mix(in oklch, var(--neon-blue) 15%, transparent); }
-.landing-page .bg-neon-green\\/5 { background-color: color-mix(in oklch, var(--neon-green) 5%, transparent); }
-.landing-page .bg-neon-green\\/10 { background-color: color-mix(in oklch, var(--neon-green) 10%, transparent); }
-.landing-page .bg-neon-green\\/15 { background-color: color-mix(in oklch, var(--neon-green) 15%, transparent); }
-.landing-page .bg-neon-green\\/20 { background-color: color-mix(in oklch, var(--neon-green) 20%, transparent); }
-.landing-page .bg-neon-green\\/70 { background-color: color-mix(in oklch, var(--neon-green) 70%, transparent); }
-.landing-page .bg-neon-cyan\\/5 { background-color: color-mix(in oklch, var(--neon-cyan) 5%, transparent); }
-.landing-page .bg-neon-cyan\\/10 { background-color: color-mix(in oklch, var(--neon-cyan) 10%, transparent); }
-.landing-page .bg-neon-cyan\\/15 { background-color: color-mix(in oklch, var(--neon-cyan) 15%, transparent); }
-.landing-page .bg-neon-violet\\/30 { background-color: color-mix(in oklch, var(--neon-violet) 30%, transparent); }
+.landing-page .bg-neon-blue\/10 { background-color: color-mix(in oklch, var(--neon-blue) 10%, transparent); }
+.landing-page .bg-neon-blue\/15 { background-color: color-mix(in oklch, var(--neon-blue) 15%, transparent); }
+.landing-page .bg-neon-green\/5 { background-color: color-mix(in oklch, var(--neon-green) 5%, transparent); }
+.landing-page .bg-neon-green\/10 { background-color: color-mix(in oklch, var(--neon-green) 10%, transparent); }
+.landing-page .bg-neon-green\/15 { background-color: color-mix(in oklch, var(--neon-green) 15%, transparent); }
+.landing-page .bg-neon-green\/20 { background-color: color-mix(in oklch, var(--neon-green) 20%, transparent); }
+.landing-page .bg-neon-green\/70 { background-color: color-mix(in oklch, var(--neon-green) 70%, transparent); }
+.landing-page .bg-neon-cyan\/5 { background-color: color-mix(in oklch, var(--neon-cyan) 5%, transparent); }
+.landing-page .bg-neon-cyan\/10 { background-color: color-mix(in oklch, var(--neon-cyan) 10%, transparent); }
+.landing-page .bg-neon-cyan\/15 { background-color: color-mix(in oklch, var(--neon-cyan) 15%, transparent); }
+.landing-page .bg-neon-violet\/30 { background-color: color-mix(in oklch, var(--neon-violet) 30%, transparent); }
 
 /* Hover helpers used by Lovable */
-.landing-page .hover\\:border-neon-blue\\/40:hover { border-color: color-mix(in oklch, var(--neon-blue) 40%, transparent); }
-.landing-page .hover\\:bg-neon-cyan\\/10:hover { background-color: color-mix(in oklch, var(--neon-cyan) 10%, transparent); }
-.landing-page .hover\\:bg-neon-cyan\\/15:hover { background-color: color-mix(in oklch, var(--neon-cyan) 15%, transparent); }
-.landing-page .hover\\:text-neon-cyan:hover { color: var(--neon-cyan); }
+.landing-page .hover\:border-neon-blue\/40:hover { border-color: color-mix(in oklch, var(--neon-blue) 40%, transparent); }
+.landing-page .hover\:bg-neon-cyan\/10:hover { background-color: color-mix(in oklch, var(--neon-cyan) 10%, transparent); }
+.landing-page .hover\:bg-neon-cyan\/15:hover { background-color: color-mix(in oklch, var(--neon-cyan) 15%, transparent); }
+.landing-page .hover\:text-neon-cyan:hover { color: var(--neon-cyan); }
 
 /* Focus-visible ring helpers used by Lovable inputs */
-.landing-page .focus-visible\\:ring-neon-blue:focus-visible {
+.landing-page .focus-visible\:ring-neon-blue:focus-visible {
   --tw-ring-color: color-mix(in oklch, var(--neon-blue) 55%, transparent);
   box-shadow: 0 0 0 3px var(--tw-ring-color);
 }
-.landing-page .focus-visible\\:border-neon-blue\\/60:focus-visible {
+.landing-page .focus-visible\:border-neon-blue\/60:focus-visible {
   border-color: color-mix(in oklch, var(--neon-blue) 60%, transparent);
 }
 
