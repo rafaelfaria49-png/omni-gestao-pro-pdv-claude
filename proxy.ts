@@ -14,6 +14,8 @@ const ADMIN_COOKIE = "assistec_admin_session"
 const CONTADOR_COOKIE = "assistec_contador_session"
 const ALWAYS_BLOCKED_FOR_CAIXA_PREFIXES = [
   "/configuracoes",
+  "/configuracoes-v3",
+  "/dashboard/configuracoes",
   "/relatorios",
   "/ia-mestre",
   "/rede",

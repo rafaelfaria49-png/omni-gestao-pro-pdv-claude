@@ -1,13 +1,15 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { Building2, Check } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Store } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
 import { cn } from "@/lib/utils"
@@ -35,16 +37,36 @@ function emptyAddress() {
   return { rua: "", numero: "", bairro: "", cidade: "", estado: "", cep: "" }
 }
 
-export function GestaoUnidadesSaas() {
+function planLabel(plan: StoreRow["subscriptionPlan"]): string {
+  if (!plan) return "—"
+  const map: Record<string, string> = { BRONZE: "Bronze", PRATA: "Prata", OURO: "Ouro" }
+  return map[plan] || plan
+}
+
+export type GestaoUnidadesSaasProps = {
+  /** Esconde o cabeçalho duplicado quando embutido em Configurações V3 (Lojas). */
+  embed?: boolean
+}
+
+export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
   const { mode } = useStudioTheme()
   const isBlack = mode === "black"
   const { toast } = useToast()
+  const { lojaAtivaId, setLojaAtivaId } = useLojaAtiva()
   const [loading, setLoading] = useState(true)
   const [stores, setStores] = useState<StoreRow[]>([])
   const [selectedId, setSelectedId] = useState<string>("")
   const [draft, setDraft] = useState<StoreRow | null>(null)
   const [settings, setSettings] = useState<StoreSettings>({ receiptFooter: "" })
   const selected = useMemo(() => stores.find((s) => s.id === selectedId) ?? null, [stores, selectedId])
+
+  const selectStore = useCallback(
+    (id: string) => {
+      setSelectedId(id)
+      setLojaAtivaId(id)
+    },
+    [setLojaAtivaId],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -69,6 +91,11 @@ export function GestaoUnidadesSaas() {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (stores.length === 0 || !lojaAtivaId) return
+    if (stores.some((s) => s.id === lojaAtivaId)) setSelectedId(lojaAtivaId)
+  }, [stores, lojaAtivaId])
 
   useEffect(() => {
     if (!selected) {
@@ -152,7 +179,10 @@ export function GestaoUnidadesSaas() {
       const rr = await fetch("/api/stores", { credentials: "include", cache: "no-store" })
       const jj = (await rr.json()) as { stores?: StoreRow[] }
       setStores(Array.isArray(jj.stores) ? jj.stores : [])
-      if (id) setSelectedId(id)
+      if (id) {
+        setSelectedId(id)
+        setLojaAtivaId(id)
+      }
       toast({ title: "Unidade criada", description: id ? `Criada ${id}` : "Criada" })
     } catch (e) {
       toast({
@@ -163,207 +193,285 @@ export function GestaoUnidadesSaas() {
     }
   }
 
+  const body = (
+    <div className="space-y-6">
+      {loading ? (
+        <p className={cn("text-center text-sm", isBlack ? "text-white/60" : "text-slate-600")}>
+          Carregando unidades…
+        </p>
+      ) : stores.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 pb-1">
+          {stores.map((s) => {
+            const isSelected = s.id === selectedId
+            const isPrincipal = s.id === lojaAtivaId
+            const name = (s.name || "Unidade").trim()
+            return (
+              <div
+                key={s.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => selectStore(s.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    selectStore(s.id)
+                  }
+                }}
+                className={cn(
+                  "flex flex-col gap-3 rounded-xl border p-4 text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+                  isBlack
+                    ? isSelected
+                      ? "border-primary bg-[#000000] shadow-[0_0_0_1px] shadow-primary/35"
+                      : "border-white/10 bg-[#000000]/90 hover:border-white/25"
+                    : isSelected
+                      ? "border-primary bg-white shadow-md ring-2 ring-primary/20"
+                      : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm",
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div
+                    className={cn(
+                      "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
+                      isSelected
+                        ? "bg-primary/15 text-primary"
+                        : isBlack
+                          ? "bg-white/5 text-white/85"
+                          : "bg-slate-100 text-slate-700",
+                    )}
+                  >
+                    <Store className="h-5 w-5" aria-hidden />
+                  </div>
+                  {isPrincipal ? (
+                    <Badge
+                      className={cn(
+                        "shrink-0 border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
+                        isBlack && "border-amber-400/35 text-amber-200",
+                      )}
+                      variant="outline"
+                    >
+                      Principal
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="min-w-0 space-y-1">
+                  <p
+                    className={cn(
+                      "truncate text-base font-semibold leading-tight",
+                      isBlack ? "text-white" : "text-slate-900",
+                    )}
+                    title={name}
+                  >
+                    {name}
+                  </p>
+                  <p
+                    className={cn(
+                      "truncate font-mono text-[11px]",
+                      isBlack ? "text-white/45" : "text-slate-500",
+                    )}
+                    title={s.id}
+                  >
+                    {s.id}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "font-normal",
+                      isBlack ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "text-emerald-800",
+                    )}
+                  >
+                    Ativa
+                  </Badge>
+                  <span
+                    className={cn(
+                      "text-xs font-medium",
+                      isBlack ? "text-white/70" : "text-slate-600",
+                    )}
+                  >
+                    Plano:{" "}
+                    <span className={cn("text-foreground", isBlack && "text-white")}>{planLabel(s.subscriptionPlan)}</span>
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={isSelected ? "default" : "outline"}
+                  className={cn(
+                    "mt-auto w-full",
+                    isBlack &&
+                      !isSelected &&
+                      "border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white",
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    selectStore(s.id)
+                  }}
+                >
+                  Gerenciar
+                </Button>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <p className={cn("text-center text-sm", isBlack ? "text-white/60" : "text-slate-600")}>
+          Nenhuma unidade cadastrada.
+        </p>
+      )}
+
+      <div
+        className={cn(
+          "flex flex-wrap justify-center gap-2 border-t pt-8 mt-2",
+          isBlack ? "border-white/10" : "border-slate-200/80",
+        )}
+      >
+        <Button
+          type="button"
+          variant="outline"
+          onClick={createStore}
+          disabled={loading}
+          className={cn(
+            isBlack
+              ? "border-white/20 bg-[#000000] text-white hover:bg-white/10 hover:text-white"
+              : "border-slate-200 bg-white",
+          )}
+        >
+          Nova unidade
+        </Button>
+        <Button type="button" onClick={save} disabled={!draft}>
+          Salvar unidade
+        </Button>
+      </div>
+
+      {!draft ? (
+        <p className={cn("text-center text-sm", isBlack ? "text-white/55" : "text-slate-600")}>
+          {stores.length ? "Selecione uma unidade nos cards ou em Gerenciar para editar." : ""}
+        </p>
+      ) : (
+        <div className="mt-10 space-y-5 pt-2">
+          <h3
+            className={cn(
+              "text-lg font-semibold leading-snug tracking-tight",
+              isBlack ? "text-white" : "text-slate-900",
+            )}
+          >
+            Dados da unidade selecionada
+          </h3>
+          <div
+            className={cn(
+              "rounded-xl border p-5 shadow-sm sm:p-6",
+              isBlack
+                ? "border-white/10 bg-[#000000]/50"
+                : "border-slate-200/90 bg-white",
+            )}
+          >
+            <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Nome</Label>
+              <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label>CNPJ</Label>
+                <Input value={draft.cnpj} onChange={(e) => setDraft({ ...draft, cnpj: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label>Telefone</Label>
+                <Input value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label>Logotipo (URL)</Label>
+              <Input value={draft.logoUrl} onChange={(e) => setDraft({ ...draft, logoUrl: e.target.value })} />
+            </div>
+            <div className="space-y-1">
+              <Label>Perfil</Label>
+              <Select value={draft.profile} onValueChange={(v) => setDraft({ ...draft, profile: v as StoreProfile })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ASSISTENCIA">Assistência</SelectItem>
+                  <SelectItem value="VARIEDADES">Variedades</SelectItem>
+                  <SelectItem value="SUPERMERCADO">Supermercado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Plano (SaaS)</Label>
+              <Select
+                value={draft.subscriptionPlan || "BRONZE"}
+                onValueChange={(v) => setDraft({ ...draft, subscriptionPlan: v as any })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BRONZE">Bronze</SelectItem>
+                  <SelectItem value="PRATA">Prata</SelectItem>
+                  <SelectItem value="OURO">Ouro</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Campo oficial da unidade (salvo na tabela `stores`).</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-sm font-semibold">Endereço</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {(["rua", "numero", "bairro", "cidade", "estado", "cep"] as const).map((k) => (
+                <div key={k} className="space-y-1">
+                  <Label className="capitalize">{k}</Label>
+                  <Input
+                    value={String(draft.address?.[k] ?? "")}
+                    onChange={(e) =>
+                      setDraft({ ...draft, address: { ...(draft.address || emptyAddress()), [k]: e.target.value } })
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-1">
+              <Label>Rodapé do cupom (por unidade)</Label>
+              <Input
+                value={settings.receiptFooter}
+                onChange={(e) => setSettings({ ...settings, receiptFooter: e.target.value })}
+                placeholder="Ex.: Obrigado pela preferência — Trocas em até 7 dias..."
+              />
+            </div>
+          </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  if (embed) {
+    return body
+  }
+
   return (
     <Card
       className={cn(
         "border transition-colors duration-300",
-        isBlack
-          ? "border-white/10 bg-[#000000] text-white"
-          : "border-slate-200 bg-white text-foreground"
+        isBlack ? "border-white/10 bg-[#000000] text-white" : "border-slate-200 bg-white text-foreground",
       )}
     >
       <CardHeader>
-        <CardTitle
-          className={cn("text-2xl font-bold", isBlack ? "text-white" : "text-slate-900")}
-        >
+        <CardTitle className={cn("text-2xl font-bold", isBlack ? "text-white" : "text-slate-900")}>
           Gestão de Unidades (SaaS)
         </CardTitle>
-        <CardDescription
-          className={cn(
-            isBlack ? "text-white/65" : "text-slate-600"
-          )}
-        >
+        <CardDescription className={cn(isBlack ? "text-white/65" : "text-slate-600")}>
           Cadastre Loja 2/3, defina perfil (Assistência/Variedades/Supermercado) e personalize rodapé do cupom por
           CNPJ.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {loading ? (
-          <p className={cn("text-center text-sm", isBlack ? "text-white/60" : "text-slate-600")}>
-            Carregando unidades…
-          </p>
-        ) : stores.length > 0 ? (
-          <div className="flex flex-wrap items-stretch justify-center gap-4">
-            {stores.map((s) => {
-              const active = s.id === selectedId
-              const name = (s.name || "Unidade").trim()
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSelectedId(s.id)}
-                  className={cn(
-                    "flex h-40 w-40 shrink-0 flex-col items-center justify-center gap-2 rounded-xl border-2 p-3 text-center transition-all duration-200",
-                    isBlack
-                      ? active
-                        ? "border-primary bg-[#000000] shadow-[0_0_0_1px] shadow-primary/40"
-                        : "border-white/10 bg-[#000000] hover:border-white/25"
-                      : active
-                        ? "border-primary bg-white shadow-sm"
-                        : "border-slate-200 bg-white hover:border-slate-300"
-                  )}
-                >
-                  <div
-                    className={cn(
-                      "flex h-11 w-11 items-center justify-center rounded-lg",
-                      active
-                        ? "bg-primary/15 text-primary"
-                        : isBlack
-                          ? "text-white/80"
-                          : "text-slate-700"
-                    )}
-                  >
-                    {active ? <Check className="h-6 w-6" /> : <Building2 className="h-6 w-6" />}
-                  </div>
-                  <span
-                    className={cn(
-                      "w-full break-words text-xs font-medium leading-tight",
-                      isBlack ? "text-white" : "text-slate-900"
-                    )}
-                  >
-                    {name}
-                  </span>
-                  <span
-                    className={cn("w-full truncate font-mono text-[10px]", isBlack ? "text-white/55" : "text-slate-500")}
-                    title={s.id}
-                  >
-                    {s.id}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        ) : (
-          <p
-            className={cn(
-              "text-center text-sm",
-              isBlack ? "text-white/60" : "text-slate-600"
-            )}
-          >
-            Nenhuma unidade cadastrada.
-          </p>
-        )}
-
-        <div className="flex flex-wrap justify-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={createStore}
-            disabled={loading}
-            className={cn(
-              isBlack
-                ? "border-white/20 bg-[#000000] text-white hover:bg-white/10 hover:text-white"
-                : "border-slate-200 bg-white"
-            )}
-          >
-            Nova unidade
-          </Button>
-          <Button type="button" onClick={save} disabled={!draft}>
-            Salvar unidade
-          </Button>
-        </div>
-
-        {!draft ? (
-          <p
-            className={cn("text-center text-sm", isBlack ? "text-white/55" : "text-slate-600")}
-          >
-            {stores.length ? "Toque em uma unidade para editar." : ""}
-          </p>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label>Nome</Label>
-                <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label>CNPJ</Label>
-                  <Input value={draft.cnpj} onChange={(e) => setDraft({ ...draft, cnpj: e.target.value })} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Telefone</Label>
-                  <Input value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} />
-                </div>
-              </div>
-              <div className="space-y-1">
-                <Label>Logotipo (URL)</Label>
-                <Input value={draft.logoUrl} onChange={(e) => setDraft({ ...draft, logoUrl: e.target.value })} />
-              </div>
-              <div className="space-y-1">
-                <Label>Perfil</Label>
-                <Select
-                  value={draft.profile}
-                  onValueChange={(v) => setDraft({ ...draft, profile: v as StoreProfile })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ASSISTENCIA">Assistência</SelectItem>
-                    <SelectItem value="VARIEDADES">Variedades</SelectItem>
-                    <SelectItem value="SUPERMERCADO">Supermercado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label>Plano (SaaS)</Label>
-                <Select
-                  value={draft.subscriptionPlan || "BRONZE"}
-                  onValueChange={(v) => setDraft({ ...draft, subscriptionPlan: v as any })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="BRONZE">Bronze</SelectItem>
-                    <SelectItem value="PRATA">Prata</SelectItem>
-                    <SelectItem value="OURO">Ouro</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Campo oficial da unidade (salvo na tabela `stores`).</p>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-sm font-semibold">Endereço</p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {(["rua", "numero", "bairro", "cidade", "estado", "cep"] as const).map((k) => (
-                  <div key={k} className="space-y-1">
-                    <Label className="capitalize">{k}</Label>
-                    <Input
-                      value={String(draft.address?.[k] ?? "")}
-                      onChange={(e) =>
-                        setDraft({ ...draft, address: { ...(draft.address || emptyAddress()), [k]: e.target.value } })
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-1">
-                <Label>Rodapé do cupom (por unidade)</Label>
-                <Input
-                  value={settings.receiptFooter}
-                  onChange={(e) => setSettings({ ...settings, receiptFooter: e.target.value })}
-                  placeholder="Ex.: Obrigado pela preferência — Trocas em até 7 dias..."
-                />
-              </div>
-            </div>
-          </div>
-        )}
-      </CardContent>
+      <CardContent>{body}</CardContent>
     </Card>
   )
 }

@@ -107,7 +107,7 @@ const fullMenuItems: MobileFullItem[] = [
     page: "config-multilojas",
     sub: [{ label: "Gestão de Unidades", page: "config-multilojas" }],
   },
-  { icon: Settings, label: "Configurações", page: "config-empresa", sub: [{ label: "Dados da Empresa", page: "config-empresa" }, { label: "Ajustes", page: "config-ajustes" }, { label: "Financeiro (cartões)", page: "config-pdv" }, { label: "Marca/Logo", page: "config-marca" }, { label: "Certificado Digital", page: "config-certificado" }, { label: "Termos de Garantia", page: "config-garantia" }, { label: "Backup", page: "config-backup" }, { label: "Meu Plano", page: "plano" }, { label: "Suporte", page: "suporte" }] },
+  { icon: Settings, label: "Configurações", externalPath: "/dashboard/configuracoes" },
 ]
 
 interface MobileNavProps {
@@ -142,12 +142,6 @@ export function MobileNav({ onNavigate, currentPage = "dashboard" }: MobileNavPr
         return {
           ...item,
           sub: item.sub.filter((s) => !(isBronze && "page" in s && s.page === "credito")),
-        }
-      }
-      if (item.label === "Configurações" && item.sub) {
-        return {
-          ...item,
-          sub: item.sub.filter((s) => !("page" in s && s.page === "config-multilojas")),
         }
       }
       if (item.label === "Gestão da Rede" && item.sub) {

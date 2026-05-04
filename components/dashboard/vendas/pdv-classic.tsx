@@ -72,6 +72,7 @@ import {
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
 import { PDV_IMPORT_COMANDA_KEY, type PdvImportComandaPayload } from "@/lib/pdv-comanda-bridge"
@@ -136,6 +137,8 @@ export interface VendasPDVProps {
   onVoiceOpenCaixaConsumed?: () => void
   /** `omni-smart` = caixa Lovable (F1–F9); `default` = tela completa legada (Services). */
   uiShell?: "default" | "omni-smart"
+  /** Vindo do Vendas HUB (`?modo=rapido`): foco automático no campo de código/produto após o PDV montar. */
+  isModoRapido?: boolean
 }
 
 export function PdvClassic({
@@ -146,6 +149,7 @@ export function PdvClassic({
   voiceOpenCaixaSignal = 0,
   onVoiceOpenCaixaConsumed,
   uiShell = "default",
+  isModoRapido = false,
 }: VendasPDVProps) {
   const router = useRouter()
   const { config } = useConfigEmpresa()
@@ -202,6 +206,8 @@ export function PdvClassic({
   const [shellSeller, setShellSeller] = useState("01 — Caixa 1")
   const [shellInfo, setShellInfo] = useState("Sistema pronto. Bipe um produto ou pressione F3 para pesquisar.")
   const [shellHighlightLineId, setShellHighlightLineId] = useState<string | null>(null)
+  /** Modo rápido: flash verde ~150ms na linha recém-adicionada. */
+  const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
   const [selectedCartLineId, setSelectedCartLineId] = useState<string | null>(null)
   const [shellProductSearchOpen, setShellProductSearchOpen] = useState(false)
   const [shellClientSearchOpen, setShellClientSearchOpen] = useState(false)
@@ -487,12 +493,32 @@ export function PdvClassic({
       },
     ])
     setSelectedCartLineId(lineId)
+    if (isModoRapido) {
+      setRapidoFlashLineId(lineId)
+      window.setTimeout(() => {
+        setRapidoFlashLineId((h) => (h === lineId ? null : h))
+      }, 150)
+      setSearchTerm("")
+      if (uiShell !== "default") {
+        setBipeCode("")
+      }
+      playPdvRapidoItemBeepIfEnabled()
+    }
     if (uiShell !== "default") {
       setShellHighlightLineId(lineId)
       window.setTimeout(() => {
         setShellHighlightLineId((h) => (h === lineId ? null : h))
       }, 1400)
-      queueMicrotask(() => shellBipeRef.current?.focus())
+      queueMicrotask(() => {
+        shellBipeRef.current?.focus()
+        if (isModoRapido) {
+          window.requestAnimationFrame(() => shellBipeRef.current?.focus())
+        }
+      })
+    } else if (isModoRapido) {
+      queueMicrotask(() => {
+        window.requestAnimationFrame(() => productInputRef.current?.focus())
+      })
     }
   }
 
@@ -854,6 +880,27 @@ export function PdvClassic({
         e.preventDefault()
         if (cart.length > 0) setIsPaymentModalOpen(true)
       } else if (e.key === "Escape") {
+        if (
+          isModoRapido &&
+          cart.length > 0 &&
+          !typing &&
+          !isPaymentModalOpen &&
+          !attrDialogOpen &&
+          !weightDialogOpen &&
+          !operationType &&
+          !showKeyboardHelp &&
+          !showOperationsMenu
+        ) {
+          e.preventDefault()
+          setCart((prev) => {
+            const next = prev.slice(0, -1)
+            const last = next[next.length - 1]
+            queueMicrotask(() => setSelectedCartLineId(last ? last.lineId : null))
+            return next
+          })
+          queueMicrotask(() => productInputRef.current?.focus())
+          return
+        }
         e.preventDefault()
         setShowKeyboardHelp(false)
         setShowOperationsMenu(false)
@@ -863,7 +910,17 @@ export function PdvClassic({
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [cart.length, uiShell])
+  }, [
+    cart.length,
+    uiShell,
+    isModoRapido,
+    isPaymentModalOpen,
+    attrDialogOpen,
+    weightDialogOpen,
+    operationType,
+    showKeyboardHelp,
+    showOperationsMenu,
+  ])
 
   const shellModalBlocking =
     isPaymentModalOpen ||
@@ -878,6 +935,43 @@ export function PdvClassic({
     operationType !== null ||
     showKeyboardHelp ||
     showOperationsMenu
+
+  useEffect(() => {
+    if (!isModoRapido || uiShell === "default") return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (shellModalBlocking) return
+      if (e.key === "Escape" && cart.length > 0) {
+        e.preventDefault()
+        setCart((prev) => {
+          const next = prev.slice(0, -1)
+          const last = next[next.length - 1]
+          queueMicrotask(() => setSelectedCartLineId(last ? last.lineId : null))
+          return next
+        })
+        queueMicrotask(() => shellBipeRef.current?.focus())
+        return
+      }
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && cart.length > 0) {
+        const active = document.activeElement
+        if (active !== shellBipeRef.current) return
+        e.preventDefault()
+        const ids = cart.map((c) => c.lineId)
+        const cur = selectedCartLineId
+        const idx = cur ? ids.indexOf(cur) : -1
+        const nextIdx =
+          e.key === "ArrowDown"
+            ? idx < 0
+              ? 0
+              : Math.min(idx + 1, ids.length - 1)
+            : idx <= 0
+              ? ids.length - 1
+              : idx - 1
+        setSelectedCartLineId(ids[nextIdx] ?? null)
+      }
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [isModoRapido, uiShell, shellModalBlocking, cart, selectedCartLineId])
 
   const focusShellBipe = useCallback(() => {
     if (uiShell === "default") return
@@ -978,6 +1072,19 @@ export function PdvClassic({
   }, [uiShell])
 
   useEffect(() => {
+    if (!isModoRapido) return
+    if (!storePdvGate.ready || storePdvGate.block) return
+    const t = window.setTimeout(() => {
+      if (uiShell === "omni-smart") {
+        shellBipeRef.current?.focus()
+      } else {
+        productInputRef.current?.focus()
+      }
+    }, 200)
+    return () => window.clearTimeout(t)
+  }, [isModoRapido, uiShell, storePdvGate.ready, storePdvGate.block])
+
+  useEffect(() => {
     if (!voiceCartSeed?.key) return
     const label = (voiceCartSeed.itemName || "").trim()
     if (!label) {
@@ -1051,7 +1158,7 @@ export function PdvClassic({
           O PDV fica bloqueado até a unidade <strong>{lojaAtivaId}</strong> ter um <strong>Nome fantasia</strong> salvo no
           banco. Acesse <strong>Configurações → Dados da Empresa</strong>, preencha e salve.
         </p>
-        <Button type="button" className="h-12 px-8 text-base font-bold" onClick={() => router.replace("/?page=config-empresa")}>
+        <Button type="button" className="h-12 px-8 text-base font-bold" onClick={() => router.replace("/dashboard/configuracoes")}>
           Ir para Dados da Empresa
         </Button>
       </div>
@@ -1064,15 +1171,19 @@ export function PdvClassic({
         <div
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border bg-background transition-colors duration-300"
         >
-          <CaixaStatusBar
-            variant="pdv"
-            openAberturaSignal={voiceOpenCaixaSignal}
-            onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
-          />
+          {!isModoRapido ? (
+            <CaixaStatusBar
+              variant="pdv"
+              openAberturaSignal={voiceOpenCaixaSignal}
+              onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
+            />
+          ) : null}
           <PdvOmniClassicShell
+              isModoRapido={isModoRapido}
               storeName={storeDisplayName}
               cartRows={shellCartRows}
               highlightLineId={shellHighlightLineId}
+              flashLineId={isModoRapido ? rapidoFlashLineId : null}
               selectedLineId={selectedCartLineId}
               onSelectLine={setSelectedCartLineId}
               total={total}
@@ -1184,69 +1295,71 @@ export function PdvClassic({
           <div
             className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r-0 lg:border-r lg:border-border"
           >
-            <CaixaStatusBar
-              variant="pdv"
-              openAberturaSignal={voiceOpenCaixaSignal}
-              onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
-            />
+            {!isModoRapido ? (
+              <>
+                <CaixaStatusBar
+                  variant="pdv"
+                  openAberturaSignal={voiceOpenCaixaSignal}
+                  onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
+                />
+                <div className="shrink-0 border-b border-border bg-background py-2.5">
+                  <div className="px-1 sm:px-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex w-full rounded-lg bg-secondary p-1 sm:w-auto">
+                        <button
+                          onClick={() => {
+                            setSaleMode("balcao")
+                            setEmitirNota(false)
+                          }}
+                          className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-base font-semibold transition-all sm:flex-none ${
+                            saleMode === "balcao"
+                              ? "bg-primary text-primary-foreground shadow-lg"
+                              : "text-foreground/70 hover:text-foreground"
+                          }`}
+                        >
+                          <Zap className="h-5 w-5" />
+                          <span>Venda Balcao (Rapida)</span>
+                        </button>
+                        <button
+                          onClick={() => setSaleMode("completa")}
+                          className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-base font-semibold transition-all sm:flex-none ${
+                            saleMode === "completa"
+                              ? "bg-primary text-primary-foreground shadow-lg"
+                              : "text-foreground/70 hover:text-foreground"
+                          }`}
+                        >
+                          <FileText className="h-5 w-5" />
+                          <span>Venda Completa (Nota)</span>
+                        </button>
+                      </div>
 
-            <div
-              className="shrink-0 border-b border-border bg-background py-2.5"
-            >
-              <div className="px-1 sm:px-2">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex w-full rounded-lg bg-secondary p-1 sm:w-auto">
-                  <button
-                    onClick={() => {
-                      setSaleMode("balcao")
-                      setEmitirNota(false)
-                    }}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-base font-semibold transition-all sm:flex-none ${
-                      saleMode === "balcao"
-                        ? "bg-primary text-primary-foreground shadow-lg"
-                        : "text-foreground/70 hover:text-foreground"
-                    }`}
-                  >
-                    <Zap className="h-5 w-5" />
-                    <span>Venda Balcao (Rapida)</span>
-                  </button>
-                  <button
-                    onClick={() => setSaleMode("completa")}
-                    className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-base font-semibold transition-all sm:flex-none ${
-                      saleMode === "completa"
-                        ? "bg-primary text-primary-foreground shadow-lg"
-                        : "text-foreground/70 hover:text-foreground"
-                    }`}
-                  >
-                    <FileText className="h-5 w-5" />
-                    <span>Venda Completa (Nota)</span>
-                  </button>
+                      <Badge
+                        variant={saleMode === "balcao" ? "secondary" : "default"}
+                        className={`px-4 py-2 text-sm ${saleMode === "completa" ? "border border-primary/30 bg-primary/20 text-primary" : ""}`}
+                      >
+                        {saleMode === "balcao" ? "Modo Rapido" : "Modo Completo - Com NF-e"}
+                      </Badge>
+                      <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-end">
+                        <span className="mr-1 text-sm font-medium text-foreground">Interface:</span>
+                        <Button type="button" size="sm" variant={pdvUiMode === "default" ? "default" : "outline"} className="h-10 text-sm" onClick={() => setPdvUiMode("default")}>
+                          Padrão
+                        </Button>
+                        <Button type="button" size="sm" variant={pdvUiMode === "touch" ? "default" : "outline"} className="h-10 gap-1 text-sm" onClick={() => setPdvUiMode("touch")}>
+                          <LayoutGrid className="h-4 w-4" />
+                          Touch
+                        </Button>
+                        <Button type="button" size="sm" variant={pdvUiMode === "scanner" ? "default" : "outline"} className="h-10 gap-1 text-sm" onClick={() => setPdvUiMode("scanner")}>
+                          <ScanLine className="h-4 w-4" />
+                          Scanner
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+              </>
+            ) : null}
 
-                <Badge
-                  variant={saleMode === "balcao" ? "secondary" : "default"}
-                  className={`px-4 py-2 text-sm ${saleMode === "completa" ? "border border-primary/30 bg-primary/20 text-primary" : ""}`}
-                >
-                  {saleMode === "balcao" ? "Modo Rapido" : "Modo Completo - Com NF-e"}
-                </Badge>
-                <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-end">
-                  <span className="mr-1 text-sm font-medium text-foreground">Interface:</span>
-                  <Button type="button" size="sm" variant={pdvUiMode === "default" ? "default" : "outline"} className="h-10 text-sm" onClick={() => setPdvUiMode("default")}>
-                    Padrão
-                  </Button>
-                  <Button type="button" size="sm" variant={pdvUiMode === "touch" ? "default" : "outline"} className="h-10 gap-1 text-sm" onClick={() => setPdvUiMode("touch")}>
-                    <LayoutGrid className="h-4 w-4" />
-                    Touch
-                  </Button>
-                  <Button type="button" size="sm" variant={pdvUiMode === "scanner" ? "default" : "outline"} className="h-10 gap-1 text-sm" onClick={() => setPdvUiMode("scanner")}>
-                    <ScanLine className="h-4 w-4" />
-                    Scanner
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-          {saleMode === "balcao" && (
+            {saleMode === "balcao" && (
             <div className="shrink-0 border-b border-dashed border-neutral-200/80 bg-background py-2 dark:border-white/10">
               <div className="space-y-2 px-1 sm:px-2">
                 <div className="flex flex-col items-center gap-4 sm:flex-row">
@@ -1429,6 +1542,23 @@ export function PdvClassic({
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     ref={productInputRef}
+                    onKeyDown={(e) => {
+                      if (!isModoRapido || e.key !== "Enter") return
+                      const term = searchTerm.trim()
+                      if (!term) return
+                      e.preventDefault()
+                      const byScan = findPdvProductByScan(term, products)
+                      if (byScan) {
+                        addToCart(byScan)
+                        return
+                      }
+                      if (filteredProducts.length === 1) {
+                        addToCart(filteredProducts[0]!)
+                        return
+                      }
+                      const exact = filteredProducts.find((p) => p.name.trim().toLowerCase() === term.toLowerCase())
+                      if (exact) addToCart(exact)
+                    }}
                     className={cn(
                       "h-12 border-border bg-secondary pl-11 text-base text-foreground placeholder:text-muted-foreground",
                       pdvUiMode === "scanner" && "h-14 text-lg ring-2 ring-primary/30"
@@ -1564,7 +1694,6 @@ export function PdvClassic({
             )}
           </div>
         </div>
-      </div>
 
         <div
           className="flex min-h-0 w-full min-w-0 flex-col overflow-hidden border-l-2 border-border bg-card lg:h-full lg:w-[450px] lg:min-w-[450px] lg:max-w-[450px] lg:shrink-0 lg:grow-0"
@@ -1622,7 +1751,13 @@ export function PdvClassic({
                 </div>
                 <div className="relative z-0 min-h-0 flex-1 divide-y divide-border overflow-y-auto overflow-x-hidden px-2 py-1 [scrollbar-gutter:stable] dark:divide-white/10 sm:px-3">
                   {cart.map((item) => (
-                    <div key={item.lineId} className="relative z-0 flex items-start gap-2 py-3 first:pt-2">
+                    <div
+                      key={item.lineId}
+                      className={cn(
+                        "relative z-0 flex items-start gap-2 py-3 first:pt-2",
+                        isModoRapido && rapidoFlashLineId === item.lineId && "pdv-rapido-row-flash rounded-md"
+                      )}
+                    >
                       <div className="min-w-0 flex-1">
                         <p className="line-clamp-2 break-words text-base font-bold leading-tight text-foreground">
                           {item.name}
@@ -1915,13 +2050,28 @@ export function PdvClassic({
           setDiscountReais(0)
           setDiscountPercent(0)
           setSelectedProduct(null)
+          setRapidoFlashLineId(null)
+          setShellHighlightLineId(null)
+          setSelectedCartLineId(null)
+          setSearchTerm("")
+          setBipeCode("")
+          setShellNextQty("1")
           onSaleCompleted?.()
           toast({
             title: "Venda finalizada",
             description: `${payments.length} forma(s) de pagamento confirmada(s).`,
           })
           if (uiShell !== "default") {
-            queueMicrotask(() => shellBipeRef.current?.focus())
+            queueMicrotask(() => {
+              shellBipeRef.current?.focus()
+              if (isModoRapido) {
+                window.requestAnimationFrame(() => shellBipeRef.current?.focus())
+              }
+            })
+          } else if (isModoRapido) {
+            queueMicrotask(() => {
+              window.requestAnimationFrame(() => productInputRef.current?.focus())
+            })
           }
         }}
       />

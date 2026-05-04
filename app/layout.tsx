@@ -64,7 +64,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" suppressHydrationWarning className={`${inter.variable} ${spaceGrotesk.variable}`}>
       <body
-        className="min-h-screen bg-background font-sans text-foreground antialiased tracking-tight"
+        className={`${inter.className} min-h-screen bg-background font-sans text-foreground antialiased tracking-tight`}
         suppressHydrationWarning
       >
         <ThemeProvider

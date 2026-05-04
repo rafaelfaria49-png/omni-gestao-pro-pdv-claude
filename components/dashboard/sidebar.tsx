@@ -18,7 +18,6 @@ import {
   PanelLeftOpen,
   ShieldCheck,
   ShoppingBag,
-  Truck,
   Receipt,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -58,20 +57,21 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
   const mainNavItems: PremiumNavLink[] = [
     { icon: Sparkles, label: "IA Mestre", externalPath: "/dashboard/ia-mestre" },
     { icon: Bot, label: "Marketing IA", externalPath: "/dashboard/marketing-ia" },
-    { icon: ShoppingBag, label: "Marketplaces", externalPath: "/dashboard/marketplaces" },
-    { icon: Truck, label: "Expedição", externalPath: "/dashboard/expedicao" },
+    { icon: ShoppingBag, label: "Marketplace", externalPath: "/dashboard/marketplace" },
+    { icon: ShieldCheck, label: "Master Console", externalPath: "/dashboard/master-console" },
     { icon: LayoutDashboard, label: "Painel Inicial", page: "dashboard-omni", externalPath: "/dashboard" },
   ]
   const standaloneNavItems: PremiumNavLink[] = [
     { icon: Users, label: "Clientes", page: "clientes-gestao", externalPath: "/dashboard/clientes" },
     { icon: BarChart3, label: "Relatórios", page: "relatorios" },
+    { icon: Settings, label: "Configurações", externalPath: "/dashboard/configuracoes" },
   ]
   const navGroups: PremiumNavGroup[] = [
     {
       icon: ShoppingCart,
       label: "Operacional",
       items: [
-        { icon: ShoppingCart, label: "PDV (Caixa)", page: "vendas", externalPath: "/dashboard/vendas" },
+        { icon: ShoppingCart, label: "Vendas", page: "vendas", externalPath: "/dashboard/vendas" },
         { icon: Receipt, label: "Histórico de Vendas", externalPath: "/dashboard/historico-vendas" },
         { icon: FileText, label: "Orçamentos", page: "orcamentos" },
         ...(hideOsMenus ? [] : [{ icon: ClipboardList, label: "Ordens de Serviço", page: "os", externalPath: "/dashboard/os" }]),
@@ -94,14 +94,6 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
         { icon: Wallet, label: "Fluxo de Caixa", page: "fluxo-caixa" },
       ],
     },
-    {
-      icon: Settings,
-      label: "Configurações",
-      items: [
-        { icon: Settings, label: "Geral", page: "config-empresa" },
-        { icon: ShieldCheck, label: "Master Console", externalPath: "/dashboard/master-console" },
-      ],
-    },
   ]
 
   const handleNavigation = (page?: string, externalPath?: string) => {
@@ -121,6 +113,11 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
     return path === externalPath || path.startsWith(`${externalPath}/`)
   }
   const isNavActive = (item: PremiumNavLink) => isActive(item.page) || isExternalActive(item.externalPath)
+
+  const defaultOpenGroups = navGroups
+    .filter((g) => g.items.some((it) => isNavActive(it)))
+    .map((g) => g.label)
+
   const navButtonClass = (active: boolean, highlighted = false) =>
     cn(
       "group relative flex items-center gap-3 w-full overflow-hidden rounded-xl border px-3 py-3 text-sm font-semibold transition-smooth",
@@ -290,8 +287,8 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
         </div>
 
         {!collapsed ? (
-          <Accordion type="multiple" defaultValue={[]} className="mt-4 space-y-2">
-            {navGroups.filter((group) => group.label !== "Configurações").map((group) => (
+          <Accordion type="multiple" defaultValue={defaultOpenGroups} className="mt-4 space-y-2">
+            {navGroups.map((group) => (
               <AccordionItem key={group.label} value={group.label} className="border-0">
                 <AccordionTrigger className="rounded-xl border border-border bg-muted/40 px-3 py-3 text-foreground transition-smooth hover:border-primary/25 hover:bg-muted/60 hover:no-underline">
                   <span className="flex items-center gap-3 text-sm font-semibold">
@@ -324,7 +321,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
           </Accordion>
         ) : (
           <div className="mt-4 space-y-2">
-            {navGroups.filter((group) => group.label !== "Configurações").map((group) => (
+            {navGroups.map((group) => (
               <button key={group.label} className={navButtonClass(false)} title={group.label}>
                 <span className={iconTileClass(false)}>
                   <group.icon className="h-4 w-4 shrink-0" />
@@ -349,51 +346,6 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
             </button>
           ))}
         </div>
-
-        {!collapsed ? (
-          <Accordion type="multiple" defaultValue={[]} className="mt-4 space-y-2">
-            {navGroups.filter((group) => group.label === "Configurações").map((group) => (
-              <AccordionItem key={group.label} value={group.label} className="border-0">
-                <AccordionTrigger className="rounded-xl border border-border bg-muted/40 px-3 py-3 text-foreground transition-smooth hover:border-primary/25 hover:bg-muted/60 hover:no-underline">
-                  <span className="flex items-center gap-3 text-sm font-semibold">
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-muted/60 text-foreground/75">
-                      <group.icon className="h-4 w-4 shrink-0" />
-                    </span>
-                    {group.label}
-                  </span>
-                </AccordionTrigger>
-                <AccordionContent className="pb-1 pt-2">
-                  <ul className="space-y-1">
-                    {group.items.map((item) => (
-                      <li key={item.label}>
-                        <button
-                          onClick={() => handleNavigation(item.page, item.externalPath)}
-                          className={submenuButtonClass(isNavActive(item))}
-                        >
-                          {activeGlow(isNavActive(item))}
-                          <span className={iconTileClass(isNavActive(item))}>
-                            <item.icon className="h-4 w-4 shrink-0" />
-                          </span>
-                          <span className="truncate">{item.label}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        ) : (
-          <div className="mt-4 space-y-2">
-            {navGroups.filter((group) => group.label === "Configurações").map((group) => (
-              <button key={group.label} className={navButtonClass(false)} title={group.label}>
-                <span className={iconTileClass(false)}>
-                  <group.icon className="h-4 w-4 shrink-0" />
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
       </nav>
       
       <div

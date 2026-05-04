@@ -1,0 +1,386 @@
+/**
+ * Tokens e utilitários isolados da área Configurações (Lovable).
+ * Não importar este ficheiro em app/globals.css.
+ */
+
+.lovable-settings {
+  min-height: 100%;
+  --background: 0 0% 100%;
+  --foreground: 240 10% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 12%;
+  --card-muted: 0 0% 98%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 12%;
+  --primary: 0 78% 52%;
+  --primary-foreground: 0 0% 100%;
+  --primary-glow: 0 90% 65%;
+  --secondary: 240 5% 96%;
+  --secondary-foreground: 240 10% 12%;
+  --muted: 240 5% 96%;
+  --muted-foreground: 240 4% 46%;
+  --accent: 0 78% 96%;
+  --accent-foreground: 0 78% 32%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 0 0% 100%;
+  --border: 240 6% 90%;
+  --input: 240 6% 90%;
+  --ring: 0 78% 52%;
+  --surface: 240 6% 98%;
+  --surface-elevated: 0 0% 100%;
+  --sidebar-bg: 240 8% 98%;
+  --sidebar-active: 0 78% 96%;
+  --sidebar-active-foreground: 0 78% 42%;
+  --gradient-primary: linear-gradient(135deg, hsl(0 78% 52%), hsl(14 90% 60%));
+  --gradient-surface: linear-gradient(180deg, hsl(0 0% 100%), hsl(240 6% 98%));
+  --shadow-soft: 0 1px 2px hsl(240 10% 12% / 0.04), 0 2px 8px hsl(240 10% 12% / 0.04);
+  --shadow-card: 0 1px 3px hsl(240 10% 12% / 0.06), 0 4px 16px hsl(240 10% 12% / 0.04);
+  --shadow-glow: 0 8px 32px hsl(0 78% 52% / 0.18);
+  --shadow-elegant: 0 14px 44px -14px hsl(var(--primary) / 0.22);
+}
+
+html[data-theme="soft-ice"] .lovable-settings,
+html.soft-ice .lovable-settings {
+  --background: 205 60% 98%;
+  --foreground: 215 35% 18%;
+  --card: 0 0% 100%;
+  --card-foreground: 215 35% 18%;
+  --card-muted: 205 50% 96%;
+  --primary: 205 85% 52%;
+  --primary-foreground: 0 0% 100%;
+  --primary-glow: 195 90% 62%;
+  --muted: 205 40% 94%;
+  --muted-foreground: 215 18% 48%;
+  --accent: 195 80% 92%;
+  --accent-foreground: 205 85% 32%;
+  --border: 205 30% 88%;
+  --input: 205 30% 88%;
+  --ring: 205 85% 52%;
+  --surface: 205 50% 97%;
+  --sidebar-bg: 205 55% 96%;
+  --sidebar-active: 195 80% 92%;
+  --sidebar-active-foreground: 205 85% 38%;
+  --gradient-primary: linear-gradient(135deg, hsl(205 85% 52%), hsl(195 90% 62%));
+  --shadow-soft: 0 1px 2px hsl(215 35% 18% / 0.04), 0 2px 8px hsl(205 85% 52% / 0.06);
+  --shadow-card: 0 1px 3px hsl(215 35% 18% / 0.06), 0 4px 16px hsl(205 85% 52% / 0.08);
+  --shadow-glow: 0 8px 32px hsl(205 85% 52% / 0.22);
+  --shadow-elegant: 0 14px 40px -12px hsl(205 85% 52% / 0.2);
+}
+
+html[data-theme="midnight"] .lovable-settings,
+html.midnight .lovable-settings {
+  --background: 222 47% 8%;
+  --foreground: 210 40% 96%;
+  --card: 222 40% 11%;
+  --card-foreground: 210 40% 96%;
+  --card-muted: 222 38% 13%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --primary-glow: 199 95% 65%;
+  --muted: 222 32% 16%;
+  --muted-foreground: 215 20% 68%;
+  --accent: 217 60% 22%;
+  --accent-foreground: 199 95% 78%;
+  --border: 222 30% 18%;
+  --input: 222 30% 18%;
+  --ring: 217 91% 60%;
+  --surface: 222 44% 9%;
+  --sidebar-bg: 222 47% 7%;
+  --sidebar-active: 217 60% 20%;
+  --sidebar-active-foreground: 199 95% 78%;
+  --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(199 95% 65%));
+  --shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.3), 0 2px 8px hsl(0 0% 0% / 0.2);
+  --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.35), 0 8px 24px hsl(0 0% 0% / 0.3);
+  --shadow-glow: 0 8px 32px hsl(217 91% 60% / 0.35);
+  --shadow-elegant: 0 16px 48px -12px hsl(217 91% 60% / 0.38);
+}
+
+html[data-theme="black"] .lovable-settings,
+html.black-edition .lovable-settings,
+html.black .lovable-settings {
+  --background: 0 0% 4%;
+  --foreground: 140 15% 92%;
+  --card: 0 0% 7%;
+  --card-foreground: 140 15% 92%;
+  --card-muted: 0 0% 9%;
+  --primary: 142 90% 50%;
+  --primary-foreground: 0 0% 5%;
+  --primary-glow: 152 95% 55%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 140 6% 62%;
+  --accent: 142 60% 14%;
+  --accent-foreground: 142 90% 65%;
+  --border: 0 0% 15%;
+  --input: 0 0% 15%;
+  --ring: 142 90% 50%;
+  --surface: 0 0% 5%;
+  --sidebar-bg: 0 0% 3%;
+  --sidebar-active: 142 60% 12%;
+  --sidebar-active-foreground: 142 90% 60%;
+  --gradient-primary: linear-gradient(135deg, hsl(142 90% 50%), hsl(152 95% 55%));
+  --shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.5), 0 2px 8px hsl(0 0% 0% / 0.4);
+  --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.6), 0 8px 24px hsl(0 0% 0% / 0.5);
+  --shadow-glow: 0 0 24px hsl(142 90% 50% / 0.4);
+  --shadow-elegant: 0 12px 40px -8px hsl(142 90% 50% / 0.35);
+}
+
+.lovable-settings .bg-gradient-primary {
+  background: var(--gradient-primary);
+}
+
+.lovable-settings .bg-gradient-surface {
+  background: var(--gradient-surface);
+}
+
+.lovable-settings .shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.lovable-settings .shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+.lovable-settings .shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+.lovable-settings .shadow-elegant {
+  box-shadow: var(--shadow-elegant);
+}
+
+/** Paridade com Lovable `transition-smooth` (antes em globals / App) */
+.lovable-settings .transition-smooth {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow,
+    transform, filter, opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Sidebar / shell helpers (tokens isolados) */
+.lovable-settings .bg-sidebar-bg {
+  background-color: hsl(var(--sidebar-bg));
+}
+
+.lovable-settings .bg-sidebar-active {
+  background-color: hsl(var(--sidebar-active));
+}
+
+.lovable-settings .text-sidebar-active-foreground {
+  color: hsl(var(--sidebar-active-foreground));
+}
+
+.lovable-settings .bg-surface {
+  background-color: hsl(var(--surface));
+}
+
+.lovable-settings .text-foreground {
+  color: hsl(var(--foreground));
+}
+
+.lovable-settings .bg-background {
+  background-color: hsl(var(--background));
+}
+
+.lovable-settings .bg-card {
+  background-color: hsl(var(--card));
+}
+
+.lovable-settings .text-card-foreground {
+  color: hsl(var(--card-foreground));
+}
+
+.lovable-settings .border-border {
+  border-color: hsl(var(--border));
+}
+
+.lovable-settings .text-muted-foreground {
+  color: hsl(var(--muted-foreground));
+}
+
+.lovable-settings .bg-muted {
+  background-color: hsl(var(--muted));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Refino visual Lovable (sidebar, cards, inputs, botões, espaçamento)        */
+/* -------------------------------------------------------------------------- */
+
+.lovable-settings .lovable-settings-shell {
+  background-image: linear-gradient(
+    180deg,
+    hsl(var(--surface)) 0%,
+    hsl(var(--surface) / 0.92) 100%
+  );
+}
+
+.lovable-settings .lovable-settings-sidebar-inner {
+  padding-right: 0.25rem;
+}
+
+.lovable-settings .lovable-settings-sidebar-nav button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring) / 0.35);
+}
+
+.lovable-settings [data-slot="input"],
+.lovable-settings [data-slot="textarea"] {
+  min-height: 2.75rem;
+  border-radius: 0.75rem;
+  border-color: hsl(var(--border) / 0.85);
+  background-color: hsl(var(--card) / 0.65);
+  padding-inline: 0.875rem 1rem;
+  padding-block: 0.5rem;
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.45);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.lovable-settings [data-slot="textarea"] {
+  min-height: 5.5rem;
+  padding-block: 0.75rem;
+}
+
+.lovable-settings [data-slot="input"]:hover,
+.lovable-settings [data-slot="textarea"]:hover {
+  border-color: hsl(var(--border));
+  background-color: hsl(var(--card));
+}
+
+.lovable-settings [data-slot="input"]:focus-visible,
+.lovable-settings [data-slot="textarea"]:focus-visible {
+  border-color: hsl(var(--ring) / 0.55);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.35),
+    0 0 0 3px hsl(var(--ring) / 0.22);
+}
+
+.lovable-settings [data-slot="select-trigger"] {
+  min-height: 2.75rem;
+  border-radius: 0.75rem;
+  border-color: hsl(var(--border) / 0.85);
+  background-color: hsl(var(--card) / 0.65);
+  padding-inline: 0.875rem 1rem;
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.45);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.lovable-settings [data-slot="select-trigger"]:hover {
+  border-color: hsl(var(--border));
+  background-color: hsl(var(--card));
+}
+
+.lovable-settings [data-slot="select-trigger"]:focus-visible {
+  border-color: hsl(var(--ring) / 0.55);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.35),
+    0 0 0 3px hsl(var(--ring) / 0.22);
+}
+
+.lovable-settings section.lovable-settings-card {
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 1px hsl(var(--border) / 0.35);
+}
+
+.lovable-settings .lovable-settings-theme-tile {
+  box-shadow: var(--shadow-soft);
+}
+
+.lovable-settings .lovable-settings-theme-tile:hover {
+  transform: translateY(-1px);
+}
+
+.lovable-settings .lovable-settings-section-header-actions [data-slot="button"] {
+  min-height: 2.625rem;
+  padding-inline: 1.25rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.lovable-settings .lovable-settings-section-header-actions [data-slot="button"].bg-primary {
+  background-image: var(--gradient-primary);
+  box-shadow:
+    var(--shadow-soft),
+    0 1px 0 hsl(0 0% 100% / 0.2) inset;
+  border: 1px solid hsl(var(--primary) / 0.35);
+}
+
+.lovable-settings .lovable-settings-section-header-actions [data-slot="button"].bg-primary:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-glow);
+}
+
+.lovable-settings .lovable-settings-section-header-actions [data-slot="button"].bg-primary:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+.lovable-settings .lovable-settings-section-header-actions [data-slot="button"].border {
+  min-height: 2.625rem;
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-soft);
+}
+
+.lovable-settings .lovable-settings-section-header-actions [data-slot="button"].border:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--ring) / 0.35);
+}
+
+/* Primários em cards e grelha de temas (não sobrepõe o header) */
+.lovable-settings .lovable-settings-card button[data-slot="button"].bg-primary,
+.lovable-settings .lovable-settings-theme-tile button[data-slot="button"].bg-primary {
+  min-height: 2.5rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  background-image: var(--gradient-primary);
+  box-shadow: var(--shadow-soft), 0 1px 0 hsl(0 0% 100% / 0.15) inset;
+  border: 1px solid hsl(var(--primary) / 0.3);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+.lovable-settings .lovable-settings-card button[data-slot="button"].bg-primary:hover,
+.lovable-settings .lovable-settings-theme-tile button[data-slot="button"].bg-primary:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-card);
+}
+
+.lovable-settings .lovable-settings-card button[data-slot="button"].bg-primary:active,
+.lovable-settings .lovable-settings-theme-tile button[data-slot="button"].bg-primary:active {
+  transform: translateY(0);
+}
+
+.lovable-settings .lovable-settings-card button[data-slot="button"].border,
+.lovable-settings .lovable-settings-theme-tile button[data-slot="button"].border {
+  border-radius: 0.75rem;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.lovable-settings .lovable-settings-card button[data-slot="button"].border:hover,
+.lovable-settings .lovable-settings-theme-tile button[data-slot="button"].border:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft);
+}

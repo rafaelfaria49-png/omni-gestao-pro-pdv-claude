@@ -54,6 +54,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PDV_PRODUCTS_BASE, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 
 // ─── Catalog slices (defaults) ───────────────────────────────────────────────
@@ -153,13 +154,18 @@ function newLineId() {
 function QuickCard({
   item,
   onAdd,
+  isPickHighlight,
 }: {
   item: PdvCatalogProduct
   onAdd: (item: PdvCatalogProduct) => void
+  isPickHighlight?: boolean
 }) {
   return (
     <Card
-      className="group cursor-pointer rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:bg-accent hover:shadow-md active:scale-[0.98]"
+      className={cn(
+        "group cursor-pointer rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:bg-accent hover:shadow-md active:scale-[0.98]",
+        isPickHighlight && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+      )}
       onClick={() => onAdd(item)}
     >
       <div className="flex items-start justify-between gap-2">
@@ -818,7 +824,7 @@ function EditarAtalhosModal({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function PdvAssistenciaEnterprise() {
+export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const customerInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -829,12 +835,20 @@ export function PdvAssistenciaEnterprise() {
     return () => window.clearInterval(t)
   }, [])
 
+  useEffect(() => {
+    if (!isModoRapido) return
+    const t = window.setTimeout(() => inputRef.current?.focus(), 200)
+    return () => window.clearTimeout(t)
+  }, [isModoRapido])
+
   // ── Search + catalog tab ─────────────────────────────────────────────────────
   const [search, setSearch] = useState("")
   const [tab, setTab] = useState<"servicos" | "produtos">("servicos")
 
   // ── Cart ─────────────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartLine[]>([])
+  const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
+  const [rapidoPickIdx, setRapidoPickIdx] = useState(0)
   const [discount, setDiscount] = useState(0)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
 
@@ -886,6 +900,10 @@ export function PdvAssistenciaEnterprise() {
         (p.barcode ? p.barcode.includes(term) : false),
     ).slice(0, 12)
   }, [search])
+
+  useEffect(() => {
+    setRapidoPickIdx(0)
+  }, [search, fullSearch.length])
 
   // ── Global F-key hotkeys ──────────────────────────────────────────────────────
   // Helper: open payment modal pre-selecting a method (only if cart isn't empty)
@@ -947,12 +965,29 @@ export function PdvAssistenciaEnterprise() {
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct) => {
+    let flashId: string | null = null
     setCart((prev) => {
       const hit = prev.find((l) => l.title === item.name && Math.abs(l.price - item.price) < 0.001)
-      if (hit) return prev.map((l) => (l.id === hit.id ? { ...l, qty: l.qty + 1 } : l))
-      return [...prev, { id: newLineId(), title: item.name, price: item.price, qty: 1 }]
+      if (hit) {
+        flashId = hit.id
+        return prev.map((l) => (l.id === hit.id ? { ...l, qty: l.qty + 1 } : l))
+      }
+      const nid = newLineId()
+      flashId = nid
+      return [...prev, { id: nid, title: item.name, price: item.price, qty: 1 }]
     })
-    queueMicrotask(() => inputRef.current?.focus())
+    if (isModoRapido && flashId) {
+      setRapidoFlashLineId(flashId)
+      window.setTimeout(() => setRapidoFlashLineId((h) => (h === flashId ? null : h)), 150)
+      setSearch("")
+      playPdvRapidoItemBeepIfEnabled()
+    }
+    queueMicrotask(() => {
+      inputRef.current?.focus()
+      if (isModoRapido) {
+        window.requestAnimationFrame(() => inputRef.current?.focus())
+      }
+    })
   }
 
   const changeQty = (id: string, delta: number) => {
@@ -972,8 +1007,15 @@ export function PdvAssistenciaEnterprise() {
     setCart([])
     setDiscount(0)
     setCustomerName("")
+    setRapidoFlashLineId(null)
+    setRapidoPickIdx(0)
     setPaymentOpen(false)
-    inputRef.current?.focus()
+    queueMicrotask(() => {
+      inputRef.current?.focus()
+      if (isModoRapido) {
+        window.requestAnimationFrame(() => inputRef.current?.focus())
+      }
+    })
   }
 
   // ── Caixa actions ──────────────────────────────────────────────────────────────
@@ -989,25 +1031,55 @@ export function PdvAssistenciaEnterprise() {
     setCaixaModalOpen(false)
   }
 
+  useEffect(() => {
+    if (!isModoRapido) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return
+      if (paymentOpen || clearConfirmOpen || caixaModalOpen || trocasOpen || editAtalhosOpen) return
+      if (cart.length === 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      setCart((prev) => prev.slice(0, -1))
+      queueMicrotask(() => {
+        inputRef.current?.focus()
+        window.requestAnimationFrame(() => inputRef.current?.focus())
+      })
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [isModoRapido, paymentOpen, clearConfirmOpen, caixaModalOpen, trocasOpen, editAtalhosOpen, cart.length])
+
   // ─── Render ─────────────────────────────────────────────────────────────────
+
+  const modoRapido = isModoRapido === true
 
   return (
     <div className="relative flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background text-foreground">
-      {/* Ambient glow */}
-      <div className="pointer-events-none absolute -left-[10%] -top-[10%] h-[35%] w-[35%] rounded-full bg-primary/8 blur-[120px]" />
-      <div className="pointer-events-none absolute -bottom-[10%] -right-[10%] h-[30%] w-[30%] rounded-full bg-primary/5 blur-[100px]" />
+      {!modoRapido ? (
+        <>
+          <div className="pointer-events-none absolute -left-[10%] -top-[10%] h-[35%] w-[35%] rounded-full bg-primary/8 blur-[120px]" />
+          <div className="pointer-events-none absolute -bottom-[10%] -right-[10%] h-[30%] w-[30%] rounded-full bg-primary/5 blur-[100px]" />
+        </>
+      ) : null}
 
       {/* ── Header ── */}
-      <header className="absolute inset-x-0 top-0 z-10 flex h-14 items-center justify-between gap-2 border-b border-border bg-card/80 px-4 backdrop-blur-xl">
+      <header
+        className={cn(
+          "absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 border-b border-border bg-card/80 px-3 backdrop-blur-xl sm:px-4",
+          modoRapido ? "h-11" : "h-14"
+        )}
+      >
         {/* Left: brand */}
         <div className="flex shrink-0 items-center gap-2.5">
           <span className="grid h-8 w-8 place-items-center rounded-xl bg-primary text-primary-foreground shadow-md">
             <Wrench className="h-4 w-4" />
           </span>
-          <div className="hidden leading-tight sm:block">
-            <p className="text-sm font-bold tracking-tight text-foreground">OmniGestão PDV</p>
-            <p className="text-[10px] text-muted-foreground">Assistência Técnica</p>
-          </div>
+          {!modoRapido ? (
+            <div className="hidden leading-tight sm:block">
+              <p className="text-sm font-bold tracking-tight text-foreground">OmniGestão PDV</p>
+              <p className="text-[10px] text-muted-foreground">Assistência Técnica</p>
+            </div>
+          ) : null}
         </div>
 
         {/* Center: control buttons */}
@@ -1039,36 +1111,43 @@ export function PdvAssistenciaEnterprise() {
             )}
           </button>
 
-          {/* Trocas */}
-          <button
-            type="button"
-            onClick={() => setTrocasOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Trocas
-          </button>
+          {!modoRapido ? (
+            <button
+              type="button"
+              onClick={() => setTrocasOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Trocas
+            </button>
+          ) : null}
         </div>
 
         {/* Right: operator + clock */}
         <div className="flex shrink-0 items-center gap-2">
-          <div className="hidden items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 sm:flex">
-            <User className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">
-              Op: <span className="font-semibold text-foreground">Operador</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5">
+          {!modoRapido ? (
+            <div className="hidden items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 sm:flex">
+              <User className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">
+                Op: <span className="font-semibold text-foreground">Operador</span>
+              </span>
+            </div>
+          ) : null}
+          <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 sm:px-3">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-xs font-semibold tabular-nums text-foreground">
-              {now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              {now.toLocaleTimeString("pt-BR", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: modoRapido ? undefined : "2-digit",
+              })}
             </span>
           </div>
         </div>
       </header>
 
       {/* ── Body ── */}
-      <div className="relative z-0 flex min-h-0 w-full flex-1 overflow-hidden pt-14">
+      <div className={cn("relative z-0 flex min-h-0 w-full flex-1 overflow-hidden", modoRapido ? "pt-11" : "pt-14")}>
 
         {/* ── Center: search + catalog ── */}
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border bg-background/60 backdrop-blur-sm">
@@ -1081,6 +1160,24 @@ export function PdvAssistenciaEnterprise() {
                 ref={inputRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (!modoRapido || !search.trim()) return
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault()
+                    setRapidoPickIdx((i) => Math.min(i + 1, Math.max(0, fullSearch.length - 1)))
+                    return
+                  }
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault()
+                    setRapidoPickIdx((i) => Math.max(0, i - 1))
+                    return
+                  }
+                  if (e.key === "Enter" && fullSearch.length > 0) {
+                    e.preventDefault()
+                    const pick = fullSearch[rapidoPickIdx] ?? fullSearch[0]
+                    if (pick) addItem(pick)
+                  }
+                }}
                 placeholder="Bipe o produto ou busque por nome / código (F1)"
                 className="h-14 rounded-2xl border-border bg-card pl-12 text-base font-medium placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
               />
@@ -1093,32 +1190,36 @@ export function PdvAssistenciaEnterprise() {
                   <X className="h-4 w-4" />
                 </button>
               ) : (
-                <kbd className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-                  F2
-                </kbd>
+                !modoRapido ? (
+                  <kbd className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                    F2
+                  </kbd>
+                ) : null
               )}
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Keyboard className="h-3 w-3" />
-                Atalhos:
-              </span>
-              {[
-                { key: "F2", label: "Busca" },
-                { key: "F3", label: "Cliente" },
-                { key: "F4", label: "Dinheiro" },
-                { key: "F6", label: "Cartão" },
-                { key: "F7", label: "PIX" },
-                { key: "F8", label: "A Prazo" },
-                { key: "F9", label: "Cancelar" },
-                { key: "F10", label: "Múltiplo" },
-              ].map(({ key, label }) => (
-                <span key={key} className="flex items-center gap-1">
-                  <kbd className="rounded border border-border bg-muted px-1 py-px font-bold">{key}</kbd>
-                  {label}
+            {!modoRapido ? (
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Keyboard className="h-3 w-3" />
+                  Atalhos:
                 </span>
-              ))}
-            </div>
+                {[
+                  { key: "F2", label: "Busca" },
+                  { key: "F3", label: "Cliente" },
+                  { key: "F4", label: "Dinheiro" },
+                  { key: "F6", label: "Cartão" },
+                  { key: "F7", label: "PIX" },
+                  { key: "F8", label: "A Prazo" },
+                  { key: "F9", label: "Cancelar" },
+                  { key: "F10", label: "Múltiplo" },
+                ].map(({ key, label }) => (
+                  <span key={key} className="flex items-center gap-1">
+                    <kbd className="rounded border border-border bg-muted px-1 py-px font-bold">{key}</kbd>
+                    {label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           {/* Grid */}
@@ -1130,8 +1231,13 @@ export function PdvAssistenciaEnterprise() {
                 </p>
                 <ScrollArea className="h-[calc(100vh-4rem-14rem)]">
                   <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {fullSearch.map((p) => (
-                      <QuickCard key={p.id} item={p} onAdd={addItem} />
+                    {fullSearch.map((p, idx) => (
+                      <QuickCard
+                        key={p.id}
+                        item={p}
+                        onAdd={addItem}
+                        isPickHighlight={modoRapido && idx === rapidoPickIdx}
+                      />
                     ))}
                     {fullSearch.length === 0 && (
                       <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
@@ -1159,17 +1265,19 @@ export function PdvAssistenciaEnterprise() {
                       Produtos ({quickProducts.length})
                     </TabsTrigger>
                   </TabsList>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-10 shrink-0 rounded-xl border-border px-3 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => setEditAtalhosOpen(true)}
-                    title="Editar Atalhos"
-                  >
-                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                    Editar Atalhos
-                  </Button>
+                  {!modoRapido ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-10 shrink-0 rounded-xl border-border px-3 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setEditAtalhosOpen(true)}
+                      title="Editar Atalhos"
+                    >
+                      <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                      Editar Atalhos
+                    </Button>
+                  ) : null}
                 </div>
 
                 <TabsContent value="servicos" className="mt-4 min-h-0">
@@ -1205,7 +1313,14 @@ export function PdvAssistenciaEnterprise() {
         </main>
 
         {/* ── Right: customer + cart + payment ── */}
-        <aside className="flex h-full w-[420px] min-w-[360px] max-w-[480px] flex-col overflow-hidden border-l border-border bg-card">
+        <aside
+          className={cn(
+            "flex h-full flex-col overflow-hidden border-l border-border bg-card",
+            modoRapido
+              ? "w-[min(100%,400px)] min-w-[260px] max-w-[420px]"
+              : "w-[420px] min-w-[360px] max-w-[480px]"
+          )}
+        >
 
           {/* Customer input */}
           <div className="shrink-0 border-b border-border px-4 py-3">
@@ -1268,7 +1383,13 @@ export function PdvAssistenciaEnterprise() {
               <ScrollArea className="h-full">
                 <div className="divide-y divide-border px-3 py-1">
                   {cart.map((l) => (
-                    <div key={l.id} className="flex items-center gap-2 py-2.5">
+                    <div
+                      key={l.id}
+                      className={cn(
+                        "flex items-center gap-2 py-2.5",
+                        modoRapido && rapidoFlashLineId === l.id && "pdv-rapido-row-flash rounded-lg"
+                      )}
+                    >
                       {/* Title — limited width so controls always show */}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-foreground">{l.title}</p>
@@ -1324,19 +1445,21 @@ export function PdvAssistenciaEnterprise() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="font-semibold tabular-nums text-foreground">{brl(subtotal)}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Desconto (R$)</span>
-                <Input
-                  value={discount ? String(discount) : ""}
-                  onChange={(e) => {
-                    const v = Number(String(e.target.value || "").replace(",", "."))
-                    setDiscount(Number.isFinite(v) ? v : 0)
-                  }}
-                  placeholder="0,00"
-                  className="h-7 w-24 rounded-xl border-border bg-background text-right text-sm tabular-nums"
-                  inputMode="decimal"
-                />
-              </div>
+              {!modoRapido ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Desconto (R$)</span>
+                  <Input
+                    value={discount ? String(discount) : ""}
+                    onChange={(e) => {
+                      const v = Number(String(e.target.value || "").replace(",", "."))
+                      setDiscount(Number.isFinite(v) ? v : 0)
+                    }}
+                    placeholder="0,00"
+                    className="h-7 w-24 rounded-xl border-border bg-background text-right text-sm tabular-nums"
+                    inputMode="decimal"
+                  />
+                </div>
+              ) : null}
               <Separator className="bg-border" />
               <div className="flex items-baseline justify-between">
                 <span className="text-sm font-semibold text-muted-foreground">TOTAL A PAGAR</span>
@@ -1358,7 +1481,8 @@ export function PdvAssistenciaEnterprise() {
                     setPaymentOpen(true)
                   }}
                   className={cn(
-                    "relative h-12 rounded-2xl text-xs font-bold text-white shadow-md disabled:opacity-40",
+                    "relative rounded-2xl text-xs font-bold text-white shadow-md disabled:opacity-40",
+                    modoRapido ? "h-11" : "h-12",
                     m.color,
                   )}
                 >

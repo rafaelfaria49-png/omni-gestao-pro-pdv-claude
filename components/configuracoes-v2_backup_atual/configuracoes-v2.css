@@ -1,0 +1,37 @@
+/**
+ * Escopo visual da página Configurações v2.
+ * Usa tokens do tema global (light / soft-ice / midnight / black-edition) — sem redefinir cores.
+ */
+
+.configuracoes-v2 {
+  position: relative;
+  isolation: isolate;
+}
+
+.configuracoes-v2 .config-v2-shell {
+  background: linear-gradient(
+    180deg,
+    hsl(var(--background)) 0%,
+    hsl(var(--muted) / 0.35) 100%
+  );
+}
+
+.configuracoes-v2 .config-v2-sidebar-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 4px hsl(var(--ring) / 0.35);
+}
+
+.configuracoes-v2 .config-v2-card {
+  box-shadow:
+    0 1px 2px hsl(var(--foreground) / 0.04),
+    0 4px 24px hsl(var(--foreground) / 0.06);
+}
+
+.dark .configuracoes-v2 .config-v2-card,
+html.black-edition .configuracoes-v2 .config-v2-card,
+html.black .configuracoes-v2 .config-v2-card,
+html.midnight .configuracoes-v2 .config-v2-card {
+  box-shadow:
+    0 1px 2px hsl(0 0% 0% / 0.2),
+    0 8px 32px hsl(0 0% 0% / 0.35);
+}

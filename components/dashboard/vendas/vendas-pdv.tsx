@@ -90,6 +90,6 @@ export function VendasPDV(props: VendasPDVProps) {
   }, [hydrated, pdvParams.pdvClassicLayout])
 
   if (layout === "supermercado") return <PdvSupermercado {...props} />
-  if (classicLayout === "services") return <PdvAssistenciaEnterprise />
+  if (classicLayout === "services") return <PdvAssistenciaEnterprise isModoRapido={props.isModoRapido} />
   return <PdvClassic {...props} uiShell="omni-smart" />
 }

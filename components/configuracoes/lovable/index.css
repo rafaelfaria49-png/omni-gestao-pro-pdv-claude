@@ -1,0 +1,8 @@
+/**
+ * Entrada CSS local da Configurações (paridade com Lovable `index.css` + pipeline `App.css`).
+ * Não importar em `app/layout.tsx` nem em `globals.css`.
+ *
+ * Ordem: tokens e refinamentos → shell App.
+ */
+@import "./settings-lovable.css";
+@import "./App.css";

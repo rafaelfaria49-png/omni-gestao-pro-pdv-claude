@@ -161,12 +161,14 @@ function ShortcutBar({ onAction, isBlack }: { onAction: (key: string) => void; i
 function ItemsTable({
   rows,
   highlightLineId,
+  flashLineId,
   selectedLineId,
   onSelect,
   isBlack,
 }: {
   rows: PdvOmniCartRow[]
   highlightLineId: string | null
+  flashLineId?: string | null
   selectedLineId: string | null
   onSelect: (id: string) => void
   isBlack: boolean
@@ -219,6 +221,7 @@ function ItemsTable({
           rows.map((item, idx) => {
             const lineTotal = item.qty * item.unitPrice
             const isHighlight = item.lineId === highlightLineId
+            const isFlash = flashLineId != null && item.lineId === flashLineId
             const isSelected = item.lineId === selectedLineId
             return (
               <button
@@ -227,6 +230,7 @@ function ItemsTable({
                 onClick={() => onSelect(item.lineId)}
                 className={cn(
                   "grid w-full grid-cols-[56px_110px_1fr_72px_120px_88px_140px] gap-3 border-b px-4 py-2.5 text-left text-sm tabular-pdv transition-colors",
+                  isFlash && "pdv-rapido-row-flash",
                   isBlack
                     ? cn(
                         "border-white/10 bg-[#000000] text-white",
@@ -276,6 +280,8 @@ export type PdvOmniClassicShellProps = {
   storeName: string
   cartRows: PdvOmniCartRow[]
   highlightLineId: string | null
+  /** Flash curto ao adicionar item (modo rápido). */
+  flashLineId?: string | null
   selectedLineId: string | null
   onSelectLine: (lineId: string) => void
   total: number
@@ -314,9 +320,12 @@ export type PdvOmniClassicShellProps = {
   onReceivablesOpenChange: (open: boolean) => void
   onOpenReceivablesModule: () => void
   onAddProductFromSearch: (product: PdvCatalogProduct) => void
+  /** PDV rápido: menos cromo (atalhos visíveis, painel lateral, infos decorativas). */
+  isModoRapido?: boolean
 }
 
 export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
+  const isModoRapido = props.isModoRapido === true
   const qtyEditRef = useRef<HTMLInputElement>(null)
   const now = new Date().toLocaleString("pt-BR")
   const { mode: studioMode } = useStudioTheme()
@@ -358,17 +367,21 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <span
-            className={cn(
-              "hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium md:inline-flex",
-              isBlack ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-            )}
-          >
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> Online
-          </span>
-          <span className={cn("hidden items-center gap-1.5 text-xs md:inline-flex", isBlack ? "text-white/50" : "text-pos-label")}>
-            <Wifi className="h-3.5 w-3.5" /> Conexão estável
-          </span>
+          {!isModoRapido ? (
+            <>
+              <span
+                className={cn(
+                  "hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium md:inline-flex",
+                  isBlack ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                )}
+              >
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> Online
+              </span>
+              <span className={cn("hidden items-center gap-1.5 text-xs md:inline-flex", isBlack ? "text-white/50" : "text-pos-label")}>
+                <Wifi className="h-3.5 w-3.5" /> Conexão estável
+              </span>
+            </>
+          ) : null}
           <span className={cn("text-xs tabular-pdv", isBlack ? "text-white/45" : "text-pos-label")}>{now}</span>
         </div>
       </header>
@@ -376,13 +389,14 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       <section
         className={cn(
           "grid grid-cols-12 gap-3 border-b px-3 py-3 sm:px-4",
+          isModoRapido && "py-2",
           isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-white"
         )}
       >
         <PosField
           ref={props.bipeRef}
           tone={fieldTone}
-          fieldClassName="col-span-12 md:col-span-4"
+          fieldClassName={cn("col-span-12", isModoRapido ? "md:col-span-5" : "md:col-span-4")}
           label="Código / Bipe"
           hint="ENTER"
           icon={<Barcode className="h-4 w-4" />}
@@ -394,7 +408,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
         />
         <PosField
           tone={fieldTone}
-          fieldClassName="col-span-6 md:col-span-3"
+          fieldClassName={cn("col-span-6", isModoRapido ? "md:col-span-4" : "md:col-span-3")}
           label="Cliente"
           hint="F2"
           icon={<User2 className="h-4 w-4" />}
@@ -403,7 +417,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
         />
         <PosField
           tone={fieldTone}
-          fieldClassName="col-span-3 md:col-span-2"
+          fieldClassName={cn("col-span-6", isModoRapido ? "md:col-span-3" : "md:col-span-2")}
           label="Quantidade"
           hint="F4"
           icon={<Hash className="h-4 w-4" />}
@@ -411,105 +425,157 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
           onChange={(e) => props.onNextQtyStrChange(e.target.value)}
           inputMode="decimal"
         />
-        <PosField
-          tone={fieldTone}
-          fieldClassName="col-span-3 md:col-span-3"
-          label="Vendedor"
-          icon={<UserCog className="h-4 w-4" />}
-          value={props.seller}
-          onChange={(e) => props.onSellerChange(e.target.value)}
-        />
+        {!isModoRapido ? (
+          <PosField
+            tone={fieldTone}
+            fieldClassName="col-span-12 md:col-span-3"
+            label="Vendedor"
+            icon={<UserCog className="h-4 w-4" />}
+            value={props.seller}
+            onChange={(e) => props.onSellerChange(e.target.value)}
+          />
+        ) : null}
       </section>
 
-      <main className={cn("grid min-h-0 flex-1 grid-cols-12 gap-3 overflow-hidden p-2 sm:p-3", isBlack ? "bg-[#000000]" : "bg-slate-50")}>
-        <div className="col-span-12 flex min-h-0 flex-col overflow-hidden lg:col-span-9">
+      <main
+        className={cn(
+          "min-h-0 flex-1 overflow-hidden p-2 sm:p-3",
+          isModoRapido ? "flex flex-col gap-2" : "grid grid-cols-12 gap-3",
+          isModoRapido && "p-2",
+          isBlack ? "bg-[#000000]" : "bg-slate-50"
+        )}
+      >
+        <div
+          className={cn(
+            "flex min-h-0 flex-col overflow-hidden",
+            isModoRapido ? "min-h-0 flex-1" : "col-span-12 lg:col-span-9"
+          )}
+        >
           <ItemsTable
             rows={props.cartRows}
             highlightLineId={props.highlightLineId}
+            flashLineId={props.flashLineId}
             selectedLineId={props.selectedLineId}
             onSelect={props.onSelectLine}
             isBlack={isBlack}
           />
         </div>
-        <aside className="col-span-12 flex min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3">
+        {isModoRapido ? (
           <div
             className={cn(
-              "rounded-md border p-4 shadow-pos",
+              "col-span-12 flex min-h-0 shrink-0 flex-wrap items-center justify-between gap-3 border-t px-2 py-2 sm:px-3",
               isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-white"
             )}
           >
-            <div className="flex items-center justify-between">
-              <span className={cn("text-[11px] font-medium uppercase tracking-wider", isBlack ? "text-white/50" : "text-pos-label")}>
-                Total da Venda
-              </span>
-              <Calculator className={cn("h-4 w-4", isBlack ? "text-white/45" : "text-pos-label")} />
-            </div>
-            <div
-              className={cn(
-                "mt-2 text-[clamp(1.75rem,5vw,2.5rem)] font-semibold leading-none tracking-tight tabular-pdv",
-                isBlack ? "text-emerald-400" : "text-pos-total"
-              )}
-            >
-              R$ {fmt(props.total)}
-            </div>
-            <div className={cn("mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs", isBlack ? "border-white/10" : "pos-divider")}>
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
               <div>
-                <div className={isBlack ? "text-white/45" : "text-pos-label"}>Nº de itens</div>
-                <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>{props.itemCount}</div>
-              </div>
-              <div className="text-right">
-                <div className={isBlack ? "text-white/45" : "text-pos-label"}>Venda anterior</div>
-                <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>
-                  {props.previousSaleTotal != null ? `R$ ${fmt(props.previousSaleTotal)}` : "—"}
+                <span className={cn("text-[10px] font-medium uppercase tracking-wider", isBlack ? "text-white/50" : "text-pos-label")}>
+                  Total
+                </span>
+                <div
+                  className={cn(
+                    "text-xl font-semibold tabular-pdv sm:text-2xl",
+                    isBlack ? "text-emerald-400" : "text-pos-total"
+                  )}
+                >
+                  R$ {fmt(props.total)}
                 </div>
               </div>
-              <div>
-                <div className={isBlack ? "text-white/45" : "text-pos-label"}>Troco</div>
-                <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>R$ 0,00</div>
-              </div>
-              <div className="text-right">
-                <div className={isBlack ? "text-white/45" : "text-pos-label"}>Sem desc.</div>
-                <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>R$ {fmt(props.total)}</div>
-              </div>
+              <span className={cn("text-sm tabular-pdv", isBlack ? "text-white/70" : "text-muted-foreground")}>
+                {props.itemCount} itens
+              </span>
             </div>
             <Button
               type="button"
               onClick={() => props.onShortcutAction("F1")}
-              className="mt-4 w-full gap-2 bg-emerald-600 font-semibold text-white hover:bg-emerald-500 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
+              className="h-11 shrink-0 gap-2 bg-emerald-600 px-6 font-semibold text-white hover:bg-emerald-500 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
             >
               <Receipt className="h-4 w-4" />
               Finalizar (F1)
-              <ChevronRight className="ml-auto h-4 w-4" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
-          <div
-            className={cn(
-              "rounded-md border p-4 shadow-pos",
-              isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-white"
-            )}
-          >
-            <div className={cn("text-[11px] font-medium uppercase tracking-wider", isBlack ? "text-white/50" : "text-pos-label")}>Informativo</div>
-            <p className={cn("mt-2 text-sm leading-relaxed", isBlack ? "text-white/85" : "text-foreground")}>{props.info}</p>
-          </div>
-          <div
-            className={cn(
-              "rounded-md border p-3 text-[11px]",
-              isBlack ? "border-white/10 bg-[#000000] text-white/50" : "pos-divider bg-pos-header text-pos-label"
-            )}
-          >
-            <div className="flex justify-between">
-              <span>Caixa</span>
-              <span className={cn("font-medium", isBlack ? "text-white" : "text-foreground")}>PDV</span>
+        ) : (
+          <aside className="col-span-12 flex min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3">
+            <div
+              className={cn(
+                "rounded-md border p-4 shadow-pos",
+                isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-white"
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <span className={cn("text-[11px] font-medium uppercase tracking-wider", isBlack ? "text-white/50" : "text-pos-label")}>
+                  Total da Venda
+                </span>
+                <Calculator className={cn("h-4 w-4", isBlack ? "text-white/45" : "text-pos-label")} />
+              </div>
+              <div
+                className={cn(
+                  "mt-2 text-[clamp(1.75rem,5vw,2.5rem)] font-semibold leading-none tracking-tight tabular-pdv",
+                  isBlack ? "text-emerald-400" : "text-pos-total"
+                )}
+              >
+                R$ {fmt(props.total)}
+              </div>
+              <div className={cn("mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs", isBlack ? "border-white/10" : "pos-divider")}>
+                <div>
+                  <div className={isBlack ? "text-white/45" : "text-pos-label"}>Nº de itens</div>
+                  <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>{props.itemCount}</div>
+                </div>
+                <div className="text-right">
+                  <div className={isBlack ? "text-white/45" : "text-pos-label"}>Venda anterior</div>
+                  <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>
+                    {props.previousSaleTotal != null ? `R$ ${fmt(props.previousSaleTotal)}` : "—"}
+                  </div>
+                </div>
+                <div>
+                  <div className={isBlack ? "text-white/45" : "text-pos-label"}>Troco</div>
+                  <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>R$ 0,00</div>
+                </div>
+                <div className="text-right">
+                  <div className={isBlack ? "text-white/45" : "text-pos-label"}>Sem desc.</div>
+                  <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>R$ {fmt(props.total)}</div>
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={() => props.onShortcutAction("F1")}
+                className="mt-4 w-full gap-2 bg-emerald-600 font-semibold text-white hover:bg-emerald-500 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
+              >
+                <Receipt className="h-4 w-4" />
+                Finalizar (F1)
+                <ChevronRight className="ml-auto h-4 w-4" />
+              </Button>
             </div>
-            <div className="flex justify-between">
-              <span>Atalhos</span>
-              <span className={cn("font-medium", isBlack ? "text-white" : "text-foreground")}>F1–F9</span>
+            <div
+              className={cn(
+                "rounded-md border p-4 shadow-pos",
+                isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-white"
+              )}
+            >
+              <div className={cn("text-[11px] font-medium uppercase tracking-wider", isBlack ? "text-white/50" : "text-pos-label")}>Informativo</div>
+              <p className={cn("mt-2 text-sm leading-relaxed", isBlack ? "text-white/85" : "text-foreground")}>{props.info}</p>
             </div>
-          </div>
-        </aside>
+            <div
+              className={cn(
+                "rounded-md border p-3 text-[11px]",
+                isBlack ? "border-white/10 bg-[#000000] text-white/50" : "pos-divider bg-pos-header text-pos-label"
+              )}
+            >
+              <div className="flex justify-between">
+                <span>Caixa</span>
+                <span className={cn("font-medium", isBlack ? "text-white" : "text-foreground")}>PDV</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Atalhos</span>
+                <span className={cn("font-medium", isBlack ? "text-white" : "text-foreground")}>F1–F9</span>
+              </div>
+            </div>
+          </aside>
+        )}
       </main>
 
-      <ShortcutBar onAction={props.onShortcutAction} isBlack={isBlack} />
+      {!isModoRapido ? <ShortcutBar onAction={props.onShortcutAction} isBlack={isBlack} /> : null}
 
       <Dialog open={props.productSearchOpen} onOpenChange={props.onProductSearchOpenChange}>
         <DialogContent className="max-w-lg border-border bg-card">

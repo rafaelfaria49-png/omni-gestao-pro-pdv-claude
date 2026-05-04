@@ -37,6 +37,7 @@ import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
 import { PdvPainelLateralTerminal, PdvVisorTotal } from "./painel-total"
 import { PdvTabelaItemLinha, PdvTabelaItens } from "./tabela-itens"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
+import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 
 import type { VendasPDVProps } from "./pdv-classic"
 
@@ -78,6 +79,7 @@ export function PdvSupermercado({
   onVoiceCartSeedConsumed,
   voiceOpenCaixaSignal = 0,
   onVoiceOpenCaixaConsumed,
+  isModoRapido = false,
 }: VendasPDVProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -95,6 +97,7 @@ export function PdvSupermercado({
 
   const [searchTerm, setSearchTerm] = useState("")
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1)
+  const [rapidoFlashLineId, setRapidoFlashLineId] = useState<string | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
 
@@ -136,6 +139,26 @@ export function PdvSupermercado({
     const t = window.setTimeout(() => hardFocusSearch(), 100)
     return () => window.clearTimeout(t)
   }, [hardFocusSearch])
+
+  useEffect(() => {
+    if (!isModoRapido) return
+    const t = window.setTimeout(() => hardFocusSearch(), 220)
+    return () => window.clearTimeout(t)
+  }, [isModoRapido, hardFocusSearch])
+
+  useEffect(() => {
+    if (!isModoRapido) return
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return
+      if (isPaymentModalOpen || supervisorDialogOpen || weightDialogOpen || attrDialogOpen) return
+      if (cart.length === 0) return
+      e.preventDefault()
+      setCart((prev) => prev.slice(0, -1))
+      queueMicrotask(hardFocusSearch)
+    }
+    window.addEventListener("keydown", onKey, true)
+    return () => window.removeEventListener("keydown", onKey, true)
+  }, [isModoRapido, isPaymentModalOpen, supervisorDialogOpen, weightDialogOpen, attrDialogOpen, cart.length, hardFocusSearch])
 
   useEffect(() => {
     let cancelled = false
@@ -202,21 +225,36 @@ export function PdvSupermercado({
     el?.scrollIntoView({ block: "nearest", behavior: "smooth" })
   }, [activeSuggestionIndex, filteredProducts])
 
-  const pushCartLine = useCallback((params: { inventoryId: string; name: string; price: number; quantity: number; vendaPorPeso?: boolean; atributosLabel?: string }) => {
-    setCart((prev) => [
-      ...prev,
-      {
-        lineId: newPdvLineId(params.inventoryId),
-        inventoryId: params.inventoryId,
-        name: params.name,
-        price: params.price,
-        quantity: params.quantity,
-        vendaPorPeso: params.vendaPorPeso,
-        atributosLabel: params.atributosLabel,
-      },
-    ])
-    queueMicrotask(hardFocusSearch)
-  }, [hardFocusSearch])
+  const pushCartLine = useCallback(
+    (params: { inventoryId: string; name: string; price: number; quantity: number; vendaPorPeso?: boolean; atributosLabel?: string }) => {
+      const lineId = newPdvLineId(params.inventoryId)
+      setCart((prev) => [
+        ...prev,
+        {
+          lineId,
+          inventoryId: params.inventoryId,
+          name: params.name,
+          price: params.price,
+          quantity: params.quantity,
+          vendaPorPeso: params.vendaPorPeso,
+          atributosLabel: params.atributosLabel,
+        },
+      ])
+      if (isModoRapido) {
+        setRapidoFlashLineId(lineId)
+        window.setTimeout(() => setRapidoFlashLineId((h) => (h === lineId ? null : h)), 150)
+        setSearchTerm("")
+        playPdvRapidoItemBeepIfEnabled()
+      }
+      queueMicrotask(() => {
+        hardFocusSearch()
+        if (isModoRapido) {
+          window.requestAnimationFrame(() => hardFocusSearch())
+        }
+      })
+    },
+    [hardFocusSearch, isModoRapido]
+  )
 
   const addToCart = useCallback(
     (product: Product, qtyOverride?: number) => {
@@ -463,30 +501,39 @@ export function PdvSupermercado({
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
-      <div className="shrink-0 border-b border-border">
-        <CaixaStatusBar
-          variant="pdv"
-          openAberturaSignal={voiceOpenCaixaSignal}
-          onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
-        />
-      </div>
+      {!isModoRapido ? (
+        <div className="shrink-0 border-b border-border">
+          <CaixaStatusBar
+            variant="pdv"
+            openAberturaSignal={voiceOpenCaixaSignal}
+            onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
+          />
+        </div>
+      ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row",
+          isModoRapido && "min-h-0"
+        )}
+      >
         {/* ESQUERDA: Catálogo + Busca gigante */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-border lg:border-b-0 lg:border-r">
-          <div className="shrink-0 bg-background px-3 py-3">
+          <div className={cn("shrink-0 bg-background px-3", isModoRapido ? "py-2" : "py-3")}>
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-card text-blue-400 shadow-sm">
-                  <Barcode className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold leading-none">Busca / Código de barras</div>
-                  <div className="text-xs leading-tight text-foreground/70 dark:text-white/55">
-                    Enter adiciona; quantidade×código com *; ↑↓ destaca sugestão.
+              {!isModoRapido ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-card text-blue-400 shadow-sm">
+                    <Barcode className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold leading-none">Busca / Código de barras</div>
+                    <div className="text-xs leading-tight text-foreground/70 dark:text-white/55">
+                      Enter adiciona; quantidade×código com *; ↑↓ destaca sugestão.
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : null}
               <div className="relative">
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-foreground/50 dark:text-white/45" />
                 <Input
@@ -562,7 +609,12 @@ export function PdvSupermercado({
         </div>
 
         {/* DIREITA: Carrinho mais largo + pagamentos gigantes */}
-        <PdvPainelLateralTerminal className="lg:w-[560px] lg:min-w-[560px]">
+        <PdvPainelLateralTerminal
+          className={cn(
+            "lg:w-[560px] lg:min-w-[560px]",
+            isModoRapido && "lg:w-[min(100%,440px)] lg:min-w-[280px] lg:max-w-[440px]"
+          )}
+        >
           <div className="shrink-0 border-b border-white/10 bg-black/20 px-3 py-3 backdrop-blur-md dark:bg-black/30">
             <div className="flex items-center justify-between">
               <div className="text-lg font-black tracking-tight">Carrinho</div>
@@ -606,7 +658,12 @@ export function PdvSupermercado({
               <ScrollArea className="h-full">
                 <PdvTabelaItens className="p-2">
                   {cart.map((item) => (
-                    <PdvTabelaItemLinha key={item.lineId}>
+                    <PdvTabelaItemLinha
+                      key={item.lineId}
+                      className={cn(
+                        isModoRapido && rapidoFlashLineId === item.lineId && "pdv-rapido-row-flash rounded-lg"
+                      )}
+                    >
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-extrabold">{item.name}</div>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-foreground/65 dark:text-white/50">
@@ -798,6 +855,8 @@ export function PdvSupermercado({
           setDiscountReais(0)
           setDiscountPercent(0)
           setSelectedProduct(null)
+          setRapidoFlashLineId(null)
+          setSearchTerm("")
           setIsPaymentModalOpen(false)
           setInstantPayIntent(null)
           onSaleCompleted?.()
@@ -805,7 +864,12 @@ export function PdvSupermercado({
             title: "Venda finalizada",
             description: `${payments.length} forma(s) de pagamento confirmada(s).`,
           })
-          queueMicrotask(hardFocusSearch)
+          queueMicrotask(() => {
+            hardFocusSearch()
+            if (isModoRapido) {
+              window.requestAnimationFrame(() => hardFocusSearch())
+            }
+          })
         }}
       />
 

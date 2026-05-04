@@ -36,6 +36,10 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "components/configuracoes/lovable_backup_antes_reset",
+    "components/configuracoes-v3/pages",
+    "components/configuracoes-v3/components/NavLink.tsx",
+    "components/configuracoes-v3/test"
   ]
 }

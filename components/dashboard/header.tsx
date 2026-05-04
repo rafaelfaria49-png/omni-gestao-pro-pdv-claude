@@ -252,7 +252,7 @@ export function Header() {
             </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
-              <Link href="/?page=config-empresa" className="cursor-pointer">
+              <Link href="/dashboard/configuracoes" className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
                 Configurações
               </Link>
@@ -288,7 +288,7 @@ export function Header() {
               <strong>CNPJ não cadastrado</strong> na loja ativa. O sistema continua operando, mas documentos e integrações podem ficar incompletos.
             </span>
             <Link
-              href="/?page=config-empresa"
+              href="/dashboard/configuracoes"
               className="font-semibold text-primary underline underline-offset-4 hover:text-primary/80"
             >
               Cadastrar agora

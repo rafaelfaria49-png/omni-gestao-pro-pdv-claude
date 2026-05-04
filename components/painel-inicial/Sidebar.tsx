@@ -18,7 +18,6 @@ import {
   Settings,
   Command,
   Store,
-  Truck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,10 +35,10 @@ const workspace: Item[] = [
   { to: "/dashboard/master-console", label: "Master Console", icon: Crown },
   { to: "/dashboard/orcamentos", label: "Orçamentos", icon: FileText },
   { to: "/dashboard/vendas", label: "Venda", icon: ShoppingCart },
+  { to: "/vendas-hub", label: "Vendas HUB", icon: ShoppingCart },
   { to: "/dashboard/os", label: "Ordens de Serviço", icon: Wrench },
   { to: "/dashboard/estoque", label: "Estoque", icon: Package },
-  { to: "/dashboard/marketplaces", label: "Marketplaces", icon: Store },
-  { to: "/dashboard/expedicao", label: "Expedição", icon: Truck },
+  { to: "/dashboard/marketplace", label: "Marketplace", icon: Store },
   { to: "/dashboard/financeiro", label: "Financeiro", icon: Wallet },
   { to: "/dashboard/clientes", label: "Clientes", icon: Users },
   { to: "/dashboard/relatorios", label: "Relatórios", icon: BarChart3 },
@@ -55,7 +54,14 @@ export function Sidebar() {
 
   const renderItem = (item: Item) => {
     const Icon = item.icon;
-    const active = (pathname || "") === item.to;
+    const path = pathname || "";
+    const active =
+      item.to === "/vendas-hub"
+        ? path.startsWith("/vendas-hub")
+        : path === item.to ||
+          (item.to !== "/dashboard" &&
+            item.to !== "/" &&
+            path.startsWith(`${item.to}/`));
     return (
       <Link
         key={item.to}

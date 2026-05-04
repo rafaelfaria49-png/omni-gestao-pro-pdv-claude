@@ -1,5 +1,5 @@
-import { ConfiguracoesSistema } from "@/components/dashboard/configuracoes/configuracoes-sistema"
+import ConfiguracoesV3Page from "@/components/configuracoes-v3/ConfiguracoesV3Page"
 
 export default function Page() {
-  return <ConfiguracoesSistema />
+  return <ConfiguracoesV3Page />
 }
