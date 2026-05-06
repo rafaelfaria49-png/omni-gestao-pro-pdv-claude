@@ -86,7 +86,7 @@ export function StatsCards() {
               </div>
             </div>
             <Button asChild variant="outline" size="sm" className="border-amber-600/40 shrink-0">
-              <Link href="/?page=contas-pagar">Ver contas a pagar</Link>
+              <Link href="/dashboard/contas-pagar">Ver contas a pagar</Link>
             </Button>
           </div>
         </Card>

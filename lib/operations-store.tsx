@@ -10,6 +10,8 @@ import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import type { DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 import { isOsVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { emitEvent } from "@/lib/events/event-bus"
+import { initAutomationEngineClient } from "@/lib/automation/automation-engine"
 
 export type { DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
@@ -25,6 +27,14 @@ export interface InventoryItem {
   name: string
   /** Código de barras (EAN/GTIN) — usado no PDV Alta Performance. */
   barcode?: string
+  /** SKU interno (Prisma `sku`) quando diferente do `id` operacional. */
+  sku?: string
+  /** Id persistido no banco (cuid) — bipe/código pode referenciar o registro. */
+  dbId?: string
+  /** Código interno de balcão (alias de SKU / id legado). */
+  codigo?: string
+  /** Alias de `barcode` para buscas e integrações. */
+  codigoBarras?: string
   stock: number
   cost: number
   price: number
@@ -253,6 +263,55 @@ function peekLegacyInventoryOrdens(raw: string | null): { inventory: InventoryIt
   }
 }
 
+type CaixaPersisted = {
+  isOpen: boolean
+  saldoInicial: number
+  dataAbertura: string | null
+  totalEntradas: number
+  totalSaidas: number
+}
+
+function caixaStorageKeyForLoja(storeId: string): string {
+  return `omnigestao:caixa:${storeId}`
+}
+
+function loadCaixaSnapshot(storeId: string): CaixaState | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = localStorage.getItem(caixaStorageKeyForLoja(storeId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<CaixaPersisted>
+    if (!parsed || typeof parsed !== "object") return null
+    const isOpen = parsed.isOpen === true
+    const saldoInicial = Number(parsed.saldoInicial) || 0
+    const totalEntradas = Number(parsed.totalEntradas) || 0
+    const totalSaidas = Number(parsed.totalSaidas) || 0
+    const dataAbertura =
+      typeof parsed.dataAbertura === "string" && parsed.dataAbertura.trim()
+        ? new Date(parsed.dataAbertura)
+        : null
+    return { isOpen, saldoInicial, dataAbertura, totalEntradas, totalSaidas }
+  } catch {
+    return null
+  }
+}
+
+function saveCaixaSnapshot(storeId: string, caixa: CaixaState): void {
+  if (typeof window === "undefined") return
+  try {
+    const payload: CaixaPersisted = {
+      isOpen: !!caixa.isOpen,
+      saldoInicial: Number(caixa.saldoInicial) || 0,
+      dataAbertura: caixa.dataAbertura ? caixa.dataAbertura.toISOString() : null,
+      totalEntradas: Number(caixa.totalEntradas) || 0,
+      totalSaidas: Number(caixa.totalSaidas) || 0,
+    }
+    localStorage.setItem(caixaStorageKeyForLoja(storeId), JSON.stringify(payload))
+  } catch {
+    /* ignore quota */
+  }
+}
+
 function toPersistedRest(state: OpsState): Omit<OpsState, "inventory" | "ordens"> {
   return {
     caixa: state.caixa,
@@ -272,6 +331,11 @@ export function OperationsProvider({
   /** Por unidade (multiloja); padrão único = assistec-pro-ops-v1 */
   storageKey?: string
 }) {
+  useEffect(() => {
+    // Camada de inteligência (eventos/automações) em modo simulado.
+    // Não altera lógica de venda/estoque existente.
+    initAutomationEngineClient()
+  }, [])
   const [state, setState] = useState<OpsState>({
     ...defaultState,
     dailyLedger: emptyLedger(),
@@ -279,6 +343,7 @@ export function OperationsProvider({
   const [opsDbReady, setOpsDbReady] = useState(false)
   const stateRef = useRef(state)
   const lastSentOpsRef = useRef<string>("")
+  const bootstrapDoneRef = useRef(false)
 
   useEffect(() => {
     stateRef.current = state
@@ -286,12 +351,16 @@ export function OperationsProvider({
 
   useEffect(() => {
     try {
+      const lojaId = opsLojaIdFromStorageKey(storageKey)
       const raw = localStorage.getItem(storageKey)
       if (raw) {
         const partial = parseLocalRest(raw, stateRef.current)
         if (partial) {
           setState((prev) => ({ ...prev, ...partial }))
         }
+        const snap = loadCaixaSnapshot(lojaId)
+        if (snap) setState((prev) => ({ ...prev, caixa: snap }))
+        bootstrapDoneRef.current = true
         return
       }
       if (storageKey !== OPS_KEY_LEGACY && storageKey.endsWith(`-${LEGACY_PRIMARY_STORE_ID}`)) {
@@ -304,18 +373,29 @@ export function OperationsProvider({
           }
         }
       }
+      const snap = loadCaixaSnapshot(lojaId)
+      if (snap) setState((prev) => ({ ...prev, caixa: snap }))
     } catch {
       // ignore
+    } finally {
+      bootstrapDoneRef.current = true
     }
   }, [storageKey])
 
   useEffect(() => {
+    if (!bootstrapDoneRef.current) return
     try {
       localStorage.setItem(storageKey, JSON.stringify(toPersistedRest(state)))
     } catch {
       // ignore
     }
   }, [state, storageKey])
+
+  useEffect(() => {
+    if (!bootstrapDoneRef.current) return
+    const lojaId = opsLojaIdFromStorageKey(storageKey)
+    saveCaixaSnapshot(lojaId, state.caixa)
+  }, [state.caixa, storageKey])
 
   useEffect(() => {
     setOpsDbReady(false)
@@ -718,6 +798,7 @@ export function OperationsProvider({
       const lj = opsLojaIdFromStorageKey(storageKey)
       const saleRow = next.sales[next.sales.length - 1]
       if (saleRow) {
+        emitEvent("venda_finalizada", { storeId: lj, entityId: saleRow.id, data: saleRow })
         void fetch("/api/ops/venda-persist", {
           method: "POST",
           credentials: "include",

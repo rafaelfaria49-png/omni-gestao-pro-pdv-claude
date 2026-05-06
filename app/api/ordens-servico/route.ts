@@ -5,6 +5,7 @@ import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite }
 import { parseStatusOS } from "@/lib/os-status"
 import type { ItemInput } from "@/lib/os-itens-stock"
 import { baixarEstoqueECriarItens, somaPecasEValidaEstoque } from "@/lib/os-itens-stock"
+import { handleEvent } from "@/lib/automation/automation-engine"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -151,6 +152,14 @@ export async function POST(req: Request) {
         where: { id: ordem.id },
         include: ordemInclude,
       })
+    })
+
+    // Eventos/automações (server-side): execução direta para não depender de event-bus in-memory.
+    const phoneDigits = String(created.cliente?.phone ?? "").replace(/\D/g, "")
+    void handleEvent("os_criada", {
+      storeId,
+      entityId: created.id,
+      data: { status: created.status, phoneDigits },
     })
 
     return json({ ok: true, ordem: created }, { status: 201 })

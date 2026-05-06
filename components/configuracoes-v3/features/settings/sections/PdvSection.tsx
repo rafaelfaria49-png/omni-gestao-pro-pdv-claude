@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
-import { Monitor, Check, Zap, Sparkles, LayoutGrid } from "lucide-react";
+import { Monitor, Check, Zap, Wrench, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { cn } from "@/components/configuracoes-v3/lib/utils";
@@ -11,16 +11,16 @@ import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
 import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
-import { writePdvClassicLayout } from "@/lib/pdv-classic-layout";
+import { notifyPdvMainLayoutChanged, writePdvClassicLayout } from "@/lib/pdv-classic-layout";
 import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name";
 
 /** Mesma chave que `vendas-pdv.tsx` / `configuracoes-sistema.tsx` (layout classic vs supermercado no navegador). */
 const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout";
 
-/** Chave opcional em `printerConfig` só para a UI V3 diferenciar cartões “Clássico” e “IA” (mesmo backend `pdvClassicLayout: lovable`). */
+/** Chave opcional em `printerConfig` para preservar preferência visual do card selecionado no V3. */
 const V3_PDV_SECTION_CARD_KEY = "v3PdvSectionCard";
 
-type LayoutId = "classico" | "rapido" | "ia";
+type LayoutId = "classico" | "rapido" | "assistencia";
 
 interface PdvLayout {
   id: LayoutId;
@@ -32,7 +32,12 @@ interface PdvLayout {
 const LAYOUTS: PdvLayout[] = [
   { id: "classico", name: "PDV Clássico", description: "Layout tradicional com grid de produtos e carrinho lateral.", icon: LayoutGrid },
   { id: "rapido", name: "PDV Rápido", description: "Foco em código de barras e teclas de atalho para alta rotatividade.", icon: Zap },
-  { id: "ia", name: "PDV Inteligente (IA)", description: "Sugestões automáticas, busca semântica e cross-sell por IA.", icon: Sparkles },
+  {
+    id: "assistencia",
+    name: "PDV Assistência",
+    description: "Foco em assistência técnica, venda de peças e atendimento no balcão.",
+    icon: Wrench,
+  },
 ];
 
 function readLocalPdvMain(): "classic" | "supermercado" {
@@ -51,8 +56,12 @@ function layoutIdFromPrinterAndLocal(
   printerConfig: Record<string, unknown> | null
 ): LayoutId {
   if (localMain === "supermercado") return "rapido";
+  const pdvParamsRaw = printerConfig?.pdvParams;
+  const pdvParams =
+    pdvParamsRaw && typeof pdvParamsRaw === "object" ? (pdvParamsRaw as Record<string, unknown>) : null;
+  if (pdvParams?.pdvClassicLayout === "services") return "assistencia";
   const card = printerConfig?.[V3_PDV_SECTION_CARD_KEY];
-  if (card === "ia") return "ia";
+  if (card === "assistencia" || card === "ia") return "assistencia";
   return "classico";
 }
 
@@ -108,9 +117,11 @@ function PdvSectionContent() {
     setSaving(true);
     try {
       const base = safePrinterRecord(remotePrinterConfig);
+      const classicLayoutKind: "services" | "lovable" =
+        draftLayout === "assistencia" ? "services" : "lovable";
       const nextPdvParams = {
         ...pdvParams,
-        ...(draftLayout === "rapido" ? {} : { pdvClassicLayout: "lovable" as const }),
+        ...(draftLayout === "rapido" ? {} : { pdvClassicLayout: classicLayoutKind }),
       };
 
       const nextPrinter: Record<string, unknown> = {
@@ -118,7 +129,7 @@ function PdvSectionContent() {
         pdvParams: nextPdvParams,
       };
 
-      if (draftLayout === "ia") nextPrinter[V3_PDV_SECTION_CARD_KEY] = "ia";
+      if (draftLayout === "assistencia") nextPrinter[V3_PDV_SECTION_CARD_KEY] = "assistencia";
       else if (draftLayout === "classico") nextPrinter[V3_PDV_SECTION_CARD_KEY] = "classico";
       else Reflect.deleteProperty(nextPrinter, V3_PDV_SECTION_CARD_KEY);
 
@@ -143,8 +154,9 @@ function PdvSectionContent() {
             localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "supermercado");
           } else {
             localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "classic");
-            writePdvClassicLayout("lovable");
+            writePdvClassicLayout(draftLayout === "assistencia" ? "services" : "lovable");
           }
+          notifyPdvMainLayoutChanged();
         }
       } catch {
         /* ignore */
@@ -244,16 +256,16 @@ function PdvSectionContent() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <Button type="button" variant="outline" size="sm" disabled>
-                    Em breve
-                  </Button>
+                <div className="flex w-full">
                   <Button
                     type="button"
                     size="sm"
+                    className="w-full"
                     variant={active ? "secondary" : "default"}
                     disabled={active || controlsDisabled}
-                    onClick={() => setDraftLayout(opt.id)}
+                    onClick={() => {
+                      setDraftLayout(opt.id);
+                    }}
                   >
                     {active ? "Selecionado" : "Selecionar"}
                   </Button>

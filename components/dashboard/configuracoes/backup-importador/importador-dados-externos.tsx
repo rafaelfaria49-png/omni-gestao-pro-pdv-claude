@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { FileSpreadsheet, UploadCloud, X } from "lucide-react"
 import Papa from "papaparse"
 import * as XLSX from "xlsx"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
@@ -36,6 +37,15 @@ import {
   type GestaoClickFileKind,
   applyGestaoClickPostParse,
 } from "@/lib/gestaoclick-import"
+import {
+  CORRECAO_CODIGOS_MAP_LABELS,
+  type CorrecaoCodigosStatus,
+  type CorrecaoMapTarget,
+  type CorrecaoMappingState,
+  type ProdutoCatalogoCorrecao,
+  buildCorrecaoCodigosPreview,
+  defaultCorrecaoMapping,
+} from "@/lib/produto-codigos-correcao"
 
 type ImportKind =
   | "clientes"
@@ -1377,6 +1387,84 @@ function applyColumnTarget(
   return next
 }
 
+const CORRECAO_MAP_TARGETS: CorrecaoMapTarget[] = CORRECAO_CODIGOS_MAP_LABELS.map((x) => x.key)
+
+function resolveSheetRowsAndHeaders(sheet: ParsedSheet): {
+  rows: Record<string, unknown>[]
+  headers: string[]
+  linhaBase: number
+} {
+  let rows = normalizeSheetRows(sheet.rows, sheet.fileName)
+  let headers = sheet.headers
+  const headerIdx = sheet.headerRowIndex ?? 0
+  let linhaBase = headerIdx + 2
+  if (rows.length === 0 && sheet.grid && sheet.grid.length > 0 && sheet.headerRowIndex != null && sheet.headerRowIndex >= 0) {
+    const built = buildRowsFromGrid(sheet.grid, sheet.headerRowIndex)
+    rows = built.rows
+    headers = built.headers.length > 0 ? built.headers : sheet.headers
+    linhaBase = sheet.headerRowIndex + 2
+  }
+  if (headers.length === 0 && rows.length > 0) {
+    headers = Object.keys(rows[0]!)
+  }
+  return { rows, headers, linhaBase }
+}
+
+function targetKeyForCorrecaoSheetColumn(
+  header: string,
+  defaultMap: CorrecaoMappingState,
+  allowedKeys: CorrecaoMapTarget[]
+): CorrecaoMapTarget | typeof SELECT_NONE {
+  for (const k of allowedKeys) {
+    if (defaultMap[k] === header) return k
+  }
+  return SELECT_NONE
+}
+
+function currentCorrecaoTargetForColumn(
+  header: string,
+  mapping: CorrecaoMappingState,
+  allowedKeys: CorrecaoMapTarget[]
+): CorrecaoMapTarget | typeof SELECT_NONE {
+  for (const k of allowedKeys) {
+    if (mapping[k] === header) return k
+  }
+  return SELECT_NONE
+}
+
+function applyCorrecaoColumnTarget(
+  prev: CorrecaoMappingState,
+  header: string,
+  newTarget: CorrecaoMapTarget | typeof SELECT_NONE,
+  allowedKeys: CorrecaoMapTarget[]
+): CorrecaoMappingState {
+  const next = { ...prev }
+  for (const k of allowedKeys) {
+    if (next[k] === header) delete next[k]
+  }
+  if (newTarget !== SELECT_NONE) {
+    next[newTarget] = header
+  }
+  return next
+}
+
+function CorrecaoStatusBadge({ status }: { status: CorrecaoCodigosStatus }) {
+  switch (status) {
+    case "seguro":
+      return <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Seguro</Badge>
+    case "duvida":
+      return <Badge variant="secondary">Dúvida</Badge>
+    case "nao_encontrado":
+      return <Badge variant="outline">Não encontrado</Badge>
+    case "sem_mudanca":
+      return <Badge variant="outline">Sem mudança</Badge>
+    case "sem_dados_planilha":
+      return <Badge variant="outline">Sem dados</Badge>
+    default:
+      return <Badge variant="outline">{status}</Badge>
+  }
+}
+
 export function ImportadorDadosExternos() {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const importRunRef = useRef(false)
@@ -1391,6 +1479,14 @@ export function ImportadorDadosExternos() {
   const [vendasSub, setVendasSub] = useState<"vendas" | "ordens_servico">("vendas")
   const [selectedFileName, setSelectedFileName] = useState<string>("")
   const [isDragActive, setIsDragActive] = useState(false)
+  const [produtosFluxo, setProdutosFluxo] = useState<"importacao" | "corrigir_codigos">("importacao")
+  const [correcaoMapping, setCorrecaoMapping] = useState<CorrecaoMappingState>({})
+  const [correcaoCatalogo, setCorrecaoCatalogo] = useState<ProdutoCatalogoCorrecao[] | null>(null)
+  const [correcaoCatalogoError, setCorrecaoCatalogoError] = useState<string | null>(null)
+  const [correcaoApplying, setCorrecaoApplying] = useState(false)
+  /** Só reinicia mapeamento padrão quando o arquivo/cabeçalhos mudam — não a cada edição manual do usuário. */
+  const correcaoMappingSourceKeyRef = useRef<string>("")
+  const [correcaoPreviewRevision, setCorrecaoPreviewRevision] = useState(0)
 
   const kind: ImportKind = useMemo(() => {
     if (uiTab === "clientes") return "clientes"
@@ -1548,9 +1644,29 @@ export function ImportadorDadosExternos() {
 
   const allowedMapTargets = useMemo(() => expectedFields.map((f) => f.key), [expectedFields])
 
+  const headersForMapping = useMemo(() => {
+    if (!sheet) return [] as string[]
+    if (uiTab === "produtos" && produtosFluxo === "corrigir_codigos") {
+      return resolveSheetRowsAndHeaders(sheet).headers
+    }
+    return sheet.headers
+  }, [sheet, uiTab, produtosFluxo])
+
+  const defaultCorrecaoSnapshot = useMemo(
+    () => (headersForMapping.length ? defaultCorrecaoMapping(headersForMapping) : ({} as CorrecaoMappingState)),
+    [headersForMapping]
+  )
+
+  const mappingColumnHeaders = useMemo(() => {
+    if (!sheet) return [] as string[]
+    if (uiTab === "produtos" && produtosFluxo === "corrigir_codigos") return headersForMapping
+    return sheet.headers
+  }, [sheet, uiTab, produtosFluxo, headersForMapping])
+
   const canImport = useMemo(() => {
     if (!sheet) return false
     if (!temLojaObrigatoria) return false
+    if (uiTab === "produtos" && produtosFluxo === "corrigir_codigos") return false
     if (kind === "clientes") {
       const colNome = mapping["clientes.nome"] && String(mapping["clientes.nome"]).trim()
       return Boolean(colNome && sheet.rows.length > 0)
@@ -1598,17 +1714,110 @@ export function ImportadorDadosExternos() {
       return Boolean(v && ven)
     }
     return false
-  }, [kind, mapping, sheet, temLojaObrigatoria])
+  }, [kind, mapping, sheet, temLojaObrigatoria, uiTab, produtosFluxo])
+
+  const correcaoPreviewRows = useMemo(() => {
+    if (!sheet || uiTab !== "produtos" || produtosFluxo !== "corrigir_codigos") return null
+    if (correcaoCatalogo == null) return null
+    try {
+      const { rows, headers, linhaBase } = resolveSheetRowsAndHeaders(sheet)
+      return buildCorrecaoCodigosPreview({
+        rows,
+        headers,
+        map: correcaoMapping,
+        dbProducts: correcaoCatalogo,
+        linhaBase,
+      })
+    } catch {
+      return null
+    }
+  }, [sheet, uiTab, produtosFluxo, correcaoMapping, correcaoCatalogo, correcaoPreviewRevision])
+
+  const correcaoSegurosCount = useMemo(
+    () => (correcaoPreviewRows?.filter((r) => r.status === "seguro").length ?? 0),
+    [correcaoPreviewRows]
+  )
+
+  const correcaoCatalogoPronto = correcaoCatalogo !== null && !correcaoCatalogoError
+
+  const canAplicarCorrecaoSeguros = useMemo(() => {
+    if (!temLojaObrigatoria) return false
+    if (uiTab !== "produtos" || produtosFluxo !== "corrigir_codigos") return false
+    if (!sheet || correcaoCatalogo == null || correcaoApplying) return false
+    return correcaoSegurosCount > 0
+  }, [
+    temLojaObrigatoria,
+    uiTab,
+    produtosFluxo,
+    sheet,
+    correcaoCatalogo,
+    correcaoApplying,
+    correcaoSegurosCount,
+  ])
+
+  const recalcularPreviaCorrecao = useCallback(() => {
+    setCorrecaoPreviewRevision((n) => n + 1)
+  }, [])
 
   useEffect(() => {
-    if (!sheet?.headers?.length) return
-    setMapping(defaultMappingFor(kind, sheet.headers, sheet))
-  }, [kind, sheet])
+    if (!sheet) return
+    if (uiTab === "produtos" && produtosFluxo === "corrigir_codigos") {
+      if (!headersForMapping.length) return
+      const sourceKey = JSON.stringify([sheet.fileName, sheet.rows.length, headersForMapping])
+      if (correcaoMappingSourceKeyRef.current !== sourceKey) {
+        correcaoMappingSourceKeyRef.current = sourceKey
+        setCorrecaoMapping(defaultCorrecaoMapping(headersForMapping))
+        setCorrecaoPreviewRevision((n) => n + 1)
+      }
+      return
+    }
+    if (sheet.headers?.length) {
+      setMapping(defaultMappingFor(kind, sheet.headers, sheet))
+    }
+  }, [kind, sheet, uiTab, produtosFluxo, headersForMapping])
+
+  useEffect(() => {
+    if (uiTab !== "produtos" || produtosFluxo !== "corrigir_codigos" || !temLojaObrigatoria) {
+      return
+    }
+    let cancelled = false
+    setCorrecaoCatalogoError(null)
+    setCorrecaoCatalogo(null)
+    void (async () => {
+      try {
+        const res = await fetchWithTimeout(`/api/produtos/correcao-codigos?storeId=${encodeURIComponent(storeHeaderParaEscrita)}`, {
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            [ASSISTEC_LOJA_HEADER]: storeHeaderParaEscrita,
+          },
+          timeoutMs: 120_000,
+        })
+        const j = (await res.json().catch(() => null)) as { ok?: boolean; produtos?: ProdutoCatalogoCorrecao[]; error?: string } | null
+        if (cancelled) return
+        if (!res.ok) {
+          setCorrecaoCatalogoError(j?.error || `Falha ao carregar produtos (HTTP ${res.status}).`)
+          setCorrecaoCatalogo([])
+          return
+        }
+        setCorrecaoCatalogo(Array.isArray(j?.produtos) ? j!.produtos! : [])
+      } catch (e) {
+        if (!cancelled) {
+          setCorrecaoCatalogoError(e instanceof Error ? e.message : "Falha ao carregar produtos da loja.")
+          setCorrecaoCatalogo([])
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [uiTab, produtosFluxo, temLojaObrigatoria, storeHeaderParaEscrita])
 
   const preview = useMemo(() => {
     if (!sheet) return null
     try {
       if (kind === "produtos") {
+        if (uiTab === "produtos" && produtosFluxo === "corrigir_codigos") return null
         const items = buildProdutosItemsFromSheetFlexible(sheet, mapping).slice(0, 8)
         return { kind: "produtos" as const, items }
       }
@@ -1624,7 +1833,7 @@ export function ImportadorDadosExternos() {
       return { kind: "erro" as const, error: e instanceof Error ? e.message : String(e) }
     }
     return null
-  }, [kind, mapping, sheet])
+  }, [kind, mapping, sheet, uiTab, produtosFluxo])
 
   const yieldToUi = async () => {
     await new Promise<void>((r) => setTimeout(r, 0))
@@ -1641,6 +1850,73 @@ export function ImportadorDadosExternos() {
       return await fetch(input, { ...init, signal: ctrl.signal })
     } finally {
       window.clearTimeout(t)
+    }
+  }
+
+  const recarregarCatalogoCorrecao = async () => {
+    if (!temLojaObrigatoria) return
+    const res = await fetchWithTimeout(`/api/produtos/correcao-codigos?storeId=${encodeURIComponent(storeHeaderParaEscrita)}`, {
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        [ASSISTEC_LOJA_HEADER]: storeHeaderParaEscrita,
+      },
+      timeoutMs: 120_000,
+    })
+    const j = (await res.json().catch(() => null)) as { ok?: boolean; produtos?: ProdutoCatalogoCorrecao[]; error?: string } | null
+    if (!res.ok) {
+      setCorrecaoCatalogoError(j?.error || `Falha ao recarregar catálogo (HTTP ${res.status}).`)
+      return
+    }
+    setCorrecaoCatalogoError(null)
+    setCorrecaoCatalogo(Array.isArray(j?.produtos) ? j!.produtos! : [])
+  }
+
+  const aplicarCorrecaoSeguros = async () => {
+    if (!canAplicarCorrecaoSeguros || !correcaoPreviewRows) return
+    setCorrecaoApplying(true)
+    setImportLog("")
+    try {
+      const alvo = correcaoPreviewRows.filter((r) => r.status === "seguro")
+      let ok = 0
+      let fail = 0
+      const erros: string[] = []
+      for (const r of alvo) {
+        if (!r.produtoId) continue
+        const body: Record<string, string> = {}
+        if (r.skuNovo != null) body.sku = r.skuNovo
+        if (r.barcodeNovo != null) {
+          body.barcode = r.barcodeNovo
+          body.codigoBarras = r.barcodeNovo
+        }
+        if (Object.keys(body).length === 0) continue
+        const res = await fetchWithTimeout(`/api/produtos/${encodeURIComponent(r.produtoId)}/codigos`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            [ASSISTEC_LOJA_HEADER]: storeHeaderParaEscrita,
+          },
+          body: JSON.stringify(body),
+          timeoutMs: 30_000,
+        })
+        if (!res.ok) {
+          fail += 1
+          const errJ = (await res.json().catch(() => null)) as { error?: string } | null
+          erros.push(`Linha ${r.linhaPlanilha} (${r.nomeDb}): ${errJ?.error || `HTTP ${res.status}`}`)
+        } else {
+          ok += 1
+        }
+        await yieldToUi()
+      }
+      await recarregarCatalogoCorrecao()
+      const head = `Correção de códigos (apenas matches seguros).\nAplicados com sucesso: ${ok}.\nFalhas: ${fail}.`
+      const tail = erros.length ? `\n\nDetalhes:\n${erros.slice(0, 30).join("\n")}` : ""
+      setImportLog(head + tail)
+    } catch (e) {
+      setImportLog(e instanceof Error ? e.message : "Falha ao aplicar correções.")
+    } finally {
+      setCorrecaoApplying(false)
     }
   }
 
@@ -1797,6 +2073,9 @@ export function ImportadorDadosExternos() {
     setProgressNow(0)
     setProgressTotal(0)
     setProgressLabel("")
+    setCorrecaoMapping({})
+    correcaoMappingSourceKeyRef.current = ""
+    setCorrecaoPreviewRevision((n) => n + 1)
     if (inputRef.current) inputRef.current.value = ""
   }
 
@@ -2301,6 +2580,42 @@ export function ImportadorDadosExternos() {
                 </div>
               )}
 
+              {uiTab === "produtos" && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={produtosFluxo === "importacao" ? "default" : "outline"}
+                    onClick={() => setProdutosFluxo("importacao")}
+                  >
+                    Importação de planilha (estoque)
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={produtosFluxo === "corrigir_codigos" ? "default" : "outline"}
+                    onClick={() => setProdutosFluxo("corrigir_codigos")}
+                  >
+                    Corrigir códigos de produtos existentes
+                  </Button>
+                </div>
+              )}
+
+              {uiTab === "produtos" && produtosFluxo === "corrigir_codigos" && (
+                <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-950 dark:text-sky-100/95 space-y-1">
+                  <p>
+                    <strong className="font-medium">Somente atualização:</strong> comparamos a planilha com os produtos
+                    já cadastrados na loja (por nome normalizado, ou por SKU exato se o nome não bater).{" "}
+                    <strong className="font-medium">Não</strong> criamos produtos novos,{" "}
+                    <strong className="font-medium">não</strong> alteramos preço, estoque nem categoria.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Colunas IMEI / número de série aparecem na prévia para conferência; o cadastro de produto no banco
+                    ainda não possui esses campos — apenas SKU e código de barras são gravados.
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Arquivo (.csv, .xlsx ou .xls)</Label>
                 <input
@@ -2377,9 +2692,11 @@ export function ImportadorDadosExternos() {
                 ) : null}
               </div>
 
-              <Button type="button" variant="secondary" className="w-full" onClick={downloadTemplate.run} disabled={!temLojaObrigatoria}>
-                {downloadTemplate.label}
-              </Button>
+              {!(uiTab === "produtos" && produtosFluxo === "corrigir_codigos") ? (
+                <Button type="button" variant="secondary" className="w-full" onClick={downloadTemplate.run} disabled={!temLojaObrigatoria}>
+                  {downloadTemplate.label}
+                </Button>
+              ) : null}
 
               {parseError && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -2405,11 +2722,12 @@ export function ImportadorDadosExternos() {
                       Detecção automática: <strong className="text-foreground">{labelGestaoClickKind(sheet.detectedKind)}</strong>
                     </p>
                   )}
-                  {sheet.headers.length > 0 && (
+                  {mappingColumnHeaders.length > 0 && (
                     <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-3">
                       <p className="text-xs font-medium text-foreground">
-                        Mapeamento inteligente: cada coluna da sua planilha → campo do sistema (ajuste o vínculo se a
-                        sugestão não for a ideal).
+                        {uiTab === "produtos" && produtosFluxo === "corrigir_codigos"
+                          ? "Mapeamento: ligue cada coluna da planilha ao papel (nome, SKU, EAN/GTIN, etc.). O casamento com o banco usa principalmente o nome normalizado."
+                          : "Mapeamento inteligente: cada coluna da sua planilha → campo do sistema (ajuste o vínculo se a sugestão não for a ideal)."}
                       </p>
                       <div className="overflow-x-auto rounded-md border border-border/60 bg-background/40">
                         <table className="w-full text-xs">
@@ -2421,7 +2739,55 @@ export function ImportadorDadosExternos() {
                             </tr>
                           </thead>
                           <tbody>
-                            {sheet.headers.map((header) => {
+                            {mappingColumnHeaders.map((header) => {
+                              const isCorrecao = uiTab === "produtos" && produtosFluxo === "corrigir_codigos"
+                              if (isCorrecao) {
+                                const suggested = targetKeyForCorrecaoSheetColumn(
+                                  header,
+                                  defaultCorrecaoSnapshot,
+                                  CORRECAO_MAP_TARGETS
+                                )
+                                const sugLabel =
+                                  suggested === SELECT_NONE
+                                    ? "—"
+                                    : (CORRECAO_CODIGOS_MAP_LABELS.find((f) => f.key === suggested)?.label ??
+                                      String(suggested))
+                                const cur = currentCorrecaoTargetForColumn(header, correcaoMapping, CORRECAO_MAP_TARGETS)
+                                const selectVal = cur === SELECT_NONE ? SELECT_NONE : cur
+                                return (
+                                  <tr key={header} className="border-b border-border/60 last:border-0">
+                                    <td className="p-2 align-middle font-medium text-foreground">{header}</td>
+                                    <td className="p-2 align-middle text-muted-foreground">{sugLabel}</td>
+                                    <td className="p-2 align-middle">
+                                      <Select
+                                        value={selectVal}
+                                        onValueChange={(v) =>
+                                          setCorrecaoMapping((prev) =>
+                                            applyCorrecaoColumnTarget(
+                                              prev,
+                                              header,
+                                              v === SELECT_NONE ? SELECT_NONE : (v as CorrecaoMapTarget),
+                                              CORRECAO_MAP_TARGETS
+                                            )
+                                          )
+                                        }
+                                      >
+                                        <SelectTrigger className="h-9 bg-background border-border text-xs">
+                                          <SelectValue placeholder="Ignorar coluna" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          <SelectItem value={SELECT_NONE}>— Ignorar coluna</SelectItem>
+                                          {CORRECAO_CODIGOS_MAP_LABELS.map((f) => (
+                                            <SelectItem key={`${header}-${f.key}`} value={f.key}>
+                                              {f.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </td>
+                                  </tr>
+                                )
+                              }
                               const suggested = targetKeyForSheetColumn(
                                 header,
                                 defaultMappingSnapshot,
@@ -2507,6 +2873,152 @@ export function ImportadorDadosExternos() {
                     </div>
                   )}
 
+                  {uiTab === "produtos" && produtosFluxo === "corrigir_codigos" && (
+                    <div className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={!temLojaObrigatoria || !sheet || !correcaoCatalogoPronto}
+                          onClick={() => recalcularPreviaCorrecao()}
+                        >
+                          Gerar / Atualizar prévia
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={!temLojaObrigatoria || !sheet || !correcaoCatalogoPronto}
+                          onClick={() => recalcularPreviaCorrecao()}
+                        >
+                          Recalcular prévia
+                        </Button>
+                        {!temLojaObrigatoria ? (
+                          <span className="text-xs text-muted-foreground">Selecione a unidade no sistema.</span>
+                        ) : correcaoCatalogo === null && !correcaoCatalogoError ? (
+                          <span className="text-xs text-muted-foreground">Carregando produtos da loja…</span>
+                        ) : null}
+                      </div>
+
+                      {correcaoCatalogoError ? (
+                        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                          {correcaoCatalogoError}
+                        </div>
+                      ) : null}
+
+                      {correcaoPreviewRows != null && correcaoCatalogo !== null ? (
+                        <>
+                          <p className="text-xs font-medium text-foreground">
+                            Prévia da correção (só leitura até você aplicar em “Ações da correção”). Última atualização: revisão{" "}
+                            <span className="tabular-nums">{correcaoPreviewRevision}</span>.
+                          </p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                            <span>
+                              Seguro (aplicação automática):{" "}
+                              <strong className="text-foreground tabular-nums">
+                                {correcaoPreviewRows.filter((x) => x.status === "seguro").length}
+                              </strong>
+                            </span>
+                            <span>
+                              Dúvida (revisão manual):{" "}
+                              <strong className="text-foreground tabular-nums">
+                                {correcaoPreviewRows.filter((x) => x.status === "duvida").length}
+                              </strong>
+                            </span>
+                            <span>
+                              Não encontrado:{" "}
+                              <strong className="text-foreground tabular-nums">
+                                {correcaoPreviewRows.filter((x) => x.status === "nao_encontrado").length}
+                              </strong>
+                            </span>
+                            <span>
+                              Sem mudança / sem dados:{" "}
+                              <strong className="text-foreground tabular-nums">
+                                {correcaoPreviewRows.filter((x) => x.status === "sem_mudanca" || x.status === "sem_dados_planilha").length}
+                              </strong>
+                            </span>
+                          </div>
+                          <div className="overflow-x-auto max-h-[min(70vh,560px)] rounded-md border border-border/60 bg-background/40">
+                            <table className="w-full text-[11px]">
+                              <thead className="sticky top-0 z-[1] border-b border-border bg-secondary">
+                                <tr className="text-left text-muted-foreground">
+                                  <th className="p-2 font-medium">Linha</th>
+                                  <th className="p-2 font-medium">Status</th>
+                                  <th className="p-2 font-medium">Produto (banco)</th>
+                                  <th className="p-2 font-medium">Nome planilha</th>
+                                  <th className="p-2 font-medium min-w-[120px]">SKU atual / novo</th>
+                                  <th className="p-2 font-medium min-w-[160px]">Código de barras (EAN) atual / novo</th>
+                                  <th className="p-2 font-medium min-w-[120px]">IMEI / série (planilha)</th>
+                                  <th className="p-2 font-medium min-w-[160px]">Motivo</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {correcaoPreviewRows.map((r, idx) => (
+                                  <tr key={`${r.linhaPlanilha}-${idx}`} className="border-b border-border/50 align-top">
+                                    <td className="p-2 tabular-nums">{r.linhaPlanilha}</td>
+                                    <td className="p-2">
+                                      <CorrecaoStatusBadge status={r.status} />
+                                    </td>
+                                    <td className="p-2 font-medium text-foreground max-w-[200px] break-words">{r.nomeDb}</td>
+                                    <td className="p-2 max-w-[200px] break-words">{r.nomePlanilha}</td>
+                                    <td className="p-2 break-all">
+                                      <div className="text-muted-foreground">SKU atual: {r.skuDb || "—"}</div>
+                                      <div className="mt-0.5 font-medium text-foreground">
+                                        SKU novo: {r.skuNovo != null ? r.skuNovo : "—"}
+                                      </div>
+                                    </td>
+                                    <td className="p-2 break-all">
+                                      <div className="text-muted-foreground">Barras atual: {r.barcodeDb || "—"}</div>
+                                      <div className="mt-0.5 font-medium text-foreground">
+                                        Barras novo (Produto.barcode): {r.barcodeNovo != null ? r.barcodeNovo : "—"}
+                                      </div>
+                                    </td>
+                                    <td className="p-2 break-all">{r.imeiPlanilha || "—"}</td>
+                                    <td className="p-2 text-muted-foreground">{r.motivo}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="rounded-lg border border-border bg-secondary/30 px-4 py-4 space-y-3">
+                            <p className="text-sm font-semibold text-foreground">Ações da correção</p>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                disabled={!canAplicarCorrecaoSeguros || correcaoApplying}
+                                onClick={() => void aplicarCorrecaoSeguros()}
+                              >
+                                {correcaoApplying
+                                  ? "Aplicando…"
+                                  : correcaoSegurosCount > 0
+                                    ? `Aplicar correções seguras (${correcaoSegurosCount})`
+                                    : "Nenhuma correção segura para aplicar"}
+                              </Button>
+                              <Button type="button" variant="outline" size="sm" disabled={!correcaoCatalogoPronto || !sheet} onClick={() => recalcularPreviaCorrecao()}>
+                                Recalcular prévia
+                              </Button>
+                            </div>
+                            {correcaoSegurosCount === 0 && correcaoCatalogoPronto ? (
+                              <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100/95 space-y-1">
+                                <p>
+                                  <strong className="font-medium">Revise o mapeamento das colunas.</strong> Para aplicar automaticamente, é necessário que exista{" "}
+                                  <strong className="font-medium">código de barras (EAN) novo</strong> na planilha,{" "}
+                                  <strong className="font-medium">diferente</strong> do código já salvo no cadastro (comparação por dígitos).
+                                </p>
+                                <p className="text-muted-foreground">
+                                  Se todas as linhas aparecem como “Sem mudança”, “Sem dados” ou “Dúvida”, nenhuma alteração será aplicada até o EAN ser detectado corretamente.
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        </>
+                      ) : correcaoCatalogo !== null ? (
+                        <p className="text-xs text-muted-foreground">Não foi possível montar a prévia. Tente “Gerar / Atualizar prévia” novamente.</p>
+                      ) : null}
+                    </div>
+                  )}
+
                   {preview?.kind === "erro" ? (
                     <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                       Prévia: {preview.error}
@@ -2528,26 +3040,39 @@ export function ImportadorDadosExternos() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-primary" />
-                Validar e gravar
+                {uiTab === "produtos" && produtosFluxo === "corrigir_codigos" ? "Resumo (correção de códigos)" : "Validar e gravar"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                O fluxo sempre envia o arquivo para <strong className="text-foreground">validação no servidor</strong>{" "}
-                (com o mapeamento atual) antes de gravar nada. Assim reduzimos erros de coluna e respostas 500 do banco.
-                Use os modelos abaixo quando quiser um cabeçalho já compatível.
-              </p>
+              {uiTab === "produtos" && produtosFluxo === "corrigir_codigos" ? (
+                <p className="text-sm text-muted-foreground">
+                  O botão <strong className="text-foreground">Aplicar correções seguras</strong> fica na seção{" "}
+                  <strong className="text-foreground">Ações da correção</strong>, logo abaixo da tabela de prévia no card
+                  acima. Somente linhas <strong className="text-foreground">Seguro</strong> são enviadas; nada altera
+                  preço, estoque ou categoria.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  O fluxo sempre envia o arquivo para <strong className="text-foreground">validação no servidor</strong>{" "}
+                  (com o mapeamento atual) antes de gravar nada. Assim reduzimos erros de coluna e respostas 500 do banco.
+                  Use os modelos abaixo quando quiser um cabeçalho já compatível.
+                </p>
+              )}
               {uiTab === "clientes" ? (
                 <p className="text-xs text-muted-foreground">
                   Foco: <strong className="text-foreground">Nome</strong>, <strong className="text-foreground">CPF/CNPJ</strong>{" "}
                   e <strong className="text-foreground">contato</strong> (telefone/e-mail). Campos extras são opcionais.
                 </p>
-              ) : uiTab === "produtos" ? (
+              ) : uiTab === "produtos" && produtosFluxo === "importacao" ? (
                 <p className="text-xs text-muted-foreground">
                   Foco: <strong className="text-foreground">SKU</strong>,{" "}
                   <strong className="text-foreground">preço de custo</strong>,{" "}
                   <strong className="text-foreground">preço de venda</strong> e <strong className="text-foreground">estoque</strong>.
                   Nome e categoria continuam disponíveis para o cadastro completo.
+                </p>
+              ) : uiTab === "produtos" && produtosFluxo === "corrigir_codigos" ? (
+                <p className="text-xs text-muted-foreground">
+                  Depois de aplicar, confira o log final neste card. Dúvida / não encontrado: ajuste manual ou planilha.
                 </p>
               ) : uiTab === "financeiro" ? (
                 <p className="text-xs text-muted-foreground">
@@ -2571,9 +3096,13 @@ export function ImportadorDadosExternos() {
                   somam ao Financeiro já carregado.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                  <Button type="button" disabled={!canImport || isImporting} onClick={() => void runImport()}>
-                    Validar e importar
-                  </Button>
+                  {uiTab === "produtos" && produtosFluxo === "corrigir_codigos" ? (
+                    <p className="text-xs text-muted-foreground">Use a prévia e as ações no card anterior.</p>
+                  ) : (
+                    <Button type="button" disabled={!canImport || isImporting} onClick={() => void runImport()}>
+                      Validar e importar
+                    </Button>
+                  )}
                 </div>
               </div>
 

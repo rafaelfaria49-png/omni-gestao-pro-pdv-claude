@@ -465,12 +465,10 @@ html.light[data-studio-theme="classic"] {
   }
 }
 
-/* Alinha a área de viewport (body) ao shell Black / Classic (Header + Sidebar + main). */
-html[data-studio-theme="black"] body {
-  background-color: #000000;
-}
-html[data-studio-theme="classic"] body {
-  background-color: #f8fafc;
+/* Viewport segue os tokens do tema ativo (evita body preso em branco/preto fixo fora dos tokens). */
+html[data-studio-theme] body {
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
 /* Recibo térmico 80 mm: só o cupom aparece na impressão (evita sidebar/header). */

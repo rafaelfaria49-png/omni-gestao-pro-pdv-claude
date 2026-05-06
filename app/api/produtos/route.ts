@@ -34,6 +34,16 @@ function parsePrice(body: unknown): number | null {
   return null
 }
 
+function optTrim(body: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = body[k]
+    if (typeof v !== "string") continue
+    const t = v.trim()
+    if (t) return t
+  }
+  return undefined
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -74,11 +84,16 @@ export async function POST(req: Request) {
   try {
     const gate = await requireAdmin()
     if (!gate.ok) return gate.res
-    const body = (await req.json()) as { name?: unknown; stock?: unknown; price?: unknown }
+    const raw = (await req.json()) as Record<string, unknown>
+    const body = raw as { name?: unknown; stock?: unknown; price?: unknown }
 
     const name = typeof body.name === "string" ? body.name.trim() : ""
     const stock = parseStock(body.stock)
     const price = parsePrice(body.price)
+    const precoCusto = parsePrice(raw.precoCusto ?? raw.cost) ?? 0
+    const category = optTrim(raw, "category", "categoria")
+    const sku = optTrim(raw, "sku", "codigo")
+    const barcode = optTrim(raw, "barcode", "codigoBarras")
     const storeId = storeIdFromAssistecRequestForWrite(req)
     if (!storeId) return badRequest("Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId.")
 
@@ -87,6 +102,7 @@ export async function POST(req: Request) {
     if (stock < 0) return badRequest("Estoque não pode ser negativo")
     if (price === null) return badRequest('Campo "price" é obrigatório (número)')
     if (price < 0) return badRequest("Preço não pode ser negativo")
+    if (precoCusto < 0) return badRequest("Preço de custo não pode ser negativo")
 
     const created = await prisma.produto.create({
       data: {
@@ -94,8 +110,24 @@ export async function POST(req: Request) {
         stock,
         price,
         storeId,
+        precoCusto,
+        category: category ?? null,
+        sku: sku ?? null,
+        barcode: barcode ?? null,
       },
-      select: { id: true, name: true, stock: true, price: true, storeId: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        name: true,
+        stock: true,
+        price: true,
+        precoCusto: true,
+        sku: true,
+        barcode: true,
+        category: true,
+        storeId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     })
 
     return json({ ok: true, produto: created }, { status: 201 })

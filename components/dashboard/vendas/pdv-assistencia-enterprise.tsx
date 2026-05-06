@@ -7,7 +7,6 @@ import {
   CreditCard,
   CircleDot,
   Clock,
-  Trash2,
   QrCode,
   User,
   Wrench,
@@ -55,7 +54,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
-import { PDV_PRODUCTS_BASE, type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { useOperationsStore } from "@/lib/operations-store"
+import { PDV_PRODUCTS_BASE, mergePdvCatalogWithInventory, type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { CaixaStatusBar } from "../caixa/caixa-status-bar"
+import { useToast } from "@/hooks/use-toast"
 
 // ─── Catalog slices (defaults) ───────────────────────────────────────────────
 
@@ -71,11 +74,9 @@ for (const cat of TOP_PRODUCT_CATEGORIES) {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type CartLine = { id: string; title: string; price: number; qty: number }
+type CartLine = { lineId: string; inventoryId: string; title: string; price: number; qty: number }
 
 type PayMethod = "dinheiro" | "pix" | "credito" | "debito" | "a_prazo" | "multiplo"
-
-type CaixaState = "fechado" | "aberto"
 
 const PAY_METHODS: {
   id: PayMethod
@@ -206,7 +207,11 @@ function PaymentModal({
   total: number
   customerName: string
   defaultMethod?: PayMethod
-  onConfirm: (method: PayMethod, notes: string) => void
+  onConfirm: (
+    method: PayMethod,
+    notes: string,
+    payments: { dinheiro: number; pix: number; cartaoDebito: number; cartaoCredito: number; aPrazo: number }
+  ) => void
   onClose: () => void
 }) {
   const [method, setMethod] = useState<PayMethod>(defaultMethod)
@@ -243,15 +248,31 @@ function PaymentModal({
     if (!canConfirm) return
     const notesLines: string[] = []
     if (notes) notesLines.push(notes)
+    const payments = { dinheiro: 0, pix: 0, cartaoDebito: 0, cartaoCredito: 0, aPrazo: 0 }
     if (method === "multiplo") {
       const m1 = PAY_METHODS.find((p) => p.id === multiplo1)!
       const m2 = PAY_METHODS.find((p) => p.id === multiplo2)!
       notesLines.push(
         `Múltiplo: ${m1.label} ${brl(m1val)} + ${m2.label} ${brl(m2val)}`,
       )
+      const add = (m: PayMethod, v: number) => {
+        if (m === "dinheiro") payments.dinheiro += v
+        else if (m === "pix") payments.pix += v
+        else if (m === "debito") payments.cartaoDebito += v
+        else if (m === "credito") payments.cartaoCredito += v
+        else if (m === "a_prazo") payments.aPrazo += v
+      }
+      add(multiplo1, m1val)
+      add(multiplo2, m2val)
     }
-    if (method === "dinheiro") notesLines.push(`Troco: ${brl(troco)}`)
-    onConfirm(method, notesLines.join(" | "))
+    if (method === "dinheiro") {
+      notesLines.push(`Troco: ${brl(troco)}`)
+      payments.dinheiro = total
+    } else if (method === "pix") payments.pix = total
+    else if (method === "debito") payments.cartaoDebito = total
+    else if (method === "credito") payments.cartaoCredito = total
+    else if (method === "a_prazo") payments.aPrazo = total
+    onConfirm(method, notesLines.join(" | "), payments)
     setAmountPaid("")
     setNotes("")
   }
@@ -439,115 +460,6 @@ function PaymentModal({
             <CheckCircle2 className="mr-2 h-4 w-4" />
             Confirmar Venda
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ─── CaixaModal ───────────────────────────────────────────────────────────────
-
-function CaixaModal({
-  open,
-  estado,
-  salesCount,
-  salesTotal,
-  onAbrir,
-  onFechar,
-  onClose,
-}: {
-  open: boolean
-  estado: CaixaState
-  salesCount: number
-  salesTotal: number
-  onAbrir: (troco: number) => void
-  onFechar: () => void
-  onClose: () => void
-}) {
-  const [troco, setTroco] = useState("")
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm rounded-2xl border-border bg-card">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-foreground">
-            {estado === "fechado" ? (
-              <>
-                <Unlock className="h-5 w-5 text-emerald-500" />
-                Abrir Caixa
-              </>
-            ) : (
-              <>
-                <Lock className="h-5 w-5 text-amber-500" />
-                Fechar Caixa
-              </>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-
-        {estado === "fechado" ? (
-          <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">
-              Informe o valor do troco inicial (fundo de caixa) para iniciar o turno.
-            </p>
-            <div>
-              <Label className="mb-1 block text-sm">Troco inicial (R$)</Label>
-              <Input
-                autoFocus
-                value={troco}
-                onChange={(e) => setTroco(e.target.value)}
-                placeholder="Ex: 100,00"
-                className="h-12 rounded-xl text-right text-lg font-bold tabular-nums"
-                inputMode="decimal"
-              />
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">Resumo do turno atual:</p>
-            <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Vendas realizadas</span>
-                <span className="font-semibold text-foreground">{salesCount}</span>
-              </div>
-              <Separator className="bg-border" />
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Total em vendas</span>
-                <span className="text-lg font-black tabular-nums text-emerald-500">
-                  {brl(salesTotal)}
-                </span>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Ao fechar o caixa, o turno é encerrado e um relatório é gerado.
-            </p>
-          </div>
-        )}
-
-        <DialogFooter>
-          <Button variant="outline" className="rounded-xl" onClick={onClose}>
-            Cancelar
-          </Button>
-          {estado === "fechado" ? (
-            <Button
-              className="rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700"
-              onClick={() => {
-                onAbrir(parseBrl(troco))
-                setTroco("")
-              }}
-            >
-              <Unlock className="mr-2 h-4 w-4" />
-              Abrir Caixa
-            </Button>
-          ) : (
-            <Button
-              className="rounded-xl bg-amber-600 font-bold text-white hover:bg-amber-700"
-              onClick={onFechar}
-            >
-              <Lock className="mr-2 h-4 w-4" />
-              Fechar Caixa
-            </Button>
-          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -825,8 +737,11 @@ function EditarAtalhosModal({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
+  const { inventory, finalizeSaleTransaction } = useOperationsStore()
+  const mergedCatalog = useMemo(() => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory), [inventory])
   const inputRef = useRef<HTMLInputElement | null>(null)
   const customerInputRef = useRef<HTMLInputElement | null>(null)
+  const { toast } = useToast()
 
   // ── Time ────────────────────────────────────────────────────────────────────
   const [now, setNow] = useState(() => new Date())
@@ -854,12 +769,6 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Customer (required for "A Prazo") ────────────────────────────────────────
   const [customerName, setCustomerName] = useState("")
-
-  // ── Caixa ────────────────────────────────────────────────────────────────────
-  const [caixaEstado, setCaixaEstado] = useState<CaixaState>("fechado")
-  const [salesCount, setSalesCount] = useState(0)
-  const [salesTotal, setSalesTotal] = useState(0)
-  const [caixaModalOpen, setCaixaModalOpen] = useState(false)
 
   // ── Modals ───────────────────────────────────────────────────────────────────
   const [paymentOpen, setPaymentOpen] = useState(false)
@@ -891,15 +800,24 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Full-catalog search ────────────────────────────────────────────────────────
   const fullSearch = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    if (!term) return []
-    return PDV_PRODUCTS_BASE.filter(
-      (p) =>
-        p.name.toLowerCase().includes(term) ||
-        p.category.toLowerCase().includes(term) ||
-        (p.barcode ? p.barcode.includes(term) : false),
-    ).slice(0, 12)
-  }, [search])
+    const raw = search.trim()
+    if (!raw) return []
+    const exact = findPdvProductByScan(raw, mergedCatalog)
+    if (exact) return [exact]
+    const term = raw.toLowerCase()
+    return mergedCatalog
+      .filter((p) => {
+        if (p.name.toLowerCase().includes(term) || p.category.toLowerCase().includes(term)) return true
+        if (p.barcode?.toLowerCase().includes(term)) return true
+        if (p.codigoBarras?.toLowerCase().includes(term)) return true
+        if (p.sku?.toLowerCase().includes(term)) return true
+        if (p.codigo?.toLowerCase().includes(term)) return true
+        if (p.id.toLowerCase().includes(term)) return true
+        if (p.dbId?.toLowerCase().includes(term)) return true
+        return false
+      })
+      .slice(0, 12)
+  }, [search, mergedCatalog])
 
   useEffect(() => {
     setRapidoPickIdx(0)
@@ -920,13 +838,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       // Do not intercept F5 (browser refresh) or unregistered keys
       const HANDLED = ["F1", "F2", "F3", "F4", "F6", "F7", "F8", "F9", "F10"]
       if (!HANDLED.includes(e.key)) return
-      e.preventDefault()
+        e.preventDefault()
 
       switch (e.key) {
         // F1 / F2 — focus search bar (both mapped for convenience)
         case "F1":
         case "F2":
-          inputRef.current?.focus()
+        inputRef.current?.focus()
           break
         // F3 — focus customer input
         case "F3":
@@ -967,14 +885,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const addItem = (item: PdvCatalogProduct) => {
     let flashId: string | null = null
     setCart((prev) => {
-      const hit = prev.find((l) => l.title === item.name && Math.abs(l.price - item.price) < 0.001)
+      const hit = prev.find((l) => l.inventoryId === item.id && Math.abs(l.price - item.price) < 0.001)
       if (hit) {
-        flashId = hit.id
-        return prev.map((l) => (l.id === hit.id ? { ...l, qty: l.qty + 1 } : l))
+        flashId = hit.lineId
+        return prev.map((l) => (l.lineId === hit.lineId ? { ...l, qty: l.qty + 1 } : l))
       }
       const nid = newLineId()
       flashId = nid
-      return [...prev, { id: nid, title: item.name, price: item.price, qty: 1 }]
+      return [...prev, { lineId: nid, inventoryId: item.id, title: item.name, price: item.price, qty: 1 }]
     })
     if (isModoRapido && flashId) {
       setRapidoFlashLineId(flashId)
@@ -993,23 +911,68 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const changeQty = (id: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((l) => (l.id === id ? { ...l, qty: Math.max(0, l.qty + delta) } : l))
+        .map((l) => (l.lineId === id ? { ...l, qty: Math.max(0, l.qty + delta) } : l))
         .filter((l) => l.qty > 0),
     )
   }
 
-  const removeLine = (id: string) => setCart((prev) => prev.filter((l) => l.id !== id))
+  const removeLine = (id: string) => setCart((prev) => prev.filter((l) => l.lineId !== id))
 
   // ── Payment confirm ────────────────────────────────────────────────────────────
-  const handlePaymentConfirm = (_method: PayMethod, _notes: string) => {
-    setSalesCount((c) => c + 1)
-    setSalesTotal((t) => t + total)
+  const handlePaymentConfirm = (
+    method: PayMethod,
+    notes: string,
+    payments: { dinheiro: number; pix: number; cartaoDebito: number; cartaoCredito: number; aPrazo: number }
+  ) => {
+    if (cart.length === 0) return
+    // `operations-store` exige CPF para à prazo. Mantemos a UI atual e bloqueamos esta forma aqui.
+    if (method === "a_prazo" || payments.aPrazo > 0.009) {
+      toast({
+        title: "Venda à prazo",
+        description: "Para vender à prazo é necessário cliente com CPF/CNPJ (use o PDV Clássico).",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const result = finalizeSaleTransaction({
+      lines: cart.map((l) => ({
+        inventoryId: l.inventoryId,
+        quantity: l.qty,
+        name: l.title,
+        unitPrice: l.price,
+      })),
+      total,
+      paymentBreakdown: {
+        dinheiro: payments.dinheiro,
+        pix: payments.pix,
+        cartaoDebito: payments.cartaoDebito,
+        cartaoCredito: payments.cartaoCredito,
+        carne: 0,
+        aPrazo: 0,
+        creditoVale: 0,
+      },
+      customerName: customerName.trim() || undefined,
+      openCaixaIfClosed: false,
+    })
+
+    if (!result.ok) {
+      toast({ title: "Falha ao finalizar", description: result.reason, variant: "destructive" })
+      return
+    }
+
+    // Venda real concluída (estoque + ledger + persistência + eventos via operations-store).
     setCart([])
     setDiscount(0)
     setCustomerName("")
     setRapidoFlashLineId(null)
     setRapidoPickIdx(0)
     setPaymentOpen(false)
+    if (notes.trim()) {
+      toast({ title: "Venda finalizada", description: notes.trim() })
+    } else {
+      toast({ title: "Venda finalizada", description: result.saleId })
+    }
     queueMicrotask(() => {
       inputRef.current?.focus()
       if (isModoRapido) {
@@ -1018,24 +981,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     })
   }
 
-  // ── Caixa actions ──────────────────────────────────────────────────────────────
-  const handleAbrirCaixa = (_troco: number) => {
-    setCaixaEstado("aberto")
-    setCaixaModalOpen(false)
-  }
-
-  const handleFecharCaixa = () => {
-    setCaixaEstado("fechado")
-    setSalesCount(0)
-    setSalesTotal(0)
-    setCaixaModalOpen(false)
-  }
-
   useEffect(() => {
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
-      if (paymentOpen || clearConfirmOpen || caixaModalOpen || trocasOpen || editAtalhosOpen) return
+      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen) return
       if (cart.length === 0) return
       e.preventDefault()
       e.stopPropagation()
@@ -1047,7 +997,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, paymentOpen, clearConfirmOpen, caixaModalOpen, trocasOpen, editAtalhosOpen, cart.length])
+  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, cart.length])
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -1078,39 +1028,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             <div className="hidden leading-tight sm:block">
               <p className="text-sm font-bold tracking-tight text-foreground">OmniGestão PDV</p>
               <p className="text-[10px] text-muted-foreground">Assistência Técnica</p>
-            </div>
+          </div>
           ) : null}
         </div>
 
         {/* Center: control buttons */}
         <div className="flex flex-1 items-center justify-center gap-2">
-          {/* Caixa */}
-          <button
-            type="button"
-            onClick={() => setCaixaModalOpen(true)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-all",
-              caixaEstado === "aberto"
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : "border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400",
-            )}
-          >
-            {caixaEstado === "aberto" ? (
-              <>
-                <span className="relative flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/70" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
-                Caixa Aberto
-              </>
-            ) : (
-              <>
-                <Lock className="h-3.5 w-3.5" />
-                Caixa Fechado
-              </>
-            )}
-          </button>
-
           {!modoRapido ? (
             <button
               type="button"
@@ -1121,7 +1044,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               Trocas
             </button>
           ) : null}
-        </div>
+          </div>
 
         {/* Right: operator + clock */}
         <div className="flex shrink-0 items-center gap-2">
@@ -1130,8 +1053,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               <User className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">
                 Op: <span className="font-semibold text-foreground">Operador</span>
-              </span>
-            </div>
+            </span>
+          </div>
           ) : null}
           <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 sm:px-3">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1147,8 +1070,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       </header>
 
       {/* ── Body ── */}
-      <div className={cn("relative z-0 flex min-h-0 w-full flex-1 overflow-hidden", modoRapido ? "pt-11" : "pt-14")}>
+      <div className={cn("relative z-0 flex min-h-0 w-full flex-1 flex-col overflow-hidden", modoRapido ? "pt-11" : "pt-14")}>
+        {/* Caixa status em fluxo normal para não ficar oculto sob o header */}
+        <div className="shrink-0 border-b border-border bg-card/90 backdrop-blur-sm">
+          <CaixaStatusBar variant="pdv" />
+        </div>
 
+        <div className="flex min-h-0 w-full flex-1 overflow-hidden">
         {/* ── Center: search + catalog ── */}
         <main className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border bg-background/60 backdrop-blur-sm">
 
@@ -1248,7 +1176,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 </ScrollArea>
               </div>
             ) : (
-              <Tabs value={tab} onValueChange={(v) => setTab(v === "produtos" ? "produtos" : "servicos")}>
+            <Tabs value={tab} onValueChange={(v) => setTab(v === "produtos" ? "produtos" : "servicos")}>
                 {/* Tab header + Editar Atalhos */}
                 <div className="flex items-center gap-2">
                   <TabsList className="flex-1 grid grid-cols-2 rounded-2xl border border-border bg-muted/60 p-1">
@@ -1257,14 +1185,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                     >
                       Serviços ({quickServices.length})
-                    </TabsTrigger>
+                </TabsTrigger>
                     <TabsTrigger
                       value="produtos"
                       className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                     >
                       Produtos ({quickProducts.length})
-                    </TabsTrigger>
-                  </TabsList>
+                </TabsTrigger>
+              </TabsList>
                   {!modoRapido ? (
                     <Button
                       type="button"
@@ -1280,7 +1208,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   ) : null}
                 </div>
 
-                <TabsContent value="servicos" className="mt-4 min-h-0">
+              <TabsContent value="servicos" className="mt-4 min-h-0">
                   <ScrollArea className="h-[calc(100vh-4rem-20rem)]">
                     <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {quickServices.length > 0 ? (
@@ -1288,13 +1216,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       ) : (
                         <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
                           Nenhum atalho configurado. Clique em &ldquo;Editar Atalhos&rdquo;.
-                        </div>
+                          </div>
                       )}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
+                  </div>
+                </ScrollArea>
+              </TabsContent>
 
-                <TabsContent value="produtos" className="mt-4 min-h-0">
+              <TabsContent value="produtos" className="mt-4 min-h-0">
                   <ScrollArea className="h-[calc(100vh-4rem-20rem)]">
                     <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {quickProducts.length > 0 ? (
@@ -1302,12 +1230,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       ) : (
                         <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
                           Nenhum atalho configurado. Clique em &ldquo;Editar Atalhos&rdquo;.
-                        </div>
+                          </div>
                       )}
-                    </div>
-                  </ScrollArea>
-                </TabsContent>
-              </Tabs>
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+            </Tabs>
             )}
           </div>
         </main>
@@ -1384,23 +1312,23 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 <div className="divide-y divide-border px-3 py-1">
                   {cart.map((l) => (
                     <div
-                      key={l.id}
+                      key={l.lineId}
                       className={cn(
                         "flex items-center gap-2 py-2.5",
-                        modoRapido && rapidoFlashLineId === l.id && "pdv-rapido-row-flash rounded-lg"
+                        modoRapido && rapidoFlashLineId === l.lineId && "pdv-rapido-row-flash rounded-lg"
                       )}
                     >
                       {/* Title — limited width so controls always show */}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-foreground">{l.title}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">{brl(l.price)} × {l.qty}</p>
-                      </div>
+                        </div>
 
                       {/* Qty controls — shrink-0 keeps them always visible */}
                       <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => changeQty(l.id, -1)}
+                          onClick={() => changeQty(l.lineId, -1)}
                           className="grid h-6 w-6 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary/40 hover:text-primary"
                         >
                           <Minus className="h-3 w-3" />
@@ -1410,7 +1338,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                         </span>
                         <button
                           type="button"
-                          onClick={() => changeQty(l.id, 1)}
+                          onClick={() => changeQty(l.lineId, 1)}
                           className="grid h-6 w-6 place-items-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-primary/40 hover:text-primary"
                         >
                           <Plus className="h-3 w-3" />
@@ -1422,13 +1350,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                         {brl(l.price * l.qty)}
                       </p>
 
-                      {/* Delete — always visible */}
+                      {/* Delete — always visible (X) */}
                       <button
                         type="button"
-                        onClick={() => removeLine(l.id)}
-                        className="shrink-0 grid h-7 w-7 place-items-center rounded-xl text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => removeLine(l.lineId)}
+                        aria-label={`Remover ${l.title}`}
+                        title="Remover item"
+                        className="shrink-0 grid h-7 w-7 place-items-center rounded-xl border border-border bg-background text-muted-foreground transition hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
@@ -1472,15 +1402,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             {/* Payment buttons — 3×2 grid */}
             <div className="grid grid-cols-3 gap-2">
               {PAY_METHODS.map((m) => (
-                <Button
+              <Button
                   key={m.id}
-                  type="button"
+                type="button"
                   disabled={cart.length === 0}
                   onClick={() => {
                     setPaymentInitMethod(m.id)
                     setPaymentOpen(true)
                   }}
-                  className={cn(
+                className={cn(
                     "relative rounded-2xl text-xs font-bold text-white shadow-md disabled:opacity-40",
                     modoRapido ? "h-11" : "h-12",
                     m.color,
@@ -1492,16 +1422,17 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       {m.shortLabel}
                     </span>
                     {m.hotkey && (
-                      <span className="rounded border border-white/30 bg-black/20 px-1 py-px text-[9px] font-bold leading-none tracking-wider">
+                      <span className="rounded border border-border/60 bg-background/20 px-1 py-px text-[9px] font-bold leading-none tracking-wider">
                         {m.hotkey}
                       </span>
                     )}
                   </span>
-                </Button>
+              </Button>
               ))}
             </div>
           </div>
         </aside>
+      </div>
       </div>
 
       {/* ── Modals ── */}
@@ -1539,15 +1470,6 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         </AlertDialogContent>
       </AlertDialog>
 
-      <CaixaModal
-        open={caixaModalOpen}
-        estado={caixaEstado}
-        salesCount={salesCount}
-        salesTotal={salesTotal}
-        onAbrir={handleAbrirCaixa}
-        onFechar={handleFecharCaixa}
-        onClose={() => setCaixaModalOpen(false)}
-      />
 
       <TrocasModal open={trocasOpen} onClose={() => setTrocasOpen(false)} />
 

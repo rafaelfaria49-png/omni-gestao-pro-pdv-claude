@@ -18,30 +18,52 @@ import {
   Settings,
   Command,
   Store,
+  MessageCircle,
+  Receipt,
   type LucideIcon,
 } from "lucide-react";
+
+type SubItem = {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+};
 
 type Item = {
   to: string;
   label: string;
   icon: LucideIcon;
   badge?: string;
+  sub?: SubItem[];
 };
+
+function isRouteActive(path: string, to: string): boolean {
+  if (to === "/vendas-hub") return path.startsWith("/vendas-hub");
+  return (
+    path === to ||
+    (to !== "/dashboard" && to !== "/" && path.startsWith(`${to}/`))
+  );
+}
 
 const workspace: Item[] = [
   { to: "/dashboard", label: "Painel Inicial", icon: LayoutDashboard },
   { to: "/dashboard/ia-mestre", label: "IA Mestre", icon: Sparkles, badge: "AI" },
   { to: "/dashboard/marketing-ia", label: "Marketing IA", icon: Megaphone, badge: "AI" },
+  { to: "/dashboard/whatsapp", label: "WhatsApp", icon: MessageCircle },
   { to: "/dashboard/master-console", label: "Master Console", icon: Crown },
   { to: "/dashboard/orcamentos", label: "Orçamentos", icon: FileText },
-  { to: "/dashboard/vendas", label: "Venda", icon: ShoppingCart },
   { to: "/vendas-hub", label: "Vendas HUB", icon: ShoppingCart },
   { to: "/dashboard/os", label: "Ordens de Serviço", icon: Wrench },
   { to: "/dashboard/estoque", label: "Estoque", icon: Package },
   { to: "/dashboard/marketplace", label: "Marketplace", icon: Store },
   { to: "/dashboard/financeiro", label: "Financeiro", icon: Wallet },
   { to: "/dashboard/clientes", label: "Clientes", icon: Users },
-  { to: "/dashboard/relatorios", label: "Relatórios", icon: BarChart3 },
+  {
+    to: "/dashboard/relatorios",
+    label: "Relatórios",
+    icon: BarChart3,
+    sub: [{ to: "/dashboard/vendas-arquivo-geral", label: "Histórico de Vendas", icon: Receipt }],
+  },
 ];
 
 const administration: Item[] = [
@@ -53,62 +75,97 @@ export function Sidebar() {
   const pathname = usePathname();
 
   const renderItem = (item: Item) => {
-    const Icon = item.icon;
     const path = pathname || "";
-    const active =
-      item.to === "/vendas-hub"
-        ? path.startsWith("/vendas-hub")
-        : path === item.to ||
-          (item.to !== "/dashboard" &&
-            item.to !== "/" &&
-            path.startsWith(`${item.to}/`));
-    return (
-      <Link
-        key={item.to}
-        href={item.to}
-        className={[
-          "group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] transition-all duration-200",
-          active
-            ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
-            : "text-muted-foreground hover:text-foreground hover:bg-panel",
-        ].join(" ")}
-      >
-        {/* Active accent bar */}
-        <span
-          className={[
-            "absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-r-full bg-primary transition-opacity",
-            active ? "opacity-100" : "opacity-0",
-          ].join(" ")}
-        />
 
-        {/* Icon tile */}
-        <span
-          className={[
-            "h-7 w-7 shrink-0 grid place-items-center rounded-lg transition-all duration-200",
-            active
-              ? "bg-primary/20 ring-1 ring-primary/30 text-primary"
-              : "bg-muted/60 ring-1 ring-border/40 text-muted-foreground group-hover:bg-background group-hover:ring-border group-hover:text-foreground",
-          ].join(" ")}
-        >
-          <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-        </span>
+    const rowClasses = (active: boolean) =>
+      [
+        "group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] transition-all duration-200",
+        active
+          ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
+          : "text-muted-foreground hover:text-foreground hover:bg-panel",
+      ].join(" ");
 
-        <span className="flex-1 truncate tracking-tight">{item.label}</span>
-
-        {item.badge && (
+    const renderRow = (params: {
+      to: string;
+      label: string;
+      Icon: LucideIcon;
+      active: boolean;
+      badge?: string;
+    }) => {
+      const { to, label, Icon, active, badge } = params;
+      return (
+        <Link key={to} href={to} className={rowClasses(active)}>
           <span
             className={[
-              "text-[9px] font-semibold px-1.5 py-0.5 rounded-md tracking-wider",
+              "absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-r-full bg-primary transition-opacity",
+              active ? "opacity-100" : "opacity-0",
+            ].join(" ")}
+          />
+          <span
+            className={[
+              "h-7 w-7 shrink-0 grid place-items-center rounded-lg transition-all duration-200",
               active
-                ? "bg-primary text-primary-foreground"
-                : "bg-foreground/90 text-background",
+                ? "bg-primary/20 ring-1 ring-primary/30 text-primary"
+                : "bg-muted/60 ring-1 ring-border/40 text-muted-foreground group-hover:bg-background group-hover:ring-border group-hover:text-foreground",
             ].join(" ")}
           >
-            {item.badge}
+            <Icon className="h-3.5 w-3.5" strokeWidth={2} />
           </span>
-        )}
-      </Link>
-    );
+          <span className="flex-1 truncate tracking-tight">{label}</span>
+          {badge && (
+            <span
+              className={[
+                "text-[9px] font-semibold px-1.5 py-0.5 rounded-md tracking-wider",
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-foreground/90 text-background",
+              ].join(" ")}
+            >
+              {badge}
+            </span>
+          )}
+        </Link>
+      );
+    };
+
+    if (item.sub?.length) {
+      const parentActive = isRouteActive(path, item.to);
+      const subActive = item.sub.some((s) => isRouteActive(path, s.to));
+      const parentLooksActive = parentActive || subActive;
+
+      return (
+        <div key={item.to} className="space-y-1">
+          {renderRow({
+            to: item.to,
+            label: item.label,
+            Icon: item.icon,
+            active: parentLooksActive,
+            badge: item.badge,
+          })}
+          <div className="ml-3 pl-3 space-y-0.5">
+            {item.sub.map((sub) => {
+              const active = isRouteActive(path, sub.to);
+              return renderRow({
+                to: sub.to,
+                label: sub.label,
+                Icon: sub.icon,
+                active,
+              });
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    const Icon = item.icon;
+    const active = isRouteActive(path, item.to);
+    return renderRow({
+      to: item.to,
+      label: item.label,
+      Icon,
+      active,
+      badge: item.badge,
+    });
   };
 
   return (

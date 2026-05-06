@@ -3,15 +3,15 @@
 import { useEffect, useState } from "react"
 import { PdvClassic, type VendasPDVProps } from "./pdv-classic"
 import { PdvSupermercado } from "./pdv-supermercado"
-import { PdvAssistenciaEnterprise } from "./pdv-assistencia-enterprise"
 import { usePerfilLoja } from "@/lib/perfil-loja-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import type { PdvClassicLayoutKind } from "@/lib/store-settings-types"
-import { 
+import {
   PDV_CLASSIC_LAYOUT_CHANGED_EVENT,
   PDV_CLASSIC_LAYOUT_STORAGE_KEY,
+  PDV_MAIN_LAYOUT_CHANGED_EVENT,
   readPdvClassicLayout,
 } from "@/lib/pdv-classic-layout"
 
@@ -58,8 +58,13 @@ export function VendasPDV(props: VendasPDVProps) {
     const onStorage = (e: StorageEvent) => {
       if (e.key === PDV_LAYOUT_STORAGE_KEY) readLayout()
     }
+    const onMainLayoutNotify = () => readLayout()
     window.addEventListener("storage", onStorage)
-    return () => window.removeEventListener("storage", onStorage)
+    window.addEventListener(PDV_MAIN_LAYOUT_CHANGED_EVENT, onMainLayoutNotify)
+    return () => {
+      window.removeEventListener("storage", onStorage)
+      window.removeEventListener(PDV_MAIN_LAYOUT_CHANGED_EVENT, onMainLayoutNotify)
+    }
   }, [lojaAtivaId, perfilLoja])
 
   useEffect(() => {
@@ -90,6 +95,7 @@ export function VendasPDV(props: VendasPDVProps) {
   }, [hydrated, pdvParams.pdvClassicLayout])
 
   if (layout === "supermercado") return <PdvSupermercado {...props} />
-  if (classicLayout === "services") return <PdvAssistenciaEnterprise isModoRapido={props.isModoRapido} />
-  return <PdvClassic {...props} uiShell="omni-smart" />
+  // Mantemos o seletor atual (Clássico/Rápido/IA). O modo "services" é um sub-modo interno do PDV Clássico.
+  // O card "IA" ainda é placeholder (não quebrar): se algum config externo setar esse estado, caímos no Clássico.
+  return <PdvClassic {...props} uiShell="omni-smart" classicLayoutKind={classicLayout} />
 }

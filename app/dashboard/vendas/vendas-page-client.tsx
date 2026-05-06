@@ -1,14 +1,18 @@
 "use client"
 
 import { VendasPDV } from "@/components/dashboard/vendas/vendas-pdv"
-import { useStudioTheme } from "@/components/theme/ThemeProvider"
-import { cn } from "@/lib/utils"
+import { useStudioTheme, type StudioThemeMode } from "@/components/theme/ThemeProvider"
 import {
   readOmnigestaoPdvModoPreferencia,
   writeOmnigestaoPdvModoPreferencia,
 } from "@/lib/omnigestao-pdv-modo"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useState } from "react"
+
+function studioModeToDataTheme(mode: StudioThemeMode): string {
+  if (mode === "classic") return "light"
+  return mode
+}
 
 export function VendasPageClient() {
   const router = useRouter()
@@ -18,7 +22,10 @@ export function VendasPageClient() {
 
   const [mounted, setMounted] = useState(false)
   const { mode } = useStudioTheme()
-  const classic = mode === "classic"
+
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute("data-theme", studioModeToDataTheme(mode))
+  }, [mode])
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -42,12 +49,7 @@ export function VendasPageClient() {
   if (!mounted) return null
 
   return (
-    <div
-      className={cn(
-        "flex min-h-[min(100dvh,100vh)] min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden transition-colors duration-300",
-        classic ? "bg-slate-50" : "bg-[#000000]"
-      )}
-    >
+    <div className="flex min-h-[min(100dvh,100vh)] min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground transition-colors duration-300">
       <VendasPDV isModoRapido={isModoRapido} />
     </div>
   )

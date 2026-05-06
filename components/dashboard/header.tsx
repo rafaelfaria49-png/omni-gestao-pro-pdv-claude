@@ -155,7 +155,7 @@ export function Header() {
               value={lojaAtivaId ?? effectiveStores[0]?.id ?? LEGACY_PRIMARY_STORE_ID}
               onValueChange={(v) => {
                 if (v === "__new_store__") {
-                  window.location.href = "/?page=config-multilojas"
+                  window.location.href = "/dashboard/unidades"
                   return
                 }
                 setLojaAtivaId(v)

@@ -11,6 +11,7 @@ import {
   QrCode,
   Search,
   Trash2,
+  X,
   Zap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -25,14 +26,10 @@ import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { useStoreSettings } from "@/lib/store-settings-provider"
-import { useOperationsStore } from "@/lib/operations-store"
+import { useOperationsStore, type InventoryItem } from "@/lib/operations-store"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
-import {
-  PDV_PRODUCTS_BASE,
-  mergePdvCatalogWithInventory,
-  newPdvLineId,
-  type PdvCatalogProduct,
-} from "@/lib/pdv-catalog"
+import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
 import { PdvPainelLateralTerminal, PdvVisorTotal } from "./painel-total"
 import { PdvTabelaItemLinha, PdvTabelaItens } from "./tabela-itens"
@@ -58,6 +55,26 @@ function normalizeQtyForProduct(p: PdvCatalogProduct, q: number | undefined): nu
   const base = q != null && Number.isFinite(q) && q > 0 ? q : 1
   if (p.vendaPorPeso) return base
   return Math.max(1, Math.floor(base))
+}
+
+function inventoryItemToPdvProduct(inv: InventoryItem): PdvCatalogProduct {
+  const unit = inv.vendaPorPeso ? (inv.precoPorKg ?? inv.price) : inv.price
+  const cat = (inv.category && inv.category.trim()) || "Produtos"
+  return {
+    id: inv.id,
+    name: inv.name,
+    barcode: inv.barcode,
+    dbId: inv.dbId,
+    sku: inv.sku,
+    codigo: inv.codigo ?? inv.sku ?? inv.id,
+    codigoBarras: inv.codigoBarras ?? inv.barcode,
+    price: unit,
+    stock: inv.stock,
+    category: cat,
+    vendaPorPeso: inv.vendaPorPeso,
+    precoPorKg: inv.precoPorKg,
+    atributos: inv.atributos,
+  }
 }
 
 type Product = PdvCatalogProduct
@@ -181,38 +198,73 @@ export function PdvSupermercado({
     listEndRef.current?.scrollIntoView({ block: "end" })
   }, [cart.length])
 
-  const quickItems = useMemo(() => {
-    return (pdvParams.atalhosRapidos || []).map(
-      (a): PdvCatalogProduct => ({
-      id: a.id,
-      name: a.nome,
-      barcode: undefined,
-      price: a.preco,
-      stock: 999,
-      category: "Atalho",
-      }),
-    )
-  }, [pdvParams.atalhosRapidos])
+  const products = useMemo(
+    () => (Array.isArray(inventory) ? inventory.map(inventoryItemToPdvProduct) : []),
+    [inventory]
+  )
 
-  const products = useMemo(() => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory), [inventory])
+  /** Atalhos configurados só aparecem se existirem no estoque real (mesmo id). */
+  const quickItems = useMemo(() => {
+    const byId = new Map(inventory.map((i) => [i.id, i]))
+    const out: PdvCatalogProduct[] = []
+    for (const a of pdvParams.atalhosRapidos || []) {
+      const inv = byId.get(a.id)
+      if (!inv) continue
+      out.push(inventoryItemToPdvProduct(inv))
+    }
+    // Fallback temporário: se ainda não houver favoritos/atalhos configurados,
+    // usamos os 10 primeiros produtos reais do estoque para não poluir a tela.
+    // (Estrutura pronta para plugar configuração de favoritos futuramente.)
+    if (out.length === 0) return products.slice(0, 10)
+    return out.slice(0, 10)
+  }, [inventory, pdvParams.atalhosRapidos])
 
   const searchTrim = searchTerm.trim()
 
   const filterCatalogByTerm = useCallback(
     (raw: string) => {
       const term = raw.trim().toLowerCase()
-      if (!term) return [...quickItems, ...products].slice(0, 60)
-      const list = [...quickItems, ...products]
-      return list.filter((p) =>
-        p.name.toLowerCase().includes(term) ||
-        p.category.toLowerCase().includes(term) ||
-        (p.barcode ? p.barcode.toLowerCase().includes(term) : false)
-      ).slice(0, 80)
+      if (!term) return []
+      return products
+        .filter(
+          (p) =>
+            p.name.toLowerCase().includes(term) ||
+            p.category.toLowerCase().includes(term) ||
+            (p.barcode?.toLowerCase().includes(term) ?? false) ||
+            (p.codigoBarras?.toLowerCase().includes(term) ?? false) ||
+            (p.sku?.toLowerCase().includes(term) ?? false) ||
+            (p.codigo?.toLowerCase().includes(term) ?? false) ||
+            p.id.toLowerCase().includes(term) ||
+            (p.dbId?.toLowerCase().includes(term) ?? false)
+        )
+        .slice(0, 30)
     },
-    [products, quickItems]
+    [products]
   )
 
-  const filteredProducts = useMemo(() => filterCatalogByTerm(searchTrim), [filterCatalogByTerm, searchTrim])
+  const filteredProducts = useMemo(() => {
+    // Sem busca: mostrar somente atalhos (2 fileiras).
+    if (!searchTrim) return quickItems
+    // Com busca: resultados reais do estoque, limitados.
+    return filterCatalogByTerm(searchTrim)
+  }, [filterCatalogByTerm, quickItems, searchTrim])
+
+  /** Lista única para bipe / `findPdvProductByScan` (atalhos primeiro, depois demais itens do estoque). */
+  const catalogForScan = useMemo(() => {
+    const seen = new Set<string>()
+    const out: PdvCatalogProduct[] = []
+    for (const p of quickItems) {
+      if (seen.has(p.id)) continue
+      seen.add(p.id)
+      out.push(p)
+    }
+    for (const p of products) {
+      if (seen.has(p.id)) continue
+      seen.add(p.id)
+      out.push(p)
+    }
+    return out
+  }, [quickItems, products])
 
   useEffect(() => {
     activeSuggestionIndexRef.current = -1
@@ -401,23 +453,8 @@ export function PdvSupermercado({
   }, [hardFocusSearch, onVoiceCartSeedConsumed, toast, voiceCartSeed])
 
   const findProductByEan = useCallback(
-    (raw: string): Product | null => {
-      const digits = raw.replace(/\D/g, "")
-      if (digits.length < 8) return null
-      const list = [...quickItems, ...products] as any[]
-      const hit = list.find((p) => {
-        // PRIMEIRO: barcode dedicado.
-        const barcodeDigits = String((p as any)?.barcode ?? "").replace(/\D/g, "")
-        if (barcodeDigits && barcodeDigits === digits) return true
-        // Fallbacks (legado): ean/gtin e, por último, id.
-        const maybeBarcode = String((p as any)?.ean ?? (p as any)?.gtin ?? "").replace(/\D/g, "")
-        return maybeBarcode && maybeBarcode === digits
-      })
-      if (hit) return hit as Product
-      const fallbackById = list.find((p) => String(p?.id ?? "").replace(/\D/g, "") === digits)
-      return (fallbackById as Product) || null
-    },
-    [products, quickItems]
+    (raw: string): Product | null => findPdvProductByScan(raw, catalogForScan),
+    [catalogForScan]
   )
 
   const submitSearch = useCallback(
@@ -501,15 +538,13 @@ export function PdvSupermercado({
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
-      {!isModoRapido ? (
-        <div className="shrink-0 border-b border-border">
-          <CaixaStatusBar
-            variant="pdv"
-            openAberturaSignal={voiceOpenCaixaSignal}
-            onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
-          />
-        </div>
-      ) : null}
+      <div className="shrink-0 border-b border-border">
+        <CaixaStatusBar
+          variant="pdv"
+          openAberturaSignal={voiceOpenCaixaSignal}
+          onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
+        />
+      </div>
 
       <div
         className={cn(
@@ -580,29 +615,41 @@ export function PdvSupermercado({
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="grid grid-cols-2 gap-3 p-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {filteredProducts.map((p, idx) => (
-                <button
-                  key={`${p.id}-${p.category}-${idx}`}
-                  type="button"
-                  data-pdv-suggestion-index={idx}
-                  className={cn(
-                    "group rounded-2xl border border-border bg-card/80 p-3 text-left shadow-sm backdrop-blur-sm transition hover:border-blue-500/35 hover:shadow-md",
-                    selectedProduct?.id === p.id ? "ring-2 ring-blue-500/35" : "",
-                    activeSuggestionIndex === idx ? "ring-2 ring-emerald-400/70 ring-offset-2 ring-offset-background" : ""
-                  )}
-                  onClick={() => addToCart(p as Product)}
-                >
-                  <div className="line-clamp-2 min-h-[2.5rem] text-sm font-extrabold leading-snug">
-                    {p.name}
-                  </div>
-                  <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-2">
-                    <div className="text-xs font-semibold text-foreground/60 dark:text-white/50">{p.category}</div>
-                    <div className="text-sm font-black tabular-nums text-emerald-400">
-                      R$ {Number(p.price || 0).toFixed(2)}
+              {filteredProducts.length === 0 ? (
+                <div className="col-span-full flex min-h-[12rem] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border bg-card/40 px-6 py-10 text-center">
+                  <p className="text-base font-semibold text-foreground">
+                    {products.length === 0
+                      ? "Nenhum produto cadastrado no estoque desta unidade."
+                      : searchTrim
+                        ? "Nenhum produto encontrado para esta busca."
+                        : "Configure os atalhos do PDV para exibir produtos rápidos aqui."}
+                  </p>
+                </div>
+              ) : (
+                filteredProducts.map((p, idx) => (
+                  <button
+                    key={`${p.id}-${p.category}-${idx}`}
+                    type="button"
+                    data-pdv-suggestion-index={idx}
+                    className={cn(
+                      "group rounded-2xl border border-border bg-card/80 p-3 text-left shadow-sm backdrop-blur-sm transition hover:border-blue-500/35 hover:shadow-md",
+                      selectedProduct?.id === p.id ? "ring-2 ring-blue-500/35" : "",
+                      activeSuggestionIndex === idx ? "ring-2 ring-emerald-400/70 ring-offset-2 ring-offset-background" : ""
+                    )}
+                    onClick={() => addToCart(p as Product)}
+                  >
+                    <div className="line-clamp-2 min-h-[2.5rem] text-sm font-extrabold leading-snug">
+                      {p.name}
                     </div>
-                  </div>
-                </button>
-              ))}
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-2">
+                      <div className="text-xs font-semibold text-foreground/60 dark:text-white/50">{p.category}</div>
+                      <div className="text-sm font-black tabular-nums text-emerald-400">
+                        R$ {Number(p.price || 0).toFixed(2)}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
             <div ref={listEndRef} />
           </ScrollArea>
@@ -623,6 +670,14 @@ export function PdvSupermercado({
                 className="h-10 rounded-2xl border-border bg-background/80 font-bold backdrop-blur-sm"
                 onClick={() => {
                   if (cart.length === 0) return
+                  if (isModoRapido) {
+                    setCart([])
+                    setDiscountPercent(0)
+                    setDiscountReais(0)
+                    toast({ title: "Carrinho limpo" })
+                    queueMicrotask(hardFocusSearch)
+                    return
+                  }
                   if (adminSessionOk) {
                     setCart([])
                     setDiscountPercent(0)
@@ -661,7 +716,8 @@ export function PdvSupermercado({
                     <PdvTabelaItemLinha
                       key={item.lineId}
                       className={cn(
-                        isModoRapido && rapidoFlashLineId === item.lineId && "pdv-rapido-row-flash rounded-lg"
+                        "rounded-lg transition-colors hover:bg-foreground/5 dark:hover:bg-white/5",
+                        isModoRapido && rapidoFlashLineId === item.lineId && "pdv-rapido-row-flash"
                       )}
                     >
                       <div className="min-w-0 flex-1">
@@ -703,6 +759,12 @@ export function PdvSupermercado({
                         size="icon"
                         className="h-10 w-10 text-foreground/55 hover:text-destructive dark:text-white/50"
                         onClick={() => {
+                          // PDV Rápido: remoção direta (sem PIN) para alta rotatividade.
+                          if (isModoRapido) {
+                            removeFromCart(item.lineId)
+                            queueMicrotask(hardFocusSearch)
+                            return
+                          }
                           if (adminSessionOk) {
                             removeFromCart(item.lineId)
                             return
@@ -713,8 +775,9 @@ export function PdvSupermercado({
                           setSupervisorPin("")
                           setSupervisorDialogOpen(true)
                         }}
+                        title="Remover item"
                       >
-                        <Trash2 className="h-5 w-5" />
+                        {isModoRapido ? <X className="h-5 w-5" /> : <Trash2 className="h-5 w-5" />}
                       </Button>
                     </PdvTabelaItemLinha>
                   ))}
@@ -736,7 +799,7 @@ export function PdvSupermercado({
                 </div>
               ) : null}
               <div className="border-t border-white/5 pt-2">
-                <PdvVisorTotal label="Total a pagar" valorFormatado={`R$ ${total.toFixed(2)}`} />
+                <PdvVisorTotal label="Total a pagar" valorFormatado={`R$ ${total.toFixed(2)}`} glow="none" />
               </div>
             </div>
 

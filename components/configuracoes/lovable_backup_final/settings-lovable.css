@@ -1,8 +1,0 @@
-/**
- * Escopo da página Configurações — sem blur, sombras extras ou overrides de card.
- * Visual vem dos utilitários Tailwind nos componentes (padrão leve tipo Lovable/shadcn).
- */
-
-.lovable-settings {
-  position: relative;
-}

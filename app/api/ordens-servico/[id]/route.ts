@@ -9,6 +9,7 @@ import {
   restaurarEstoqueItensOrdem,
   somaPecasEValidaEstoque,
 } from "@/lib/os-itens-stock"
+import { handleEvent } from "@/lib/automation/automation-engine"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -131,6 +132,23 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
     if (!updated) {
       return json({ error: "Ordem de serviço não encontrada" }, { status: 404 })
+    }
+
+    // Evento de status (server-side): executa diretamente.
+    if (statusParsed != null) {
+      const phoneDigits = String(updated.cliente?.phone ?? "").replace(/\D/g, "")
+      void handleEvent("os_status_alterado", {
+        storeId,
+        entityId: updated.id,
+        data: { status: updated.status, phoneDigits },
+      })
+      if (String(updated.status) === "Entregue") {
+        void handleEvent("os_finalizada", {
+          storeId,
+          entityId: updated.id,
+          data: { status: updated.status, phoneDigits, valorTotal: updated.valorTotal },
+        })
+      }
     }
 
     return json({ ok: true, ordem: updated })

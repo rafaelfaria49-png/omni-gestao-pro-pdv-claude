@@ -5,6 +5,11 @@ export type PdvCatalogProduct = {
   name: string
   /** Código de barras (EAN/GTIN). */
   barcode?: string
+  /** Id Prisma (cuid) do produto, quando `id` operacional é SKU. */
+  dbId?: string
+  sku?: string
+  codigo?: string
+  codigoBarras?: string
   price: number
   stock: number
   category: string
@@ -101,6 +106,10 @@ export function mergePdvCatalogWithInventory(
       precoPorKg: inv.precoPorKg ?? inv.price,
       vendaPorPeso: inv.vendaPorPeso,
       atributos: inv.atributos?.length ? inv.atributos : p.atributos,
+      dbId: inv.dbId ?? p.dbId,
+      sku: inv.sku ?? p.sku,
+      codigo: inv.codigo ?? inv.sku ?? p.codigo,
+      codigoBarras: inv.codigoBarras ?? inv.barcode ?? p.codigoBarras,
     }
   })
 
@@ -112,6 +121,10 @@ export function mergePdvCatalogWithInventory(
       id: inv.id,
       name: inv.name,
       barcode: inv.barcode,
+      dbId: inv.dbId,
+      sku: inv.sku,
+      codigo: inv.codigo ?? inv.sku ?? inv.id,
+      codigoBarras: inv.codigoBarras ?? inv.barcode,
       price: unit,
       stock: inv.stock,
       category: inv.category ?? "Outros",

@@ -329,8 +329,11 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
   const qtyEditRef = useRef<HTMLInputElement>(null)
   const now = new Date().toLocaleString("pt-BR")
   const { mode: studioMode } = useStudioTheme()
-  const isBlack = studioMode === "black"
-  const fieldTone = isBlack ? ("black" as const) : ("classic" as const)
+  /** Apenas Black Edition: fundo #000 fixo no shell. */
+  const isBlackEdition = studioMode === "black"
+  /** Midnight e Black Edition compartilham chrome de alto contraste (tabela, atalhos, campos). */
+  const inkUi = studioMode === "black" || studioMode === "midnight"
+  const fieldTone = inkUi ? ("black" as const) : ("classic" as const)
 
   useEffect(() => {
     if (!props.qtyEditOpen) return
@@ -345,25 +348,25 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
     <div
       className={cn(
         "flex min-h-0 flex-1 flex-col transition-colors duration-300",
-        isBlack ? "bg-[#000000] text-white" : "bg-slate-50 text-foreground"
+        isBlackEdition ? "bg-[#000000] text-white" : "bg-background text-foreground"
       )}
     >
       <header
         className={cn(
           "flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 shadow-pos sm:px-4",
-          isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-slate-50"
+          isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-background"
         )}
       >
         <div className="flex min-w-0 items-center gap-3 md:gap-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
             <Zap className="h-5 w-5" />
           </div>
-          <div className={cn("hidden h-8 w-px md:block", isBlack ? "bg-white/15" : "bg-[hsl(var(--pos-divider))]")} />
+          <div className={cn("hidden h-8 w-px md:block", isBlackEdition ? "bg-white/15" : "bg-border")} />
           <div className="hidden min-w-0 flex-col leading-tight md:flex">
-            <span className={cn("text-[11px] uppercase tracking-wider", isBlack ? "text-white/50" : "text-pos-label")}>
+            <span className={cn("text-[11px] uppercase tracking-wider", isBlackEdition ? "text-white/50" : "text-muted-foreground")}>
               Estabelecimento
             </span>
-            <span className={cn("truncate text-sm font-medium", isBlack ? "text-white" : "text-foreground")}>{props.storeName}</span>
+            <span className={cn("truncate text-sm font-medium", isBlackEdition ? "text-white" : "text-foreground")}>{props.storeName}</span>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -372,17 +375,17 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               <span
                 className={cn(
                   "hidden items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium md:inline-flex",
-                  isBlack ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  isBlackEdition ? "bg-emerald-500/15 text-emerald-300" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
                 )}
               >
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> Online
               </span>
-              <span className={cn("hidden items-center gap-1.5 text-xs md:inline-flex", isBlack ? "text-white/50" : "text-pos-label")}>
+              <span className={cn("hidden items-center gap-1.5 text-xs md:inline-flex", isBlackEdition ? "text-white/50" : "text-muted-foreground")}>
                 <Wifi className="h-3.5 w-3.5" /> Conexão estável
               </span>
             </>
           ) : null}
-          <span className={cn("text-xs tabular-pdv", isBlack ? "text-white/45" : "text-pos-label")}>{now}</span>
+          <span className={cn("text-xs tabular-pdv", isBlackEdition ? "text-white/45" : "text-muted-foreground")}>{now}</span>
         </div>
       </header>
 
@@ -390,7 +393,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
         className={cn(
           "grid grid-cols-12 gap-3 border-b px-3 py-3 sm:px-4",
           isModoRapido && "py-2",
-          isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-white"
+          isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-card"
         )}
       >
         <PosField
@@ -442,7 +445,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
           "min-h-0 flex-1 overflow-hidden p-2 sm:p-3",
           isModoRapido ? "flex flex-col gap-2" : "grid grid-cols-12 gap-3",
           isModoRapido && "p-2",
-          isBlack ? "bg-[#000000]" : "bg-slate-50"
+          isBlackEdition ? "bg-[#000000]" : "bg-background"
         )}
       >
         <div
@@ -457,31 +460,31 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             flashLineId={props.flashLineId}
             selectedLineId={props.selectedLineId}
             onSelect={props.onSelectLine}
-            isBlack={isBlack}
+            isBlack={inkUi}
           />
         </div>
         {isModoRapido ? (
           <div
             className={cn(
               "col-span-12 flex min-h-0 shrink-0 flex-wrap items-center justify-between gap-3 border-t px-2 py-2 sm:px-3",
-              isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-white"
+              isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-card"
             )}
           >
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
               <div>
-                <span className={cn("text-[10px] font-medium uppercase tracking-wider", isBlack ? "text-white/50" : "text-pos-label")}>
+                <span className={cn("text-[10px] font-medium uppercase tracking-wider", isBlackEdition ? "text-white/50" : "text-muted-foreground")}>
                   Total
                 </span>
                 <div
                   className={cn(
                     "text-xl font-semibold tabular-pdv sm:text-2xl",
-                    isBlack ? "text-emerald-400" : "text-pos-total"
+                    isBlackEdition ? "text-emerald-400" : "text-pos-total"
                   )}
                 >
                   R$ {fmt(props.total)}
                 </div>
               </div>
-              <span className={cn("text-sm tabular-pdv", isBlack ? "text-white/70" : "text-muted-foreground")}>
+              <span className={cn("text-sm tabular-pdv", isBlackEdition ? "text-white/70" : "text-muted-foreground")}>
                 {props.itemCount} itens
               </span>
             </div>
@@ -500,41 +503,41 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             <div
               className={cn(
                 "rounded-md border p-4 shadow-pos",
-                isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-white"
+                isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-card"
               )}
             >
               <div className="flex items-center justify-between">
-                <span className={cn("text-[11px] font-medium uppercase tracking-wider", isBlack ? "text-white/50" : "text-pos-label")}>
+                <span className={cn("text-[11px] font-medium uppercase tracking-wider", isBlackEdition ? "text-white/50" : "text-muted-foreground")}>
                   Total da Venda
                 </span>
-                <Calculator className={cn("h-4 w-4", isBlack ? "text-white/45" : "text-pos-label")} />
+                <Calculator className={cn("h-4 w-4", isBlackEdition ? "text-white/45" : "text-muted-foreground")} />
               </div>
               <div
                 className={cn(
                   "mt-2 text-[clamp(1.75rem,5vw,2.5rem)] font-semibold leading-none tracking-tight tabular-pdv",
-                  isBlack ? "text-emerald-400" : "text-pos-total"
+                  isBlackEdition ? "text-emerald-400" : "text-pos-total"
                 )}
               >
                 R$ {fmt(props.total)}
               </div>
-              <div className={cn("mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs", isBlack ? "border-white/10" : "pos-divider")}>
+              <div className={cn("mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-xs", isBlackEdition ? "border-white/10" : "border-border")}>
                 <div>
-                  <div className={isBlack ? "text-white/45" : "text-pos-label"}>Nº de itens</div>
-                  <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>{props.itemCount}</div>
+                  <div className={isBlackEdition ? "text-white/45" : "text-muted-foreground"}>Nº de itens</div>
+                  <div className={cn("font-semibold tabular-pdv", isBlackEdition ? "text-white" : "text-foreground")}>{props.itemCount}</div>
                 </div>
                 <div className="text-right">
-                  <div className={isBlack ? "text-white/45" : "text-pos-label"}>Venda anterior</div>
-                  <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>
+                  <div className={isBlackEdition ? "text-white/45" : "text-muted-foreground"}>Venda anterior</div>
+                  <div className={cn("font-semibold tabular-pdv", isBlackEdition ? "text-white" : "text-foreground")}>
                     {props.previousSaleTotal != null ? `R$ ${fmt(props.previousSaleTotal)}` : "—"}
                   </div>
                 </div>
                 <div>
-                  <div className={isBlack ? "text-white/45" : "text-pos-label"}>Troco</div>
-                  <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>R$ 0,00</div>
+                  <div className={isBlackEdition ? "text-white/45" : "text-muted-foreground"}>Troco</div>
+                  <div className={cn("font-semibold tabular-pdv", isBlackEdition ? "text-white" : "text-foreground")}>R$ 0,00</div>
                 </div>
                 <div className="text-right">
-                  <div className={isBlack ? "text-white/45" : "text-pos-label"}>Sem desc.</div>
-                  <div className={cn("font-semibold tabular-pdv", isBlack ? "text-white" : "text-foreground")}>R$ {fmt(props.total)}</div>
+                  <div className={isBlackEdition ? "text-white/45" : "text-muted-foreground"}>Sem desc.</div>
+                  <div className={cn("font-semibold tabular-pdv", isBlackEdition ? "text-white" : "text-foreground")}>R$ {fmt(props.total)}</div>
                 </div>
               </div>
               <Button
@@ -550,32 +553,32 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             <div
               className={cn(
                 "rounded-md border p-4 shadow-pos",
-                isBlack ? "border-white/10 bg-[#000000]" : "border-slate-200/90 bg-white"
+                isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-card"
               )}
             >
-              <div className={cn("text-[11px] font-medium uppercase tracking-wider", isBlack ? "text-white/50" : "text-pos-label")}>Informativo</div>
-              <p className={cn("mt-2 text-sm leading-relaxed", isBlack ? "text-white/85" : "text-foreground")}>{props.info}</p>
+              <div className={cn("text-[11px] font-medium uppercase tracking-wider", isBlackEdition ? "text-white/50" : "text-muted-foreground")}>Informativo</div>
+              <p className={cn("mt-2 text-sm leading-relaxed", isBlackEdition ? "text-white/85" : "text-foreground")}>{props.info}</p>
             </div>
             <div
               className={cn(
                 "rounded-md border p-3 text-[11px]",
-                isBlack ? "border-white/10 bg-[#000000] text-white/50" : "pos-divider bg-pos-header text-pos-label"
+                isBlackEdition ? "border-white/10 bg-[#000000] text-white/50" : "border-border bg-muted/50 text-muted-foreground"
               )}
             >
               <div className="flex justify-between">
                 <span>Caixa</span>
-                <span className={cn("font-medium", isBlack ? "text-white" : "text-foreground")}>PDV</span>
+                <span className={cn("font-medium", isBlackEdition ? "text-white" : "text-foreground")}>PDV</span>
               </div>
               <div className="flex justify-between">
                 <span>Atalhos</span>
-                <span className={cn("font-medium", isBlack ? "text-white" : "text-foreground")}>F1–F9</span>
+                <span className={cn("font-medium", isBlackEdition ? "text-white" : "text-foreground")}>F1–F9</span>
               </div>
             </div>
           </aside>
         )}
       </main>
 
-      {!isModoRapido ? <ShortcutBar onAction={props.onShortcutAction} isBlack={isBlack} /> : null}
+      {!isModoRapido ? <ShortcutBar onAction={props.onShortcutAction} isBlack={inkUi} /> : null}
 
       <Dialog open={props.productSearchOpen} onOpenChange={props.onProductSearchOpenChange}>
         <DialogContent className="max-w-lg border-border bg-card">

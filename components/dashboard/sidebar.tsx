@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   ShoppingBag,
   Receipt,
+  MessageCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
@@ -56,6 +57,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
   const hideOsMenus = perfilLoja === "variedades" || perfilLoja === "supermercado"
   const mainNavItems: PremiumNavLink[] = [
     { icon: Sparkles, label: "IA Mestre", externalPath: "/dashboard/ia-mestre" },
+    { icon: MessageCircle, label: "WhatsApp HUB", externalPath: "/dashboard/whatsapp-automation" },
     { icon: Bot, label: "Marketing IA", externalPath: "/dashboard/marketing-ia" },
     { icon: ShoppingBag, label: "Marketplace", externalPath: "/dashboard/marketplace" },
     { icon: ShieldCheck, label: "Master Console", externalPath: "/dashboard/master-console" },

@@ -241,7 +241,7 @@ function FinanceiroSectionContent() {
             />
           </div>
           <Button variant="outline" className="mt-4 w-full" asChild>
-            <Link href="/?page=fluxo-caixa">Ver lançamentos</Link>
+            <Link href="/dashboard/fluxo-caixa">Ver lançamentos</Link>
           </Button>
         </SettingsCard>
       </div>

@@ -81,10 +81,31 @@ import { pickCostPrice, pickSalePrice } from "@/lib/inventory-item-from-api"
 import { TypeToConfirmDialog } from "@/components/dashboard/safety/type-to-confirm-dialog"
 import { cn } from "@/lib/utils"
 
+/** Prefixos legados (ex.: importação / IDs sintéticos) — só para `codigo`/SKU exibidos e enviados; não altera `id` nem `dbId`. */
+function stripAutoCodigoPrefixes(raw: string): string {
+  let s = raw.trim()
+  const re = /^(?:gc-|prod-|id-)/i
+  while (re.test(s)) s = s.replace(re, "").trim()
+  return s
+}
+
+function normalizeUserCodigoInput(s: string | undefined): string | undefined {
+  const t = (s ?? "").trim()
+  if (!t) return undefined
+  const out = stripAutoCodigoPrefixes(t)
+  return out || undefined
+}
+
 interface Product {
   id: string
+  /** Id persistido no Prisma (cuid) — usado em PATCH/DELETE na API. */
+  dbId?: string
   nome: string
+  /** SKU comercial (opcional). */
+  sku?: string
   codigo: string
+  /** Código de barras alternativo (opcional); mesma coluna que `barcode` na API se só um for preenchido. */
+  codigoBarras?: string
   /** Código de barras (EAN) para bipar no cadastro e usar no PDV. */
   barcode?: string
   /** Slug da categoria (`peca`, `servico`, ou slug criado na importação). */
@@ -122,8 +143,10 @@ const mockProducts: Product[] = []
 
 const emptyProduct: Omit<Product, "id"> = {
   nome: "",
+  sku: "",
   codigo: "",
   barcode: "",
+  codigoBarras: "",
   categoria: "peca",
   precoCusto: 0,
   precoVenda: 0,
@@ -215,6 +238,7 @@ export function GestaoProdutos({
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false)
   const [singleDeleting, setSingleDeleting] = useState(false)
+  const [saveBusy, setSaveBusy] = useState(false)
   const [iaSyncLoading, setIaSyncLoading] = useState(false)
   const [visionQuickScanLoading, setVisionQuickScanLoading] = useState(false)
   const [ncmSuggestLoading, setNcmSuggestLoading] = useState(false)
@@ -280,11 +304,28 @@ export function GestaoProdutos({
           const precoVenda = pickSalePrice(row)
           const rawCategory =
             typeof it.category === "string" && it.category.trim() ? it.category.trim() : "peca"
+          const skuStr = typeof row.sku === "string" ? row.sku.trim() : ""
+          const codigoFromApi = typeof row.codigo === "string" ? String(row.codigo).trim() : ""
+          const codigoBase = codigoFromApi || skuStr
+          const codigoStr =
+            stripAutoCodigoPrefixes(codigoBase) ||
+            stripAutoCodigoPrefixes(String(it.id ?? "")) ||
+            codigoBase
+          const bc =
+            typeof row.barcode === "string"
+              ? row.barcode.trim()
+              : typeof row.codigoBarras === "string"
+                ? String(row.codigoBarras).trim()
+                : ""
+          const dbId = typeof row.dbId === "string" ? row.dbId.trim() : ""
           return {
             id: String(it.id ?? ""),
+            dbId: dbId || undefined,
             nome: String(it.name ?? ""),
-            codigo: String((row.sku as any) ?? it.id ?? ""),
-            barcode: typeof row.barcode === "string" ? row.barcode : "",
+            sku: skuStr || undefined,
+            codigo: codigoStr || String(it.id ?? ""),
+            barcode: bc || undefined,
+            codigoBarras: "",
             categoria: rawCategory,
             precoCusto: Number.isFinite(precoCusto) ? precoCusto : 0,
             precoVenda: Number.isFinite(precoVenda) ? precoVenda : 0,
@@ -340,10 +381,15 @@ export function GestaoProdutos({
     return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1], "pt-BR"))
   }, [categoriaNomePorSlug, formData.categoria, getCategoryLabel])
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (product.imei && product.imei.includes(searchTerm))
+  const filteredProducts = products.filter((product) => {
+    const q = searchTerm.toLowerCase()
+    const matchesSearch =
+      product.nome.toLowerCase().includes(q) ||
+      product.codigo.toLowerCase().includes(q) ||
+      (product.sku && product.sku.toLowerCase().includes(q)) ||
+      (product.barcode && product.barcode.toLowerCase().includes(q)) ||
+      (product.codigoBarras && product.codigoBarras.toLowerCase().includes(q)) ||
+      (product.imei && product.imei.includes(searchTerm))
     const matchesCategory = categoryFilter === "all" || product.categoria === categoryFilter
     return matchesSearch && matchesCategory
   })
@@ -384,6 +430,8 @@ export function GestaoProdutos({
 
   const bulkDeleteSelectedProducts = async () => {
     const ids = Array.from(selectedProductIds)
+      .map((id) => products.find((p) => p.id === id)?.dbId || id)
+      .filter(Boolean)
     if (ids.length === 0) return
     setBulkDeleting(true)
     try {
@@ -431,7 +479,10 @@ export function GestaoProdutos({
       setEditingProduct(product)
       setFormData({
         nome: product.nome,
-        codigo: product.codigo,
+        sku: product.sku ? stripAutoCodigoPrefixes(product.sku) : "",
+        codigo: stripAutoCodigoPrefixes(product.codigo),
+        barcode: product.barcode ?? "",
+        codigoBarras: product.codigoBarras ?? "",
         categoria: product.categoria,
         precoCusto: product.precoCusto,
         precoVenda: product.precoVenda,
@@ -491,41 +542,86 @@ export function GestaoProdutos({
     onVoiceStockHintConsumed?.()
   }, [voiceStockHint, onVoiceStockHintConsumed])
 
-  const handleSave = () => {
-    if (editingProduct) {
-      appendAuditLog({
-        action: "stock_manual",
-        userLabel: auditUser(),
-        detail: `${formData.nome}: estoque ${editingProduct.estoqueAtual} → ${formData.estoqueAtual}`,
-      })
-      setProducts(prev => prev.map(p => 
-        p.id === editingProduct.id 
-          ? { ...p, ...formData, imagem: previewImage || undefined }
-          : p
-      ))
-    } else {
-      const newProduct: Product = {
-        id: Date.now().toString(),
-        ...formData,
-        imagem: previewImage || undefined,
-      }
-      appendAuditLog({
-        action: "stock_manual",
-        userLabel: auditUser(),
-        detail: `Cadastro "${formData.nome}", estoque inicial ${formData.estoqueAtual}`,
-      })
-      setProducts(prev => [...prev, newProduct])
+  const handleSave = async () => {
+    const nome = formData.nome.trim()
+    if (!nome) {
+      toast({ title: "Nome obrigatório", description: "Informe o nome do item.", variant: "destructive" })
+      return
     }
-    toast({
-      title: editingProduct ? "Item atualizado" : "Item cadastrado",
-      description: "Cadastro de estoque salvo com sucesso.",
-    })
-    handleCloseModal()
+    if (!(Number(formData.precoVenda) > 0)) {
+      toast({ title: "Preço de venda", description: "Informe um preço de venda válido.", variant: "destructive" })
+      return
+    }
+    setSaveBusy(true)
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        [ASSISTEC_LOJA_HEADER]: lojaHeader,
+      }
+      const payload = {
+        name: nome,
+        stock: Math.max(0, Math.floor(Number(formData.estoqueAtual) || 0)),
+        price: Number(formData.precoVenda) || 0,
+        precoCusto: Math.max(0, Number(formData.precoCusto) || 0),
+        category: formData.categoria?.trim() || undefined,
+        sku: normalizeUserCodigoInput(formData.sku),
+        codigo: normalizeUserCodigoInput(formData.codigo),
+        barcode: formData.barcode?.trim() || undefined,
+        codigoBarras: formData.codigoBarras?.trim() || undefined,
+      }
+      const res = editingProduct
+        ? await fetch(
+            `/api/produtos/${encodeURIComponent(editingProduct.dbId || editingProduct.id)}`,
+            {
+              method: "PATCH",
+              credentials: "include",
+              headers,
+              body: JSON.stringify(payload),
+            }
+          )
+        : await fetch("/api/produtos", {
+            method: "POST",
+            credentials: "include",
+            headers,
+            body: JSON.stringify(payload),
+          })
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; detail?: string } | null
+      if (!res.ok) {
+        throw new Error(data?.error || data?.detail || `Falha ao salvar (HTTP ${res.status})`)
+      }
+      if (editingProduct) {
+        appendAuditLog({
+          action: "stock_manual",
+          userLabel: auditUser(),
+          detail: `${formData.nome}: estoque ${editingProduct.estoqueAtual} → ${formData.estoqueAtual}`,
+        })
+      } else {
+        appendAuditLog({
+          action: "stock_manual",
+          userLabel: auditUser(),
+          detail: `Cadastro "${formData.nome}", estoque inicial ${formData.estoqueAtual}`,
+        })
+      }
+      await reloadInventory()
+      toast({
+        title: editingProduct ? "Item atualizado" : "Item cadastrado",
+        description: "Cadastro de estoque salvo com sucesso.",
+      })
+      handleCloseModal()
+    } catch (e) {
+      toast({
+        title: "Não foi possível salvar",
+        description: e instanceof Error ? e.message : "Erro inesperado",
+        variant: "destructive",
+      })
+    } finally {
+      setSaveBusy(false)
+    }
   }
 
   const confirmDeleteProduct = async () => {
     if (!pendingDeleteId) return
-    const product = products.find((p) => p.id === pendingDeleteId)
+    const product = products.find((p) => p.dbId === pendingDeleteId || p.id === pendingDeleteId)
     setSingleDeleting(true)
     try {
       const res = await fetch(`/api/produtos/${encodeURIComponent(pendingDeleteId)}`, {
@@ -1174,7 +1270,10 @@ export function GestaoProdutos({
         next.push({
           id: `${Date.now()}-${item.id}`,
           nome: item.nome,
+          sku: "",
           codigo: item.codigo,
+          barcode: "",
+          codigoBarras: "",
           categoria: "peca",
           precoCusto: item.valorUnitario,
           precoVenda: +(item.valorUnitario * 1.7).toFixed(2),
@@ -1470,7 +1569,7 @@ export function GestaoProdutos({
                           variant="ghost" 
                           size="icon"
                           className="text-destructive hover:text-destructive"
-                          onClick={() => setPendingDeleteId(product.id)}
+                          onClick={() => setPendingDeleteId(product.dbId || product.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -1513,7 +1612,7 @@ export function GestaoProdutos({
             </DialogTitle>
           </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
             <TabsList className="grid w-full grid-cols-3 mb-4">
               <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
               <TabsTrigger value="fiscal">Dados Fiscais</TabsTrigger>
@@ -1766,6 +1865,73 @@ export function GestaoProdutos({
                   </p>
                 </div>
 
+                {/* Identificação e PDV (logo após o nome) */}
+                <div className="sm:col-span-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="sku">SKU</Label>
+                      <div className="relative">
+                        <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id="sku"
+                          value={formData.sku ?? ""}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, sku: e.target.value }))}
+                          placeholder="Opcional"
+                          className="h-12 border border-border bg-secondary pl-10"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="codigo">Código interno</Label>
+                      <div className="relative">
+                        <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id="codigo"
+                          value={formData.codigo}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, codigo: e.target.value }))}
+                          placeholder="Opcional"
+                          className="h-12 border border-border bg-secondary pl-10"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="codigoBarras">Código de barras (EAN)</Label>
+                      <div className="relative">
+                        <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id="codigoBarras"
+                          value={formData.codigoBarras ?? ""}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, codigoBarras: e.target.value }))}
+                          placeholder="Opcional"
+                          className="h-12 border border-border bg-secondary pl-10"
+                          inputMode="numeric"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="barcode">Código alternativo</Label>
+                      <div className="relative">
+                        <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id="barcode"
+                          value={formData.barcode ?? ""}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, barcode: e.target.value }))}
+                          placeholder="Opcional"
+                          className="h-12 border border-border bg-secondary pl-10"
+                          inputMode="numeric"
+                          autoComplete="off"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="sm:col-span-2 space-y-2">
                   <Label htmlFor="descricaoVenda">Descrição para venda</Label>
                   <Textarea
@@ -1779,38 +1945,6 @@ export function GestaoProdutos({
                     className="resize-y min-h-[88px] bg-secondary border-border text-sm"
                     disabled={iaSyncLoading}
                   />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="codigo">Código interno (SKU)</Label>
-                  <div className="relative">
-                    <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      id="codigo"
-                      value={formData.codigo}
-                      onChange={(e) => setFormData(prev => ({ ...prev, codigo: e.target.value }))}
-                      placeholder="Ex.: SKU-001 / Código do fornecedor"
-                      className="h-12 pl-10 bg-secondary border-border"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="barcode">Código de Barras (EAN)</Label>
-                  <div className="relative">
-                    <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      id="barcode"
-                      value={formData.barcode ?? ""}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, barcode: e.target.value }))}
-                      placeholder="Bipe o produto (EAN/GTIN)"
-                      className="h-12 pl-10 bg-secondary border-border"
-                      inputMode="numeric"
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Este campo é usado pelo <strong>PDV Alta Performance</strong> para adicionar o item automaticamente no Enter.
-                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -2114,11 +2248,20 @@ export function GestaoProdutos({
               Cancelar
             </Button>
             <Button 
-              onClick={handleSave}
-              disabled={!formData.nome || !formData.precoVenda}
+              onClick={() => void handleSave()}
+              disabled={!formData.nome || !formData.precoVenda || saveBusy}
               className="bg-primary hover:bg-primary/90"
             >
-              {editingProduct ? "Salvar Alterações" : "Cadastrar Item"}
+              {saveBusy ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando…
+                </>
+              ) : editingProduct ? (
+                "Salvar Alterações"
+              ) : (
+                "Cadastrar Item"
+              )}
             </Button>
           </div>
         </DialogContent>

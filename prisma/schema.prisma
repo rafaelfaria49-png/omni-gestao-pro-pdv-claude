@@ -58,9 +58,148 @@ model Store {
   iaMessages IaMessage[]
   marketingIaPosts MarketingIaPost[]
   marketingMediaJobs MarketingMediaJob[]
+  whatsappContacts          WhatsAppContact[]
+  whatsappConversations     WhatsAppConversation[]
+  whatsappMessages          WhatsAppMessage[]
+  whatsappAutomations       WhatsAppAutomation[]
+  whatsappQuickReplies      WhatsAppQuickReply[]
+  whatsappAiSetting         WhatsAppAiSetting?
+  whatsappAutomationLogs    WhatsAppAutomationLog[]
 
   @@index([profile])
   @@map("stores")
+}
+
+/** Contato WhatsApp por unidade (Cloud API / Evolution — id externo opcional). */
+model WhatsAppContact {
+  id             String   @id @default(cuid())
+  storeId        String   @map("storeId")
+  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /** Identificador oficial WhatsApp quando disponível (ex.: número @c.us ou wa_id). */
+  waExternalId   String   @default("") @map("waExternalId")
+  /** Somente dígitos com DDI (normalizado). */
+  phoneDigits    String   @map("phoneDigits")
+  displayName    String   @default("") @map("displayName")
+  profilePicUrl  String   @default("") @map("profilePicUrl")
+  metadata       Json?    @map("metadata") @db.JsonB
+  createdAt      DateTime @default(now()) @map("createdAt")
+  updatedAt      DateTime @updatedAt @map("updatedAt")
+
+  conversations WhatsAppConversation[]
+
+  @@unique([storeId, phoneDigits], name: "whatsapp_contact_store_phone")
+  @@index([storeId])
+  @@map("whatsapp_contacts")
+}
+
+model WhatsAppConversation {
+  id                  String   @id @default(cuid())
+  storeId             String   @map("storeId")
+  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  contactId           String   @map("contactId")
+  contact             WhatsAppContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  externalThreadId    String   @default("") @map("externalThreadId")
+  status              String   @default("open") @map("status")
+  assignedToUserId    String   @default("") @map("assignedToUserId")
+  humanMode           Boolean  @default(false) @map("humanMode")
+  lastMessagePreview  String   @default("") @map("lastMessagePreview") @db.Text
+  lastMessageAt       DateTime? @map("lastMessageAt")
+  unreadCount         Int      @default(0) @map("unreadCount")
+  metadata            Json?    @map("metadata") @db.JsonB
+  createdAt           DateTime @default(now()) @map("createdAt")
+  updatedAt           DateTime @updatedAt @map("updatedAt")
+
+  messages WhatsAppMessage[]
+
+  @@index([storeId, lastMessageAt])
+  @@index([contactId])
+  @@map("whatsapp_conversations")
+}
+
+model WhatsAppMessage {
+  id                 String   @id @default(cuid())
+  storeId            String   @map("storeId")
+  store              Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  conversationId     String   @map("conversationId")
+  conversation       WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction          String   @map("direction")
+  body               String   @map("body") @db.Text
+  messageType        String   @default("text") @map("messageType")
+  externalMessageId  String   @default("") @map("externalMessageId")
+  payload            Json?    @map("payload") @db.JsonB
+  createdAt          DateTime @default(now()) @map("createdAt")
+
+  @@index([storeId, createdAt])
+  @@index([conversationId, createdAt])
+  @@map("whatsapp_messages")
+}
+
+model WhatsAppAutomation {
+  id           String   @id @default(cuid())
+  storeId      String   @map("storeId")
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name         String   @map("name")
+  triggerType  String   @default("keyword") @map("triggerType")
+  enabled      Boolean  @default(true) @map("enabled")
+  priority     Int      @default(0) @map("priority")
+  conditions   Json?    @map("conditions") @db.JsonB
+  actions      Json?    @map("actions") @db.JsonB
+  createdAt    DateTime @default(now()) @map("createdAt")
+  updatedAt    DateTime @updatedAt @map("updatedAt")
+
+  logs WhatsAppAutomationLog[]
+
+  @@index([storeId, enabled])
+  @@map("whatsapp_automations")
+}
+
+model WhatsAppQuickReply {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  shortcut  String   @map("shortcut")
+  title     String   @map("title")
+  body      String   @map("body") @db.Text
+  category  String   @default("") @map("category")
+  sortOrder Int      @default(0) @map("sortOrder")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@unique([storeId, shortcut], name: "whatsapp_quick_reply_store_shortcut")
+  @@index([storeId])
+  @@map("whatsapp_quick_replies")
+}
+
+/** Uma linha de configuração de IA por loja (sugestões simuladas no hub). */
+model WhatsAppAiSetting {
+  id                   String   @id @default(cuid())
+  storeId              String   @unique @map("storeId")
+  store                Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tone                 String   @default("consultivo") @map("tone")
+  systemPrompt         String   @default("") @map("systemPrompt") @db.Text
+  suggestionsEnabled   Boolean  @default(true) @map("suggestionsEnabled")
+  maxContextMessages   Int      @default(12) @map("maxContextMessages")
+  metadata             Json?    @map("metadata") @db.JsonB
+  updatedAt            DateTime @updatedAt @map("updatedAt")
+
+  @@map("whatsapp_ai_settings")
+}
+
+model WhatsAppAutomationLog {
+  id           String   @id @default(cuid())
+  storeId      String   @map("storeId")
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  automationId String?  @map("automationId")
+  automation   WhatsAppAutomation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
+  level        String   @default("info") @map("level")
+  action       String   @map("action")
+  message      String   @default("") @map("message") @db.Text
+  payload      Json?    @map("payload") @db.JsonB
+  createdAt    DateTime @default(now()) @map("createdAt")
+
+  @@index([storeId, createdAt])
+  @@index([action])
+  @@map("whatsapp_automation_logs")
 }
 
 /** Legenda e agendamentos do Estúdio Marketing IA (IA Mestre), por unidade. */

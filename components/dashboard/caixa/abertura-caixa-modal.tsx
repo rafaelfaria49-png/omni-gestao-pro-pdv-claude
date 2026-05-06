@@ -26,6 +26,8 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
   const { abrirCaixa } = useCaixa()
   const { empresaDocumentos } = useLojaAtiva()
   const [saldoInicial, setSaldoInicial] = useState("")
+  const [observacao, setObservacao] = useState("")
+  const [operador, setOperador] = useState("")
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -41,12 +43,15 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
   const handleAbrirCaixa = () => {
     const valor = parseFloat(saldoInicial) || 0
     abrirCaixa(valor)
+    const operadorLabel = operador.trim()
     appendAuditLog({
       action: "caixa_aberto",
       userLabel: `${(empresaDocumentos.nomeFantasia || "Loja").trim() || "Administrador"} (sessão local)`,
-      detail: `Saldo inicial ${formatCurrency(valor)}`,
+      detail: `Saldo inicial ${formatCurrency(valor)}${operadorLabel ? ` | Operador: ${operadorLabel}` : ""}${observacao.trim() ? ` | Obs: ${observacao.trim()}` : ""}`,
     })
     setSaldoInicial("")
+    setObservacao("")
+    setOperador("")
     onClose()
   }
 
@@ -118,6 +123,27 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
               </div>
             </CardContent>
           </Card>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Operador</Label>
+              <Input
+                value={operador}
+                onChange={(e) => setOperador(e.target.value)}
+                placeholder="Ex.: Caixa 1 / Nome"
+                className="h-11 bg-secondary border-border"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Observação (opcional)</Label>
+              <Input
+                value={observacao}
+                onChange={(e) => setObservacao(e.target.value)}
+                placeholder="Ex.: Troco inicial conferido"
+                className="h-11 bg-secondary border-border"
+              />
+            </div>
+          </div>
 
           {/* Botoes */}
           <div className="flex gap-3">

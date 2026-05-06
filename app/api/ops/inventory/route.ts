@@ -14,6 +14,11 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
+/** Fora de produção, leituras/escritas de estoque não exigem cookie de assinatura (dev / preview local). */
+function bypassSubscriptionCheck(): boolean {
+  return process.env.NODE_ENV !== "production"
+}
+
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
@@ -49,6 +54,10 @@ type InvPayload = {
   id: string
   name: string
   barcode?: string
+  sku?: string
+  dbId?: string
+  codigo?: string
+  codigoBarras?: string
   stock: number
   cost: number
   price: number
@@ -64,10 +73,17 @@ function rowToItem(row: Produto): InvPayload {
     typeof (row as unknown as { barcode?: unknown }).barcode === "string"
       ? String((row as unknown as { barcode: string }).barcode)
       : ""
+  const skuTrim = sku.trim()
+  const bcTrim = barcode.trim()
+  const opId = skuTrim || row.id
   return {
-    id: sku.trim() || row.id,
+    id: opId,
     name: row.name,
-    barcode: barcode.trim() || undefined,
+    barcode: bcTrim || undefined,
+    sku: skuTrim || undefined,
+    dbId: row.id,
+    codigo: skuTrim || undefined,
+    codigoBarras: bcTrim || undefined,
     stock: row.stock,
     cost: row.precoCusto,
     price: row.price,
@@ -104,10 +120,8 @@ export async function GET(req: Request) {
   try {
     const gate = await requireSubscription()
     if (!gate.ok) {
-      const dev = process.env.NODE_ENV === "development"
-      console.warn("[ops/inventory GET] gate negado —", gate.res.status)
-      // Em dev, não bloqueia listagem: isso evita UI vazia quando cookie de sessão não está presente.
-      if (!dev) return gate.res
+      if (!bypassSubscriptionCheck()) return gate.res
+      console.warn("[ops/inventory] bypass subscription check (dev mode)")
     }
 
     const lojaIdRecebido = storeIdFromAssistecRequestForRead(req)
@@ -122,7 +136,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       items: rows.map(rowToItem),
       _lojaIdRecebido: lojaIdRecebido,
-      _gateBypassedInDev: !gate.ok && process.env.NODE_ENV === "development",
+      _gateBypassedInDev: !gate.ok && bypassSubscriptionCheck(),
     })
   } catch (e) {
     const dev = process.env.NODE_ENV === "development"
@@ -140,7 +154,10 @@ export async function GET(req: Request) {
 
 export async function PUT(req: Request) {
   const gate = await requireSubscription()
-  if (!gate.ok) return gate.res
+  if (!gate.ok) {
+    if (!bypassSubscriptionCheck()) return gate.res
+    console.warn("[ops/inventory] bypass subscription check (dev mode)")
+  }
   const adminGate = await requireAdmin()
   if (!adminGate.ok) return adminGate.res
   const storeId = storeIdFromAssistecRequestForWrite(req)
@@ -170,10 +187,22 @@ export async function PUT(req: Request) {
     const id = typeof o.id === "string" ? o.id : ""
     const name = typeof o.name === "string" ? o.name : ""
     if (!id || !name) continue
+    const rawSku = typeof (o as { sku?: unknown }).sku === "string" ? String((o as { sku: string }).sku).trim() : ""
+    const rawDb = typeof (o as { dbId?: unknown }).dbId === "string" ? String((o as { dbId: string }).dbId).trim() : ""
+    const rawCodigo = typeof (o as { codigo?: unknown }).codigo === "string" ? String((o as { codigo: string }).codigo).trim() : ""
     normalized.push({
       id,
       name,
       barcode: typeof o.barcode === "string" ? o.barcode : typeof (o as { codigoBarras?: unknown }).codigoBarras === "string" ? String((o as any).codigoBarras) : "",
+      sku: rawSku || undefined,
+      dbId: rawDb || undefined,
+      codigo: rawCodigo || rawSku || undefined,
+      codigoBarras:
+        typeof o.barcode === "string"
+          ? o.barcode
+          : typeof (o as { codigoBarras?: unknown }).codigoBarras === "string"
+            ? String((o as { codigoBarras: string }).codigoBarras)
+            : "",
       stock: typeof o.stock === "number" && Number.isFinite(o.stock) ? o.stock : 0,
       cost: typeof o.cost === "number" && Number.isFinite(o.cost) ? o.cost : 0,
       price: typeof o.price === "number" && Number.isFinite(o.price) ? o.price : 0,

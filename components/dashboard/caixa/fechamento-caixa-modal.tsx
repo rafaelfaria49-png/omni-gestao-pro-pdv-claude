@@ -38,6 +38,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const { dailyLedger } = useOperationsStore()
   const { empresaDocumentos } = useLojaAtiva()
   const [valorContado, setValorContado] = useState("")
+  const [observacao, setObservacao] = useState("")
   const ledger = ensureLedger(dailyLedger)
   const userAudit = (empresaDocumentos.nomeFantasia || "").trim() || "Loja"
 
@@ -61,25 +62,35 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
         detail: `Esperado ${formatCurrency(saldoEsperado)} | Contado ${formatCurrency(valorContadoNum)} | Diferença ${formatCurrency(diferenca)} | Dia: Din ${formatCurrency(ledger.vendasDinheiro)} Pix ${formatCurrency(ledger.vendasPix)} Déb ${formatCurrency(ledger.vendasCartaoDebito)} Créd ${formatCurrency(ledger.vendasCartaoCredito)} Carnê ${formatCurrency(ledger.vendasCarne)} Vale ${formatCurrency(ledger.vendasCreditoVale)}`,
       })
     }
+    if (observacao.trim()) {
+      appendAuditLog({
+        action: "quebra_caixa",
+        userLabel: `${userAudit} (fechamento)`,
+        detail: `Obs: ${observacao.trim()}`,
+      })
+    }
     fecharCaixa()
     setValorContado("")
+    setObservacao("")
     onClose()
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg bg-card border-border">
-        <DialogHeader className="pb-2">
-          <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Lock className="w-6 h-6 text-red-500" />
-            Fechamento de Caixa
-          </DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Confira os valores e conte o dinheiro em caixa antes de fechar.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="max-w-lg border-border bg-card p-0">
+        <div className="flex max-h-[90vh] flex-col overflow-hidden">
+          <DialogHeader className="shrink-0 px-6 pb-2 pt-6">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
+              <Lock className="h-6 w-6 text-red-500" />
+              Fechamento de Caixa
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Confira os valores e conte o dinheiro em caixa antes de fechar.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-6 pt-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+            <div className="space-y-6 pt-4">
           {/* Resumo do Dia */}
           <Card className="bg-secondary border-border">
             <CardContent className="pt-4 pb-4 space-y-4">
@@ -168,6 +179,16 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
             </div>
           </div>
 
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Observação (opcional)</Label>
+            <Input
+              placeholder="Ex.: Conferido por supervisor, sangria realizada..."
+              value={observacao}
+              onChange={(e) => setObservacao(e.target.value)}
+              className="h-11 bg-secondary border-border"
+            />
+          </div>
+
           {/* Status da Conferencia */}
           {valorContado !== "" && (
             <Card className={`border ${temDiferenca ? 'bg-amber-500/10 border-amber-500/30' : 'bg-green-500/10 border-green-500/30'}`}>
@@ -199,34 +220,30 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
               </CardContent>
             </Card>
           )}
-
-          {/* Botoes */}
-          <div className="space-y-3">
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1 h-12 border-border"
-              >
-                <Printer className="w-4 h-4 mr-2" />
-                Imprimir Relatorio
-              </Button>
             </div>
-            
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                className="flex-1 h-12 border-border"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleFecharCaixa}
-                className="flex-1 h-12 bg-red-500 hover:bg-red-600 font-semibold"
-              >
-                <Lock className="w-4 h-4 mr-2" />
-                Confirmar Fechamento
-              </Button>
+          </div>
+
+          <div className="sticky bottom-0 shrink-0 border-t border-border bg-card px-6 py-4">
+            <div className="space-y-3">
+              <div className="flex gap-3">
+                <Button variant="outline" className="h-12 flex-1 border-border">
+                  <Printer className="mr-2 h-4 w-4" />
+                  Imprimir Relatorio
+                </Button>
+              </div>
+
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={onClose} className="h-12 flex-1 border-border">
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleFecharCaixa}
+                  className="h-12 flex-1 bg-red-500 font-semibold hover:bg-red-600"
+                >
+                  <Lock className="mr-2 h-4 w-4" />
+                  Confirmar Fechamento
+                </Button>
+              </div>
             </div>
           </div>
         </div>

@@ -25,10 +25,13 @@ export function PdvPainelLateralTerminal({
 export function PdvVisorTotal({
   label = "TOTAL",
   valorFormatado,
+  glow = "soft",
   className,
 }: {
   label?: string
   valorFormatado: string
+  /** none = sem glow (ex.: PDV rápido); soft = glow leve (demais PDVs). */
+  glow?: "none" | "soft"
   className?: string
 }) {
   return (
@@ -41,10 +44,14 @@ export function PdvVisorTotal({
       <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{label}</span>
       <p
         className="mt-1 text-3xl font-black tabular-nums tracking-tight text-primary"
-        style={{
-          textShadow:
-            "0 0 14px color-mix(in oklch, var(--primary) 90%, transparent), 0 0 32px color-mix(in oklch, var(--primary) 60%, transparent), 0 0 56px color-mix(in oklch, var(--primary) 40%, transparent)",
-        }}
+        style={
+          glow === "none"
+            ? undefined
+            : {
+                // Glow leve (enterprise): sem blur pesado para manter legibilidade.
+                textShadow: "0 0 8px var(--primary)",
+              }
+        }
       >
         {valorFormatado}
       </p>

@@ -165,14 +165,22 @@ export async function proxy(request: NextRequest) {
   const staffSession = !!String(request.cookies.get(STAFF_SESSION_COOKIE)?.value || "").trim()
   const staffRole = String(request.cookies.get(STAFF_ROLE_COOKIE)?.value || "").trim().toUpperCase()
   const isGerente = staffSession && staffRole === "GERENTE"
-  const isCaixa = !adminPresent && !isGerente
+  // Apenas usuários com sessão staff EXPLÍCITA e papel diferente de Gerente são restritos.
+  // Donos da loja que navegam só com o cookie de assinatura NÃO recebem restrição de CAIXA.
+  const isCaixa = staffSession && !adminPresent && !isGerente
   if (isCaixa) {
+    // Páginas administrativas bloqueadas para o perfil CAIXA/Vendedor.
+    // Redireciona para o PDV dentro do dashboard (nunca para a landing em /).
+    const caixaFallback = () => {
+      const u = request.nextUrl.clone()
+      u.pathname = "/dashboard/vendas"
+      u.search = ""
+      return NextResponse.redirect(u)
+    }
+
     // Sempre bloqueado (admin-only)
     if (ALWAYS_BLOCKED_FOR_CAIXA_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-      const u = request.nextUrl.clone()
-      u.pathname = "/"
-      u.search = "?page=vendas"
-      return NextResponse.redirect(u)
+      return caixaFallback()
     }
 
     // Permissões dinâmicas (por unidade)
@@ -182,22 +190,13 @@ export async function proxy(request: NextRequest) {
     const allowMarketing = perms?.permitirMarketingIA === true
 
     if (!allowFinanceiro && FINANCEIRO_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-      const u = request.nextUrl.clone()
-      u.pathname = "/"
-      u.search = "?page=vendas"
-      return NextResponse.redirect(u)
+      return caixaFallback()
     }
     if (!allowEstoque && ESTOQUE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-      const u = request.nextUrl.clone()
-      u.pathname = "/"
-      u.search = "?page=vendas"
-      return NextResponse.redirect(u)
+      return caixaFallback()
     }
     if (!allowMarketing && MARKETING_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-      const u = request.nextUrl.clone()
-      u.pathname = "/"
-      u.search = "?page=vendas"
-      return NextResponse.redirect(u)
+      return caixaFallback()
     }
   }
 

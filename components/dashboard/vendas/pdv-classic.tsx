@@ -65,6 +65,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useOperationsStore } from "@/lib/operations-store"
 import { useStoreSettings } from "@/lib/store-settings-provider"
+import type { PdvClassicLayoutKind } from "@/lib/store-settings-types"
 import {
   PDV_PRODUCTS_BASE,
   mergePdvCatalogWithInventory,
@@ -74,6 +75,7 @@ import {
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
+import { PdvAssistenciaEnterprise } from "./pdv-assistencia-enterprise"
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
 import { PDV_IMPORT_COMANDA_KEY, type PdvImportComandaPayload } from "@/lib/pdv-comanda-bridge"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
@@ -139,6 +141,8 @@ export interface VendasPDVProps {
   uiShell?: "default" | "omni-smart"
   /** Vindo do Vendas HUB (`?modo=rapido`): foco automático no campo de código/produto após o PDV montar. */
   isModoRapido?: boolean
+  /** Sub-layout interno do PDV Clássico (mesmo seletor atual). */
+  classicLayoutKind?: PdvClassicLayoutKind
 }
 
 export function PdvClassic({
@@ -150,6 +154,7 @@ export function PdvClassic({
   onVoiceOpenCaixaConsumed,
   uiShell = "default",
   isModoRapido = false,
+  classicLayoutKind,
 }: VendasPDVProps) {
   const router = useRouter()
   const { config } = useConfigEmpresa()
@@ -217,6 +222,18 @@ export function PdvClassic({
   const [shellReceivablesOpen, setShellReceivablesOpen] = useState(false)
   const [lastSaleTotal, setLastSaleTotal] = useState<number | null>(null)
   const [shellCustomerField, setShellCustomerField] = useState("CONSUMIDOR")
+
+  const resolvedClassicLayout: PdvClassicLayoutKind =
+    classicLayoutKind === "services" || classicLayoutKind === "lovable"
+      ? classicLayoutKind
+      : pdvParams.pdvClassicLayout === "services" || pdvParams.pdvClassicLayout === "lovable"
+        ? pdvParams.pdvClassicLayout
+        : "lovable"
+
+  // Modo "services" (assistência) integrado como sub-modo do PDV Clássico (sem novo seletor).
+  if (resolvedClassicLayout === "services") {
+    return <PdvAssistenciaEnterprise isModoRapido={isModoRapido} />
+  }
 
   /** Bloqueio do PDV até cadastrar Nome Fantasia (Store.name) da unidade no banco. */
   const [storePdvGate, setStorePdvGate] = useState<{ ready: boolean; block: boolean }>({
@@ -1171,13 +1188,11 @@ export function PdvClassic({
         <div
           className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-border bg-background transition-colors duration-300"
         >
-          {!isModoRapido ? (
-            <CaixaStatusBar
-              variant="pdv"
-              openAberturaSignal={voiceOpenCaixaSignal}
-              onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
-            />
-          ) : null}
+          <CaixaStatusBar
+            variant="pdv"
+            openAberturaSignal={voiceOpenCaixaSignal}
+            onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
+          />
           <PdvOmniClassicShell
               isModoRapido={isModoRapido}
               storeName={storeDisplayName}
@@ -1295,14 +1310,13 @@ export function PdvClassic({
           <div
             className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r-0 lg:border-r lg:border-border"
           >
-            {!isModoRapido ? (
-              <>
-                <CaixaStatusBar
-                  variant="pdv"
-                  openAberturaSignal={voiceOpenCaixaSignal}
-                  onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
-                />
-                <div className="shrink-0 border-b border-border bg-background py-2.5">
+            <>
+              <CaixaStatusBar
+                variant="pdv"
+                openAberturaSignal={voiceOpenCaixaSignal}
+                onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
+              />
+              <div className="shrink-0 border-b border-border bg-background py-2.5">
                   <div className="px-1 sm:px-2">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex w-full rounded-lg bg-secondary p-1 sm:w-auto">
@@ -1356,8 +1370,7 @@ export function PdvClassic({
                     </div>
                   </div>
                 </div>
-              </>
-            ) : null}
+            </>
 
             {saleMode === "balcao" && (
             <div className="shrink-0 border-b border-dashed border-neutral-200/80 bg-background py-2 dark:border-white/10">

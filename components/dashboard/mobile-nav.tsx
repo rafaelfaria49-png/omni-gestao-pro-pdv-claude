@@ -10,6 +10,7 @@ import {
   Wallet,
   Menu,
   UtensilsCrossed,
+  MessageCircle,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -58,9 +59,9 @@ const mobileMenuItems: MobileMoreItem[] = [
 
 const fullMenuItems: MobileFullItem[] = [
   { icon: Bot, label: "🤖 IA Mestre", externalPath: "/dashboard/ia-mestre" },
+  { icon: MessageCircle, label: "WhatsApp", externalPath: "/dashboard/whatsapp" },
   { icon: LayoutDashboard, label: "Painel inicial", externalPath: "/dashboard" },
   { icon: ShoppingCart, label: "Vendas (Caixa/PDV)", page: "vendas", externalPath: "/dashboard/vendas" },
-  { icon: ShoppingCart, label: "Histórico de Vendas", page: "vendas-arquivo" },
   { icon: ShoppingCart, label: "Trocas e devolução", page: "trocas" },
   { icon: FileText, label: "Orçamentos", page: "orcamentos" },
   {
@@ -86,6 +87,7 @@ const fullMenuItems: MobileFullItem[] = [
     icon: Users,
     label: "Clientes",
     page: "clientes",
+    externalPath: "/dashboard/clientes",
     sub: [
       { label: "Gestão de Clientes", page: "clientes-gestao", externalPath: "/dashboard/clientes" },
       { label: "Cadastro de Clientes", page: "clientes" },
@@ -97,6 +99,7 @@ const fullMenuItems: MobileFullItem[] = [
     label: "Relatórios",
     page: "relatorios",
     sub: [
+      { label: "Histórico de Vendas", externalPath: "/dashboard/vendas-arquivo-geral" },
       { label: "Relatórios gerenciais", page: "relatorios" },
       { label: "Dashboard 360", page: "dashboard-360" },
     ],
