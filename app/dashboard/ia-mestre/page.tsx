@@ -4,12 +4,14 @@ import { useCallback, useMemo, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import {
   BarChart3,
+  Bot,
   MessageCircle,
   PackageSearch,
   Plus,
   ShoppingBag,
   Sparkles,
   TrendingDown,
+  User,
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
@@ -87,6 +89,30 @@ function extractLogoText(message: string) {
   }
 
   return null
+}
+
+function shouldAutoPopulateDocument(text: string): boolean {
+  const t = (text || "").trim();
+  if (t.length > 300) return true;
+  const tl = t.toLowerCase();
+  return (
+    tl.includes("relatório") ||
+    tl.includes("contrato") ||
+    tl.includes("roteiro") ||
+    tl.includes("campanha") ||
+    tl.includes("proposta") ||
+    tl.includes("planejamento")
+  );
+}
+
+function inferDocumentTitle(text: string): string {
+  const tl = (text || "").toLowerCase();
+  if (tl.includes("relatório")) return "Relatório";
+  if (tl.includes("contrato")) return "Contrato";
+  if (tl.includes("roteiro")) return "Roteiro";
+  if (tl.includes("campanha")) return "Campanha";
+  if (tl.includes("proposta")) return "Proposta";
+  return "Documento gerado";
 }
 
 const MAGIC_TEMPLATE_CATEGORIES: Array<{
@@ -181,6 +207,8 @@ function Shell() {
   const [draft, setDraft] = useState("");
   const [pendingImageRequest, setPendingImageRequest] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [docTitle, setDocTitle] = useState<string>("");
+  const [docContent, setDocContent] = useState<string>("");
 
   const isImageIntent = useCallback((text: string) => {
     const t = (text || "").toLowerCase();
@@ -268,6 +296,10 @@ function Shell() {
         ...(isImage && imageUrl ? { image: { url: imageUrl, tool: "Gerado com DALL·E 3" } } : {}),
       };
       setMessages((prev) => [...prev, reply]);
+      if (!isImage && shouldAutoPopulateDocument(reply.content)) {
+        setDocTitle(inferDocumentTitle(reply.content));
+        setDocContent(reply.content);
+      }
       if (isImage) {
         const cost = getCreditCost("image");
         const next =
@@ -317,19 +349,52 @@ function Shell() {
             <IdentitySwitch checked={identityOn} onCheckedChange={setIdentityOn} />
           </div>
           <div className="flex items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground">
+            <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/60 px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition hover:text-foreground">
               <Plus className="h-3.5 w-3.5" /> Nova conversa
             </button>
             <ThemeSwitcher />
           </div>
         </header>
 
-        <div className="flex flex-none items-center gap-2 border-b border-border/40 bg-surface/30 px-5 py-2 text-xs text-muted-foreground backdrop-blur-md">
+        <div className="flex flex-none items-center gap-2 border-b border-border/40 bg-surface/30 px-5 py-2 text-[11px] text-muted-foreground backdrop-blur-md">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
           <span>Conversa #2487 · Contexto da loja {identityOn ? "ATIVO" : "desligado"}</span>
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-border bg-background/60 px-2 py-0.5 font-medium text-foreground/80">
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--color-primary-glow)" }} />
-            {model}
+          <span
+            className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px] font-medium"
+            style={{
+              border: "0.5px solid",
+              borderColor:
+                model !== "openai/gpt-5.5-pro"
+                  ? "color-mix(in oklab, var(--color-primary) 45%, transparent)"
+                  : identityOn
+                    ? "color-mix(in oklab, var(--color-primary) 55%, transparent)"
+                    : "color-mix(in oklab, var(--color-primary) 55%, transparent)",
+              color:
+                model !== "openai/gpt-5.5-pro"
+                  ? "var(--color-primary)"
+                  : identityOn
+                    ? "color-mix(in oklab, var(--color-primary) 85%, var(--color-foreground))"
+                    : "color-mix(in oklab, var(--color-primary) 85%, var(--color-foreground))",
+              background: "color-mix(in oklab, var(--color-background) 60%, transparent)",
+            }}
+            title={model}
+          >
+            {model !== "openai/gpt-5.5-pro" ? (
+              <>
+                <Bot className="h-3.5 w-3.5" />
+                <span>{model.split("/")[1] || model}</span>
+              </>
+            ) : identityOn ? (
+              <>
+                <span aria-hidden>⚡</span>
+                <span>auto-mestre</span>
+              </>
+            ) : (
+              <>
+                <User className="h-3.5 w-3.5" />
+                <span>manual</span>
+              </>
+            )}
           </span>
         </div>
 
@@ -401,7 +466,7 @@ function Shell() {
               </div>
             ) : null}
             <ChatInput onSend={handleSend} disabled={typing || !!pendingImageRequest} value={draft} onValueChange={setDraft} />
-            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            <p className="mt-2 text-center text-[12px] text-muted-foreground/80">
               IA Mestre pode cometer erros. Sempre confirme dados financeiros importantes.
             </p>
           </div>
@@ -409,7 +474,14 @@ function Shell() {
       </section>
 
       <div className="hidden lg:block">
-        <RightPanel />
+        <RightPanel
+          title={docTitle}
+          content={docContent}
+          onClear={() => {
+            setDocTitle("");
+            setDocContent("");
+          }}
+        />
       </div>
 
       <MagicTemplatesSheet
