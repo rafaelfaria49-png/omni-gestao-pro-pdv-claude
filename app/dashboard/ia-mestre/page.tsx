@@ -1,10 +1,12 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence } from "framer-motion";
 import {
   BarChart3,
   Bot,
+  FolderKanban,
   MessageCircle,
   PackageSearch,
   Plus,
@@ -15,9 +17,7 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { ThemeProvider } from "@/components/ia-mestre/ThemeProvider";
 import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
-import { Sidebar } from "@/components/ia-mestre/Sidebar";
 import { RightPanel } from "@/components/ia-mestre/RightPanel";
 import { ModelSelect, type ModelId } from "@/components/ia-mestre/ModelSelect";
 import { IdentitySwitch } from "@/components/ia-mestre/IdentitySwitch";
@@ -187,9 +187,9 @@ const MAGIC_TEMPLATE_CATEGORIES: Array<{
 
 export default function IaMestrePage() {
   return (
-    <ThemeProvider>
+    <Suspense fallback={null}>
       <Shell />
-    </ThemeProvider>
+    </Suspense>
   );
 }
 
@@ -198,6 +198,8 @@ function toBackendModel(m: ModelId): string {
 }
 
 function Shell() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const { credits } = useUserCredits();
   const [model, setModel] = useState<ModelId>("openai/gpt-5.5-pro");
@@ -207,6 +209,7 @@ function Shell() {
   const [draft, setDraft] = useState("");
   const [pendingImageRequest, setPendingImageRequest] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [projectBanner, setProjectBanner] = useState<string | null>(null);
   const [docTitle, setDocTitle] = useState<string>("");
   const [docContent, setDocContent] = useState<string>("");
 
@@ -233,6 +236,31 @@ function Shell() {
   const isImageIntentDraft = useMemo(() => {
     return isImageIntent(draft);
   }, [draft, isImageIntent]);
+
+  useEffect(() => {
+    const onOpen = () => setTemplatesOpen(true);
+    window.addEventListener("ia-mestre-open-templates", onOpen);
+    return () => window.removeEventListener("ia-mestre-open-templates", onOpen);
+  }, []);
+
+  useEffect(() => {
+    const openTemplates = searchParams.get("templates") === "1";
+    const projeto = searchParams.get("projeto");
+    if (!openTemplates && !projeto) return;
+    if (openTemplates) setTemplatesOpen(true);
+    if (projeto) {
+      try {
+        setProjectBanner(decodeURIComponent(projeto));
+        toast({
+          title: "Projeto aberto",
+          description: `Continuando a conversa: ${decodeURIComponent(projeto)}`,
+        });
+      } catch {
+        setProjectBanner(projeto);
+      }
+    }
+    router.replace("/dashboard/ia-mestre", { scroll: false });
+  }, [searchParams, router, toast]);
 
   const sendToApi = async (text: string) => {
     const userMsg: ChatMsg = { id: crypto.randomUUID(), role: "user", content: text };
@@ -334,15 +362,9 @@ function Shell() {
   };
 
   return (
-    <div className="relative flex h-screen w-full overflow-hidden overflow-x-hidden bg-background text-foreground">
-      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-32 left-1/3 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-gradient-primary opacity-[0.12] blur-3xl" />
-        <div className="absolute -bottom-40 right-0 h-[420px] w-[420px] rounded-full opacity-20 blur-3xl" style={{ background: "var(--color-primary-glow)" }} />
-      </div>
-
-      <Sidebar onTemplatesClick={() => setTemplatesOpen(true)} />
-
-      <section className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
+    <>
+      <div className="flex min-w-0 flex-1">
+        <section className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <header className="flex flex-none flex-wrap items-center justify-between gap-3 border-b border-border bg-background/70 px-5 py-3 backdrop-blur-xl">
           <div className="flex items-center gap-2 min-w-0">
             <ModelSelect value={model} onChange={setModel} />
@@ -355,6 +377,20 @@ function Shell() {
             <ThemeSwitcher />
           </div>
         </header>
+
+        {projectBanner ? (
+          <div className="flex flex-none flex-wrap items-center gap-2 border-b border-border bg-muted/30 px-5 py-2 text-[12px] backdrop-blur-md">
+            <FolderKanban className="h-4 w-4 shrink-0 text-primary" />
+            <span className="font-medium text-foreground">Projeto: {projectBanner}</span>
+            <button
+              type="button"
+              className="ml-auto rounded-lg border border-border bg-background/80 px-2 py-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
+              onClick={() => setProjectBanner(null)}
+            >
+              Fechar
+            </button>
+          </div>
+        ) : null}
 
         <div className="flex flex-none items-center gap-2 border-b border-border/40 bg-surface/30 px-5 py-2 text-[11px] text-muted-foreground backdrop-blur-md">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -471,17 +507,18 @@ function Shell() {
             </p>
           </div>
         </footer>
-      </section>
+        </section>
 
-      <div className="hidden lg:block">
-        <RightPanel
-          title={docTitle}
-          content={docContent}
-          onClear={() => {
-            setDocTitle("");
-            setDocContent("");
-          }}
-        />
+        <div className="hidden lg:block">
+          <RightPanel
+            title={docTitle}
+            content={docContent}
+            onClear={() => {
+              setDocTitle("");
+              setDocContent("");
+            }}
+          />
+        </div>
       </div>
 
       <MagicTemplatesSheet
@@ -492,7 +529,7 @@ function Shell() {
           setTemplatesOpen(false);
         }}
       />
-    </div>
+    </>
   );
 }
 
