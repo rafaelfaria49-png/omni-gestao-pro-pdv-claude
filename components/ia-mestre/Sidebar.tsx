@@ -13,16 +13,17 @@ import {
   Wand2,
   Zap,
 } from "lucide-react"
-import { useState } from "react"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
 
 type NavId = "projects" | "templates" | "images" | "train" | "settings"
 
-const NAV: { id: NavId; label: string; icon: typeof Bot; badge?: string }[] = [
-  { id: "projects", label: "Meus Projetos", icon: FolderKanban, badge: "12" },
+const NAV: { id: NavId; label: string; icon: typeof Bot; badge?: string; href?: string }[] = [
+  { id: "projects", label: "Meus Projetos", icon: FolderKanban, badge: "12", href: "/dashboard/ia-mestre/projetos" },
   { id: "templates", label: "Templates Mágicos", icon: Wand2 },
-  { id: "images", label: "Gerador de Imagens", icon: ImagePlus, badge: "Novo" },
-  { id: "train", label: "Treinar IA", icon: GraduationCap },
-  { id: "settings", label: "Configurações", icon: Settings },
+  { id: "images", label: "Gerador de Imagens", icon: ImagePlus, badge: "Novo", href: "/dashboard/ia-mestre/gerador-imagens" },
+  { id: "train", label: "Treinar IA", icon: GraduationCap, href: "/dashboard/ia-mestre/treinar" },
+  { id: "settings", label: "Configurações", icon: Settings, href: "/dashboard/ia-mestre/configuracoes" },
 ]
 
 const RECENT_CHATS = [
@@ -35,27 +36,46 @@ const RECENT_CHATS = [
   "Treino atendimento",
 ]
 
-export function Sidebar({ onTemplatesClick }: { onTemplatesClick?: () => void }) {
-  const [active, setActive] = useState<NavId>("projects")
+export function Sidebar() {
+  const pathname = usePathname()
+  const router = useRouter()
   const pct = Math.round((2405 / 5000) * 100)
+
+  const openTemplates = () => {
+    if (pathname === "/dashboard/ia-mestre") {
+      window.dispatchEvent(new Event("ia-mestre-open-templates"))
+    } else {
+      router.push("/dashboard/ia-mestre?templates=1")
+    }
+  }
+
+  const navActive = (item: (typeof NAV)[number]) => {
+    if (!item.href) return false
+    if (item.href === "/dashboard/ia-mestre/projetos") return pathname.startsWith("/dashboard/ia-mestre/projetos")
+    return pathname === item.href || pathname.startsWith(`${item.href}/`)
+  }
 
   return (
     <aside className="flex h-full w-[250px] flex-none flex-col border-r border-border bg-panel/80 backdrop-blur-xl">
       <div className="flex items-center gap-3 px-5 py-5">
-        <motion.div
-          initial={{ scale: 0.6, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow"
-        >
-          <Bot className="h-5 w-5 text-primary-foreground" />
-          <span
-            className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-panel"
-            style={{ background: "var(--color-primary-glow)" }}
-          />
-        </motion.div>
+        <Link href="/dashboard/ia-mestre" className="shrink-0">
+          <motion.div
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="relative flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-primary shadow-glow"
+          >
+            <Bot className="h-5 w-5 text-primary-foreground" />
+            <span
+              className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-panel"
+              style={{ background: "var(--color-primary-glow)" }}
+            />
+          </motion.div>
+        </Link>
         <div className="leading-tight">
-          <h1 className="font-display text-base font-bold tracking-tight">IA Mestre</h1>
+          <Link href="/dashboard/ia-mestre" className="block font-display text-base font-bold tracking-tight">
+            IA Mestre
+          </Link>
           <p className="flex items-center gap-1 text-[12px] text-muted-foreground">
             <Sparkles className="h-2.5 w-2.5" /> RafaCell · Pro
           </p>
@@ -67,44 +87,57 @@ export function Sidebar({ onTemplatesClick }: { onTemplatesClick?: () => void })
         <ul className="space-y-1">
           {NAV.map((item) => {
             const Icon = item.icon
-            const isActive = active === item.id
+            const isActive = item.id === "templates" ? false : navActive(item)
+            const inner = (
+              <>
+                {isActive ? (
+                  <motion.span
+                    layoutId="sidebar-active-pill"
+                    className="absolute inset-0 -z-10 rounded-xl bg-gradient-primary shadow-elegant"
+                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                  />
+                ) : null}
+                <Icon
+                  className="h-4 w-4 flex-none"
+                  style={{ color: isActive ? "var(--color-primary-foreground)" : "var(--color-muted-foreground)" }}
+                />
+                <span className="flex-1 text-left">{item.label}</span>
+                {item.badge ? (
+                  <span
+                    className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                    style={{
+                      background: isActive
+                        ? "color-mix(in oklab, var(--color-primary-foreground) 22%, transparent)"
+                        : "var(--color-muted)",
+                      color: isActive ? "var(--color-primary-foreground)" : "var(--color-muted-foreground)",
+                    }}
+                  >
+                    {item.badge}
+                  </span>
+                ) : null}
+              </>
+            )
+
             return (
               <li key={item.id}>
-                <button
-                  onClick={() => {
-                    setActive(item.id)
-                    if (item.id === "templates") onTemplatesClick?.()
-                  }}
-                  className="relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-medium transition"
-                  style={{ color: isActive ? "var(--color-primary-foreground)" : "var(--color-foreground)" }}
-                  type="button"
-                >
-                  {isActive ? (
-                    <motion.span
-                      layoutId="sidebar-active-pill"
-                      className="absolute inset-0 -z-10 rounded-xl bg-gradient-primary shadow-elegant"
-                      transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                    />
-                  ) : null}
-                  <Icon
-                    className="h-4 w-4 flex-none"
-                    style={{ color: isActive ? "var(--color-primary-foreground)" : "var(--color-muted-foreground)" }}
-                  />
-                  <span className="flex-1 text-left">{item.label}</span>
-                  {item.badge ? (
-                    <span
-                      className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-                      style={{
-                        background: isActive
-                          ? "color-mix(in oklab, var(--color-primary-foreground) 22%, transparent)"
-                          : "var(--color-muted)",
-                        color: isActive ? "var(--color-primary-foreground)" : "var(--color-muted-foreground)",
-                      }}
-                    >
-                      {item.badge}
-                    </span>
-                  ) : null}
-                </button>
+                {item.href ? (
+                  <Link
+                    href={item.href}
+                    className="relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-medium transition"
+                    style={{ color: isActive ? "var(--color-primary-foreground)" : "var(--color-foreground)" }}
+                  >
+                    {inner}
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openTemplates()}
+                    className="relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-medium transition"
+                    style={{ color: "var(--color-foreground)" }}
+                  >
+                    {inner}
+                  </button>
+                )}
               </li>
             )
           })}
@@ -118,16 +151,22 @@ export function Sidebar({ onTemplatesClick }: { onTemplatesClick?: () => void })
           <ul className="space-y-0.5">
             {RECENT_CHATS.map((chat) => (
               <li key={chat}>
-                <button
-                  className="group/chat flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                  type="button"
-                >
-                  <MessageSquare className="h-3.5 w-3.5 flex-none opacity-60" />
-                  <span className="flex-1 truncate">{chat}</span>
-                  <span className="flex h-6 w-6 flex-none items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover/chat:opacity-100">
+                <div className="group/chat flex w-full items-center gap-1">
+                  <Link
+                    href="/dashboard/ia-mestre"
+                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5 flex-none opacity-60" />
+                    <span className="flex-1 truncate">{chat}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    className="flex h-8 w-8 flex-none items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover/chat:opacity-100"
+                    aria-label={`Remover ${chat}`}
+                  >
                     <Trash2 className="h-3 w-3" />
-                  </span>
-                </button>
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -168,4 +207,3 @@ export function Sidebar({ onTemplatesClick }: { onTemplatesClick?: () => void })
     </aside>
   )
 }
-
