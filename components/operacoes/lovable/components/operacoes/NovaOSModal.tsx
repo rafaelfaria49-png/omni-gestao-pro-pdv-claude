@@ -51,7 +51,7 @@ const ESTADOS: { value: ChecklistEstado; label: string; cls: string }[] = [
 ];
 
 export function NovaOSModal({ open, onOpenChange }: Props) {
-  const { clientes, tecnicos, servicosCatalogo, pecasEstoque, storeId, criarOS } = useOS();
+  const { clientes, tecnicos, servicosCatalogo, pecasEstoque, equipamentosModelos, storeId, criarOS } = useOS();
   const navigate = useNavigate();
 
   // Cliente
@@ -147,6 +147,11 @@ export function NovaOSModal({ open, onOpenChange }: Props) {
     if (!defeito.trim()) return toast.error("Descreva o defeito relatado");
 
     const tecnico = tecnicos.find((t) => t.id === tecnicoId);
+    const modeloMatch = equipamentosModelos.find((m) => {
+      const nameOk = m.name.trim().toLowerCase() === modelo.trim().toLowerCase();
+      const brandOk = !marca.trim() || m.brand.trim().toLowerCase() === marca.trim().toLowerCase();
+      return nameOk && brandOk;
+    });
     const prazoMs = 24 * 3600 * 1000 * 2;
     const termoConsolidado = servicos.map((s) => `▸ ${s.nome} (${s.prazoGarantiaDias} dias)\n${s.termoGarantia}`).join("\n\n---\n\n");
 
@@ -166,6 +171,8 @@ export function NovaOSModal({ open, onOpenChange }: Props) {
         numeroSerie: serie || undefined,
         acessorios: acessorios ? acessorios.split(",").map((x) => x.trim()).filter(Boolean) : [],
         defeitoRelatado: defeito,
+        defeitosComuns: modeloMatch?.commonDefects?.length ? modeloMatch.commonDefects : undefined,
+        checklistRecomendado: modeloMatch?.recommendedChecklist?.length ? modeloMatch.recommendedChecklist : undefined,
       },
       status: "aberta",
       prioridade,
@@ -254,8 +261,36 @@ export function NovaOSModal({ open, onOpenChange }: Props) {
                   </SelectContent>
                 </Select>
               </div>
-              <div><Label>Marca *</Label><Input value={marca} onChange={(e) => setMarca(e.target.value)} maxLength={40} /></div>
-              <div><Label>Modelo *</Label><Input value={modelo} onChange={(e) => setModelo(e.target.value)} maxLength={60} /></div>
+              <div>
+                <Label>Marca *</Label>
+                <Input
+                  value={marca}
+                  onChange={(e) => setMarca(e.target.value)}
+                  maxLength={40}
+                  list="og_operacoes_marcas"
+                />
+                <datalist id="og_operacoes_marcas">
+                  {Array.from(new Set(equipamentosModelos.map((m) => m.brand).filter(Boolean))).map((b) => (
+                    <option key={b} value={b} />
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <Label>Modelo *</Label>
+                <Input
+                  value={modelo}
+                  onChange={(e) => setModelo(e.target.value)}
+                  maxLength={60}
+                  list="og_operacoes_modelos"
+                />
+                <datalist id="og_operacoes_modelos">
+                  {equipamentosModelos
+                    .filter((m) => !marca.trim() || m.brand.toLowerCase() === marca.trim().toLowerCase())
+                    .map((m) => (
+                      <option key={m.id} value={m.name} />
+                    ))}
+                </datalist>
+              </div>
               <div><Label>IMEI / Nº de série</Label><Input value={serie} onChange={(e) => setSerie(e.target.value)} maxLength={40} /></div>
               <div><Label>Senha (opcional)</Label><Input value={senha} onChange={(e) => setSenha(e.target.value)} maxLength={40} placeholder="Padrão, biometria, etc." /></div>
               <div><Label>Acessórios entregues</Label><Input value={acessorios} onChange={(e) => setAcessorios(e.target.value)} maxLength={120} placeholder="Carregador, capa, cabo..." /></div>

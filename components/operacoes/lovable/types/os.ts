@@ -44,6 +44,9 @@ export interface Equipamento {
   numeroSerie?: string;
   acessorios?: string[]; // Carregador, capa, cabo...
   defeitoRelatado: string;
+  /** Dados opcionais vindos do Cadastros HUB (EquipamentoModelo). */
+  defeitosComuns?: string[];
+  checklistRecomendado?: string[];
 }
 
 export interface Tecnico {
@@ -66,12 +69,21 @@ export interface PecaUsada {
   sku?: string;
   quantidade: number;
   valorUnitario: number;
+  /** Desconto em valor (R$) aplicado à linha, após qtd × unitário. */
+  desconto?: number;
+  observacao?: string;
+  /** Dias de garantia do cadastro de produto (quando aplicável). */
+  prazoGarantiaDias?: number;
 }
 
 export interface Servico {
   id: string;
   descricao: string;
   valor: number;
+  desconto?: number;
+  observacao?: string;
+  prazoGarantiaDias?: number;
+  termoGarantia?: string;
 }
 
 export interface Orcamento {
@@ -82,9 +94,12 @@ export interface Orcamento {
   desconto: number;
   total: number;
   criadoEm: string;
+  atualizadoEm?: string;
   enviadoEm?: string;
   respondidoEm?: string;
   validoAte?: string;
+  /** Observação geral do orçamento (campo principal persistido). */
+  observacao?: string;
   observacoes?: string;
 }
 
@@ -108,8 +123,13 @@ export type EventoTipo =
   | "atribuicao_tecnico"
   | "orcamento_criado"
   | "orcamento_enviado"
+  | "orcamento_item_adicionado"
+  | "orcamento_item_removido"
+  | "orcamento_atualizado"
   | "orcamento_aprovado"
   | "orcamento_recusado"
+  | "faturamento_os_pendente"
+  | "faturamento_os_cancelado"
   | "anexo_adicionado"
   | "observacao"
   | "mensagem_cliente"
@@ -173,6 +193,15 @@ export interface OrdemServico {
   servicosCatalogo?: { servicoId: string; descricao: string; custoInterno: number; valorVenda: number; prazoGarantiaDias: number; termoGarantia: string }[];
   senhaEquipamento?: string;
   observacaoCliente?: string;
+
+  /** Base para faturamento real (payload apenas; sem modelo financeiro ainda). */
+  faturamentoPendente?: boolean;
+  faturamentoStatus?: "pendente" | "cancelado";
+  faturamentoOrigem?: "orcamento_os";
+  faturamentoTotal?: number;
+  faturamentoCriadoEm?: string;
+  /** Referência humana + id estável da OS (ex.: código · uuid). */
+  faturamentoReferencia?: string;
 }
 
 // ----------------------------------------------------------------------------

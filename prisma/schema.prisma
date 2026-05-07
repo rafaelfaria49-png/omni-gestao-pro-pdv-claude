@@ -47,12 +47,19 @@ model Store {
 
   clientes Cliente[]
   produtos Produto[]
+  servicos Servico[]
   ordensServico OrdemServico[]
   contasReceber ContaReceberTitulo[]
   contasPagar ContaPagarTitulo[]
   fornecedores Fornecedor[]
   vendas Venda[]
   categorias CategoriaProduto[]
+  categoriasCadastro CategoriaCadastro[]
+  marcasCadastro MarcaCadastro[]
+  tecnicos Tecnico[]
+  equipamentosModelos EquipamentoModelo[]
+  productMedia ProductMedia[]
+  marketplaceListings MarketplaceListing[]
   settings StoreSettings?
   iaConversations IaConversation[]
   iaMessages IaMessage[]
@@ -313,8 +320,20 @@ model Cliente {
   storeId   String   @default("loja-1") @map("storeId")
   store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
   name      String   @map("name")
+  /** PF/PJ para Cadastros HUB e OS futuro. */
+  kind      String   @default("PF") @map("kind")
+  /** CPF/CNPJ (normalizado ou com máscara). */
+  document  String   @default("") @map("document")
   phone     String?  @map("phone")
   email     String?  @map("email")
+  /** Ex.: "São Paulo/SP" (compatível com UI atual). */
+  city      String   @default("") @map("city")
+  /** Tags livres (UI atual usa string[]). */
+  tags      Json?    @map("tags") @db.JsonB
+  active    Boolean  @default(true) @map("active")
+  /** Campos auxiliares para UI (opcionais). */
+  totalSpent Float   @default(0) @map("totalSpent")
+  lastPurchaseAt DateTime? @map("lastPurchaseAt")
   createdAt DateTime @default(now()) @map("createdAt")
   updatedAt DateTime @default(now()) @updatedAt @map("updatedAt")
 
@@ -384,20 +403,139 @@ model Produto {
   /** Código de barras (EAN/GTIN) — leitura no PDV Alta Performance. */
   barcode   String?  @map("barcode")
   name      String   @map("name")
+  brand     String   @default("") @map("brand")
+  supplierName String @default("") @map("supplierName")
   stock     Int      @default(0) @map("stock")
   /** Custo unitário (planilhas/backup): coluna `price_cost` no Supabase. */
   precoCusto Float   @default(0) @map("price_cost")
   price     Float    @default(0) @map("price")
   category  String?  @map("category")
+  warrantyDays Int   @default(0) @map("warrantyDays")
+  status    String   @default("Ativo") @map("status")
+  active    Boolean  @default(true) @map("active")
   createdAt DateTime @default(now()) @map("createdAt")
   updatedAt DateTime @default(now()) @updatedAt @map("updatedAt")
 
   ordemServicoItens OrdemServicoItem[]
+  media ProductMedia[]
+  marketplaceListings MarketplaceListing[]
 
   @@index([storeId])
   @@unique([storeId, sku], name: "storeId_sku")
   @@unique([storeId, barcode], name: "storeId_barcode")
   @@map("estoque_produtos")
+}
+
+model Tecnico {
+  id        String   @id @default(cuid())
+  storeId   String   @default("loja-1") @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  name      String   @map("name")
+  email     String   @default("") @map("email")
+  phone     String   @default("") @map("phone")
+  role      String   @default("") @map("role")
+  specialty String   @default("") @map("specialty")
+  commissionPercent Float @default(0) @map("commissionPercent")
+  active    Boolean  @default(true) @map("active")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@index([storeId])
+  @@index([name])
+  @@map("tecnicos")
+}
+
+model EquipamentoModelo {
+  id        String   @id @default(cuid())
+  storeId   String   @default("loja-1") @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  name      String   @map("name")
+  brand     String   @default("") @map("brand")
+  type      String   @default("") @map("type")
+  year      Int      @default(0) @map("year")
+  compatibleParts Json? @map("compatibleParts") @db.JsonB
+  commonDefects   Json? @map("commonDefects") @db.JsonB
+  recommendedChecklist Json? @map("recommendedChecklist") @db.JsonB
+  averageRepairTime String @default("") @map("averageRepairTime")
+  active    Boolean  @default(true) @map("active")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@index([storeId])
+  @@index([brand])
+  @@index([name])
+  @@map("equipamentos_modelos")
+}
+
+model ProductMedia {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId String   @map("productId")
+  product   Produto  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  url       String   @map("url")
+  type      String   @default("image") @map("type")
+  source    String   @default("manual") @map("source")
+  isPrimary Boolean  @default(false) @map("isPrimary")
+  createdAt DateTime @default(now()) @map("createdAt")
+
+  @@index([storeId])
+  @@index([productId])
+  @@unique([productId, url], name: "productId_url")
+  @@map("product_media")
+}
+
+model MarketplaceListing {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId String   @map("productId")
+  product   Produto  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  channel     String   @map("channel")
+  status      String   @default("draft") @map("status")
+  title       String   @default("") @map("title")
+  description String   @default("") @map("description") @db.Text
+  price       Float    @default(0) @map("price")
+  externalId  String   @default("") @map("externalId")
+  publishedAt DateTime? @map("publishedAt")
+  createdAt   DateTime @default(now()) @map("createdAt")
+  updatedAt   DateTime @updatedAt @map("updatedAt")
+
+  @@index([storeId])
+  @@index([productId])
+  @@index([channel])
+  @@index([status])
+  @@unique([storeId, channel, externalId], name: "store_channel_external")
+  @@map("marketplace_listings")
+}
+
+model Servico {
+  id        String   @id @default(cuid())
+  storeId   String   @default("loja-1") @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  name      String   @map("name")
+  category  String   @default("") @map("category")
+  /** Ex.: "45 min" (mantém UI atual). */
+  avgTime   String   @default("") @map("avgTime")
+  cost      Float    @default(0) @map("cost")
+  price     Float    @default(0) @map("price")
+  margin    Float    @default(0) @map("margin")
+  warrantyDays Int   @default(0) @map("warrantyDays")
+  terms     String   @default("") @map("terms") @db.Text
+  status    String   @default("Ativo") @map("status")
+  active    Boolean  @default(true) @map("active")
+
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@index([storeId])
+  @@index([name])
+  @@map("servicos")
 }
 
 // --- Tabelas auxiliares (API ops / WhatsApp / auditoria) — ver prisma/supabase_manual_full_schema.sql
@@ -464,11 +602,25 @@ model Fornecedor {
   id        String   @id @default(cuid())
   storeId   String   @default("loja-1") @map("storeId")
   store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /** Nome fantasia / exibição. */
   name      String   @map("name")
+  /** Razão social (opcional, mas suportada pela UI). */
+  legalName String   @default("") @map("legalName")
+  /** Contato principal (opcional). */
+  contactName String @default("") @map("contactName")
   /** CPF/CNPJ ou identificador fiscal livre. */
   document  String   @default("") @map("document")
   email     String   @default("") @map("email")
   phone     String   @default("") @map("phone")
+  whatsapp  String   @default("") @map("whatsapp")
+  /** Endereço completo (rua/numero/bairro/cidade/uf/cep) como texto livre. */
+  address   String   @default("") @map("address") @db.Text
+  /** Lista livre de itens fornecidos (texto). */
+  productsProvided String @default("") @map("productsProvided") @db.Text
+  /** Prazo médio (texto, ex.: "5 dias"). */
+  avgLeadTime String @default("") @map("avgLeadTime")
+  /** Condição de pagamento (texto, ex.: "30/60"). */
+  paymentTerms String @default("") @map("paymentTerms")
   notes     String?  @map("notes") @db.Text
   active    Boolean  @default(true) @map("active")
   createdAt DateTime @default(now()) @map("createdAt")
@@ -479,6 +631,42 @@ model Fornecedor {
   @@index([storeId])
   @@index([name])
   @@map("fornecedores")
+}
+
+/** Categorias do Cadastros HUB (multi-entidade) por unidade. */
+model CategoriaCadastro {
+  id        String   @id @default(cuid())
+  storeId   String   @default("loja-1") @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  name      String   @map("name")
+  /** "produto" | "servico" | "equipamento" | "geral" */
+  type      String   @default("geral") @map("type")
+  active    Boolean  @default(true) @map("active")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@unique([storeId, type, name], name: "categoria_cadastro_store_type_name")
+  @@index([storeId])
+  @@index([type])
+  @@map("categorias_cadastro")
+}
+
+/** Marcas do Cadastros HUB por unidade. */
+model MarcaCadastro {
+  id        String   @id @default(cuid())
+  storeId   String   @default("loja-1") @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  name      String   @map("name")
+  /** Opcional: classificar por tipo (produto/equipamento/geral). */
+  type      String   @default("") @map("type")
+  active    Boolean  @default(true) @map("active")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@unique([storeId, type, name], name: "marca_cadastro_store_type_name")
+  @@index([storeId])
+  @@index([type])
+  @@map("marcas_cadastro")
 }
 
 /** Título a pagar (fornecedor, boleto, aluguel, etc.) — escopo exclusivo da loja. */

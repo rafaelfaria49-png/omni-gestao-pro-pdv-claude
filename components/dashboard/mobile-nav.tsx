@@ -4,13 +4,14 @@ import {
   Home,
   LayoutDashboard,
   ShoppingCart,
-  ClipboardList,
+  Activity,
   Bot,
   Package,
   Wallet,
   Menu,
   UtensilsCrossed,
   MessageCircle,
+  Database,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -22,7 +23,6 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/co
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { 
-  FileText, 
   Users, 
   BarChart3, 
   Settings,
@@ -52,26 +52,19 @@ type MobileFullItem = {
 const mobileMenuItems: MobileMoreItem[] = [
   { icon: LayoutDashboard, label: "Painel", href: "/dashboard" },
   { icon: ShoppingCart, label: "PDV", page: "vendas", href: "/dashboard/vendas" },
-  { icon: ClipboardList, label: "OS", page: "os" },
+  { icon: Activity, label: "Operações", href: "/dashboard/operacoes-v2" },
   { icon: Package, label: "Estoque", page: "produtos" },
   { icon: Menu, label: "Mais", href: "#", isMore: true },
 ]
 
 const fullMenuItems: MobileFullItem[] = [
   { icon: Bot, label: "🤖 IA Mestre", externalPath: "/dashboard/ia-mestre" },
-  { icon: MessageCircle, label: "WhatsApp", externalPath: "/dashboard/whatsapp" },
+  { icon: MessageCircle, label: "WhatsApp HUB", externalPath: "/dashboard/whatsapp" },
+  { icon: Activity, label: "Operações HUB", externalPath: "/dashboard/operacoes-v2" },
+  { icon: Database, label: "Cadastros HUB", externalPath: "/dashboard/cadastros-v2" },
   { icon: LayoutDashboard, label: "Painel inicial", externalPath: "/dashboard" },
   { icon: ShoppingCart, label: "Vendas (Caixa/PDV)", page: "vendas", externalPath: "/dashboard/vendas" },
   { icon: ShoppingCart, label: "Trocas e devolução", page: "trocas" },
-  { icon: FileText, label: "Orçamentos", page: "orcamentos" },
-  {
-    icon: ClipboardList,
-    label: "Ordens de Serviço",
-    page: "os",
-    sub: [
-      { label: "Painel integrado", page: "os", externalPath: "/dashboard/os" },
-    ],
-  },
   {
     icon: Package,
     label: "Estoque",

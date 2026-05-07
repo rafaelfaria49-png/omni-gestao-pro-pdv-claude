@@ -7,9 +7,8 @@ import {
   Sparkles,
   Megaphone,
   Crown,
-  FileText,
   ShoppingCart,
-  Wrench,
+  Activity,
   Package,
   Wallet,
   Users,
@@ -20,6 +19,7 @@ import {
   Store,
   MessageCircle,
   Receipt,
+  Database,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,88 +45,102 @@ function isRouteActive(path: string, to: string): boolean {
   );
 }
 
-const workspace: Item[] = [
-  { to: "/dashboard", label: "Painel Inicial", icon: LayoutDashboard },
-  { to: "/dashboard/ia-mestre", label: "IA Mestre", icon: Sparkles, badge: "AI" },
-  { to: "/dashboard/marketing-ia", label: "Marketing IA", icon: Megaphone, badge: "AI" },
-  { to: "/dashboard/whatsapp", label: "WhatsApp", icon: MessageCircle },
-  { to: "/dashboard/master-console", label: "Master Console", icon: Crown },
-  { to: "/dashboard/orcamentos", label: "Orçamentos", icon: FileText },
-  { to: "/vendas-hub", label: "Vendas HUB", icon: ShoppingCart },
-  { to: "/dashboard/os", label: "Ordens de Serviço", icon: Wrench },
-  { to: "/dashboard/estoque", label: "Estoque", icon: Package },
-  { to: "/dashboard/marketplace", label: "Marketplace", icon: Store },
-  { to: "/dashboard/financeiro", label: "Financeiro", icon: Wallet },
-  { to: "/dashboard/clientes", label: "Clientes", icon: Users },
+// ── WORKSPACE ────────────────────────────────────────────────────────────────
+const workspaceItems: Item[] = [
+  { to: "/dashboard",           label: "Painel Inicial", icon: LayoutDashboard },
+  { to: "/dashboard/ia-mestre", label: "IA Mestre",      icon: Sparkles, badge: "AI" },
+];
+
+// ── HUBS ─────────────────────────────────────────────────────────────────────
+const hubsItems: Item[] = [
+  { to: "/dashboard/marketing-ia",   label: "Marketing IA",   icon: Megaphone,    badge: "AI" },
+  { to: "/dashboard/whatsapp",       label: "WhatsApp HUB",   icon: MessageCircle },
+  { to: "/dashboard/operacoes-v2",   label: "Operações HUB",  icon: Activity      },
+  { to: "/dashboard/cadastros-v2",   label: "Cadastros HUB",  icon: Database      },
+  { to: "/vendas-hub",               label: "Vendas HUB",     icon: ShoppingCart  },
+  { to: "/dashboard/marketplace",    label: "Marketplace",    icon: Store         },
+  { to: "/dashboard/financeiro",     label: "Financeiro",     icon: Wallet        },
+];
+
+// ── GESTÃO ───────────────────────────────────────────────────────────────────
+const gestaoItems: Item[] = [
+  { to: "/dashboard/clientes", label: "Clientes", icon: Users   },
+  { to: "/dashboard/estoque",  label: "Estoque",  icon: Package },
   {
     to: "/dashboard/relatorios",
     label: "Relatórios",
     icon: BarChart3,
-    sub: [{ to: "/dashboard/vendas-arquivo-geral", label: "Histórico de Vendas", icon: Receipt }],
+    sub: [
+      { to: "/dashboard/vendas-arquivo-geral", label: "Histórico de Vendas", icon: Receipt },
+    ],
   },
 ];
 
-const administration: Item[] = [
-  { to: "/dashboard/unidades", label: "Gestão da Rede", icon: Network },
-  { to: "/dashboard/configuracoes", label: "Configurações", icon: Settings },
+// ── ADMINISTRAÇÃO ─────────────────────────────────────────────────────────────
+const administrationItems: Item[] = [
+  { to: "/dashboard/master-console", label: "Master Console", icon: Crown    },
+  { to: "/dashboard/unidades",       label: "Gestão da Rede", icon: Network  },
+  { to: "/dashboard/configuracoes",  label: "Configurações",  icon: Settings },
 ];
+
+// ── Componente ────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
   const pathname = usePathname();
 
-  const renderItem = (item: Item) => {
-    const path = pathname || "";
+  const rowClasses = (active: boolean) =>
+    [
+      "group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] transition-all duration-200",
+      active
+        ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
+        : "text-muted-foreground hover:text-foreground hover:bg-panel",
+    ].join(" ");
 
-    const rowClasses = (active: boolean) =>
-      [
-        "group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-[13px] transition-all duration-200",
-        active
-          ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
-          : "text-muted-foreground hover:text-foreground hover:bg-panel",
-      ].join(" ");
-
-    const renderRow = (params: {
-      to: string;
-      label: string;
-      Icon: LucideIcon;
-      active: boolean;
-      badge?: string;
-    }) => {
-      const { to, label, Icon, active, badge } = params;
-      return (
-        <Link key={to} href={to} className={rowClasses(active)}>
+  const renderRow = (params: {
+    to: string;
+    label: string;
+    Icon: LucideIcon;
+    active: boolean;
+    badge?: string;
+  }) => {
+    const { to, label, Icon, active, badge } = params;
+    return (
+      <Link key={to} href={to} className={rowClasses(active)}>
+        <span
+          className={[
+            "absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-r-full bg-primary transition-opacity",
+            active ? "opacity-100" : "opacity-0",
+          ].join(" ")}
+        />
+        <span
+          className={[
+            "h-7 w-7 shrink-0 grid place-items-center rounded-lg transition-all duration-200",
+            active
+              ? "bg-primary/20 ring-1 ring-primary/30 text-primary"
+              : "bg-muted/60 ring-1 ring-border/40 text-muted-foreground group-hover:bg-background group-hover:ring-border group-hover:text-foreground",
+          ].join(" ")}
+        >
+          <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+        </span>
+        <span className="flex-1 truncate tracking-tight">{label}</span>
+        {badge && (
           <span
             className={[
-              "absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2px] rounded-r-full bg-primary transition-opacity",
-              active ? "opacity-100" : "opacity-0",
-            ].join(" ")}
-          />
-          <span
-            className={[
-              "h-7 w-7 shrink-0 grid place-items-center rounded-lg transition-all duration-200",
+              "text-[9px] font-semibold px-1.5 py-0.5 rounded-md tracking-wider",
               active
-                ? "bg-primary/20 ring-1 ring-primary/30 text-primary"
-                : "bg-muted/60 ring-1 ring-border/40 text-muted-foreground group-hover:bg-background group-hover:ring-border group-hover:text-foreground",
+                ? "bg-primary text-primary-foreground"
+                : "bg-foreground/90 text-background",
             ].join(" ")}
           >
-            <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+            {badge}
           </span>
-          <span className="flex-1 truncate tracking-tight">{label}</span>
-          {badge && (
-            <span
-              className={[
-                "text-[9px] font-semibold px-1.5 py-0.5 rounded-md tracking-wider",
-                active
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-foreground/90 text-background",
-              ].join(" ")}
-            >
-              {badge}
-            </span>
-          )}
-        </Link>
-      );
-    };
+        )}
+      </Link>
+    );
+  };
+
+  const renderItem = (item: Item) => {
+    const path = pathname || "";
 
     if (item.sub?.length) {
       const parentActive = isRouteActive(path, item.to);
@@ -145,28 +159,27 @@ export function Sidebar() {
           <div className="ml-3 pl-3 space-y-0.5">
             {item.sub.map((sub) => {
               const active = isRouteActive(path, sub.to);
-              return renderRow({
-                to: sub.to,
-                label: sub.label,
-                Icon: sub.icon,
-                active,
-              });
+              return renderRow({ to: sub.to, label: sub.label, Icon: sub.icon, active });
             })}
           </div>
         </div>
       );
     }
 
-    const Icon = item.icon;
     const active = isRouteActive(path, item.to);
-    return renderRow({
-      to: item.to,
-      label: item.label,
-      Icon,
-      active,
-      badge: item.badge,
-    });
+    return renderRow({ to: item.to, label: item.label, Icon: item.icon, active, badge: item.badge });
   };
+
+  const sectionLabel = (label: string, first = false) => (
+    <div
+      className={[
+        "px-2.5 pb-2 text-[10px] uppercase tracking-[0.14em] font-semibold text-muted-foreground/70",
+        first ? "" : "pt-5",
+      ].join(" ")}
+    >
+      {label}
+    </div>
+  );
 
   return (
     <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r border-border bg-background">
@@ -198,15 +211,17 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        <div className="px-2.5 pb-2 text-[10px] uppercase tracking-[0.14em] font-semibold text-muted-foreground/70">
-          Workspace
-        </div>
-        <div className="space-y-1">{workspace.map(renderItem)}</div>
+        {sectionLabel("Workspace", true)}
+        <div className="space-y-1">{workspaceItems.map(renderItem)}</div>
 
-        <div className="px-2.5 pt-5 pb-2 text-[10px] uppercase tracking-[0.14em] font-semibold text-muted-foreground/70">
-          Administração
-        </div>
-        <div className="space-y-1">{administration.map(renderItem)}</div>
+        {sectionLabel("Hubs")}
+        <div className="space-y-1">{hubsItems.map(renderItem)}</div>
+
+        {sectionLabel("Gestão")}
+        <div className="space-y-1">{gestaoItems.map(renderItem)}</div>
+
+        {sectionLabel("Administração")}
+        <div className="space-y-1">{administrationItems.map(renderItem)}</div>
       </nav>
 
       {/* Footer status */}

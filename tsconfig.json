@@ -48,6 +48,10 @@
       "@/lib/os/format": ["./components/operacoes/lovable/lib/os/format.ts"],
       "@/components/operacoes/lovable/*": ["./components/operacoes/lovable/*"],
       "@/components/operacoes/*": ["./components/operacoes/lovable/components/operacoes/*"],
+      "@/data/cadastros-mock": ["./components/cadastros/lovable/data/cadastros-mock.ts"],
+      "@/components/theme-switcher": ["./components/cadastros/lovable/components/theme-switcher.tsx"],
+      "@/components/cadastros/lovable/*": ["./components/cadastros/lovable/*"],
+      "@/components/cadastros/*": ["./components/cadastros/lovable/components/cadastros/*"],
       "@/*": ["./*"]
     }
   },
@@ -71,6 +75,10 @@
     "components/operacoes/lovable/components/ui",
     "components/operacoes/lovable/hooks",
     "components/operacoes/lovable/lib/utils.ts",
-    "components/operacoes/lovable/test"
+    "components/operacoes/lovable/test",
+    "components/cadastros/lovable/components/ui",
+    "components/cadastros/lovable/routes",
+    "components/cadastros/lovable/hooks",
+    "components/cadastros/lovable/lib/utils.ts"
   ]
 }

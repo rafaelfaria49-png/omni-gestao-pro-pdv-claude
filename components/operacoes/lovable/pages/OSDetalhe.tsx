@@ -31,7 +31,7 @@ const ESTADO_BADGE: Record<string, string> = {
 
 export default function OSDetalhe() {
   const { id = "" } = useParams();
-  const { getOS, moveStatus } = useOS();
+  const { getOS, moveStatus, updateChecklist } = useOS();
   const os = getOS(id);
 
   const [iaOpen, setIaOpen] = useState(false);
@@ -55,6 +55,8 @@ export default function OSDetalhe() {
   }
 
   const currentIndex = PIPELINE.findIndex((p) => p.id === os.status);
+  const cycle = (s: "ok" | "ruim" | "nao_testado"): "ok" | "ruim" | "nao_testado" =>
+    s === "nao_testado" ? "ok" : s === "ok" ? "ruim" : "nao_testado";
 
   return (
     <OperacoesLayout>
@@ -167,9 +169,18 @@ export default function OSDetalhe() {
                 {os.checklist.map((c) => (
                   <div key={c.id} className="flex items-center justify-between rounded-md border border-border bg-background/40 p-2 text-xs">
                     <span>{c.label}</span>
-                    <span className={cn("rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase", ESTADO_BADGE[c.estado])}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = os.checklist?.map((it) => it.id === c.id ? { ...it, estado: cycle(it.estado) } : it);
+                        updateChecklist(os.id, next, "Você");
+                        toast.success("Checklist atualizado");
+                      }}
+                      className={cn("rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase", ESTADO_BADGE[c.estado])}
+                      title="Clique para alternar"
+                    >
                       {c.estado === "nao_testado" ? "N/T" : c.estado}
-                    </span>
+                    </button>
                   </div>
                 ))}
               </div>
