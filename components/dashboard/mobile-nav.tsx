@@ -22,6 +22,7 @@ import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useStoreSettings } from "@/lib/store-settings-provider"
+import { financeiroV2Enabled } from "@/lib/feature-flags"
 import { 
   Users, 
   BarChart3, 
@@ -75,7 +76,23 @@ const fullMenuItems: MobileFullItem[] = [
       { label: "Planejamento de Compras", page: "planejamento-compras" },
     ],
   },
-  { icon: Wallet, label: "Financeiro", page: "fluxo-caixa", sub: [{ label: "Carteiras", page: "carteiras" }, { label: "Fluxo de Caixa", page: "fluxo-caixa" }, { label: "Contas a Pagar", page: "contas-pagar" }, { label: "Contas a Receber", page: "contas-receber" }, { label: "Relatórios Financeiros", page: "relatorios-financeiros" }, { label: "Área do Contador", externalPath: "/contador" }] },
+  ...(financeiroV2Enabled
+    ? [{ icon: Wallet, label: "Financeiro HUB", externalPath: "/dashboard/financeiro-v2" } satisfies MobileFullItem]
+    : [
+        {
+          icon: Wallet,
+          label: "Financeiro",
+          page: "fluxo-caixa",
+          sub: [
+            { label: "Carteiras", page: "carteiras" },
+            { label: "Fluxo de Caixa", page: "fluxo-caixa" },
+            { label: "Contas a Pagar", page: "contas-pagar" },
+            { label: "Contas a Receber", page: "contas-receber" },
+            { label: "Relatórios Financeiros", page: "relatorios-financeiros" },
+            { label: "Área do Contador", externalPath: "/contador" },
+          ],
+        } satisfies MobileFullItem,
+      ]),
   {
     icon: Users,
     label: "Clientes",
@@ -121,7 +138,7 @@ export function MobileNav({ onNavigate, currentPage = "dashboard" }: MobileNavPr
   const fullMenuItemsResolved = useMemo(() => {
     let items = [...fullMenuItems]
     if (staffRole === "VENDEDOR") {
-      items = items.filter((i) => i.label !== "Financeiro" && i.label !== "Configurações")
+      items = items.filter((i) => i.label !== "Financeiro" && i.label !== "Financeiro HUB" && i.label !== "Configurações")
     }
     if (pdvParams.moduloControleConsumo) {
       const idx = items.findIndex((i) => i.page === "trocas")

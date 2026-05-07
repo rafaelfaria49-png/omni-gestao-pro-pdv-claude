@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Camera,
   Image as ImageIcon,
@@ -130,7 +130,7 @@ export function BomDiaModal({
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Reset when template changes
-  useMemo(() => {
+  useEffect(() => {
     setMessage(tpl.caption);
     setActiveTake(0);
     setTakeMedia([null, null, null]);

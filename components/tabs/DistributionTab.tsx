@@ -213,7 +213,7 @@ export const DistributionTab = () => {
           </div>
           <div className="flex-1">
             <p className="text-base font-semibold text-foreground">
-              Aplicar marca d'água da loja
+              Aplicar marca d{"'"}água da loja
             </p>
             <p className="text-sm text-muted-foreground">
               Logo discreto no canto inferior direito.
@@ -264,7 +264,7 @@ export const DistributionTab = () => {
                 <Badge variant="outline">há 2 min</Badge>
               </div>
               <p className="mt-3 rounded-lg bg-muted/60 p-3 text-base text-foreground">
-                "{m.msg}"
+                &quot;{m.msg}&quot;
               </p>
               <div className="mt-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
                 <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-primary">

@@ -22,6 +22,7 @@ import {
   Database,
   type LucideIcon,
 } from "lucide-react";
+import { financeiroV2Enabled } from "@/lib/feature-flags";
 
 type SubItem = {
   to: string;
@@ -59,7 +60,9 @@ const hubsItems: Item[] = [
   { to: "/dashboard/cadastros-v2",   label: "Cadastros HUB",  icon: Database      },
   { to: "/vendas-hub",               label: "Vendas HUB",     icon: ShoppingCart  },
   { to: "/dashboard/marketplace",    label: "Marketplace",    icon: Store         },
-  { to: "/dashboard/financeiro",     label: "Financeiro",     icon: Wallet        },
+  ...(financeiroV2Enabled
+    ? [{ to: "/dashboard/financeiro-v2", label: "Financeiro HUB", icon: Wallet } satisfies Item]
+    : [{ to: "/dashboard/financeiro", label: "Financeiro", icon: Wallet } satisfies Item]),
 ];
 
 // ── GESTÃO ───────────────────────────────────────────────────────────────────
