@@ -95,27 +95,27 @@ export function FinanceiroHubIsolated() {
     // Conecta o bundle Lovable (que usa var(--color-*)) aos tokens globais do OmniGestão.
     // Mantém escopo local para evitar side-effects globais.
     return {
-      ["--color-background"]: "hsl(var(--background))",
-      ["--color-foreground"]: "hsl(var(--foreground))",
-      ["--color-card"]: "hsl(var(--card))",
-      ["--color-card-foreground"]: "hsl(var(--card-foreground))",
-      ["--color-popover"]: "hsl(var(--popover))",
-      ["--color-popover-foreground"]: "hsl(var(--popover-foreground))",
-      ["--color-border"]: "hsl(var(--border))",
-      ["--color-input"]: "hsl(var(--input))",
-      ["--color-muted"]: "hsl(var(--muted))",
-      ["--color-muted-foreground"]: "hsl(var(--muted-foreground))",
-      ["--color-primary"]: chartPalette.chart1,
-      ["--color-primary-foreground"]: "hsl(var(--primary-foreground))",
-      ["--color-ring"]: "hsl(var(--ring))",
+      "--color-background": "hsl(var(--background))",
+      "--color-foreground": "hsl(var(--foreground))",
+      "--color-card": "hsl(var(--card))",
+      "--color-card-foreground": "hsl(var(--card-foreground))",
+      "--color-popover": "hsl(var(--popover))",
+      "--color-popover-foreground": "hsl(var(--popover-foreground))",
+      "--color-border": "hsl(var(--border))",
+      "--color-input": "hsl(var(--input))",
+      "--color-muted": "hsl(var(--muted))",
+      "--color-muted-foreground": "hsl(var(--muted-foreground))",
+      "--color-primary": chartPalette.chart1,
+      "--color-primary-foreground": "hsl(var(--primary-foreground))",
+      "--color-ring": "hsl(var(--ring))",
       // Charts
-      ["--color-chart-2"]: chartPalette.chart2,
-      ["--color-chart-3"]: chartPalette.chart3,
-      ["--color-chart-4"]: chartPalette.chart4,
-      ["--color-chart-5"]: chartPalette.chart5,
+      "--color-chart-2": chartPalette.chart2,
+      "--color-chart-3": chartPalette.chart3,
+      "--color-chart-4": chartPalette.chart4,
+      "--color-chart-5": chartPalette.chart5,
       // Mantém destructive vindo do tema global (alertas/erros), não para série de gráficos.
-      ["--color-destructive"]: "hsl(var(--destructive))",
-    } satisfies CSSProperties;
+      "--color-destructive": "hsl(var(--destructive))",
+    } as unknown as CSSProperties;
   }, [chartPalette]);
 
   return (
