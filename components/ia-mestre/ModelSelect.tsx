@@ -53,12 +53,15 @@ export function ModelSelect({ value, onChange }: { value: ModelId; onChange: (v:
   }
   return (
     <Select.Root value={value} onValueChange={(v) => onChange(v as ModelId)}>
-      <Select.Trigger className="group flex items-center gap-2 rounded-full border border-border bg-surface/70 px-3 py-1.5 text-sm font-medium backdrop-blur-md transition hover:border-primary/40 hover:shadow-elegant">
+      <Select.Trigger className="group flex items-center gap-2 rounded-full border border-border bg-surface/70 px-3 py-1.5 text-[13px] font-medium backdrop-blur-md transition hover:border-primary/40 hover:shadow-elegant">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-primary text-primary-foreground">
           {current?.auto ? <Sparkles className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
         </span>
         <Select.Value>
-          <span className="flex items-center gap-2"><span>{current?.name || "Selecionando..."}</span><span className="hidden text-xs text-muted-foreground sm:inline">· {current?.provider || ""}</span></span>
+          <span className="flex items-center gap-2">
+            <span>{current?.name || "Selecionando..."}</span>
+            <span className="hidden text-[11px] text-muted-foreground sm:inline">· {current?.provider || ""}</span>
+          </span>
         </Select.Value>
         <Select.Icon><ChevronDown className="h-4 w-4 text-muted-foreground transition group-data-[state=open]:rotate-180" /></Select.Icon>
       </Select.Trigger>
@@ -66,14 +69,14 @@ export function ModelSelect({ value, onChange }: { value: ModelId; onChange: (v:
         <Select.Content position="popper" sideOffset={8} className="z-50 min-w-[280px] overflow-hidden rounded-2xl border border-border bg-popover p-1.5 text-popover-foreground shadow-elegant data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
           <Select.Viewport>
             {MODELS.map((m) => (
-              <Select.Item key={m.id} value={m.id} className="relative flex cursor-pointer select-none items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm outline-none data-[highlighted]:bg-muted data-[state=checked]:bg-muted/60">
+              <Select.Item key={m.id} value={m.id} className="relative flex cursor-pointer select-none items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-[13px] outline-none data-[highlighted]:bg-muted data-[state=checked]:bg-muted/60">
                 <div className="flex items-center gap-2.5">
                   <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${m.auto ? "bg-gradient-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
                     {m.auto ? <Sparkles className="h-3.5 w-3.5" /> : <Cpu className="h-3.5 w-3.5" />}
                   </span>
                   <div className="flex flex-col">
                     <Select.ItemText><span className="font-medium">{m.name}</span></Select.ItemText>
-                    <span className="text-xs text-muted-foreground">{m.description}</span>
+                    <span className="text-[11px] text-muted-foreground">{m.description}</span>
                   </div>
                 </div>
                 <Select.ItemIndicator><Check className="h-4 w-4 text-primary" /></Select.ItemIndicator>

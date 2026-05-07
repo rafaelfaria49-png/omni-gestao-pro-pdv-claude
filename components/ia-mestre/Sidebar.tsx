@@ -56,14 +56,14 @@ export function Sidebar({ onTemplatesClick }: { onTemplatesClick?: () => void })
         </motion.div>
         <div className="leading-tight">
           <h1 className="font-display text-base font-bold tracking-tight">IA Mestre</h1>
-          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <p className="flex items-center gap-1 text-[12px] text-muted-foreground">
             <Sparkles className="h-2.5 w-2.5" /> RafaCell · Pro
           </p>
         </div>
       </div>
 
       <nav className="scroll-elegant flex-1 overflow-y-auto px-3 pb-4 pt-2">
-        <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Navegação</p>
+        <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Navegação</p>
         <ul className="space-y-1">
           {NAV.map((item) => {
             const Icon = item.icon
@@ -75,7 +75,7 @@ export function Sidebar({ onTemplatesClick }: { onTemplatesClick?: () => void })
                     setActive(item.id)
                     if (item.id === "templates") onTemplatesClick?.()
                   }}
-                  className="relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-base font-medium transition"
+                  className="relative flex w-full items-center gap-3 rounded-xl px-3 py-3 text-[13px] font-medium transition"
                   style={{ color: isActive ? "var(--color-primary-foreground)" : "var(--color-foreground)" }}
                   type="button"
                 >
@@ -112,14 +112,14 @@ export function Sidebar({ onTemplatesClick }: { onTemplatesClick?: () => void })
 
         <div className="mt-5 border-t border-border/60 pt-4">
           <div className="flex items-center justify-between px-2 pb-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Chats Recentes</p>
-            <span className="text-[10px] font-medium text-muted-foreground/70">{RECENT_CHATS.length}</span>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Chats Recentes</p>
+            <span className="text-[11px] font-medium text-muted-foreground/70">{RECENT_CHATS.length}</span>
           </div>
           <ul className="space-y-0.5">
             {RECENT_CHATS.map((chat) => (
               <li key={chat}>
                 <button
-                  className="group/chat flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                  className="group/chat flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
                   type="button"
                 >
                   <MessageSquare className="h-3.5 w-3.5 flex-none opacity-60" />
@@ -156,7 +156,11 @@ export function Sidebar({ onTemplatesClick }: { onTemplatesClick?: () => void })
           <span>
             <span className="font-semibold text-foreground">2.405</span> / 5.000
           </span>
-          <button className="font-semibold text-primary hover:underline" type="button">
+          <button
+            className="inline-flex h-7 items-center gap-1.5 rounded-full bg-gradient-primary px-3 text-[12px] font-semibold text-primary-foreground shadow-elegant transition hover:opacity-90 hover:shadow-glow"
+            type="button"
+          >
+            <Zap className="h-3.5 w-3.5" />
             Upgrade
           </button>
         </div>

@@ -11,7 +11,7 @@ export function IdentitySwitch({
   onCheckedChange: (v: boolean) => void
 }) {
   return (
-    <label className="inline-flex items-center gap-2.5 rounded-full border border-border bg-surface/70 px-3 py-1.5 text-sm backdrop-blur-md transition hover:border-primary/40">
+    <label className="inline-flex items-center gap-2.5 rounded-full border border-border bg-surface/70 px-3 py-1.5 text-[13px] backdrop-blur-md transition hover:border-primary/40">
       <Store className="h-3.5 w-3.5 text-muted-foreground" />
       <span className="hidden font-medium md:inline">Identidade da Loja</span>
       <span className="md:hidden font-medium">Loja</span>
