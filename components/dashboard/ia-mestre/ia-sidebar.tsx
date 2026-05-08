@@ -1,8 +1,11 @@
 "use client"
 
 import { Sparkles, FolderOpen, Wand2, Image, BrainCircuit, Settings, Zap } from "lucide-react"
+import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
+
+const LS_CONFIG = "ia-mestre-config-v1"
 
 const navItems = [
   { name: "Meus Projetos", icon: FolderOpen, href: "#", active: true },
@@ -13,9 +16,26 @@ const navItems = [
 ]
 
 export function IaSidebar() {
-  const creditsUsed = 2450
-  const creditsTotal = 5000
-  const creditsPercentage = (creditsUsed / creditsTotal) * 100
+  const [creditsUsed, setCreditsUsed] = useState(2405)
+  const [creditsTotal, setCreditsTotal] = useState(5000)
+
+  useEffect(() => {
+    function syncCredits(e?: StorageEvent) {
+      if (e && e.key !== LS_CONFIG) return
+      try {
+        const raw = e?.newValue ?? localStorage.getItem(LS_CONFIG)
+        if (!raw) return
+        const p = JSON.parse(raw) as { creditsUsed?: number; creditsTotal?: number }
+        if (typeof p.creditsUsed === "number") setCreditsUsed(p.creditsUsed)
+        if (typeof p.creditsTotal === "number") setCreditsTotal(p.creditsTotal)
+      } catch { /* ignore */ }
+    }
+    syncCredits()
+    window.addEventListener("storage", syncCredits)
+    return () => window.removeEventListener("storage", syncCredits)
+  }, [])
+
+  const creditsPercentage = creditsTotal > 0 ? (creditsUsed / creditsTotal) * 100 : 0
 
   return (
     <aside className="flex h-full w-64 flex-col border-r border-white/5 bg-black/40 backdrop-blur-xl">

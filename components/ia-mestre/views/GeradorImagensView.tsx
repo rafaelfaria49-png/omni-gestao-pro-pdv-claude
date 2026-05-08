@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 
-const LS_CREDITS = "ia-mestre-gerador-creditos-mock-v1"
+const LS_CONFIG = "ia-mestre-config-v1"
 const LS_HISTORY = "ia-mestre-gerador-historico-v1"
 
 type Aspect = "1:1" | "16:9" | "9:16" | "3:1"
@@ -85,12 +85,17 @@ export function GeradorImagensView() {
   const [generating, setGenerating] = useState(false)
   const [current, setCurrent] = useState<GenItem | null>(null)
   const [history, setHistory] = useState<GenItem[]>([])
-  const [credits, setCredits] = useState(20)
+  const [credits, setCredits] = useState(2595)
 
   useEffect(() => {
     try {
-      const c = localStorage.getItem(LS_CREDITS)
-      if (c != null) setCredits(Math.max(0, Number(c)) || 20)
+      const raw = localStorage.getItem(LS_CONFIG)
+      if (raw) {
+        const p = JSON.parse(raw) as { creditsUsed?: number; creditsTotal?: number }
+        const used = typeof p.creditsUsed === "number" ? p.creditsUsed : 2405
+        const total = typeof p.creditsTotal === "number" ? p.creditsTotal : 5000
+        setCredits(Math.max(0, total - used))
+      }
       const h = localStorage.getItem(LS_HISTORY)
       if (h) {
         const p = JSON.parse(h) as GenItem[]
@@ -100,14 +105,6 @@ export function GeradorImagensView() {
       /* ignore */
     }
   }, [])
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LS_CREDITS, String(credits))
-    } catch {
-      /* ignore */
-    }
-  }, [credits])
 
   useEffect(() => {
     try {
@@ -133,8 +130,8 @@ export function GeradorImagensView() {
       }
       if (credits < 1) {
         toast({
-          title: "Créditos insuficientes (mock)",
-          description: "Recarregue a página para simular novos créditos.",
+          title: "Créditos insuficientes",
+          description: "Adquira mais créditos em Configurações.",
           variant: "destructive",
         })
         return
@@ -154,7 +151,19 @@ export function GeradorImagensView() {
         }
         setCurrent(item)
         pushHistory(item)
-        setCredits((c) => Math.max(0, c - 1))
+        setCredits((c) => {
+          const newC = Math.max(0, c - 1)
+          try {
+            const raw = localStorage.getItem(LS_CONFIG)
+            const cfg = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+            const total = typeof cfg.creditsTotal === "number" ? cfg.creditsTotal : 5000
+            const next = { ...cfg, creditsUsed: Math.max(0, total - newC) }
+            const nextStr = JSON.stringify(next)
+            localStorage.setItem(LS_CONFIG, nextStr)
+            window.dispatchEvent(new StorageEvent("storage", { key: LS_CONFIG, newValue: nextStr }))
+          } catch { /* ignore */ }
+          return newC
+        })
         setGenerating(false)
         toast({ title: "Imagem gerada (mock)", description: "Preview SVG para demonstração." })
       }, 2000)
@@ -260,7 +269,7 @@ export function GeradorImagensView() {
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-4">
             <span className="text-[11px] text-muted-foreground">
-              Créditos mock: <span className="font-semibold text-foreground">{credits}</span>
+              Créditos disponíveis: <span className="font-semibold text-foreground">{credits.toLocaleString("pt-BR")}</span>
             </span>
             <Button
               type="button"

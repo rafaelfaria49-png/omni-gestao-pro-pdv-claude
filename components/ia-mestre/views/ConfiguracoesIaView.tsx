@@ -157,7 +157,9 @@ export function ConfiguracoesIaView() {
   const persist = useCallback(
     (next: IaMestreConfigState) => {
       try {
-        localStorage.setItem(LS_KEY, JSON.stringify(next))
+        const nextStr = JSON.stringify(next)
+        localStorage.setItem(LS_KEY, nextStr)
+        window.dispatchEvent(new StorageEvent("storage", { key: LS_KEY, newValue: nextStr }))
       } catch {
         toast({ title: "Erro ao salvar", variant: "destructive" })
       }

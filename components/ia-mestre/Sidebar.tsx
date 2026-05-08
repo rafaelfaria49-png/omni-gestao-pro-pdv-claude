@@ -14,6 +14,7 @@ import {
   Zap,
 } from "lucide-react"
 import Link from "next/link"
+import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 
 type NavId = "projects" | "templates" | "images" | "train" | "settings"
@@ -36,10 +37,31 @@ const RECENT_CHATS = [
   "Treino atendimento",
 ]
 
+const LS_CONFIG = "ia-mestre-config-v1"
+
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const pct = Math.round((2405 / 5000) * 100)
+  const [creditsUsed, setCreditsUsed] = useState(2405)
+  const [creditsTotal, setCreditsTotal] = useState(5000)
+
+  useEffect(() => {
+    function syncCredits(e?: StorageEvent) {
+      if (e && e.key !== LS_CONFIG) return
+      try {
+        const raw = e?.newValue ?? localStorage.getItem(LS_CONFIG)
+        if (!raw) return
+        const p = JSON.parse(raw) as { creditsUsed?: number; creditsTotal?: number }
+        if (typeof p.creditsUsed === "number") setCreditsUsed(p.creditsUsed)
+        if (typeof p.creditsTotal === "number") setCreditsTotal(p.creditsTotal)
+      } catch { /* ignore */ }
+    }
+    syncCredits()
+    window.addEventListener("storage", syncCredits)
+    return () => window.removeEventListener("storage", syncCredits)
+  }, [])
+
+  const pct = creditsTotal > 0 ? Math.round((creditsUsed / creditsTotal) * 100) : 0
 
   const openTemplates = () => {
     if (pathname === "/dashboard/ia-mestre") {
@@ -193,7 +215,7 @@ export function Sidebar() {
         </div>
         <div className="flex items-baseline justify-between text-[11px] text-muted-foreground">
           <span>
-            <span className="font-semibold text-foreground">2.405</span> / 5.000
+            <span className="font-semibold text-foreground">{creditsUsed.toLocaleString("pt-BR")}</span> / {creditsTotal.toLocaleString("pt-BR")}
           </span>
           <button
             className="inline-flex h-7 items-center gap-1.5 rounded-full bg-gradient-primary px-3 text-[12px] font-semibold text-primary-foreground shadow-elegant transition hover:opacity-90 hover:shadow-glow"
