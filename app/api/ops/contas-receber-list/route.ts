@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireOpsSubscription, opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import type { ContaReceberRow } from "@/lib/contas-receber-types"
+import { buildContaReceberAuditTrail, buildContaReceberSummary } from "@/lib/financeiro/services"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -28,13 +29,13 @@ export async function GET(req: Request) {
 
   try {
     await prismaEnsureConnected()
-    const rows = await prisma.contaReceberTitulo.findMany({
+    const titulos = await prisma.contaReceberTitulo.findMany({
       where: { storeId: lojaId },
       orderBy: { updatedAt: "desc" },
     })
 
     const out: ContaReceberRow[] = []
-    for (const r of rows) {
+    for (const r of titulos) {
       const lk = r.localKey?.trim() || r.id
       if (!lk) continue
       const fromPayload = rowFromPayload(lk, r.payload)
@@ -53,10 +54,21 @@ export async function GET(req: Request) {
       })
     }
 
+    const summary = buildContaReceberSummary(titulos)
+    const audit = buildContaReceberAuditTrail(titulos)
+    const generatedAt = new Date().toISOString()
+
     return NextResponse.json({
+      ok: true,
       rows: out,
-      _lojaIdRecebido: lojaId,
-      _gateBypassedInDev: !gate.ok && process.env.NODE_ENV === "development",
+      summary,
+      audit,
+      metadata: {
+        source: "server",
+        storeId: lojaId,
+        generatedAt,
+        gateBypassedInDev: !gate.ok && process.env.NODE_ENV === "development",
+      },
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

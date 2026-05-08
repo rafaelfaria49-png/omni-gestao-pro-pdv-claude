@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
-import { Prisma } from "@/generated/prisma"
 import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import type { ContaReceberRow } from "@/lib/contas-receber-types"
+import { upsertContaReceber } from "@/lib/financeiro/services"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -58,31 +58,18 @@ export async function POST(req: Request) {
       const localKey = String(r.id ?? "").trim()
       if (!localKey) continue
 
-      const scal = rowToScalar(r)
-      const payload = r as unknown as Prisma.InputJsonValue
-
       try {
-        await prisma.contaReceberTitulo.upsert({
-          where: { storeId_localKey: { storeId: lojaId, localKey } },
-          create: {
-            storeId: lojaId,
-            localKey,
-            payload,
-            descricao: scal.descricao,
-            cliente: scal.cliente,
-            valor: scal.valor,
-            vencimento: scal.vencimento,
-            status: scal.status,
-          },
-          update: {
-            storeId: lojaId,
-            payload,
-            descricao: scal.descricao,
-            cliente: scal.cliente,
-            valor: scal.valor,
-            vencimento: scal.vencimento,
-            status: scal.status,
-          },
+        const scal = rowToScalar(r)
+        await upsertContaReceber({
+          storeId: lojaId,
+          localKey,
+          descricao: scal.descricao,
+          cliente: scal.cliente,
+          valor: scal.valor,
+          vencimento: scal.vencimento,
+          status: scal.status,
+          payloadPatch: r as unknown as Record<string, unknown>,
+          replacePayload: true,
         })
         rowsApplied += 1
       } catch (rowErr) {
