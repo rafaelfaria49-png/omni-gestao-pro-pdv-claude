@@ -9,7 +9,10 @@ import type {
   Orcamento,
   OrdemServico,
   OSStatus,
+  PecaUsada,
+  Servico,
 } from "@/types/os";
+import type { Venda, VendaStatus, VendaOrigem } from "@/types/venda";
 import { snapshotGarantia } from "@/lib/os/garantia";
 import { cancelContaReceberFromOS, upsertContaReceberFromOS } from "@/lib/financeiro/adapters/os-faturamento";
 import { asOperacoesPayload, nowIso } from "@/lib/operacoes/services/os-helpers";
@@ -294,5 +297,96 @@ export async function updateOSPayload(
 
   revalidatePath("/dashboard/operacoes-v2");
   return nextWithPolicy;
+}
+
+// ── Vendas (para o HUB de Operações) ─────────────────────────────────────────
+
+function safePayloadObj(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+}
+
+export async function listVendasHub(storeId: string): Promise<Venda[]> {
+  const rows = await prisma.venda.findMany({
+    where: { storeId },
+    include: { itens: true },
+    orderBy: { at: "desc" },
+    take: 200,
+  })
+  return rows.map((r) => {
+    const pl = safePayloadObj(r.payload)
+    const itens: PecaUsada[] = Array.isArray(pl?.itens)
+      ? (pl!.itens as PecaUsada[])
+      : r.itens.map((i) => ({
+          id: i.inventoryId ?? i.id,
+          nome: i.nome,
+          quantidade: i.quantidade,
+          valorUnitario: i.precoUnitario,
+        }))
+    const servicos: Servico[] = Array.isArray(pl?.servicos) ? (pl!.servicos as Servico[]) : []
+    return {
+      id: r.id,
+      storeId: r.storeId,
+      numero: r.pedidoId,
+      clienteId: (pl?.clienteId as string) ?? "",
+      origem: ((pl?.origem as VendaOrigem | undefined) ?? "balcao") as VendaOrigem,
+      origemRefId: (pl?.origemRefId as string | undefined),
+      itens,
+      servicos,
+      desconto: typeof pl?.desconto === "number" ? pl.desconto : 0,
+      total: r.total,
+      status: ((pl?.status as VendaStatus | undefined) ?? "emitida") as VendaStatus,
+      criadoEm: r.at.toISOString(),
+      pagoEm: (pl?.pagoEm as string | undefined),
+    }
+  })
+}
+
+export async function criarVendaDeOSAction(os: OrdemServico): Promise<Venda> {
+  if (!os.orcamento) throw new Error("OS sem orçamento — impossível faturar")
+  const year = new Date().getFullYear()
+  const count = await prisma.venda.count({ where: { storeId: os.storeId } })
+  const pedidoId = `VND-${year}-${(count + 1).toString().padStart(5, "0")}`
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const payload: any = {
+    clienteId: os.clienteId,
+    origem: "os",
+    origemRefId: os.id,
+    itens: os.orcamento.pecas,
+    servicos: os.orcamento.servicos,
+    desconto: os.orcamento.desconto,
+    status: "emitida",
+  }
+  const venda = await prisma.venda.create({
+    data: {
+      storeId: os.storeId,
+      pedidoId,
+      total: os.orcamento.total,
+      clienteNome: os.clienteId,
+      payload,
+      itens: {
+        create: os.orcamento.pecas.map((p) => ({
+          inventoryId: p.produtoId ?? p.id,
+          nome: p.nome,
+          quantidade: p.quantidade,
+          precoUnitario: p.valorUnitario ?? 0,
+          lineTotal: p.quantidade * (p.valorUnitario ?? 0),
+        })),
+      },
+    },
+  })
+  return {
+    id: venda.id,
+    storeId: venda.storeId,
+    numero: pedidoId,
+    clienteId: os.clienteId,
+    origem: "os",
+    origemRefId: os.id,
+    itens: os.orcamento.pecas,
+    servicos: os.orcamento.servicos,
+    desconto: os.orcamento.desconto,
+    total: os.orcamento.total,
+    status: "emitida",
+    criadoEm: venda.at.toISOString(),
+  }
 }
 

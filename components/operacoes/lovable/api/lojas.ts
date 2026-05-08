@@ -1,8 +1,13 @@
-import { db } from "./_db";
-import { delay } from "./_helpers";
+import { listLojasCadastros } from "@/app/actions/cadastros";
 import type { Loja } from "@/types/loja";
 
 export async function listLojas(): Promise<Loja[]> {
-  await delay(40);
-  return [...db.lojas];
+  const rows = await listLojasCadastros();
+  return rows.map((r) => ({
+    id: r.id,
+    nome: r.nome,
+    cnpj: r.cnpj || undefined,
+    cidade: r.cidade || undefined,
+    ativa: r.ativa,
+  }));
 }

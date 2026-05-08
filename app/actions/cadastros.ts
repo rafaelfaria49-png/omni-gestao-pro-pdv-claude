@@ -937,3 +937,30 @@ export async function upsertServico(
   return created;
 }
 
+// ── Lojas ─────────────────────────────────────────────────────────────────────
+
+export type LojaDTO = {
+  id: string
+  nome: string
+  cnpj: string
+  cidade: string
+  ativa: boolean
+}
+
+export async function listLojasCadastros(): Promise<LojaDTO[]> {
+  const rows = await prisma.store.findMany({ orderBy: { id: "asc" }, take: 50 })
+  return rows.map((s) => {
+    const addr =
+      s.address && typeof s.address === "object" && !Array.isArray(s.address)
+        ? (s.address as Record<string, unknown>)
+        : null
+    return {
+      id: s.id,
+      nome: s.name || s.id,
+      cnpj: s.cnpj,
+      cidade: (addr?.cidade as string) ?? (addr?.city as string) ?? "",
+      ativa: true,
+    }
+  })
+}
+
