@@ -1,5 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useFinanceiroReal,
+  FinanceiroRealProvider,
+  type StatusReceber,
+  type StatusPagar,
+  type ContaReceber,
+  type ContaPagar,
+  type NovoReceberInput,
+  type NovoPagarInput,
+} from "../context/FinanceiroRealContext";
 import { toast } from "sonner";
 import {
   Wallet,
@@ -115,8 +125,7 @@ export const Route = createFileRoute("/financeiro" as never)({
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-type StatusReceber = "pendente" | "atrasado" | "pago" | "parcial";
-type StatusPagar = "pendente" | "atrasado" | "pago";
+// StatusReceber, StatusPagar, ContaReceber, ContaPagar imported from FinanceiroRealContext
 
 const statusBadge = (s: StatusReceber | StatusPagar) => {
   const map: Record<string, { label: string; cls: string; icon: any }> = {
@@ -161,22 +170,7 @@ const carteiras = [
   { id: "6", nome: "Banco Bradesco", tipo: "Banco", icon: Building2, saldo: 15780.45 },
 ];
 
-const receber = [
-  { id: "R001", cliente: "Auto Mecânica JL", valor: 1250, venc: "2026-05-02", status: "atrasado" as StatusReceber },
-  { id: "R002", cliente: "Maria Silva", valor: 480, venc: "2026-05-08", status: "pendente" as StatusReceber },
-  { id: "R003", cliente: "Frota Express", valor: 3200, venc: "2026-04-28", status: "pago" as StatusReceber },
-  { id: "R004", cliente: "João Souza", valor: 890, venc: "2026-05-10", status: "parcial" as StatusReceber },
-  { id: "R005", cliente: "TransLog Ltda", valor: 5400, venc: "2026-05-15", status: "pendente" as StatusReceber },
-  { id: "R006", cliente: "Carlos Eduardo", valor: 320, venc: "2026-05-04", status: "atrasado" as StatusReceber },
-];
-
-const pagar = [
-  { id: "P001", fornecedor: "Distrib. Peças Brasil", valor: 2400, venc: "2026-05-05", status: "pendente" as StatusPagar },
-  { id: "P002", fornecedor: "Energia CEMIG", valor: 680, venc: "2026-04-30", status: "atrasado" as StatusPagar },
-  { id: "P003", fornecedor: "Aluguel Imóvel", valor: 3500, venc: "2026-05-10", status: "pendente" as StatusPagar },
-  { id: "P004", fornecedor: "Internet Vivo", valor: 220, venc: "2026-04-25", status: "pago" as StatusPagar },
-  { id: "P005", fornecedor: "Folha Pagamento", valor: 12400, venc: "2026-05-05", status: "pendente" as StatusPagar },
-];
+// receber[] and pagar[] removed — data now comes from FinanceiroRealProvider via useFinanceiroReal()
 
 const fluxoMensal = [
   { mes: "Nov", entrada: 42000, saida: 31000 },
@@ -268,13 +262,10 @@ function StatCard({
 }
 
 function VisaoGeral() {
+  const { summaryR, summaryP } = useFinanceiroReal();
   const totalCarteiras = carteiras.reduce((a, c) => a + c.saldo, 0);
-  const totalReceber = receber
-    .filter((r) => r.status !== "pago")
-    .reduce((a, r) => a + r.valor, 0);
-  const totalPagar = pagar
-    .filter((r) => r.status !== "pago")
-    .reduce((a, r) => a + r.valor, 0);
+  const totalReceber = summaryR?.totalAberto ?? 0;
+  const totalPagar = summaryP?.totalAberto ?? 0;
   const entradas = 61000;
   const saidas = 42000;
   const lucro = entradas - saidas;
@@ -303,11 +294,13 @@ function VisaoGeral() {
           <CardDescription>Itens que exigem sua atenção</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {[
-            { msg: "2 contas a pagar vencidas hoje", val: fmt(880) },
-            { msg: "1 cliente com pagamento em atraso há 5+ dias", val: fmt(1250) },
-            { msg: "Saldo negativo previsto para 12/05", val: "-" },
-          ].map((a, i) => (
+          {(
+            [
+              summaryP && summaryP.totalVencido > 0 ? { msg: `${summaryP.quantidade} contas a pagar — ${fmt(summaryP.totalVencido)} em atraso`, val: fmt(summaryP.totalVencido) } : null,
+              summaryR && summaryR.totalVencido > 0 ? { msg: `A receber — ${fmt(summaryR.totalVencido)} vencido de clientes`, val: fmt(summaryR.totalVencido) } : null,
+              { msg: "Saldo negativo previsto para 12/05", val: "-" },
+            ].filter((x): x is { msg: string; val: string } => x !== null)
+          ).map((a, i) => (
             <div
               key={i}
               className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3"
@@ -399,64 +392,63 @@ function VisaoGeral() {
   );
 }
 
-type ContaReceber = {
-  id: string;
-  cliente: string;
-  valor: number;
-  recebido: number;
-  venc: string;
-  status: StatusReceber;
-  parcela?: string;
-};
+// ContaReceber type imported from FinanceiroRealContext
 
 function ContasReceber() {
+  const { receber, loading, error, reload, liquidarReceber, receberParcial, estornarReceber, criarReceber } = useFinanceiroReal();
   const [filter, setFilter] = useState<string>("todos");
   const [openNovo, setOpenNovo] = useState(false);
-  const [items, setItems] = useState<ContaReceber[]>(
-    receber.map((r) => ({
-      ...r,
-      recebido: r.status === "pago" ? r.valor : r.status === "parcial" ? r.valor * 0.4 : 0,
-      parcela: "1/1",
-    })),
-  );
   const [selected, setSelected] = useState<ContaReceber | null>(null);
   const [modal, setModal] = useState<"receber" | "recibo" | "estorno" | "historico" | "renegociar" | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const open = (m: typeof modal, item: ContaReceber) => {
     setSelected(item);
     setModal(m);
   };
 
-  const handleReceber = (valor: number, total: boolean) => {
-    if (!selected) return;
-    setItems((prev) =>
-      prev.map((i) => {
-        if (i.id !== selected.id) return i;
-        const novoRecebido = total ? i.valor : Math.min(i.valor, i.recebido + valor);
-        const restante = i.valor - novoRecebido;
-        return {
-          ...i,
-          recebido: novoRecebido,
-          status: restante <= 0 ? "pago" : novoRecebido > 0 ? "parcial" : i.status,
-        };
-      }),
-    );
-    toast.success(total ? "Conta quitada" : "Baixa parcial registrada");
-    setModal(null);
+  const handleReceber = async (valor: number, total: boolean) => {
+    if (!selected || busy) return;
+    setBusy(true);
+    try {
+      if (total) {
+        await liquidarReceber(selected.id);
+        toast.success("Conta quitada");
+      } else {
+        await receberParcial(selected.id, valor);
+        toast.success("Baixa parcial registrada");
+      }
+      setModal(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao registrar recebimento");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleEstorno = () => {
-    if (!selected) return;
-    setItems((prev) =>
-      prev.map((i) =>
-        i.id === selected.id ? { ...i, recebido: 0, status: "pendente" as StatusReceber } : i,
-      ),
-    );
-    toast.success("Recebimento estornado");
-    setModal(null);
+  const handleEstorno = async () => {
+    if (!selected || busy) return;
+    setBusy(true);
+    try {
+      await estornarReceber(selected.id);
+      toast.success("Recebimento estornado");
+      setModal(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao estornar");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const list = items.filter((r) => filter === "todos" || r.status === filter);
+  const list = receber.filter((r) => filter === "todos" || r.status === filter);
+
+  if (loading) return <div className="py-12 text-center text-sm text-muted-foreground">Carregando títulos...</div>;
+  if (error) return (
+    <div className="space-y-3 py-8 text-center">
+      <p className="text-sm text-destructive">{error}</p>
+      <button className="text-xs text-primary underline" onClick={reload}>Tentar novamente</button>
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -539,7 +531,7 @@ function ContasReceber() {
           </div>
         </CardContent>
       </Card>
-      <NovoRecebimentoModal open={openNovo} onOpenChange={setOpenNovo} />
+      <NovoRecebimentoModal open={openNovo} onOpenChange={setOpenNovo} onSave={criarReceber} />
       <ReceberContaModal
         open={modal === "receber"}
         onOpenChange={(v) => !v && setModal(null)}
@@ -567,67 +559,77 @@ function ContasReceber() {
   );
 }
 
-type ContaPagar = {
-  id: string;
-  fornecedor: string;
-  valor: number;
-  pago: number;
-  venc: string;
-  status: StatusPagar;
-};
+// ContaPagar type imported from FinanceiroRealContext
 
 function ContasPagar() {
+  const { pagar, loading, error, reload, liquidarPagar, pagarParcial, estornarPagar, criarPagar } = useFinanceiroReal();
   const [filter, setFilter] = useState<string>("todos");
   const [openNovo, setOpenNovo] = useState(false);
-  const [items, setItems] = useState<ContaPagar[]>(
-    pagar.map((p) => ({ ...p, pago: p.status === "pago" ? p.valor : 0 })),
-  );
   const [selected, setSelected] = useState<ContaPagar | null>(null);
   const [modal, setModal] = useState<"pagar" | "historico" | "estorno" | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const handlePagar = (valor: number, total: boolean) => {
-    if (!selected) return;
-    setItems((prev) =>
-      prev.map((i) => {
-        if (i.id !== selected.id) return i;
-        const novo = total ? i.valor : Math.min(i.valor, i.pago + valor);
-        return { ...i, pago: novo, status: novo >= i.valor ? "pago" : i.status };
-      }),
-    );
-    toast.success(total ? "Pagamento total registrado" : "Pagamento parcial registrado");
-    setModal(null);
+  const handlePagar = async (valor: number, total: boolean) => {
+    if (!selected || busy) return;
+    setBusy(true);
+    try {
+      if (total) {
+        await liquidarPagar(selected.id);
+        toast.success("Pagamento total registrado");
+      } else {
+        await pagarParcial(selected.id, valor);
+        toast.success("Pagamento parcial registrado");
+      }
+      setModal(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao registrar pagamento");
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleEstorno = () => {
-    if (!selected) return;
-    setItems((prev) =>
-      prev.map((i) => (i.id === selected.id ? { ...i, pago: 0, status: "pendente" as StatusPagar } : i)),
-    );
-    toast.success("Pagamento estornado");
-    setModal(null);
+  const handleEstorno = async () => {
+    if (!selected || busy) return;
+    setBusy(true);
+    try {
+      await estornarPagar(selected.id);
+      toast.success("Pagamento estornado");
+      setModal(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao estornar");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleMarcarPago = async (item: ContaPagar) => {
+    try {
+      await liquidarPagar(item.id);
+      toast.success("Conta marcada como paga");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao liquidar");
+    }
   };
 
   const handleDuplicar = (item: ContaPagar) => {
-    setItems((prev) => [
-      ...prev,
-      { ...item, id: `P${String(prev.length + 1).padStart(3, "0")}`, pago: 0, status: "pendente" },
-    ]);
-    toast.success("Conta duplicada");
+    criarPagar({ fornecedor: item.fornecedor, descricao: item.fornecedor, valor: item.valor, vencimento: item.venc })
+      .then(() => toast.success("Conta duplicada"))
+      .catch(() => toast.error("Falha ao duplicar"));
   };
 
-  const handleMarcarPago = (item: ContaPagar) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, pago: i.valor, status: "pago" as StatusPagar } : i)),
-    );
-    toast.success("Conta marcada como paga");
+  const handleExcluir = (_item: ContaPagar) => {
+    toast.info("Exclusão não disponível — use estorno para reverter");
   };
 
-  const handleExcluir = (item: ContaPagar) => {
-    setItems((prev) => prev.filter((i) => i.id !== item.id));
-    toast.success("Conta excluída");
-  };
+  const list = pagar.filter((r) => filter === "todos" || r.status === filter);
 
-  const list = items.filter((r) => filter === "todos" || r.status === filter);
+  if (loading) return <div className="py-12 text-center text-sm text-muted-foreground">Carregando títulos...</div>;
+  if (error) return (
+    <div className="space-y-3 py-8 text-center">
+      <p className="text-sm text-destructive">{error}</p>
+      <button className="text-xs text-primary underline" onClick={reload}>Tentar novamente</button>
+    </div>
+  );
 
   return (
     <>
@@ -708,7 +710,7 @@ function ContasPagar() {
         </div>
       </CardContent>
     </Card>
-    <NovaContaModal open={openNovo} onOpenChange={setOpenNovo} />
+    <NovaContaModal open={openNovo} onOpenChange={setOpenNovo} onSave={criarPagar} />
     <PagarContaModal
       open={modal === "pagar"}
       onOpenChange={(v) => !v && setModal(null)}
@@ -1228,6 +1230,14 @@ function Configuracoes() {
 }
 
 function FinanceiroHub() {
+  return (
+    <FinanceiroRealProvider>
+      <FinanceiroHubInner />
+    </FinanceiroRealProvider>
+  );
+}
+
+function FinanceiroHubInner() {
   const [theme, setTheme] = useState<"light" | "soft-ice" | "midnight" | "black">("light");
 
   // Herda o tema global (data-theme) sem sobrescrever.
@@ -1309,11 +1319,40 @@ function FinanceiroHub() {
 function NovoRecebimentoModal({
   open,
   onOpenChange,
+  onSave,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  onSave: (data: NovoReceberInput) => Promise<void>;
 }) {
   const [parcelar, setParcelar] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const clienteRef = useRef<HTMLInputElement>(null);
+  const descricaoRef = useRef<HTMLInputElement>(null);
+  const valorRef = useRef<HTMLInputElement>(null);
+  const vencimentoRef = useRef<HTMLInputElement>(null);
+
+  const handleSave = async () => {
+    const cliente = clienteRef.current?.value.trim() ?? "";
+    const descricao = descricaoRef.current?.value.trim() ?? "";
+    const valor = parseFloat((valorRef.current?.value ?? "0").replace(",", "."));
+    const vencimento = vencimentoRef.current?.value ?? "";
+    if (!cliente || !valor || !vencimento) {
+      toast.error("Preencha cliente, valor e vencimento");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave({ cliente, descricao: descricao || cliente, valor, vencimento });
+      toast.success("Recebimento criado");
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao salvar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
@@ -1325,8 +1364,8 @@ function NovoRecebimentoModal({
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Cliente</Label>
-            <Input list="clientes-list" placeholder="Buscar cliente..." />
+            <Label>Cliente *</Label>
+            <Input ref={clienteRef} list="clientes-list" placeholder="Buscar cliente..." />
             <datalist id="clientes-list">
               <option value="Auto Mecânica JL" />
               <option value="Maria Silva" />
@@ -1337,7 +1376,7 @@ function NovoRecebimentoModal({
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Título / descrição</Label>
-            <Input placeholder="Ex.: OS #882 — troca de óleo" />
+            <Input ref={descricaoRef} placeholder="Ex.: OS #882 — troca de óleo" />
           </div>
           <div className="space-y-1.5">
             <Label>Categoria</Label>
@@ -1351,12 +1390,12 @@ function NovoRecebimentoModal({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Valor (R$)</Label>
-            <Input type="number" step="0.01" placeholder="0,00" />
+            <Label>Valor (R$) *</Label>
+            <Input ref={valorRef} type="number" step="0.01" placeholder="0,00" />
           </div>
           <div className="space-y-1.5">
-            <Label>Vencimento</Label>
-            <Input type="date" />
+            <Label>Vencimento *</Label>
+            <Input ref={vencimentoRef} type="date" />
           </div>
           <div className="space-y-1.5">
             <Label>Forma de pagamento</Label>
@@ -1453,7 +1492,9 @@ function NovoRecebimentoModal({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={() => onOpenChange(false)}>Salvar</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Salvando..." : "Salvar"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1463,12 +1504,41 @@ function NovoRecebimentoModal({
 function NovaContaModal({
   open,
   onOpenChange,
+  onSave,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  onSave: (data: NovoPagarInput) => Promise<void>;
 }) {
   const [parcelar, setParcelar] = useState(false);
   const [fixa, setFixa] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const fornecedorRef = useRef<HTMLInputElement>(null);
+  const descricaoRef = useRef<HTMLInputElement>(null);
+  const valorRef2 = useRef<HTMLInputElement>(null);
+  const vencimentoRef2 = useRef<HTMLInputElement>(null);
+
+  const handleSave = async () => {
+    const fornecedor = fornecedorRef.current?.value.trim() ?? "";
+    const descricao = descricaoRef.current?.value.trim() ?? "";
+    const valor = parseFloat((valorRef2.current?.value ?? "0").replace(",", "."));
+    const vencimento = vencimentoRef2.current?.value ?? "";
+    if (!fornecedor || !valor || !vencimento) {
+      toast.error("Preencha fornecedor, valor e vencimento");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave({ fornecedor, descricao: descricao || fornecedor, valor, vencimento });
+      toast.success("Conta a pagar criada");
+      onOpenChange(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao salvar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
@@ -1480,8 +1550,8 @@ function NovaContaModal({
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Fornecedor</Label>
-            <Input list="fornecedores-list" placeholder="Buscar fornecedor..." />
+            <Label>Fornecedor *</Label>
+            <Input ref={fornecedorRef} list="fornecedores-list" placeholder="Buscar fornecedor..." />
             <datalist id="fornecedores-list">
               <option value="Distrib. Peças Brasil" />
               <option value="Energia CEMIG" />
@@ -1491,7 +1561,7 @@ function NovaContaModal({
           </div>
           <div className="space-y-1.5 sm:col-span-2">
             <Label>Descrição</Label>
-            <Input placeholder="Ex.: Compra de peças NF 1234" />
+            <Input ref={descricaoRef} placeholder="Ex.: Compra de peças NF 1234" />
           </div>
           <div className="space-y-1.5">
             <Label>Categoria</Label>
@@ -1507,12 +1577,12 @@ function NovaContaModal({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Valor (R$)</Label>
-            <Input type="number" step="0.01" placeholder="0,00" />
+            <Label>Valor (R$) *</Label>
+            <Input ref={valorRef2} type="number" step="0.01" placeholder="0,00" />
           </div>
           <div className="space-y-1.5">
-            <Label>Vencimento</Label>
-            <Input type="date" />
+            <Label>Vencimento *</Label>
+            <Input ref={vencimentoRef2} type="date" />
           </div>
           <div className="space-y-1.5">
             <Label>Forma de pagamento</Label>
@@ -1618,7 +1688,9 @@ function NovaContaModal({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={() => onOpenChange(false)}>Salvar</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Salvando..." : "Salvar"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

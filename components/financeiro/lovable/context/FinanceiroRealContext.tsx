@@ -1,0 +1,340 @@
+"use client"
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react"
+
+// ── Shared types (hub + context) ──────────────────────────────────────────────
+
+export type StatusReceber = "pendente" | "atrasado" | "pago" | "parcial"
+export type StatusPagar = "pendente" | "atrasado" | "pago"
+
+export type ContaReceber = {
+  id: string
+  cliente: string
+  valor: number
+  recebido: number
+  venc: string
+  status: StatusReceber
+  parcela?: string
+}
+
+export type ContaPagar = {
+  id: string
+  fornecedor: string
+  valor: number
+  pago: number
+  venc: string
+  status: StatusPagar
+}
+
+export type SummaryReceber = {
+  quantidade: number
+  totalAberto: number
+  totalVencido: number
+  totalPago: number
+}
+
+export type SummaryPagar = {
+  quantidade: number
+  totalAberto: number
+  totalVencido: number
+  totalPago: number
+}
+
+export type NovoReceberInput = {
+  cliente: string
+  descricao: string
+  valor: number
+  vencimento: string
+}
+
+export type NovoPagarInput = {
+  fornecedor: string
+  descricao: string
+  valor: number
+  vencimento: string
+  categoria?: string
+}
+
+// ── Context shape ─────────────────────────────────────────────────────────────
+
+type FinanceiroRealState = {
+  receber: ContaReceber[]
+  pagar: ContaPagar[]
+  summaryR: SummaryReceber | null
+  summaryP: SummaryPagar | null
+  loading: boolean
+  error: string | null
+  reload: () => void
+  liquidarReceber: (id: string, observacao?: string) => Promise<void>
+  receberParcial: (id: string, valor: number, observacao?: string) => Promise<void>
+  estornarReceber: (id: string, motivo?: string) => Promise<void>
+  criarReceber: (data: NovoReceberInput) => Promise<void>
+  liquidarPagar: (id: string, observacao?: string) => Promise<void>
+  pagarParcial: (id: string, valor: number, observacao?: string) => Promise<void>
+  estornarPagar: (id: string, motivo?: string) => Promise<void>
+  criarPagar: (data: NovoPagarInput) => Promise<void>
+}
+
+const FinanceiroRealContext = createContext<FinanceiroRealState | null>(null)
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getLojaId(): string {
+  if (typeof document === "undefined") return "loja-1"
+  const match = document.cookie.match(/(?:^|;\s*)assistec-active-store=([^;]+)/)
+  if (match) {
+    const v = decodeURIComponent(match[1]).trim()
+    if (v) return v
+  }
+  return "loja-1"
+}
+
+function safeStr(v: unknown): string {
+  return typeof v === "string" ? v : ""
+}
+
+function safeNum(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0
+}
+
+function normalizeReceberStatus(s: string): StatusReceber {
+  const l = s.toLowerCase().trim()
+  if (l === "pago") return "pago"
+  if (l === "parcial") return "parcial"
+  if (l === "vencido" || l === "atrasado") return "atrasado"
+  if (l === "estornado") return "pendente"
+  if (l === "cancelado") return "pago"
+  return "pendente"
+}
+
+function normalizePagarStatus(s: string): StatusPagar {
+  const l = s.toLowerCase().trim()
+  if (l === "pago") return "pago"
+  if (l === "vencido" || l === "atrasado") return "atrasado"
+  if (l === "estornado" || l === "parcial") return "pendente"
+  if (l === "cancelado") return "pago"
+  return "pendente"
+}
+
+type AuditR = { id?: unknown; localKey?: unknown; saldoAberto?: unknown }
+type AuditP = { id?: unknown; localKey?: unknown; pago?: unknown }
+
+function normalizeReceberRows(rows: unknown[], audit: unknown[]): ContaReceber[] {
+  const auditMap = new Map<string, AuditR>()
+  for (const a of audit) {
+    const item = a as AuditR
+    const key = safeStr(item.id ?? item.localKey)
+    if (key) auditMap.set(key, item)
+  }
+  const result: ContaReceber[] = []
+  for (const r of rows) {
+    const row = r as Record<string, unknown>
+    const id = safeStr(row.id).trim()
+    if (!id) continue
+    const auditItem = auditMap.get(id)
+    const valor = safeNum(row.valor)
+    const status = normalizeReceberStatus(safeStr(row.status))
+    const saldoAberto = auditItem ? safeNum(auditItem.saldoAberto) : status === "pago" ? 0 : valor
+    const recebido = Math.max(0, valor - saldoAberto)
+    result.push({
+      id,
+      cliente: safeStr(row.cliente) || safeStr(row.descricao) || "—",
+      valor,
+      recebido,
+      venc: safeStr(row.vencimento),
+      status,
+      parcela: "1/1",
+    })
+  }
+  return result
+}
+
+function normalizePagarRows(rows: unknown[], audit: unknown[]): ContaPagar[] {
+  const auditMap = new Map<string, AuditP>()
+  for (const a of audit) {
+    const item = a as AuditP
+    const key = safeStr(item.id ?? item.localKey)
+    if (key) auditMap.set(key, item)
+  }
+  const result: ContaPagar[] = []
+  for (const r of rows) {
+    const row = r as Record<string, unknown>
+    const id = safeStr(row.id).trim()
+    if (!id) continue
+    const auditItem = auditMap.get(id)
+    const valor = safeNum(row.valor)
+    const status = normalizePagarStatus(safeStr(row.status))
+    const pago = auditItem ? safeNum(auditItem.pago) : status === "pago" ? valor : 0
+    result.push({
+      id,
+      fornecedor: safeStr(row.fornecedor) || safeStr(row.descricao) || "—",
+      valor,
+      pago,
+      venc: safeStr(row.dataVencimento) || safeStr(row.vencimento),
+      status,
+    })
+  }
+  return result
+}
+
+// ── Provider ──────────────────────────────────────────────────────────────────
+
+export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
+  const [receber, setReceber] = useState<ContaReceber[]>([])
+  const [pagar, setPagar] = useState<ContaPagar[]>([])
+  const [summaryR, setSummaryR] = useState<SummaryReceber | null>(null)
+  const [summaryP, setSummaryP] = useState<SummaryPagar | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [rRes, pRes] = await Promise.all([
+        fetch("/api/ops/contas-receber-list"),
+        fetch("/api/ops/contas-pagar-list"),
+      ])
+      const [rJson, pJson] = await Promise.all([
+        rRes.json() as Promise<Record<string, unknown>>,
+        pRes.json() as Promise<Record<string, unknown>>,
+      ])
+      if (rJson.ok) {
+        setReceber(normalizeReceberRows(rJson.rows as unknown[], rJson.audit as unknown[] ?? []))
+        const sr = rJson.summary as Record<string, unknown> | undefined
+        if (sr) setSummaryR({ quantidade: safeNum(sr.quantidade), totalAberto: safeNum(sr.totalAberto), totalVencido: safeNum(sr.totalVencido), totalPago: safeNum(sr.totalPago) })
+      }
+      if (pJson.ok) {
+        setPagar(normalizePagarRows(pJson.rows as unknown[], pJson.audit as unknown[] ?? []))
+        const sp = pJson.summary as Record<string, unknown> | undefined
+        if (sp) setSummaryP({ quantidade: safeNum(sp.quantidade), totalAberto: safeNum(sp.totalAberto), totalVencido: safeNum(sp.totalVencido), totalPago: safeNum(sp.totalPago) })
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao carregar dados financeiros")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  const callApi = useCallback(async (path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    const lojaId = getLojaId()
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify({ lojaId, ...body }),
+    })
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok || json.ok === false) {
+      throw new Error(safeStr(json.error) || `Falha ${res.status}`)
+    }
+    return json
+  }, [])
+
+  const liquidarReceber = useCallback(async (id: string, observacao?: string) => {
+    await callApi("/api/financeiro/contas-receber/liquidar", { localKey: id, observacao })
+    await fetchData()
+  }, [callApi, fetchData])
+
+  const receberParcial = useCallback(async (id: string, valor: number, observacao?: string) => {
+    await callApi("/api/financeiro/contas-receber/pagamento-parcial", { localKey: id, valor, observacao })
+    await fetchData()
+  }, [callApi, fetchData])
+
+  const estornarReceber = useCallback(async (id: string, motivo?: string) => {
+    await callApi("/api/financeiro/contas-receber/estornar-ultimo-pagamento", { localKey: id, motivo })
+    await fetchData()
+  }, [callApi, fetchData])
+
+  const criarReceber = useCallback(async (data: NovoReceberInput) => {
+    const lojaId = getLojaId()
+    const localKey = `manual-cr-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const res = await fetch("/api/ops/contas-receber-persist", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify({
+        rows: [{
+          id: localKey,
+          localKey,
+          cliente: data.cliente,
+          descricao: data.descricao,
+          valor: data.valor,
+          vencimento: data.vencimento,
+          status: "pendente",
+        }],
+      }),
+    })
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok || json.ok === false) throw new Error(safeStr(json.error) || "Falha ao criar recebimento")
+    await fetchData()
+  }, [fetchData])
+
+  const liquidarPagar = useCallback(async (id: string, observacao?: string) => {
+    await callApi("/api/financeiro/contas-pagar/liquidar", { localKey: id, observacao })
+    await fetchData()
+  }, [callApi, fetchData])
+
+  const pagarParcial = useCallback(async (id: string, valor: number, observacao?: string) => {
+    await callApi("/api/financeiro/contas-pagar/pagamento-parcial", { localKey: id, valor, observacao })
+    await fetchData()
+  }, [callApi, fetchData])
+
+  const estornarPagar = useCallback(async (id: string, motivo?: string) => {
+    await callApi("/api/financeiro/contas-pagar/estornar-ultimo-pagamento", { localKey: id, motivo })
+    await fetchData()
+  }, [callApi, fetchData])
+
+  const criarPagar = useCallback(async (data: NovoPagarInput) => {
+    const lojaId = getLojaId()
+    const localKey = `manual-cp-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    const res = await fetch("/api/ops/contas-pagar-persist", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify({
+        lojaId,
+        rows: [{
+          id: localKey,
+          localKey,
+          fornecedor: data.fornecedor,
+          fornecedorNome: data.fornecedor,
+          descricao: data.descricao,
+          valor: data.valor,
+          vencimento: data.vencimento,
+          dataVencimento: data.vencimento,
+          status: "pendente",
+          categoria: data.categoria || "Outros",
+        }],
+      }),
+    })
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok || json.ok === false) throw new Error(safeStr(json.error) || "Falha ao criar conta a pagar")
+    await fetchData()
+  }, [fetchData])
+
+  return (
+    <FinanceiroRealContext.Provider
+      value={{
+        receber, pagar, summaryR, summaryP,
+        loading, error, reload: fetchData,
+        liquidarReceber, receberParcial, estornarReceber, criarReceber,
+        liquidarPagar, pagarParcial, estornarPagar, criarPagar,
+      }}
+    >
+      {children}
+    </FinanceiroRealContext.Provider>
+  )
+}
+
+export function useFinanceiroReal(): FinanceiroRealState {
+  const ctx = useContext(FinanceiroRealContext)
+  if (!ctx) throw new Error("useFinanceiroReal: missing FinanceiroRealProvider")
+  return ctx
+}
