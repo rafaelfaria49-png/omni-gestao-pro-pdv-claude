@@ -1,11 +1,6 @@
-import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import VendasHubPage from "@/components/vendas-hub/VendasHubPage";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-function VendasHubSkeleton() {
+export default function Loading() {
   return (
     <div className="w-full min-w-0 p-6 space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -19,14 +14,5 @@ function VendasHubSkeleton() {
       </div>
       <Skeleton className="h-64 w-full" />
     </div>
-  );
-}
-
-/** Mesma SPA do TanStack Router; segmentos extras servem para refresh direto em sub-rotas (/vendas-hub/vendas, etc.). */
-export default function Page() {
-  return (
-    <Suspense fallback={<VendasHubSkeleton />}>
-      <VendasHubPage />
-    </Suspense>
   );
 }

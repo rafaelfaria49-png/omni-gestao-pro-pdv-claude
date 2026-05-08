@@ -6,6 +6,8 @@ import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { validateOrdensImport, validateVendasMovimentosImport, type MappingRecord } from "@/lib/import-validate"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 async function requireSubscription() {
   const sub = await getVerifiedSubscriptionFromCookies()
