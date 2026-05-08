@@ -69,17 +69,38 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
     [setLojaAtivaId],
   )
 
+  const fetchStoresWithRetry = useCallback(async (signal?: AbortSignal): Promise<StoreRow[]> => {
+    const MAX_ATTEMPTS = 3
+    const DELAYS = [0, 1500, 3000]
+    let lastErr: unknown
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError")
+      if (DELAYS[attempt] > 0) {
+        await new Promise<void>((res, rej) => {
+          const t = setTimeout(res, DELAYS[attempt])
+          signal?.addEventListener("abort", () => { clearTimeout(t); rej(new DOMException("Aborted", "AbortError")) }, { once: true })
+        })
+      }
+      try {
+        const r = await fetch("/api/stores", { credentials: "include", cache: "no-store", signal })
+        if (r.ok) {
+          const j = (await r.json()) as { stores?: StoreRow[] }
+          return Array.isArray(j.stores) ? j.stores : []
+        }
+        lastErr = new Error(`HTTP ${r.status}`)
+      } catch (e) {
+        if ((e as any)?.name === "AbortError") throw e
+        lastErr = e
+      }
+    }
+    throw lastErr
+  }, [])
+
   const loadStores = useCallback(async () => {
     setLoading(true)
     setApiError(false)
     try {
-      const r = await fetch("/api/stores", { credentials: "include", cache: "no-store" })
-      if (!r.ok) {
-        setApiError(true)
-        return
-      }
-      const j = (await r.json()) as { stores?: StoreRow[] }
-      const list = Array.isArray(j.stores) ? j.stores : []
+      const list = await fetchStoresWithRetry()
       setStores(list)
       const first = list[0]?.id || LEGACY_PRIMARY_STORE_ID
       setSelectedId((prev) => (list.some((s) => s.id === prev) ? prev : first))
@@ -88,36 +109,24 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [fetchStoresWithRetry])
 
   useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      setLoading(true)
-      setApiError(false)
-      try {
-        const r = await fetch("/api/stores", { credentials: "include", cache: "no-store" })
-        if (!r.ok) {
-          if (!cancelled) setApiError(true)
-          return
-        }
-        const j = (await r.json()) as { stores?: StoreRow[] }
-        const list = Array.isArray(j.stores) ? j.stores : []
-        if (!cancelled) {
-          setStores(list)
-          const first = list[0]?.id || LEGACY_PRIMARY_STORE_ID
-          setSelectedId((prev) => (list.some((s) => s.id === prev) ? prev : first))
-        }
-      } catch {
-        if (!cancelled) setApiError(true)
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    const ac = new AbortController()
+    setLoading(true)
+    setApiError(false)
+    fetchStoresWithRetry(ac.signal)
+      .then((list) => {
+        setStores(list)
+        const first = list[0]?.id || LEGACY_PRIMARY_STORE_ID
+        setSelectedId((prev) => (list.some((s) => s.id === prev) ? prev : first))
+      })
+      .catch((e) => {
+        if ((e as any)?.name !== "AbortError") setApiError(true)
+      })
+      .finally(() => setLoading(false))
+    return () => ac.abort()
+  }, [fetchStoresWithRetry])
 
   useEffect(() => {
     if (stores.length === 0 || !lojaAtivaId) return
@@ -223,9 +232,12 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
   const body = (
     <div className="space-y-6">
       {loading ? (
-        <p className={cn("text-center text-sm", isBlack ? "text-white/60" : "text-slate-600")}>
-          Carregando unidades…
-        </p>
+        <div className="flex flex-col items-center gap-3 py-10">
+          <RefreshCw className={cn("h-6 w-6 animate-spin", isBlack ? "text-white/40" : "text-slate-400")} />
+          <p className={cn("text-sm", isBlack ? "text-white/60" : "text-slate-500")}>
+            Carregando unidades…
+          </p>
+        </div>
       ) : apiError ? (
         <div className={cn(
           "flex flex-col items-center gap-4 rounded-xl border px-6 py-10 text-center",
