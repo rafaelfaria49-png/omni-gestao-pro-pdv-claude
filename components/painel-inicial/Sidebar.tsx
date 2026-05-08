@@ -20,6 +20,7 @@ import {
   MessageCircle,
   Receipt,
   Database,
+  Bot,
   type LucideIcon,
 } from "lucide-react";
 import { financeiroV2Enabled } from "@/lib/feature-flags";
@@ -48,8 +49,9 @@ function isRouteActive(path: string, to: string): boolean {
 
 // ── WORKSPACE ────────────────────────────────────────────────────────────────
 const workspaceItems: Item[] = [
-  { to: "/dashboard",           label: "Painel Inicial", icon: LayoutDashboard },
-  { to: "/dashboard/ia-mestre", label: "IA Mestre",      icon: Sparkles, badge: "AI" },
+  { to: "/dashboard",              label: "Painel Inicial",  icon: LayoutDashboard },
+  { to: "/dashboard/ia-mestre",    label: "IA Mestre",       icon: Sparkles, badge: "AI" },
+  { to: "/dashboard/omni-agent",   label: "Omni Agent HUB",  icon: Bot,      badge: "AI" },
 ];
 
 // ── HUBS ─────────────────────────────────────────────────────────────────────
