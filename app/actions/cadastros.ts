@@ -937,6 +937,40 @@ export async function upsertServico(
   return created;
 }
 
+// ── Auditoria ─────────────────────────────────────────────────────────────────
+
+export type AuditoriaItemDTO = {
+  id: string
+  acao: string
+  entidade: string
+  usuario: string
+  data: string
+  antes: string
+  depois: string
+  ip: string
+}
+
+export async function listLogsAuditoriaCadastros(): Promise<AuditoriaItemDTO[]> {
+  const rows = await prisma.logsAuditoria.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  })
+  return rows.map((r) => {
+    let meta: Record<string, unknown> = {}
+    try { if (r.metadata) meta = JSON.parse(r.metadata) } catch { /* ignore */ }
+    return {
+      id: r.id,
+      acao: r.action,
+      entidade: (meta.entidade as string) || r.detail.slice(0, 60),
+      usuario: r.userLabel,
+      data: r.createdAt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+      antes: (meta.antes as string) || "",
+      depois: (meta.depois as string) || r.detail.slice(0, 120),
+      ip: r.source,
+    }
+  })
+}
+
 // ── Lojas ─────────────────────────────────────────────────────────────────────
 
 export type LojaDTO = {

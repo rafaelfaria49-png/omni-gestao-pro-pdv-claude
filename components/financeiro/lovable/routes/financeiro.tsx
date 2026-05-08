@@ -160,55 +160,16 @@ const statusBadge = (s: StatusReceber | StatusPagar) => {
   );
 };
 
-// ----- MOCK DATA -----
+// carteiras não têm modelo Prisma — usadas apenas em GestaoCarteiras e selects de configuração.
 const carteiras = [
-  { id: "1", nome: "Caixa Loja Centro", tipo: "Caixa", icon: Store, saldo: 4820.5 },
-  { id: "2", nome: "Banco Inter PJ", tipo: "Banco", icon: Landmark, saldo: 28450.32 },
-  { id: "3", nome: "Dinheiro", tipo: "Dinheiro", icon: Banknote, saldo: 1250.0 },
-  { id: "4", nome: "Cartão Stone", tipo: "Cartão", icon: CreditCard, saldo: 9430.7 },
-  { id: "5", nome: "Pessoal Sócio", tipo: "Pessoal", icon: User, saldo: 2100.0 },
-  { id: "6", nome: "Banco Bradesco", tipo: "Banco", icon: Building2, saldo: 15780.45 },
+  { id: "1", nome: "Caixa Loja Centro", tipo: "Caixa", icon: Store, saldo: 0 },
+  { id: "2", nome: "Banco Inter PJ", tipo: "Banco", icon: Landmark, saldo: 0 },
+  { id: "3", nome: "Dinheiro", tipo: "Dinheiro", icon: Banknote, saldo: 0 },
+  { id: "4", nome: "Cartão Stone", tipo: "Cartão", icon: CreditCard, saldo: 0 },
 ];
 
 // receber[] and pagar[] removed — data now comes from FinanceiroRealProvider via useFinanceiroReal()
-
-const fluxoMensal = [
-  { mes: "Nov", entrada: 42000, saida: 31000 },
-  { mes: "Dez", entrada: 51000, saida: 36000 },
-  { mes: "Jan", entrada: 38000, saida: 29000 },
-  { mes: "Fev", entrada: 47000, saida: 33000 },
-  { mes: "Mar", entrada: 55000, saida: 40000 },
-  { mes: "Abr", entrada: 61000, saida: 42000 },
-];
-
-const movimentacoes = [
-  { id: "M1", desc: "Venda PDV #4521", tipo: "entrada", valor: 320, data: "Hoje, 14:32" },
-  { id: "M2", desc: "Pagamento fornecedor", tipo: "saida", valor: 1200, data: "Hoje, 11:08" },
-  { id: "M3", desc: "Recebimento OS #882", tipo: "entrada", valor: 850, data: "Ontem, 17:45" },
-  { id: "M4", desc: "Tarifa bancária", tipo: "saida", valor: 38, data: "Ontem, 09:00" },
-  { id: "M5", desc: "Venda PDV #4520", tipo: "entrada", valor: 145, data: "Ontem, 08:22" },
-];
-
-const receitasOrigem = [
-  { name: "PDV", value: 28000 },
-  { name: "Ordem Serviço", value: 18500 },
-  { name: "Vendas Online", value: 9200 },
-  { name: "Outros", value: 5300 },
-];
-
-const despesasCategoria = [
-  { name: "Folha", value: 12400 },
-  { name: "Fornecedores", value: 8900 },
-  { name: "Aluguel", value: 3500 },
-  { name: "Utilidades", value: 1800 },
-  { name: "Marketing", value: 1200 },
-];
-
-const resultadoLoja = [
-  { loja: "Centro", receita: 32000, despesa: 21000 },
-  { loja: "Norte", receita: 21000, despesa: 16000 },
-  { loja: "Sul", receita: 18000, despesa: 12000 },
-];
+// fluxoMensal, movimentacoes, receitasOrigem, despesasCategoria, resultadoLoja now come from analytics via useFinanceiroReal()
 
 const CHART_COLORS = [
   "var(--color-primary)",
@@ -262,13 +223,15 @@ function StatCard({
 }
 
 function VisaoGeral() {
-  const { summaryR, summaryP } = useFinanceiroReal();
+  const { summaryR, summaryP, analytics } = useFinanceiroReal();
   const totalCarteiras = carteiras.reduce((a, c) => a + c.saldo, 0);
   const totalReceber = summaryR?.totalAberto ?? 0;
   const totalPagar = summaryP?.totalAberto ?? 0;
-  const entradas = 61000;
-  const saidas = 42000;
+  const mesAtual = analytics?.fluxoMensal?.at(-1);
+  const entradas = mesAtual?.entrada ?? summaryR?.totalPago ?? 0;
+  const saidas = mesAtual?.saida ?? summaryP?.totalPago ?? 0;
   const lucro = entradas - saidas;
+  const fluxoMensal = analytics?.fluxoMensal ?? [];
 
   return (
     <div className="space-y-4">
@@ -729,6 +692,9 @@ function ContasPagar() {
 }
 
 function FluxoCaixa() {
+  const { analytics } = useFinanceiroReal();
+  const movimentacoes = analytics?.movimentacoes ?? [];
+  const fluxoMensal = analytics?.fluxoMensal ?? [];
   const [periodo, setPeriodo] = useState("mes");
   const totEntrada = movimentacoes
     .filter((m) => m.tipo === "entrada")
@@ -938,6 +904,10 @@ function GestaoCarteiras() {
 }
 
 function Relatorios() {
+  const { analytics } = useFinanceiroReal();
+  const receitasOrigem = analytics?.receitasOrigem ?? [];
+  const despesasCategoria = analytics?.despesasCategoria ?? [];
+  const resultadoLoja = analytics?.resultadoLoja ?? [];
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card className="rounded-xl">

@@ -47,6 +47,16 @@ export type SummaryPagar = {
   totalPago: number
 }
 
+export type FluxoMes = { mes: string; entrada: number; saida: number }
+export type MovimentacaoItem = { id: string; desc: string; tipo: "entrada" | "saida"; valor: number; data: string }
+export type AnalyticsFinanceiro = {
+  fluxoMensal: FluxoMes[]
+  movimentacoes: MovimentacaoItem[]
+  receitasOrigem: { name: string; value: number }[]
+  despesasCategoria: { name: string; value: number }[]
+  resultadoLoja: { loja: string; receita: number; despesa: number }[]
+}
+
 export type NovoReceberInput = {
   cliente: string
   descricao: string
@@ -69,6 +79,7 @@ type FinanceiroRealState = {
   pagar: ContaPagar[]
   summaryR: SummaryReceber | null
   summaryP: SummaryPagar | null
+  analytics: AnalyticsFinanceiro | null
   loading: boolean
   error: string | null
   reload: () => void
@@ -191,6 +202,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [pagar, setPagar] = useState<ContaPagar[]>([])
   const [summaryR, setSummaryR] = useState<SummaryReceber | null>(null)
   const [summaryP, setSummaryP] = useState<SummaryPagar | null>(null)
+  const [analytics, setAnalytics] = useState<AnalyticsFinanceiro | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -198,13 +210,15 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
     try {
-      const [rRes, pRes] = await Promise.all([
+      const [rRes, pRes, aRes] = await Promise.all([
         fetch("/api/ops/contas-receber-list"),
         fetch("/api/ops/contas-pagar-list"),
+        fetch("/api/financeiro/analytics"),
       ])
-      const [rJson, pJson] = await Promise.all([
+      const [rJson, pJson, aJson] = await Promise.all([
         rRes.json() as Promise<Record<string, unknown>>,
         pRes.json() as Promise<Record<string, unknown>>,
+        aRes.json() as Promise<Record<string, unknown>>,
       ])
       if (rJson.ok) {
         setReceber(normalizeReceberRows(rJson.rows as unknown[], rJson.audit as unknown[] ?? []))
@@ -215,6 +229,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
         setPagar(normalizePagarRows(pJson.rows as unknown[], pJson.audit as unknown[] ?? []))
         const sp = pJson.summary as Record<string, unknown> | undefined
         if (sp) setSummaryP({ quantidade: safeNum(sp.quantidade), totalAberto: safeNum(sp.totalAberto), totalVencido: safeNum(sp.totalVencido), totalPago: safeNum(sp.totalPago) })
+      }
+      if (aJson.ok) {
+        setAnalytics(aJson as unknown as AnalyticsFinanceiro)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao carregar dados financeiros")
@@ -322,7 +339,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   return (
     <FinanceiroRealContext.Provider
       value={{
-        receber, pagar, summaryR, summaryP,
+        receber, pagar, summaryR, summaryP, analytics,
         loading, error, reload: fetchData,
         liquidarReceber, receberParcial, estornarReceber, criarReceber,
         liquidarPagar, pagarParcial, estornarPagar, criarPagar,

@@ -25,7 +25,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  mockContacts, mockAutomations, mockQuickReplies, variables, aiSuggestions,
+  variables, aiSuggestions,
   type Contact, type Automation, type QuickReply, type FunnelStage, type Trigger, type Action,
 } from "./mockData";
 
@@ -160,10 +160,92 @@ export default function WhatsAppHub() {
   };
 
   // state
-  const [contacts, setContacts] = useState<Contact[]>(mockContacts);
-  const [automations, setAutomations] = useState<Automation[]>(mockAutomations);
-  const [replies, setReplies] = useState<QuickReply[]>(mockQuickReplies);
-  const [selectedId, setSelectedId] = useState<string>(mockContacts[0].id);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [automations, setAutomations] = useState<Automation[]>([]);
+  const [replies, setReplies] = useState<QuickReply[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
+  const [dataLoading, setDataLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      setDataLoading(true);
+      try {
+        const [cRes, aRes, qRes] = await Promise.all([
+          fetch("/api/whatsapp/contacts"),
+          fetch("/api/whatsapp/automations"),
+          fetch("/api/whatsapp/quick-replies"),
+        ]);
+        const [cJson, aJson, qJson] = await Promise.all([cRes.json(), aRes.json(), qRes.json()]);
+
+        if (cJson.ok && Array.isArray(cJson.contacts)) {
+          const mapped: Contact[] = (cJson.contacts as Record<string, unknown>[]).map((c) => {
+            const meta = c.metadata && typeof c.metadata === "object" && !Array.isArray(c.metadata)
+              ? (c.metadata as Record<string, unknown>) : {};
+            const phone = String(c.phoneDigits ?? "").replace(/^55(\d{2})(\d{5})(\d{4})$/, "+55 $1 $2-$3");
+            return {
+              id: String(c.id ?? ""),
+              name: String(c.displayName ?? c.phoneDigits ?? "—"),
+              phone: phone || String(c.phoneDigits ?? ""),
+              lastMessage: String(meta.lastMessage ?? ""),
+              lastTime: String(meta.lastTime ?? "—"),
+              unread: typeof meta.unread === "number" ? meta.unread : 0,
+              status: (["auto","human","waiting"].includes(String(meta.status)) ? meta.status : "auto") as Contact["status"],
+              stage: (["novo","atendimento","aguardando_cliente","aguardando_orcamento","finalizado"].includes(String(meta.stage)) ? meta.stage : "novo") as FunnelStage,
+              responsible: String(meta.responsible ?? "—"),
+              idleMinutes: typeof meta.idleMinutes === "number" ? meta.idleMinutes : 0,
+              tags: Array.isArray(meta.tags) ? (meta.tags as string[]) : [],
+              clientSince: String(meta.clientSince ?? new Date(String(c.createdAt ?? "")).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })),
+              totalSpent: typeof meta.totalSpent === "number" ? meta.totalSpent : 0,
+              notes: String(meta.notes ?? ""),
+              messages: Array.isArray(meta.messages) ? (meta.messages as Contact["messages"]) : [],
+              os: Array.isArray(meta.os) ? (meta.os as Contact["os"]) : [],
+              history: Array.isArray(meta.history) ? (meta.history as Contact["history"]) : [],
+            };
+          });
+          setContacts(mapped);
+          if (mapped.length > 0) setSelectedId(mapped[0].id);
+        }
+
+        if (aJson.ok && Array.isArray(aJson.automations)) {
+          const mapped: Automation[] = (aJson.automations as Record<string, unknown>[]).map((a) => {
+            const acts = a.actions && typeof a.actions === "object" && !Array.isArray(a.actions)
+              ? (a.actions as Record<string, unknown>) : {};
+            const conds = a.conditions && typeof a.conditions === "object" && !Array.isArray(a.conditions)
+              ? (a.conditions as Record<string, unknown>) : {};
+            return {
+              id: String(a.id ?? ""),
+              name: String(a.name ?? ""),
+              description: String(acts.description ?? ""),
+              enabled: Boolean(a.enabled),
+              trigger: (String(a.triggerType ?? "keyword")) as Trigger,
+              conditions: Array.isArray(conds.list) ? (conds.list as string[]) : [],
+              action: (String(acts.type ?? "send_message")) as Action,
+              message: String(acts.replyText ?? acts.message ?? ""),
+              lastRun: String(acts.lastRun ?? "—"),
+              runs: typeof acts.runs === "number" ? acts.runs : 0,
+            };
+          });
+          setAutomations(mapped);
+        }
+
+        if (qJson.ok && Array.isArray(qJson.quickReplies)) {
+          const mapped: QuickReply[] = (qJson.quickReplies as Record<string, unknown>[]).map((q) => ({
+            id: String(q.id ?? ""),
+            title: String(q.title ?? ""),
+            category: (String(q.category ?? "Boas-vindas")) as QuickReply["category"],
+            shortcut: String(q.shortcut ?? ""),
+            message: String(q.body ?? ""),
+          }));
+          setReplies(mapped);
+        }
+      } catch {
+        // silencioso — hub continua com arrays vazios
+      } finally {
+        setDataLoading(false);
+      }
+    }
+    void loadData();
+  }, []);
   const [search, setSearch] = useState("");
   const [convFilter, setConvFilter] = useState<"all" | "auto" | "human" | "waiting">("all");
   const [draft, setDraft] = useState("");
@@ -175,7 +257,7 @@ export default function WhatsAppHub() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [osModal, setOsModal] = useState<null | "open" | "status" | "budget">(null);
 
-  const selected = contacts.find((c) => c.id === selectedId)!;
+  const selected = contacts.find((c) => c.id === selectedId) ?? contacts[0];
   const filteredContacts = contacts.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) &&

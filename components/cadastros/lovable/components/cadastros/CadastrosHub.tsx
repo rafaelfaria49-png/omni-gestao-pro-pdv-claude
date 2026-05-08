@@ -8,7 +8,6 @@ import {
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea, useToggle } from "./ui-kit";
 import { ProductAIModal, QualityScore, InteligenciaCadastros, ImportIAActions } from "./produto-ia";
-import { categorias, auditoria } from "@/data/cadastros-mock";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
 import {
@@ -22,6 +21,8 @@ import {
   listProdutos,
   listServicos,
   listTecnicos,
+  listLogsAuditoriaCadastros,
+  type AuditoriaItemDTO,
   type CategoriaCadastroDTO,
   type ClienteDTO,
   type EquipamentoModeloDTO,
@@ -766,6 +767,13 @@ function ServicosPanel({ storeId }: { storeId: string }) {
   const [rows, setRows] = useState<ServicoDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+  const [servCategorias, setServCategorias] = useState<string[]>([]);
+
+  useEffect(() => {
+    listCategorias(storeId).then((cats) =>
+      setServCategorias(cats.filter((c) => c.active && c.type === "servico").map((c) => c.name))
+    ).catch(() => {});
+  }, [storeId]);
   const [saving, startSaving] = useTransition();
   const nomeRef = useRef<HTMLInputElement | null>(null);
   const catRef = useRef<HTMLSelectElement | null>(null);
@@ -866,7 +874,7 @@ function ServicosPanel({ storeId }: { storeId: string }) {
       <Modal open={m.open} onClose={m.close} title="Novo serviço" subtitle="Configuração completa para OS e Marketing IA." size="lg">
         <div className="grid grid-cols-2 gap-4" key={m.open ? "open" : "closed"}>
           <Field label="Nome" span={2}><Input ref={nomeRef} defaultValue={editing?.nome ?? ""} placeholder="Troca de tela" /></Field>
-          <Field label="Categoria"><Select ref={catRef} defaultValue={editing?.categoria ?? ""}>{categorias.servicos.map((c) => <option key={c}>{c}</option>)}</Select></Field>
+          <Field label="Categoria"><Select ref={catRef} defaultValue={editing?.categoria ?? ""}>{servCategorias.map((c) => <option key={c}>{c}</option>)}</Select></Field>
           <Field label="Tempo médio"><Input ref={tempoRef} defaultValue={editing?.tempo === "—" ? "" : editing?.tempo ?? ""} placeholder="45 min" /></Field>
           <Field label="Custo interno"><Input ref={custoRef} defaultValue={editing ? String(editing.custo) : ""} placeholder="60" /></Field>
           <Field label="Preço de venda"><Input ref={precoRef} defaultValue={editing ? String(editing.preco) : ""} placeholder="280" /></Field>
@@ -1591,8 +1599,8 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
     { l: "Categorias de produtos", items: itemsFor("produto"), t: "primary" as const, kind: "categoria" as const, catType: "produto" as const },
     { l: "Categorias de serviços", items: itemsFor("servico"), t: "info" as const, kind: "categoria" as const, catType: "servico" as const },
     { l: "Marcas", items: brands.filter((b) => b.active).map((b) => b.name), t: "success" as const, kind: "marca" as const, catType: "geral" as const },
-    { l: "Linhas de equipamentos", items: categorias.linhas, t: "warning" as const, kind: "categoria" as const, catType: "equipamento" as const },
-    { l: "Tags globais", items: categorias.tags, t: "default" as const, kind: "categoria" as const, catType: "geral" as const },
+    { l: "Linhas de equipamentos", items: itemsFor("equipamento"), t: "warning" as const, kind: "categoria" as const, catType: "equipamento" as const },
+    { l: "Tags globais", items: itemsFor("geral"), t: "default" as const, kind: "categoria" as const, catType: "geral" as const },
   ];
   return (
     <div className="grid w-full min-w-0 gap-6 md:grid-cols-2">
@@ -1849,12 +1857,24 @@ function ImportFlow() {
 
 /* ───── AUDITORIA ───── */
 function AuditoriaPanel() {
+  const [logs, setLogs] = useState<AuditoriaItemDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    listLogsAuditoriaCadastros()
+      .then(setLogs)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div className="w-full min-w-0">
-      <Toolbar count={auditoria.length} label="eventos" />
+      <Toolbar count={logs.length} label="eventos" />
       <Card className="p-6">
+        {loading && <div className="text-sm text-muted-foreground">Carregando auditoria…</div>}
+        {!loading && logs.length === 0 && <div className="text-sm text-muted-foreground">Nenhum evento registrado.</div>}
         <ol className="relative ml-3 space-y-6 border-l border-border pl-6">
-          {auditoria.map((a) => (
+          {logs.map((a) => (
             <li key={a.id} className="relative">
               <span className="absolute -left-[31px] top-1 grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground">
                 <span className="h-2 w-2 rounded-full bg-primary-foreground" />
@@ -1866,9 +1886,9 @@ function AuditoriaPanel() {
                 <span className="ml-auto text-xs text-muted-foreground">{a.data}</span>
               </div>
               <div className="mt-2 grid gap-2 rounded-xl border border-border bg-background p-3 text-xs md:grid-cols-2">
-                <div><span className="text-muted-foreground">Antes:</span> <span className="text-foreground">{a.antes}</span></div>
-                <div><span className="text-muted-foreground">Depois:</span> <span className="text-foreground">{a.depois}</span></div>
-                <div className="md:col-span-2 text-muted-foreground">IP/dispositivo: <span className="font-mono">{a.ip}</span></div>
+                {a.antes && <div><span className="text-muted-foreground">Antes:</span> <span className="text-foreground">{a.antes}</span></div>}
+                <div className={a.antes ? "" : "md:col-span-2"}><span className="text-muted-foreground">Detalhe:</span> <span className="text-foreground">{a.depois}</span></div>
+                <div className="md:col-span-2 text-muted-foreground">Origem: <span className="font-mono">{a.ip}</span></div>
               </div>
             </li>
           ))}
