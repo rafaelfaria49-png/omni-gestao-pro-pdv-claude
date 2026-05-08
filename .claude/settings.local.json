@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:omni-gestao-pro.vercel.app)",
+      "WebFetch(domain:omni-gestao-pi.vercel.app)",
+      "Bash(npx vercel *)",
+      "Bash(curl *)",
+      "Bash(npm run *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(git pull *)",
+      "Bash(gh api *)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(gh repo *)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "PowerShell(Remove-Item *)",
+      "Bash(npx kill-port *)",
+      "Read(//tmp/claude/C--Projetos-omni-gestao/9f91edf8-6ab3-454f-9b1d-0d982c4ee6d4/tasks/**)",
+      "Bash(Find-Item *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Projetos\\\\omni-gestao\" -Directory)",
+      "Bash(Select-Object Name)",
+      "PowerShell(ls -Path \"C:\\\\Projetos\\\\omni-gestao\\\\app\\\\api\" -Recurse | Where-Object { $_.Name -match \"financeiro\" })",
+      "PowerShell(ls -Path \"C:\\\\Projetos\\\\omni-gestao\\\\app\\\\actions\" -Recurse | Where-Object { $_.Name -match \"financeiro\" })",
+      "Bash(pkill -f \"next build\")",
+      "Bash(npx tsc *)",
+      "Bash(git commit *)",
+      "Bash(git stash *)",
+      "Bash(Wait-Event -Timeout 300)",
+      "PowerShell(npx tsc --noEmit 2>&1 | Select-Object -First 50)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Projetos\\\\omni-gestao\\\\app\\\\dashboard\\\\whatsapp\" -Recurse -Include \"*.tsx\", \"*.ts\")",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "PowerShell(git add *)",
+      "PowerShell(git push *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Projetos\\\\omni-gestao\\\\app\\\\dashboard\" -Filter \"*marketplace*\" -Recurse -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object FullName)"
+    ]
+  }
+}
