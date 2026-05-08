@@ -285,27 +285,32 @@ export type FornecedorDTO = {
 };
 
 export async function listFornecedores(storeId: string): Promise<FornecedorDTO[]> {
-  const rows = await prisma.fornecedor.findMany({
-    where: { storeId },
-    orderBy: { updatedAt: "desc" },
-    take: 500,
-  });
-  return rows.map((f) => ({
-    id: f.id,
-    nome: f.name,
-    razaoSocial: f.legalName,
-    cnpj: f.document || "—",
-    contato: f.contactName || "—",
-    whatsapp: f.whatsapp || "—",
-    email: f.email || "—",
-    endereco: f.address || "",
-    produtos: f.productsProvided || "",
-    prazo: f.avgLeadTime || "—",
-    pagamento: f.paymentTerms || "—",
-    observacoes: f.notes ?? "",
-    ultima: fmtDateISO(f.updatedAt),
-    status: f.active ? "Ativo" : "Inativo",
-  }));
+  try {
+    const rows = await prisma.fornecedor.findMany({
+      where: { storeId },
+      orderBy: { updatedAt: "desc" },
+      take: 500,
+    });
+    return rows.map((f) => ({
+      id: f.id,
+      nome: f.name,
+      razaoSocial: f.legalName,
+      cnpj: f.document || "—",
+      contato: f.contactName || "—",
+      whatsapp: f.whatsapp || "—",
+      email: f.email || "—",
+      endereco: f.address || "",
+      produtos: f.productsProvided || "",
+      prazo: f.avgLeadTime || "—",
+      pagamento: f.paymentTerms || "—",
+      observacoes: f.notes ?? "",
+      ultima: fmtDateISO(f.updatedAt),
+      status: f.active ? "Ativo" : "Inativo",
+    }));
+  } catch (e) {
+    console.error("[cadastros:listFornecedores] storeId=%s err=%s", storeId, e instanceof Error ? e.message : String(e));
+    return [];
+  }
 }
 
 export async function upsertFornecedor(
@@ -368,17 +373,22 @@ export type CategoriaCadastroDTO = {
 };
 
 export async function listCategorias(storeId: string): Promise<CategoriaCadastroDTO[]> {
-  const rows = await prisma.categoriaCadastro.findMany({
-    where: { storeId },
-    orderBy: [{ type: "asc" }, { name: "asc" }],
-    take: 1000,
-  });
-  return rows.map((c) => ({
-    id: c.id,
-    name: c.name,
-    type: (c.type as CategoriaCadastroType) || "geral",
-    active: c.active,
-  }));
+  try {
+    const rows = await prisma.categoriaCadastro.findMany({
+      where: { storeId },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+      take: 1000,
+    });
+    return rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      type: (c.type as CategoriaCadastroType) || "geral",
+      active: c.active,
+    }));
+  } catch (e) {
+    console.error("[cadastros:listCategorias] storeId=%s err=%s", storeId, e instanceof Error ? e.message : String(e));
+    return [];
+  }
 }
 
 export async function upsertCategoria(
@@ -416,17 +426,22 @@ export type MarcaCadastroDTO = {
 };
 
 export async function listMarcas(storeId: string): Promise<MarcaCadastroDTO[]> {
-  const rows = await prisma.marcaCadastro.findMany({
-    where: { storeId },
-    orderBy: [{ type: "asc" }, { name: "asc" }],
-    take: 2000,
-  });
-  return rows.map((m) => ({
-    id: m.id,
-    name: m.name,
-    type: m.type,
-    active: m.active,
-  }));
+  try {
+    const rows = await prisma.marcaCadastro.findMany({
+      where: { storeId },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+      take: 2000,
+    });
+    return rows.map((m) => ({
+      id: m.id,
+      name: m.name,
+      type: m.type,
+      active: m.active,
+    }));
+  } catch (e) {
+    console.error("[cadastros:listMarcas] storeId=%s err=%s", storeId, e instanceof Error ? e.message : String(e));
+    return [];
+  }
 }
 
 export async function upsertMarca(
@@ -468,21 +483,26 @@ export type TecnicoDTO = {
 };
 
 export async function listTecnicos(storeId: string): Promise<TecnicoDTO[]> {
-  const rows = await prisma.tecnico.findMany({
-    where: { storeId },
-    orderBy: { updatedAt: "desc" },
-    take: 500,
-  });
-  return rows.map((t) => ({
-    id: t.id,
-    name: t.name,
-    email: t.email,
-    phone: t.phone,
-    role: t.role,
-    specialty: t.specialty,
-    commissionPercent: Number(t.commissionPercent ?? 0),
-    active: t.active,
-  }));
+  try {
+    const rows = await prisma.tecnico.findMany({
+      where: { storeId },
+      orderBy: { updatedAt: "desc" },
+      take: 500,
+    });
+    return rows.map((t) => ({
+      id: t.id,
+      name: t.name,
+      email: t.email,
+      phone: t.phone,
+      role: t.role,
+      specialty: t.specialty,
+      commissionPercent: Number(t.commissionPercent ?? 0),
+      active: t.active,
+    }));
+  } catch (e) {
+    console.error("[cadastros:listTecnicos] storeId=%s err=%s", storeId, e instanceof Error ? e.message : String(e));
+    return [];
+  }
 }
 
 export async function upsertTecnico(
@@ -544,23 +564,28 @@ function jsonStringArray(v: unknown): string[] {
 }
 
 export async function listEquipamentosModelos(storeId: string): Promise<EquipamentoModeloDTO[]> {
-  const rows = await prisma.equipamentoModelo.findMany({
-    where: { storeId },
-    orderBy: { updatedAt: "desc" },
-    take: 500,
-  });
-  return rows.map((e) => ({
-    id: e.id,
-    name: e.name,
-    brand: e.brand,
-    type: e.type,
-    year: e.year,
-    averageRepairTime: e.averageRepairTime,
-    active: e.active,
-    compatibleParts: jsonStringArray(e.compatibleParts),
-    commonDefects: jsonStringArray(e.commonDefects),
-    recommendedChecklist: jsonStringArray(e.recommendedChecklist),
-  }));
+  try {
+    const rows = await prisma.equipamentoModelo.findMany({
+      where: { storeId },
+      orderBy: { updatedAt: "desc" },
+      take: 500,
+    });
+    return rows.map((e) => ({
+      id: e.id,
+      name: e.name,
+      brand: e.brand,
+      type: e.type,
+      year: e.year,
+      averageRepairTime: e.averageRepairTime,
+      active: e.active,
+      compatibleParts: jsonStringArray(e.compatibleParts),
+      commonDefects: jsonStringArray(e.commonDefects),
+      recommendedChecklist: jsonStringArray(e.recommendedChecklist),
+    }));
+  } catch (e) {
+    console.error("[cadastros:listEquipamentosModelos] storeId=%s err=%s", storeId, e instanceof Error ? e.message : String(e));
+    return [];
+  }
 }
 
 export async function upsertEquipamentoModelo(
@@ -688,23 +713,28 @@ function fmtDateISO(d: Date | null | undefined): string {
 }
 
 export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
-  const rows = await prisma.cliente.findMany({
-    where: { storeId },
-    orderBy: { updatedAt: "desc" },
-    take: 500,
-  });
-  return rows.map((c) => ({
-    id: c.id,
-    nome: c.name,
-    tipo: (c.kind === "PJ" ? "PJ" : "PF") satisfies ClienteKind,
-    telefone: c.phone ?? "—",
-    documento: c.document || "—",
-    cidade: c.city || "—",
-    totalGasto: Number(c.totalSpent ?? 0),
-    ultimaCompra: fmtDateISO(c.lastPurchaseAt),
-    tags: safeStringArray(c.tags),
-    status: c.active ? "Ativo" : "Inativo",
-  }));
+  try {
+    const rows = await prisma.cliente.findMany({
+      where: { storeId },
+      orderBy: { updatedAt: "desc" },
+      take: 500,
+    });
+    return rows.map((c) => ({
+      id: c.id,
+      nome: c.name,
+      tipo: (c.kind === "PJ" ? "PJ" : "PF") satisfies ClienteKind,
+      telefone: c.phone ?? "—",
+      documento: c.document || "—",
+      cidade: c.city || "—",
+      totalGasto: Number(c.totalSpent ?? 0),
+      ultimaCompra: fmtDateISO(c.lastPurchaseAt),
+      tags: safeStringArray(c.tags),
+      status: c.active ? "Ativo" : "Inativo",
+    }));
+  } catch (e) {
+    console.error("[cadastros:listClientes] storeId=%s err=%s", storeId, e instanceof Error ? e.message : String(e));
+    return [];
+  }
 }
 
 export async function createCliente(
@@ -775,12 +805,14 @@ export async function updateCliente(
 }
 
 export async function listProdutos(storeId: string): Promise<ProdutoDTO[]> {
+  console.log("[cadastros:listProdutos] storeId=%s", storeId);
   try {
     const rows = await prisma.produto.findMany({
       where: { storeId },
       orderBy: { updatedAt: "desc" },
       take: 1000,
     });
+    console.log("[cadastros:listProdutos] storeId=%s count=%d", storeId, rows.length);
     return rows.map((p) => {
       const preco = Number(p.price ?? 0);
       const custo = Number(p.precoCusto ?? 0);
@@ -808,10 +840,8 @@ export async function listProdutos(storeId: string): Promise<ProdutoDTO[]> {
       };
     });
   } catch (e) {
-    // Hardening: em produção, se o banco estiver em versão parcial (colunas/tabelas divergentes),
-    // evita quebrar o render e tenta um select mínimo.
     const msg = e instanceof Error ? e.message : String(e);
-    console.error("[cadastros:listProdutos]", msg);
+    console.error("[cadastros:listProdutos] storeId=%s primary-query-failed=%s — tentando fallback", storeId, msg);
 
     const legacyRows = await withPrismaSafe(
       (db) =>
@@ -914,23 +944,28 @@ export async function upsertProduto(
 }
 
 export async function listServicos(storeId: string): Promise<ServicoDTO[]> {
-  const rows = await prisma.servico.findMany({
-    where: { storeId },
-    orderBy: { updatedAt: "desc" },
-    take: 500,
-  });
-  return rows.map((s) => ({
-    id: s.id,
-    nome: s.name,
-    categoria: s.category || "—",
-    tempo: s.avgTime || "—",
-    custo: Number(s.cost ?? 0),
-    preco: Number(s.price ?? 0),
-    margem: Number(s.margin ?? 0),
-    garantia: s.warrantyDays ?? 0,
-    termo: s.terms || "",
-    status: (!s.name || !s.category || s.price <= 0 ? "Incompleto" : s.active ? "Ativo" : "Inativo"),
-  }));
+  try {
+    const rows = await prisma.servico.findMany({
+      where: { storeId },
+      orderBy: { updatedAt: "desc" },
+      take: 500,
+    });
+    return rows.map((s) => ({
+      id: s.id,
+      nome: s.name,
+      categoria: s.category || "—",
+      tempo: s.avgTime || "—",
+      custo: Number(s.cost ?? 0),
+      preco: Number(s.price ?? 0),
+      margem: Number(s.margin ?? 0),
+      garantia: s.warrantyDays ?? 0,
+      termo: s.terms || "",
+      status: (!s.name || !s.category || s.price <= 0 ? "Incompleto" : s.active ? "Ativo" : "Inativo"),
+    }));
+  } catch (e) {
+    console.error("[cadastros:listServicos] storeId=%s err=%s", storeId, e instanceof Error ? e.message : String(e));
+    return [];
+  }
 }
 
 export async function upsertServico(
@@ -1001,24 +1036,29 @@ export type AuditoriaItemDTO = {
 }
 
 export async function listLogsAuditoriaCadastros(): Promise<AuditoriaItemDTO[]> {
-  const rows = await prisma.logsAuditoria.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  })
-  return rows.map((r) => {
-    let meta: Record<string, unknown> = {}
-    try { if (r.metadata) meta = JSON.parse(r.metadata) } catch { /* ignore */ }
-    return {
-      id: r.id,
-      acao: r.action,
-      entidade: (meta.entidade as string) || r.detail.slice(0, 60),
-      usuario: r.userLabel,
-      data: r.createdAt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
-      antes: (meta.antes as string) || "",
-      depois: (meta.depois as string) || r.detail.slice(0, 120),
-      ip: r.source,
-    }
-  })
+  try {
+    const rows = await prisma.logsAuditoria.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    })
+    return rows.map((r) => {
+      let meta: Record<string, unknown> = {}
+      try { if (r.metadata) meta = JSON.parse(r.metadata) } catch { /* ignore */ }
+      return {
+        id: r.id,
+        acao: r.action,
+        entidade: (meta.entidade as string) || r.detail.slice(0, 60),
+        usuario: r.userLabel,
+        data: r.createdAt.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+        antes: (meta.antes as string) || "",
+        depois: (meta.depois as string) || r.detail.slice(0, 120),
+        ip: r.source,
+      }
+    })
+  } catch (e) {
+    console.error("[cadastros:listLogsAuditoriaCadastros] err=%s", e instanceof Error ? e.message : String(e));
+    return [];
+  }
 }
 
 // ── Lojas ─────────────────────────────────────────────────────────────────────
@@ -1032,19 +1072,24 @@ export type LojaDTO = {
 }
 
 export async function listLojasCadastros(): Promise<LojaDTO[]> {
-  const rows = await prisma.store.findMany({ orderBy: { id: "asc" }, take: 50 })
-  return rows.map((s) => {
-    const addr =
-      s.address && typeof s.address === "object" && !Array.isArray(s.address)
-        ? (s.address as Record<string, unknown>)
-        : null
-    return {
-      id: s.id,
-      nome: s.name || s.id,
-      cnpj: s.cnpj,
-      cidade: (addr?.cidade as string) ?? (addr?.city as string) ?? "",
-      ativa: true,
-    }
-  })
+  try {
+    const rows = await prisma.store.findMany({ orderBy: { id: "asc" }, take: 50 })
+    return rows.map((s) => {
+      const addr =
+        s.address && typeof s.address === "object" && !Array.isArray(s.address)
+          ? (s.address as Record<string, unknown>)
+          : null
+      return {
+        id: s.id,
+        nome: s.name || s.id,
+        cnpj: s.cnpj,
+        cidade: (addr?.cidade as string) ?? (addr?.city as string) ?? "",
+        ativa: true,
+      }
+    })
+  } catch (e) {
+    console.error("[cadastros:listLojasCadastros] err=%s", e instanceof Error ? e.message : String(e));
+    return [];
+  }
 }
 

@@ -49,9 +49,8 @@ export async function withPrismaSafe<T>(
   try {
     return await op(prisma)
   } catch (e) {
-    if (process.env.NODE_ENV === "development") {
-      console.error("[prisma]", e)
-    }
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error("[prisma:safe]", msg)
     return fallback
   }
 }
