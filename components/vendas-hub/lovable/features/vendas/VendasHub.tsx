@@ -6,6 +6,10 @@ import {
   ShoppingCart,
   ArrowLeft,
   ArrowRight,
+  BarChart3,
+  Clock,
+  Package,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react"
 import ThemeSwitcher from "./ThemeSwitcher"
@@ -18,33 +22,61 @@ type VendasCard = {
   icon: LucideIcon
   badge?: string
   status?: Status
-  /** Destino real no app Next (fora do SPA do Hub). */
   dashboardHref: string
+  highlight?: boolean
+  meta?: string
 }
 
 const cards: VendasCard[] = [
   {
-    title: "PDV rápido",
-    description: "Venda rápida para balcão, caixa e atendimento imediato.",
+    title: "PDV Rápido",
+    description: "Venda rápida para balcão, caixa e atendimento imediato. Teclas de atalho F1–F9.",
     icon: Zap,
     badge: "Rápido",
     status: "ativo",
     dashboardHref: "/dashboard/vendas?modo=rapido",
+    highlight: true,
+    meta: "Modo balcão",
   },
   {
-    title: "Venda completa",
-    description:
-      "Venda detalhada para produtos de maior valor, emissão fiscal e dados completos do cliente.",
+    title: "Venda Completa",
+    description: "Venda detalhada com dados do cliente, nota fiscal e registro completo.",
     icon: ShoppingCart,
     status: "ativo",
     dashboardHref: "/dashboard/vendas",
+    meta: "Com NF e cliente",
   },
   {
     title: "Orçamentos",
-    description: "Crie, acompanhe e converta orçamentos em vendas.",
+    description: "Crie, envie e converta orçamentos em vendas com acompanhamento de status.",
     icon: FileText,
     status: "beta",
     dashboardHref: "/dashboard/orcamentos",
+    meta: "Beta",
+  },
+  {
+    title: "Histórico de Vendas",
+    description: "Consulte todas as vendas registradas com filtros por data, cliente e produto.",
+    icon: Clock,
+    status: "ativo",
+    dashboardHref: "/dashboard/historico-vendas",
+    meta: "Arquivo geral",
+  },
+  {
+    title: "Estoque",
+    description: "Controle de produtos, entradas, saídas e alertas de estoque mínimo.",
+    icon: Package,
+    status: "ativo",
+    dashboardHref: "/dashboard/estoque",
+    meta: "Inventário",
+  },
+  {
+    title: "Relatórios",
+    description: "Análise de performance, ticket médio, produtos mais vendidos e crescimento.",
+    icon: BarChart3,
+    status: "ativo",
+    dashboardHref: "/dashboard/relatorios",
+    meta: "Analytics",
   },
 ]
 
@@ -56,8 +88,9 @@ const STATUS_LABEL: Record<Status, string> = {
 
 export default function VendasHub() {
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] px-6 py-10 md:px-8 md:py-14">
-      <div className="mx-auto w-full max-w-6xl">
+    <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] px-4 py-8 md:px-8 md:py-12">
+      <div className="mx-auto w-full max-w-5xl">
+        {/* Nav superior */}
         <div className="flex items-center justify-between mb-8">
           <Link
             to="/vendas"
@@ -69,104 +102,143 @@ export default function VendasHub() {
           <ThemeSwitcher />
         </div>
 
-        <header className="mb-10 md:mb-12">
-          <span
-            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium mb-4"
+        {/* Header */}
+        <header className="mb-8 md:mb-10">
+          <div
+            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium mb-3"
             style={{
               backgroundColor: "hsl(var(--primary) / 0.12)",
               color: "hsl(var(--primary))",
             }}
           >
+            <TrendingUp className="h-3 w-3" />
             OmniGestão Pro
-          </span>
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+          </div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
             Vendas HUB Central
           </h1>
-          <p className="mt-3 text-sm md:text-base text-[hsl(var(--muted-foreground))] max-w-2xl">
-            Gerencie todas as operações de venda do OmniGestão Pro em um único lugar.
+          <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))] max-w-xl">
+            Todas as operações de venda em um único lugar. Escolha o módulo para começar.
           </p>
         </header>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
-          {cards.map((card) => {
-            const Icon = card.icon
-            const statusLabel = card.status ? STATUS_LABEL[card.status] : undefined
-            const statusTone =
-              card.status === "em-breve"
-                ? {
-                    bg: "hsl(var(--muted))",
-                    fg: "hsl(var(--muted-foreground))",
-                  }
-                : card.status === "beta"
-                  ? {
-                      bg: "hsl(var(--success) / 0.15)",
-                      fg: "hsl(var(--success))",
-                    }
-                  : {
-                      bg: "hsl(var(--primary) / 0.12)",
-                      fg: "hsl(var(--primary))",
-                    }
-            const cardClassName =
-              "group relative flex flex-col text-left rounded-2xl p-6 border cursor-pointer overflow-hidden transition-all duration-200 ease-out shadow-sm hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-            const cardStyle = {
-              backgroundColor: "hsl(var(--card))",
-              color: "hsl(var(--card-foreground))",
-              borderColor: "hsl(var(--border))",
-              ["--tw-ring-color" as string]: "hsl(var(--primary))",
-              ["--tw-ring-offset-color" as string]: "hsl(var(--background))",
-            } as CSSProperties
-
-            const cardInner = (
-              <>
-                <div className="flex items-start justify-between mb-5">
-                  <div
-                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110"
-                    style={{ backgroundColor: "hsl(var(--primary) / 0.12)" }}
+        {/* Card destaque (PDV Rápido) */}
+        {cards.filter(c => c.highlight).map((card) => {
+          const Icon = card.icon
+          return (
+            <a
+              key={card.title}
+              href={card.dashboardHref}
+              className="group relative mb-5 flex flex-col sm:flex-row sm:items-center gap-5 rounded-2xl border p-6 overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.99]"
+              style={{
+                backgroundColor: "hsl(var(--primary) / 0.06)",
+                borderColor: "hsl(var(--primary) / 0.25)",
+              }}
+            >
+              {/* Glow de fundo */}
+              <div
+                className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full blur-3xl opacity-20"
+                style={{ background: "hsl(var(--primary))" }}
+              />
+              <div
+                className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl transition-transform duration-200 group-hover:scale-110"
+                style={{ backgroundColor: "hsl(var(--primary) / 0.15)" }}
+              >
+                <Icon className="h-8 w-8" style={{ color: "hsl(var(--primary))" }} strokeWidth={2} />
+              </div>
+              <div className="relative flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <h2 className="text-xl font-bold tracking-tight">{card.title}</h2>
+                  <span
+                    className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full"
+                    style={{
+                      backgroundColor: "hsl(var(--primary) / 0.15)",
+                      color: "hsl(var(--primary))",
+                    }}
                   >
-                    <Icon className="h-6 w-6 text-[hsl(var(--primary))]" strokeWidth={2} />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    {card.badge && (
-                      <span
-                        className="text-[10px] uppercase tracking-wide font-semibold px-2.5 py-1 rounded-full"
-                        style={{
-                          backgroundColor: "hsl(var(--primary) / 0.12)",
-                          color: "hsl(var(--primary))",
-                        }}
-                      >
-                        {card.badge}
-                      </span>
-                    )}
-                    {statusLabel && (
-                      <span
-                        className="text-[10px] uppercase tracking-wide font-semibold px-2.5 py-1 rounded-full"
-                        style={{ backgroundColor: statusTone.bg, color: statusTone.fg }}
-                      >
-                        {statusLabel}
-                      </span>
-                    )}
-                  </div>
+                    {card.badge}
+                  </span>
                 </div>
-                <h2 className="text-lg font-semibold tracking-tight mb-2">{card.title}</h2>
-                <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed mb-5 flex-1">
+                <p className="text-sm text-[hsl(var(--muted-foreground))] leading-relaxed">
                   {card.description}
                 </p>
+              </div>
+              <span
+                className="relative inline-flex items-center gap-2 shrink-0 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 group-hover:gap-3"
+                style={{
+                  backgroundColor: "hsl(var(--primary))",
+                  color: "hsl(var(--primary-foreground))",
+                }}
+              >
+                Abrir PDV
+                <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+              </span>
+            </a>
+          )
+        })}
+
+        {/* Grid dos demais cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {cards.filter(c => !c.highlight).map((card) => {
+            const Icon = card.icon
+            const statusLabel = card.status ? STATUS_LABEL[card.status] : undefined
+            const isEmBreve = card.status === "em-breve"
+            const isBeta = card.status === "beta"
+
+            const statusStyle: CSSProperties = isEmBreve
+              ? { backgroundColor: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))" }
+              : isBeta
+              ? { backgroundColor: "hsl(var(--success) / 0.12)", color: "hsl(var(--success))" }
+              : { backgroundColor: "hsl(var(--primary) / 0.10)", color: "hsl(var(--primary))" }
+
+            return (
+              <a
+                key={card.title}
+                href={card.dashboardHref}
+                className="group relative flex flex-col rounded-2xl border p-5 cursor-pointer overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99]"
+                style={{
+                  backgroundColor: "hsl(var(--card))",
+                  borderColor: "hsl(var(--border))",
+                  color: "hsl(var(--card-foreground))",
+                }}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110"
+                    style={{ backgroundColor: "hsl(var(--primary) / 0.10)" }}
+                  >
+                    <Icon className="h-5 w-5" style={{ color: "hsl(var(--primary))" }} strokeWidth={2} />
+                  </div>
+                  {statusLabel && (
+                    <span
+                      className="text-[10px] uppercase tracking-wide font-semibold px-2 py-0.5 rounded-full"
+                      style={statusStyle}
+                    >
+                      {statusLabel}
+                    </span>
+                  )}
+                </div>
+
+                <h2 className="text-base font-semibold tracking-tight mb-1">{card.title}</h2>
+                {card.meta && (
+                  <p className="text-[11px] font-medium mb-1.5" style={{ color: "hsl(var(--primary))" }}>
+                    {card.meta}
+                  </p>
+                )}
+                <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed mb-4 flex-1">
+                  {card.description}
+                </p>
+
                 <span
-                  className="inline-flex items-center gap-1.5 self-start rounded-lg px-3 py-1.5 text-xs font-semibold transition-all duration-200 group-hover:gap-2.5"
+                  className="inline-flex items-center gap-1.5 self-start rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-200 group-hover:gap-2.5"
                   style={{
-                    backgroundColor: "hsl(var(--primary) / 0.10)",
+                    backgroundColor: "hsl(var(--primary) / 0.08)",
                     color: "hsl(var(--primary))",
                   }}
                 >
-                  Acessar módulo
+                  Acessar
                   <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1" />
                 </span>
-              </>
-            )
-
-            return (
-              <a key={card.title} href={card.dashboardHref} className={cardClassName} style={cardStyle}>
-                {cardInner}
               </a>
             )
           })}
