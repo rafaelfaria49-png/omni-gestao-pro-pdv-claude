@@ -65,10 +65,16 @@ export interface SLA {
 
 export interface PecaUsada {
   id: string;
+  /** Id real do Produto (Prisma) quando disponível. */
+  produtoId?: string;
   nome: string;
   sku?: string;
+  barcode?: string;
+  /** Origem do vínculo com o cadastro de produto. */
+  produtoOrigem?: "prisma" | "mock" | "manual";
   quantidade: number;
   valorUnitario: number;
+  custoUnitario?: number;
   /** Desconto em valor (R$) aplicado à linha, após qtd × unitário. */
   desconto?: number;
   observacao?: string;
@@ -115,6 +121,14 @@ export interface Anexo {
   enviadoPor: string;
   enviadoEm: string;
   publico?: boolean; // true = visível ao cliente no portal
+  /** Categoria operacional do anexo (HUB V2). */
+  categoria?: "diagnostico" | "bancada" | "cliente" | "comprovante" | "garantia" | "equipamento" | "outros";
+  /** Provider do storage (nesta fase: local-idb / legacy-blob / external-url). */
+  storageProvider?: "local-idb" | "legacy-blob" | "external-url";
+  /** true quando o blob está persistido no provider (IndexedDB/external). */
+  persisted?: boolean;
+  checksum?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export type EventoTipo =
@@ -127,10 +141,25 @@ export type EventoTipo =
   | "orcamento_item_removido"
   | "orcamento_atualizado"
   | "orcamento_aprovado"
+  | "orcamento_aprovado_editado_sem_valor"
+  | "orcamento_aprovado_revisado"
   | "orcamento_recusado"
   | "faturamento_os_pendente"
   | "faturamento_os_cancelado"
+  | "faturamento_os_revisado"
+  | "estoque_consumido"
+  | "estoque_item_consumido"
+  | "estoque_sync_erro"
+  | "estoque_restaurado"
+  | "estoque_restaurado_automaticamente"
+  | "estoque_delta_aplicado"
+  | "estoque_delta_erro"
+  | "financeiro_conta_receber_criada"
+  | "financeiro_conta_receber_atualizada"
+  | "financeiro_conta_receber_cancelada"
+  | "financeiro_sync_erro"
   | "anexo_adicionado"
+  | "anexo_removido"
   | "observacao"
   | "mensagem_cliente"
   | "mensagem_interna"
@@ -202,6 +231,52 @@ export interface OrdemServico {
   faturamentoCriadoEm?: string;
   /** Referência humana + id estável da OS (ex.: código · uuid). */
   faturamentoReferencia?: string;
+
+  /** Política: histórico de revisões quando orçamento já aprovado é alterado. */
+  orcamentoHistorico?: {
+    orcamento: Orcamento;
+    revisadoEm: string;
+    motivo: "aprovado_editado_sem_valor" | "aprovado_revisado";
+    totalAnterior: number;
+    totalNovo: number;
+  }[];
+  /** Política: revisão atual (quando houver). */
+  orcamentoRevisaoAtual?: {
+    revisadoEm: string;
+    totalAnterior: number;
+    totalNovo: number;
+    revisadoAposAprovacao: boolean;
+  };
+  /** Política: marcadores de revisão do faturamento derivado do orçamento. */
+  faturamentoRevisadoEm?: string;
+  faturamentoValorAnterior?: number;
+  faturamentoValorAtual?: number;
+
+  /** Estoque (real) — marcadores/idempotência no payload. */
+  estoqueConsumido?: boolean;
+  estoqueConsumidoEm?: string;
+  estoqueMovimentos?: {
+    id: string;
+    produtoId: string;
+    nome: string;
+    quantidade: number;
+    estoqueAnterior: number;
+    estoqueDepois: number;
+    origem: "operacoes-hub-v2";
+    ordemServicoId: string;
+    createdAt: string;
+  }[];
+  estoqueRestaurado?: boolean;
+  estoqueRestauradoEm?: string;
+  estoqueUltimaRevisaoEm?: string;
+  estoqueDeltaHistorico?: {
+    produtoId: string;
+    quantidadeAnterior: number;
+    quantidadeNova: number;
+    diferenca: number;
+    tipo: "consumo" | "restauracao";
+    createdAt: string;
+  }[];
 }
 
 // ----------------------------------------------------------------------------

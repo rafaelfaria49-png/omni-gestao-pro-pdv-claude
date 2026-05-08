@@ -18,6 +18,8 @@ import { createOS, listOS, updateOSPayload, updateOSStatus } from "@/app/actions
 import { buildFaturamentoFromOrcamento, buildFaturamentoRecusadoOrcamento } from "@/lib/os/faturamento";
 import { snapshotGarantia } from "@/lib/os/garantia";
 import { listTecnicos as listTecnicosCadastros } from "@/app/actions/cadastros";
+import { normalizeOperacaoStatus } from "@/components/operacoes/lovable/utils/os-status";
+import { normalizePecaUsada, normalizePecasUsadas } from "@/components/operacoes/lovable/utils/pecas-normalization";
 
 let CURRENT_STORE_ID = "loja-1";
 
@@ -96,7 +98,10 @@ export async function salvarOrcamento(
   const current = rows.find((o) => o.id === osId);
   if (!current) throw new Error("OS não encontrada");
 
-  const merged = recalcularTotalOrcamento(orcamento);
+  const merged = recalcularTotalOrcamento({
+    ...orcamento,
+    pecas: normalizePecasUsadas(orcamento.pecas),
+  });
   let tipo: EventoTipo = "orcamento_atualizado";
   let conteudo = "Orçamento atualizado.";
   if (evento.kind === "orcamento_item_adicionado") {
@@ -184,6 +189,7 @@ export async function criarOS(
 ): Promise<OrdemServico> {
   const created = await createOS(input.storeId, {
     ...(input as unknown as Parameters<typeof createOS>[1]),
+    operacaoStatus: normalizeOperacaoStatus((input as unknown as OrdemServico).status),
     timeline: [newEvent("criacao", autor, "usuario", "OS criada.")],
   });
   return created as unknown as OrdemServico;
@@ -191,10 +197,11 @@ export async function criarOS(
 
 export async function moveStatus(osId: string, status: OSStatus, autor: string): Promise<OrdemServico> {
   // mantém timeline via patch incremental
-  const updated = await updateOSStatus(CURRENT_STORE_ID, osId, status);
+  const effective = normalizeOperacaoStatus(status);
+  const updated = await updateOSStatus(CURRENT_STORE_ID, osId, effective);
   const nextTimeline = [
     ...readTimeline((updated as unknown as { timeline?: unknown }).timeline),
-    newEvent("mudanca_status", autor, "usuario", `Status alterado para "${status}".`, { para: status }),
+    newEvent("mudanca_status", autor, "usuario", `Status alterado para "${effective}".`, { para: effective }),
   ];
   const patched = await updateOSPayload(CURRENT_STORE_ID, osId, { timeline: nextTimeline } as Partial<OrdemServico>);
   return patched as unknown as OrdemServico;
@@ -228,6 +235,19 @@ export async function addAnexo(osId: string, anexo: Anexo): Promise<OrdemServico
   const timeline = [
     ...readTimeline((current as { timeline?: unknown } | null)?.timeline),
     newEvent("anexo_adicionado", anexo.enviadoPor, "usuario", `Anexo adicionado: ${anexo.nome}.`),
+  ];
+  const patched = await updateOSPayload(CURRENT_STORE_ID, osId, { anexos, timeline } as Partial<OrdemServico>);
+  return patched as unknown as OrdemServico;
+}
+
+export async function removeAnexo(osId: string, anexoId: string, autor: string): Promise<OrdemServico> {
+  const current = (await listOS(CURRENT_STORE_ID)).find((o) => o.id === osId) as unknown;
+  const curAnexos = readArray<Anexo>((current as { anexos?: unknown } | null)?.anexos);
+  const target = curAnexos.find((a) => a.id === anexoId);
+  const anexos = curAnexos.filter((a) => a.id !== anexoId);
+  const timeline = [
+    ...readTimeline((current as { timeline?: unknown } | null)?.timeline),
+    newEvent("anexo_removido", autor, "usuario", `Anexo removido: ${target?.nome ?? anexoId}.`, { anexoId }),
   ];
   const patched = await updateOSPayload(CURRENT_STORE_ID, osId, { anexos, timeline } as Partial<OrdemServico>);
   return patched as unknown as OrdemServico;
@@ -314,12 +334,19 @@ export async function addEvento(osId: string, conteudo: string, tipo: EventoTipo
 
 // Adiciona uma peça do estoque à OS e cria reserva (baixa ocorre no faturamento).
 export async function addPecaFromEstoque(osId: string, peca: PecaUsada, autor: string): Promise<OrdemServico> {
-  await reservarPeca(peca.id, peca.quantidade, osId);
+  const normalized = normalizePecaUsada(peca);
+  await reservarPeca(normalized.id, normalized.quantidade, osId);
   const current = (await listOS(CURRENT_STORE_ID)).find((o) => o.id === osId) as unknown;
-  const pecas = [...readArray<PecaUsada>((current as { pecas?: unknown } | null)?.pecas), peca];
+  const pecas = [...readArray<PecaUsada>((current as { pecas?: unknown } | null)?.pecas), normalized];
   const timeline = [
     ...readTimeline((current as { timeline?: unknown } | null)?.timeline),
-    newEvent("peca_adicionada", autor, "usuario", `Peça adicionada: ${peca.quantidade}× ${peca.nome}.`, { pecaId: peca.id }),
+    newEvent(
+      "peca_adicionada",
+      autor,
+      "usuario",
+      `Peça adicionada: ${normalized.quantidade}× ${normalized.nome}.`,
+      { pecaId: normalized.id, produtoId: normalized.produtoId, sku: normalized.sku },
+    ),
   ];
   const patched = await updateOSPayload(CURRENT_STORE_ID, osId, { pecas, timeline } as Partial<OrdemServico>);
   return patched as unknown as OrdemServico;

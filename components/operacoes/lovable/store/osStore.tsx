@@ -69,6 +69,7 @@ interface OSContextValue {
   assignTecnico: (osId: string, tecnico: Tecnico, autor?: string) => void;
   addObservacao: (osId: string, conteudo: string, interna: boolean, autor?: string) => void;
   addAnexo: (osId: string, anexo: Omit<Anexo, "id" | "enviadoEm">) => void;
+  removeAnexo: (osId: string, anexoId: string, autor?: string) => void;
   approveOrcamento: (osId: string, autor?: string) => void;
   rejectOrcamento: (osId: string, motivo?: string, autor?: string) => void;
   criarOrcamentoRascunho: (osId: string, autor?: string) => void;
@@ -183,6 +184,9 @@ export function OSProvider({ children }: { children: ReactNode }) {
         void osApi
           .addAnexo(osId, { ...anexo, id: uid("an"), enviadoEm: new Date().toISOString() })
           .then(replaceOS);
+      },
+      removeAnexo: (osId, anexoId, autor = DEFAULT_AUTOR) => {
+        void osApi.removeAnexo(osId, anexoId, autor).then(replaceOS);
       },
       approveOrcamento: (osId, autor = "Cliente") => {
         void osApi.approveOrcamento(osId, autor).then(replaceOS);

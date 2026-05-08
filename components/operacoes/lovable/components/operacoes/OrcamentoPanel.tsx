@@ -122,10 +122,14 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
     if (!p) return;
     const line: PecaUsada = {
       id: uid("pec"),
+      produtoId: p.id,
       nome: p.nome,
       sku: p.sku,
+      barcode: p.barras,
+      produtoOrigem: "prisma",
       quantidade: 1,
       valorUnitario: p.preco,
+      custoUnitario: p.custo > 0 ? p.custo : undefined,
       desconto: 0,
       observacao: "",
       prazoGarantiaDias: p.garantia > 0 ? p.garantia : undefined,
@@ -241,7 +245,21 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
                       <div className="font-medium text-foreground/90">
                         {p.quantidade}× {p.nome}
                       </div>
-                      <div className="text-[11px] text-muted-foreground">{p.sku ? `SKU ${p.sku}` : null}</div>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                        {p.sku ? <span>{`SKU ${p.sku}`}</span> : null}
+                        {p.produtoOrigem ? (
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                              p.produtoOrigem === "prisma"
+                                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600"
+                                : "border-border bg-muted/30 text-muted-foreground",
+                            )}
+                          >
+                            {p.produtoOrigem === "prisma" ? "Produto real" : "Mock/manual"}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <span className="whitespace-nowrap font-medium">{brl(Math.max(0, p.quantidade * p.valorUnitario - (p.desconto ?? 0)))}</span>

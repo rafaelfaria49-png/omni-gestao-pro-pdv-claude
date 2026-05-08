@@ -1,11 +1,14 @@
-import { useRef } from "react";
-import { Camera, FileText, ImageIcon, Lock, Receipt, Upload, Video } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, FileText, ImageIcon, Lock, Receipt, Upload, Video, X } from "lucide-react";
 import type { Anexo, OrdemServico } from "@/types/os";
 import { useOS } from "@/store/osStore";
 import { Button } from "@/components/ui/button";
 import { dt } from "@/lib/os/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { categoriaFromTipo, buildLocalIdbUrl, toCanonicalFromPayload, toPayloadFromCanonical } from "@/components/operacoes/lovable/services/anexos/helpers";
+import { putLocalBlob, deleteLocalBlob } from "@/components/operacoes/lovable/services/anexos/storage";
+import { resolvePreviewUrl, revokePreviewUrlFor, gcPreviewCache } from "@/components/operacoes/lovable/services/anexos/preview";
 
 const TIPO_LABEL: Record<Anexo["tipo"], string> = {
   foto_antes: "Antes",
@@ -26,33 +29,94 @@ const BOTOES: { tipo: Anexo["tipo"]; label: string; icon: typeof Camera; accept:
 ];
 
 export function AnexosPanel({ os }: { os: OrdemServico }) {
-  const { addAnexo } = useOS();
+  const { addAnexo, removeAnexo } = useOS();
   const inputRef = useRef<HTMLInputElement>(null);
   const tipoRef = useRef<Anexo["tipo"]>("outro");
+  const [uploading, setUploading] = useState(false);
+  const [previewById, setPreviewById] = useState<Record<string, string | null>>({});
+
+  const anexosCanon = useMemo(() => os.anexos.map(toCanonicalFromPayload), [os.anexos]);
 
   const trigger = (tipo: Anexo["tipo"], accept: string) => {
     tipoRef.current = tipo;
     if (inputRef.current) {
       inputRef.current.accept = accept;
+      inputRef.current.multiple = true;
       inputRef.current.click();
     }
   };
 
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const url = URL.createObjectURL(f);
-    addAnexo(os.id, {
-      tipo: tipoRef.current,
-      nome: f.name,
-      url,
-      tamanho: f.size,
-      mimeType: f.type,
-      enviadoPor: "Você",
-      publico: tipoRef.current === "foto_antes" || tipoRef.current === "foto_depois",
-    });
-    toast.success(`Anexo "${f.name}" adicionado`);
-    e.target.value = "";
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setUploading(true);
+    try {
+      for (const f of files) {
+        const id = `an_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        await putLocalBlob(id, f, f.type);
+        const canonical = {
+          id,
+          nome: f.name,
+          tipo: tipoRef.current,
+          mimeType: f.type,
+          tamanho: f.size,
+          createdAt: new Date().toISOString(),
+          enviadoPor: "Você",
+          origem: "operacoes-hub" as const,
+          categoria: categoriaFromTipo(tipoRef.current),
+          url: buildLocalIdbUrl(id),
+          storageProvider: "local-idb" as const,
+          persisted: true,
+          publico: tipoRef.current === "foto_antes" || tipoRef.current === "foto_depois",
+        };
+        addAnexo(os.id, toPayloadFromCanonical(canonical));
+      }
+      toast.success(`${files.length} anexo(s) adicionado(s)`);
+    } catch (err) {
+      toast.error("Falha ao salvar anexo localmente");
+      // best-effort cleanup: nada a fazer sem rastrear ids parciais
+      console.error(err);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      // Resolve previews para itens locais e faz GC periódico.
+      gcPreviewCache();
+      const next: Record<string, string | null> = {};
+      for (const a of anexosCanon) {
+        // Legacy blob: mantemos a.url (mas marcamos como não persistido na UI)
+        if (a.storageProvider === "legacy-blob") {
+          next[a.id] = a.url;
+          continue;
+        }
+        const url = await resolvePreviewUrl(a);
+        next[a.id] = url;
+      }
+      if (!cancelled) setPreviewById(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [anexosCanon]);
+
+  const handleRemove = async (a: CanonicalAnexoLike) => {
+    // remove do payload (persistência real via server action)
+    removeAnexo(os.id, a.id);
+    // remove blob local (se existir)
+    if (a.storageProvider === "local-idb") {
+      try {
+        await deleteLocalBlob(a.id);
+      } catch {
+        // best-effort
+      }
+      revokePreviewUrlFor(a.url);
+    }
+    toast.success("Anexo removido");
   };
 
   return (
@@ -75,6 +139,7 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
             size="sm"
             className="gap-2"
             onClick={() => trigger(b.tipo, b.accept)}
+            disabled={uploading}
           >
             <b.icon className="h-4 w-4" /> {b.label}
           </Button>
@@ -88,16 +153,20 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-2 border-t border-border p-3 sm:grid-cols-3">
-          {os.anexos.map((a) => (
+          {anexosCanon.map((a) => {
+            const preview = previewById[a.id] ?? null;
+            const href = preview ?? a.url;
+            const isPersisted = a.persisted && a.storageProvider !== "legacy-blob";
+            return (
             <a
               key={a.id}
-              href={a.url}
+              href={href}
               target="_blank"
               rel="noreferrer"
               className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
             >
-              {a.mimeType?.startsWith("image/") ? (
-                <img src={a.url} alt={a.nome} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+              {a.mimeType?.startsWith("image/") && preview ? (
+                <img src={preview} alt={a.nome} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
               ) : (
                 <div className="flex h-full items-center justify-center p-2 text-center text-[10px] text-muted-foreground">
                   <FileText className="mr-1 h-4 w-4" /> {a.nome}
@@ -112,15 +181,32 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
                 )}>
                   {a.publico ? "Público" : <><Lock className="inline h-2.5 w-2.5" /> Privado</>}
                 </span>
+                <button
+                  type="button"
+                  onClick={(ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    void handleRemove(a);
+                  }}
+                  className="rounded-md border border-border bg-background/40 p-1 text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100"
+                  title="Remover anexo"
+                >
+                  <X className="h-3 w-3" />
+                </button>
               </div>
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
                 <div className="text-[10px] font-medium text-white">{TIPO_LABEL[a.tipo]}</div>
-                <div className="text-[9px] text-white/70">{dt(a.enviadoEm)}</div>
+                <div className="text-[9px] text-white/70">{dt(a.createdAt)}</div>
+                <div className="mt-0.5 text-[9px] text-white/70">
+                  {a.categoria} · {a.tamanho ? `${Math.round(a.tamanho / 1024)} KB` : "—"} · {isPersisted ? "Persistido" : "Sessão atual"}
+                </div>
               </div>
             </a>
-          ))}
+          )})}
         </div>
       )}
     </div>
   );
 }
+
+type CanonicalAnexoLike = ReturnType<typeof toCanonicalFromPayload>;
