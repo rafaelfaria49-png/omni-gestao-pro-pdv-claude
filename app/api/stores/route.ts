@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/require-admin"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 type StoreProfileInput = "ASSISTENCIA" | "VARIEDADES" | "SUPERMERCADO"
 type SubscriptionPlanInput = "BRONZE" | "PRATA" | "OURO"
