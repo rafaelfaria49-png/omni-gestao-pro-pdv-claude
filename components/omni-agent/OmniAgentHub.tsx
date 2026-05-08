@@ -20,7 +20,6 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
-type Theme = "light" | "ice" | "midnight" | "black";
 type CmdStatus = "executado" | "pendente" | "recusado" | "aprovado";
 type ModuleId = "Financeiro" | "Vendas" | "OS" | "Estoque" | "Clientes" | "Lembretes" | "Relatórios" | "Geral";
 type Cmd = { id: string; text: string; category: string; status: CmdStatus; confidence: number; time: string; ts: number; module: string };
@@ -29,13 +28,6 @@ type InboxItem = {
   status: "pending" | "approved" | "rejected"; original: string;
   fields: Record<string, string>; ts: number;
 };
-
-const THEMES: { id: Theme; label: string }[] = [
-  { id: "light", label: "Light" },
-  { id: "ice", label: "Soft Ice" },
-  { id: "midnight", label: "Midnight" },
-  { id: "black", label: "Black Edition" },
-];
 
 const TABS = [
   { id: "overview", label: "Visão Geral", icon: Activity },
@@ -132,7 +124,6 @@ function beep() {
 
 /* ============================================================ */
 export default function OmniAgentHub() {
-  const [theme, setTheme] = useLS<Theme>("omni-theme", "midnight");
   const [tab, setTab] = useState<TabId>("overview");
   const [agentOnline, setAgentOnline] = useLS<boolean>("omni-agent-online", true);
   const [compact, setCompact] = useLS<boolean>("omni-compact", false);
@@ -192,10 +183,9 @@ export default function OmniAgentHub() {
   const pendingCount = inbox.filter(i => i.status === "pending").length;
 
   return (
-    <div data-theme={theme} className={cn("min-h-screen w-full bg-background text-foreground", compact && "text-[13px]")}>
-      <Toaster position="top-right" theme={theme === "light" || theme === "ice" ? "light" : "dark"} richColors />
+    <div className={cn("min-h-screen w-full bg-background text-foreground", compact && "text-[13px]")}>
+      <Toaster position="top-right" theme="system" richColors />
       <Header
-        theme={theme} setTheme={(t: Theme) => { setTheme(t); toast(`Tema: ${THEMES.find(x => x.id === t)?.label}`); }}
         agentOnline={agentOnline}
         setAgentOnline={(v: boolean) => { setAgentOnline(v); if (v) onlineSince.current = Date.now(); logAudit(v ? "Agente ativado" : "Agente pausado"); }}
         onSimulate={simulate}
@@ -289,7 +279,7 @@ function Row({ k, v }: { k: string; v: string }) {
 }
 
 /* ---------- Header ---------- */
-function Header({ theme, setTheme, agentOnline, setAgentOnline, onSimulate, onNewCmd, notifications, onGotoInbox, compact, setCompact, onOpenPalette }: any) {
+function Header({ agentOnline, setAgentOnline, onSimulate, onNewCmd, notifications, onGotoInbox, compact, setCompact, onOpenPalette }: any) {
   const [clock, setClock] = useState(nowTime());
   const [bellOpen, setBellOpen] = useState(false);
   useEffect(() => { const id = setInterval(() => setClock(nowTime()), 30000); return () => clearInterval(id); }, []);
@@ -337,10 +327,6 @@ function Header({ theme, setTheme, agentOnline, setAgentOnline, onSimulate, onNe
           </div>
 
           <Button variant="outline" size="sm" onClick={onOpenPalette} title='Atalho: "/"'><Search /> <kbd className="ml-1 rounded bg-muted px-1 text-[10px]">/</kbd></Button>
-
-          <select value={theme} onChange={(e) => setTheme(e.target.value)} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-            {THEMES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-          </select>
 
           <Button variant="ghost" size="sm" onClick={() => setCompact(!compact)} title="Modo compacto">
             {compact ? <Maximize2 /> : <Minimize2 />}
@@ -1308,10 +1294,14 @@ function ReportsTab({ pushToInbox, logAudit }: { pushToInbox: (t: string) => any
           <h3 className="font-semibold">Vendas — últimos 7 dias</h3>
           <Badge variant="secondary">Mock</Badge>
         </div>
-        <div className="flex items-end gap-2 h-40">
+        <div className="flex items-end gap-2" style={{ height: 128 }}>
           {week.map((v, i) => (
             <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full bg-primary/80 rounded-t transition-all hover:bg-primary" style={{ height: `${(v / maxW) * 100}%` }} title={`R$ ${v}`} />
+              <div
+                className="w-full bg-primary/80 rounded-t transition-all hover:bg-primary cursor-default"
+                style={{ height: Math.max(4, Math.round((v / maxW) * 112)) }}
+                title={`R$ ${v}`}
+              />
               <span className="text-[10px] text-muted-foreground">{days[i]}</span>
             </div>
           ))}
