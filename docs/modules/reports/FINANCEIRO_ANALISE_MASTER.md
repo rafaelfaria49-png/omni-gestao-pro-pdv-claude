@@ -388,7 +388,7 @@ Sugestão de pacote interno (nome ilustrativo) `@omni/finance-core`:
 ## 22. Riscos da integração
 
 | Risco | Mitigação |
-|-------|-----------|
+|-------|----------|
 | Perda de dados localStorage | Export/import + migração assistida + feature flag. |
 | Divergência multiloja | Testes com `storeId` e headers ops. |
 | Regressão PDV | E2E fluxo à vista / à prazo / estorno. |
@@ -418,3 +418,4 @@ O OmniGestão já possui **pernas reais** em **Contas a Receber** (cliente + ser
 ---
 
 *Fim do relatório. Nenhuma alteração de código foi aplicada na geração deste documento.*
+

@@ -1,3 +1,11 @@
+# Inbox Notes — IA / Desenvolvimento
+
+> Use este arquivo para colar notas soltas, rascunhos, logs e ideias a classificar depois.
+
+
+---
+## Importado de docs/Untitled (2026-05-07)
+
 # OMNIGESTÃO PRO — RELATÓRIO MASTER DO PROJETO
 
 ## VISÃO GERAL DO PROJETO
@@ -520,3 +528,50 @@ Quando quiser gerar novo resumo no Cursor/ChatGPT, use:
 * decisões técnicas importantes”
 
 Isso mantém continuidade sem travar conversa.
+
+
+---
+## Importado de docs/ai/Untitled (2026-05-07)
+
+# 🚀 OMNIGESTÃO PRO - MASTER CONTEXT & STATUS
+
+## 1. VISÃO GERAL DO PRODUTO (O QUE É O SISTEMA)
+O OmniGestão Pro é um SaaS/ERP Enterprise Omnichannel focado em gestão de múltiplas lojas com Inteligência Artificial embutida no fluxo de trabalho.
+**Diferenciais de Mercado:**
+- **Sistema Multi-tenant:** Controle de várias unidades (lojas) isoladas por CNPJ.
+- **Hub de Marketing IA:** Geração de campanhas automáticas com preview de celular em tempo real (State Lifting).
+- **IA Mestre:** Chatbot centralizado para consultoria de negócios e auxílio operacional.
+- **Marketplace Hub:** Gestão centralizada de pedidos, SAC e conexões com plataformas de venda (ex: Mercado Livre, Shopee).
+- **Design System Premium:** 4 temas dinâmicos (Light, Soft Ice, Midnight, Black Edition) utilizando tecnologia OKLCH para precisão de cores.
+
+---
+
+## 2. REGRAS DE NEGÓCIO E MONETIZAÇÃO DA IA (PROTEÇÃO DE CAIXA)
+O sistema opera com um modelo de "Créditos Ponderados" para evitar prejuízos no Plano Diamante (7.000 créditos).
+- **Retenção (Grátis / Custo Zero):** Interações de texto (Chat, Sugestões, Diagnóstico em OS). NÃO devem consumir créditos brutos do usuário.
+- **Monetização (Consumo de Créditos):** Mídia pesada.
+  - Imagem (Ex: 15-30 créditos).
+  - Voz (Ex: 30-80 créditos).
+  - Vídeo (Ex: 300-1000 créditos) -> Requer limite diário restrito para evitar falência por abuso de API.
+- **Atualização Automática:** O saldo é atualizado na UI via evento global `credit-balance-updated` assim que a mídia é gerada.
+
+---
+
+## 3. PROTOCOLO DE DESENVOLVIMENTO (CURSOR E TOKENS)
+Para evitar o consumo massivo de tokens e custos elevados nas APIs (OpenRouter/OpenAI), o desenvolvimento deve seguir estas regras estritas:
+1. **Limpeza de Contexto:** SEMPRE fechar as abas (tabs) no topo do Cursor que não estão sendo editadas. O Modo Agent envia todos os arquivos abertos, o que drena os tokens (Evitar envio de >100k tokens por request).
+2. **Modelo Padrão (Trabalho Braçal):** Usar `openai/gpt-4o-mini` (via OpenRouter) para Modo Agent, pois é 50x mais barato e altamente eficiente para loops de correção.
+3. **Modelo Arquiteto (Código Complexo):** Usar `anthropic/claude-3.5-sonnet` apenas para estruturas complexas, UI avançada ou quando o Agent travar.
+4. **Ignorar Pastas:** Garantir que pastas como `.next` e arquivos de imagem não sejam lidos pelo Cursor.
+
+---
+
+## 4. STATUS ATUAL E PRÓXIMOS PASSOS (FASE 1)
+**O que já está pronto:**
+- Landing Page isolada (sem conflitos de CSS com o Dashboard).
+- UI do Marketing IA com preview em tempo real.
+- Layout do Hub de Marketplace copiado do Lovable para `components/marketplace/lovable/`.
+- Sistema de controle de histórico de créditos e atualização de saldo no frontend.
+
+**Próximo Foco Imediato (Ação Atual):**
+👉 Integrar definitivamente o HUB de Marketplace na rota `/dashboard/marketplace` e começar a substituir os dados falsos (mocks) e o `localStorage` por conexões reais com o banco de dados (Prisma).
