@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Plus,
   Search,
@@ -28,9 +28,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useFinanceiro } from "@/lib/financeiro-store"
 import type { ContaPagarItem } from "@/lib/financeiro-types"
+import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useToast } from "@/hooks/use-toast"
 
 function todayISO(): string {
@@ -44,13 +52,105 @@ function effectiveStatus(c: ContaPagarItem): ContaPagarItem["status"] {
   return "pendente"
 }
 
+type ContaPagarServerRow = Record<string, unknown> & {
+  id?: unknown
+  localKey?: unknown
+  descricao?: unknown
+  fornecedor?: unknown
+  fornecedorNome?: unknown
+  valor?: unknown
+  dataVencimento?: unknown
+  vencimento?: unknown
+  status?: unknown
+  categoria?: unknown
+}
+
+type ContaPagarServerSummary = {
+  quantidade: number
+  totalAberto: number
+  totalVencido: number
+  totalPago: number
+  totalParcial: number
+  porStatus?: Record<string, number>
+}
+
+type ContaPagarApiAudit = {
+  pago?: number
+  restante?: number
+  vencido?: boolean
+  fornecedorNome?: string
+}
+
+function safeStr(v: unknown): string {
+  return typeof v === "string" ? v : ""
+}
+
+function safeNum(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0
+}
+
+function normalizeStatusFromServer(raw: unknown): ContaPagarItem["status"] {
+  const s = safeStr(raw).toLowerCase().trim()
+  if (s === "pago") return "pago"
+  if (s === "vencido" || s === "atrasado") return "atrasado"
+  // parcial/pendente/cancelado/estornado → painel legado não tem status dedicado; tratamos como pendente
+  return "pendente"
+}
+
+function normalizeContaPagarRowFromServer(r: ContaPagarServerRow): ContaPagarItem | null {
+  const id = (safeStr(r.id) || safeStr(r.localKey)).trim()
+  if (!id) return null
+
+  const descricao = safeStr(r.descricao).trim()
+  const fornecedor = (safeStr(r.fornecedor) || safeStr(r.fornecedorNome)).trim()
+  const valor = safeNum(r.valor)
+  const dataVencimento = (safeStr(r.dataVencimento) || safeStr(r.vencimento)).trim()
+  const categoria = safeStr(r.categoria).trim() || "Outros"
+
+  if (!descricao || !dataVencimento) return null
+
+  return {
+    id,
+    descricao,
+    fornecedor,
+    valor,
+    dataVencimento,
+    status: normalizeStatusFromServer(r.status),
+    categoria,
+  }
+}
+
+function rowsToPersistPayload(contas: ContaPagarItem[]): Record<string, unknown>[] {
+  return contas.map((c) => ({
+    id: c.id,
+    localKey: c.id,
+    descricao: c.descricao,
+    fornecedor: c.fornecedor,
+    fornecedorNome: c.fornecedor,
+    valor: c.valor,
+    dataVencimento: c.dataVencimento,
+    vencimento: c.dataVencimento,
+    status: c.status,
+    categoria: c.categoria,
+  }))
+}
+
 export function ContasPagar() {
   const { contasPagar, setContasPagar } = useFinanceiro()
   const { toast } = useToast()
+  const { lojaAtivaId, lojas } = useLojaAtiva()
+  const lojaId = lojaAtivaId ?? lojas[0]?.id ?? ""
   const [filtro, setFiltro] = useState("todos")
   const [busca, setBusca] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ContaPagarItem | null>(null)
+  const [serverSummary, setServerSummary] = useState<ContaPagarServerSummary | null>(null)
+  const [acaoOpen, setAcaoOpen] = useState(false)
+  const [acaoConta, setAcaoConta] = useState<ContaPagarItem | null>(null)
+  const [acaoTipo, setAcaoTipo] = useState<"pagamento_parcial" | "liquidar" | "estornar" | "estornar_ultimo">(
+    "pagamento_parcial",
+  )
+  const [acaoForm, setAcaoForm] = useState({ valor: "", observacao: "", motivo: "" })
   const [form, setForm] = useState({
     descricao: "",
     fornecedor: "",
@@ -59,6 +159,154 @@ export function ContasPagar() {
     categoria: "Despesas Fixas",
     status: "pendente" as ContaPagarItem["status"],
   })
+
+  const openAcao = (
+    conta: ContaPagarItem,
+    tipo: "pagamento_parcial" | "liquidar" | "estornar" | "estornar_ultimo",
+  ) => {
+    setAcaoConta(conta)
+    setAcaoTipo(tipo)
+    setAcaoForm({ valor: "", observacao: "", motivo: "" })
+    setAcaoOpen(true)
+  }
+
+  const persistToServer = async (nextRows: ContaPagarItem[]) => {
+    if (!lojaId) return
+    try {
+      const res = await fetch("/api/ops/contas-pagar-persist", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-assistec-loja-id": lojaId,
+        },
+        body: JSON.stringify({ lojaId, rows: rowsToPersistPayload(nextRows) }),
+      })
+      if (!res.ok) throw new Error(`persist_failed_${res.status}`)
+    } catch (e) {
+      if (process.env.NODE_ENV === "development") console.error("[contas-pagar] persist", e)
+      toast({
+        title: "Servidor indisponível",
+        description: "Alteração salva localmente (fallback). Vamos tentar sincronizar novamente ao recarregar.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const applyServerResultToLocal = (contaId: string, titulo: unknown, audit: unknown) => {
+    const t = titulo as { status?: unknown }
+    const a = audit as ContaPagarApiAudit | null
+    const byStatus = normalizeStatusFromServer(t?.status)
+    const restante = a && typeof a.restante === "number" ? a.restante : null
+    const nextStatus: ContaPagarItem["status"] = restante != null && restante <= 0.009 ? "pago" : byStatus
+    setContasPagar((prev) =>
+      prev.map((x) => (x.id === contaId ? { ...x, status: nextStatus, fornecedor: x.fornecedor || (a?.fornecedorNome ?? "") } : x)),
+    )
+  }
+
+  const callApi = async (path: string, body: Record<string, unknown>) => {
+    if (!lojaId) throw new Error("missing_loja")
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify({ lojaId, ...body }),
+    })
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok || json.ok === false) {
+      const err = safeStr(json.error) || `Falha (${res.status})`
+      throw new Error(err)
+    }
+    return json
+  }
+
+  const confirmarAcao = async () => {
+    const conta = acaoConta
+    if (!conta) return
+
+    try {
+      if (acaoTipo === "pagamento_parcial") {
+        const valor = parseFloat(acaoForm.valor.replace(",", "."))
+        if (!Number.isFinite(valor) || valor <= 0) {
+          toast({ title: "Valor inválido", variant: "destructive" })
+          return
+        }
+        const json = await callApi("/api/financeiro/contas-pagar/pagamento-parcial", {
+          localKey: conta.id,
+          valor,
+          observacao: acaoForm.observacao?.trim() || undefined,
+        })
+        applyServerResultToLocal(conta.id, json.titulo, json.audit)
+        toast({ title: "Pagamento parcial registrado" })
+      }
+
+      if (acaoTipo === "liquidar") {
+        const json = await callApi("/api/financeiro/contas-pagar/liquidar", {
+          localKey: conta.id,
+          observacao: acaoForm.observacao?.trim() || undefined,
+        })
+        applyServerResultToLocal(conta.id, json.titulo, json.audit)
+        toast({ title: "Conta liquidada" })
+      }
+
+      if (acaoTipo === "estornar") {
+        const json = await callApi("/api/financeiro/contas-pagar/estornar", {
+          localKey: conta.id,
+          motivo: acaoForm.motivo?.trim() || undefined,
+        })
+        applyServerResultToLocal(conta.id, json.titulo, json.audit)
+        toast({ title: "Estorno registrado (título)" })
+      }
+
+      if (acaoTipo === "estornar_ultimo") {
+        const json = await callApi("/api/financeiro/contas-pagar/estornar-ultimo-pagamento", {
+          localKey: conta.id,
+          motivo: acaoForm.motivo?.trim() || undefined,
+        })
+        applyServerResultToLocal(conta.id, json.titulo, json.audit)
+        toast({ title: "Estorno do último pagamento registrado" })
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      toast({ title: "Falha no servidor", description: msg, variant: "destructive" })
+    } finally {
+      setAcaoOpen(false)
+    }
+  }
+
+  const refreshFromServer = async () => {
+    if (!lojaId) return
+    try {
+      const res = await fetch("/api/ops/contas-pagar-list", {
+        method: "GET",
+        headers: {
+          "x-assistec-loja-id": lojaId,
+        },
+      })
+      if (!res.ok) throw new Error(`list_failed_${res.status}`)
+      const json = (await res.json()) as { ok?: unknown; rows?: unknown; summary?: unknown }
+      const rowsRaw = Array.isArray(json.rows) ? (json.rows as unknown[]) : []
+      const next: ContaPagarItem[] = []
+      for (const item of rowsRaw) {
+        if (!item || typeof item !== "object") continue
+        const norm = normalizeContaPagarRowFromServer(item as ContaPagarServerRow)
+        if (norm) next.push(norm)
+      }
+      if (next.length > 0) setContasPagar(next)
+      if (json.summary && typeof json.summary === "object") {
+        const s = json.summary as Partial<ContaPagarServerSummary>
+        if (typeof s.totalAberto === "number") {
+          setServerSummary(s as ContaPagarServerSummary)
+        }
+      }
+    } catch (e) {
+      if (process.env.NODE_ENV === "development") console.error("[contas-pagar] list", e)
+      // fallback: mantém localStorage
+    }
+  }
+
+  useEffect(() => {
+    void refreshFromServer()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lojaId])
 
   const contasComStatus = useMemo(
     () =>
@@ -97,8 +345,10 @@ export function ContasPagar() {
     const pagoMes = contasComStatus
       .filter((c) => c.status === "pago")
       .reduce((s, c) => s + c.valor, 0)
-    return { totalPagar, vencendo, atrasados, pagoMes }
-  }, [contasComStatus])
+    const totalPagarOut = serverSummary?.totalAberto ?? totalPagar
+    const pagoOut = serverSummary?.totalPago ?? pagoMes
+    return { totalPagar: totalPagarOut, vencendo, atrasados, pagoMes: pagoOut }
+  }, [contasComStatus, serverSummary])
 
   const openNovo = () => {
     setEditing(null)
@@ -142,10 +392,18 @@ export function ContasPagar() {
       categoria: form.categoria,
     }
     if (editing) {
-      setContasPagar((prev) => prev.map((x) => (x.id === editing.id ? row : x)))
+      setContasPagar((prev) => {
+        const next = prev.map((x) => (x.id === editing.id ? row : x))
+        void persistToServer(next)
+        return next
+      })
       toast({ title: "Conta atualizada" })
     } else {
-      setContasPagar((prev) => [...prev, row])
+      setContasPagar((prev) => {
+        const next = [...prev, row]
+        void persistToServer(next)
+        return next
+      })
       toast({ title: "Conta adicionada" })
     }
     setDialogOpen(false)
@@ -285,6 +543,24 @@ export function ContasPagar() {
                     <Button variant="ghost" size="sm" onClick={() => openEdit(conta)}>
                       Editar
                     </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label="Ações">
+                          <MoreHorizontal className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openAcao(conta, "pagamento_parcial")}>
+                          Pagamento parcial
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openAcao(conta, "liquidar")}>Liquidar</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => openAcao(conta, "estornar")}>Estornar (título)</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openAcao(conta, "estornar_ultimo")}>
+                          Estornar último pagamento
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               )
@@ -292,6 +568,48 @@ export function ContasPagar() {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={acaoOpen} onOpenChange={setAcaoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {acaoTipo === "pagamento_parcial" && "Pagamento parcial"}
+              {acaoTipo === "liquidar" && "Liquidar conta"}
+              {acaoTipo === "estornar" && "Estornar título"}
+              {acaoTipo === "estornar_ultimo" && "Estornar último pagamento"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {acaoTipo === "pagamento_parcial" && (
+              <div className="space-y-1">
+                <Label>Valor (R$)</Label>
+                <Input value={acaoForm.valor} onChange={(e) => setAcaoForm((f) => ({ ...f, valor: e.target.value }))} />
+              </div>
+            )}
+            {(acaoTipo === "pagamento_parcial" || acaoTipo === "liquidar") && (
+              <div className="space-y-1">
+                <Label>Observação</Label>
+                <Input
+                  value={acaoForm.observacao}
+                  onChange={(e) => setAcaoForm((f) => ({ ...f, observacao: e.target.value }))}
+                />
+              </div>
+            )}
+            {(acaoTipo === "estornar" || acaoTipo === "estornar_ultimo") && (
+              <div className="space-y-1">
+                <Label>Motivo</Label>
+                <Input value={acaoForm.motivo} onChange={(e) => setAcaoForm((f) => ({ ...f, motivo: e.target.value }))} />
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAcaoOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void confirmarAcao()}>Confirmar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
