@@ -775,37 +775,87 @@ export async function updateCliente(
 }
 
 export async function listProdutos(storeId: string): Promise<ProdutoDTO[]> {
-  const rows = await prisma.produto.findMany({
-    where: { storeId },
-    orderBy: { updatedAt: "desc" },
-    take: 1000,
-  });
-  return rows.map((p) => {
-    const preco = Number(p.price ?? 0);
-    const custo = Number(p.precoCusto ?? 0);
-    const margem = preco > 0 ? ((preco - custo) / preco) * 100 : 0;
-    const status =
-      !p.name || !p.category || preco <= 0
-        ? ("Incompleto" as const)
-        : p.active
-          ? ("Ativo" as const)
-          : ("Inativo" as const);
-    return {
-      id: p.id,
-      nome: p.name,
-      sku: p.sku ?? "—",
-      barras: p.barcode ?? "",
-      categoria: p.category ?? "—",
-      marca: p.brand || "—",
-      fornecedor: p.supplierName || "—",
-      estoque: p.stock ?? 0,
-      custo,
-      preco,
-      margem: Number.isFinite(margem) ? Number(margem.toFixed(1)) : 0,
-      garantia: p.warrantyDays ?? 0,
-      status,
-    };
-  });
+  try {
+    const rows = await prisma.produto.findMany({
+      where: { storeId },
+      orderBy: { updatedAt: "desc" },
+      take: 1000,
+    });
+    return rows.map((p) => {
+      const preco = Number(p.price ?? 0);
+      const custo = Number(p.precoCusto ?? 0);
+      const margem = preco > 0 ? ((preco - custo) / preco) * 100 : 0;
+      const status =
+        !p.name || !p.category || preco <= 0
+          ? ("Incompleto" as const)
+          : p.active
+            ? ("Ativo" as const)
+            : ("Inativo" as const);
+      return {
+        id: p.id,
+        nome: p.name,
+        sku: p.sku ?? "—",
+        barras: p.barcode ?? "",
+        categoria: p.category ?? "—",
+        marca: p.brand || "—",
+        fornecedor: p.supplierName || "—",
+        estoque: p.stock ?? 0,
+        custo,
+        preco,
+        margem: Number.isFinite(margem) ? Number(margem.toFixed(1)) : 0,
+        garantia: p.warrantyDays ?? 0,
+        status,
+      };
+    });
+  } catch (e) {
+    // Hardening: em produção, se o banco estiver em versão parcial (colunas/tabelas divergentes),
+    // evita quebrar o render e tenta um select mínimo.
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[cadastros:listProdutos]", msg);
+
+    const legacyRows = await withPrismaSafe(
+      (db) =>
+        db.produto.findMany({
+          where: { storeId },
+          orderBy: { updatedAt: "desc" },
+          take: 1000,
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            barcode: true,
+            category: true,
+            stock: true,
+            price: true,
+            precoCusto: true,
+            updatedAt: true,
+          },
+        }),
+      [],
+    );
+
+    return legacyRows.map((p) => {
+      const preco = Number(p.price ?? 0);
+      const custo = Number(p.precoCusto ?? 0);
+      const margem = preco > 0 ? ((preco - custo) / preco) * 100 : 0;
+      const status = !p.name || !p.category || preco <= 0 ? ("Incompleto" as const) : ("Ativo" as const);
+      return {
+        id: p.id,
+        nome: p.name,
+        sku: p.sku ?? "—",
+        barras: p.barcode ?? "",
+        categoria: p.category ?? "—",
+        marca: "—",
+        fornecedor: "—",
+        estoque: p.stock ?? 0,
+        custo,
+        preco,
+        margem: Number.isFinite(margem) ? Number(margem.toFixed(1)) : 0,
+        garantia: 0,
+        status,
+      };
+    });
+  }
 }
 
 export async function upsertProduto(
