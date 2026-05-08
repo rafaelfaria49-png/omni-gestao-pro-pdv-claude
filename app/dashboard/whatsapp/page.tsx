@@ -1,8 +1,7 @@
-"use client"
+export const dynamic = "force-dynamic";
 
-import React from "react"
-import WhatsAppHub from "@/components/whatsapp/lovable/components/whatsapp/WhatsAppHub"
+import WhatsAppHub from "@/components/whatsapp/lovable/components/whatsapp/WhatsAppHub";
 
 export default function WhatsAppPage() {
-  return <WhatsAppHub />
+  return <WhatsAppHub />;
 }
