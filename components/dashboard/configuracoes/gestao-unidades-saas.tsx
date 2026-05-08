@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Store } from "lucide-react"
+import { Store, RefreshCw, AlertTriangle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -54,6 +54,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
   const { toast } = useToast()
   const { lojaAtivaId, setLojaAtivaId } = useLojaAtiva()
   const [loading, setLoading] = useState(true)
+  const [apiError, setApiError] = useState(false)
   const [stores, setStores] = useState<StoreRow[]>([])
   const [selectedId, setSelectedId] = useState<string>("")
   const [draft, setDraft] = useState<StoreRow | null>(null)
@@ -68,12 +69,38 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
     [setLojaAtivaId],
   )
 
+  const loadStores = useCallback(async () => {
+    setLoading(true)
+    setApiError(false)
+    try {
+      const r = await fetch("/api/stores", { credentials: "include", cache: "no-store" })
+      if (!r.ok) {
+        setApiError(true)
+        return
+      }
+      const j = (await r.json()) as { stores?: StoreRow[] }
+      const list = Array.isArray(j.stores) ? j.stores : []
+      setStores(list)
+      const first = list[0]?.id || LEGACY_PRIMARY_STORE_ID
+      setSelectedId((prev) => (list.some((s) => s.id === prev) ? prev : first))
+    } catch {
+      setApiError(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
       setLoading(true)
+      setApiError(false)
       try {
         const r = await fetch("/api/stores", { credentials: "include", cache: "no-store" })
+        if (!r.ok) {
+          if (!cancelled) setApiError(true)
+          return
+        }
         const j = (await r.json()) as { stores?: StoreRow[] }
         const list = Array.isArray(j.stores) ? j.stores : []
         if (!cancelled) {
@@ -82,7 +109,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
           setSelectedId((prev) => (list.some((s) => s.id === prev) ? prev : first))
         }
       } catch {
-        if (!cancelled) setStores([])
+        if (!cancelled) setApiError(true)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -199,6 +226,39 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
         <p className={cn("text-center text-sm", isBlack ? "text-white/60" : "text-slate-600")}>
           Carregando unidades…
         </p>
+      ) : apiError ? (
+        <div className={cn(
+          "flex flex-col items-center gap-4 rounded-xl border px-6 py-10 text-center",
+          isBlack ? "border-red-500/25 bg-red-500/5" : "border-red-200 bg-red-50/60",
+        )}>
+          <div className={cn(
+            "flex h-12 w-12 items-center justify-center rounded-full",
+            isBlack ? "bg-red-500/15" : "bg-red-100",
+          )}>
+            <AlertTriangle className={cn("h-6 w-6", isBlack ? "text-red-400" : "text-red-500")} />
+          </div>
+          <div className="space-y-1">
+            <p className={cn("font-semibold", isBlack ? "text-white" : "text-slate-900")}>
+              Não foi possível carregar as unidades
+            </p>
+            <p className={cn("text-sm", isBlack ? "text-white/55" : "text-slate-500")}>
+              Ocorreu um erro ao buscar os dados. Seus dados estão seguros — tente novamente.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={loadStores}
+            className={cn(
+              "gap-2",
+              isBlack ? "border-white/20 bg-transparent text-white hover:bg-white/10" : "",
+            )}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Tentar novamente
+          </Button>
+        </div>
       ) : stores.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 pb-1">
           {stores.map((s) => {
