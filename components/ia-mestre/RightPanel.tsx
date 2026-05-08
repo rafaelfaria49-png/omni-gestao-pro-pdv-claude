@@ -137,19 +137,19 @@ export function RightPanel({
       </header>
 
       {!hasContent ? (
-        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.85, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="relative"
-          >
-            <div className="absolute inset-0 -z-10 rounded-full bg-gradient-primary opacity-20 blur-3xl" />
-            <div className="flex h-24 w-24 items-center justify-center rounded-3xl border border-border bg-card shadow-elegant">
-              <FileText className="h-10 w-10 text-muted-foreground" strokeWidth={1.4} />
-            </div>
-          </motion.div>
-          <h3 className="mt-6 font-display text-base font-bold">Nenhum documento aberto</h3>
+      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="relative"
+        >
+          <div className="absolute inset-0 -z-10 rounded-full bg-gradient-primary opacity-20 blur-3xl" />
+          <div className="flex h-24 w-24 items-center justify-center rounded-3xl border border-border bg-card shadow-elegant">
+            <FileText className="h-10 w-10 text-muted-foreground" strokeWidth={1.4} />
+          </div>
+        </motion.div>
+        <h3 className="mt-6 font-display text-base font-bold">Nenhum documento aberto</h3>
           <p className="mt-2 max-w-[260px] text-[13px] leading-relaxed text-muted-foreground">
             Quando a IA gerar um relatório, contrato, roteiro ou campanha longa, ele vai aparecer aqui pronto pra editar e exportar.
           </p>
@@ -189,8 +189,8 @@ export function RightPanel({
               className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-xl border border-border bg-surface/60 px-3 text-[13px] font-semibold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="h-4 w-4" /> Limpar documento
-            </button>
-          </div>
+        </button>
+      </div>
         </div>
       )}
 

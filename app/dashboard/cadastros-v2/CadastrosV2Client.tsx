@@ -14,20 +14,17 @@ const CadastrosHubIsolated = dynamic(
     loading: () => (
       <div className="w-full min-w-0 max-w-full p-6 space-y-4">
         <div className="flex items-center justify-between gap-4">
-          <Skeleton className="h-10 w-64" />
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-10 w-28" />
-            <Skeleton className="h-10 w-28" />
-          </div>
+          <Skeleton className="h-10 w-72" />
+          <Skeleton className="h-10 w-40" />
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-40 w-full" />
         </div>
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-96 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-[520px] w-full" />
       </div>
     ),
   }
