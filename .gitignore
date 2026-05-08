@@ -24,6 +24,7 @@ prisma/*.db-journal
 node_modules
 .next/
 .DS_Store
+tsconfig.tsbuildinfo
 
 # PWA — gerados no build (Workbox / service worker)
 public/sw.js
