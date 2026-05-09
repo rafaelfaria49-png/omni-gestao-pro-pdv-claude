@@ -688,23 +688,28 @@ function fmtDateISO(d: Date | null | undefined): string {
 }
 
 export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
-  const rows = await prisma.cliente.findMany({
-    where: { storeId },
-    orderBy: { updatedAt: "desc" },
-    take: 500,
-  });
-  return rows.map((c) => ({
-    id: c.id,
-    nome: c.name,
-    tipo: (c.kind === "PJ" ? "PJ" : "PF") satisfies ClienteKind,
-    telefone: c.phone ?? "—",
-    documento: c.document || "—",
-    cidade: c.city || "—",
-    totalGasto: Number(c.totalSpent ?? 0),
-    ultimaCompra: fmtDateISO(c.lastPurchaseAt),
-    tags: safeStringArray(c.tags),
-    status: c.active ? "Ativo" : "Inativo",
-  }));
+  try {
+    const rows = await prisma.cliente.findMany({
+      where: { storeId },
+      orderBy: { updatedAt: "desc" },
+      take: 500,
+    });
+    return rows.map((c) => ({
+      id: c.id,
+      nome: c.name,
+      tipo: (c.kind === "PJ" ? "PJ" : "PF") satisfies ClienteKind,
+      telefone: c.phone ?? "—",
+      documento: c.document || "—",
+      cidade: c.city || "—",
+      totalGasto: Number(c.totalSpent ?? 0),
+      ultimaCompra: fmtDateISO(c.lastPurchaseAt),
+      tags: safeStringArray(c.tags),
+      status: c.active ? "Ativo" : "Inativo",
+    }));
+  } catch (err) {
+    console.error("[listClientes] erro ao buscar clientes:", err instanceof Error ? err.message : String(err));
+    return [];
+  }
 }
 
 export async function createCliente(
@@ -720,25 +725,30 @@ export async function createCliente(
     active?: boolean;
   }
 ): Promise<{ id: string }> {
-  const nome = input.nome.trim();
-  if (!nome) throw new Error("Nome obrigatório");
+  try {
+    const nome = input.nome.trim();
+    if (!nome) throw new Error("Nome obrigatório");
 
-  const created = await prisma.cliente.create({
-    data: {
-      storeId,
-      name: nome,
-      kind: input.tipo,
-      document: (input.documento ?? "").trim(),
-      phone: (input.telefone ?? "").trim() || null,
-      email: (input.email ?? "").trim() || null,
-      city: (input.cidade ?? "").trim(),
-      tags: input.tags ? input.tags : undefined,
-      active: input.active ?? true,
-    },
-    select: { id: true },
-  });
-  revalidatePath("/dashboard/cadastros-v2");
-  return created;
+    const created = await prisma.cliente.create({
+      data: {
+        storeId,
+        name: nome,
+        kind: input.tipo,
+        document: (input.documento ?? "").trim(),
+        phone: (input.telefone ?? "").trim() || null,
+        email: (input.email ?? "").trim() || null,
+        city: (input.cidade ?? "").trim(),
+        tags: input.tags ? input.tags : undefined,
+        active: input.active ?? true,
+      },
+      select: { id: true },
+    });
+    revalidatePath("/dashboard/cadastros-v2");
+    return created;
+  } catch (err) {
+    console.error("[createCliente] erro ao criar cliente:", err instanceof Error ? err.message : String(err));
+    throw err instanceof Error ? err : new Error("Falha ao criar cliente. Tente novamente.");
+  }
 }
 
 export async function updateCliente(
@@ -755,23 +765,28 @@ export async function updateCliente(
     active: boolean;
   }>
 ): Promise<void> {
-  const existing = await prisma.cliente.findFirst({ where: { id, storeId }, select: { id: true } });
-  if (!existing) throw new Error("Cliente não encontrado");
+  try {
+    const existing = await prisma.cliente.findFirst({ where: { id, storeId }, select: { id: true } });
+    if (!existing) throw new Error("Cliente não encontrado");
 
-  await prisma.cliente.update({
-    where: { id },
-    data: {
-      name: patch.nome ? patch.nome.trim() : undefined,
-      kind: patch.tipo,
-      document: patch.documento !== undefined ? patch.documento.trim() : undefined,
-      phone: patch.telefone !== undefined ? patch.telefone.trim() || null : undefined,
-      email: patch.email !== undefined ? patch.email.trim() || null : undefined,
-      city: patch.cidade !== undefined ? patch.cidade.trim() : undefined,
-      tags: patch.tags !== undefined ? patch.tags : undefined,
-      active: patch.active,
-    },
-  });
-  revalidatePath("/dashboard/cadastros-v2");
+    await prisma.cliente.update({
+      where: { id },
+      data: {
+        name: patch.nome ? patch.nome.trim() : undefined,
+        kind: patch.tipo,
+        document: patch.documento !== undefined ? patch.documento.trim() : undefined,
+        phone: patch.telefone !== undefined ? patch.telefone.trim() || null : undefined,
+        email: patch.email !== undefined ? patch.email.trim() || null : undefined,
+        city: patch.cidade !== undefined ? patch.cidade.trim() : undefined,
+        tags: patch.tags !== undefined ? patch.tags : undefined,
+        active: patch.active,
+      },
+    });
+    revalidatePath("/dashboard/cadastros-v2");
+  } catch (err) {
+    console.error("[updateCliente] erro ao atualizar cliente:", err instanceof Error ? err.message : String(err));
+    throw err instanceof Error ? err : new Error("Falha ao atualizar cliente. Tente novamente.");
+  }
 }
 
 export async function listProdutos(storeId: string): Promise<ProdutoDTO[]> {

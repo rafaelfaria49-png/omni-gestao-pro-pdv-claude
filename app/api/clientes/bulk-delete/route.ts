@@ -35,7 +35,12 @@ export async function POST(req: Request) {
     return badRequest("Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId.")
   }
 
-  const res = await prisma.cliente.deleteMany({ where: { id: { in: normalized }, storeId } })
-  return json({ ok: true, deleted: res.count })
+  try {
+    const res = await prisma.cliente.deleteMany({ where: { id: { in: normalized }, storeId } })
+    return json({ ok: true, deleted: res.count })
+  } catch (err) {
+    console.error("[bulk-delete] erro ao excluir clientes:", err)
+    return json({ error: "Erro ao excluir clientes. Tente novamente." }, { status: 500 })
+  }
 }
 

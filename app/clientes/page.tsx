@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { CadastroClientes } from "@/components/dashboard/clientes/cadastro-clientes"
 import { AppOpsProviders } from "@/components/dashboard/app-ops-providers"
 
