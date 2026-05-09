@@ -105,25 +105,33 @@ export function Topbar() {
               Criar novo
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 cursor-pointer text-[12.5px]">
-              <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="flex-1">Nova Venda</span>
-              <kbd className="font-mono text-[9.5px] text-muted-foreground">N V</kbd>
+            <DropdownMenuItem asChild className="gap-2 cursor-pointer text-[12.5px]">
+              <Link href="/dashboard/vendas" className="flex w-full items-center gap-2">
+                <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="flex-1">Nova Venda</span>
+                <kbd className="pointer-events-none font-mono text-[9.5px] text-muted-foreground">N V</kbd>
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2 cursor-pointer text-[12.5px]">
-              <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="flex-1">Nova OS</span>
-              <kbd className="font-mono text-[9.5px] text-muted-foreground">N O</kbd>
+            <DropdownMenuItem asChild className="gap-2 cursor-pointer text-[12.5px]">
+              <Link href="/dashboard/operacoes-v2" className="flex w-full items-center gap-2">
+                <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="flex-1">Nova OS</span>
+                <kbd className="pointer-events-none font-mono text-[9.5px] text-muted-foreground">N O</kbd>
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2 cursor-pointer text-[12.5px]">
-              <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="flex-1">Novo Cliente</span>
-              <kbd className="font-mono text-[9.5px] text-muted-foreground">N C</kbd>
+            <DropdownMenuItem asChild className="gap-2 cursor-pointer text-[12.5px]">
+              <Link href="/dashboard/clientes" className="flex w-full items-center gap-2">
+                <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="flex-1">Novo Cliente</span>
+                <kbd className="pointer-events-none font-mono text-[9.5px] text-muted-foreground">N C</kbd>
+              </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem className="gap-2 cursor-pointer text-[12.5px]">
-              <Package className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="flex-1">Novo Produto</span>
-              <kbd className="font-mono text-[9.5px] text-muted-foreground">N P</kbd>
+            <DropdownMenuItem asChild className="gap-2 cursor-pointer text-[12.5px]">
+              <Link href="/dashboard/estoque" className="flex w-full items-center gap-2">
+                <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="flex-1">Novo Produto</span>
+                <kbd className="pointer-events-none font-mono text-[9.5px] text-muted-foreground">N P</kbd>
+              </Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

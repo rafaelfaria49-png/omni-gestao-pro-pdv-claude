@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { isAdminSession } from "@/lib/api-auth"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 export async function GET(request: Request) {
   if (!(await isAdminSession())) {

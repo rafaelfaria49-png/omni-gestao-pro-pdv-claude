@@ -54,10 +54,10 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
   );
 }
 
-export const getRouter = () => {
+export const getRouter = (basepath: string = "/vendas-hub") => {
   const router = createRouter({
     routeTree,
-    basepath: "/vendas-hub",
+    basepath,
     context: {},
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,

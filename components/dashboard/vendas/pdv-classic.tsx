@@ -365,12 +365,31 @@ export function PdvClassic({
     const matchName = p.name.toLowerCase().includes(term)
     const matchCat = catLower.includes(term)
     const matchBarcode = p.barcode ? p.barcode.toLowerCase().includes(term) : false
-    if (!matchName && !matchCat && !matchBarcode) return false
+    const matchSku = p.sku ? p.sku.toLowerCase().includes(term) : false
+    const matchCodigo = (p as { codigo?: string }).codigo ? (p as { codigo?: string }).codigo!.toLowerCase().includes(term) : false
+    if (!matchName && !matchCat && !matchBarcode && !matchSku && !matchCodigo) return false
     if (searchTrim.length === 0 && PDV_CATEGORIAS_OCULTAS_ATE_BUSCA.has(catLower)) return false
     if (searchTrim.length > 0) return true
     if (hideCategoriesPdv && hiddenCategoriesSet.has(catLower)) return false
     return true
   })
+
+  const bipeSuggestions = useMemo(() => {
+    const t = bipeCode.trim().toLowerCase()
+    if (!t) return []
+    return products
+      .filter((p) => {
+        const matchName = p.name.toLowerCase().includes(t)
+        const matchSku = p.sku ? p.sku.toLowerCase().includes(t) : false
+        const matchCodigo = (p as { codigo?: string }).codigo
+          ? (p as { codigo?: string }).codigo!.toLowerCase().includes(t)
+          : false
+        const matchBarcode = p.barcode ? p.barcode.includes(t) : false
+        const matchId = p.id.toLowerCase() === t
+        return matchName || matchSku || matchCodigo || matchBarcode || matchId
+      })
+      .slice(0, 8)
+  }, [bipeCode, products])
 
   const filteredCustomers = customers.filter(
     (c) =>
@@ -606,6 +625,20 @@ export function PdvClassic({
       queueMicrotask(() => shellBipeRef.current?.focus())
     },
     [addToCart, bipeCode, products, shellNextQty, toast]
+  )
+
+  const handleBipeSuggestionSelect = useCallback(
+    (product: PdvCatalogProduct) => {
+      const q = Number(shellNextQty.replace(",", ".")) || 1
+      addToCart(product, q)
+      setBipeCode("")
+      setShellNextQty("1")
+      setShellInfo(
+        `✓ ${product.name} adicionado · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(product.price * q)}`
+      )
+      queueMicrotask(() => shellBipeRef.current?.focus())
+    },
+    [addToCart, shellNextQty]
   )
 
   const addComplemento = (productId: string, complementoName: string, complementoPrice: number) => {
@@ -1208,6 +1241,8 @@ export function PdvClassic({
               onBipeChange={setBipeCode}
               bipeRef={shellBipeRef}
               onBipeKeyDown={handleShellBipeKeyDown}
+              bipeSuggestions={bipeSuggestions}
+              onBipeSuggestionSelect={handleBipeSuggestionSelect}
               customerDisplay={shellCustomerField}
               onCustomerDisplayChange={(v) => setShellCustomerField(v)}
               nextQtyStr={shellNextQty}

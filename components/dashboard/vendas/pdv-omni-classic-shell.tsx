@@ -1,6 +1,6 @@
 "use client"
 
-import { forwardRef, useEffect, useRef, type InputHTMLAttributes, type KeyboardEvent, type ReactNode } from "react"
+import { forwardRef, useCallback, useEffect, useRef, useState, type InputHTMLAttributes, type KeyboardEvent, type ReactNode } from "react"
 import {
   Barcode,
   Calculator,
@@ -291,6 +291,9 @@ export type PdvOmniClassicShellProps = {
   onBipeChange: (v: string) => void
   bipeRef: React.RefObject<HTMLInputElement | null>
   onBipeKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void
+  /** Sugestões para autocomplete do campo BIPE (max 8). */
+  bipeSuggestions?: PdvCatalogProduct[]
+  onBipeSuggestionSelect?: (product: PdvCatalogProduct) => void
   customerDisplay: string
   onCustomerDisplayChange: (v: string) => void
   nextQtyStr: string
@@ -334,6 +337,50 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
   /** Midnight e Black Edition compartilham chrome de alto contraste (tabela, atalhos, campos). */
   const inkUi = studioMode === "black" || studioMode === "midnight"
   const fieldTone = inkUi ? ("black" as const) : ("classic" as const)
+
+  // Índice da sugestão ativa via teclado (-1 = nenhuma)
+  const [bipeActiveIdx, setBipeActiveIdx] = useState(-1)
+  const activeItemRef = useRef<HTMLButtonElement>(null)
+
+  // Reseta seleção quando o texto muda
+  useEffect(() => {
+    setBipeActiveIdx(-1)
+  }, [props.bipeCode])
+
+  // Scroll automático para manter item ativo visível
+  useEffect(() => {
+    activeItemRef.current?.scrollIntoView({ block: "nearest" })
+  }, [bipeActiveIdx])
+
+  const handleBipeKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      const suggestions = props.bipeSuggestions ?? []
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setBipeActiveIdx((prev) => Math.min(prev + 1, suggestions.length - 1))
+        return
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setBipeActiveIdx((prev) => Math.max(prev - 1, -1))
+        return
+      }
+      if (e.key === "Escape") {
+        e.preventDefault()
+        props.onBipeChange("")
+        setBipeActiveIdx(-1)
+        return
+      }
+      if (e.key === "Enter" && bipeActiveIdx >= 0 && suggestions[bipeActiveIdx]) {
+        e.preventDefault()
+        props.onBipeSuggestionSelect?.(suggestions[bipeActiveIdx])
+        setBipeActiveIdx(-1)
+        return
+      }
+      props.onBipeKeyDown(e)
+    },
+    [bipeActiveIdx, props]
+  )
 
   useEffect(() => {
     if (!props.qtyEditOpen) return
@@ -396,19 +443,84 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
           isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-card"
         )}
       >
-        <PosField
-          ref={props.bipeRef}
-          tone={fieldTone}
-          fieldClassName={cn("col-span-12", isModoRapido ? "md:col-span-5" : "md:col-span-4")}
-          label="Código / Bipe"
-          hint="ENTER"
-          icon={<Barcode className="h-4 w-4" />}
-          value={props.bipeCode}
-          onChange={(e) => props.onBipeChange(e.target.value)}
-          onKeyDown={props.onBipeKeyDown}
-          placeholder="Bipe ou digite o código do produto"
-          autoComplete="off"
-        />
+        {/* BIPE com dropdown de autocomplete */}
+        <div className={cn("relative col-span-12", isModoRapido ? "md:col-span-5" : "md:col-span-4")}>
+          <PosField
+            ref={props.bipeRef}
+            tone={fieldTone}
+            label="Código / Bipe"
+            hint="ENTER"
+            icon={<Barcode className="h-4 w-4" />}
+            value={props.bipeCode}
+            onChange={(e) => props.onBipeChange(e.target.value)}
+            onKeyDown={handleBipeKeyDown}
+            placeholder="Bipe ou digite o código do produto"
+            autoComplete="off"
+          />
+          {props.bipeCode.trim().length >= 1 ? (
+            <div
+              className={cn(
+                "absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border shadow-xl",
+                inkUi ? "border-white/10 bg-[#111111]" : "border-border bg-card"
+              )}
+            >
+              {props.bipeSuggestions && props.bipeSuggestions.length > 0 ? (
+                <ul className="max-h-60 overflow-y-auto">
+                  {props.bipeSuggestions.map((product, idx) => {
+                    const isActive = idx === bipeActiveIdx
+                    return (
+                    <li key={`${product.id}-${product.dbId ?? ""}`}>
+                      <button
+                        ref={isActive ? activeItemRef : undefined}
+                        type="button"
+                        className={cn(
+                          "flex w-full items-center gap-3 border-t px-3 py-2.5 text-left text-sm transition-colors first:border-0",
+                          inkUi
+                            ? "border-white/5 text-white hover:bg-white/[0.08]"
+                            : "border-border text-foreground hover:bg-muted",
+                          isActive && (inkUi ? "bg-white/[0.12]" : "bg-accent text-accent-foreground")
+                        )}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          props.onBipeSuggestionSelect?.(product)
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{product.name}</div>
+                          <div className={cn("text-xs", inkUi ? "text-white/40" : "text-muted-foreground")}>
+                            {[
+                              product.sku ? `SKU ${product.sku}` : null,
+                              product.barcode ? `EAN ${product.barcode}` : null,
+                              `Estoque: ${product.stock}`,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        </div>
+                        <span
+                          className={cn(
+                            "shrink-0 font-semibold tabular-pdv",
+                            inkUi ? "text-emerald-400" : "text-emerald-700 dark:text-emerald-400"
+                          )}
+                        >
+                          R$ {fmt(product.price)}
+                        </span>
+                      </button>
+                    </li>
+                  )
+                  })}
+                </ul>
+              ) : (
+                <div className={cn("px-4 py-3 text-sm", inkUi ? "text-white/40" : "text-muted-foreground")}>
+                  Nenhum produto encontrado para{" "}
+                  <span className={cn("font-medium", inkUi ? "text-white/70" : "text-foreground")}>
+                    &quot;{props.bipeCode.trim()}&quot;
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
         <PosField
           tone={fieldTone}
           fieldClassName={cn("col-span-6", isModoRapido ? "md:col-span-4" : "md:col-span-3")}
@@ -499,7 +611,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             </Button>
           </div>
         ) : (
-          <aside className="col-span-12 flex min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3">
+          <aside className="col-span-12 flex h-full min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3">
             <div
               className={cn(
                 "rounded-md border p-4 shadow-pos",
@@ -552,7 +664,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             </div>
             <div
               className={cn(
-                "rounded-md border p-4 shadow-pos",
+                "min-h-0 flex-1 rounded-md border p-4 shadow-pos",
                 isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-card"
               )}
             >

@@ -2,6 +2,7 @@
 
 import { VendasPDV } from "@/components/dashboard/vendas/vendas-pdv"
 import { useStudioTheme, type StudioThemeMode } from "@/components/theme/ThemeProvider"
+import { LoadingState } from "@/components/ui/states"
 import {
   readOmnigestaoPdvModoPreferencia,
   writeOmnigestaoPdvModoPreferencia,
@@ -46,10 +47,10 @@ export function VendasPageClient() {
     setMounted(true)
   }, [])
 
-  if (!mounted) return null
+  if (!mounted) return <LoadingState message="Carregando PDV…" />
 
   return (
-    <div className="flex min-h-[min(100dvh,100vh)] min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground transition-colors duration-300">
+    <div className="-mx-4 sm:-mx-6 lg:-mx-8 flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground transition-colors duration-300">
       <VendasPDV isModoRapido={isModoRapido} />
     </div>
   )

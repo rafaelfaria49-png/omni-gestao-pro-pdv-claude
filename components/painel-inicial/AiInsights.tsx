@@ -1,6 +1,7 @@
 "use client";
 
 import { Sparkles, TrendingDown, TrendingUp, AlertCircle, ArrowRight } from "lucide-react";
+import { DemoBadge } from "@/components/painel-inicial/DemoBadge";
 
 type Insight = {
   icon: typeof TrendingUp;
@@ -45,11 +46,14 @@ export function AiInsights() {
             <Sparkles className="h-3.5 w-3.5 text-primary" strokeWidth={2} />
           </div>
           <div>
-            <h3 className="font-display font-semibold text-[14px] tracking-tight">
-              Insights da IA Mestre
-            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-display font-semibold text-[14px] tracking-tight">
+                Insights da IA Mestre
+              </h3>
+              <DemoBadge>Exemplo</DemoBadge>
+            </div>
             <p className="text-[10.5px] text-muted-foreground -mt-0.5">
-              Análises automáticas · atualizado há 4 min
+              Textos ilustrativos — não refletem sua operação
             </p>
           </div>
         </div>

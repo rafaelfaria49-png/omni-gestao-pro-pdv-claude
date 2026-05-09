@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { useState } from "react";
+import { DemoBadge } from "@/components/painel-inicial/DemoBadge";
 
 const data = [
   { day: "Seg", value: 18420 },
@@ -32,21 +33,22 @@ const ranges = ["7D", "30D", "90D"] as const;
 
 export function RevenueChart() {
   const [range, setRange] = useState<(typeof ranges)[number]>("7D");
-  const total = data.reduce((s, d) => s + d.value, 0);
 
   return (
     <div className="rounded-lg border border-border bg-card">
       <div className="flex items-start justify-between p-5 pb-3">
         <div>
-          <h3 className="font-display font-semibold text-[14px] tracking-tight">
-            Faturamento
-          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-display font-semibold text-[14px] tracking-tight">
+              Faturamento
+            </h3>
+            <DemoBadge>Exemplo</DemoBadge>
+          </div>
           <div className="flex items-baseline gap-2 mt-1">
-            <span className="text-2xl font-display font-semibold tabular-nums tracking-tight">
-              {fmt(total)}
+            <span className="text-2xl font-display font-semibold tabular-nums tracking-tight text-muted-foreground">
+              —
             </span>
-            <span className="text-[11px] text-success font-medium">+12.4%</span>
-            <span className="text-[11px] text-muted-foreground">vs. semana anterior</span>
+            <span className="text-[11px] text-muted-foreground">Curva abaixo é apenas visual</span>
           </div>
         </div>
         <div className="flex items-center gap-0.5 p-0.5 rounded-md border border-border bg-muted/50">
