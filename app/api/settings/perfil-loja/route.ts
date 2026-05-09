@@ -5,6 +5,8 @@ import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 function storeProfileToPerfilLoja(profile: string | null | undefined): PerfilLojaId {
   if (profile === "VARIEDADES") return "variedades"

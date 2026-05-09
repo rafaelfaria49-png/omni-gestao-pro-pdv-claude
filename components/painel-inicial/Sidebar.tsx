@@ -21,6 +21,7 @@ import {
   Receipt,
   Database,
   Bot,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 import { financeiroV2Enabled } from "@/lib/feature-flags";
@@ -58,7 +59,7 @@ const workspaceItems: Item[] = [
 const hubsItems: Item[] = [
   { to: "/dashboard/marketing-ia",   label: "Marketing IA",   icon: Megaphone,    badge: "AI" },
   { to: "/dashboard/whatsapp",       label: "WhatsApp HUB",   icon: MessageCircle },
-  { to: "/dashboard/operacoes-v2",   label: "Operações HUB",  icon: Activity      },
+  { to: "/dashboard/operacoes-v2",   label: "Operações HUB",  icon: Activity,    badge: "Novo" },
   { to: "/dashboard/cadastros-v2",   label: "Cadastros HUB",  icon: Database      },
   { to: "/vendas-hub",               label: "Vendas HUB",     icon: ShoppingCart  },
   { to: "/dashboard/marketplace",    label: "Marketplace",    icon: Store         },
@@ -70,6 +71,7 @@ const hubsItems: Item[] = [
 // ── GESTÃO ───────────────────────────────────────────────────────────────────
 const gestaoItems: Item[] = [
   { to: "/dashboard/clientes", label: "Clientes", icon: Users   },
+  { to: "/dashboard/os",       label: "Ordens de Serviço (Legado)", icon: ClipboardList, badge: "Legado" },
   { to: "/dashboard/estoque",  label: "Estoque",  icon: Package },
   {
     to: "/dashboard/relatorios",
@@ -240,7 +242,7 @@ export function Sidebar() {
             <span className="text-[11px] font-medium">Sistema operacional</span>
           </div>
           <p className="text-[10.5px] text-muted-foreground leading-relaxed">
-            Sincronizado · há 12s
+            Sessão ativa · status ilustrativo
           </p>
         </div>
       </div>

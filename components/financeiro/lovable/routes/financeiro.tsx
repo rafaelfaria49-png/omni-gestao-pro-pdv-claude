@@ -232,6 +232,20 @@ function VisaoGeral() {
   const saidas = mesAtual?.saida ?? summaryP?.totalPago ?? 0;
   const lucro = entradas - saidas;
   const fluxoMensal = analytics?.fluxoMensal ?? [];
+  const periodoResultado =
+    mesAtual?.mes?.trim() ||
+    new Date().toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
+
+  const alertItems = (
+    [
+      summaryP && summaryP.totalVencido > 0
+        ? { msg: `${summaryP.quantidade} contas a pagar — ${fmt(summaryP.totalVencido)} em atraso`, val: fmt(summaryP.totalVencido) }
+        : null,
+      summaryR && summaryR.totalVencido > 0
+        ? { msg: `A receber — ${fmt(summaryR.totalVencido)} vencido de clientes`, val: fmt(summaryR.totalVencido) }
+        : null,
+    ] as Array<{ msg: string; val: string } | null>
+  ).filter((x): x is { msg: string; val: string } => x !== null);
 
   return (
     <div className="space-y-4">
@@ -239,13 +253,13 @@ function VisaoGeral() {
         <StatCard title="Saldo em carteiras" value={fmt(totalCarteiras)} hint={`${carteiras.length} carteiras ativas`} icon={Wallet} />
         <StatCard title="A receber" value={fmt(totalReceber)} hint="Em aberto" icon={ArrowDownCircle} tone="positive" />
         <StatCard title="A pagar" value={fmt(totalPagar)} hint="Em aberto" icon={ArrowUpCircle} tone="negative" />
-        <StatCard title="Resultado do mês" value={fmt(lucro)} hint="Abr / 2026" icon={TrendingUp} tone="positive" />
+        <StatCard title="Resultado do mês" value={fmt(lucro)} hint={periodoResultado} icon={TrendingUp} tone="positive" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard title="Entradas" value={fmt(entradas)} icon={ArrowDownLeft} tone="positive" />
         <StatCard title="Saídas" value={fmt(saidas)} icon={ArrowUpRight} tone="negative" />
-        <StatCard title="Lucro líquido" value={fmt(lucro)} hint="Margem 31%" icon={PiggyBank} tone="positive" />
+        <StatCard title="Lucro líquido" value={fmt(lucro)} hint="Consolidado no período exibido" icon={PiggyBank} tone="positive" />
       </div>
 
       <Card className="rounded-xl">
@@ -257,26 +271,24 @@ function VisaoGeral() {
           <CardDescription>Itens que exigem sua atenção</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {(
-            [
-              summaryP && summaryP.totalVencido > 0 ? { msg: `${summaryP.quantidade} contas a pagar — ${fmt(summaryP.totalVencido)} em atraso`, val: fmt(summaryP.totalVencido) } : null,
-              summaryR && summaryR.totalVencido > 0 ? { msg: `A receber — ${fmt(summaryR.totalVencido)} vencido de clientes`, val: fmt(summaryR.totalVencido) } : null,
-              { msg: "Saldo negativo previsto para 12/05", val: "-" },
-            ].filter((x): x is { msg: string; val: string } => x !== null)
-          ).map((a, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3"
-            >
-              <div className="flex items-center gap-3">
-                <div className="rounded-md bg-destructive/10 p-1.5 text-destructive">
-                  <AlertTriangle className="h-4 w-4" />
+          {alertItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-1">Nenhum alerta com base nos dados atuais da loja.</p>
+          ) : (
+            alertItems.map((a, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="rounded-md bg-destructive/10 p-1.5 text-destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <p className="text-sm text-foreground">{a.msg}</p>
                 </div>
-                <p className="text-sm text-foreground">{a.msg}</p>
+                <span className="text-sm font-medium text-muted-foreground">{a.val}</span>
               </div>
-              <span className="text-sm font-medium text-muted-foreground">{a.val}</span>
-            </div>
-          ))}
+            ))
+          )}
         </CardContent>
       </Card>
 
@@ -1224,15 +1236,16 @@ function FinanceiroHubInner() {
   }, []);
 
   const tabs = useMemo(
-    () => [
-      { v: "visao", label: "Visão geral", icon: LayoutDashboard, comp: <VisaoGeral /> },
-      { v: "receber", label: "A receber", icon: ArrowDownCircle, comp: <ContasReceber /> },
-      { v: "pagar", label: "A pagar", icon: ArrowUpCircle, comp: <ContasPagar /> },
-      { v: "fluxo", label: "Fluxo de caixa", icon: BarChart3, comp: <FluxoCaixa /> },
-      { v: "carteiras", label: "Carteiras", icon: Wallet, comp: <GestaoCarteiras /> },
-      { v: "relatorios", label: "Relatórios", icon: FileText, comp: <Relatorios /> },
-      { v: "config", label: "Configurações", icon: Settings, comp: <Configuracoes /> },
-    ],
+    () =>
+      [
+        { v: "visao", label: "Visão geral", icon: LayoutDashboard, comp: <VisaoGeral />, hubBadge: "Preview" as const },
+        { v: "receber", label: "A receber", icon: ArrowDownCircle, comp: <ContasReceber /> },
+        { v: "pagar", label: "A pagar", icon: ArrowUpCircle, comp: <ContasPagar /> },
+        { v: "fluxo", label: "Fluxo de caixa", icon: BarChart3, comp: <FluxoCaixa />, hubBadge: "Preview" as const },
+        { v: "carteiras", label: "Carteiras", icon: Wallet, comp: <GestaoCarteiras />, hubBadge: "Demo" as const },
+        { v: "relatorios", label: "Relatórios", icon: FileText, comp: <Relatorios />, hubBadge: "Preview" as const },
+        { v: "config", label: "Configurações", icon: Settings, comp: <Configuracoes />, hubBadge: "Demo" as const },
+      ] as const,
     [],
   );
 
@@ -1248,7 +1261,8 @@ function FinanceiroHubInner() {
               Financeiro HUB
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Centralize carteiras, contas, fluxo e relatórios em um só lugar.
+              Centralize carteiras, contas, fluxo e relatórios em um só lugar. Abas com selo Preview/Demo ainda
+              misturam dados reais com trechos ilustrativos.
             </p>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -1267,10 +1281,19 @@ function FinanceiroHubInner() {
           <TabsList className="mb-6 grid w-full grid-cols-3 gap-1 sm:grid-cols-7">
             {tabs.map((t) => {
               const Icon = t.icon;
+              const badge = "hubBadge" in t ? t.hubBadge : undefined;
               return (
                 <TabsTrigger key={t.v} value={t.v} className="gap-1.5 text-xs">
                   <Icon className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">{t.label}</span>
+                  {badge ? (
+                    <Badge
+                      variant="secondary"
+                      className="hidden h-5 shrink-0 px-1.5 py-0 text-[9px] font-normal uppercase tracking-wide text-muted-foreground sm:inline-flex"
+                    >
+                      {badge}
+                    </Badge>
+                  ) : null}
                 </TabsTrigger>
               );
             })}

@@ -1,7 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import dynamic from "next/dynamic";
-import { Skeleton } from "@/components/ui/skeleton";
+import { OperacoesV2LoadingFallback } from "./OperacoesV2LoadingFallback";
 
 /**
  * Rota de validação visual do Operações HUB Lovable.
@@ -17,29 +18,16 @@ const OperacoesHubIsolated = dynamic(
     ).then((m) => m.OperacoesHubIsolated),
   {
     ssr: false,
-    loading: () => (
-      <div className="w-full min-w-0 max-w-full p-6 space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <Skeleton className="h-10 w-72" />
-          <Skeleton className="h-10 w-40" />
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
-        </div>
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-[520px] w-full" />
-      </div>
-    ),
+    loading: () => <OperacoesV2LoadingFallback />,
   }
 );
 
 export default function OperacoesV2Page() {
   return (
-    <div className="-mx-4 min-w-0 sm:-mx-6 lg:-mx-8">
-      <OperacoesHubIsolated />
-    </div>
+    <Suspense fallback={<OperacoesV2LoadingFallback />}>
+      <div className="-mx-4 min-w-0 sm:-mx-6 lg:-mx-8">
+        <OperacoesHubIsolated />
+      </div>
+    </Suspense>
   );
 }

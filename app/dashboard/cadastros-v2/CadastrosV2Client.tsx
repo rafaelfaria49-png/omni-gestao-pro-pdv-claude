@@ -2,32 +2,13 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
 
 const CadastrosHubIsolated = dynamic(
   () =>
     import("@/components/cadastros/lovable/CadastrosHubIsolated").then(
       (m) => m.CadastrosHubIsolated
     ),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="w-full min-w-0 max-w-full p-6 space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <Skeleton className="h-10 w-72" />
-          <Skeleton className="h-10 w-40" />
-        </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
-          <Skeleton className="h-40 w-full" />
-        </div>
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-[520px] w-full" />
-      </div>
-    ),
-  }
+  { ssr: false }
 );
 
 export default function CadastrosV2Client() {

@@ -1,6 +1,7 @@
 "use client";
 
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { DemoBadge } from "@/components/painel-inicial/DemoBadge";
 
 const data = [
   { name: "Eletrônicos", value: 38, color: "var(--primary)" },
@@ -10,17 +11,18 @@ const data = [
   { name: "Outros", value: 6, color: "var(--muted-foreground)" },
 ];
 
-const total = data.reduce((s, d) => s + d.value, 0);
-
 export function CategoryChart() {
   return (
     <div className="rounded-lg border border-border bg-card h-full flex flex-col">
       <div className="px-5 py-3.5 border-b border-border">
-        <h3 className="font-display font-semibold text-[14px] tracking-tight">
-          Vendas por Categoria
-        </h3>
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="font-display font-semibold text-[14px] tracking-tight">
+            Vendas por Categoria
+          </h3>
+          <DemoBadge>Exemplo</DemoBadge>
+        </div>
         <p className="text-[11px] text-muted-foreground mt-0.5">
-          Distribuição dos últimos 7 dias
+          Distribuição ilustrativa (não reflete vendas reais)
         </p>
       </div>
 
@@ -56,8 +58,8 @@ export function CategoryChart() {
           <div className="absolute inset-0 grid place-items-center pointer-events-none">
             <div className="text-center">
               <div className="text-[10px] text-muted-foreground">Total</div>
-              <div className="text-[15px] font-display font-semibold tabular-nums">
-                {total}%
+              <div className="text-[15px] font-display font-semibold tabular-nums text-muted-foreground">
+                —
               </div>
             </div>
           </div>

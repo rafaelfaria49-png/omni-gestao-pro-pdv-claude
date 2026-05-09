@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-/** Alias legado / bookmarks → Operações HUB atual. */
+/** Alias amigável: o HUB real vive em `/dashboard/operacoes-v2`. */
 export default function OperacoesAliasPage() {
   redirect("/dashboard/operacoes-v2");
 }

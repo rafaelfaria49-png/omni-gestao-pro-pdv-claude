@@ -9,6 +9,8 @@ import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite }
 import { requireAdmin } from "@/lib/require-admin"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 async function requireSubscription() {
   const sub = await getVerifiedSubscriptionFromCookies()

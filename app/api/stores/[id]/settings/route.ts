@@ -6,6 +6,8 @@ import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
 import { STAFF_ROLE_COOKIE, STAFF_SESSION_COOKIE } from "@/lib/staff-session"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 async function canManageStoreSettings(): Promise<boolean> {
   // 1) Admin explícito (fluxo mais restrito)

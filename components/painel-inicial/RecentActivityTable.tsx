@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { ArrowUpRight, ShoppingBag, Wrench } from "lucide-react";
+import { DemoBadge } from "@/components/painel-inicial/DemoBadge";
 
 type Row = {
   id: string;
@@ -31,16 +33,22 @@ export function RecentActivityTable() {
     <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="px-5 py-3.5 flex items-center justify-between border-b border-border">
         <div>
-          <h3 className="font-display font-semibold text-[14px] tracking-tight">
-            Atividades Recentes
-          </h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-display font-semibold text-[14px] tracking-tight">
+              Atividades Recentes
+            </h3>
+            <DemoBadge>Exemplo</DemoBadge>
+          </div>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Vendas e OS aprovadas
+            Linhas fictícias — use Histórico de Vendas para dados reais
           </p>
         </div>
-        <button className="text-[11.5px] font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 transition-colors">
-          Ver todas <ArrowUpRight className="h-3 w-3" />
-        </button>
+        <Link
+          href="/dashboard/vendas-arquivo-geral"
+          className="text-[11.5px] font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 transition-colors"
+        >
+          Histórico de vendas <ArrowUpRight className="h-3 w-3" />
+        </Link>
       </div>
 
       <div className="divide-y divide-border">

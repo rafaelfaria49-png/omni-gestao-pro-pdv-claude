@@ -221,12 +221,16 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
         aRes.json() as Promise<Record<string, unknown>>,
       ])
       if (rJson.ok) {
-        setReceber(normalizeReceberRows(rJson.rows as unknown[], rJson.audit as unknown[] ?? []))
+        const rRows = Array.isArray(rJson.rows) ? rJson.rows : []
+        const rAudit = Array.isArray(rJson.audit) ? rJson.audit : []
+        setReceber(normalizeReceberRows(rRows, rAudit))
         const sr = rJson.summary as Record<string, unknown> | undefined
         if (sr) setSummaryR({ quantidade: safeNum(sr.quantidade), totalAberto: safeNum(sr.totalAberto), totalVencido: safeNum(sr.totalVencido), totalPago: safeNum(sr.totalPago) })
       }
       if (pJson.ok) {
-        setPagar(normalizePagarRows(pJson.rows as unknown[], pJson.audit as unknown[] ?? []))
+        const pRows = Array.isArray(pJson.rows) ? pJson.rows : []
+        const pAudit = Array.isArray(pJson.audit) ? pJson.audit : []
+        setPagar(normalizePagarRows(pRows, pAudit))
         const sp = pJson.summary as Record<string, unknown> | undefined
         if (sp) setSummaryP({ quantidade: safeNum(sp.quantidade), totalAberto: safeNum(sp.totalAberto), totalVencido: safeNum(sp.totalVencido), totalPago: safeNum(sp.totalPago) })
       }
