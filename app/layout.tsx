@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 import { APP_DISPLAY_NAME } from '@/lib/app-brand'
+import { SessionProvider } from '@/components/auth/SessionProvider'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -75,7 +76,9 @@ export default function RootLayout({
           storageKey="omni-gestao-theme"
           disableTransitionOnChange={false}
         >
-          {children}
+          <SessionProvider>
+            {children}
+          </SessionProvider>
           <Toaster />
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}

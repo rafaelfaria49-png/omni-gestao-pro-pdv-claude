@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
+import NextAuth from "next-auth"
+import { authConfig } from "./auth.config"
 import {
   SUBSCRIPTION_COOKIE_NAME,
   isVencimentoExpired,
@@ -6,6 +8,8 @@ import {
 } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { STAFF_ROLE_COOKIE, STAFF_SESSION_COOKIE } from "@/lib/staff-session"
+
+const { auth } = NextAuth(authConfig)
 
 const SUBSCRIPTION_SECRET =
   process.env.ASSISTEC_SUBSCRIPTION_SECRET || "assistec-dev-secret-change-in-production"
@@ -32,7 +36,6 @@ type CaixaPerms = { permitirFinanceiro: boolean; permitirEstoque: boolean; permi
 
 async function getCaixaPerms(request: NextRequest): Promise<CaixaPerms | null> {
   try {
-    // Descobre a unidade ativa. Se não tiver, aplica política mais restritiva (null).
     const storeId = String(request.cookies.get("assistec_active_store")?.value || "").trim()
     if (!storeId) return null
     const url = new URL(`/api/stores/${encodeURIComponent(storeId)}/settings`, request.nextUrl.origin)
@@ -71,6 +74,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === "/sw.js") return true
   if (pathname.startsWith("/workbox-") || pathname.startsWith("/worker-")) return true
   if (/\.(png|svg|ico|webp|jpg|jpeg|gif|webmanifest)$/i.test(pathname)) return true
+  // Auth routes and login page are always public
+  if (pathname === "/login" || pathname.startsWith("/login/")) return true
   return false
 }
 
@@ -96,11 +101,19 @@ function isClientePortalPath(pathname: string): boolean {
   return pathname === "/portal" || pathname.startsWith("/portal/")
 }
 
-export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
+export const proxy = auth(async (req) => {
+  const { pathname } = req.nextUrl
+  const session = req.auth
 
   if (isPublicPath(pathname)) {
     return NextResponse.next()
+  }
+
+  // Protect /dashboard/* — redirect to /login if no NextAuth session
+  if (pathname.startsWith("/dashboard") && !session) {
+    const loginUrl = new URL("/login", req.url)
+    loginUrl.searchParams.set("callbackUrl", pathname)
+    return NextResponse.redirect(loginUrl)
   }
 
   if (
@@ -112,12 +125,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const cookie = request.cookies.get(SUBSCRIPTION_COOKIE_NAME)?.value
+  const cookie = req.cookies.get(SUBSCRIPTION_COOKIE_NAME)?.value
   const verified = await verifySubscriptionCookieValue(cookie, SUBSCRIPTION_SECRET)
   const now = await getTrustedTimeMs()
 
   const redirectPlano = () => {
-    const u = request.nextUrl.clone()
+    const u = req.nextUrl.clone()
     u.pathname = "/meu-plano"
     u.search = ""
     return NextResponse.redirect(u)
@@ -125,7 +138,7 @@ export async function proxy(request: NextRequest) {
 
   if (!verified.ok) {
     if (pathname === "/") {
-      const pageParam = request.nextUrl.searchParams.get("page")
+      const pageParam = req.nextUrl.searchParams.get("page")
       if (pageParam && CRITICAL_PAGE_PARAMS.has(pageParam)) {
         return redirectPlano()
       }
@@ -141,9 +154,9 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname === "/logs-sistema" || pathname.startsWith("/logs-sistema/")) {
-    const admin = String(request.cookies.get(ADMIN_COOKIE)?.value || "").trim()
+    const admin = String(req.cookies.get(ADMIN_COOKIE)?.value || "").trim()
     if (!admin) {
-      const u = request.nextUrl.clone()
+      const u = req.nextUrl.clone()
       u.pathname = "/"
       u.search = ""
       return NextResponse.redirect(u)
@@ -151,40 +164,34 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname === "/contador" || pathname.startsWith("/contador/")) {
-    const contador = request.cookies.get(CONTADOR_COOKIE)?.value
+    const contador = req.cookies.get(CONTADOR_COOKIE)?.value
     if (contador !== "1") {
-      const u = request.nextUrl.clone()
+      const u = req.nextUrl.clone()
       u.pathname = "/login-contador"
       u.searchParams.set("next", pathname)
       return NextResponse.redirect(u)
     }
   }
 
-  // Bloqueio por role: CAIXA / Vendedor não acessam áreas administrativas; Gerente (sessão staff) segue liberado aqui.
-  const adminPresent = !!String(request.cookies.get(ADMIN_COOKIE)?.value || "").trim()
-  const staffSession = !!String(request.cookies.get(STAFF_SESSION_COOKIE)?.value || "").trim()
-  const staffRole = String(request.cookies.get(STAFF_ROLE_COOKIE)?.value || "").trim().toUpperCase()
+  // Bloqueio por role: CAIXA / Vendedor não acessam áreas administrativas
+  const adminPresent = !!String(req.cookies.get(ADMIN_COOKIE)?.value || "").trim()
+  const staffSession = !!String(req.cookies.get(STAFF_SESSION_COOKIE)?.value || "").trim()
+  const staffRole = String(req.cookies.get(STAFF_ROLE_COOKIE)?.value || "").trim().toUpperCase()
   const isGerente = staffSession && staffRole === "GERENTE"
-  // Apenas usuários com sessão staff EXPLÍCITA e papel diferente de Gerente são restritos.
-  // Donos da loja que navegam só com o cookie de assinatura NÃO recebem restrição de CAIXA.
   const isCaixa = staffSession && !adminPresent && !isGerente
   if (isCaixa) {
-    // Páginas administrativas bloqueadas para o perfil CAIXA/Vendedor.
-    // Redireciona para o PDV dentro do dashboard (nunca para a landing em /).
     const caixaFallback = () => {
-      const u = request.nextUrl.clone()
+      const u = req.nextUrl.clone()
       u.pathname = "/dashboard/vendas"
       u.search = ""
       return NextResponse.redirect(u)
     }
 
-    // Sempre bloqueado (admin-only)
     if (ALWAYS_BLOCKED_FOR_CAIXA_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
       return caixaFallback()
     }
 
-    // Permissões dinâmicas (por unidade)
-    const perms = await getCaixaPerms(request)
+    const perms = await getCaixaPerms(req)
     const allowFinanceiro = perms?.permitirFinanceiro === true
     const allowEstoque = perms?.permitirEstoque === true
     const allowMarketing = perms?.permitirMarketingIA === true
@@ -201,7 +208,7 @@ export async function proxy(request: NextRequest) {
   }
 
   return NextResponse.next()
-}
+})
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image).*)"],

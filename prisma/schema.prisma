@@ -800,3 +800,26 @@ model CreditPurchase {
 
   @@index([userId, createdAt])
 }
+
+// ─── NextAuth / Admin Auth ───────────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  GERENTE
+  OPERADOR
+}
+
+/** Usuários de acesso ao painel OmniGestão (email + senha). Separado do User PIN-based. */
+model AdminUser {
+  id        String   @id @default(cuid())
+  name      String   @default("")
+  email     String   @unique
+  password  String
+  role      UserRole @default(OPERADOR)
+  lojaId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admin_users")
+}
