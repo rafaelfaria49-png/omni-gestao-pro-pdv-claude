@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Search, Send, Phone, MoreVertical, Bot, User, Clock,
   FileText, Eye, DollarSign, Activity, Plus, Edit, Sparkles,
@@ -27,9 +27,12 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  variables, aiSuggestions,
+  variables, aiSuggestions, mockContacts,
   type Contact, type Automation, type QuickReply, type FunnelStage, type Trigger, type Action,
 } from "./mockData";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
+import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
 
 // ───────── helpers ─────────
 const THEMES = [
@@ -75,6 +78,73 @@ const CONDITION_OPTS = [
 
 const statusLabel = (s: Contact["status"]) =>
   s === "auto" ? "Automático" : s === "human" ? "Humano" : "Aguardando";
+
+function formatPhoneBr(digits: string) {
+  const d = String(digits ?? "").replace(/\D/g, "");
+  if (/^55\d{10,11}$/.test(d)) {
+    return d.replace(/^55(\d{2})(\d{5})(\d{4})$/, "+55 $1 $2-$3");
+  }
+  return d || String(digits ?? "");
+}
+
+function formatMsgTime(iso: string) {
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+  } catch {
+    return "—";
+  }
+}
+
+function mapConversationsToContacts(rows: Record<string, unknown>[]): Contact[] {
+  return rows.map((r) => {
+    const contact = (r.contact && typeof r.contact === "object" ? r.contact : {}) as Record<string, unknown>;
+    const phoneDigits = String(contact.phoneDigits ?? "");
+    const meta =
+      contact.metadata && typeof contact.metadata === "object" && !Array.isArray(contact.metadata)
+        ? (contact.metadata as Record<string, unknown>)
+        : {};
+    const rawMsgs = Array.isArray(r.messages) ? (r.messages as Record<string, unknown>[]) : [];
+    const messages: Contact["messages"] = rawMsgs.map((m) => ({
+      id: String(m.id ?? ""),
+      from: m.direction === "outbound" ? "me" : "them",
+      text: String(m.body ?? ""),
+      time: m.createdAt ? formatMsgTime(String(m.createdAt)) : "—",
+    }));
+    const lastAt = r.lastMessageAt ? String(r.lastMessageAt) : "";
+    return {
+      id: String(contact.id ?? ""),
+      conversationId: String(r.id ?? ""),
+      name: String(contact.displayName ?? phoneDigits ?? "—"),
+      phone: formatPhoneBr(phoneDigits) || phoneDigits,
+      lastMessage: String(r.lastMessagePreview ?? ""),
+      lastTime: lastAt ? formatMsgTime(lastAt) : "—",
+      unread: typeof r.unreadCount === "number" ? r.unreadCount : 0,
+      status: r.humanMode === true ? "human" : "auto",
+      stage: (["novo", "atendimento", "aguardando_cliente", "aguardando_orcamento", "finalizado"].includes(
+        String(meta.stage)
+      )
+        ? meta.stage
+        : "novo") as FunnelStage,
+      responsible: String(meta.responsible ?? "—"),
+      idleMinutes: typeof meta.idleMinutes === "number" ? meta.idleMinutes : 0,
+      tags: Array.isArray(meta.tags) ? (meta.tags as string[]) : [],
+      clientSince: String(
+        meta.clientSince ?? new Date(String(contact.createdAt ?? "")).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })
+      ),
+      totalSpent: typeof meta.totalSpent === "number" ? meta.totalSpent : 0,
+      notes: String(meta.notes ?? ""),
+      messages,
+      os: Array.isArray(meta.os) ? (meta.os as Contact["os"]) : [],
+      history: Array.isArray(meta.history) ? (meta.history as Contact["history"]) : [],
+    };
+  });
+}
 
 // ───────── small components ─────────
 function StatCard({ icon: Icon, label, value, hint }: any) {
@@ -142,6 +212,13 @@ function applyHubTheme(t: ThemeId) {
 }
 
 export default function WhatsAppHub() {
+  const { lojaAtivaId } = useLojaAtiva();
+  const storeHeader = useMemo(
+    () => (lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
+    [lojaAtivaId]
+  );
+  const apiHeaders = useMemo(() => ({ [ASSISTEC_LOJA_HEADER]: storeHeader }), [storeHeader]);
+
   // theme — lê do sistema global primeiro, depois do storage local do hub
   const [theme, setThemeState] = useState<ThemeId>("light");
   useEffect(() => {
@@ -172,41 +249,54 @@ export default function WhatsAppHub() {
     async function loadData() {
       setDataLoading(true);
       try {
-        const [cRes, aRes, qRes] = await Promise.all([
-          fetch("/api/whatsapp/contacts"),
-          fetch("/api/whatsapp/automations"),
-          fetch("/api/whatsapp/quick-replies"),
+        const [convRes, aRes, qRes] = await Promise.all([
+          fetch("/api/whatsapp/conversations?includeMessages=1", { headers: apiHeaders }),
+          fetch("/api/whatsapp/automations", { headers: apiHeaders }),
+          fetch("/api/whatsapp/quick-replies", { headers: apiHeaders }),
         ]);
-        const [cJson, aJson, qJson] = await Promise.all([cRes.json(), aRes.json(), qRes.json()]);
+        const [convJson, aJson, qJson] = await Promise.all([convRes.json(), aRes.json(), qRes.json()]);
 
-        if (cJson.ok && Array.isArray(cJson.contacts)) {
-          const mapped: Contact[] = (cJson.contacts as Record<string, unknown>[]).map((c) => {
-            const meta = c.metadata && typeof c.metadata === "object" && !Array.isArray(c.metadata)
-              ? (c.metadata as Record<string, unknown>) : {};
-            const phone = String(c.phoneDigits ?? "").replace(/^55(\d{2})(\d{5})(\d{4})$/, "+55 $1 $2-$3");
-            return {
-              id: String(c.id ?? ""),
-              name: String(c.displayName ?? c.phoneDigits ?? "—"),
-              phone: phone || String(c.phoneDigits ?? ""),
-              lastMessage: String(meta.lastMessage ?? ""),
-              lastTime: String(meta.lastTime ?? "—"),
-              unread: typeof meta.unread === "number" ? meta.unread : 0,
-              status: (["auto","human","waiting"].includes(String(meta.status)) ? meta.status : "auto") as Contact["status"],
-              stage: (["novo","atendimento","aguardando_cliente","aguardando_orcamento","finalizado"].includes(String(meta.stage)) ? meta.stage : "novo") as FunnelStage,
-              responsible: String(meta.responsible ?? "—"),
-              idleMinutes: typeof meta.idleMinutes === "number" ? meta.idleMinutes : 0,
-              tags: Array.isArray(meta.tags) ? (meta.tags as string[]) : [],
-              clientSince: String(meta.clientSince ?? new Date(String(c.createdAt ?? "")).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })),
-              totalSpent: typeof meta.totalSpent === "number" ? meta.totalSpent : 0,
-              notes: String(meta.notes ?? ""),
-              messages: Array.isArray(meta.messages) ? (meta.messages as Contact["messages"]) : [],
-              os: Array.isArray(meta.os) ? (meta.os as Contact["os"]) : [],
-              history: Array.isArray(meta.history) ? (meta.history as Contact["history"]) : [],
-            };
-          });
-          setContacts(mapped);
-          if (mapped.length > 0) setSelectedId(mapped[0].id);
+        let mappedContacts: Contact[] = [];
+
+        if (convJson.ok && Array.isArray(convJson.conversations) && convJson.conversations.length > 0) {
+          mappedContacts = mapConversationsToContacts(convJson.conversations as Record<string, unknown>[]);
+        } else {
+          const cRes = await fetch("/api/whatsapp/contacts", { headers: apiHeaders });
+          const cJson = await cRes.json();
+          if (cJson.ok && Array.isArray(cJson.contacts) && cJson.contacts.length > 0) {
+            mappedContacts = (cJson.contacts as Record<string, unknown>[]).map((c) => {
+              const meta = c.metadata && typeof c.metadata === "object" && !Array.isArray(c.metadata)
+                ? (c.metadata as Record<string, unknown>) : {};
+              const phone = String(c.phoneDigits ?? "").replace(/^55(\d{2})(\d{5})(\d{4})$/, "+55 $1 $2-$3");
+              return {
+                id: String(c.id ?? ""),
+                name: String(c.displayName ?? c.phoneDigits ?? "—"),
+                phone: phone || String(c.phoneDigits ?? ""),
+                lastMessage: String(meta.lastMessage ?? ""),
+                lastTime: String(meta.lastTime ?? "—"),
+                unread: typeof meta.unread === "number" ? meta.unread : 0,
+                status: (["auto","human","waiting"].includes(String(meta.status)) ? meta.status : "auto") as Contact["status"],
+                stage: (["novo","atendimento","aguardando_cliente","aguardando_orcamento","finalizado"].includes(String(meta.stage)) ? meta.stage : "novo") as FunnelStage,
+                responsible: String(meta.responsible ?? "—"),
+                idleMinutes: typeof meta.idleMinutes === "number" ? meta.idleMinutes : 0,
+                tags: Array.isArray(meta.tags) ? (meta.tags as string[]) : [],
+                clientSince: String(meta.clientSince ?? new Date(String(c.createdAt ?? "")).toLocaleDateString("pt-BR", { month: "short", year: "numeric" })),
+                totalSpent: typeof meta.totalSpent === "number" ? meta.totalSpent : 0,
+                notes: String(meta.notes ?? ""),
+                messages: Array.isArray(meta.messages) ? (meta.messages as Contact["messages"]) : [],
+                os: Array.isArray(meta.os) ? (meta.os as Contact["os"]) : [],
+                history: Array.isArray(meta.history) ? (meta.history as Contact["history"]) : [],
+              };
+            });
+          }
         }
+
+        if (mappedContacts.length === 0) {
+          mappedContacts = mockContacts;
+        }
+
+        setContacts(mappedContacts);
+        if (mappedContacts.length > 0) setSelectedId(mappedContacts[0].id);
 
         if (aJson.ok && Array.isArray(aJson.automations)) {
           const mapped: Automation[] = (aJson.automations as Record<string, unknown>[]).map((a) => {
@@ -241,13 +331,13 @@ export default function WhatsAppHub() {
           setReplies(mapped);
         }
       } catch {
-        // silencioso — hub continua com arrays vazios
+        setContacts(mockContacts);
       } finally {
         setDataLoading(false);
       }
     }
     void loadData();
-  }, []);
+  }, [apiHeaders]);
   const [search, setSearch] = useState("");
   const [convFilter, setConvFilter] = useState<"all" | "auto" | "human" | "waiting">("all");
   const [draft, setDraft] = useState("");
@@ -259,16 +349,52 @@ export default function WhatsAppHub() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [osModal, setOsModal] = useState<null | "open" | "status" | "budget">(null);
 
-  const selected = contacts.find((c) => c.id === selectedId) ?? contacts[0];
+  const selected = contacts.find((c) => c.id === selectedId) ?? contacts[0] ?? mockContacts[0];
   const filteredContacts = contacts.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) &&
       (convFilter === "all" || c.status === convFilter)
   );
 
-  const sendMessage = (text?: string) => {
+  const sendMessage = useCallback(async (text?: string) => {
     const t = (text ?? draft).trim();
     if (!t) return;
+    const convId = selected?.conversationId;
+    if (convId) {
+      try {
+        const res = await fetch("/api/whatsapp/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...apiHeaders },
+          body: JSON.stringify({ conversationId: convId, text: t }),
+        });
+        const j = (await res.json()) as { ok?: boolean; error?: string; messageId?: string };
+        if (!j.ok) {
+          toast.error(typeof j.error === "string" ? j.error : "Falha ao enviar");
+          return;
+        }
+        setContacts((prev) =>
+          prev.map((c) =>
+            c.id === selectedId
+              ? {
+                  ...c,
+                  messages: [
+                    ...c.messages,
+                    { id: j.messageId ?? `tmp-${Date.now()}`, from: "me", text: t, time: "agora" },
+                  ],
+                  lastMessage: t,
+                  lastTime: "agora",
+                  unread: 0,
+                }
+              : c
+          )
+        );
+        setDraft("");
+        return;
+      } catch {
+        toast.error("Erro de rede ao enviar");
+        return;
+      }
+    }
     setContacts((prev) =>
       prev.map((c) =>
         c.id === selectedId
@@ -283,7 +409,7 @@ export default function WhatsAppHub() {
       )
     );
     setDraft("");
-  };
+  }, [apiHeaders, draft, selected?.conversationId, selectedId]);
 
   const moveStage = (id: string, dir: 1 | -1) => {
     setContacts((prev) =>

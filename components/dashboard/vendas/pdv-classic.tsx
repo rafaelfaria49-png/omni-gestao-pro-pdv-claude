@@ -90,6 +90,7 @@ import { appendAuditLog } from "@/lib/audit-log"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { formatEntradaRapidaResumo, mergeEntradaRapida } from "@/lib/os-entrada-checklist"
 import { isOsVirtualSaleLine, osPecasInventoryId, osServicoInventoryId } from "@/lib/os-pdv-virtual-lines"
+import { productMatchesPdvSearch } from "@/lib/pdv-product-search"
 
 type SaleMode = "balcao" | "completa"
 
@@ -230,9 +231,13 @@ export function PdvClassic({
         ? pdvParams.pdvClassicLayout
         : "lovable"
 
-  // Modo "services" (assistência) integrado como sub-modo do PDV Clássico (sem novo seletor).
+  // Modo "services" (assistência): encaixa no slot do AppShell sem margens negativas (evitam recorte com overflow-hidden do <main>).
   if (resolvedClassicLayout === "services") {
-    return <PdvAssistenciaEnterprise isModoRapido={isModoRapido} />
+    return (
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+        <PdvAssistenciaEnterprise isModoRapido={isModoRapido} />
+      </div>
+    )
   }
 
   /** Bloqueio do PDV até cadastrar Nome Fantasia (Store.name) da unidade no banco. */
@@ -358,37 +363,27 @@ export function PdvClassic({
 
   const searchTrim = searchTerm.trim()
   const hideCategoriesPdv = pdvParams.ocultarCategoriasNoPdv === true
-  const hiddenCategoriesSet = new Set((pdvParams.categoriasOcultasNoPdv ?? []).map((c) => c.toLowerCase()))
-  const filteredProducts = products.filter((p) => {
-    const catLower = p.category.toLowerCase()
-    const term = searchTerm.toLowerCase()
-    const matchName = p.name.toLowerCase().includes(term)
-    const matchCat = catLower.includes(term)
-    const matchBarcode = p.barcode ? p.barcode.toLowerCase().includes(term) : false
-    const matchSku = p.sku ? p.sku.toLowerCase().includes(term) : false
-    const matchCodigo = (p as { codigo?: string }).codigo ? (p as { codigo?: string }).codigo!.toLowerCase().includes(term) : false
-    if (!matchName && !matchCat && !matchBarcode && !matchSku && !matchCodigo) return false
-    if (searchTrim.length === 0 && PDV_CATEGORIAS_OCULTAS_ATE_BUSCA.has(catLower)) return false
-    if (searchTrim.length > 0) return true
-    if (hideCategoriesPdv && hiddenCategoriesSet.has(catLower)) return false
-    return true
-  })
+  const hiddenCategoriesSet = useMemo(
+    () => new Set((pdvParams.categoriasOcultasNoPdv ?? []).map((c) => c.toLowerCase())),
+    [pdvParams.categoriasOcultasNoPdv]
+  )
+
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const catLower = p.category.toLowerCase()
+      if (searchTrim.length === 0) {
+        if (PDV_CATEGORIAS_OCULTAS_ATE_BUSCA.has(catLower)) return false
+        if (hideCategoriesPdv && hiddenCategoriesSet.has(catLower)) return false
+        return true
+      }
+      return productMatchesPdvSearch(p, searchTrim)
+    })
+  }, [products, searchTrim, hideCategoriesPdv, hiddenCategoriesSet])
 
   const bipeSuggestions = useMemo(() => {
-    const t = bipeCode.trim().toLowerCase()
+    const t = bipeCode.trim()
     if (!t) return []
-    return products
-      .filter((p) => {
-        const matchName = p.name.toLowerCase().includes(t)
-        const matchSku = p.sku ? p.sku.toLowerCase().includes(t) : false
-        const matchCodigo = (p as { codigo?: string }).codigo
-          ? (p as { codigo?: string }).codigo!.toLowerCase().includes(t)
-          : false
-        const matchBarcode = p.barcode ? p.barcode.includes(t) : false
-        const matchId = p.id.toLowerCase() === t
-        return matchName || matchSku || matchCodigo || matchBarcode || matchId
-      })
-      .slice(0, 8)
+    return products.filter((p) => productMatchesPdvSearch(p, t)).slice(0, 8)
   }, [bipeCode, products])
 
   const filteredCustomers = customers.filter(

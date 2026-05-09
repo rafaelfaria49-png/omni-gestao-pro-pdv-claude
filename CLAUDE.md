@@ -144,6 +144,16 @@ STRIPE_PRICE_DIAMANTE_YEARLY  # price_...
 # Webhook endpoint a registrar na Vercel: https://<seu-dominio>/api/webhooks/stripe
 # Eventos necessários: checkout.session.completed, customer.subscription.updated,
 #   customer.subscription.deleted, invoice.paid, invoice.payment_failed
+# WhatsApp Cloud API (Meta Business) — obrigatórias para envio/recebimento real:
+WHATSAPP_PHONE_NUMBER_ID     # ID do número no Meta Business (ex.: 123456789)
+WHATSAPP_ACCESS_TOKEN        # Token de acesso permanente da Meta Graph API
+WHATSAPP_VERIFY_TOKEN        # Token de verificação do webhook (string aleatória segura)
+WHATSAPP_APP_SECRET          # App Secret do Meta App (para validar X-Hub-Signature-256)
+WHATSAPP_WEBHOOK_STORE_ID    # storeId para roteamento de mensagens recebidas
+# WHATSAPP_API_VERSION       # opcional (padrão: v21.0)
+# Webhook a registrar na Meta: https://<seu-dominio>/api/webhooks/whatsapp
+# Eventos: messages, message_deliveries, message_reads
+# Envio manual: POST /api/whatsapp/send (header x-assistec-loja-id + { conversationId, text })
 ```
 
 ## Key Files

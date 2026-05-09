@@ -1,16 +1,30 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  noPadding,
+}: {
+  children: ReactNode;
+  noPadding?: boolean;
+}) {
   return (
-    <div className="min-h-screen flex bg-background text-foreground">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Topbar />
-        <main className="flex-1 flex flex-col overflow-hidden px-4 sm:px-6 lg:px-8 py-6">{children}</main>
+        <main
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+            !noPadding && "px-4 py-6 sm:px-6 lg:px-8",
+          )}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

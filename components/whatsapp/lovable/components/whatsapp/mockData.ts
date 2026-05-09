@@ -15,6 +15,8 @@ export interface Message {
 
 export interface Contact {
   id: string;
+  /** Preenchido quando a lista vem de `/api/whatsapp/conversations` (envio real). */
+  conversationId?: string;
   name: string;
   phone: string;
   lastMessage: string;

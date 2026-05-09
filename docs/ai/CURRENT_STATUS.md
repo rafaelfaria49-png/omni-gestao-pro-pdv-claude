@@ -11,7 +11,7 @@
 ## ✅ Concluído e Funcionando
 
 ### Hubs Visuais (Lovable integrado)
-- **WhatsApp HUB** — renderizado em `/dashboard/whatsapp`, tema sincronizado globalmente, sem scroll interno, full width
+- **WhatsApp HUB** — renderizado em `/dashboard/whatsapp`, tema sincronizado globalmente, sem scroll interno, full width. **Dados reais via Prisma** (conversas, automações, respostas rápidas); fallback para mock se banco vazio. Envio real via Meta Cloud API (`/api/whatsapp/send` → `sendCloudApiTextAndRecord`)
 - **Operações HUB** — renderizado em `/dashboard/operacoes-v2`, MemoryRouter isolado, OSProvider com dados mock, Kanban em grid responsivo
 
 ### Sistema de Temas
@@ -35,6 +35,14 @@
 - `ensureDefaultEventAutomations` não sobrescreve `targetPhone` configurado pelo usuário
 - Deduplicação de automações duplicadas automática
 
+### WhatsApp — Meta Cloud API (integração real)
+- **Cliente Cloud API** (`lib/whatsapp.ts`): `sendTextMessage`, `sendTemplateMessage`, `sendMediaMessage` via Graph API v21.0
+- **Webhook oficial** (`/api/webhooks/whatsapp`): verificação de assinatura `X-Hub-Signature-256`, processamento assíncrono via `next/server` `after()`, idempotente por `wamid`
+- **Endpoint de envio** (`POST /api/whatsapp/send`): texto, template e mídia; grava outbound na conversa Prisma
+- **Server Actions** (`app/actions/whatsapp.ts`): `sendWhatsAppTextAction`, `sendWhatsAppTemplateAction`, `sendWhatsAppMediaAction` — requerem sessão NextAuth
+- **WhatsApp service ampliado** (`lib/whatsapp/whatsapp-service.ts`): `sendCloudApiTextAndRecord`, `sendCloudApiTemplateAndRecord`, `sendCloudApiMediaAndRecord`; `logWebhookPayload`; `createOrUpdateContact`; `findOrCreateOpenConversation`
+- **HUB UI integrado**: carrega conversas/automações/respostas reais na inicialização; send vai para Meta API quando há `conversationId`; fallback para mock se banco sem dados
+
 ### PDV
 - PDV Assistência integrado com `finalizeSaleTransaction`
 - CaixaStatusBar unificada entre todos os PDVs
@@ -43,6 +51,8 @@
 - **Busca de produtos no BIPE corrigida** (2026-05-09): `filteredProducts` agora inclui SKU e código interno; campo BIPE exibe dropdown de autocomplete em tempo real (até 8 sugestões por nome/SKU/código/EAN/ID); clique na sugestão adiciona ao carrinho e retorna foco. Relatório: `docs/modules/reports/PDV_FIX_BUSCA_PRODUTOS.md`
 - **UX premium do autocomplete** (2026-05-09): navegação por teclado (↑/↓/Enter/ESC), highlight da linha ativa, scroll automático para item visível. Relatório: `docs/modules/reports/PDV_UX_AUTOCOMPLETE_IMPROVEMENTS.md`
 - **Layout fixo sem rolagem global** (2026-05-09): PDV encaixado em 100vh sem scroll de página; AppShell.main convertido em flex container; wrapper de rota PDV usa `overflow-hidden` sem `pb-24`; padding horizontal cancelado com `-mx-*`; aside com `h-full`, card Informativo com `flex-1`. Relatório: `docs/modules/reports/PDV_FIXED_LAYOUT_POLISH.md`
+- **PDV Assistência — encaixe no AppShell** (2026-05-09): remove `100vh` aninhado; header/faixa caixa em fluxo normal; grade com `ScrollArea` e `min-h-0`. **Correção definitiva (pós-validação):** removidas margens negativas `-mx`/`-my` do ramo `services` (causavam recorte com `main { overflow-hidden }`); cadeia `flex-1 min-h-0 basis-0` em layout vendas + página vendas; carrinho com invólucro + `ScrollArea` limitada. Relatório: `docs/modules/reports/PDV_ASSISTENCIA_LAYOUT_FINAL.md`
+- **PDV Rápido (Omni)** — `/dashboard/vendas?modo=rapido` (2026-05-09): `lib/pdv-product-search.ts` unifica filtro (nome, categoria, SKU, código, EAN, id, sem acentos); F3 com campo de filtro e lista restrita ao termo; modo rápido com coluna direita fixa (total + Finalizar) e carrinho com scroll interno. Relatório: `docs/modules/reports/PDV_RAPIDO_LAYOUT_E_BUSCA.md`
 
 ### Navegação
 - Menu "WhatsApp" → `/dashboard/whatsapp`
@@ -171,7 +181,7 @@
 ### Longo Prazo
 - [ ] Financeiro HUB — fechamento de caixa, conciliação, relatórios
 - [ ] Cadastro inteligente com IA (sugestão de descrição, categorias, preços)
-- [ ] WhatsApp HUB — conectar com Meta Business API real
+- [x] ~~WhatsApp HUB — conectar com Meta Business API real~~ (concluído)
 
 ---
 
@@ -195,6 +205,6 @@ components/
 
 1. Sempre rodar `npx tsc --noEmit` antes de fazer deploy
 2. O Operações HUB usa dados **mock** — não persistem ao recarregar
-3. WhatsApp automações são **simuladas** (sem Meta API real)
+3. WhatsApp **envio** usa Meta Cloud API real (requer ENVs configuradas) — automações de evento ainda são simuladas via `runAutomationSimulation`
 4. A rota `/dashboard/os` (legado) continua funcionando em paralelo ao `/dashboard/operacoes-v2`
 5. Não importar `index.css` ou `App.css` dos hubs Lovable no layout raiz

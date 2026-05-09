@@ -57,6 +57,7 @@ import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { useOperationsStore } from "@/lib/operations-store"
 import { PDV_PRODUCTS_BASE, mergePdvCatalogWithInventory, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useToast } from "@/hooks/use-toast"
 
@@ -804,19 +805,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     if (!raw) return []
     const exact = findPdvProductByScan(raw, mergedCatalog)
     if (exact) return [exact]
-    const term = raw.toLowerCase()
-    return mergedCatalog
-      .filter((p) => {
-        if (p.name.toLowerCase().includes(term) || p.category.toLowerCase().includes(term)) return true
-        if (p.barcode?.toLowerCase().includes(term)) return true
-        if (p.codigoBarras?.toLowerCase().includes(term)) return true
-        if (p.sku?.toLowerCase().includes(term)) return true
-        if (p.codigo?.toLowerCase().includes(term)) return true
-        if (p.id.toLowerCase().includes(term)) return true
-        if (p.dbId?.toLowerCase().includes(term)) return true
-        return false
-      })
-      .slice(0, 12)
+    return filterPdvCatalogBySearch(mergedCatalog, raw).slice(0, 12)
   }, [search, mergedCatalog])
 
   useEffect(() => {
@@ -1004,7 +993,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const modoRapido = isModoRapido === true
 
   return (
-    <div className="relative flex h-[calc(100vh-4rem)] w-full overflow-hidden bg-background text-foreground">
+    <div className="relative flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
       {!modoRapido ? (
         <>
           <div className="pointer-events-none absolute -left-[10%] -top-[10%] h-[35%] w-[35%] rounded-full bg-primary/8 blur-[120px]" />
@@ -1012,11 +1001,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         </>
       ) : null}
 
-      {/* ── Header ── */}
+      {/* ── Header: fluxo normal (evita recorte com position absolute + padding no body) ── */}
       <header
         className={cn(
-          "absolute inset-x-0 top-0 z-10 flex items-center justify-between gap-2 border-b border-border bg-card/80 px-3 backdrop-blur-xl sm:px-4",
-          modoRapido ? "h-11" : "h-14"
+          "relative z-10 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card/80 px-3 py-2 backdrop-blur-xl sm:px-4",
+          modoRapido ? "min-h-11" : "min-h-14"
         )}
       >
         {/* Left: brand */}
@@ -1069,16 +1058,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         </div>
       </header>
 
-      {/* ── Body ── */}
-      <div className={cn("relative z-0 flex min-h-0 w-full flex-1 flex-col overflow-hidden", modoRapido ? "pt-11" : "pt-14")}>
-        {/* Caixa status em fluxo normal para não ficar oculto sob o header */}
+      {/* ── Body: ocupa exatamente o espaço abaixo do header, sem scroll na página ── */}
+      <div className="relative z-0 flex min-h-0 w-full flex-1 flex-col overflow-hidden">
         <div className="shrink-0 border-b border-border bg-card/90 backdrop-blur-sm">
           <CaixaStatusBar variant="pdv" />
         </div>
 
-        <div className="flex min-h-0 w-full flex-1 overflow-hidden">
+        <div className="flex min-h-0 w-full min-w-0 flex-1 items-stretch overflow-hidden">
         {/* ── Center: search + catalog ── */}
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border bg-background/60 backdrop-blur-sm">
+        <main className="flex min-h-0 min-w-0 max-h-full flex-1 flex-col overflow-hidden border-r border-border bg-background/60 backdrop-blur-sm">
 
           {/* Search */}
           <div className="shrink-0 p-4">
@@ -1150,14 +1138,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             ) : null}
           </div>
 
-          {/* Grid */}
-          <div className="min-h-0 flex-1 overflow-hidden px-4 pb-4">
+          {/* Grid — scroll só na área da grade */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4">
             {search.trim() ? (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground">
+              <div className="flex min-h-0 flex-1 flex-col gap-2">
+                <p className="shrink-0 text-xs font-semibold text-muted-foreground">
                   {fullSearch.length} resultado{fullSearch.length !== 1 ? "s" : ""} para &ldquo;{search}&rdquo;
                 </p>
-                <ScrollArea className="h-[calc(100vh-4rem-14rem)]">
+                <ScrollArea className="min-h-0 flex-1">
                   <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {fullSearch.map((p, idx) => (
                       <QuickCard
@@ -1176,9 +1164,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 </ScrollArea>
               </div>
             ) : (
-            <Tabs value={tab} onValueChange={(v) => setTab(v === "produtos" ? "produtos" : "servicos")}>
+            <Tabs
+              value={tab}
+              onValueChange={(v) => setTab(v === "produtos" ? "produtos" : "servicos")}
+              className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden"
+            >
                 {/* Tab header + Editar Atalhos */}
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   <TabsList className="flex-1 grid grid-cols-2 rounded-2xl border border-border bg-muted/60 p-1">
                     <TabsTrigger
                       value="servicos"
@@ -1208,8 +1200,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   ) : null}
                 </div>
 
-              <TabsContent value="servicos" className="mt-4 min-h-0">
-                  <ScrollArea className="h-[calc(100vh-4rem-20rem)]">
+              <TabsContent
+                value="servicos"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden outline-none data-[state=inactive]:hidden"
+              >
+                  <ScrollArea className="min-h-0 flex-1">
                     <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {quickServices.length > 0 ? (
                         quickServices.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)
@@ -1222,8 +1217,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 </ScrollArea>
               </TabsContent>
 
-              <TabsContent value="produtos" className="mt-4 min-h-0">
-                  <ScrollArea className="h-[calc(100vh-4rem-20rem)]">
+              <TabsContent
+                value="produtos"
+                className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden outline-none data-[state=inactive]:hidden"
+              >
+                  <ScrollArea className="min-h-0 flex-1">
                     <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {quickProducts.length > 0 ? (
                         quickProducts.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)
@@ -1243,7 +1241,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         {/* ── Right: customer + cart + payment ── */}
         <aside
           className={cn(
-            "flex h-full flex-col overflow-hidden border-l border-border bg-card",
+            "flex min-h-0 min-w-0 max-h-full shrink-0 flex-col overflow-hidden border-l border-border bg-card self-stretch",
             modoRapido
               ? "w-[min(100%,400px)] min-w-[260px] max-w-[420px]"
               : "w-[420px] min-w-[360px] max-w-[480px]"
@@ -1296,10 +1294,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             </div>
           </div>
 
-          {/* Cart lines */}
-          <div className="min-h-0 flex-1 overflow-hidden">
+          {/* Cart lines — scroll só aqui; não estoura a viewport */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {cart.length === 0 ? (
-              <div className="flex h-full items-center justify-center p-8 text-center">
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-8 text-center">
                 <div className="space-y-2">
                   <p className="text-base font-semibold text-foreground">Carrinho vazio</p>
                   <p className="text-sm text-muted-foreground">
@@ -1308,8 +1306,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 </div>
               </div>
             ) : (
-              <ScrollArea className="h-full">
-                <div className="divide-y divide-border px-3 py-1">
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <ScrollArea className="h-full max-h-full">
+                  <div className="divide-y divide-border px-3 py-1">
                   {cart.map((l) => (
                     <div
                       key={l.lineId}
@@ -1362,8 +1361,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       </button>
                     </div>
                   ))}
-                </div>
-              </ScrollArea>
+                  </div>
+                </ScrollArea>
+              </div>
             )}
           </div>
 

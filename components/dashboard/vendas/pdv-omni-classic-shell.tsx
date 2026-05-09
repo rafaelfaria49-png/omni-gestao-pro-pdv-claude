@@ -1,6 +1,16 @@
 "use client"
 
-import { forwardRef, useCallback, useEffect, useRef, useState, type InputHTMLAttributes, type KeyboardEvent, type ReactNode } from "react"
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type InputHTMLAttributes,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react"
 import {
   Barcode,
   Calculator,
@@ -15,7 +25,9 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
+import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { cn } from "@/lib/utils"
 import type { PdvCatalogProduct } from "@/lib/pdv-catalog"
 
@@ -198,7 +210,7 @@ function ItemsTable({
         {rows.length === 0 ? (
           <div
             className={cn(
-              "flex h-full min-h-[200px] flex-col items-center justify-center gap-2 py-16",
+              "flex flex-col items-center justify-center gap-2 py-10",
               isBlack ? "text-white/50" : "text-pos-label"
             )}
           >
@@ -391,10 +403,20 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
     return () => window.cancelAnimationFrame(id)
   }, [props.qtyEditOpen])
 
+  const [productDialogQuery, setProductDialogQuery] = useState("")
+  useEffect(() => {
+    if (props.productSearchOpen) setProductDialogQuery("")
+  }, [props.productSearchOpen])
+
+  const productsForDialog = useMemo(
+    () => filterPdvCatalogBySearch(props.products, productDialogQuery),
+    [props.products, productDialogQuery]
+  )
+
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-1 flex-col transition-colors duration-300",
+        "flex h-full min-h-0 flex-1 flex-col transition-colors duration-300",
         isBlackEdition ? "bg-[#000000] text-white" : "bg-background text-foreground"
       )}
     >
@@ -555,15 +577,74 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       <main
         className={cn(
           "min-h-0 flex-1 overflow-hidden p-2 sm:p-3",
-          isModoRapido ? "flex flex-col gap-2" : "grid grid-cols-12 gap-3",
+          isModoRapido ? "flex min-h-0 flex-col" : "grid grid-cols-12 gap-3",
           isModoRapido && "p-2",
           isBlackEdition ? "bg-[#000000]" : "bg-background"
         )}
       >
+        {isModoRapido ? (
+          <div className="flex min-h-0 min-w-0 flex-1 gap-2 overflow-hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <ItemsTable
+                rows={props.cartRows}
+                highlightLineId={props.highlightLineId}
+                flashLineId={props.flashLineId}
+                selectedLineId={props.selectedLineId}
+                onSelect={props.onSelectLine}
+                isBlack={inkUi}
+              />
+            </div>
+            <aside
+              className={cn(
+                "flex w-[min(280px,34vw)] min-w-[232px] max-w-[300px] shrink-0 flex-col justify-between gap-3 self-stretch border-l px-3 py-3 sm:px-4",
+                isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-card"
+              )}
+            >
+              <div className="min-w-0 space-y-3">
+                <div>
+                  <span
+                    className={cn(
+                      "text-[10px] font-medium uppercase tracking-wider",
+                      isBlackEdition ? "text-white/50" : "text-muted-foreground"
+                    )}
+                  >
+                    Total
+                  </span>
+                  <div
+                    className={cn(
+                      "text-xl font-semibold tabular-pdv sm:text-2xl",
+                      isBlackEdition ? "text-emerald-400" : "text-pos-total"
+                    )}
+                  >
+                    R$ {fmt(props.total)}
+                  </div>
+                </div>
+                <p className={cn("text-sm tabular-pdv", isBlackEdition ? "text-white/70" : "text-muted-foreground")}>
+                  {props.itemCount} {props.itemCount === 1 ? "item" : "itens"}
+                </p>
+                {props.previousSaleTotal != null ? (
+                  <p className={cn("text-xs tabular-pdv", isBlackEdition ? "text-white/45" : "text-muted-foreground")}>
+                    Venda anterior: R$ {fmt(props.previousSaleTotal)}
+                  </p>
+                ) : null}
+              </div>
+              <Button
+                type="button"
+                onClick={() => props.onShortcutAction("F1")}
+                className="h-11 w-full shrink-0 gap-2 bg-emerald-600 font-semibold text-white hover:bg-emerald-500 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
+              >
+                <Receipt className="h-4 w-4" />
+                Finalizar (F1)
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </aside>
+          </div>
+        ) : (
+          <>
         <div
           className={cn(
             "flex min-h-0 flex-col overflow-hidden",
-            isModoRapido ? "min-h-0 flex-1" : "col-span-12 lg:col-span-9"
+            "col-span-12 lg:col-span-9"
           )}
         >
           <ItemsTable
@@ -575,42 +656,6 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             isBlack={inkUi}
           />
         </div>
-        {isModoRapido ? (
-          <div
-            className={cn(
-              "col-span-12 flex min-h-0 shrink-0 flex-wrap items-center justify-between gap-3 border-t px-2 py-2 sm:px-3",
-              isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-card"
-            )}
-          >
-            <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
-              <div>
-                <span className={cn("text-[10px] font-medium uppercase tracking-wider", isBlackEdition ? "text-white/50" : "text-muted-foreground")}>
-                  Total
-                </span>
-                <div
-                  className={cn(
-                    "text-xl font-semibold tabular-pdv sm:text-2xl",
-                    isBlackEdition ? "text-emerald-400" : "text-pos-total"
-                  )}
-                >
-                  R$ {fmt(props.total)}
-                </div>
-              </div>
-              <span className={cn("text-sm tabular-pdv", isBlackEdition ? "text-white/70" : "text-muted-foreground")}>
-                {props.itemCount} itens
-              </span>
-            </div>
-            <Button
-              type="button"
-              onClick={() => props.onShortcutAction("F1")}
-              className="h-11 shrink-0 gap-2 bg-emerald-600 px-6 font-semibold text-white hover:bg-emerald-500 dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400"
-            >
-              <Receipt className="h-4 w-4" />
-              Finalizar (F1)
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
           <aside className="col-span-12 flex h-full min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3">
             <div
               className={cn(
@@ -687,6 +732,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               </div>
             </div>
           </aside>
+          </>
         )}
       </main>
 
@@ -696,27 +742,44 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
         <DialogContent className="max-w-lg border-border bg-card">
           <DialogHeader>
             <DialogTitle>Pesquisar Produto (F3)</DialogTitle>
-            <DialogDescription>Selecione um produto para adicionar à venda.</DialogDescription>
+            <DialogDescription>
+              Filtrar por nome, categoria, SKU, código ou EAN. Lista vazia mostra todo o catálogo.
+            </DialogDescription>
           </DialogHeader>
+          <Input
+            value={productDialogQuery}
+            onChange={(e) => setProductDialogQuery(e.target.value)}
+            placeholder="Digite para filtrar…"
+            className="h-10"
+            autoComplete="off"
+          />
           <div className="max-h-72 overflow-y-auto rounded-md border border-border">
-            {props.products.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => {
-                  props.onProductSearchOpenChange(false)
-                  props.onAddProductFromSearch(p)
-                }}
-                className="grid w-full grid-cols-[100px_1fr_70px_100px] gap-2 border-b border-border px-3 py-2 text-left text-sm hover:bg-muted/60"
-              >
-                <span className="font-mono text-muted-foreground">{p.barcode || p.id}</span>
-                <span className="truncate text-foreground">{p.name}</span>
-                <span className="text-muted-foreground">{p.vendaPorPeso ? "KG" : "UN"}</span>
-                <span className="text-right font-semibold tabular-pdv text-foreground">
-                  {p.vendaPorPeso ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg` : `R$ ${fmt(p.price)}`}
-                </span>
-              </button>
-            ))}
+            {productsForDialog.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
+                <PackageOpen className="h-9 w-9 opacity-40" strokeWidth={1.5} />
+                <p className="font-medium text-foreground">Nenhum produto encontrado</p>
+                <p className="text-xs">Ajuste o termo ou limpe o filtro para ver o catálogo completo.</p>
+              </div>
+            ) : (
+              productsForDialog.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    props.onProductSearchOpenChange(false)
+                    props.onAddProductFromSearch(p)
+                  }}
+                  className="grid w-full grid-cols-[100px_1fr_70px_100px] gap-2 border-b border-border px-3 py-2 text-left text-sm hover:bg-muted/60"
+                >
+                  <span className="font-mono text-muted-foreground">{p.barcode || p.sku || p.id}</span>
+                  <span className="truncate text-foreground">{p.name}</span>
+                  <span className="text-muted-foreground">{p.vendaPorPeso ? "KG" : "UN"}</span>
+                  <span className="text-right font-semibold tabular-pdv text-foreground">
+                    {p.vendaPorPeso ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg` : `R$ ${fmt(p.price)}`}
+                  </span>
+                </button>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>

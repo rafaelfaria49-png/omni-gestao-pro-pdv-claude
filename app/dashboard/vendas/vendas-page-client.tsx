@@ -50,7 +50,7 @@ export function VendasPageClient() {
   if (!mounted) return <LoadingState message="Carregando PDV…" />
 
   return (
-    <div className="-mx-4 sm:-mx-6 lg:-mx-8 flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground transition-colors duration-300">
+    <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground transition-colors duration-300 basis-0">
       <VendasPDV isModoRapido={isModoRapido} />
     </div>
   )

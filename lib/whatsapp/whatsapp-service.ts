@@ -1,6 +1,14 @@
 import { prisma } from "@/lib/prisma"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import type { Prisma } from "@/generated/prisma"
+import {
+  assertValidWhatsAppRecipientDigits,
+  firstOutboundWamid,
+  sendMediaMessage as cloudSendMedia,
+  sendTemplateMessage as cloudSendTemplate,
+  sendTextMessage as cloudSendText,
+  type TemplateComponent,
+} from "@/lib/whatsapp"
 
 export type ContactInput = {
   phoneDigits: string
@@ -93,6 +101,17 @@ export async function createConversation(
       metadata: extra?.metadata === undefined ? undefined : extra.metadata,
     },
     include: { contact: true },
+  })
+}
+
+export async function findOrCreateOpenConversation(storeId: string, contactId: string) {
+  const existing = await prisma.whatsAppConversation.findFirst({
+    where: { storeId, contactId, status: "open" },
+    orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
+  })
+  if (existing) return existing
+  return prisma.whatsAppConversation.create({
+    data: { storeId, contactId, status: "open", unreadCount: 0 },
   })
 }
 
@@ -538,4 +557,95 @@ export async function sendWhatsAppMessage(input: {
   })
 
   return { conversationId: conv.id, messageId: m.id, contactId }
+}
+
+export async function sendCloudApiTextAndRecord(storeId: string, conversationId: string, text: string) {
+  const trimmed = text.trim()
+  if (!trimmed) throw new Error("message vazio")
+
+  const conv = await prisma.whatsAppConversation.findFirst({
+    where: { id: conversationId, storeId },
+    include: { contact: true },
+  })
+  if (!conv) throw new Error("Conversa não encontrada")
+
+  const to = assertValidWhatsAppRecipientDigits(conv.contact.phoneDigits)
+  const res = await cloudSendText(to, trimmed)
+  const wamid = firstOutboundWamid(res)
+  const m = await addMessage(storeId, conversationId, {
+    direction: "outbound",
+    body: trimmed,
+    messageType: "text",
+    externalMessageId: wamid,
+    payload: { cloud: { kind: "text", wamid: wamid || undefined } } as Prisma.InputJsonValue,
+  })
+  return { message: m, wamid }
+}
+
+export async function sendCloudApiTemplateAndRecord(
+  storeId: string,
+  conversationId: string,
+  input: { templateName: string; languageCode: string; components?: TemplateComponent[] }
+) {
+  const conv = await prisma.whatsAppConversation.findFirst({
+    where: { id: conversationId, storeId },
+    include: { contact: true },
+  })
+  if (!conv) throw new Error("Conversa não encontrada")
+
+  const to = assertValidWhatsAppRecipientDigits(conv.contact.phoneDigits)
+  const res = await cloudSendTemplate({
+    toDigits: to,
+    templateName: input.templateName,
+    languageCode: input.languageCode,
+    components: input.components,
+  })
+  const wamid = firstOutboundWamid(res)
+  const preview = `Template: ${input.templateName}`
+  const m = await addMessage(storeId, conversationId, {
+    direction: "outbound",
+    body: preview,
+    messageType: "template",
+    externalMessageId: wamid,
+    payload: {
+      cloud: { kind: "template", name: input.templateName, language: input.languageCode, wamid: wamid || undefined },
+    } as Prisma.InputJsonValue,
+  })
+  return { message: m, wamid }
+}
+
+export async function sendCloudApiMediaAndRecord(
+  storeId: string,
+  conversationId: string,
+  input: {
+    mediaType: "image" | "document" | "audio" | "video"
+    link: string
+    caption?: string
+    filename?: string
+  }
+) {
+  const conv = await prisma.whatsAppConversation.findFirst({
+    where: { id: conversationId, storeId },
+    include: { contact: true },
+  })
+  if (!conv) throw new Error("Conversa não encontrada")
+
+  const to = assertValidWhatsAppRecipientDigits(conv.contact.phoneDigits)
+  const res = await cloudSendMedia({
+    toDigits: to,
+    mediaType: input.mediaType,
+    link: input.link,
+    caption: input.caption,
+    filename: input.filename,
+  })
+  const wamid = firstOutboundWamid(res)
+  const body = (input.caption?.trim() || `[${input.mediaType}]`).trim() || `[${input.mediaType}]`
+  const m = await addMessage(storeId, conversationId, {
+    direction: "outbound",
+    body,
+    messageType: input.mediaType,
+    externalMessageId: wamid,
+    payload: { cloud: { kind: input.mediaType, link: input.link, wamid: wamid || undefined } } as Prisma.InputJsonValue,
+  })
+  return { message: m, wamid }
 }
