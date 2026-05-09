@@ -210,6 +210,8 @@ export const proxy = auth(async (req) => {
   return NextResponse.next()
 })
 
+export { proxy as default }
+
 export const config = {
   matcher: ["/((?!_next/static|_next/image).*)"],
 }
