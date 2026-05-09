@@ -10,6 +10,8 @@ import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
 import { requireAdmin } from "@/lib/require-admin"
 
 export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 function missingClientesTableResponse() {
   return NextResponse.json(

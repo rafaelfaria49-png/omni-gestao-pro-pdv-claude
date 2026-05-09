@@ -4,9 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { resolveLojaIdParaConsultaClientes } from "@/lib/clientes-loja-resolve"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { Pencil, Trash2, Users } from "lucide-react"
-import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states"
-import { humanizeUnknownError } from "@/lib/humanize-error"
+import { Pencil, Trash2 } from "lucide-react"
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -147,7 +145,7 @@ export default function DashboardClientesPage() {
       })
       .catch((e: unknown) => {
         if (cancelled) return
-        setListError(humanizeUnknownError(e))
+        setListError(e instanceof Error ? e.message : String(e))
       })
       .finally(() => {
         if (cancelled) return
@@ -236,7 +234,7 @@ export default function DashboardClientesPage() {
       setModalOpen(false)
       await reload()
     } catch (e2) {
-      setFormError(humanizeUnknownError(e2))
+      setFormError(e2 instanceof Error ? e2.message : String(e2))
     } finally {
       setSubmitting(false)
     }
@@ -334,25 +332,14 @@ export default function DashboardClientesPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={4} className="p-0">
-                      <LoadingState inline message="Carregando clientes…" className="text-foreground/80" />
+                    <td colSpan={4} className="px-4 py-6 text-black/70">
+                      Carregando lista…
                     </td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-0">
-                      <EmptyState
-                        compact
-                        icon={Users}
-                        title={query.trim() ? "Nenhum resultado" : "Nenhum cliente cadastrado"}
-                        description={
-                          query.trim()
-                            ? "Nenhum cliente corresponde à busca. Ajuste o termo ou limpe os filtros."
-                            : "Quando houver cadastros nesta unidade, eles aparecerão aqui. Você pode incluir um novo cliente pelo botão acima."
-                        }
-                        dashboardLink={false}
-                        action={{ label: "Atualizar lista", onClick: () => void reload() }}
-                      />
+                    <td colSpan={4} className="px-4 py-6 text-black/70">
+                      Nenhum cliente encontrado.
                     </td>
                   </tr>
                 ) : (
