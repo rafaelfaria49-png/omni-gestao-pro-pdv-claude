@@ -18,7 +18,7 @@ dotenv.config({ path: path.resolve(__dirname, "../.env.local") })
 const secretKey = process.env.STRIPE_SECRET_KEY
 if (!secretKey) throw new Error("STRIPE_SECRET_KEY não encontrada no .env.local")
 
-const stripe = new Stripe(secretKey, { apiVersion: "2025-04-30.basil", typescript: true })
+const stripe = new Stripe(secretKey, { apiVersion: "2026-04-22.dahlia", typescript: true })
 
 const ENV_LOCAL_PATH = path.resolve(__dirname, "../.env.local")
 
