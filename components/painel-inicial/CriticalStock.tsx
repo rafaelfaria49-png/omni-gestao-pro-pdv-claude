@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, Plus } from "lucide-react";
+import { DemoBadge } from "@/components/painel-inicial/DemoBadge";
 
 type Item = {
   sku: string;
@@ -24,11 +25,14 @@ export function CriticalStock() {
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-3.5 w-3.5 text-warning" />
           <div>
-            <h3 className="font-display font-semibold text-[14px] tracking-tight">
-              Atenção Necessária
-            </h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-display font-semibold text-[14px] tracking-tight">
+                Atenção Necessária
+              </h3>
+              <DemoBadge>Exemplo</DemoBadge>
+            </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              {items.length} itens abaixo do mínimo
+              {items.length} linhas fictícias — estoque real em Estoque / Cadastros
             </p>
           </div>
         </div>

@@ -1,10 +1,16 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+import { ModuleEmDesenvolvimento } from "@/components/painel-inicial/ModuleEmDesenvolvimento";
+import { financeiroV2Enabled } from "@/lib/feature-flags";
 
 export default function Page() {
   return (
-    <div className="p-10 text-center text-xl font-semibold text-muted-foreground">
-      Página de Financeiro em Construção
-    </div>
+    <ModuleEmDesenvolvimento
+      title="Financeiro (legado)"
+      description="Esta rota mantém compatibilidade com atalhos antigos. O painel principal de finanças é o Financeiro HUB; use-o para fluxo de caixa, contas e visão consolidada."
+      links={
+        financeiroV2Enabled
+          ? [{ href: "/dashboard/financeiro-v2", label: "Abrir Financeiro HUB" }]
+          : [{ href: "/dashboard/financeiro/contas-a-receber", label: "Contas a receber" }]
+      }
+    />
   );
 }

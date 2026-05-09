@@ -3,6 +3,9 @@
 > Última atualização: Maio 2026
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
+**Auditoria consolidada (todos os módulos, status real/híbrido/mock, P0/P1 e riscos de lançamento):**  
+[`docs/modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md`](../modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md)
+
 ---
 
 ## ✅ Concluído e Funcionando
@@ -37,12 +40,51 @@
 - CaixaStatusBar unificada entre todos os PDVs
 - Estado do caixa persistido por `storeId` no localStorage
 - Modal de fechamento de caixa com layout corrigido
+- **Busca de produtos no BIPE corrigida** (2026-05-09): `filteredProducts` agora inclui SKU e código interno; campo BIPE exibe dropdown de autocomplete em tempo real (até 8 sugestões por nome/SKU/código/EAN/ID); clique na sugestão adiciona ao carrinho e retorna foco. Relatório: `docs/modules/reports/PDV_FIX_BUSCA_PRODUTOS.md`
+- **UX premium do autocomplete** (2026-05-09): navegação por teclado (↑/↓/Enter/ESC), highlight da linha ativa, scroll automático para item visível. Relatório: `docs/modules/reports/PDV_UX_AUTOCOMPLETE_IMPROVEMENTS.md`
+- **Layout fixo sem rolagem global** (2026-05-09): PDV encaixado em 100vh sem scroll de página; AppShell.main convertido em flex container; wrapper de rota PDV usa `overflow-hidden` sem `pb-24`; padding horizontal cancelado com `-mx-*`; aside com `h-full`, card Informativo com `flex-1`. Relatório: `docs/modules/reports/PDV_FIXED_LAYOUT_POLISH.md`
 
 ### Navegação
 - Menu "WhatsApp" → `/dashboard/whatsapp`
 - Menu "Histórico de Vendas" → `/dashboard/vendas-arquivo-geral`
 - Links do sidebar corrigidos (não caem mais na landing page)
 - Permissões de configurações: ADMIN/GERENTE/dono podem salvar
+- Sidebar: **Operações HUB** com selo **Novo**; entrada explícita **Ordens de Serviço (Legado)** → `/dashboard/os` (evita confusão com o fluxo novo)
+
+### MVP — honestidade visual (passo 1)
+- **Painel inicial** (`/dashboard`): KPIs e textos que pareciam métricas reais foram neutralizados (—) com aviso de pré-visualização; gráficos/listas IA/estoque/atividades marcados como exemplo.
+- **Financeiro HUB V2**: abas com dados mistos ou UI ilustrativa exibem badge **Preview** ou **Demo** no trigger da tab; alertas da visão geral só a partir de dados reais (removido alerta fictício fixo).
+- **API** `GET /api/ops/ordens`: `dynamic = "force-dynamic"` + `revalidate = 0` (alinhado a outras rotas ops críticas).
+- Relatório: `docs/modules/reports/MVP_STABILIZATION_PASS_01.md`
+
+### MVP — produção e rotas críticas (passo 2)
+- **Checklist de deploy**: `docs/deploy/PRODUCTION_CHECKLIST.md` (ENV Supabase, build Vercel, rotas dinâmicas, smoke, validação manual por módulo).
+- **Smoke read-only**: `scripts/smoke-production.mjs` — `BASE_URL=… node scripts/smoke-production.mjs` (opcional `X_ASSISTEC_LOJA_ID`).
+- **Rotas GET** adicionadas a `force-dynamic` + `revalidate = 0`: `GET /api/stores/[id]`, `GET /api/stores/[id]/settings`, `GET /api/ops/import/clientes`, `GET /api/settings/perfil-loja`, `GET /api/audit/logs`.
+- Relatório: `docs/modules/reports/MVP_STABILIZATION_PASS_02.md`
+
+### MVP — painel interno de health (passo 3)
+- **Rota** `/dashboard/dev-health`: UI read-only que consulta `GET /api/stores`, `/api/debug/prod-health`, `/api/ops/contas-receber-list`, `/api/ops/contas-pagar-list`, `/api/ops/ordens` com cookies da sessão; estados Carregando / OK / Atenção / Erro; contagens globais e flags `hasDatabaseUrl`/`hasDirectUrl` **sem** expor secrets.
+- **Menu:** sem link novo (não há seção técnica consolidada nas configurações); acesso direto pela URL.
+- Relatório: `docs/modules/reports/MVP_STABILIZATION_PASS_03.md`
+
+### MVP — guard dev-health (passo 4)
+- **`lib/dev-tools/dev-access.ts`**: em **`NODE_ENV === "production"`**, o painel só abre se **`ENABLE_DEV_HEALTH=true`** (servidor, recomendado) ou **`NEXT_PUBLIC_ENABLE_DEV_HEALTH=true`**; caso contrário, página bloqueada sem executar probes.
+- Relatório: `docs/modules/reports/MVP_STABILIZATION_PASS_04.md`
+
+### MVP — smoke UI e rotas (passo 5)
+- **Aliases**: `/dashboard/cadastros` → `cadastros-v2`; `/dashboard/produtos` → `estoque`; `/dashboard/pdv` → `vendas`.
+- **Placeholders honestos**: `ModuleEmDesenvolvimento` em `relatorios` e substituição do stub de `financeiro` (legado) com link para Financeiro HUB ou contas a receber.
+- **Topbar**: dropdown **Novo** com links reais para vendas, operações, clientes e estoque.
+- **Mobile nav** (`components/dashboard/mobile-nav.tsx`): destinos explícitos para Estoque (barra + sheet) quando usado fora do contexto SPA.
+- Relatório: `docs/modules/reports/MVP_STABILIZATION_PASS_05.md`
+
+### MVP — empty states e fallbacks visuais (passo 6)
+- **Componentes** `EmptyState`, `ErrorState`, `LoadingState` em `components/ui/states/` (dependem de `components/ui/empty.tsx` e `components/ui/spinner.tsx`).
+- **Financeiro HUB**: `FinanceiroV2LoadingFallback` (skeleton com KPIs + tabela) + `loading.tsx` de rota; substitui texto cru.
+- **PDV Vendas**: `return null` na hidratação substituído por `<LoadingState message="Carregando PDV…" />` — elimina blank screen.
+- **Estoque**: `isLoading` state + finally em `reloadInventory`; `TableBody` exibe spinner durante carregamento e `EmptyState` contextual (sem filtro → botão "Novo Produto"; com filtro → dica de ajuste).
+- Relatório: `docs/modules/reports/MVP_STABILIZATION_PASS_06.md`
 
 ---
 

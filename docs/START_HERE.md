@@ -26,6 +26,7 @@ SaaS/ERP omnichannel premium com módulos (Financeiro, Operações, PDV, Estoque
 - **Módulos**: `docs/modules/`
 - **Relatórios e auditorias**: `docs/modules/reports/`
 - **Roadmap**: `docs/roadmap/`
+- **Deploy / checklist produção**: `docs/deploy/PRODUCTION_CHECKLIST.md`
 - **Temas e tokens**: `docs/themes/`
 - **Ideias futuras**: `docs/future-ideas/`
 

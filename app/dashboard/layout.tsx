@@ -28,10 +28,14 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
     }
   }, [pathname])
 
+  const isVendas = pathname?.startsWith("/dashboard/vendas")
+
   const shell = (
     <AppShell>
       <FirstAccessWizard />
-      <div className="flex-1 overflow-auto pb-24 lg:pb-0">{children}</div>
+      <div className={isVendas ? "flex flex-1 flex-col overflow-hidden" : "flex-1 overflow-auto pb-24 lg:pb-0"}>
+        {children}
+      </div>
     </AppShell>
   )
 

@@ -12,6 +12,8 @@ type Props = {
   hint?: string;
   accent?: "primary" | "success" | "warning" | "destructive";
   spark?: number[];
+  /** Quando true, não exibe variação percentual fictícia (painel ilustrativo). */
+  hideTrend?: boolean;
 };
 
 const accentBg: Record<NonNullable<Props["accent"]>, string> = {
@@ -36,8 +38,9 @@ export function KpiCard({
   hint,
   accent = "primary",
   spark = [4, 6, 5, 8, 7, 10, 9, 12, 11, 14],
+  hideTrend = false,
 }: Props) {
-  const positive = trend >= 0;
+  const positive = !hideTrend && trend >= 0;
   const data = spark.map((v, i) => ({ i, v }));
   const stroke = accentStroke[accent];
   const gradId = `spark-${accent}-${label.replace(/\s/g, "")}`;
@@ -53,20 +56,24 @@ export function KpiCard({
             {label}
           </span>
         </div>
-        <span
-          className={[
-            "inline-flex items-center gap-0.5 text-[11px] font-semibold tabular-nums",
-            positive ? "text-success" : "text-destructive",
-          ].join(" ")}
-        >
-          {positive ? (
-            <ArrowUpRight className="h-3 w-3" strokeWidth={2.5} />
-          ) : (
-            <ArrowDownRight className="h-3 w-3" strokeWidth={2.5} />
-          )}
-          {positive ? "+" : ""}
-          {trend.toFixed(1)}%
-        </span>
+        {hideTrend ? (
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ilustrativo</span>
+        ) : (
+          <span
+            className={[
+              "inline-flex items-center gap-0.5 text-[11px] font-semibold tabular-nums",
+              positive ? "text-success" : "text-destructive",
+            ].join(" ")}
+          >
+            {positive ? (
+              <ArrowUpRight className="h-3 w-3" strokeWidth={2.5} />
+            ) : (
+              <ArrowDownRight className="h-3 w-3" strokeWidth={2.5} />
+            )}
+            {positive ? "+" : ""}
+            {trend.toFixed(1)}%
+          </span>
+        )}
       </div>
 
       <div className="mt-3 flex items-end justify-between gap-3">
