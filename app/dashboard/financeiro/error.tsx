@@ -4,7 +4,7 @@ import { useEffect } from "react"
 import { ErrorState } from "@/components/ui/states/ErrorState"
 import { humanizeUnknownError } from "@/lib/humanize-error"
 
-export default function RelatoriosError({
+export default function FinanceiroError({
   error,
   reset,
 }: {
@@ -12,12 +12,12 @@ export default function RelatoriosError({
   reset: () => void
 }) {
   useEffect(() => {
-    console.error("[relatorios] error boundary:", error)
+    console.error("[financeiro] error boundary:", error)
   }, [error])
 
   return (
     <ErrorState
-      title="Falha ao carregar Relatórios"
+      title="Falha ao carregar o Financeiro"
       description={humanizeUnknownError(error)}
       action={{ label: "Tentar novamente", onClick: reset }}
     />
