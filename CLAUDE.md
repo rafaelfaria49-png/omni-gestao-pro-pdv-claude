@@ -95,6 +95,25 @@ Many aliases point into the Lovable sub-app at `components/operacoes/lovable/`:
 - Use only semantic Tailwind tokens: `bg-background`, `text-foreground`, `border-border`, `text-primary`, etc. **No hardcoded colors.**
 - Hubs that need full width cancel AppShell padding with `-mx-*` negative margins.
 
+### Authentication System (NextAuth v5)
+
+The app uses **two auth layers**:
+
+1. **NextAuth v5** (outer gate — route protection):
+   - Email + senha bcrypt contra tabela `admin_users` (modelo `AdminUser`)
+   - JWT sessions (sem tabelas DB adicionais)
+   - `proxy.ts` protege `/dashboard/*` — redireciona para `/login` sem sessão
+   - Config Edge-safe em `auth.config.ts`; config completa (Credentials + bcrypt) em `auth.ts`
+   - Seed inicial: `npm run db:seed-admin` → cria `admin@rafacell.com.br`
+
+2. **AccessGate / PIN** (inner gate — role selection, legado):
+   - Exibido apenas se não houver sessão NextAuth ativa
+   - Cookies: `assistec_staff_session`, `assistec_staff_role`, `assistec_admin_session`
+
+**Roles NextAuth:** `SUPER_ADMIN | ADMIN | GERENTE | OPERADOR`
+
+Key files: `auth.ts`, `auth.config.ts`, `proxy.ts`, `app/(auth)/login/page.tsx`, `app/actions/auth.ts`
+
 ### Environment Variables
 
 ```
@@ -104,13 +123,23 @@ OPENROUTER_API_KEY
 OPENAI_API_KEY / OPENAI_BASE / OPENAI_MODEL
 NEXT_PUBLIC_APP_URL
 ASSISTEC_MASTER_PASSWORD
+# NextAuth v5 — obrigatórias na Vercel:
+AUTH_SECRET                  # gerar: node -e "require('crypto').randomBytes(32).toString('base64url')"
+NEXTAUTH_URL                 # https://omni-gestao-pro.vercel.app
+ADMIN_DEFAULT_PASSWORD       # senha do usuário admin@rafacell.com.br
+# GOOGLE_CLIENT_ID           # opcional (OAuth Google — desabilitado por ora)
+# GOOGLE_CLIENT_SECRET       # opcional
 ```
 
 ## Key Files
 
 | File | Role |
 |------|------|
-| `app/dashboard/layout.tsx` | Dashboard shell: AccessGate + FirstAccessWizard + AppShell |
+| `auth.ts` | NextAuth v5 config (Credentials provider, bcrypt, JWT callbacks) |
+| `auth.config.ts` | NextAuth base config — Edge-safe, usado pelo proxy.ts |
+| `app/(auth)/login/page.tsx` | Página de login (email + senha) |
+| `app/actions/auth.ts` | signInAction, signOutAction, getCurrentUser |
+| `app/dashboard/layout.tsx` | Dashboard shell: skip AccessGate se NextAuth session, senão PIN gate |
 | `components/painel-inicial/AppShell.tsx` | Master layout (header, sidebar, scroll controller) |
 | `app/actions/operacoes.ts` | OS Server Actions orchestrator |
 | `lib/prisma.ts` | Prisma singleton with safe error handling |
