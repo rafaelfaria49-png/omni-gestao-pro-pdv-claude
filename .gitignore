@@ -20,6 +20,9 @@ prisma/*.db-journal
 # Prisma — cliente gerado fora de node_modules (`schema.prisma` → output ../generated/prisma)
 /generated/prisma
 
+# Claude Code local settings
+.claude/
+
 # Common ignores
 node_modules
 .next/
