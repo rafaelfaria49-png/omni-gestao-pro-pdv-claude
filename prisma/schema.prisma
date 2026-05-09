@@ -821,5 +821,19 @@ model AdminUser {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // ─── Stripe / Billing ───────────────────────────────────────────────────────
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  stripePriceId        String?
+  /** active | canceled | past_due | trialing | incomplete | unpaid */
+  subscriptionStatus   String?
+  /** BRONZE | PRATA | OURO | DIAMANTE */
+  planName             String?
+  /** monthly | yearly */
+  billingInterval      String?
+  creditsIA            Int       @default(0)
+  creditsUsed          Int       @default(0)
+  currentPeriodEnd     DateTime?
+
   @@map("admin_users")
 }
