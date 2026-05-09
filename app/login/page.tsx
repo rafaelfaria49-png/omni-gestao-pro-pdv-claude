@@ -27,8 +27,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-sm space-y-6">
         {/* Brand */}
-        <div className="text-center space-y-1">
-          <div className="inline-flex items-center justify-center rounded-2xl bg-primary/10 p-3 mb-2">
+        <div className="space-y-1 text-center">
+          <div className="mb-2 inline-flex items-center justify-center rounded-2xl bg-primary/10 p-3">
             <svg
               className="h-8 w-8 text-primary"
               viewBox="0 0 24 24"
@@ -76,7 +76,7 @@ export default function LoginPage() {
               </div>
 
               {state.error && (
-                <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive ring-1 ring-destructive/20">
                   {state.error}
                 </p>
               )}
