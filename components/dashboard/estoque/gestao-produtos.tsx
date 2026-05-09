@@ -79,6 +79,8 @@ import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { resolveLojaIdParaConsultaClientes } from "@/lib/clientes-loja-resolve"
 import { pickCostPrice, pickSalePrice } from "@/lib/inventory-item-from-api"
 import { TypeToConfirmDialog } from "@/components/dashboard/safety/type-to-confirm-dialog"
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states"
+import { humanizeUnknownError } from "@/lib/humanize-error"
 import { cn } from "@/lib/utils"
 
 /** Prefixos legados (ex.: importação / IDs sintéticos) — só para `codigo`/SKU exibidos e enviados; não altera `id` nem `dbId`. */
@@ -249,6 +251,8 @@ export function GestaoProdutos({
   const [relampagoImageDataUrl, setRelampagoImageDataUrl] = useState<string | null>(null)
   const [relampagoAudioBlob, setRelampagoAudioBlob] = useState<Blob | null>(null)
   const [isRecordingAudio, setIsRecordingAudio] = useState(false)
+  const [inventoryLoading, setInventoryLoading] = useState(true)
+  const [inventoryLoadError, setInventoryLoadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const visionScanInputRef = useRef<HTMLInputElement>(null)
@@ -260,6 +264,8 @@ export function GestaoProdutos({
   const importInputRef = useRef<HTMLInputElement>(null)
 
   const reloadInventory = useCallback(async () => {
+    setInventoryLoadError(null)
+    setInventoryLoading(true)
     try {
       const headers = { [ASSISTEC_LOJA_HEADER]: lojaHeader }
       const q = `?lojaId=${encodeURIComponent(lojaHeader)}`
@@ -285,12 +291,16 @@ export function GestaoProdutos({
       }
       if (!invRes.ok) {
         const err = (await invRes.json().catch(() => null)) as { error?: string; detail?: string } | null
+        const detail = err?.detail || err?.error || `Resposta HTTP ${invRes.status}`
         toast({
           title: "Falha ao carregar produtos",
-          description: err?.detail || err?.error || `HTTP ${invRes.status}`,
+          description: detail,
           variant: "destructive",
         })
         setProducts([])
+        setInventoryLoadError(
+          humanizeUnknownError(detail, "Não foi possível carregar o catálogo desta unidade. Tente atualizar."),
+        )
         return
       }
       const data = (await invRes.json().catch(() => null)) as {
@@ -334,8 +344,20 @@ export function GestaoProdutos({
           }
         })
       )
-    } catch {
-      /* ignore */
+    } catch (e) {
+      const msg = humanizeUnknownError(
+        e,
+        "Não foi possível carregar o estoque. Verifique sua conexão e tente de novo.",
+      )
+      setInventoryLoadError(msg)
+      setProducts([])
+      toast({
+        title: "Falha ao carregar produtos",
+        description: msg,
+        variant: "destructive",
+      })
+    } finally {
+      setInventoryLoading(false)
     }
   }, [lojaHeader, toast])
 
@@ -457,7 +479,7 @@ export function GestaoProdutos({
     } catch (e) {
       toast({
         title: "Não foi possível excluir",
-        description: e instanceof Error ? e.message : "Erro inesperado",
+        description: humanizeUnknownError(e),
         variant: "destructive",
       })
     } finally {
@@ -611,7 +633,7 @@ export function GestaoProdutos({
     } catch (e) {
       toast({
         title: "Não foi possível salvar",
-        description: e instanceof Error ? e.message : "Erro inesperado",
+        description: humanizeUnknownError(e),
         variant: "destructive",
       })
     } finally {
@@ -652,7 +674,7 @@ export function GestaoProdutos({
     } catch (e) {
       toast({
         title: "Não foi possível excluir",
-        description: e instanceof Error ? e.message : "Erro inesperado",
+        description: humanizeUnknownError(e),
         variant: "destructive",
       })
     } finally {
@@ -1444,6 +1466,15 @@ export function GestaoProdutos({
           <CardTitle className="text-lg">Itens Cadastrados ({filteredProducts.length})</CardTitle>
         </CardHeader>
         <CardContent className="w-full min-w-0 p-0">
+          {inventoryLoadError ? (
+            <div className="p-4 md:p-6">
+              <ErrorState
+                title="Não foi possível carregar o estoque"
+                description={inventoryLoadError}
+                onRetry={() => void reloadInventory()}
+              />
+            </div>
+          ) : (
           <Table className="w-full min-w-0 table-fixed">
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
@@ -1466,7 +1497,35 @@ export function GestaoProdutos({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.map((product) => (
+                {inventoryLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="p-0">
+                      <LoadingState inline message="Carregando produtos…" />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="p-0">
+                      <EmptyState
+                        compact
+                        icon={Package}
+                        title={
+                          searchTerm.trim() || categoryFilter !== "all"
+                            ? "Nenhum item encontrado"
+                            : "Nenhum produto cadastrado"
+                        }
+                        description={
+                          searchTerm.trim() || categoryFilter !== "all"
+                            ? "Ajuste a busca ou o filtro de categoria, ou limpe os filtros para ver todos os itens."
+                            : "Cadastre um produto ou importe o catálogo para que os itens apareçam nesta lista."
+                        }
+                        dashboardLink={false}
+                        action={{ label: "Atualizar", onClick: () => void reloadInventory() }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                filteredProducts.map((product) => (
                   <TableRow key={product.id} className="group/row border-border">
                     <TableCell className="shrink-0 align-top">
                       <Checkbox
@@ -1576,9 +1635,10 @@ export function GestaoProdutos({
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                )))}
               </TableBody>
             </Table>
+          )}
         </CardContent>
       </Card>
 

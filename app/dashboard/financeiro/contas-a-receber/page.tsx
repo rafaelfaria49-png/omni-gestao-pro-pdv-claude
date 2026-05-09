@@ -1,10 +1,18 @@
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+"use client"
+
+import { Wallet } from "lucide-react"
+import { EmptyState } from "@/components/ui/states"
 
 export default function Page() {
   return (
-    <div className="p-10 text-center text-xl font-semibold text-muted-foreground">
-      Página de Contas a Receber em Construção
+    <div className="min-w-0 p-6">
+      <EmptyState
+        icon={Wallet}
+        title="Contas a receber"
+        description="Esta tela legada ainda está em preparação. Use o Financeiro HUB para ver títulos, recebimentos e visão consolidada da unidade."
+        primaryHref={{ label: "Abrir Financeiro HUB", href: "/dashboard/financeiro-v2" }}
+        dashboardLink
+      />
     </div>
   )
 }
