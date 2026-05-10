@@ -15,6 +15,7 @@ import type {
 import { reservarPeca } from "./estoque";
 import { criarVendaDeOS } from "./vendas";
 import { createOS, listOS, updateOSPayload, updateOSStatus } from "@/app/actions/operacoes";
+import { listOrdens as listOrdensPrisma, getOrdem } from "@/app/actions/ordens";
 import { buildFaturamentoFromOrcamento, buildFaturamentoRecusadoOrcamento } from "@/lib/os/faturamento";
 import { snapshotGarantia } from "@/lib/os/garantia";
 import { listTecnicos as listTecnicosCadastros } from "@/app/actions/cadastros";
@@ -165,8 +166,14 @@ const newEvent = (
 export async function listOrdens(storeId?: string): Promise<OrdemServico[]> {
   if (!storeId) return [];
   CURRENT_STORE_ID = storeId;
-  const rows = await listOS(storeId);
+  const rows = await listOrdensPrisma(storeId);
   return rows as unknown as OrdemServico[];
+}
+
+/** Leitura individual (Prisma); não altera CURRENT_STORE_ID. */
+export async function fetchOrdem(storeId: string, osId: string): Promise<OrdemServico | undefined> {
+  const row = await getOrdem(storeId, osId);
+  return row as unknown as OrdemServico | undefined;
 }
 
 export async function listTecnicos(storeId?: string): Promise<Tecnico[]> {

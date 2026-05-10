@@ -16,7 +16,7 @@ import type { Venda, VendaStatus, VendaOrigem } from "@/types/venda";
 import { snapshotGarantia } from "@/lib/os/garantia";
 import { cancelContaReceberFromOS, upsertContaReceberFromOS } from "@/lib/financeiro/adapters/os-faturamento";
 import { asOperacoesPayload, nowIso } from "@/lib/operacoes/services/os-helpers";
-import { hydrateOSRows } from "@/lib/operacoes/services/hydration-service";
+import { listOrdens as listOrdensRead } from "@/app/actions/ordens";
 import { mergePayload, computeEffectiveOperacaoStatus, validatePatchIdentifiers } from "@/lib/operacoes/services/payload-service";
 import { syncFinanceiroAfterOSPayloadUpdate } from "@/lib/operacoes/services/financeiro-sync-service";
 import { appendTimelineEvent, makeTimelineEvent } from "@/lib/operacoes/services/timeline-service";
@@ -87,24 +87,8 @@ async function nextCodigo(storeId: string): Promise<string> {
 }
 
 export async function listOS(storeId: string): Promise<OperacoesOSPayload[]> {
-  const rows = await prisma.ordemServico.findMany({
-    where: { storeId },
-    orderBy: { updatedAt: "desc" },
-    take: 500,
-  });
-  return hydrateOSRows<OperacoesOSPayload>(
-    rows.map((r) => ({
-      id: r.id,
-      storeId: r.storeId,
-      numero: r.numero ?? null,
-      clienteId: r.clienteId ?? null,
-      defeito: r.defeito ?? "",
-      status: r.status,
-      payload: r.payload as unknown,
-      createdAt: r.createdAt,
-      updatedAt: r.updatedAt,
-    }))
-  );
+  const rows = await listOrdensRead(storeId);
+  return rows as OperacoesOSPayload[];
 }
 
 export async function createOS(

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft, Bot, ExternalLink, MessageCircle, Phone, Printer,
@@ -18,7 +18,8 @@ import { PortalClienteModal } from "@/components/operacoes/PortalClienteModal";
 import { ImpressaoModal } from "@/components/operacoes/ImpressaoModal";
 import { EtiquetaModal } from "@/components/operacoes/EtiquetaModal";
 import { ModoBancadaModal } from "@/components/operacoes/ModoBancadaModal";
-import { ORIGEM_LABEL, PIPELINE, type OSStatus } from "@/types/os";
+import { ORIGEM_LABEL, PIPELINE, type OrdemServico, type OSStatus } from "@/types/os";
+import * as osApi from "@/api/os";
 import { brl, dt } from "@/lib/os/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -31,8 +32,49 @@ const ESTADO_BADGE: Record<string, string> = {
 
 export default function OSDetalhe() {
   const { id = "" } = useParams();
-  const { getOS, moveStatus, updateChecklist } = useOS();
-  const os = getOS(id);
+  const { getOS, moveStatus, updateChecklist, storeId, loading: hubLoading } = useOS();
+  const fromList = getOS(id);
+  /** idle = ainda não resolveu leitura avulsa; loading; done + os */
+  const [detailRead, setDetailRead] = useState<
+    { phase: "idle" } | { phase: "loading" } | { phase: "done"; os: OrdemServico | null }
+  >({ phase: "idle" });
+
+  useEffect(() => {
+    if (!id.trim() || !storeId) {
+      setDetailRead({ phase: "idle" });
+      return;
+    }
+    if (fromList) {
+      setDetailRead({ phase: "idle" });
+      return;
+    }
+    if (hubLoading) {
+      setDetailRead({ phase: "idle" });
+      return;
+    }
+    let cancelled = false;
+    setDetailRead({ phase: "loading" });
+    void (async () => {
+      try {
+        const o = await osApi.fetchOrdem(storeId, id);
+        if (!cancelled) setDetailRead({ phase: "done", os: o ?? null });
+      } catch {
+        if (!cancelled) setDetailRead({ phase: "done", os: null });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [id, storeId, fromList, hubLoading]);
+
+  const os =
+    fromList ?? (detailRead.phase === "done" ? detailRead.os ?? undefined : undefined);
+
+  const awaitingDetail =
+    Boolean(id.trim() && storeId) &&
+    !fromList &&
+    !hubLoading &&
+    detailRead.phase !== "done";
 
   const [iaOpen, setIaOpen] = useState(false);
   const [retornoOpen, setRetornoOpen] = useState(false);
@@ -40,6 +82,16 @@ export default function OSDetalhe() {
   const [printOpen, setPrintOpen] = useState(false);
   const [etiqOpen, setEtiqOpen] = useState(false);
   const [bancadaOpen, setBancadaOpen] = useState(false);
+
+  if (hubLoading || detailRead.phase === "loading" || awaitingDetail) {
+    return (
+      <OperacoesLayout>
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
+          <div className="text-sm font-medium text-muted-foreground">Carregando OS…</div>
+        </div>
+      </OperacoesLayout>
+    );
+  }
 
   if (!os) {
     return (

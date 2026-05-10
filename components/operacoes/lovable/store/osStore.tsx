@@ -90,8 +90,8 @@ interface OSContextValue {
 const OSContext = createContext<OSContextValue | null>(null);
 const DEFAULT_AUTOR = "Você";
 
-export function OSProvider({ children }: { children: ReactNode }) {
-  const [storeId, setStoreId] = useState<string>(DEFAULT_STORE_ID);
+export function OSProvider({ children, initialStoreId }: { children: ReactNode; initialStoreId?: string }) {
+  const [storeId, setStoreId] = useState<string>(initialStoreId ?? DEFAULT_STORE_ID);
   const [ordens, setOrdens] = useState<OrdemServico[]>([]);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [clientes, setClientes] = useState<ClienteRecord[]>([]);

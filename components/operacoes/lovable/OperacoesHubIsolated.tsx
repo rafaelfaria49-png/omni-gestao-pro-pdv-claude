@@ -5,7 +5,7 @@
  *
  * Wrapper de isolamento que monta o Operações HUB Lovable dentro do Next.js:
  * - MemoryRouter isola a navegação interna do App Router do Next
- * - OSProvider fornece o contexto de dados (mock) apenas para esta árvore
+ * - OSProvider fornece o contexto de dados (Prisma leitura + mocks auxiliares) para esta árvore
  * - Tema gerenciado pelo OperacoesLayout (sincronizado com tema global via applyGlobalTheme)
  *
  * NÃO importa index.css nem App.css globalmente.
@@ -13,6 +13,8 @@
  */
 
 import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
 import { OSProvider } from "./store/osStore";
 import OperacoesHubPage from "./pages/OperacoesHub";
 import DashboardOperacional from "./pages/DashboardOperacional";
@@ -26,9 +28,12 @@ import Notificacoes from "./pages/Notificacoes";
 import NotFound from "./pages/NotFound";
 
 export function OperacoesHubIsolated() {
+  const { lojaAtivaId } = useLojaAtiva();
+  const storeId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID;
+
   return (
     <div className="w-full min-w-0">
-      <OSProvider>
+      <OSProvider key={storeId} initialStoreId={storeId}>
         <MemoryRouter initialEntries={["/operacoes"]} initialIndex={0}>
           <Routes>
             <Route path="/" element={<Navigate to="/operacoes" replace />} />
