@@ -19,11 +19,14 @@ export function resolveWhatsAppWebhookVerifyToken(): string {
   return ""
 }
 
+/** Qualquer objeto com `searchParams` (URL, NextURL em Route Handlers). */
+export type MetaHandshakeUrlLike = Pick<URL, "searchParams">
+
 /**
  * Handshake GET Meta (Cloud API): hub.mode=subscribe, hub.verify_token, hub.challenge.
  * Sucesso: 200, corpo = apenas hub.challenge, text/plain.
  */
-export function metaWebhookHandshakeGetResponse(url: URL): Response {
+export function metaWebhookHandshakeGetResponse(url: MetaHandshakeUrlLike): Response {
   const mode = (url.searchParams.get("hub.mode") ?? "").trim().toLowerCase()
   const token = (url.searchParams.get("hub.verify_token") ?? "").trim()
   const challenge = (url.searchParams.get("hub.challenge") ?? "").trim()

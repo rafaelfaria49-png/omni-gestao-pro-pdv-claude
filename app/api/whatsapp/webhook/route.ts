@@ -1,5 +1,5 @@
 import { after } from "next/server"
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { metaWebhookHandshakeGetResponse } from "@/lib/whatsapp-meta-handshake"
 import {
@@ -30,12 +30,15 @@ function verifyWebhookSecret(request: Request): boolean {
 
 const MAX_DETAIL = 4000
 
-export async function GET(request: Request) {
-  const url = new URL(request.url)
-  const mode = (url.searchParams.get("hub.mode") ?? "").trim().toLowerCase()
-  const challenge = (url.searchParams.get("hub.challenge") ?? "").trim()
+export async function GET(request: NextRequest) {
+  // Usar nextUrl.searchParams (não só `new URL(request.url)`): em produção/Vercel a query
+  // às vezes não entra no handshake Meta e cai no JSON de diagnóstico.
+  const sp = request.nextUrl.searchParams
+  const mode = (sp.get("hub.mode") ?? "").trim().toLowerCase()
+  const challenge = (sp.get("hub.challenge") ?? "").trim()
+
   if (mode === "subscribe" && challenge.length > 0) {
-    return metaWebhookHandshakeGetResponse(url)
+    return metaWebhookHandshakeGetResponse(request.nextUrl)
   }
 
   const res = NextResponse.json({
@@ -51,6 +54,7 @@ export async function GET(request: Request) {
       "Recomendado na Meta (rota estável na Vercel): /api/whatsapp/webhook. Alternativa: /api/webhooks/whatsapp (handler espelhado em app/api/webhooks/whatsapp/route.ts — não depende de rewrite).",
     auth: "Opcional: ?token= ou x-webhook-token se ASSISTEC_WHATSAPP_WEBHOOK_SECRET estiver definido.",
   })
+  res.headers.set("Cache-Control", "private, no-store, max-age=0")
   return withCors(request, res)
 }
 
