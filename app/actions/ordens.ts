@@ -31,6 +31,8 @@ function mapRows(rows: Awaited<ReturnType<typeof prisma.ordemServico.findMany>>)
     payload: r.payload as unknown,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
+    valorTotal: Number(r.valorTotal ?? 0) || 0,
+    valorBase: Number(r.valorBase ?? 0) || 0,
   }))
 }
 
