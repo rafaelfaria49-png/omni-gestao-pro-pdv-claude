@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { metaWebhookHandshakeGetResponse } from "@/lib/whatsapp-meta-handshake"
 import { corsHeaders, withCors } from "@/lib/api-cors"
 import { extractFromEvolutionLikePayload } from "@/lib/whatsapp-webhook-parse"
 import { processOwnerWhatsAppAI } from "@/lib/whatsapp-webhook-ai"
@@ -7,6 +8,7 @@ import { logWebhookPayload, webhookDefaultStoreId } from "@/lib/whatsapp/whatsap
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 function verifyWebhookSecret(request: Request): boolean {
   const secret = process.env.ASSISTEC_WHATSAPP_WEBHOOK_SECRET
@@ -21,26 +23,13 @@ function verifyWebhookSecret(request: Request): boolean {
 
 const MAX_DETAIL = 4000
 
-/** Meta Cloud API — verificação do webhook (GET). */
-function metaVerifyResponse(url: URL): Response | null {
-  const mode = url.searchParams.get("hub.mode")
-  const token = url.searchParams.get("hub.verify_token")
-  const challenge = url.searchParams.get("hub.challenge")
-  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN?.trim()
-
-  if (mode === "subscribe" && challenge && verifyToken && token === verifyToken) {
-    return new NextResponse(challenge, {
-      status: 200,
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    })
-  }
-  return null
-}
-
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const meta = metaVerifyResponse(url)
-  if (meta) return meta
+  const mode = (url.searchParams.get("hub.mode") ?? "").trim().toLowerCase()
+  const challenge = (url.searchParams.get("hub.challenge") ?? "").trim()
+  if (mode === "subscribe" && challenge.length > 0) {
+    return metaWebhookHandshakeGetResponse(url)
+  }
 
   const res = NextResponse.json({
     ok: true,

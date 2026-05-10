@@ -1,27 +1,14 @@
 import { createHmac, timingSafeEqual } from "crypto"
 import { after } from "next/server"
 import { NextResponse } from "next/server"
+import { metaWebhookHandshakeGetResponse } from "@/lib/whatsapp-meta-handshake"
 import { processMetaWhatsAppWebhookPayload } from "@/lib/whatsapp-meta-cloud-webhook"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 const MAX_RAW = 2_000_000
-
-function metaVerifyResponse(url: URL): Response | null {
-  const mode = url.searchParams.get("hub.mode")
-  const token = url.searchParams.get("hub.verify_token")
-  const challenge = url.searchParams.get("hub.challenge")
-  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN?.trim()
-
-  if (mode === "subscribe" && challenge && verifyToken && token === verifyToken) {
-    return new NextResponse(challenge, {
-      status: 200,
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    })
-  }
-  return null
-}
 
 function verifyMetaSignature(rawBody: string, sigHeader: string | null, secret: string): boolean {
   if (!sigHeader?.startsWith("sha256=")) return false
@@ -37,13 +24,7 @@ function verifyMetaSignature(rawBody: string, sigHeader: string | null, secret: 
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const meta = metaVerifyResponse(url)
-  if (meta) return meta
-  return NextResponse.json({
-    ok: true,
-    service: "webhooks/whatsapp",
-    hint: "Configure o callback da Meta para esta URL. GET com hub.mode=subscribe, hub.verify_token, hub.challenge.",
-  })
+  return metaWebhookHandshakeGetResponse(url)
 }
 
 export async function POST(request: Request) {
