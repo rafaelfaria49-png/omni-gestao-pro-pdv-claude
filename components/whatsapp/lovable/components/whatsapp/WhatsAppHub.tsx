@@ -765,7 +765,22 @@ export default function WhatsAppHub() {
           <div className="space-y-3">
             {automations.map((a) => (
               <Card key={a.id} className="p-4 flex items-center gap-4 bg-card text-card-foreground flex-wrap">
-                <Switch checked={a.enabled} onCheckedChange={() => setAutomations((p) => p.map((x) => x.id===a.id?{...x,enabled:!x.enabled}:x))} />
+                <Switch checked={a.enabled} onCheckedChange={async () => {
+                  const newEnabled = !a.enabled;
+                  setAutomations((p) => p.map((x) => x.id===a.id?{...x,enabled:newEnabled}:x));
+                  try {
+                    const res = await fetch(`/api/whatsapp/automations/${a.id}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json", ...apiHeaders },
+                      body: JSON.stringify({ enabled: newEnabled }),
+                    });
+                    const j = (await res.json()) as { ok?: boolean; error?: string };
+                    if (!j.ok) throw new Error(j.error ?? "Falha ao salvar");
+                  } catch {
+                    setAutomations((p) => p.map((x) => x.id===a.id?{...x,enabled:!newEnabled}:x));
+                    toast.error("Falha ao atualizar automação");
+                  }
+                }} />
                 <div className="flex-1 min-w-[200px]">
                   <div className="font-medium flex items-center gap-2">
                     {a.name}
@@ -933,7 +948,20 @@ export default function WhatsAppHub() {
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => setEditingReply({ ...r })}><Edit className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={() => { navigator.clipboard.writeText(r.message); toast.success("Copiado"); }}><Copy className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="icon" onClick={() => setReplies(replies.filter((x) => x.id !== r.id))}><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={async () => {
+                    try {
+                      const res = await fetch(`/api/whatsapp/quick-replies/${r.id}`, {
+                        method: "DELETE",
+                        headers: apiHeaders,
+                      });
+                      const j = (await res.json()) as { ok?: boolean; error?: string };
+                      if (!j.ok) throw new Error(j.error ?? "Falha ao excluir");
+                      setReplies((prev) => prev.filter((x) => x.id !== r.id));
+                      toast.success("Resposta excluída");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Falha ao excluir resposta");
+                    }
+                  }}><Trash2 className="h-4 w-4" /></Button>
                 </Card>
               ))}
             </div>
@@ -1081,11 +1109,27 @@ export default function WhatsAppHub() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingAuto(null)}>Cancelar</Button>
-            <Button onClick={() => {
+            <Button onClick={async () => {
               if (!editingAuto) return;
-              setAutomations((p) => p.map((x) => x.id===editingAuto.id?editingAuto:x));
-              setEditingAuto(null);
-              toast.success("Automação atualizada");
+              try {
+                const res = await fetch(`/api/whatsapp/automations/${editingAuto.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json", ...apiHeaders },
+                  body: JSON.stringify({
+                    name: editingAuto.name,
+                    triggerType: editingAuto.trigger,
+                    actions: { replyText: editingAuto.message, type: editingAuto.action },
+                    conditions: { list: editingAuto.conditions },
+                  }),
+                });
+                const j = (await res.json()) as { ok?: boolean; error?: string };
+                if (!j.ok) throw new Error(j.error ?? "Falha ao salvar");
+                setAutomations((p) => p.map((x) => x.id===editingAuto.id?editingAuto:x));
+                setEditingAuto(null);
+                toast.success("Automação atualizada");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Falha ao salvar automação");
+              }
             }}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
@@ -1129,15 +1173,40 @@ export default function WhatsAppHub() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingReply(null)}>Cancelar</Button>
-            <Button onClick={() => {
+            <Button onClick={async () => {
               if (!editingReply) return;
-              if (editingReply.id) {
-                setReplies((p) => p.map((x) => x.id === editingReply.id ? editingReply : x));
-              } else {
-                setReplies((p) => [...p, { ...editingReply, id: Date.now().toString() }]);
+              const payload = {
+                title: editingReply.title,
+                body: editingReply.message,
+                category: editingReply.category,
+                shortcut: editingReply.shortcut,
+              };
+              try {
+                if (editingReply.id) {
+                  const res = await fetch(`/api/whatsapp/quick-replies/${editingReply.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json", ...apiHeaders },
+                    body: JSON.stringify(payload),
+                  });
+                  const j = (await res.json()) as { ok?: boolean; error?: string };
+                  if (!j.ok) throw new Error(j.error ?? "Falha ao salvar");
+                  setReplies((p) => p.map((x) => x.id === editingReply.id ? editingReply : x));
+                } else {
+                  const res = await fetch("/api/whatsapp/quick-replies", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", ...apiHeaders },
+                    body: JSON.stringify(payload),
+                  });
+                  const j = (await res.json()) as { ok?: boolean; error?: string; quickReply?: { id: string } };
+                  if (!j.ok) throw new Error(j.error ?? "Falha ao criar");
+                  const newId = j.quickReply?.id ?? Date.now().toString();
+                  setReplies((p) => [...p, { ...editingReply, id: newId }]);
+                }
+                setEditingReply(null);
+                toast.success("Resposta salva");
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Falha ao salvar resposta");
               }
-              setEditingReply(null);
-              toast.success("Resposta salva");
             }}>Salvar</Button>
           </DialogFooter>
         </DialogContent>

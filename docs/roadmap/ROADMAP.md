@@ -29,7 +29,7 @@ Este arquivo descreve **fases macro**; detalhes técnicos continuam nos relatór
 ## Fase C — Consolidação multi-módulo
 
 - Vendas HUB: matriz de features real vs demonstração; sync com vendas Prisma.
-- WhatsApp: caminho de produção (Meta, webhooks, observabilidade) além da simulação atual.
+- WhatsApp: caminho de produção — **Meta Cloud API** (envio + webhook + Prisma) já integrado; reforçar observabilidade, templates, limites e automações de evento fora da simulação.
 - Contas a pagar: reduzir trilha dupla localStorage/API quando a UI estiver 100% confortável no server-first.
 - Master Console: dados reais multi-loja (Prisma) em vez de fixtures.
 

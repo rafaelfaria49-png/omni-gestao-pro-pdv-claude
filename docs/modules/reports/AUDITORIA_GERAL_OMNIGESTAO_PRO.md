@@ -45,7 +45,7 @@ O OmniGestão Pro é um **Next.js + Prisma + Postgres** com módulos **premium e
 | 13 | Estoque | Híbrido | `Produto.stock`, consumo OS na entrega (adapter idempotente) | Telas de estoque dashboard: validar % real vs seed | Operações, produtos | Estoque “de mentira” em demos do hub | P1 |
 | 14 | Marketplace | Não iniciado / placeholder | Rota/menu pode existir; doc placeholder | Integrações ML/Shopee etc. | Cadastros, vendas | Expectativa de feature inexistente | P3 |
 | 15 | Marketing IA | Híbrido | Telas ricas; APIs marketing em `app/api/marketing/*`; calendário com helpers mock | Consistência “real” por feature (custo créditos, persistência posts) | Créditos, loja | Custo de API e limites sem governança clara = risco financeiro | P2 |
-| 16 | WhatsApp HUB | Híbrido | UI isolada; engine automação **simulada**; temas/scroll corrigidos | Meta Business API real; filas webhooks produção | Auth, loja, automação | Regulatório + escala sem infra dedicada | P1 |
+| 16 | WhatsApp HUB | Híbrido | UI + Prisma (conversas/mensagens); **Meta Cloud API** — texto/template/mídia (`lib/whatsapp.ts`, `POST /api/whatsapp/send`); inbound `POST /api/webhooks/whatsapp` + `after()`; simulação de automações por palavra-chave; temas/scroll corrigidos | Automações de **evento de sistema** ainda majoritariamente simuladas; métricas do dashboard HUB ainda ilustrativas em partes; filas/observabilidade Meta em escala | Auth, loja, templates aprovados Business Manager | Custo/regulatório API; webhook sem secret em ambiente aberto | P1 |
 | 17 | Omni Agent HUB | Mock (doc) | UX premium demonstrativa | Execução real com auditoria (`docs/ai/AGENT_HUB.md`) | Todos os módulos | “IA faz tudo” sem trilha = risco reputacional | P2 |
 | 18 | Configurações | Híbrido | Rotas `configuracoes`, `configuracoes-v2`; permissões citadas em CURRENT_STATUS | Unificar v2/v3 vs dashboard | Auth, loja | Múltiplas entradas confundem suporte | P2 |
 | 19 | Temas globais | Real | `applyGlobalTheme`, tokens, persistência LS, sync hubs | Doc `THEMES.md` ainda placeholder | — | Cores hardcoded pontuais (citado em OPERACOES.md) | P3 |
@@ -110,8 +110,8 @@ O OmniGestão Pro é um **Next.js + Prisma + Postgres** com módulos **premium e
 - **Prioridade:** P2 (governança créditos), P1 se disparar custo API sem teto.
 
 ### 16. WhatsApp HUB
-- **Híbrido:** UI real; automação **simulada**; sem Meta API completa como produto pronto.
-- **Prioridade:** P1.
+- **Híbrido:** UI real + dados Prisma (conversas/mensagens); **Meta Cloud API** para envio e recebimento (webhook dedicado, gravação inbound, outbound com wamid); automações por palavra-chave e eventos de sistema ainda **não** equivalentes a um BSP completo; parte das métricas do dashboard HUB permanece ilustrativa.
+- **Prioridade:** P1 (operacionalização: secrets, templates, limites, observabilidade).
 
 ### 17. Omni Agent HUB
 - **Mock** declarado em `AGENT_HUB.md`.
@@ -222,6 +222,7 @@ O OmniGestão Pro é um **Next.js + Prisma + Postgres** com módulos **premium e
 
 ## Referências cruzadas
 
+- Memória viva consolidada: `docs/memory/OMNIGESTAO_MASTER_MEMORY.md`
 - Estado vivo resumido: `docs/ai/CURRENT_STATUS.md`
 - Roadmap macro: `docs/roadmap/ROADMAP.md`
 - Financeiro: `docs/modules/FINANCEIRO.md` + `FINANCEIRO_V2_REAL_CHECKIN.md`

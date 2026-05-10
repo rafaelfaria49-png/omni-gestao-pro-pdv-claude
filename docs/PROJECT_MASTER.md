@@ -2,6 +2,7 @@
 
 ## Índice rápido
 
+- **`docs/memory/OMNIGESTAO_MASTER_MEMORY.md`** — memória viva consolidada (onboarding + agentes)
 - `docs/START_HERE.md`
 - `docs/ai/CURRENT_STATUS.md`
 - `docs/architecture/ARCHITECTURE.md`

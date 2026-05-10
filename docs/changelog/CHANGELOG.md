@@ -1,11 +1,20 @@
 # Changelog — OmniGestão Pro
 
+## 2026-05-08 — Memória viva do projeto
+
+- **Documentação:** criado [`docs/memory/OMNIGESTAO_MASTER_MEMORY.md`](../memory/OMNIGESTAO_MASTER_MEMORY.md) — relatório longo de continuidade: histórico por fases, implementações por módulo (Financeiro, PDV, Operações, WhatsApp, Auth, Billing, etc.), separação *inferencial* Claude Code vs Cursor, status ✅/⚠️/❌, decisões arquiteturais, pendências P0/P1/P2/P3, temas (incl. Quantum Violet como acento, não tema studio), PDVs, produção/Vercel, riscos, sequência MVP e apêndices (migrations, índice de reports, commits).
+- **`docs/ai/CURRENT_STATUS.md`:** link para a memória mestra e nota sobre possível defasagem da tabela da auditoria na linha WhatsApp.
+- **`docs/PROJECT_MASTER.md`** e **`docs/START_HERE.md`:** entrada na ordem de leitura apontando para a memória consolidada.
+- **`docs/modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md`:** ajuste na linha do WhatsApp HUB (Meta Cloud API real + automações parciais).
+- **`docs/roadmap/ROADMAP.md`:** Fase C — bullet WhatsApp alinhado à integração Meta existente.
+
 ## 2026-05-09 (WhatsApp Cloud API)
 
 - WhatsApp: **integração Meta Cloud API real** — `lib/whatsapp.ts` (cliente Graph API: texto, template, mídia); `app/api/webhooks/whatsapp/route.ts` (verificação `X-Hub-Signature-256`, `after()` assíncrono, resposta 200 imediata); `app/api/whatsapp/send/route.ts` (texto/template/mídia outbound); `app/actions/whatsapp.ts` (Server Actions com guard NextAuth); `lib/whatsapp-meta-cloud-webhook.ts` (processamento de payload inbound: deduplicação por wamid, contato upsert, conversa findOrCreate, `addMessage`).
 - WhatsApp HUB UI: carrega conversas/automações/respostas rápidas de Prisma na inicialização (`/api/whatsapp/conversations?includeMessages=1`, `/api/whatsapp/automations`, `/api/whatsapp/quick-replies`); fallback para mock se banco vazio; `sendMessage` usa `/api/whatsapp/send` com `conversationId` real; `mapConversationsToContacts` normaliza dados do Prisma para o schema de UI do HUB.
 - WhatsApp service (`lib/whatsapp/whatsapp-service.ts`): adicionados `sendCloudApiTextAndRecord`, `sendCloudApiTemplateAndRecord`, `sendCloudApiMediaAndRecord` (chamam Cloud API + `addMessage` outbound); `logWebhookPayload` registra ingress no log de automação.
 - Docs: ENVs WhatsApp (`WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_WEBHOOK_STORE_ID`) adicionadas ao `CLAUDE.md`; `CURRENT_STATUS.md` atualizado com seção da integração real.
+- WhatsApp HUB UI — **CRUD persistido**: toggle de automação chama `PATCH /api/whatsapp/automations/[id]` com rollback local em caso de erro; salvar edição de automação persiste via PATCH; deletar resposta rápida chama `DELETE /api/whatsapp/quick-replies/[id]`; criar/editar resposta usa `POST`/`PATCH` com id real retornado pelo servidor. Todas as ações exibem toast de erro se a API falhar.
 
 ## 2026-05-09
 

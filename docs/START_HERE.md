@@ -24,6 +24,7 @@ SaaS/ERP omnichannel premium com módulos (Financeiro, Operações, PDV, Estoque
 - **Contexto e regras de IA**: `docs/ai/`
 - **Arquitetura**: `docs/architecture/`
 - **Módulos**: `docs/modules/`
+- **Memória consolidada (onboarding longo)**: `docs/memory/`
 - **Relatórios e auditorias**: `docs/modules/reports/`
 - **Roadmap**: `docs/roadmap/`
 - **Deploy / checklist produção**: `docs/deploy/PRODUCTION_CHECKLIST.md`
@@ -32,12 +33,13 @@ SaaS/ERP omnichannel premium com módulos (Financeiro, Operações, PDV, Estoque
 
 ## Ordem de leitura recomendada (para uma IA/Cursor nova)
 
-1. `docs/PROJECT_MASTER.md`
-2. `docs/ai/CURRENT_STATUS.md`
-3. `docs/architecture/ARCHITECTURE.md`
-4. `docs/architecture/MODULARIZACAO.md`
-5. `docs/themes/THEMES.md`
-6. `docs/roadmap/ROADMAP.md`
-7. `docs/modules/FINANCEIRO.md`
-8. `docs/ai/AGENT_HUB.md`
+1. **`docs/memory/OMNIGESTAO_MASTER_MEMORY.md`** — visão histórica e por módulo (memória viva)
+2. `docs/PROJECT_MASTER.md`
+3. `docs/ai/CURRENT_STATUS.md`
+4. `docs/architecture/ARCHITECTURE.md`
+5. `docs/architecture/MODULARIZACAO.md`
+6. `docs/themes/THEMES.md`
+7. `docs/roadmap/ROADMAP.md`
+8. `docs/modules/FINANCEIRO.md`
+9. `docs/ai/AGENT_HUB.md`
 

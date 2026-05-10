@@ -3,15 +3,18 @@
 > Última atualização: Maio 2026
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
+**Memória viva consolidada (histórico, módulos, pendências P0/P1/P2, PDVs, produção, inferência Claude/Cursor):**  
+[`docs/memory/OMNIGESTAO_MASTER_MEMORY.md`](../memory/OMNIGESTAO_MASTER_MEMORY.md)
+
 **Auditoria consolidada (todos os módulos, status real/híbrido/mock, P0/P1 e riscos de lançamento):**  
-[`docs/modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md`](../modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md)
+[`docs/modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md`](../modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md) — *nota: linha WhatsApp da tabela resumida pode estar defasada face à integração Meta Cloud API; preferir esta página + memória mestra para WhatsApp.*
 
 ---
 
 ## ✅ Concluído e Funcionando
 
 ### Hubs Visuais (Lovable integrado)
-- **WhatsApp HUB** — renderizado em `/dashboard/whatsapp`, tema sincronizado globalmente, sem scroll interno, full width. **Dados reais via Prisma** (conversas, automações, respostas rápidas); fallback para mock se banco vazio. Envio real via Meta Cloud API (`/api/whatsapp/send` → `sendCloudApiTextAndRecord`)
+- **WhatsApp HUB** — renderizado em `/dashboard/whatsapp`, tema sincronizado globalmente, sem scroll interno, full width. **Dados reais via Prisma** (conversas, automações, respostas rápidas); fallback para mock se banco vazio. Envio real via Meta Cloud API (`/api/whatsapp/send` → `sendCloudApiTextAndRecord`). Toggle/edição de automações e CRUD de respostas rápidas persistem via API (com rollback local e toast de erro). Recebimento inbound via webhook `POST /api/webhooks/whatsapp` (verificação HMAC, idempotência por wamid, `after()` assíncrono).
 - **Operações HUB** — renderizado em `/dashboard/operacoes-v2`, MemoryRouter isolado, OSProvider com dados mock, Kanban em grid responsivo
 
 ### Sistema de Temas
