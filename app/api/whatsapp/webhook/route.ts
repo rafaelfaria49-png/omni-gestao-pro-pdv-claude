@@ -1,6 +1,13 @@
+import { after } from "next/server"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { metaWebhookHandshakeGetResponse } from "@/lib/whatsapp-meta-handshake"
+import {
+  isMetaCloudIngressBody,
+  META_WEBHOOK_MAX_BODY_BYTES,
+  verifyMetaXHubSignature256,
+} from "@/lib/whatsapp-meta-webhook-signature"
+import { processMetaWhatsAppWebhookPayload } from "@/lib/whatsapp-meta-cloud-webhook"
 import { corsHeaders, withCors } from "@/lib/api-cors"
 import { extractFromEvolutionLikePayload } from "@/lib/whatsapp-webhook-parse"
 import { processOwnerWhatsAppAI } from "@/lib/whatsapp-webhook-ai"
@@ -40,6 +47,8 @@ export async function GET(request: Request) {
       "Evolution/Baileys: defina WHATSAPP_WEBHOOK_LEGACY_AI=true para acionar o processamento anterior (processOwnerWhatsAppAI). Por padrão apenas logging.",
     meta:
       "Meta GET: envie hub.mode=subscribe, hub.verify_token e hub.challenge conforme documentação.",
+    metaUrl:
+      "URL canônica na Meta: /api/webhooks/whatsapp (rewrite interno para esta rota se o segmento webhooks não existir no deploy).",
     auth: "Opcional: ?token= ou x-webhook-token se ASSISTEC_WHATSAPP_WEBHOOK_SECRET estiver definido.",
   })
   return withCors(request, res)
@@ -49,18 +58,69 @@ export async function OPTIONS(request: Request) {
   return new NextResponse(null, { status: 204, headers: corsHeaders(request) })
 }
 
+async function handleMetaCloudPost(request: Request, raw: string): Promise<Response> {
+  const secret = process.env.WHATSAPP_APP_SECRET?.trim() || process.env.META_APP_SECRET?.trim() || ""
+  const sig = request.headers.get("x-hub-signature-256")
+
+  if (raw.length > META_WEBHOOK_MAX_BODY_BYTES) {
+    return NextResponse.json({ ok: true }, { status: 200 })
+  }
+
+  if (secret && !verifyMetaXHubSignature256(raw, sig, secret)) {
+    after(async () => {
+      try {
+        await prisma.logsAuditoria.create({
+          data: {
+            action: "whatsapp_meta_webhook_bad_signature",
+            userLabel: "meta",
+            detail: "Assinatura X-Hub-Signature-256 inválida ou ausente (processamento ignorado).",
+            source: "webhook",
+          },
+        })
+      } catch {
+        /* ignore */
+      }
+    })
+    return NextResponse.json({ ok: true }, { status: 200 })
+  }
+
+  let parsed: unknown = null
+  try {
+    parsed = raw.length > 0 ? JSON.parse(raw) : null
+  } catch {
+    parsed = null
+  }
+
+  after(async () => {
+    try {
+      if (parsed !== null) await processMetaWhatsAppWebhookPayload(parsed)
+    } catch {
+      /* nunca propagar — webhook já respondeu 200 */
+    }
+  })
+
+  return NextResponse.json({ ok: true }, { status: 200 })
+}
+
 export async function POST(request: Request) {
+  const raw = await request.text().catch(() => "")
+
+  let parsed: unknown = null
+  try {
+    parsed = raw.length > 0 ? JSON.parse(raw) : null
+  } catch {
+    parsed = null
+  }
+
+  if (isMetaCloudIngressBody(parsed)) {
+    return handleMetaCloudPost(request, raw)
+  }
+
   if (!verifyWebhookSecret(request)) {
     return withCors(request, NextResponse.json({ error: "Unauthorized" }, { status: 401 }))
   }
 
-  let body: unknown
-  try {
-    body = await request.json()
-  } catch {
-    return withCors(request, NextResponse.json({ error: "Invalid JSON" }, { status: 400 }))
-  }
-
+  const body = parsed
   const storeId = webhookDefaultStoreId()
   try {
     await logWebhookPayload(storeId, body)

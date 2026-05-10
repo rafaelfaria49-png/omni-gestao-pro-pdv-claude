@@ -60,6 +60,11 @@ const nextConfig = {
   async rewrites() {
     return [
       { source: "/manifest.json", destination: "/manifest.webmanifest" },
+      /**
+       * Alguns deploys na Vercel não expuseram `app/api/webhooks/*` (404 em produção).
+       * A URL pública na Meta permanece `/api/webhooks/whatsapp`; o rewrite encaminha ao handler real.
+       */
+      { source: "/api/webhooks/whatsapp", destination: "/api/whatsapp/webhook" },
     ]
   },
   async redirects() {
