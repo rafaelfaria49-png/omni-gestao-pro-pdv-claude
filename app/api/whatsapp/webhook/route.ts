@@ -30,7 +30,30 @@ function verifyWebhookSecret(request: Request): boolean {
 
 const MAX_DETAIL = 4000
 
+/**
+ * TEMP: `true` = todo GET retorna só o probe (prova se query chega na Vercel). Desligar após diagnóstico.
+ * Ou defina env WHATSAPP_META_GET_FORCE_PROBE=0 em produção sem novo deploy (se preferir).
+ */
+const FORCE_META_GET_URL_PROBE =
+  process.env.WHATSAPP_META_GET_FORCE_PROBE !== "0" && process.env.WHATSAPP_META_GET_FORCE_PROBE !== "false"
+
 export async function GET(request: NextRequest) {
+  if (FORCE_META_GET_URL_PROBE) {
+    const probe = NextResponse.json({
+      phase: "meta_get_forced_probe",
+      rawUrl: request.url,
+      nextUrl: request.nextUrl.href,
+      entries: Object.fromEntries(request.nextUrl.searchParams.entries()),
+    })
+    probe.headers.set("Cache-Control", "private, no-store, max-age=0")
+    return withCors(request, probe)
+  }
+
+  return whatsAppWebhookGetAfterProbe(request)
+}
+
+/** Handshake Meta + diagnóstico (ativo quando `WHATSAPP_META_GET_FORCE_PROBE` é `0` ou `false`). */
+async function whatsAppWebhookGetAfterProbe(request: NextRequest) {
   // Usar nextUrl.searchParams (não só `new URL(request.url)`): em produção/Vercel a query
   // às vezes não entra no handshake Meta e cai no JSON de diagnóstico.
   const sp = request.nextUrl.searchParams
