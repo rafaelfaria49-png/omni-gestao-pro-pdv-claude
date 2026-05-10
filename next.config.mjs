@@ -61,8 +61,8 @@ const nextConfig = {
     return [
       { source: "/manifest.json", destination: "/manifest.webmanifest" },
       /**
-       * Alguns deploys na Vercel não expuseram `app/api/webhooks/*` (404 em produção).
-       * A URL pública na Meta permanece `/api/webhooks/whatsapp`; o rewrite encaminha ao handler real.
+       * Mantido por compatibilidade. Preferir também `app/api/webhooks/whatsapp/route.ts` (re-export),
+       * pois em alguns deploys Vercel o rewrite não é aplicado e `/api/webhooks/whatsapp` retorna 404.
        */
       { source: "/api/webhooks/whatsapp", destination: "/api/whatsapp/webhook" },
     ]

@@ -47,8 +47,8 @@ export async function GET(request: Request) {
       "Evolution/Baileys: defina WHATSAPP_WEBHOOK_LEGACY_AI=true para acionar o processamento anterior (processOwnerWhatsAppAI). Por padrão apenas logging.",
     meta:
       "Meta GET: envie hub.mode=subscribe, hub.verify_token e hub.challenge conforme documentação.",
-    metaUrl:
-      "URL canônica na Meta: /api/webhooks/whatsapp (rewrite interno para esta rota se o segmento webhooks não existir no deploy).",
+    urls:
+      "Recomendado na Meta (rota estável na Vercel): /api/whatsapp/webhook. Alternativa: /api/webhooks/whatsapp (handler espelhado em app/api/webhooks/whatsapp/route.ts — não depende de rewrite).",
     auth: "Opcional: ?token= ou x-webhook-token se ASSISTEC_WHATSAPP_WEBHOOK_SECRET estiver definido.",
   })
   return withCors(request, res)
