@@ -36,26 +36,58 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams
   const mode = (sp.get("hub.mode") ?? "").trim().toLowerCase()
   const challenge = (sp.get("hub.challenge") ?? "").trim()
+  const verifyToken = (sp.get("hub.verify_token") ?? "").trim()
+  const entries = Object.fromEntries(sp.entries())
 
-  if (mode === "subscribe" && challenge.length > 0) {
+  let urlFromRequest: URL | null = null
+  try {
+    urlFromRequest = new URL(request.url)
+  } catch {
+    urlFromRequest = null
+  }
+  const entriesFromRequestUrl = urlFromRequest
+    ? Object.fromEntries(urlFromRequest.searchParams.entries())
+    : {}
+
+  const subscribeOk = mode === "subscribe"
+  const challengeOk = challenge.length > 0
+  const handshakeWouldRun = subscribeOk && challengeOk
+
+  if (!handshakeWouldRun) {
+    console.warn(
+      "[whatsapp-webhook:GET:meta-handshake-miss]",
+      JSON.stringify({
+        requestUrl: request.url,
+        nextUrlHref: request.nextUrl.href,
+        nextUrlEntries: entries,
+        requestUrlEntries: entriesFromRequestUrl,
+        mode,
+        challengeLength: challenge.length,
+        subscribeOk,
+        challengeOk,
+      })
+    )
+  }
+
+  if (handshakeWouldRun) {
     return metaWebhookHandshakeGetResponse(request.nextUrl)
   }
 
-  const res = NextResponse.json({
-    ok: true,
-    service: "whatsapp-webhook",
-    hint:
-      "POST JSON — payloads são registrados em whatsapp_automation_logs (ação webhook_ingress). Cloud API: configure WHATSAPP_VERIFY_TOKEN para o handshake GET hub.*.",
-    legacyAi:
-      "Evolution/Baileys: defina WHATSAPP_WEBHOOK_LEGACY_AI=true para acionar o processamento anterior (processOwnerWhatsAppAI). Por padrão apenas logging.",
-    meta:
-      "Meta GET: envie hub.mode=subscribe, hub.verify_token e hub.challenge conforme documentação.",
-    urls:
-      "Recomendado na Meta (rota estável na Vercel): /api/whatsapp/webhook. Alternativa: /api/webhooks/whatsapp (handler espelhado em app/api/webhooks/whatsapp/route.ts — não depende de rewrite).",
-    auth: "Opcional: ?token= ou x-webhook-token se ASSISTEC_WHATSAPP_WEBHOOK_SECRET estiver definido.",
+  // TEMP: diagnóstico produção — remover após confirmar query na Vercel (substitui JSON genérico).
+  const diag = NextResponse.json({
+    phase: "meta_get_diagnostic",
+    mode,
+    challenge,
+    verifyToken,
+    entries,
+    subscribeOk,
+    challengeOk,
+    requestUrl: request.url,
+    nextUrlHref: request.nextUrl.href,
+    entriesFromRequestUrl,
   })
-  res.headers.set("Cache-Control", "private, no-store, max-age=0")
-  return withCors(request, res)
+  diag.headers.set("Cache-Control", "private, no-store, max-age=0")
+  return withCors(request, diag)
 }
 
 export async function OPTIONS(request: Request) {
