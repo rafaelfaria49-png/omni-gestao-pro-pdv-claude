@@ -24,7 +24,8 @@
     "db:check-rls": "node --env-file=.env scripts/check-rls-tables.mjs",
     "db:migrate-legacy-financeiro": "node --env-file=.env scripts/migrate-legacy-financeiro.mjs",
     "financeiro:seed": "node scripts/seed-contas-receber-os.mjs --exec && node scripts/seed-contas-pagar.mjs --exec",
-    "financeiro:backfill-movimentacoes": "node scripts/backfill-movimentacoes-financeiras.mjs --exec"
+    "financeiro:backfill-movimentacoes": "node scripts/backfill-movimentacoes-financeiras.mjs --exec",
+    "debug:whatsapp": "npx tsx scripts/debug-whatsapp-subscriptions.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
