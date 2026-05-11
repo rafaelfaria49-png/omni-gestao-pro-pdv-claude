@@ -1,13 +1,31 @@
 import Stripe from "stripe"
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY não definida.")
+let _stripe: Stripe | undefined
+
+function lazyStripe(): Stripe {
+  if (!_stripe) {
+    const key = process.env.STRIPE_SECRET_KEY
+    if (!key) {
+      throw new Error(
+        "STRIPE_SECRET_KEY não definida. Configure essa variável no Vercel Production."
+      )
+    }
+    _stripe = new Stripe(key, {
+      apiVersion: "2026-04-22.dahlia",
+      typescript: true,
+    })
+  }
+  return _stripe
 }
 
-/** Instância server-side (Node.js / Server Actions / API routes). */
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2026-04-22.dahlia",
-  typescript: true,
+/**
+ * Instância server-side do Stripe — lazy (inicializada na primeira chamada de request,
+ * nunca no import). Garante que builds sem STRIPE_SECRET_KEY não falhem na Vercel.
+ */
+export const stripe = new Proxy({} as Stripe, {
+  get(_target, prop, receiver) {
+    return Reflect.get(lazyStripe(), prop, receiver)
+  },
 })
 
 /** Chave pública para uso no cliente (checkout, Elements). */
