@@ -223,7 +223,7 @@ function StatCard({
 }
 
 function VisaoGeral() {
-  const { summaryR, summaryP, analytics } = useFinanceiroReal();
+  const { summaryR, summaryP, analytics, receber, pagar } = useFinanceiroReal();
   const totalCarteiras = carteiras.reduce((a, c) => a + c.saldo, 0);
   const totalReceber = summaryR?.totalAberto ?? 0;
   const totalPagar = summaryP?.totalAberto ?? 0;
@@ -232,6 +232,11 @@ function VisaoGeral() {
   const saidas = mesAtual?.saida ?? summaryP?.totalPago ?? 0;
   const lucro = entradas - saidas;
   const fluxoMensal = analytics?.fluxoMensal ?? [];
+  const receitasOrigem = analytics?.receitasOrigem ?? [];
+  const recebidoOS = receitasOrigem.find((x) => x.name === "Ordem de Serviço")?.value ?? 0;
+  const recebidoPDV = receitasOrigem.find((x) => x.name === "PDV")?.value ?? 0;
+  const atrasados = (summaryR?.totalVencido ?? 0) + (summaryP?.totalVencido ?? 0);
+  const parciaisCount = receber.filter((r) => r.status === "parcial").length;
   const periodoResultado =
     mesAtual?.mes?.trim() ||
     new Date().toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
@@ -330,12 +335,12 @@ function VisaoGeral() {
         <CardContent>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
-              { label: "Recebido OS", val: fmt(8420), icon: Wrench, tone: "primary" },
-              { label: "Recebido PDV", val: fmt(12350), icon: ShoppingCart, tone: "primary" },
-              { label: "Despesas fixas", val: fmt(16400), icon: Repeat, tone: "muted" },
-              { label: "Parceladas", val: "12 ativas", icon: CalendarClock, tone: "muted" },
-              { label: "Atrasados", val: fmt(1570), icon: TrendingDown, tone: "destructive" },
-              { label: "Baixas parciais", val: "3 títulos", icon: Percent, tone: "muted" },
+              { label: "Recebido OS", val: fmt(recebidoOS), icon: Wrench, tone: "primary" },
+              { label: "Recebido PDV", val: fmt(recebidoPDV), icon: ShoppingCart, tone: "primary" },
+              { label: "Despesas em aberto", val: fmt(totalPagar), icon: Repeat, tone: "muted" },
+              { label: "Parceladas", val: `${parciaisCount} ativas`, icon: CalendarClock, tone: "muted" },
+              { label: "Em atraso", val: fmt(atrasados), icon: TrendingDown, tone: "destructive" },
+              { label: "Baixas parciais", val: `${parciaisCount} títulos`, icon: Percent, tone: "muted" },
             ].map((c) => {
               const Icon = c.icon;
               const ring =
@@ -916,10 +921,29 @@ function GestaoCarteiras() {
 }
 
 function Relatorios() {
-  const { analytics } = useFinanceiroReal();
+  const { analytics, summaryR, summaryP, receber } = useFinanceiroReal();
   const receitasOrigem = analytics?.receitasOrigem ?? [];
   const despesasCategoria = analytics?.despesasCategoria ?? [];
   const resultadoLoja = analytics?.resultadoLoja ?? [];
+
+  const vencidas = summaryR?.totalVencido ?? 0;
+  const atrasosByCliente = useMemo(() => {
+    const m = new Map<string, { cliente: string; total: number }>();
+    for (const r of receber) {
+      if (r.status !== "atrasado") continue;
+      const nome = r.cliente || "Cliente";
+      m.set(nome, { cliente: nome, total: (m.get(nome)?.total ?? 0) + Math.max(0, r.valor - r.recebido) });
+    }
+    return Array.from(m.values()).sort((a, b) => b.total - a.total).slice(0, 3);
+  }, [receber]);
+  const clientesAtraso = atrasosByCliente.length;
+  const denom = (summaryR?.totalPago ?? 0) + (summaryR?.totalAberto ?? 0) + (summaryR?.totalVencido ?? 0);
+  const taxa = denom > 0 ? (vencidas / denom) * 100 : 0;
+
+  const receitaBruta = summaryR?.totalPago ?? 0;
+  const despesas = summaryP?.totalPago ?? 0;
+  const lucroLiquido = receitaBruta - despesas;
+  const margem = receitaBruta > 0 ? (lucroLiquido / receitaBruta) * 100 : 0;
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card className="rounded-xl">
@@ -1027,29 +1051,30 @@ function Relatorios() {
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Vencidas</p>
-              <p className="text-lg font-semibold text-destructive">{fmt(1570)}</p>
+              <p className="text-lg font-semibold text-destructive">{fmt(vencidas)}</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Clientes</p>
-              <p className="text-lg font-semibold">2</p>
+              <p className="text-lg font-semibold">{clientesAtraso}</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Taxa</p>
-              <p className="text-lg font-semibold">3,2%</p>
+              <p className="text-lg font-semibold">{taxa.toFixed(1)}%</p>
             </div>
           </div>
-          {[
-            { c: "Auto Mecânica JL", v: 1250, d: 5 },
-            { c: "Carlos Eduardo", v: 320, d: 3 },
-          ].map((i) => (
-            <div key={i.c} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2.5">
-              <div>
-                <p className="text-sm font-medium">{i.c}</p>
-                <p className="text-xs text-muted-foreground">{i.d} dias em atraso</p>
+          {atrasosByCliente.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum cliente em atraso com base nos dados atuais.</p>
+          ) : (
+            atrasosByCliente.map((i) => (
+              <div key={i.cliente} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2.5">
+                <div>
+                  <p className="text-sm font-medium">{i.cliente}</p>
+                  <p className="text-xs text-muted-foreground">Em atraso</p>
+                </div>
+                <span className="text-sm font-semibold text-destructive">{fmt(i.total)}</span>
               </div>
-              <span className="text-sm font-semibold text-destructive">{fmt(i.v)}</span>
-            </div>
-          ))}
+            ))
+          )}
         </CardContent>
       </Card>
 
@@ -1062,19 +1087,19 @@ function Relatorios() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Receita bruta</p>
-              <p className="text-lg font-semibold text-primary">{fmt(61000)}</p>
+              <p className="text-lg font-semibold text-primary">{fmt(receitaBruta)}</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Despesas</p>
-              <p className="text-lg font-semibold text-destructive">{fmt(42000)}</p>
+              <p className="text-lg font-semibold text-destructive">{fmt(despesas)}</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lucro líquido</p>
-              <p className="text-lg font-semibold text-primary">{fmt(19000)}</p>
+              <p className={`text-lg font-semibold ${lucroLiquido >= 0 ? "text-primary" : "text-destructive"}`}>{fmt(lucroLiquido)}</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/30 p-3">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Margem</p>
-              <p className="text-lg font-semibold">31%</p>
+              <p className="text-lg font-semibold">{margem.toFixed(0)}%</p>
             </div>
           </div>
         </CardContent>
@@ -1318,6 +1343,11 @@ function NovoRecebimentoModal({
   onOpenChange: (v: boolean) => void;
   onSave: (data: NovoReceberInput) => Promise<void>;
 }) {
+  const { receber } = useFinanceiroReal();
+  const clientesUnicos = useMemo(
+    () => Array.from(new Set(receber.map((r) => r.cliente).filter(Boolean))).sort(),
+    [receber],
+  );
   const [parcelar, setParcelar] = useState(false);
   const [saving, setSaving] = useState(false);
   const clienteRef = useRef<HTMLInputElement>(null);
@@ -1360,11 +1390,7 @@ function NovoRecebimentoModal({
             <Label>Cliente *</Label>
             <Input ref={clienteRef} list="clientes-list" placeholder="Buscar cliente..." />
             <datalist id="clientes-list">
-              <option value="Auto Mecânica JL" />
-              <option value="Maria Silva" />
-              <option value="Frota Express" />
-              <option value="João Souza" />
-              <option value="TransLog Ltda" />
+              {clientesUnicos.map((c) => <option key={c} value={c} />)}
             </datalist>
           </div>
           <div className="space-y-1.5 sm:col-span-2">
@@ -1503,6 +1529,11 @@ function NovaContaModal({
   onOpenChange: (v: boolean) => void;
   onSave: (data: NovoPagarInput) => Promise<void>;
 }) {
+  const { pagar } = useFinanceiroReal();
+  const fornecedoresUnicos = useMemo(
+    () => Array.from(new Set(pagar.map((p) => p.fornecedor).filter(Boolean))).sort(),
+    [pagar],
+  );
   const [parcelar, setParcelar] = useState(false);
   const [fixa, setFixa] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -1546,10 +1577,7 @@ function NovaContaModal({
             <Label>Fornecedor *</Label>
             <Input ref={fornecedorRef} list="fornecedores-list" placeholder="Buscar fornecedor..." />
             <datalist id="fornecedores-list">
-              <option value="Distrib. Peças Brasil" />
-              <option value="Energia CEMIG" />
-              <option value="Internet Vivo" />
-              <option value="Aluguel Imóvel" />
+              {fornecedoresUnicos.map((f) => <option key={f} value={f} />)}
             </datalist>
           </div>
           <div className="space-y-1.5 sm:col-span-2">
@@ -2030,6 +2058,41 @@ function EstornoModal({
   );
 }
 
+type HistoricoEvento = {
+  at?: string;
+  tipo?: string;
+  userLabel?: string;
+  valor?: number;
+  observacao?: string;
+  [k: string]: unknown;
+};
+
+function fmtEvtLabel(tipo?: string): string {
+  const map: Record<string, string> = {
+    liquidacao: "Liquidação total",
+    pagamento: "Pagamento parcial",
+    cancelamento: "Cancelamento",
+    estorno_titulo: "Estorno do título",
+    estorno_pagamento: "Estorno de pagamento",
+  };
+  return map[tipo ?? ""] ?? (tipo ? tipo.replace(/_/g, " ") : "Evento");
+}
+
+function fmtEvtDate(at?: string): string {
+  if (!at) return "—";
+  try {
+    return new Date(at).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return at;
+  }
+}
+
 function HistoricoModal({
   open,
   onOpenChange,
@@ -2039,13 +2102,25 @@ function HistoricoModal({
   onOpenChange: (v: boolean) => void;
   conta: ContaReceber | null;
 }) {
+  const [eventos, setEventos] = useState<HistoricoEvento[]>([]);
+  const [loadingHist, setLoadingHist] = useState(false);
+
+  useEffect(() => {
+    if (!open || !conta) return;
+    setLoadingHist(true);
+    void fetch(`/api/financeiro/receber?localKey=${encodeURIComponent(conta.id)}`)
+      .then((r) => r.json())
+      .then((j: Record<string, unknown>) => {
+        const hist = Array.isArray((j.titulo as { historico?: unknown })?.historico)
+          ? (j.titulo as { historico: HistoricoEvento[] }).historico
+          : [];
+        setEventos(hist.length > 0 ? hist : [{ tipo: "criacao", at: undefined, userLabel: "Sistema", observacao: `Conta registrada — valor ${fmt(conta.valor)}` }]);
+      })
+      .catch(() => setEventos([{ tipo: "criacao", at: undefined, userLabel: "Sistema", observacao: `Conta registrada — valor ${fmt(conta.valor)}` }]))
+      .finally(() => setLoadingHist(false));
+  }, [open, conta]);
+
   if (!conta) return null;
-  const eventos = [
-    { data: "01/04/2026 09:12", user: "Sistema", evt: "Conta criada", val: fmt(conta.valor) },
-    { data: "10/04/2026 14:20", user: "Maria (caixa)", evt: "Baixa parcial", val: fmt(conta.valor * 0.4) },
-    { data: "10/04/2026 14:21", user: "Maria (caixa)", evt: "Recibo emitido", val: "—" },
-    { data: "20/04/2026 10:05", user: "Admin", evt: "Renegociação", val: "novo venc. 25/04" },
-  ];
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
@@ -2054,19 +2129,25 @@ function HistoricoModal({
           <DialogDescription>{conta.cliente}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          {eventos.map((e, i) => (
-            <div key={i} className="flex gap-3 rounded-lg border border-border bg-muted/30 p-3">
-              <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">{e.evt}</p>
-                  <span className="text-xs text-muted-foreground">{e.data}</span>
+          {loadingHist ? (
+            <p className="text-sm text-muted-foreground">Carregando histórico...</p>
+          ) : (
+            eventos.map((e, i) => (
+              <div key={i} className="flex gap-3 rounded-lg border border-border bg-muted/30 p-3">
+                <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{fmtEvtLabel(e.tipo)}</p>
+                    <span className="text-xs text-muted-foreground">{fmtEvtDate(e.at)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">por {e.userLabel ?? "Sistema"}</p>
+                  {(e.valor != null || e.observacao) && (
+                    <p className="mt-1 text-sm">{e.valor != null ? fmt(e.valor) : ""}{e.observacao ? ` — ${e.observacao}` : ""}</p>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">por {e.user}</p>
-                <p className="mt-1 text-sm">{e.val}</p>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -2276,12 +2357,25 @@ function HistoricoPagarModal({
   onOpenChange: (v: boolean) => void;
   conta: ContaPagar | null;
 }) {
+  const [eventos, setEventos] = useState<HistoricoEvento[]>([]);
+  const [loadingHist, setLoadingHist] = useState(false);
+
+  useEffect(() => {
+    if (!open || !conta) return;
+    setLoadingHist(true);
+    void fetch(`/api/financeiro/pagar?localKey=${encodeURIComponent(conta.id)}`)
+      .then((r) => r.json())
+      .then((j: Record<string, unknown>) => {
+        const hist = Array.isArray((j.titulo as { historico?: unknown })?.historico)
+          ? (j.titulo as { historico: HistoricoEvento[] }).historico
+          : [];
+        setEventos(hist.length > 0 ? hist : [{ tipo: "criacao", at: undefined, userLabel: "Sistema", observacao: `Conta registrada — valor ${fmt(conta.valor)}` }]);
+      })
+      .catch(() => setEventos([{ tipo: "criacao", at: undefined, userLabel: "Sistema", observacao: `Conta registrada — valor ${fmt(conta.valor)}` }]))
+      .finally(() => setLoadingHist(false));
+  }, [open, conta]);
+
   if (!conta) return null;
-  const eventos = [
-    { data: "02/04/2026 10:00", user: "Sistema", evt: "Conta criada", val: fmt(conta.valor) },
-    { data: "08/04/2026 16:30", user: "Admin", evt: "Pagamento parcial", val: fmt(conta.valor * 0.5) },
-    { data: "12/04/2026 11:00", user: "Admin", evt: "Comprovante anexado", val: "—" },
-  ];
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
@@ -2290,19 +2384,25 @@ function HistoricoPagarModal({
           <DialogDescription>{conta.fornecedor}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          {eventos.map((e, i) => (
-            <div key={i} className="flex gap-3 rounded-lg border border-border bg-muted/30 p-3">
-              <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
-              <div className="flex-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">{e.evt}</p>
-                  <span className="text-xs text-muted-foreground">{e.data}</span>
+          {loadingHist ? (
+            <p className="text-sm text-muted-foreground">Carregando histórico...</p>
+          ) : (
+            eventos.map((e, i) => (
+              <div key={i} className="flex gap-3 rounded-lg border border-border bg-muted/30 p-3">
+                <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium">{fmtEvtLabel(e.tipo)}</p>
+                    <span className="text-xs text-muted-foreground">{fmtEvtDate(e.at)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">por {e.userLabel ?? "Sistema"}</p>
+                  {(e.valor != null || e.observacao) && (
+                    <p className="mt-1 text-sm">{e.valor != null ? fmt(e.valor) : ""}{e.observacao ? ` — ${e.observacao}` : ""}</p>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">por {e.user}</p>
-                <p className="mt-1 text-sm">{e.val}</p>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </DialogContent>
     </Dialog>

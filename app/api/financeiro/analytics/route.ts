@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
-import { prisma, prismaEnsureConnected } from "@/lib/prisma"
+import { prisma, prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { requireOpsSubscription, opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { parseDateStringSafe } from "@/lib/financeiro/contracts/valores"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -9,8 +10,9 @@ export const revalidate = 0
 const MONTH_NAMES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"]
 
 function monthKey(vencimento: string): string {
-  const m = vencimento.match(/^(\d{4}-\d{2})/)
-  return m ? m[1] : ""
+  const d = parseDateStringSafe(vencimento)
+  if (!d) return ""
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
 function formatDate(d: Date): string {
@@ -40,20 +42,26 @@ export async function GET(req: Request) {
   try {
     await prismaEnsureConnected()
 
-    const [receber, pagar, stores] = await Promise.all([
+    const [receber, pagar, stores, movs] = await Promise.all([
       prisma.contaReceberTitulo.findMany({
-        where: { storeId, status: "pago" },
-        select: { id: true, cliente: true, descricao: true, valor: true, vencimento: true, localKey: true, storeId: true, updatedAt: true },
+        where: { storeId },
+        select: { id: true, cliente: true, descricao: true, valor: true, vencimento: true, localKey: true, storeId: true, status: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: 500,
       }),
       prisma.contaPagarTitulo.findMany({
-        where: { storeId, status: "pago" },
-        select: { id: true, descricao: true, valor: true, vencimento: true, payload: true, storeId: true, updatedAt: true },
+        where: { storeId },
+        select: { id: true, descricao: true, valor: true, vencimento: true, payload: true, storeId: true, status: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: 500,
       }),
       prisma.store.findMany({ select: { id: true, name: true } }),
+      prisma.movimentacaoFinanceira.findMany({
+        where: { storeId },
+        select: { id: true, tipo: true, descricao: true, valor: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take: 40,
+      }),
     ])
 
     const storeNameMap = new Map(stores.map((s) => [s.id, s.name || s.id]))
@@ -66,11 +74,14 @@ export async function GET(req: Request) {
       keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
     }
     const fluxoMap = new Map(keys.map((k) => [k, { entrada: 0, saida: 0 }]))
+    // Política do gráfico: fluxo realizado = apenas títulos pagos.
     for (const r of receber) {
+      if (r.status !== "pago") continue
       const k = monthKey(r.vencimento)
       if (fluxoMap.has(k)) fluxoMap.get(k)!.entrada += r.valor
     }
     for (const p of pagar) {
+      if (p.status !== "pago") continue
       const k = monthKey(p.vencimento)
       if (fluxoMap.has(k)) fluxoMap.get(k)!.saida += p.valor
     }
@@ -80,28 +91,49 @@ export async function GET(req: Request) {
     })
 
     // ── Movimentações recentes ────────────────────────────────────────────────
-    const movimentacoes = [
-      ...receber.slice(0, 6).map((r) => ({
-        id: r.id,
-        desc: r.cliente || r.descricao || "Recebimento",
-        tipo: "entrada" as const,
-        valor: r.valor,
-        data: formatDate(r.updatedAt),
-      })),
-      ...pagar.slice(0, 6).map((p) => ({
-        id: p.id,
-        desc: p.descricao || "Pagamento",
-        tipo: "saida" as const,
-        valor: p.valor,
-        data: formatDate(p.updatedAt),
-      })),
-    ]
-      .sort((a, b) => b.valor - a.valor)
-      .slice(0, 8)
+    const movimentacoesBase =
+      movs.length > 0
+        ? movs.map((m) => ({
+            id: m.id,
+            desc: m.descricao || "Movimentação",
+            tipo: m.tipo === "saida" ? ("saida" as const) : ("entrada" as const),
+            valor: m.valor,
+            data: formatDate(m.createdAt),
+          }))
+        : [
+            ...receber
+              .filter((r) => r.status === "pago")
+              .slice(0, 6)
+              .map((r) => ({
+                id: r.id,
+                desc: r.cliente || r.descricao || "Recebimento",
+                tipo: "entrada" as const,
+                valor: r.valor,
+                data: formatDate(r.updatedAt),
+              })),
+            ...pagar
+              .filter((p) => p.status === "pago")
+              .slice(0, 6)
+              .map((p) => ({
+                id: p.id,
+                desc: p.descricao || "Pagamento",
+                tipo: "saida" as const,
+                valor: p.valor,
+                data: formatDate(p.updatedAt),
+              })),
+          ]
+
+    const movimentacoes = movimentacoesBase
+      .sort((a, b) => {
+        // já ordenados por data desc — manter ordem, somente limitar
+        return 0
+      })
+      .slice(0, 20)
 
     // ── Receitas por origem ───────────────────────────────────────────────────
     const origemMap = new Map<string, number>()
     for (const r of receber) {
+      if (r.status !== "pago") continue
       const key = getOrigin(r.localKey, r.descricao)
       origemMap.set(key, (origemMap.get(key) ?? 0) + r.valor)
     }
@@ -112,6 +144,7 @@ export async function GET(req: Request) {
     // ── Despesas por categoria ────────────────────────────────────────────────
     const catMap = new Map<string, number>()
     for (const p of pagar) {
+      if (p.status !== "pago") continue
       const pl =
         p.payload && typeof p.payload === "object" && !Array.isArray(p.payload)
           ? (p.payload as Record<string, unknown>)
@@ -123,20 +156,53 @@ export async function GET(req: Request) {
       .map(([name, value]) => ({ name, value: Math.round(value) }))
       .sort((a, b) => b.value - a.value)
 
-    // ── Resultado por loja ────────────────────────────────────────────────────
-    const [recByStore, pagByStore] = await Promise.all([
-      prisma.contaReceberTitulo.groupBy({ by: ["storeId"], where: { status: "pago" }, _sum: { valor: true } }),
-      prisma.contaPagarTitulo.groupBy({ by: ["storeId"], where: { status: "pago" }, _sum: { valor: true } }),
-    ])
-    const recMap = new Map(recByStore.map((r) => [r.storeId, r._sum.valor ?? 0]))
-    const pagMap = new Map(pagByStore.map((p) => [p.storeId, p._sum.valor ?? 0]))
-    const allSids = new Set([...recMap.keys(), ...pagMap.keys()])
+    // ── Resultado por loja (totais completos) ─────────────────────────────────
+    type GroupByRow = { storeId: string; _sum: { valor: number | null } }
+    type GroupResult = [GroupByRow[], GroupByRow[], GroupByRow[], GroupByRow[]]
+
+    const lojaGroups = await withPrismaSafe<GroupResult>(
+      async (db) => {
+        const [a, b, c, d] = await Promise.all([
+          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: { status: "pago" }, _sum: { valor: true } }),
+          db.contaReceberTitulo.groupBy({ by: ["storeId"], where: { status: { notIn: ["pago", "cancelado"] } }, _sum: { valor: true } }),
+          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: { status: "pago" }, _sum: { valor: true } }),
+          db.contaPagarTitulo.groupBy({ by: ["storeId"], where: { status: { notIn: ["pago", "cancelado"] } }, _sum: { valor: true } }),
+        ])
+        return [a as GroupByRow[], b as GroupByRow[], c as GroupByRow[], d as GroupByRow[]]
+      },
+      [[], [], [], []] as GroupResult,
+    )
+    const [recPagoByStore, recAbertoByStore, pagPagoByStore, pagAbertoByStore] = lojaGroups
+
+    const toMap = (arr: GroupByRow[]) =>
+      new Map(arr.map((r) => [r.storeId, r._sum.valor ?? 0]))
+
+    const rpMap = toMap(recPagoByStore)
+    const raMap = toMap(recAbertoByStore)
+    const ppMap = toMap(pagPagoByStore)
+    const paMap = toMap(pagAbertoByStore)
+
+    const allSids = new Set([...rpMap.keys(), ...raMap.keys(), ...ppMap.keys(), ...paMap.keys()])
     const resultadoLoja = Array.from(allSids)
-      .map((sid) => ({
-        loja: storeNameMap.get(sid) || sid,
-        receita: Math.round(recMap.get(sid) ?? 0),
-        despesa: Math.round(pagMap.get(sid) ?? 0),
-      }))
+      .map((sid) => {
+        const totalRecebido = Math.round((rpMap.get(sid) ?? 0) * 100) / 100
+        const totalReceber  = Math.round((raMap.get(sid) ?? 0) * 100) / 100
+        const totalPago     = Math.round((ppMap.get(sid) ?? 0) * 100) / 100
+        const totalPagar    = Math.round((paMap.get(sid) ?? 0) * 100) / 100
+        const saldo         = Math.round((totalRecebido - totalPago) * 100) / 100
+        return {
+          loja: storeNameMap.get(sid) || sid,
+          // legado (mantém compat. com gráfico BarChart existente)
+          receita: totalRecebido,
+          despesa: totalPago,
+          // novos campos completos
+          totalReceber,
+          totalRecebido,
+          totalPagar,
+          totalPago,
+          saldo,
+        }
+      })
       .sort((a, b) => b.receita - a.receita)
 
     return NextResponse.json({ ok: true, fluxoMensal, movimentacoes, receitasOrigem, despesasCategoria, resultadoLoja })
