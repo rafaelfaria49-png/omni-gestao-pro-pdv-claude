@@ -60,7 +60,7 @@ export function metaWebhookHandshakeGetResponse(url: MetaHandshakeUrlLike): Resp
     status: 200,
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "private, no-store, max-age=0",
+      "Cache-Control": "no-store, max-age=0",
     },
   })
 }

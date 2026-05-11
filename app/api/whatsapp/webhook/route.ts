@@ -1,7 +1,7 @@
 import { after } from "next/server"
 import { NextResponse, type NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { metaWebhookHandshakeGetResponse } from "@/lib/whatsapp-meta-handshake"
+import { resolveWhatsAppWebhookVerifyToken } from "@/lib/whatsapp-meta-handshake"
 import {
   isMetaCloudIngressBody,
   META_WEBHOOK_MAX_BODY_BYTES,
@@ -31,86 +31,98 @@ function verifyWebhookSecret(request: Request): boolean {
 const MAX_DETAIL = 4000
 
 /**
- * TEMP: `true` = todo GET retorna só o probe (prova se query chega na Vercel). Desligar após diagnóstico.
- * Ou defina env WHATSAPP_META_GET_FORCE_PROBE=0 em produção sem novo deploy (se preferir).
+ * Lê os parâmetros do handshake Meta (`hub.mode`, `hub.verify_token`, `hub.challenge`)
+ * de forma robusta: tenta `request.nextUrl.searchParams` primeiro e cai em
+ * `new URL(request.url).searchParams` caso o primeiro venha vazio (alguns deploys
+ * Vercel já reportaram divergência entre os dois objetos).
  */
-const FORCE_META_GET_URL_PROBE =
-  process.env.WHATSAPP_META_GET_FORCE_PROBE !== "0" && process.env.WHATSAPP_META_GET_FORCE_PROBE !== "false"
+function readMetaHandshakeParams(request: NextRequest): {
+  mode: string
+  token: string
+  challenge: string
+  hasMetaSignal: boolean
+} {
+  const fromNextUrl = request.nextUrl.searchParams
+  let mode = (fromNextUrl.get("hub.mode") ?? "").trim().toLowerCase()
+  let token = (fromNextUrl.get("hub.verify_token") ?? "").trim()
+  let challenge = (fromNextUrl.get("hub.challenge") ?? "").trim()
 
-export async function GET(request: NextRequest) {
-  if (FORCE_META_GET_URL_PROBE) {
-    const probe = NextResponse.json({
-      phase: "meta_get_forced_probe",
-      rawUrl: request.url,
-      nextUrl: request.nextUrl.href,
-      entries: Object.fromEntries(request.nextUrl.searchParams.entries()),
-    })
-    probe.headers.set("Cache-Control", "private, no-store, max-age=0")
-    return withCors(request, probe)
+  if (!mode && !token && !challenge) {
+    try {
+      const fromRawUrl = new URL(request.url).searchParams
+      mode = (fromRawUrl.get("hub.mode") ?? "").trim().toLowerCase()
+      token = (fromRawUrl.get("hub.verify_token") ?? "").trim()
+      challenge = (fromRawUrl.get("hub.challenge") ?? "").trim()
+    } catch {
+      /* mantém vazios */
+    }
   }
 
-  return whatsAppWebhookGetAfterProbe(request)
+  const hasMetaSignal = mode.length > 0 || challenge.length > 0
+  return { mode, token, challenge, hasMetaSignal }
 }
 
-/** Handshake Meta + diagnóstico (ativo quando `WHATSAPP_META_GET_FORCE_PROBE` é `0` ou `false`). */
-async function whatsAppWebhookGetAfterProbe(request: NextRequest) {
-  // Usar nextUrl.searchParams (não só `new URL(request.url)`): em produção/Vercel a query
-  // às vezes não entra no handshake Meta e cai no JSON de diagnóstico.
-  const sp = request.nextUrl.searchParams
-  const mode = (sp.get("hub.mode") ?? "").trim().toLowerCase()
-  const challenge = (sp.get("hub.challenge") ?? "").trim()
-  const verifyToken = (sp.get("hub.verify_token") ?? "").trim()
-  const entries = Object.fromEntries(sp.entries())
+/**
+ * GET — Handshake Meta WhatsApp Cloud API.
+ *
+ * **PRIMEIRA lógica absoluta**: se a query trouxer `hub.mode` ou `hub.challenge`,
+ * resposta vai sempre por aqui (200/403/503), nunca por JSON debug/auth/fallback.
+ *
+ * Sucesso: 200, body = challenge puro, `Content-Type: text/plain; charset=utf-8`.
+ */
+export async function GET(request: NextRequest) {
+  const { mode, token, challenge, hasMetaSignal } = readMetaHandshakeParams(request)
 
-  let urlFromRequest: URL | null = null
-  try {
-    urlFromRequest = new URL(request.url)
-  } catch {
-    urlFromRequest = null
-  }
-  const entriesFromRequestUrl = urlFromRequest
-    ? Object.fromEntries(urlFromRequest.searchParams.entries())
-    : {}
+  if (hasMetaSignal) {
+    const verifyToken = resolveWhatsAppWebhookVerifyToken()
 
-  const subscribeOk = mode === "subscribe"
-  const challengeOk = challenge.length > 0
-  const handshakeWouldRun = subscribeOk && challengeOk
-
-  if (!handshakeWouldRun) {
-    console.warn(
-      "[whatsapp-webhook:GET:meta-handshake-miss]",
-      JSON.stringify({
-        requestUrl: request.url,
-        nextUrlHref: request.nextUrl.href,
-        nextUrlEntries: entries,
-        requestUrlEntries: entriesFromRequestUrl,
-        mode,
-        challengeLength: challenge.length,
-        subscribeOk,
-        challengeOk,
+    if (!verifyToken) {
+      return new Response("misconfigured: WHATSAPP_VERIFY_TOKEN empty", {
+        status: 503,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store, max-age=0",
+        },
       })
-    )
+    }
+
+    if (mode !== "subscribe" || !challenge) {
+      return new Response("bad_request: hub.mode must be 'subscribe' with hub.challenge", {
+        status: 400,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store, max-age=0",
+        },
+      })
+    }
+
+    if (token !== verifyToken) {
+      return new Response("verify_token mismatch", {
+        status: 403,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store, max-age=0",
+        },
+      })
+    }
+
+    return new Response(challenge, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-store, max-age=0",
+      },
+    })
   }
 
-  if (handshakeWouldRun) {
-    return metaWebhookHandshakeGetResponse(request.nextUrl)
-  }
-
-  // TEMP: diagnóstico produção — remover após confirmar query na Vercel (substitui JSON genérico).
-  const diag = NextResponse.json({
-    phase: "meta_get_diagnostic",
-    mode,
-    challenge,
-    verifyToken,
-    entries,
-    subscribeOk,
-    challengeOk,
-    requestUrl: request.url,
-    nextUrlHref: request.nextUrl.href,
-    entriesFromRequestUrl,
+  // Sem qualquer sinal Meta — health-check humano (curl/navegador). Não interfere no handshake.
+  const info = NextResponse.json({
+    ok: true,
+    service: "whatsapp-webhook",
+    hint: "Meta GET espera hub.mode=subscribe, hub.verify_token=<WHATSAPP_VERIFY_TOKEN>, hub.challenge=<token-da-meta>",
   })
-  diag.headers.set("Cache-Control", "private, no-store, max-age=0")
-  return withCors(request, diag)
+  info.headers.set("Cache-Control", "no-store, max-age=0")
+  return withCors(request, info)
 }
 
 export async function OPTIONS(request: Request) {
@@ -226,3 +238,36 @@ export async function POST(request: Request) {
 
   return withCors(request, NextResponse.json({ ok: true, logged: true, legacy: "processed" }))
 }
+
+/**
+ * ─────────────────────────────────────────────────────────────────────────────
+ * TESTE MANUAL — Handshake Meta WhatsApp (GET)
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * Pré-requisitos locais (.env.local):
+ *   WHATSAPP_VERIFY_TOKEN=omnigestao_webhook_2026
+ *   # (aliases também aceitos: META_WHATSAPP_VERIFY_TOKEN, WHATSAPP_WEBHOOK_VERIFY_TOKEN)
+ *
+ * 1) Subir o dev:
+ *    npm run dev
+ *
+ * 2) Disparar o GET de handshake (deve retornar EXATAMENTE "CHALLENGE", text/plain):
+ *    curl "http://localhost:3000/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=omnigestao_webhook_2026&hub.challenge=CHALLENGE"
+ *
+ *    Resposta esperada (status 200):
+ *      Content-Type: text/plain; charset=utf-8
+ *      Cache-Control: no-store, max-age=0
+ *      Body:        CHALLENGE
+ *
+ * 3) Token errado → 403 + "verify_token mismatch"
+ *    curl -i "http://localhost:3000/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=ERRADO&hub.challenge=CHALLENGE"
+ *
+ * 4) Sem env de token → 503 + "misconfigured: WHATSAPP_VERIFY_TOKEN empty"
+ *
+ * 5) Sem qualquer hub.* (health-check humano) → 200 + JSON {ok:true, service, hint}.
+ *
+ * 6) Mesma rota responde via alias histórico:
+ *    curl "http://localhost:3000/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=omnigestao_webhook_2026&hub.challenge=CHALLENGE"
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
