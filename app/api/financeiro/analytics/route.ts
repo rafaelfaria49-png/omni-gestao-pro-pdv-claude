@@ -58,7 +58,7 @@ export async function GET(req: Request) {
       prisma.store.findMany({ select: { id: true, name: true } }),
       prisma.movimentacaoFinanceira.findMany({
         where: { storeId },
-        select: { id: true, tipo: true, descricao: true, valor: true, createdAt: true },
+        select: { id: true, tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
         orderBy: { createdAt: "desc" },
         take: 40,
       }),
@@ -67,6 +67,8 @@ export async function GET(req: Request) {
     const storeNameMap = new Map(stores.map((s) => [s.id, s.name || s.id]))
 
     // ── Fluxo mensal (últimos 6 meses) ───────────────────────────────────────
+    // Fonte primária: MovimentacaoFinanceira (entradas/saídas reais)
+    // Fallback: CR/CP com status=pago (quando ainda não há movimentações reais)
     const now = new Date()
     const keys: string[] = []
     for (let i = 5; i >= 0; i--) {
@@ -74,36 +76,56 @@ export async function GET(req: Request) {
       keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
     }
     const fluxoMap = new Map(keys.map((k) => [k, { entrada: 0, saida: 0 }]))
-    // Política do gráfico: fluxo realizado = apenas títulos pagos.
-    for (const r of receber) {
-      if (r.status !== "pago") continue
-      const k = monthKey(r.vencimento)
-      if (fluxoMap.has(k)) fluxoMap.get(k)!.entrada += r.valor
+
+    const usaMovReal = movs.length > 0
+
+    if (usaMovReal) {
+      // Usa movimentações reais (origem != estorno para não duplicar)
+      for (const m of movs) {
+        const k = `${m.createdAt.getFullYear()}-${String(m.createdAt.getMonth() + 1).padStart(2, "0")}`
+        if (!fluxoMap.has(k)) continue
+        // Origens de estorno não contam no fluxo (já foram contabilizadas na operação original)
+        const isEstorno = (m.origem ?? "").startsWith("estorno")
+        if (isEstorno) continue
+        if (m.tipo === "entrada") fluxoMap.get(k)!.entrada += m.valor
+        else fluxoMap.get(k)!.saida += m.valor
+      }
+    } else {
+      // Fallback: títulos pagos (dados anteriores ao backfill)
+      for (const r of receber) {
+        if (r.status !== "pago") continue
+        const k = monthKey(r.vencimento)
+        if (fluxoMap.has(k)) fluxoMap.get(k)!.entrada += r.valor
+      }
+      for (const p of pagar) {
+        if (p.status !== "pago") continue
+        const k = monthKey(p.vencimento)
+        if (fluxoMap.has(k)) fluxoMap.get(k)!.saida += p.valor
+      }
     }
-    for (const p of pagar) {
-      if (p.status !== "pago") continue
-      const k = monthKey(p.vencimento)
-      if (fluxoMap.has(k)) fluxoMap.get(k)!.saida += p.valor
-    }
+
     const fluxoMensal = keys.map((k) => {
       const month = parseInt(k.split("-")[1], 10) - 1
       return { mes: MONTH_NAMES[month] ?? k, ...fluxoMap.get(k)! }
     })
 
     // ── Movimentações recentes ────────────────────────────────────────────────
+    // Fonte primária: MovimentacaoFinanceira real; fallback: CR/CP pagos
     const movimentacoesBase =
-      movs.length > 0
-        ? movs.map((m) => ({
-            id: m.id,
-            desc: m.descricao || "Movimentação",
-            tipo: m.tipo === "saida" ? ("saida" as const) : ("entrada" as const),
-            valor: m.valor,
-            data: formatDate(m.createdAt),
-          }))
+      usaMovReal
+        ? movs
+            .filter((m) => !(m.origem ?? "").startsWith("estorno"))
+            .map((m) => ({
+              id: m.id,
+              desc: m.descricao || "Movimentação",
+              tipo: m.tipo === "saida" ? ("saida" as const) : ("entrada" as const),
+              valor: m.valor,
+              data: formatDate(m.createdAt),
+            }))
         : [
             ...receber
               .filter((r) => r.status === "pago")
-              .slice(0, 6)
+              .slice(0, 8)
               .map((r) => ({
                 id: r.id,
                 desc: r.cliente || r.descricao || "Recebimento",
@@ -113,7 +135,7 @@ export async function GET(req: Request) {
               })),
             ...pagar
               .filter((p) => p.status === "pago")
-              .slice(0, 6)
+              .slice(0, 8)
               .map((p) => ({
                 id: p.id,
                 desc: p.descricao || "Pagamento",
@@ -123,12 +145,7 @@ export async function GET(req: Request) {
               })),
           ]
 
-    const movimentacoes = movimentacoesBase
-      .sort((a, b) => {
-        // já ordenados por data desc — manter ordem, somente limitar
-        return 0
-      })
-      .slice(0, 20)
+    const movimentacoes = movimentacoesBase.slice(0, 20)
 
     // ── Receitas por origem ───────────────────────────────────────────────────
     const origemMap = new Map<string, number>()

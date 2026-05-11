@@ -22,6 +22,10 @@ import {
   estornarContaPagar,
   upsertContaPagar,
 } from "@/lib/financeiro/services"
+import {
+  createMovimentacaoSaidaFromPagar,
+  estornarMovimentacaoPorReferencia,
+} from "@/lib/financeiro/services/movimentacoes-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -249,22 +253,36 @@ export async function PATCH(req: Request) {
     if (parsed.data.op === "liquidar") {
       const res = await liquidarContaPagar({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel: "financeiro_hub" })
       if (!res.ok) return err(res.reason, `liquidar_${res.reason}`, 422)
+      // Gerar movimentação de saída (idempotente)
+      await createMovimentacaoSaidaFromPagar(
+        { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao },
+        res.data.valor,
+      ).catch((e) => console.error("[pagar/liquidar mov]", e))
       return NextResponse.json({ ok: true, op: "liquidar" })
     }
 
     if (parsed.data.op === "parcial") {
       const res = await registrarPagamentoParcialContaPagar({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, userLabel: "financeiro_hub" })
       if (!res.ok) return err(res.reason, `parcial_${res.reason}`, 422)
+      // Gerar movimentação de saída parcial (idempotente por soma total)
+      await createMovimentacaoSaidaFromPagar(
+        { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao },
+        parsed.data.valor,
+        { parcial: true },
+      ).catch((e) => console.error("[pagar/parcial mov]", e))
       return NextResponse.json({ ok: true, op: "parcial" })
     }
 
     if (parsed.data.op === "estornar") {
       const res = await estornarContaPagar({ storeId, localKey: parsed.data.localKey, modo: "ultimo_pagamento", motivo: parsed.data.motivo, userLabel: "financeiro_hub" })
       if (!res.ok) return err(res.reason, `estornar_${res.reason}`, 422)
+      // Estornar movimentação correspondente (idempotente)
+      await estornarMovimentacaoPorReferencia(storeId, res.data.id, "pagar")
+        .catch((e) => console.error("[pagar/estornar mov]", e))
       return NextResponse.json({ ok: true, op: "estornar" })
     }
 
-    // cancelar
+    // cancelar — não gera movimentação nova
     const res = await cancelContaPagar({ storeId, localKey: parsed.data.localKey, motivo: parsed.data.motivo, userLabel: "financeiro_hub" })
     if (!res.ok) return err(res.reason, `cancelar_${res.reason}`, 422)
     return NextResponse.json({ ok: true, op: "cancelar" })

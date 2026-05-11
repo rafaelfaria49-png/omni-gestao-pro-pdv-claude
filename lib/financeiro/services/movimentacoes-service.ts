@@ -5,9 +5,7 @@
  *  - `tipo`  ∈ {"entrada", "saida"}
  *  - `valor` sempre > 0 (o sentido financeiro fica em `tipo`)
  *  - `storeId` obrigatório; falha explícita se ausente
- *  - Deleção é hard-delete pois movimentações avulsas/manuais não têm impacto
- *    em outros registros. Movimentações derivadas (origine "os", "venda" etc.)
- *    devem ser canceladas pelo fluxo do sistema que as criou.
+ *  - Idempotência via (storeId, referenciaId, tipo, origem) para ops derivadas
  */
 
 import { prisma } from "@/lib/prisma"
@@ -17,7 +15,7 @@ import type { MovimentacaoFinanceira, Prisma } from "@/generated/prisma"
 
 export type MovTipo = "entrada" | "saida"
 
-export const MOV_ORIGENS = ["os", "venda", "manual", "pagar", "receber"] as const
+export const MOV_ORIGENS = ["os", "venda", "manual", "pagar", "receber", "estorno_receber", "estorno_pagar"] as const
 export type MovOrigem = (typeof MOV_ORIGENS)[number] | string
 
 export type CreateMovimentacaoInput = {
@@ -28,6 +26,16 @@ export type CreateMovimentacaoInput = {
   origem?: MovOrigem
   referenciaId?: string
 }
+
+export type CreateFromTituloMeta = {
+  /** Se fornecido, usa como id de referência ao invés do .id */
+  referenciaId?: string
+}
+
+export type MovimentacaoResult =
+  | { ok: true; action: "created"; movimentacao: MovimentacaoFinanceira }
+  | { ok: true; action: "skipped_idempotent" }
+  | { ok: false; reason: string }
 
 export type ListMovimentacoesFilters = {
   tipo?: MovTipo
@@ -77,32 +85,39 @@ function toDate(d: Date | string | undefined): Date | undefined {
   return Number.isNaN(dt.getTime()) ? undefined : dt
 }
 
-// ─── funções exportadas ───────────────────────────────────────────────────────
-
 /**
- * Lista movimentações de uma loja com filtros opcionais.
+ * Verifica idempotência: existe movimentação com (storeId, referenciaId, tipo, origem)?
  */
+async function existeMovimentacao(
+  storeId: string,
+  referenciaId: string,
+  tipo: MovTipo,
+  origem: string,
+): Promise<boolean> {
+  const found = await prisma.movimentacaoFinanceira.findFirst({
+    where: { storeId, referenciaId, tipo, origem },
+    select: { id: true },
+  })
+  return found !== null
+}
+
+// ─── funções genéricas ────────────────────────────────────────────────────────
+
 export async function listMovimentacoes(
   storeId: string,
   filters: ListMovimentacoesFilters = {},
 ): Promise<MovimentacaoFinanceira[]> {
   const sid = assertStoreId(storeId)
-
   const where: Prisma.MovimentacaoFinanceiraWhereInput = { storeId: sid }
 
   if (filters.tipo) where.tipo = assertTipo(filters.tipo)
   if (filters.origem) where.origem = safeStr(filters.origem)
   if (filters.referenciaId) where.referenciaId = safeStr(filters.referenciaId)
-  if (filters.q) {
-    where.descricao = { contains: safeStr(filters.q), mode: "insensitive" }
-  }
+  if (filters.q) where.descricao = { contains: safeStr(filters.q), mode: "insensitive" }
   if (filters.dataInicial || filters.dataFinal) {
     const gte = toDate(filters.dataInicial)
     const lte = toDate(filters.dataFinal)
-    where.createdAt = {
-      ...(gte ? { gte } : {}),
-      ...(lte ? { lte } : {}),
-    }
+    where.createdAt = { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) }
   }
 
   return prisma.movimentacaoFinanceira.findMany({
@@ -113,9 +128,6 @@ export async function listMovimentacoes(
   })
 }
 
-/**
- * Cria uma movimentação financeira genérica.
- */
 export async function createMovimentacao(
   input: CreateMovimentacaoInput,
 ): Promise<MovimentacaoFinanceira> {
@@ -138,28 +150,18 @@ export async function createMovimentacao(
   })
 }
 
-/**
- * Atalho para criar uma entrada (receita).
- */
 export async function createEntrada(
   input: Omit<CreateMovimentacaoInput, "tipo">,
 ): Promise<MovimentacaoFinanceira> {
   return createMovimentacao({ ...input, tipo: "entrada" })
 }
 
-/**
- * Atalho para criar uma saída (despesa).
- */
 export async function createSaida(
   input: Omit<CreateMovimentacaoInput, "tipo">,
 ): Promise<MovimentacaoFinanceira> {
   return createMovimentacao({ ...input, tipo: "saida" })
 }
 
-/**
- * Remove uma movimentação manual por id + storeId (multi-tenant).
- * Lança se não encontrada ou se pertencer a outra loja.
- */
 export async function deleteMovimentacao(id: string, storeId: string): Promise<void> {
   const sid = assertStoreId(storeId)
   const tid = safeStr(id)
@@ -169,52 +171,159 @@ export async function deleteMovimentacao(id: string, storeId: string): Promise<v
     where: { id: tid, storeId: sid },
     select: { id: true },
   })
-  if (!existing) {
-    throw new Error(`movimentacoes-service: movimentação "${tid}" não encontrada para storeId "${sid}"`)
-  }
-
+  if (!existing) throw new Error(`movimentacoes-service: movimentação "${tid}" não encontrada`)
   await prisma.movimentacaoFinanceira.delete({ where: { id: tid } })
 }
 
-/**
- * Resumo agregado de entradas, saídas e saldo para um período.
- */
 export async function getResumoMovimentacoes(
   storeId: string,
   range?: { dataInicial?: Date | string; dataFinal?: Date | string },
 ): Promise<ResumoMovimentacoes> {
   const sid = assertStoreId(storeId)
-
-  const dateFilter: Prisma.MovimentacaoFinanceiraWhereInput["createdAt"] = {}
   const gte = toDate(range?.dataInicial)
   const lte = toDate(range?.dataFinal)
-  if (gte) dateFilter.gte = gte
-  if (lte) dateFilter.lte = lte
-
+  const dateFilter: Prisma.MovimentacaoFinanceiraWhereInput["createdAt"] = {
+    ...(gte ? { gte } : {}),
+    ...(lte ? { lte } : {}),
+  }
   const baseWhere: Prisma.MovimentacaoFinanceiraWhereInput = {
     storeId: sid,
     ...(gte || lte ? { createdAt: dateFilter } : {}),
   }
 
   const [entradas, saidas, count] = await prisma.$transaction([
-    prisma.movimentacaoFinanceira.aggregate({
-      where: { ...baseWhere, tipo: "entrada" },
-      _sum: { valor: true },
-    }),
-    prisma.movimentacaoFinanceira.aggregate({
-      where: { ...baseWhere, tipo: "saida" },
-      _sum: { valor: true },
-    }),
+    prisma.movimentacaoFinanceira.aggregate({ where: { ...baseWhere, tipo: "entrada" }, _sum: { valor: true } }),
+    prisma.movimentacaoFinanceira.aggregate({ where: { ...baseWhere, tipo: "saida" }, _sum: { valor: true } }),
     prisma.movimentacaoFinanceira.count({ where: baseWhere }),
   ])
 
   const totalEntradas = Math.round((entradas._sum.valor ?? 0) * 100) / 100
   const totalSaidas = Math.round((saidas._sum.valor ?? 0) * 100) / 100
-
   return {
     totalEntradas,
     totalSaidas,
     saldo: Math.round((totalEntradas - totalSaidas) * 100) / 100,
     count,
   }
+}
+
+// ─── funções de integração CR/CP ──────────────────────────────────────────────
+
+/**
+ * Cria movimentação de ENTRADA a partir de um ContaReceberTitulo liquidado/parcial.
+ * Idempotente: (storeId, referenciaId=titulo.id, tipo="entrada", origem="receber").
+ * Para parciais sucessivos, usa origem="receber_parcial_<suffix>" para não colidir.
+ */
+export async function createMovimentacaoEntradaFromReceber(
+  titulo: { id: string; storeId: string; descricao: string; cliente: string },
+  valor: number,
+  opts: { parcial?: boolean; meta?: CreateFromTituloMeta } = {},
+): Promise<MovimentacaoResult> {
+  const storeId = assertStoreId(titulo.storeId)
+  const referenciaId = safeStr(opts.meta?.referenciaId) || titulo.id
+  const valorMoney = safeMoney(valor)
+  if (!(valorMoney > 0)) return { ok: false, reason: "valor_invalido" }
+
+  const origem = opts.parcial ? "receber_parcial" : "receber"
+
+  // Para liquidação total: idempotência estrita (skipa se já existe)
+  // Para parcial: permite múltiplos APENAS se valor diferente já gravado (melhor esforço)
+  if (!opts.parcial) {
+    if (await existeMovimentacao(storeId, referenciaId, "entrada", origem)) {
+      return { ok: true, action: "skipped_idempotent" }
+    }
+  } else {
+    // Para parcial: verifica se o total já gravado para esta referência ≥ valor recebido agora
+    const agg = await prisma.movimentacaoFinanceira.aggregate({
+      where: { storeId, referenciaId, tipo: "entrada", origem: { startsWith: "receber" } },
+      _sum: { valor: true },
+    })
+    const totalGravado = safeMoney(agg._sum.valor ?? 0)
+    // Se total gravado já é >= o novo valor, provavelmente retry; pula
+    if (totalGravado >= valorMoney) {
+      return { ok: true, action: "skipped_idempotent" }
+    }
+  }
+
+  const descricao = `Recebimento — ${titulo.cliente || titulo.descricao}`
+  const movimentacao = await prisma.movimentacaoFinanceira.create({
+    data: { storeId, tipo: "entrada", valor: valorMoney, descricao, origem, referenciaId },
+  })
+  return { ok: true, action: "created", movimentacao }
+}
+
+/**
+ * Cria movimentação de SAÍDA a partir de um ContaPagarTitulo liquidado/parcial.
+ * Idempotente: (storeId, referenciaId=titulo.id, tipo="saida", origem="pagar").
+ */
+export async function createMovimentacaoSaidaFromPagar(
+  titulo: { id: string; storeId: string; descricao: string },
+  valor: number,
+  opts: { parcial?: boolean; meta?: CreateFromTituloMeta } = {},
+): Promise<MovimentacaoResult> {
+  const storeId = assertStoreId(titulo.storeId)
+  const referenciaId = safeStr(opts.meta?.referenciaId) || titulo.id
+  const valorMoney = safeMoney(valor)
+  if (!(valorMoney > 0)) return { ok: false, reason: "valor_invalido" }
+
+  const origem = opts.parcial ? "pagar_parcial" : "pagar"
+
+  if (!opts.parcial) {
+    if (await existeMovimentacao(storeId, referenciaId, "saida", origem)) {
+      return { ok: true, action: "skipped_idempotent" }
+    }
+  } else {
+    const agg = await prisma.movimentacaoFinanceira.aggregate({
+      where: { storeId, referenciaId, tipo: "saida", origem: { startsWith: "pagar" } },
+      _sum: { valor: true },
+    })
+    const totalGravado = safeMoney(agg._sum.valor ?? 0)
+    if (totalGravado >= valorMoney) {
+      return { ok: true, action: "skipped_idempotent" }
+    }
+  }
+
+  const descricao = `Pagamento — ${titulo.descricao}`
+  const movimentacao = await prisma.movimentacaoFinanceira.create({
+    data: { storeId, tipo: "saida", valor: valorMoney, descricao, origem, referenciaId },
+  })
+  return { ok: true, action: "created", movimentacao }
+}
+
+/**
+ * Cria movimentação de estorno: lança entrada reversa (para saída) ou saída reversa (para entrada).
+ * Idempotente via origem="estorno_receber" / "estorno_pagar".
+ */
+export async function estornarMovimentacaoPorReferencia(
+  storeId: string,
+  referenciaId: string,
+  origemOriginal: "receber" | "pagar",
+): Promise<MovimentacaoResult> {
+  const sid = assertStoreId(storeId)
+  const rid = safeStr(referenciaId)
+  if (!rid) return { ok: false, reason: "referenciaId_invalida" }
+
+  const origemEstorno = origemOriginal === "receber" ? "estorno_receber" : "estorno_pagar"
+  const tipoEstorno: MovTipo = origemOriginal === "receber" ? "saida" : "entrada"
+
+  if (await existeMovimentacao(sid, rid, tipoEstorno, origemEstorno)) {
+    return { ok: true, action: "skipped_idempotent" }
+  }
+
+  // Busca o total original para saber o valor a estornar
+  const agg = await prisma.movimentacaoFinanceira.aggregate({
+    where: { storeId: sid, referenciaId: rid, tipo: origemOriginal === "receber" ? "entrada" : "saida" },
+    _sum: { valor: true },
+  })
+  const valorOriginal = safeMoney(agg._sum.valor ?? 0)
+  if (!(valorOriginal > 0)) {
+    // Nenhuma movimentação original — nada a estornar
+    return { ok: true, action: "skipped_idempotent" }
+  }
+
+  const descricao = `Estorno de ${origemOriginal === "receber" ? "recebimento" : "pagamento"}`
+  const movimentacao = await prisma.movimentacaoFinanceira.create({
+    data: { storeId: sid, tipo: tipoEstorno, valor: valorOriginal, descricao, origem: origemEstorno, referenciaId: rid },
+  })
+  return { ok: true, action: "created", movimentacao }
 }

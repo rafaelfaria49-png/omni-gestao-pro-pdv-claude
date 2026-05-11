@@ -22,6 +22,10 @@ import {
   estornarContaReceber,
   upsertContaReceber,
 } from "@/lib/financeiro/services"
+import {
+  createMovimentacaoEntradaFromReceber,
+  estornarMovimentacaoPorReferencia,
+} from "@/lib/financeiro/services/movimentacoes-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -242,22 +246,36 @@ export async function PATCH(req: Request) {
     if (parsed.data.op === "liquidar") {
       const res = await liquidarContaReceber({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel: "financeiro_hub" })
       if (!res.ok) return err(res.reason, `liquidar_${res.reason}`, 422)
+      // Gerar movimentação de entrada (idempotente)
+      await createMovimentacaoEntradaFromReceber(
+        { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
+        res.data.valor,
+      ).catch((e) => console.error("[receber/liquidar mov]", e))
       return NextResponse.json({ ok: true, op: "liquidar" })
     }
 
     if (parsed.data.op === "parcial") {
       const res = await registrarPagamentoParcial({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, userLabel: "financeiro_hub" })
       if (!res.ok) return err(res.reason, `parcial_${res.reason}`, 422)
+      // Gerar movimentação de entrada parcial (idempotente por soma total)
+      await createMovimentacaoEntradaFromReceber(
+        { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
+        parsed.data.valor,
+        { parcial: true },
+      ).catch((e) => console.error("[receber/parcial mov]", e))
       return NextResponse.json({ ok: true, op: "parcial" })
     }
 
     if (parsed.data.op === "estornar") {
       const res = await estornarContaReceber({ storeId, localKey: parsed.data.localKey, modo: parsed.data.modo, motivo: parsed.data.motivo, userLabel: "financeiro_hub" })
       if (!res.ok) return err(res.reason, `estornar_${res.reason}`, 422)
+      // Estornar movimentação correspondente (idempotente)
+      await estornarMovimentacaoPorReferencia(storeId, res.data.id, "receber")
+        .catch((e) => console.error("[receber/estornar mov]", e))
       return NextResponse.json({ ok: true, op: "estornar" })
     }
 
-    // cancelar
+    // cancelar — não gera movimentação nova
     const res = await cancelContaReceber({ storeId, localKey: parsed.data.localKey, motivo: parsed.data.motivo, userLabel: "financeiro_hub" })
     if (!res.ok) return err(res.reason, `cancelar_${res.reason}`, 422)
     return NextResponse.json({ ok: true, op: "cancelar" })
