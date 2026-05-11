@@ -6,6 +6,8 @@ import { Search, Phone } from "lucide-react";
 import { Link } from "react-router-dom";
 import { brl, dt, totalOrcamento } from "@/lib/os/format";
 
+const normPhone = (p?: string) => (p ?? "").replace(/\D/g, "");
+
 export default function HistoricoClientes() {
   const { ordens, clientes } = useOS();
   const [q, setQ] = useState("");
@@ -17,10 +19,30 @@ export default function HistoricoClientes() {
   }, [clientes, q]);
 
   const cliente = clientes.find((c) => c.id === selecionado);
-  const osCliente = useMemo(
-    () => ordens.filter((o) => o.clienteId === selecionado).sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm)),
-    [ordens, selecionado],
-  );
+
+  /** Matches OS to a cliente using UUID → phone → name cascade (handles legacy seed IDs). */
+  const ordensParaCliente = useMemo(() => {
+    const byId = new Map<string, typeof ordens>();
+    for (const c of clientes) {
+      const fone = normPhone(c.telefone);
+      const nome = (c.nome ?? "").toLowerCase().trim();
+      const lista = ordens.filter((o) => {
+        if (o.clienteId === c.id) return true;
+        const snapFone = normPhone(o.cliente?.telefone);
+        if (fone && snapFone && fone === snapFone) return true;
+        const snapNome = (o.cliente?.nome ?? "").toLowerCase().trim();
+        if (nome && snapNome && nome === snapNome) return true;
+        return false;
+      });
+      byId.set(c.id, lista);
+    }
+    return byId;
+  }, [ordens, clientes]);
+
+  const osCliente = useMemo(() => {
+    if (!selecionado) return [];
+    return (ordensParaCliente.get(selecionado) ?? []).slice().sort((a, b) => +new Date(b.criadoEm) - +new Date(a.criadoEm));
+  }, [ordensParaCliente, selecionado]);
   const totalGasto = osCliente.reduce((s, o) => s + (o.orcamento?.total ?? totalOrcamento(o)), 0);
 
   return (
@@ -39,7 +61,7 @@ export default function HistoricoClientes() {
           <div className="max-h-[60vh] space-y-1 overflow-y-auto">
             {filtrados.map((c) => {
               const ativo = c.id === selecionado;
-              const qtd = ordens.filter((o) => o.clienteId === c.id).length;
+              const qtd = (ordensParaCliente.get(c.id) ?? []).length;
               return (
                 <button
                   key={c.id}
