@@ -144,7 +144,7 @@ export async function processMetaWhatsAppWebhookPayload(raw: unknown): Promise<v
           waExternalId: from,
         })
 
-        const conv = await findOrCreateOpenConversation(storeId, contact.id)
+        const conv = await findOrCreateOpenConversation(storeId, contact.id, from)
 
         const ts = msg.timestamp ? Number(msg.timestamp) * 1000 : Date.now()
         const payload: Prisma.InputJsonValue = {

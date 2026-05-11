@@ -105,6 +105,9 @@ model WhatsAppConversation {
   store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   contactId           String   @map("contactId")
   contact             WhatsAppContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  /** Vínculo opcional com cliente cadastrado (match por telefone normalizado). */
+  clienteId           String?  @map("clienteId")
+  cliente             Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   externalThreadId    String   @default("") @map("externalThreadId")
   status              String   @default("open") @map("status")
   assignedToUserId    String   @default("") @map("assignedToUserId")
@@ -120,6 +123,7 @@ model WhatsAppConversation {
 
   @@index([storeId, lastMessageAt])
   @@index([contactId])
+  @@index([clienteId])
   @@map("whatsapp_conversations")
 }
 
@@ -338,6 +342,7 @@ model Cliente {
   updatedAt DateTime @default(now()) @updatedAt @map("updatedAt")
 
   ordensServico OrdemServico[]
+  whatsappConversations WhatsAppConversation[]
 
   @@index([storeId])
   @@map("clientes_importados")

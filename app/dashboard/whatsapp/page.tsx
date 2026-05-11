@@ -1,7 +1,11 @@
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"
 
-import WhatsAppHub from "@/components/whatsapp/lovable/components/whatsapp/WhatsAppHub";
+import WhatsAppInbox from "@/components/whatsapp/WhatsAppInbox"
 
 export default function WhatsAppPage() {
-  return <WhatsAppHub />;
+  return (
+    <div className="px-4 pt-4 pb-2 -mx-4 sm:-mx-6">
+      <WhatsAppInbox />
+    </div>
+  )
 }

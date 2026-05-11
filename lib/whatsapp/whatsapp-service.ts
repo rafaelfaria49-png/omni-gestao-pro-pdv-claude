@@ -104,14 +104,54 @@ export async function createConversation(
   })
 }
 
-export async function findOrCreateOpenConversation(storeId: string, contactId: string) {
+/**
+ * Tenta encontrar um `Cliente` cadastrado cujo telefone (dígitos) corresponda
+ * ao phoneDigits do contato WhatsApp. Usado para vincular `clienteId` na conversa.
+ */
+export async function matchClienteByPhone(storeId: string, phoneDigits: string): Promise<string | null> {
+  if (!phoneDigits) return null
+  const digits = normalizeDigits(phoneDigits)
+  if (!digits) return null
+
+  // Tenta sufixos: número completo, últimos 11 dígitos (com DDD), últimos 9 dígitos
+  const suffixes = [digits, digits.slice(-11), digits.slice(-9)].filter((s) => s.length >= 8)
+
+  for (const suffix of suffixes) {
+    const cliente = await prisma.cliente.findFirst({
+      where: {
+        storeId,
+        phone: { endsWith: suffix.replace(/\D/g, "") },
+        active: true,
+      },
+      select: { id: true },
+    })
+    if (cliente) return cliente.id
+  }
+  return null
+}
+
+export async function findOrCreateOpenConversation(storeId: string, contactId: string, phoneDigits?: string) {
   const existing = await prisma.whatsAppConversation.findFirst({
     where: { storeId, contactId, status: "open" },
     orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
   })
-  if (existing) return existing
+  if (existing) {
+    // Tenta vincular clienteId retroativamente se ainda não vinculado
+    if (!existing.clienteId && phoneDigits) {
+      const clienteId = await matchClienteByPhone(storeId, phoneDigits)
+      if (clienteId) {
+        await prisma.whatsAppConversation.update({
+          where: { id: existing.id },
+          data: { clienteId },
+        })
+      }
+    }
+    return existing
+  }
+
+  const clienteId = phoneDigits ? await matchClienteByPhone(storeId, phoneDigits) : null
   return prisma.whatsAppConversation.create({
-    data: { storeId, contactId, status: "open", unreadCount: 0 },
+    data: { storeId, contactId, status: "open", unreadCount: 0, clienteId },
   })
 }
 
