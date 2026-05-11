@@ -137,22 +137,29 @@ async function handleMetaCloudPost(request: Request, raw: string): Promise<Respo
     return NextResponse.json({ ok: true }, { status: 200 })
   }
 
-  if (secret && !verifyMetaXHubSignature256(raw, sig, secret)) {
-    after(async () => {
-      try {
-        await prisma.logsAuditoria.create({
-          data: {
-            action: "whatsapp_meta_webhook_bad_signature",
-            userLabel: "meta",
-            detail: "Assinatura X-Hub-Signature-256 inválida ou ausente (processamento ignorado).",
-            source: "webhook",
-          },
-        })
-      } catch {
-        /* ignore */
-      }
-    })
-    return NextResponse.json({ ok: true }, { status: 200 })
+  if (secret) {
+    const sigOk = verifyMetaXHubSignature256(raw, sig, secret)
+    console.log("[wa/webhook:handleMetaCloudPost] signature check: ok=%s hasSig=%s", sigOk, !!sig)
+    if (!sigOk) {
+      console.warn("[wa/webhook:handleMetaCloudPost] SIGNATURE MISMATCH — verificar WHATSAPP_APP_SECRET")
+      after(async () => {
+        try {
+          await prisma.logsAuditoria.create({
+            data: {
+              action: "whatsapp_meta_webhook_bad_signature",
+              userLabel: "meta",
+              detail: "Assinatura X-Hub-Signature-256 inválida ou ausente (processamento ignorado). Verificar WHATSAPP_APP_SECRET na Vercel.",
+              source: "webhook",
+            },
+          })
+        } catch {
+          /* ignore */
+        }
+      })
+      return NextResponse.json({ ok: true }, { status: 200 })
+    }
+  } else {
+    console.warn("[wa/webhook:handleMetaCloudPost] WHATSAPP_APP_SECRET vazio — assinatura não verificada")
   }
 
   let parsed: unknown = null
@@ -207,6 +214,14 @@ async function handleMetaCloudPost(request: Request, raw: string): Promise<Respo
 }
 
 export async function POST(request: Request) {
+  // Absolute synchronous log — visible in Vercel Functions logs immediately
+  console.log("[wa/webhook:POST] received", JSON.stringify({
+    ts: new Date().toISOString(),
+    hasSig: !!request.headers.get("x-hub-signature-256"),
+    contentType: request.headers.get("content-type") ?? null,
+    userAgent: request.headers.get("user-agent")?.slice(0, 40) ?? null,
+  }))
+
   const raw = await request.text().catch(() => "")
 
   let parsed: unknown = null
@@ -216,7 +231,10 @@ export async function POST(request: Request) {
     parsed = null
   }
 
-  if (isMetaCloudIngressBody(parsed)) {
+  const isMetaBody = isMetaCloudIngressBody(parsed)
+  console.log("[wa/webhook:POST] isMetaCloudIngressBody=%s bodyLen=%d", isMetaBody, raw.length)
+
+  if (isMetaBody) {
     return handleMetaCloudPost(request, raw)
   }
 
