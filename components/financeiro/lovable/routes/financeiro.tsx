@@ -223,48 +223,59 @@ function StatCard({
 }
 
 function VisaoGeral() {
-  const { summaryR, summaryP, analytics, receber, pagar } = useFinanceiroReal();
+  const { summaryR, summaryP, analytics, receber, pagar, fluxoCaixa } = useFinanceiroReal();
   const totalCarteiras = carteiras.reduce((a, c) => a + c.saldo, 0);
-  const totalReceber = summaryR?.totalAberto ?? 0;
-  const totalPagar = summaryP?.totalAberto ?? 0;
-  const mesAtual = analytics?.fluxoMensal?.at(-1);
-  const entradas = mesAtual?.entrada ?? summaryR?.totalPago ?? 0;
-  const saidas = mesAtual?.saida ?? summaryP?.totalPago ?? 0;
+
+  // Preferência: fluxo-caixa real → fallback analytics/summaryR/P
+  const totalReceber = fluxoCaixa?.totalReceberAberto ?? summaryR?.totalAberto ?? 0;
+  const totalPagar = fluxoCaixa?.totalPagarAberto ?? summaryP?.totalAberto ?? 0;
+  const entradas = fluxoCaixa?.entradasMes ?? analytics?.fluxoMensal?.at(-1)?.entrada ?? summaryR?.totalPago ?? 0;
+  const saidas = fluxoCaixa?.saidasMes ?? analytics?.fluxoMensal?.at(-1)?.saida ?? summaryP?.totalPago ?? 0;
   const lucro = entradas - saidas;
+  const saldoReal = fluxoCaixa?.saldoAtual ?? null;
   const fluxoMensal = analytics?.fluxoMensal ?? [];
   const receitasOrigem = analytics?.receitasOrigem ?? [];
   const recebidoOS = receitasOrigem.find((x) => x.name === "Ordem de Serviço")?.value ?? 0;
   const recebidoPDV = receitasOrigem.find((x) => x.name === "PDV")?.value ?? 0;
-  const atrasados = (summaryR?.totalVencido ?? 0) + (summaryP?.totalVencido ?? 0);
+  const atrasados = (fluxoCaixa?.totalVencidosReceber ?? 0) + (fluxoCaixa?.totalVencidosPagar ?? 0);
   const parciaisCount = receber.filter((r) => r.status === "parcial").length;
+  const mesAtual = analytics?.fluxoMensal?.at(-1);
   const periodoResultado =
     mesAtual?.mes?.trim() ||
     new Date().toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
 
-  const alertItems = (
+  // Alertas: usa fluxo-caixa real quando disponível, fallback para summaryR/P
+  const alertItems: { msg: string; val: string; urgente?: boolean }[] = fluxoCaixa?.alertas?.map((a) => ({
+    msg: a.mensagem,
+    val: a.valor != null ? fmt(a.valor) : "",
+    urgente: a.urgente,
+  })) ?? (
     [
       summaryP && summaryP.totalVencido > 0
-        ? { msg: `${summaryP.quantidade} contas a pagar — ${fmt(summaryP.totalVencido)} em atraso`, val: fmt(summaryP.totalVencido) }
+        ? { msg: `${summaryP.quantidade} contas a pagar — ${fmt(summaryP.totalVencido)} em atraso`, val: fmt(summaryP.totalVencido), urgente: true }
         : null,
       summaryR && summaryR.totalVencido > 0
-        ? { msg: `A receber — ${fmt(summaryR.totalVencido)} vencido de clientes`, val: fmt(summaryR.totalVencido) }
+        ? { msg: `A receber — ${fmt(summaryR.totalVencido)} vencido de clientes`, val: fmt(summaryR.totalVencido), urgente: false }
         : null,
-    ] as Array<{ msg: string; val: string } | null>
-  ).filter((x): x is { msg: string; val: string } => x !== null);
+    ] as Array<{ msg: string; val: string; urgente?: boolean } | null>
+  ).filter((x): x is { msg: string; val: string; urgente?: boolean } => x !== null);
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Saldo em carteiras" value={fmt(totalCarteiras)} hint={`${carteiras.length} carteiras ativas`} icon={Wallet} />
+        {saldoReal !== null
+          ? <StatCard title="Saldo realizado" value={fmt(saldoReal)} hint="Entradas − saídas efetivadas" icon={Wallet} tone={saldoReal >= 0 ? "positive" : "negative"} />
+          : <StatCard title="Saldo em carteiras" value={fmt(totalCarteiras)} hint={`${carteiras.length} carteiras ativas`} icon={Wallet} />
+        }
         <StatCard title="A receber" value={fmt(totalReceber)} hint="Em aberto" icon={ArrowDownCircle} tone="positive" />
         <StatCard title="A pagar" value={fmt(totalPagar)} hint="Em aberto" icon={ArrowUpCircle} tone="negative" />
-        <StatCard title="Resultado do mês" value={fmt(lucro)} hint={periodoResultado} icon={TrendingUp} tone="positive" />
+        <StatCard title="Resultado do mês" value={fmt(lucro)} hint={periodoResultado} icon={TrendingUp} tone={lucro >= 0 ? "positive" : "negative"} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard title="Entradas" value={fmt(entradas)} icon={ArrowDownLeft} tone="positive" />
-        <StatCard title="Saídas" value={fmt(saidas)} icon={ArrowUpRight} tone="negative" />
-        <StatCard title="Lucro líquido" value={fmt(lucro)} hint="Consolidado no período exibido" icon={PiggyBank} tone="positive" />
+        <StatCard title="Entradas mês" value={fmt(entradas)} icon={ArrowDownLeft} tone="positive" />
+        <StatCard title="Saídas mês" value={fmt(saidas)} icon={ArrowUpRight} tone="negative" />
+        <StatCard title="Lucro líquido" value={fmt(lucro)} hint="Consolidado no período exibido" icon={PiggyBank} tone={lucro >= 0 ? "positive" : "negative"} />
       </div>
 
       <Card className="rounded-xl">
@@ -282,15 +293,15 @@ function VisaoGeral() {
             alertItems.map((a, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between rounded-lg border border-border bg-muted/40 p-3"
+                className={`flex items-center justify-between rounded-lg border p-3 ${a.urgente ? "border-destructive/30 bg-destructive/5" : "border-border bg-muted/40"}`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="rounded-md bg-destructive/10 p-1.5 text-destructive">
+                  <div className={`rounded-md p-1.5 ${a.urgente ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-600"}`}>
                     <AlertTriangle className="h-4 w-4" />
                   </div>
                   <p className="text-sm text-foreground">{a.msg}</p>
                 </div>
-                <span className="text-sm font-medium text-muted-foreground">{a.val}</span>
+                {a.val && <span className="text-sm font-medium text-muted-foreground">{a.val}</span>}
               </div>
             ))
           )}
@@ -338,9 +349,19 @@ function VisaoGeral() {
               { label: "Recebido OS", val: fmt(recebidoOS), icon: Wrench, tone: "primary" },
               { label: "Recebido PDV", val: fmt(recebidoPDV), icon: ShoppingCart, tone: "primary" },
               { label: "Despesas em aberto", val: fmt(totalPagar), icon: Repeat, tone: "muted" },
-              { label: "Parceladas", val: `${parciaisCount} ativas`, icon: CalendarClock, tone: "muted" },
-              { label: "Em atraso", val: fmt(atrasados), icon: TrendingDown, tone: "destructive" },
-              { label: "Baixas parciais", val: `${parciaisCount} títulos`, icon: Percent, tone: "muted" },
+              {
+                label: "Próx. 7 dias",
+                val: fluxoCaixa ? fmt(fluxoCaixa.proximosRecebimentos7Dias.total + fluxoCaixa.proximosPagamentos7Dias.total) : `${parciaisCount} ativas`,
+                icon: CalendarClock,
+                tone: "muted",
+              },
+              { label: "Em atraso", val: fmt(atrasados), icon: TrendingDown, tone: atrasados > 0 ? "destructive" : "muted" },
+              {
+                label: "Entradas hoje",
+                val: fluxoCaixa ? fmt(fluxoCaixa.entradasHoje) : `${parciaisCount} títulos`,
+                icon: Percent,
+                tone: (fluxoCaixa?.entradasHoje ?? 0) > 0 ? "primary" : "muted",
+              },
             ].map((c) => {
               const Icon = c.icon;
               const ring =

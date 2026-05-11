@@ -57,6 +57,29 @@ export type AnalyticsFinanceiro = {
   resultadoLoja: { loja: string; receita: number; despesa: number }[]
 }
 
+export type FluxoCaixaProximoItem = { id: string; descricao: string; valor: number; vencimento: string; diasRestantes: number }
+export type FluxoCaixaAlerta = { tipo: string; mensagem: string; valor?: number; urgente: boolean }
+export type FluxoCaixaFluxoDia = { data: string; label: string; entrada: number; saida: number; saldo: number }
+
+export type FluxoCaixa = {
+  saldoAtual: number
+  entradasHoje: number
+  saidasHoje: number
+  entradasMes: number
+  saidasMes: number
+  saldoMes: number
+  totalReceberAberto: number
+  totalPagarAberto: number
+  totalVencidosReceber: number
+  totalVencidosPagar: number
+  qtdVencidosReceber: number
+  qtdVencidosPagar: number
+  proximosRecebimentos7Dias: { total: number; count: number; items: FluxoCaixaProximoItem[] }
+  proximosPagamentos7Dias: { total: number; count: number; items: FluxoCaixaProximoItem[] }
+  fluxoDiarioUltimos30Dias: FluxoCaixaFluxoDia[]
+  alertas: FluxoCaixaAlerta[]
+}
+
 export type NovoReceberInput = {
   cliente: string
   descricao: string
@@ -80,9 +103,12 @@ type FinanceiroRealState = {
   summaryR: SummaryReceber | null
   summaryP: SummaryPagar | null
   analytics: AnalyticsFinanceiro | null
+  fluxoCaixa: FluxoCaixa | null
+  loadingFluxoCaixa: boolean
   loading: boolean
   error: string | null
   reload: () => void
+  refreshFluxoCaixa: () => Promise<void>
   liquidarReceber: (id: string, observacao?: string) => Promise<void>
   receberParcial: (id: string, valor: number, observacao?: string) => Promise<void>
   estornarReceber: (id: string, motivo?: string) => Promise<void>
@@ -203,6 +229,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [summaryR, setSummaryR] = useState<SummaryReceber | null>(null)
   const [summaryP, setSummaryP] = useState<SummaryPagar | null>(null)
   const [analytics, setAnalytics] = useState<AnalyticsFinanceiro | null>(null)
+  const [fluxoCaixa, setFluxoCaixa] = useState<FluxoCaixa | null>(null)
+  const [loadingFluxoCaixa, setLoadingFluxoCaixa] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -211,8 +239,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     setError(null)
     try {
       const [rRes, pRes, aRes] = await Promise.all([
-        fetch("/api/ops/contas-receber-list"),
-        fetch("/api/ops/contas-pagar-list"),
+        fetch("/api/financeiro/receber"),
+        fetch("/api/financeiro/pagar"),
         fetch("/api/financeiro/analytics"),
       ])
       const [rJson, pJson, aJson] = await Promise.all([
@@ -244,12 +272,26 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  const refreshFluxoCaixa = useCallback(async () => {
+    setLoadingFluxoCaixa(true)
+    try {
+      const res = await fetch("/api/financeiro/fluxo-caixa")
+      const json = (await res.json()) as Record<string, unknown>
+      if (json.ok) setFluxoCaixa(json as unknown as FluxoCaixa)
+    } catch {
+      // silencioso — fluxo-caixa é complementar
+    } finally {
+      setLoadingFluxoCaixa(false)
+    }
+  }, [])
 
-  const callApi = useCallback(async (path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> => {
+  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { void refreshFluxoCaixa() }, [refreshFluxoCaixa])
+
+  const callApi = useCallback(async (path: string, body: Record<string, unknown>, method: "POST" | "PATCH" = "POST"): Promise<Record<string, unknown>> => {
     const lojaId = getLojaId()
     const res = await fetch(path, {
-      method: "POST",
+      method,
       headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
       body: JSON.stringify({ lojaId, ...body }),
     })
@@ -261,90 +303,65 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const liquidarReceber = useCallback(async (id: string, observacao?: string) => {
-    await callApi("/api/financeiro/contas-receber/liquidar", { localKey: id, observacao })
+    await callApi("/api/financeiro/receber", { op: "liquidar", localKey: id, observacao }, "PATCH")
     await fetchData()
   }, [callApi, fetchData])
 
   const receberParcial = useCallback(async (id: string, valor: number, observacao?: string) => {
-    await callApi("/api/financeiro/contas-receber/pagamento-parcial", { localKey: id, valor, observacao })
+    await callApi("/api/financeiro/receber", { op: "parcial", localKey: id, valor, observacao }, "PATCH")
     await fetchData()
   }, [callApi, fetchData])
 
   const estornarReceber = useCallback(async (id: string, motivo?: string) => {
-    await callApi("/api/financeiro/contas-receber/estornar-ultimo-pagamento", { localKey: id, motivo })
+    await callApi("/api/financeiro/receber", { op: "estornar", localKey: id, modo: "ultimo_pagamento", motivo }, "PATCH")
     await fetchData()
   }, [callApi, fetchData])
 
   const criarReceber = useCallback(async (data: NovoReceberInput) => {
-    const lojaId = getLojaId()
-    const localKey = `manual-cr-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const res = await fetch("/api/ops/contas-receber-persist", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
-      body: JSON.stringify({
-        rows: [{
-          id: localKey,
-          localKey,
-          cliente: data.cliente,
-          descricao: data.descricao,
-          valor: data.valor,
-          vencimento: data.vencimento,
-          status: "pendente",
-        }],
-      }),
-    })
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    if (!res.ok || json.ok === false) throw new Error(safeStr(json.error) || "Falha ao criar recebimento")
+    const res = await callApi("/api/financeiro/receber", {
+      descricao: data.descricao,
+      cliente: data.cliente,
+      valor: data.valor,
+      vencimento: data.vencimento,
+    }, "POST")
+    if (res.ok === false) throw new Error(safeStr(res.error) || "Falha ao criar recebimento")
     await fetchData()
-  }, [fetchData])
+  }, [callApi, fetchData])
 
   const liquidarPagar = useCallback(async (id: string, observacao?: string) => {
-    await callApi("/api/financeiro/contas-pagar/liquidar", { localKey: id, observacao })
+    await callApi("/api/financeiro/pagar", { op: "liquidar", localKey: id, observacao }, "PATCH")
     await fetchData()
   }, [callApi, fetchData])
 
   const pagarParcial = useCallback(async (id: string, valor: number, observacao?: string) => {
-    await callApi("/api/financeiro/contas-pagar/pagamento-parcial", { localKey: id, valor, observacao })
+    await callApi("/api/financeiro/pagar", { op: "parcial", localKey: id, valor, observacao }, "PATCH")
     await fetchData()
   }, [callApi, fetchData])
 
   const estornarPagar = useCallback(async (id: string, motivo?: string) => {
-    await callApi("/api/financeiro/contas-pagar/estornar-ultimo-pagamento", { localKey: id, motivo })
+    await callApi("/api/financeiro/pagar", { op: "estornar", localKey: id, motivo }, "PATCH")
     await fetchData()
   }, [callApi, fetchData])
 
   const criarPagar = useCallback(async (data: NovoPagarInput) => {
-    const lojaId = getLojaId()
-    const localKey = `manual-cp-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const res = await fetch("/api/ops/contas-pagar-persist", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
-      body: JSON.stringify({
-        lojaId,
-        rows: [{
-          id: localKey,
-          localKey,
-          fornecedor: data.fornecedor,
-          fornecedorNome: data.fornecedor,
-          descricao: data.descricao,
-          valor: data.valor,
-          vencimento: data.vencimento,
-          dataVencimento: data.vencimento,
-          status: "pendente",
-          categoria: data.categoria || "Outros",
-        }],
-      }),
-    })
-    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
-    if (!res.ok || json.ok === false) throw new Error(safeStr(json.error) || "Falha ao criar conta a pagar")
+    const res = await callApi("/api/financeiro/pagar", {
+      fornecedor: data.fornecedor,
+      descricao: data.descricao,
+      valor: data.valor,
+      vencimento: data.vencimento,
+      categoria: data.categoria || "Outros",
+    }, "POST")
+    if (res.ok === false) throw new Error(safeStr(res.error) || "Falha ao criar conta a pagar")
     await fetchData()
-  }, [fetchData])
+  }, [callApi, fetchData])
 
   return (
     <FinanceiroRealContext.Provider
       value={{
         receber, pagar, summaryR, summaryP, analytics,
+        fluxoCaixa, loadingFluxoCaixa,
         loading, error, reload: fetchData,
+        refreshFluxoCaixa,
         liquidarReceber, receberParcial, estornarReceber, criarReceber,
         liquidarPagar, pagarParcial, estornarPagar, criarPagar,
       }}
