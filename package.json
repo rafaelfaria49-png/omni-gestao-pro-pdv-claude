@@ -22,7 +22,8 @@
     "stripe:setup": "npx tsx scripts/stripe-setup.ts",
     "db:migrate-loja": "node --env-file=.env scripts/migrate-loja-ids.mjs",
     "db:check-rls": "node --env-file=.env scripts/check-rls-tables.mjs",
-    "db:migrate-legacy-financeiro": "node --env-file=.env scripts/migrate-legacy-financeiro.mjs"
+    "db:migrate-legacy-financeiro": "node --env-file=.env scripts/migrate-legacy-financeiro.mjs",
+    "financeiro:seed": "node scripts/seed-contas-receber-os.mjs --exec && node scripts/seed-contas-pagar.mjs --exec"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
