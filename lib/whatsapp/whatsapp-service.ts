@@ -319,13 +319,15 @@ export async function generateAiSuggestion(storeId: string, conversationId: stri
 
 /** Garante dados mínimos para o hub não abrir vazio. */
 export async function ensureHubSeed(storeId: string): Promise<void> {
-  const [cCount, qrCount, auCount] = await Promise.all([
-    prisma.whatsAppConversation.count({ where: { storeId } }),
-    prisma.whatsAppQuickReply.count({ where: { storeId } }),
-    prisma.whatsAppAutomation.count({ where: { storeId } }),
+  // Usa findFirst em vez de count para evitar pânico do Prisma Query Engine
+  // com pgBouncer em transaction mode (Supabase porta 6543).
+  const [conv, qr, auto] = await Promise.all([
+    prisma.whatsAppConversation.findFirst({ where: { storeId }, select: { id: true } }),
+    prisma.whatsAppQuickReply.findFirst({ where: { storeId }, select: { id: true } }),
+    prisma.whatsAppAutomation.findFirst({ where: { storeId }, select: { id: true } }),
   ])
 
-  if (cCount > 0 && qrCount > 0 && auCount > 0) return
+  if (conv && qr && auto) return
 
   await prisma.$transaction(async (tx) => {
     const aiExisting = await tx.whatsAppAiSetting.findUnique({ where: { storeId } })
@@ -342,7 +344,7 @@ export async function ensureHubSeed(storeId: string): Promise<void> {
       })
     }
 
-    if ((await tx.whatsAppQuickReply.count({ where: { storeId } })) === 0) {
+    if (!(await tx.whatsAppQuickReply.findFirst({ where: { storeId }, select: { id: true } }))) {
       await tx.whatsAppQuickReply.createMany({
         data: [
           {
@@ -373,7 +375,7 @@ export async function ensureHubSeed(storeId: string): Promise<void> {
       })
     }
 
-    if ((await tx.whatsAppAutomation.count({ where: { storeId } })) === 0) {
+    if (!(await tx.whatsAppAutomation.findFirst({ where: { storeId }, select: { id: true } }))) {
       await tx.whatsAppAutomation.createMany({
         data: [
           {
@@ -404,7 +406,7 @@ export async function ensureHubSeed(storeId: string): Promise<void> {
       })
     }
 
-    if ((await tx.whatsAppConversation.count({ where: { storeId } })) === 0) {
+    if (!(await tx.whatsAppConversation.findFirst({ where: { storeId }, select: { id: true } }))) {
       const c1 = await tx.whatsAppContact.create({
         data: {
           storeId,
