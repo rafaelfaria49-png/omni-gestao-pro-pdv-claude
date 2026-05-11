@@ -60,11 +60,11 @@ const nextConfig = {
   async rewrites() {
     return [
       { source: "/manifest.json", destination: "/manifest.webmanifest" },
-      /**
-       * Mantido por compatibilidade. Preferir também `app/api/webhooks/whatsapp/route.ts` (re-export),
-       * pois em alguns deploys Vercel o rewrite não é aplicado e `/api/webhooks/whatsapp` retorna 404.
-       */
-      { source: "/api/webhooks/whatsapp", destination: "/api/whatsapp/webhook" },
+      // NOTE: The rewrite for /api/webhooks/whatsapp → /api/whatsapp/webhook was removed.
+      // Next.js 16 plain-array rewrites are classified as "afterFiles" (confirmed in
+      // load-custom-routes.js: `afterFiles = _rewrites`), meaning the filesystem is checked
+      // first. Since app/api/webhooks/whatsapp/route.ts exists, that file always wins and
+      // the rewrite was dead code. Removing it eliminates ambiguity.
     ]
   },
   async redirects() {
