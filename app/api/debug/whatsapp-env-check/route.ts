@@ -39,7 +39,9 @@ export async function GET(req: Request) {
     ?? process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim()
   const webhookStoreId   = process.env.WHATSAPP_WEBHOOK_STORE_ID?.trim()
   const businessAccountId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID?.trim()
-  const apiVersion       = process.env.WHATSAPP_API_VERSION?.trim() ?? "v21.0 (default)"
+  const apiVersionRaw    = process.env.WHATSAPP_API_VERSION?.trim()
+  const apiVersion       = apiVersionRaw ?? "v21.0"
+  const apiVersionLabel  = apiVersionRaw ? apiVersion : `${apiVersion} (padrão)`
 
   return NextResponse.json({
     ok: true,
@@ -54,10 +56,10 @@ export async function GET(req: Request) {
       hasBusinessAccountId: !!businessAccountId,
       businessAccountIdMasked: mask(businessAccountId, 4, 3),
       webhookStoreId:       webhookStoreId ?? "(não configurado — usa loja-1)",
-      apiVersion,
+      apiVersion:           apiVersionLabel,
     },
     graphApi: {
-      baseUrl: `https://graph.facebook.com/${apiVersion.replace(/^v/, "v")}/`,
+      baseUrl: `https://graph.facebook.com/${apiVersion}/`,
       messagesEndpoint: `/{phoneNumberId}/messages`,
     },
     ready: !!(accessToken && phoneNumberId),
