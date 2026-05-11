@@ -164,7 +164,40 @@ async function handleMetaCloudPost(request: Request, raw: string): Promise<Respo
 
   after(async () => {
     try {
-      if (parsed !== null) await processMetaWhatsAppWebhookPayload(parsed)
+      if (parsed !== null) {
+        // Log seguro: object, field, contacts count, messages count, from mascarado
+        try {
+          const p = parsed as {
+            object?: string
+            entry?: Array<{
+              changes?: Array<{
+                field?: string
+                value?: {
+                  contacts?: unknown[]
+                  messages?: Array<{ from?: string; type?: string }>
+                }
+              }>
+            }>
+          }
+          const changes = p.entry?.[0]?.changes ?? []
+          const firstChange = changes[0]
+          const msgs = firstChange?.value?.messages ?? []
+          const contacts = firstChange?.value?.contacts ?? []
+          const from = typeof msgs[0]?.from === "string" ? msgs[0].from : ""
+          const fromMasked = from.length > 6 ? `${from.slice(0, 4)}****${from.slice(-4)}` : "****"
+          console.log("[whatsapp-webhook:POST:meta]", JSON.stringify({
+            object: p.object ?? "?",
+            field: firstChange?.field ?? "?",
+            contactsLen: contacts.length,
+            messagesLen: msgs.length,
+            fromMasked: msgs.length > 0 ? fromMasked : null,
+            msgType: msgs[0]?.type ?? null,
+          }))
+        } catch {
+          console.log("[whatsapp-webhook:POST:meta] log-parse-error")
+        }
+        await processMetaWhatsAppWebhookPayload(parsed)
+      }
     } catch {
       /* nunca propagar — webhook já respondeu 200 */
     }
