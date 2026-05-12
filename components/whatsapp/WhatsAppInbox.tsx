@@ -18,6 +18,13 @@ import {
   RefreshCw,
   MoreVertical,
   UserCheck,
+  Zap,
+  Tag,
+  Plus,
+  X,
+  Pencil,
+  Trash2,
+  Check,
 } from "lucide-react"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -27,6 +34,19 @@ type WaContact = {
   phoneDigits: string
   displayName: string
   profilePicUrl: string
+}
+
+type WaEtiqueta = {
+  id: string
+  nome: string
+  cor: string
+  ativo: boolean
+}
+
+type WaConvEtiqueta = {
+  id: string
+  etiquetaId: string
+  etiqueta: WaEtiqueta
 }
 
 type WaConversation = {
@@ -40,6 +60,7 @@ type WaConversation = {
   lastMessageAt: string | null
   unreadCount: number
   humanMode: boolean
+  etiquetas?: WaConvEtiqueta[]
 }
 
 type WaMessage = {
@@ -52,11 +73,22 @@ type WaMessage = {
   createdAt: string
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+type WaQuickReply = {
+  id: string
+  shortcut: string
+  title: string
+  body: string
+  category: string
+  ativo: boolean
+}
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const STORE_ID = "loja-1"
 const API_HEADERS = { "x-assistec-loja-id": STORE_ID, "Content-Type": "application/json" }
 const POLL_MS = 5000
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatTime(iso: string | null | undefined): string {
   if (!iso) return ""
@@ -86,20 +118,22 @@ function getInitials(name: string): string {
 
 function getAvatarColor(id: string): string {
   const colors = [
-    "bg-emerald-500",
-    "bg-sky-500",
-    "bg-violet-500",
-    "bg-amber-500",
-    "bg-rose-500",
-    "bg-teal-500",
-    "bg-indigo-500",
-    "bg-orange-500",
+    "bg-emerald-500", "bg-sky-500", "bg-violet-500", "bg-amber-500",
+    "bg-rose-500", "bg-teal-500", "bg-indigo-500", "bg-orange-500",
   ]
   const hash = id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0)
   return colors[hash % colors.length]
 }
 
-// ─── Avatar component ─────────────────────────────────────────────────────────
+function hexToRgba(hex: string, alpha = 0.15): string {
+  const h = hex.replace("#", "")
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
+// ─── Avatar ───────────────────────────────────────────────────────────────────
 
 function ContactAvatar({ contact, size = "md" }: { contact: WaContact; size?: "sm" | "md" | "lg" }) {
   const sz = size === "sm" ? "h-8 w-8 text-xs" : size === "lg" ? "h-12 w-12 text-base" : "h-10 w-10 text-sm"
@@ -119,17 +153,27 @@ function ContactAvatar({ contact, size = "md" }: { contact: WaContact; size?: "s
   )
 }
 
+// ─── Label chip (small) ────────────────────────────────────────────────────────
+
+function EtiquetaChip({ etiqueta, onRemove }: { etiqueta: WaEtiqueta; onRemove?: () => void }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none"
+      style={{ backgroundColor: hexToRgba(etiqueta.cor, 0.18), color: etiqueta.cor, border: `1px solid ${hexToRgba(etiqueta.cor, 0.4)}` }}
+    >
+      {etiqueta.nome}
+      {onRemove && (
+        <button onClick={onRemove} className="hover:opacity-70 transition-opacity ml-0.5">
+          <X className="h-2.5 w-2.5" />
+        </button>
+      )}
+    </span>
+  )
+}
+
 // ─── Conversation list item ────────────────────────────────────────────────────
 
-function ConvItem({
-  conv,
-  selected,
-  onClick,
-}: {
-  conv: WaConversation
-  selected: boolean
-  onClick: () => void
-}) {
+function ConvItem({ conv, selected, onClick }: { conv: WaConversation; selected: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -160,14 +204,20 @@ function ConvItem({
             {conv.lastMessagePreview || "Sem mensagens"}
           </p>
           <div className="flex items-center gap-1 flex-shrink-0 ml-1">
-            {conv.clienteId && (
-              <UserCheck className="h-3 w-3 text-emerald-500" aria-label="Cliente vinculado" />
-            )}
-            {conv.humanMode && (
-              <span className="text-[10px] text-amber-500 font-semibold">Human</span>
-            )}
+            {conv.clienteId && <UserCheck className="h-3 w-3 text-emerald-500" />}
+            {conv.humanMode && <span className="text-[10px] text-amber-500 font-semibold">Human</span>}
           </div>
         </div>
+        {conv.etiquetas && conv.etiquetas.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {conv.etiquetas.slice(0, 3).map((ce) => (
+              <EtiquetaChip key={ce.id} etiqueta={ce.etiqueta} />
+            ))}
+            {conv.etiquetas.length > 3 && (
+              <span className="text-[10px] text-muted-foreground">+{conv.etiquetas.length - 3}</span>
+            )}
+          </div>
+        )}
       </div>
     </button>
   )
@@ -179,14 +229,10 @@ function MessageBubble({ msg }: { msg: WaMessage }) {
   const out = msg.direction === "outbound"
   return (
     <div className={cn("flex mb-1", out ? "justify-end" : "justify-start")}>
-      <div
-        className={cn(
-          "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
-          out
-            ? "bg-emerald-600 text-white rounded-br-sm"
-            : "bg-card border border-border text-foreground rounded-bl-sm"
-        )}
-      >
+      <div className={cn(
+        "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
+        out ? "bg-emerald-600 text-white rounded-br-sm" : "bg-card border border-border text-foreground rounded-bl-sm"
+      )}>
         <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>
         <div className={cn("flex items-center gap-1 mt-1", out ? "justify-end" : "justify-start")}>
           <span className={cn("text-[10px]", out ? "text-emerald-100/80" : "text-muted-foreground")}>
@@ -194,6 +240,478 @@ function MessageBubble({ msg }: { msg: WaMessage }) {
           </span>
           {out && <CheckCheck className="h-3 w-3 text-emerald-200/80" />}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Quick reply autocomplete ─────────────────────────────────────────────────
+
+function QuickReplyDropdown({
+  query,
+  quickReplies,
+  onSelect,
+  onClose,
+}: {
+  query: string
+  quickReplies: WaQuickReply[]
+  onSelect: (body: string) => void
+  onClose: () => void
+}) {
+  const q = query.slice(1).toLowerCase()
+  const matches = quickReplies.filter(
+    (r) => r.ativo && (q === "" || r.shortcut.replace("/", "").toLowerCase().startsWith(q))
+  )
+
+  if (matches.length === 0) return null
+
+  return (
+    <div className="absolute bottom-full left-0 right-0 mb-1 bg-background border border-border rounded-xl shadow-lg overflow-hidden z-50 max-h-56 overflow-y-auto">
+      <div className="px-3 py-1.5 border-b border-border/60 flex items-center justify-between">
+        <span className="text-[11px] text-muted-foreground font-medium flex items-center gap-1">
+          <Zap className="h-3 w-3 text-emerald-500" /> Respostas rápidas
+        </span>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      {matches.map((r) => (
+        <button
+          key={r.id}
+          onClick={() => onSelect(r.body)}
+          className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-muted/60 transition-colors text-left"
+        >
+          <div className="flex-shrink-0 mt-0.5">
+            <span className="inline-block bg-emerald-500/10 text-emerald-600 text-[11px] font-semibold rounded px-1.5 py-0.5 font-mono">
+              /{r.shortcut.replace(/^\//, "")}
+            </span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-foreground truncate">{r.title}</p>
+            <p className="text-[11px] text-muted-foreground truncate mt-0.5">{r.body}</p>
+          </div>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ─── Quick reply modal ────────────────────────────────────────────────────────
+
+type QRFormState = { shortcut: string; title: string; body: string; category: string }
+
+function QuickReplyModal({
+  quickReplies,
+  onClose,
+  onRefresh,
+}: {
+  quickReplies: WaQuickReply[]
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const [form, setForm] = useState<QRFormState>({ shortcut: "", title: "", body: "", category: "" })
+  const [editId, setEditId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  function openEdit(r: WaQuickReply) {
+    setEditId(r.id)
+    setForm({ shortcut: r.shortcut, title: r.title, body: r.body, category: r.category })
+    setError("")
+  }
+
+  function resetForm() {
+    setEditId(null)
+    setForm({ shortcut: "", title: "", body: "", category: "" })
+    setError("")
+  }
+
+  async function save() {
+    const shortcut = form.shortcut.replace(/^\//, "").trim()
+    if (!shortcut) { setError("Atalho obrigatório."); return }
+    if (!form.title.trim()) { setError("Título obrigatório."); return }
+    if (!form.body.trim()) { setError("Mensagem obrigatória."); return }
+
+    setSaving(true)
+    setError("")
+    try {
+      const url = editId
+        ? `/api/whatsapp/quick-replies/${editId}`
+        : "/api/whatsapp/quick-replies"
+      const method = editId ? "PATCH" : "POST"
+      const res = await fetch(url, {
+        method,
+        headers: API_HEADERS,
+        body: JSON.stringify({ shortcut, title: form.title.trim(), body: form.body, category: form.category.trim() }),
+      })
+      const data = await res.json() as { error?: string }
+      if (!res.ok) { setError(data.error ?? "Erro ao salvar."); return }
+      resetForm()
+      onRefresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Remover esta resposta rápida?")) return
+    const res = await fetch(`/api/whatsapp/quick-replies/${id}`, { method: "DELETE", headers: API_HEADERS })
+    if (res.ok) onRefresh()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-emerald-500" />
+            <h2 className="text-base font-semibold text-foreground">Respostas Rápidas</h2>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* List */}
+          <div className="w-1/2 border-r border-border overflow-y-auto">
+            {quickReplies.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 p-8 text-center">
+                <Zap className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">Nenhuma resposta ainda.</p>
+              </div>
+            ) : (
+              quickReplies.map((r) => (
+                <div
+                  key={r.id}
+                  className={cn(
+                    "flex items-start gap-2 px-4 py-3 border-b border-border/60 group hover:bg-muted/40 transition-colors",
+                    editId === r.id && "bg-muted"
+                  )}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[11px] bg-emerald-500/10 text-emerald-600 rounded px-1.5 py-0.5 font-semibold">
+                        /{r.shortcut.replace(/^\//, "")}
+                      </span>
+                      {!r.ativo && (
+                        <span className="text-[10px] text-muted-foreground bg-muted rounded px-1.5 py-0.5">inativo</span>
+                      )}
+                    </div>
+                    <p className="text-xs font-medium text-foreground mt-1 truncate">{r.title}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{r.body}</p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => openEdit(r)}
+                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => remove(r.id)}
+                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-red-50 text-muted-foreground hover:text-red-500"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Form */}
+          <div className="w-1/2 flex flex-col p-5 gap-3 overflow-y-auto">
+            <p className="text-xs font-semibold text-foreground/70 uppercase tracking-wide">
+              {editId ? "Editar resposta" : "Nova resposta"}
+            </p>
+            {error && <p className="text-xs text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Atalho</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-mono">/</span>
+                <Input
+                  value={form.shortcut.replace(/^\//, "")}
+                  onChange={(e) => setForm((f) => ({ ...f, shortcut: e.target.value.replace(/\s/g, "") }))}
+                  placeholder="garantia"
+                  className="pl-6 h-9 text-sm font-mono"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Título</label>
+              <Input
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="Informações de garantia"
+                className="h-9 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Categoria (opcional)</label>
+              <Input
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                placeholder="atendimento"
+                className="h-9 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Mensagem</label>
+              <textarea
+                value={form.body}
+                onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
+                placeholder="Digite a mensagem completa aqui..."
+                rows={5}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={save}
+                disabled={saving}
+                size="sm"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {saving ? "Salvando…" : editId ? "Salvar alterações" : "Criar resposta"}
+              </Button>
+              {editId && (
+                <Button onClick={resetForm} variant="outline" size="sm" className="flex-shrink-0">
+                  Cancelar
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Etiquetas modal ──────────────────────────────────────────────────────────
+
+const PRESET_COLORS = [
+  "#10b981", "#3b82f6", "#8b5cf6", "#f59e0b",
+  "#ef4444", "#ec4899", "#14b8a6", "#f97316",
+]
+
+function EtiquetasModal({
+  etiquetas,
+  onClose,
+  onRefresh,
+}: {
+  etiquetas: WaEtiqueta[]
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const [nome, setNome] = useState("")
+  const [cor, setCor] = useState(PRESET_COLORS[0])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const [editId, setEditId] = useState<string | null>(null)
+  const [editNome, setEditNome] = useState("")
+  const [editCor, setEditCor] = useState("")
+
+  async function create() {
+    if (!nome.trim()) { setError("Nome obrigatório."); return }
+    setSaving(true); setError("")
+    try {
+      const res = await fetch("/api/whatsapp/etiquetas", {
+        method: "POST",
+        headers: API_HEADERS,
+        body: JSON.stringify({ nome: nome.trim(), cor }),
+      })
+      const data = await res.json() as { error?: string }
+      if (!res.ok) { setError(data.error ?? "Erro ao criar."); return }
+      setNome(""); setCor(PRESET_COLORS[0])
+      onRefresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function startEdit(e: WaEtiqueta) {
+    setEditId(e.id); setEditNome(e.nome); setEditCor(e.cor)
+  }
+
+  async function saveEdit() {
+    if (!editId || !editNome.trim()) return
+    const res = await fetch(`/api/whatsapp/etiquetas/${editId}`, {
+      method: "PATCH",
+      headers: API_HEADERS,
+      body: JSON.stringify({ nome: editNome.trim(), cor: editCor }),
+    })
+    if (res.ok) { setEditId(null); onRefresh() }
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Remover esta etiqueta? Será removida de todas as conversas.")) return
+    const res = await fetch(`/api/whatsapp/etiquetas/${id}`, { method: "DELETE", headers: API_HEADERS })
+    if (res.ok) onRefresh()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Tag className="h-4 w-4 text-primary" />
+            <h2 className="text-base font-semibold">Etiquetas</h2>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* Create */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nova etiqueta</p>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <div className="flex gap-2">
+              <Input
+                value={nome}
+                onChange={(e) => setNome(e.target.value)}
+                placeholder="Nome da etiqueta"
+                className="flex-1 h-9 text-sm"
+                onKeyDown={(e) => e.key === "Enter" && create()}
+              />
+              <Button
+                onClick={create}
+                disabled={saving}
+                size="sm"
+                className="h-9 px-3 bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {PRESET_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCor(c)}
+                  className={cn(
+                    "h-6 w-6 rounded-full border-2 transition-transform",
+                    cor === c ? "border-foreground scale-110" : "border-transparent"
+                  )}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="space-y-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              {etiquetas.length} etiqueta{etiquetas.length !== 1 ? "s" : ""}
+            </p>
+            {etiquetas.map((e) =>
+              editId === e.id ? (
+                <div key={e.id} className="flex items-center gap-2 p-2 rounded-lg border border-border bg-muted/40">
+                  <div className="flex gap-1.5 flex-wrap flex-1">
+                    {PRESET_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setEditCor(c)}
+                        className={cn("h-5 w-5 rounded-full border-2", editCor === c ? "border-foreground" : "border-transparent")}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                  <Input
+                    value={editNome}
+                    onChange={(ev) => setEditNome(ev.target.value)}
+                    className="h-8 text-xs w-32"
+                    onKeyDown={(ev) => ev.key === "Enter" && saveEdit()}
+                  />
+                  <button onClick={saveEdit} className="text-emerald-500 hover:text-emerald-600">
+                    <Check className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => setEditId(null)} className="text-muted-foreground hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div key={e.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/40 group">
+                  <span className="h-4 w-4 rounded-full flex-shrink-0" style={{ backgroundColor: e.cor }} />
+                  <span className="flex-1 text-sm text-foreground truncate">{e.nome}</span>
+                  {!e.ativo && <span className="text-[10px] text-muted-foreground">inativa</span>}
+                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
+                    <button onClick={() => startEdit(e)} className="text-muted-foreground hover:text-foreground">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button onClick={() => remove(e.id)} className="text-muted-foreground hover:text-red-500">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Add label popover ────────────────────────────────────────────────────────
+
+function AddEtiquetaPopover({
+  conversationId,
+  currentEtiquetas,
+  allEtiquetas,
+  onClose,
+  onChange,
+}: {
+  conversationId: string
+  currentEtiquetas: WaConvEtiqueta[]
+  allEtiquetas: WaEtiqueta[]
+  onClose: () => void
+  onChange: () => void
+}) {
+  const currentIds = new Set(currentEtiquetas.map((ce) => ce.etiquetaId))
+
+  async function toggle(etiqueta: WaEtiqueta) {
+    if (currentIds.has(etiqueta.id)) {
+      await fetch(`/api/whatsapp/conversations/${conversationId}/etiquetas/${etiqueta.id}`, {
+        method: "DELETE",
+        headers: API_HEADERS,
+      })
+    } else {
+      await fetch(`/api/whatsapp/conversations/${conversationId}/etiquetas`, {
+        method: "POST",
+        headers: API_HEADERS,
+        body: JSON.stringify({ etiquetaId: etiqueta.id }),
+      })
+    }
+    onChange()
+  }
+
+  return (
+    <div className="absolute top-full right-0 mt-1 bg-background border border-border rounded-xl shadow-xl z-50 w-52 overflow-hidden">
+      <div className="px-3 py-2 border-b border-border/60">
+        <p className="text-xs font-semibold text-muted-foreground">Adicionar etiqueta</p>
+      </div>
+      {allEtiquetas.filter((e) => e.ativo).length === 0 ? (
+        <p className="text-xs text-muted-foreground px-3 py-3">Nenhuma etiqueta criada.</p>
+      ) : (
+        allEtiquetas.filter((e) => e.ativo).map((e) => (
+          <button
+            key={e.id}
+            onClick={() => toggle(e)}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 hover:bg-muted/60 transition-colors text-left"
+          >
+            <span className="h-3.5 w-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: e.cor }} />
+            <span className="text-sm text-foreground flex-1 truncate">{e.nome}</span>
+            {currentIds.has(e.id) && <Check className="h-3.5 w-3.5 text-emerald-500" />}
+          </button>
+        ))
+      )}
+      <div className="border-t border-border/60">
+        <button onClick={onClose} className="w-full px-3 py-2 text-xs text-muted-foreground hover:text-foreground text-center">
+          Fechar
+        </button>
       </div>
     </div>
   )
@@ -222,9 +740,7 @@ function EmptyChat() {
         <MessageCircle className="h-8 w-8 text-muted-foreground" />
       </div>
       <p className="font-medium text-foreground">Selecione uma conversa</p>
-      <p className="text-sm text-muted-foreground">
-        Escolha um contato à esquerda para ver as mensagens.
-      </p>
+      <p className="text-sm text-muted-foreground">Escolha um contato à esquerda para ver as mensagens.</p>
     </div>
   )
 }
@@ -235,19 +751,38 @@ export default function WhatsAppInbox() {
   const [conversations, setConversations] = useState<WaConversation[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [messages, setMessages] = useState<WaMessage[]>([])
+  const [quickReplies, setQuickReplies] = useState<WaQuickReply[]>([])
+  const [etiquetas, setEtiquetas] = useState<WaEtiqueta[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [labelFilter, setLabelFilter] = useState<string | null>(null)
   const [inputText, setInputText] = useState("")
   const [loadingConvs, setLoadingConvs] = useState(true)
   const [loadingMsgs, setLoadingMsgs] = useState(false)
   const [sending, setSending] = useState(false)
   const [online, setOnline] = useState(true)
-  const [lastPoll, setLastPoll] = useState(Date.now())
+  const [showQRModal, setShowQRModal] = useState(false)
+  const [showEtiquetasModal, setShowEtiquetasModal] = useState(false)
+  const [showAddLabel, setShowAddLabel] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const addLabelRef = useRef<HTMLDivElement>(null)
 
   const selectedConv = conversations.find((c) => c.id === selectedId) ?? null
+  const showQRDropdown = inputText.startsWith("/") && quickReplies.length > 0
+
+  // ── Close add-label popover on outside click ──
+  useEffect(() => {
+    if (!showAddLabel) return
+    function handler(e: MouseEvent) {
+      if (addLabelRef.current && !addLabelRef.current.contains(e.target as Node)) {
+        setShowAddLabel(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [showAddLabel])
 
   // ── Fetch conversations ──
   const fetchConversations = useCallback(async (silent = false) => {
@@ -255,55 +790,68 @@ export default function WhatsAppInbox() {
     try {
       const res = await fetch("/api/whatsapp/conversations", { headers: API_HEADERS })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      const data = await res.json() as { conversations?: WaConversation[] }
       setConversations(data.conversations ?? [])
       setOnline(true)
     } catch {
       setOnline(false)
     } finally {
       if (!silent) setLoadingConvs(false)
-      setLastPoll(Date.now())
     }
   }, [])
 
-  // ── Fetch messages for selected conversation ──
+  // ── Fetch messages ──
   const fetchMessages = useCallback(async (convId: string, silent = false) => {
     if (!silent) setLoadingMsgs(true)
     try {
-      const res = await fetch(`/api/whatsapp/messages?conversationId=${convId}&take=100`, {
-        headers: API_HEADERS,
-      })
+      const res = await fetch(`/api/whatsapp/messages?conversationId=${convId}&take=100`, { headers: API_HEADERS })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
+      const data = await res.json() as { messages?: WaMessage[] }
       setMessages(data.messages ?? [])
-    } catch {
-      /* keep existing messages */
-    } finally {
-      if (!silent) setLoadingMsgs(false)
-    }
+    } catch { /* keep existing */ }
+    finally { if (!silent) setLoadingMsgs(false) }
   }, [])
 
-  // ── Select conversation + mark read ──
-  const selectConversation = useCallback(
-    async (conv: WaConversation) => {
-      setSelectedId(conv.id)
-      setMessages([])
-      await fetchMessages(conv.id)
-      // Mark as read if there are unread messages
-      if (conv.unreadCount > 0) {
-        await fetch(`/api/whatsapp/conversations/${conv.id}`, {
-          method: "PATCH",
-          headers: API_HEADERS,
-          body: JSON.stringify({ unreadCount: 0 }),
-        })
-        setConversations((prev) =>
-          prev.map((c) => (c.id === conv.id ? { ...c, unreadCount: 0 } : c))
-        )
+  // ── Fetch quick replies ──
+  const fetchQuickReplies = useCallback(async () => {
+    try {
+      const res = await fetch("/api/whatsapp/quick-replies", { headers: API_HEADERS })
+      if (res.ok) {
+        const data = await res.json() as { quickReplies?: WaQuickReply[] }
+        setQuickReplies(data.quickReplies ?? [])
       }
-      inputRef.current?.focus()
-    },
-    [fetchMessages]
-  )
+    } catch { /* silent */ }
+  }, [])
+
+  // ── Fetch etiquetas ──
+  const fetchEtiquetas = useCallback(async () => {
+    try {
+      const res = await fetch("/api/whatsapp/etiquetas", { headers: API_HEADERS })
+      if (res.ok) {
+        const data = await res.json() as { etiquetas?: WaEtiqueta[] }
+        setEtiquetas(data.etiquetas ?? [])
+      }
+    } catch { /* silent */ }
+  }, [])
+
+  // ── Select conversation ──
+  const selectConversation = useCallback(async (conv: WaConversation) => {
+    setSelectedId(conv.id)
+    setMessages([])
+    setShowAddLabel(false)
+    await fetchMessages(conv.id)
+    if (conv.unreadCount > 0) {
+      await fetch(`/api/whatsapp/conversations/${conv.id}`, {
+        method: "PATCH",
+        headers: API_HEADERS,
+        body: JSON.stringify({ unreadCount: 0 }),
+      })
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conv.id ? { ...c, unreadCount: 0 } : c))
+      )
+    }
+    inputRef.current?.focus()
+  }, [fetchMessages])
 
   // ── Send message ──
   const sendMessage = useCallback(async () => {
@@ -318,12 +866,11 @@ export default function WhatsAppInbox() {
         body: JSON.stringify({ conversationId: selectedId, text }),
       })
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
+        const err = await res.json().catch(() => ({})) as { error?: string }
         console.error("[WhatsAppInbox] send error:", err)
-        setInputText(text) // restore on failure
+        setInputText(text)
         return
       }
-      // Optimistically add message then refresh
       const optimistic: WaMessage = {
         id: `opt-${Date.now()}`,
         conversationId: selectedId,
@@ -334,7 +881,6 @@ export default function WhatsAppInbox() {
         createdAt: new Date().toISOString(),
       }
       setMessages((prev) => [...prev, optimistic])
-      // Update last preview in sidebar
       setConversations((prev) =>
         prev.map((c) =>
           c.id === selectedId
@@ -342,7 +888,6 @@ export default function WhatsAppInbox() {
             : c
         )
       )
-      // Refresh messages from server after short delay
       setTimeout(() => fetchMessages(selectedId, true), 1200)
     } finally {
       setSending(false)
@@ -350,15 +895,22 @@ export default function WhatsAppInbox() {
     }
   }, [inputText, selectedId, sending, fetchMessages])
 
-  // ── Auto-scroll to bottom on new messages ──
+  // ── After label change, refresh conversation list ──
+  const onLabelChange = useCallback(async () => {
+    await fetchConversations(true)
+  }, [fetchConversations])
+
+  // ── Auto-scroll ──
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
   // ── Initial load ──
   useEffect(() => {
-    fetchConversations()
-  }, [fetchConversations])
+    void fetchConversations()
+    void fetchQuickReplies()
+    void fetchEtiquetas()
+  }, [fetchConversations, fetchQuickReplies, fetchEtiquetas])
 
   // ── Polling ──
   useEffect(() => {
@@ -371,216 +923,336 @@ export default function WhatsAppInbox() {
     }
   }, [fetchConversations, fetchMessages, selectedId])
 
-  // ── Keyboard send ──
+  // ── Keyboard ──
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage() }
+    if (e.key === "Escape" && showQRDropdown) setInputText("")
   }
 
-  // ── Filtered conversations ──
-  const filtered = searchQuery
-    ? conversations.filter(
-        (c) =>
-          c.contact.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.contact.phoneDigits.includes(searchQuery.replace(/\D/g, "")) ||
-          c.lastMessagePreview.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : conversations
+  // ── Filter conversations ──
+  const filtered = conversations.filter((c) => {
+    const matchesSearch = !searchQuery || (
+      c.contact.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.contact.phoneDigits.includes(searchQuery.replace(/\D/g, "")) ||
+      c.lastMessagePreview.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    const matchesLabel = !labelFilter ||
+      c.etiquetas?.some((ce) => ce.etiquetaId === labelFilter)
+    return matchesSearch && matchesLabel
+  })
 
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
+  const activeEtiquetas = etiquetas.filter((e) => e.ativo)
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border border-border bg-background shadow-sm">
-      {/* ── Sidebar ── */}
-      <aside className="w-80 flex-shrink-0 flex flex-col border-r border-border">
-        {/* Header */}
-        <div className="px-4 py-3 border-b border-border">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-lg bg-emerald-500 flex items-center justify-center">
-                <MessageCircle className="h-4 w-4 text-white" />
-              </div>
-              <div>
-                <h1 className="text-sm font-semibold text-foreground leading-none">WhatsApp</h1>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {online ? "Conectado" : "Sem conexão"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {totalUnread > 0 && (
-                <Badge variant="default" className="bg-emerald-500 hover:bg-emerald-500 text-white text-[10px] px-1.5 py-0 h-4">
-                  {totalUnread}
-                </Badge>
-              )}
-              {online ? (
-                <Wifi className="h-3.5 w-3.5 text-emerald-500" />
-              ) : (
-                <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />
-              )}
-              <button
-                onClick={() => fetchConversations()}
-                className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                title="Atualizar"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          </div>
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar contato ou mensagem…"
-              className="pl-8 h-8 text-xs bg-muted/40 border-border/60"
-            />
-          </div>
-        </div>
+    <>
+      {/* ── Modals ── */}
+      {showQRModal && (
+        <QuickReplyModal
+          quickReplies={quickReplies}
+          onClose={() => setShowQRModal(false)}
+          onRefresh={fetchQuickReplies}
+        />
+      )}
+      {showEtiquetasModal && (
+        <EtiquetasModal
+          etiquetas={etiquetas}
+          onClose={() => setShowEtiquetasModal(false)}
+          onRefresh={fetchEtiquetas}
+        />
+      )}
 
-        {/* Conversation list */}
-        <div className="flex-1 overflow-y-auto">
-          {loadingConvs ? (
-            <div className="p-4 space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="flex-1 space-y-1.5">
-                    <Skeleton className="h-3.5 w-3/4" />
-                    <Skeleton className="h-3 w-full" />
-                  </div>
+      <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+        {/* ── Sidebar ── */}
+        <aside className="w-80 flex-shrink-0 flex flex-col border-r border-border">
+          {/* Header */}
+          <div className="px-4 py-3 border-b border-border">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-lg bg-emerald-500 flex items-center justify-center">
+                  <MessageCircle className="h-4 w-4 text-white" />
                 </div>
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <EmptyConversations />
-          ) : (
-            filtered.map((conv) => (
-              <ConvItem
-                key={conv.id}
-                conv={conv}
-                selected={conv.id === selectedId}
-                onClick={() => selectConversation(conv)}
-              />
-            ))
-          )}
-        </div>
-      </aside>
-
-      {/* ── Chat panel ── */}
-      <div className="flex-1 min-w-0 flex flex-col">
-        {!selectedConv ? (
-          <EmptyChat />
-        ) : (
-          <>
-            {/* Chat header */}
-            <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3 bg-background/80 backdrop-blur-sm">
-              <div className="flex items-center gap-3 min-w-0">
-                <ContactAvatar contact={selectedConv.contact} size="md" />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-semibold text-foreground truncate">
-                      {selectedConv.contact.displayName}
-                    </p>
-                    {selectedConv.clienteId && (
-                      <div title="Cliente cadastrado vinculado" className="flex items-center gap-0.5">
-                        <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
-                        <span className="text-[10px] text-emerald-500 font-medium">Cadastrado</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                    <p className="text-xs text-muted-foreground truncate">
-                      {phoneLabel(selectedConv.contact.phoneDigits)}
-                    </p>
-                    {selectedConv.humanMode && (
-                      <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-400 text-amber-500">
-                        Atendimento humano
-                      </Badge>
-                    )}
-                  </div>
+                <div>
+                  <h1 className="text-sm font-semibold text-foreground leading-none">WhatsApp</h1>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {online ? "Conectado" : "Sem conexão"}
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "text-[10px] h-5 px-1.5",
-                    selectedConv.status === "open"
-                      ? "border-emerald-500/40 text-emerald-500"
-                      : "border-muted text-muted-foreground"
-                  )}
+              <div className="flex items-center gap-1.5">
+                {totalUnread > 0 && (
+                  <Badge variant="default" className="bg-emerald-500 hover:bg-emerald-500 text-white text-[10px] px-1.5 py-0 h-4">
+                    {totalUnread}
+                  </Badge>
+                )}
+                {online ? <Wifi className="h-3.5 w-3.5 text-emerald-500" /> : <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />}
+                <button
+                  onClick={() => void fetchConversations()}
+                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title="Atualizar"
                 >
-                  {selectedConv.status === "open" ? "Aberta" : selectedConv.status}
-                </Badge>
-                <button className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                  <MoreVertical className="h-4 w-4" />
+                  <RefreshCw className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-0.5 bg-muted/20">
-              {loadingMsgs ? (
-                <div className="space-y-3 pt-2">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className={cn("flex", i % 2 === 0 ? "justify-end" : "justify-start")}>
-                      <Skeleton className={cn("h-10 rounded-2xl", i % 2 === 0 ? "w-48" : "w-64")} />
-                    </div>
-                  ))}
-                </div>
-              ) : messages.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-sm text-muted-foreground">Nenhuma mensagem nesta conversa.</p>
-                </div>
-              ) : (
-                <>
-                  {messages.map((msg) => (
-                    <MessageBubble key={msg.id} msg={msg} />
-                  ))}
-                  <div ref={messagesEndRef} />
-                </>
-              )}
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar contato ou mensagem…"
+                className="pl-8 h-8 text-xs bg-muted/40 border-border/60"
+              />
             </div>
+          </div>
 
-            {/* Input area */}
-            <div className="px-4 py-3 border-t border-border bg-background">
-              <div className="flex items-center gap-2">
-                <Input
-                  ref={inputRef}
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Digite uma mensagem… (Enter para enviar)"
-                  disabled={sending}
-                  className="flex-1 h-10 text-sm bg-muted/40 border-border/60 focus-visible:ring-emerald-500/50"
-                />
-                <Button
-                  onClick={sendMessage}
-                  disabled={!inputText.trim() || sending}
-                  size="sm"
-                  className="h-10 w-10 p-0 bg-emerald-600 hover:bg-emerald-700 text-white flex-shrink-0"
+          {/* Label filter */}
+          {activeEtiquetas.length > 0 && (
+            <div className="px-4 py-2 border-b border-border/60 flex gap-1.5 flex-wrap">
+              <button
+                onClick={() => setLabelFilter(null)}
+                className={cn(
+                  "text-[11px] rounded-full px-2.5 py-1 font-medium transition-colors",
+                  !labelFilter ? "bg-foreground text-background" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                )}
+              >
+                Todas
+              </button>
+              {activeEtiquetas.map((e) => (
+                <button
+                  key={e.id}
+                  onClick={() => setLabelFilter(labelFilter === e.id ? null : e.id)}
+                  className={cn(
+                    "text-[11px] rounded-full px-2.5 py-1 font-medium transition-all",
+                    labelFilter === e.id
+                      ? "ring-2 ring-offset-1"
+                      : "opacity-80 hover:opacity-100"
+                  )}
+                  style={{
+                    backgroundColor: hexToRgba(e.cor, labelFilter === e.id ? 0.25 : 0.12),
+                    color: e.cor,
+                    borderColor: e.cor,
+                    border: `1px solid ${hexToRgba(e.cor, 0.35)}`,
+                    ...(labelFilter === e.id ? { outlineColor: e.cor } : {}),
+                  }}
                 >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1">
-                <User className="h-3 w-3" />
-                Enviando como{" "}
-                <span className="font-medium">
-                  {process.env.NEXT_PUBLIC_APP_URL?.replace(/https?:\/\//, "") ?? "OmniGestão"}
-                </span>
-                {" · "}
-                Atualiza automaticamente a cada {POLL_MS / 1000}s
-              </p>
+                  {e.nome}
+                </button>
+              ))}
             </div>
-          </>
-        )}
+          )}
+
+          {/* Conversation list */}
+          <div className="flex-1 overflow-y-auto">
+            {loadingConvs ? (
+              <div className="p-4 space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <Skeleton className="h-10 w-10 rounded-full" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-3.5 w-3/4" />
+                      <Skeleton className="h-3 w-full" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <EmptyConversations />
+            ) : (
+              filtered.map((conv) => (
+                <ConvItem
+                  key={conv.id}
+                  conv={conv}
+                  selected={conv.id === selectedId}
+                  onClick={() => void selectConversation(conv)}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Sidebar tools */}
+          <div className="px-4 py-2.5 border-t border-border flex items-center gap-1.5">
+            <button
+              onClick={() => setShowQRModal(true)}
+              className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Respostas rápidas"
+            >
+              <Zap className="h-3.5 w-3.5 text-emerald-500" />
+              Respostas rápidas
+            </button>
+            <button
+              onClick={() => setShowEtiquetasModal(true)}
+              className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Etiquetas"
+            >
+              <Tag className="h-3.5 w-3.5 text-primary" />
+              Etiquetas
+            </button>
+          </div>
+        </aside>
+
+        {/* ── Chat panel ── */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {!selectedConv ? (
+            <EmptyChat />
+          ) : (
+            <>
+              {/* Chat header */}
+              <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3 bg-background/80 backdrop-blur-sm">
+                <div className="flex items-center gap-3 min-w-0">
+                  <ContactAvatar contact={selectedConv.contact} size="md" />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-sm font-semibold text-foreground truncate">
+                        {selectedConv.contact.displayName}
+                      </p>
+                      {selectedConv.clienteId && (
+                        <div title="Cliente cadastrado vinculado" className="flex items-center gap-0.5">
+                          <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
+                          <span className="text-[10px] text-emerald-500 font-medium">Cadastrado</span>
+                        </div>
+                      )}
+                      {/* Etiqueta chips on header */}
+                      {selectedConv.etiquetas?.map((ce) => (
+                        <EtiquetaChip
+                          key={ce.id}
+                          etiqueta={ce.etiqueta}
+                          onRemove={() => {
+                            void fetch(
+                              `/api/whatsapp/conversations/${selectedConv.id}/etiquetas/${ce.etiquetaId}`,
+                              { method: "DELETE", headers: API_HEADERS }
+                            ).then(() => onLabelChange())
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                      <p className="text-xs text-muted-foreground truncate">
+                        {phoneLabel(selectedConv.contact.phoneDigits)}
+                      </p>
+                      {selectedConv.humanMode && (
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-amber-400 text-amber-500">
+                          Atendimento humano
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] h-5 px-1.5",
+                      selectedConv.status === "open"
+                        ? "border-emerald-500/40 text-emerald-500"
+                        : "border-muted text-muted-foreground"
+                    )}
+                  >
+                    {selectedConv.status === "open" ? "Aberta" : selectedConv.status}
+                  </Badge>
+                  {/* Add label button */}
+                  <div className="relative" ref={addLabelRef}>
+                    <button
+                      onClick={() => setShowAddLabel((v) => !v)}
+                      className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      title="Adicionar etiqueta"
+                    >
+                      <Tag className="h-4 w-4" />
+                    </button>
+                    {showAddLabel && (
+                      <AddEtiquetaPopover
+                        conversationId={selectedConv.id}
+                        currentEtiquetas={selectedConv.etiquetas ?? []}
+                        allEtiquetas={etiquetas}
+                        onClose={() => setShowAddLabel(false)}
+                        onChange={() => { void onLabelChange(); setShowAddLabel(false) }}
+                      />
+                    )}
+                  </div>
+                  <button className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                    <MoreVertical className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-0.5 bg-muted/20">
+                {loadingMsgs ? (
+                  <div className="space-y-3 pt-2">
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className={cn("flex", i % 2 === 0 ? "justify-end" : "justify-start")}>
+                        <Skeleton className={cn("h-10 rounded-2xl", i % 2 === 0 ? "w-48" : "w-64")} />
+                      </div>
+                    ))}
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-sm text-muted-foreground">Nenhuma mensagem nesta conversa.</p>
+                  </div>
+                ) : (
+                  <>
+                    {messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)}
+                    <div ref={messagesEndRef} />
+                  </>
+                )}
+              </div>
+
+              {/* Input area */}
+              <div className="px-4 py-3 border-t border-border bg-background">
+                <div className="relative flex items-center gap-2">
+                  {/* Quick reply dropdown */}
+                  {showQRDropdown && (
+                    <QuickReplyDropdown
+                      query={inputText}
+                      quickReplies={quickReplies}
+                      onSelect={(body) => { setInputText(body); inputRef.current?.focus() }}
+                      onClose={() => setInputText("")}
+                    />
+                  )}
+                  <button
+                    onClick={() => setShowQRModal(true)}
+                    className="h-9 w-9 flex-shrink-0 flex items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-emerald-500 transition-colors"
+                    title="Respostas rápidas (ou digite /)"
+                  >
+                    <Zap className="h-4 w-4" />
+                  </button>
+                  <Input
+                    ref={inputRef}
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Digite uma mensagem ou / para respostas rápidas…"
+                    disabled={sending}
+                    className="flex-1 h-10 text-sm bg-muted/40 border-border/60 focus-visible:ring-emerald-500/50"
+                  />
+                  <Button
+                    onClick={() => void sendMessage()}
+                    disabled={!inputText.trim() || sending}
+                    size="sm"
+                    className="h-10 w-10 p-0 bg-emerald-600 hover:bg-emerald-700 text-white flex-shrink-0"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1.5 flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  Enviando como{" "}
+                  <span className="font-medium">
+                    {process.env.NEXT_PUBLIC_APP_URL?.replace(/https?:\/\//, "") ?? "OmniGestão"}
+                  </span>
+                  {" · "}
+                  Atualiza a cada {POLL_MS / 1000}s
+                  {quickReplies.filter((r) => r.ativo).length > 0 && (
+                    <> · <Zap className="h-2.5 w-2.5 text-emerald-500" /> {quickReplies.filter((r) => r.ativo).length} atalhos</>
+                  )}
+                </p>
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }

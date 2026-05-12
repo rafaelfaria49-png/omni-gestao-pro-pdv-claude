@@ -81,6 +81,7 @@ model Store {
   whatsappMessages       WhatsAppMessage[]
   whatsappAutomations    WhatsAppAutomation[]
   whatsappQuickReplies   WhatsAppQuickReply[]
+  whatsappEtiquetas      WhatsAppEtiqueta[]
   whatsappAiSetting      WhatsAppAiSetting?
   whatsappAutomationLogs WhatsAppAutomationLog[]
 
@@ -138,7 +139,8 @@ model WhatsAppConversation {
   createdAt          DateTime        @default(now()) @map("createdAt")
   updatedAt          DateTime        @updatedAt @map("updatedAt")
 
-  messages WhatsAppMessage[]
+  messages  WhatsAppMessage[]
+  etiquetas WhatsAppConversacaoEtiqueta[]
 
   @@index([storeId, lastMessageAt])
   @@index([contactId])
@@ -192,12 +194,44 @@ model WhatsAppQuickReply {
   body      String   @map("body") @db.Text
   category  String   @default("") @map("category")
   sortOrder Int      @default(0) @map("sortOrder")
+  ativo     Boolean  @default(true) @map("ativo")
   createdAt DateTime @default(now()) @map("createdAt")
   updatedAt DateTime @updatedAt @map("updatedAt")
 
   @@unique([storeId, shortcut], name: "whatsapp_quick_reply_store_shortcut")
   @@index([storeId])
   @@map("whatsapp_quick_replies")
+}
+
+model WhatsAppEtiqueta {
+  id           String   @id @default(cuid())
+  storeId      String   @map("storeId")
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  nome         String   @map("nome")
+  cor          String   @default("#10b981") @map("cor")
+  ativo        Boolean  @default(true) @map("ativo")
+  createdAt    DateTime @default(now()) @map("createdAt")
+  updatedAt    DateTime @updatedAt @map("updatedAt")
+
+  conversacoes WhatsAppConversacaoEtiqueta[]
+
+  @@unique([storeId, nome], name: "wa_etiqueta_store_nome")
+  @@index([storeId])
+  @@map("whatsapp_etiquetas")
+}
+
+model WhatsAppConversacaoEtiqueta {
+  id             String               @id @default(cuid())
+  conversationId String               @map("conversationId")
+  conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  etiquetaId     String               @map("etiquetaId")
+  etiqueta       WhatsAppEtiqueta     @relation(fields: [etiquetaId], references: [id], onDelete: Cascade)
+  createdAt      DateTime             @default(now()) @map("createdAt")
+
+  @@unique([conversationId, etiquetaId])
+  @@index([conversationId])
+  @@index([etiquetaId])
+  @@map("whatsapp_conversa_etiquetas")
 }
 
 /**

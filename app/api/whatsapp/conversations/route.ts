@@ -22,6 +22,7 @@ function badRequest(message: string) {
 export async function GET(req: Request) {
   try {
     const storeId = storeIdFromAssistecRequestForRead(req)
+    console.info("[whatsapp/conversations:GET] storeId=%s", storeId)
     await ensureHubSeed(storeId)
 
     const url = new URL(req.url)
@@ -34,6 +35,9 @@ export async function GET(req: Request) {
       take: 100,
       include: {
         contact: true,
+        etiquetas: {
+          include: { etiqueta: true },
+        },
         ...(includeMessages
           ? {
               messages: {
@@ -44,6 +48,7 @@ export async function GET(req: Request) {
           : {}),
       },
     })
+    console.info("[whatsapp/conversations:GET] storeId=%s rows=%d", storeId, rows.length)
     return json({ ok: true, conversations: rows })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

@@ -38,6 +38,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (typeof o.sortOrder === "number" && Number.isFinite(o.sortOrder)) {
       data.sortOrder = Math.floor(o.sortOrder)
     }
+    if (typeof o.ativo === "boolean") data.ativo = o.ativo
 
     if (Object.keys(data).length === 0) {
       const quickReply = await prisma.whatsAppQuickReply.findFirst({ where: { id, storeId } })
