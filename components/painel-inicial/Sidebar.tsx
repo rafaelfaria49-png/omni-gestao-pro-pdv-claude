@@ -9,19 +9,14 @@ import {
   Crown,
   ShoppingCart,
   Activity,
-  Package,
   Wallet,
-  Users,
-  BarChart3,
   Network,
   Settings,
   Command,
   Store,
   MessageCircle,
-  Receipt,
   Database,
   Bot,
-  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 import { financeiroV2Enabled } from "@/lib/feature-flags";
@@ -65,22 +60,7 @@ const hubsItems: Item[] = [
   { to: "/dashboard/marketplace",    label: "Marketplace",    icon: Store         },
   ...(financeiroV2Enabled
     ? [{ to: "/dashboard/financeiro-v2", label: "Financeiro HUB", icon: Wallet } satisfies Item]
-    : [{ to: "/dashboard/financeiro", label: "Financeiro", icon: Wallet } satisfies Item]),
-];
-
-// ── GESTÃO ───────────────────────────────────────────────────────────────────
-const gestaoItems: Item[] = [
-  { to: "/dashboard/clientes", label: "Clientes", icon: Users   },
-  { to: "/dashboard/os",       label: "Ordens de Serviço (Legado)", icon: ClipboardList, badge: "Legado" },
-  { to: "/dashboard/estoque",  label: "Estoque",  icon: Package },
-  {
-    to: "/dashboard/relatorios",
-    label: "Relatórios",
-    icon: BarChart3,
-    sub: [
-      { to: "/dashboard/vendas-arquivo-geral", label: "Histórico de Vendas", icon: Receipt },
-    ],
-  },
+    : [{ to: "/dashboard/financeiro", label: "Financeiro HUB", icon: Wallet } satisfies Item]),
 ];
 
 // ── ADMINISTRAÇÃO ─────────────────────────────────────────────────────────────
@@ -223,9 +203,6 @@ export function Sidebar() {
 
         {sectionLabel("Hubs")}
         <div className="space-y-1">{hubsItems.map(renderItem)}</div>
-
-        {sectionLabel("Gestão")}
-        <div className="space-y-1">{gestaoItems.map(renderItem)}</div>
 
         {sectionLabel("Administração")}
         <div className="space-y-1">{administrationItems.map(renderItem)}</div>
