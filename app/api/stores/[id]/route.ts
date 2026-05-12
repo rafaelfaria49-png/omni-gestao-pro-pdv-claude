@@ -30,6 +30,19 @@ export async function GET(_: Request, ctx: { params: Promise<{ id: string }> }) 
   }
 }
 
+export async function DELETE(_: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params
+  try {
+    const gate = await requireAdmin()
+    if (!gate.ok) return gate.res
+    await prisma.store.delete({ where: { id } })
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Falha ao excluir unidade"
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 })
+  }
+}
+
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
   try {

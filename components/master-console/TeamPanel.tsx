@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Crown, Briefcase, UserCog, MoreHorizontal, Users, KeyRound, UserMinus, Activity, Pencil, Sparkles } from 'lucide-react';
+import { Plus, Crown, Briefcase, UserCog, MoreHorizontal, Users, KeyRound, UserMinus, Activity, Pencil, Sparkles, UserPlus, ClipboardList } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -78,6 +78,21 @@ export function TeamPanel({ store, employees, activity }: TeamPanelProps) {
           </div>
           <TabsContent value="team" className="flex-1 overflow-y-auto px-6 pb-6 pt-4 data-[state=inactive]:hidden">
             <Button size="sm" variant="outline" onClick={openCreate} className="mb-4 w-full rounded-xl border-dashed font-semibold transition-smooth hover:border-info hover:text-info"><Plus className="mr-1.5 h-4 w-4" />Adicionar Colaborador</Button>
+            {team.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-panel/30 py-10 text-center">
+                <UserPlus className="h-8 w-8 text-muted-foreground/50" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">Nenhum colaborador cadastrado</p>
+                  <p className="text-xs text-muted-foreground max-w-[220px]">
+                    Convide colaboradores para operar o sistema com permissões por função.
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={openCreate} className="rounded-xl text-xs">
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Adicionar colaborador
+                </Button>
+              </div>
+            ) : (
             <ul className="space-y-2">
               {team.map((emp) => {
                 const r = roleStyles[emp.role] || roleStyles['Operador']; const Icon = r.icon; const inactive = emp.status === 'Inativo';
@@ -109,8 +124,23 @@ export function TeamPanel({ store, employees, activity }: TeamPanelProps) {
                 );
               })}
             </ul>
+            )}
           </TabsContent>
-          <TabsContent value="logs" className="flex-1 overflow-y-auto px-6 pb-6 pt-4 data-[state=inactive]:hidden"><ActivityLog entries={activity} /></TabsContent>
+          <TabsContent value="logs" className="flex-1 overflow-y-auto px-6 pb-6 pt-4 data-[state=inactive]:hidden">
+            {activity.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-panel/30 py-10 text-center">
+                <ClipboardList className="h-8 w-8 text-muted-foreground/50" />
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">Nenhuma atividade registrada</p>
+                  <p className="text-xs text-muted-foreground max-w-[220px]">
+                    As ações administrativas aparecerão aqui quando houver movimentação.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <ActivityLog entries={activity} />
+            )}
+          </TabsContent>
         </Tabs>
       </aside>
       <EmployeeAccessSheet employee={selectedEmp} open={sheetOpen} onOpenChange={setSheetOpen} />

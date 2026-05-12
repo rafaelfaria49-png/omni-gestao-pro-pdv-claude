@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Store, RefreshCw, AlertTriangle } from "lucide-react"
+import { Store, RefreshCw, AlertTriangle, Trash2 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -201,6 +201,32 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
     }
   }
 
+  const deleteStore = async (id: string) => {
+    try {
+      const r = await fetch(`/api/stores/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+      if (!r.ok) {
+        const j = (await r.json()) as { error?: string }
+        throw new Error(j.error || "Falha ao excluir unidade")
+      }
+      const rr = await fetch("/api/stores", { credentials: "include", cache: "no-store" })
+      const jj = (await rr.json()) as { stores?: StoreRow[] }
+      const list = Array.isArray(jj.stores) ? jj.stores : []
+      setStores(list)
+      const first = list[0]?.id || ""
+      setSelectedId((prev) => (list.some((s) => s.id === prev) ? prev : first))
+      toast({ title: "Unidade removida", description: `A unidade ${id} foi excluída.` })
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao excluir",
+        description: e instanceof Error ? e.message : "Falha ao excluir",
+      })
+    }
+  }
+
   const createStore = async () => {
     try {
       const r = await fetch("/api/stores", {
@@ -365,31 +391,68 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                     <span className={cn("text-foreground", isBlack && "text-white")}>{planLabel(s.subscriptionPlan)}</span>
                   </span>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={isSelected ? "default" : "outline"}
-                  className={cn(
-                    "mt-auto w-full",
-                    isBlack &&
-                      !isSelected &&
-                      "border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white",
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    selectStore(s.id)
-                  }}
-                >
-                  Gerenciar
-                </Button>
+                <div className="mt-auto flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={isSelected ? "default" : "outline"}
+                    className={cn(
+                      "flex-1",
+                      isBlack &&
+                        !isSelected &&
+                        "border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white",
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      selectStore(s.id)
+                    }}
+                  >
+                    Gerenciar
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className={cn(
+                      "shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive",
+                      isBlack && "text-red-400 hover:bg-red-500/10 hover:text-red-400",
+                    )}
+                    title="Excluir unidade"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (confirm(`Excluir a unidade "${s.name || s.id}"? Esta ação não pode ser desfeita.`)) {
+                        void deleteStore(s.id)
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             )
           })}
         </div>
       ) : (
-        <p className={cn("text-center text-sm", isBlack ? "text-white/60" : "text-slate-600")}>
-          Nenhuma unidade cadastrada.
-        </p>
+        <div className={cn(
+          "flex flex-col items-center gap-4 rounded-xl border border-dashed px-8 py-14 text-center",
+          isBlack ? "border-white/10" : "border-slate-200",
+        )}>
+          <div className={cn(
+            "flex h-12 w-12 items-center justify-center rounded-xl",
+            isBlack ? "bg-white/5" : "bg-slate-100",
+          )}>
+            <Store className={cn("h-6 w-6", isBlack ? "text-white/50" : "text-slate-500")} />
+          </div>
+          <div className="space-y-1">
+            <p className={cn("font-semibold", isBlack ? "text-white" : "text-slate-900")}>
+              Configure sua primeira unidade
+            </p>
+            <p className={cn("text-sm max-w-xs", isBlack ? "text-white/55" : "text-slate-500")}>
+              Nenhuma unidade encontrada. Clique em{" "}
+              <span className="font-medium">"Nova unidade"</span> para cadastrar sua loja principal.
+            </p>
+          </div>
+        </div>
       )}
 
       <div

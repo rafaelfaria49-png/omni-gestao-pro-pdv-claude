@@ -7,9 +7,14 @@ import { cn } from '@/lib/utils';
 import { StoreFormSheet } from './StoreFormSheet';
 
 export interface Store { id: string; name: string; cnpj: string; manager: string; status: 'Ativa' | 'Pausada'; city: string; }
-interface StoreListProps { stores: Store[]; selectedId: string; onSelect: (id: string) => void; }
+interface StoreListProps {
+  stores: Store[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+  onDelete?: (id: string) => Promise<void>;
+}
 
-export function StoreList({ stores, selectedId, onSelect }: StoreListProps) {
+export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
   const [formStore, setFormStore] = useState<Store | null>(null);
@@ -78,7 +83,12 @@ export function StoreList({ stores, selectedId, onSelect }: StoreListProps) {
                       <DropdownMenuItem onClick={() => openEdit(store)} className="rounded-lg text-sm font-medium"><Pencil className="mr-2 h-4 w-4 text-info" />Editar Dados</DropdownMenuItem>
                       <DropdownMenuItem className="rounded-lg text-sm font-medium"><PauseCircle className="mr-2 h-4 w-4 text-warning" />Pausar Filial</DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="rounded-lg text-sm font-medium text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />Excluir</DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="rounded-lg text-sm font-medium text-destructive focus:text-destructive"
+                        onClick={() => onDelete?.(store.id)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />Excluir
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>

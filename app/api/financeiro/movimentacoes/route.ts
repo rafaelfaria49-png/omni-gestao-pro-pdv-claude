@@ -16,6 +16,7 @@ import {
   deleteMovimentacao,
   getResumoMovimentacoes,
 } from "@/lib/financeiro/services/movimentacoes-service"
+import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -39,6 +40,7 @@ const postSchema = z.object({
     .optional()
     .default("manual"),
   referenciaId: z.string().max(128).optional(),
+  data: z.string().optional(),
 })
 
 const deleteSchema = z.object({
@@ -113,6 +115,15 @@ export async function POST(req: Request) {
 
   try {
     await prismaEnsureConnected()
+
+    const lock = await verificarPeriodoFechado(sid, parsed.data.data ? new Date(parsed.data.data) : new Date())
+    if (lock.fechado) {
+      return NextResponse.json(
+        { ok: false, error: "Período financeiro fechado. Reabra o fechamento para alterar lançamentos.", code: "periodo_fechado" },
+        { status: 409 },
+      )
+    }
+
     const mov = await createMovimentacao({ storeId: sid, ...parsed.data })
     return NextResponse.json({ ok: true, movimentacao: mov }, { status: 201 })
   } catch (e) {
