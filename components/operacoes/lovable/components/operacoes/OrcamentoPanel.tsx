@@ -50,6 +50,7 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
     enviarOrcamentoAoCliente,
     approveOrcamento,
     rejectOrcamento,
+    validateOrcamentoEstoque,
   } = useOS();
 
   const [draft, setDraft] = useState<Orcamento | null>(() => (os.orcamento ? cloneOrcamento(os.orcamento) : null));
@@ -74,6 +75,16 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
     });
   };
 
+  const oEffective = draft ?? os.orcamento;
+  const subPecas = useMemo(() => {
+    if (!oEffective) return 0;
+    return oEffective.pecas.reduce((s, p) => s + Math.max(0, p.quantidade * p.valorUnitario - (p.desconto ?? 0)), 0);
+  }, [oEffective]);
+  const subServicos = useMemo(() => {
+    if (!oEffective) return 0;
+    return oEffective.servicos.reduce((s, x) => s + Math.max(0, x.valor - (x.desconto ?? 0)), 0);
+  }, [oEffective]);
+
   if (!os.orcamento && !draft) {
     return (
       <div className="rounded-xl border border-dashed border-border p-6 text-center">
@@ -91,6 +102,12 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
   if (!o) return null;
 
   const cfg = STATUS_LABEL[o.status];
+
+  const estoqueDaPeca = (produtoId: string | undefined) => {
+    const id = (produtoId ?? "").trim();
+    if (!id) return null;
+    return produtosCatalogo.find((x) => x.id === id)?.estoque ?? null;
+  };
   const editavel = o.status === "rascunho";
 
   const addServicoCatalogo = () => {
@@ -170,6 +187,13 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
     if (!draft) return;
     const next = recalcularTotalOrcamento(draft);
     setDraft(next);
+    void validateOrcamentoEstoque(os.id).then((r) => {
+      if (!r.ok) {
+        toast.warning("Estoque insuficiente para algumas peças do orçamento.", {
+          description: r.issues.map((i) => `${i.nome}: precisa ${i.necessario}, disponível ${i.disponivel}`).join(" · "),
+        });
+      }
+    });
     persist(next, { kind: "orcamento_atualizado" });
     toast.success("Orçamento salvo");
   };
@@ -178,8 +202,12 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
     <div className="rounded-xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border p-4">
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Orçamento</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Peças e Serviços (orçamento)</div>
           <div className="text-lg font-semibold">{brl(o.total)}</div>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+            <span>Subtotal peças: {brl(subPecas)}</span>
+            <span>Subtotal serviços: {brl(subServicos)}</span>
+          </div>
         </div>
         <span className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium", cfg.cls)}>
           {cfg.label}
@@ -257,6 +285,18 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
                             )}
                           >
                             {p.produtoOrigem === "prisma" ? "Produto real" : "Mock/manual"}
+                          </span>
+                        ) : null}
+                        {estoqueDaPeca(p.produtoId) !== null ? (
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                              (estoqueDaPeca(p.produtoId) ?? 0) < p.quantidade
+                                ? "border-destructive/25 bg-destructive/10 text-destructive"
+                                : "border-border bg-muted/30 text-muted-foreground",
+                            )}
+                          >
+                            Estoque: {estoqueDaPeca(p.produtoId)}
                           </span>
                         ) : null}
                       </div>
@@ -395,6 +435,24 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {os.itensPersistidos && os.itensPersistidos.length > 0 && (
+          <div className="rounded-lg border border-dashed border-border bg-muted/15 p-3 text-[11px]">
+            <div className="mb-1 font-medium text-foreground">
+              {os.estoqueConsumido ? "Itens baixados (estoque)" : "Espelho no banco (itens da OS)"}
+            </div>
+            <ul className="space-y-1 text-muted-foreground">
+              {os.itensPersistidos.map((it) => (
+                <li key={it.id} className="flex justify-between gap-2">
+                  <span className="min-w-0 truncate">
+                    {it.quantidade}× {it.descricao || "—"}
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] uppercase">{it.tipo}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

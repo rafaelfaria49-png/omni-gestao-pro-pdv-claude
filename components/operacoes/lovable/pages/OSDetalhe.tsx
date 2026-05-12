@@ -20,6 +20,8 @@ import { PortalClienteModal } from "@/components/operacoes/PortalClienteModal";
 import { ImpressaoModal } from "@/components/operacoes/ImpressaoModal";
 import { EtiquetaModal } from "@/components/operacoes/EtiquetaModal";
 import { ModoBancadaModal } from "@/components/operacoes/ModoBancadaModal";
+import { OperacionalAlertsBar } from "@/components/operacoes/OperacionalAlertsBar";
+import { GerarCobrancaModal } from "@/components/operacoes/GerarCobrancaModal";
 import { ORIGEM_LABEL, type OrdemServico } from "@/types/os";
 import { getOperacaoStatusMeta, normalizeOperacaoStatus } from "@/components/operacoes/lovable/utils/os-status";
 import * as osApi from "@/api/os";
@@ -35,7 +37,7 @@ const ESTADO_BADGE: Record<string, string> = {
 
 export default function OSDetalhe() {
   const { id = "" } = useParams();
-  const { getOS, updateChecklist, storeId, loading: hubLoading, refresh } = useOS();
+  const { getOS, updateChecklist, storeId, loading: hubLoading, refresh, produtosCatalogo } = useOS();
   const fromList = getOS(id);
   /** idle = ainda não resolveu leitura avulsa; loading; done + os */
   const [detailRead, setDetailRead] = useState<
@@ -85,6 +87,7 @@ export default function OSDetalhe() {
   const [printOpen, setPrintOpen] = useState(false);
   const [etiqOpen, setEtiqOpen] = useState(false);
   const [bancadaOpen, setBancadaOpen] = useState(false);
+  const [cobrancaOpen, setCobrancaOpen] = useState(false);
 
   if (hubLoading || detailRead.phase === "loading" || awaitingDetail) {
     return (
@@ -184,6 +187,10 @@ export default function OSDetalhe() {
         <OperacaoOsAcaoBar os={os} onDone={() => void refresh()} />
       </div>
 
+      <div className="mt-4 min-w-0">
+        <OperacionalAlertsBar os={os} produtosCatalogo={produtosCatalogo} />
+      </div>
+
       {/* Conteúdo */}
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
@@ -210,7 +217,33 @@ export default function OSDetalhe() {
                 <dt className="text-xs text-muted-foreground">Atualizado em</dt>
                 <dd className="font-medium">{dt(os.atualizadoEm)}</dd>
               </div>
+              {os.faturamentoPendente && os.faturamentoStatus === "pendente" && (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-muted-foreground">Faturamento pendente</dt>
+                  <dd className="font-medium">{brl(Number(os.faturamentoTotal ?? 0))}</dd>
+                </div>
+              )}
+              {os.faturamentoModoCobranca && (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-muted-foreground">Modo de cobrança</dt>
+                  <dd className="font-medium">
+                    {os.faturamentoModoCobranca}
+                    {os.faturamentoParcelas && os.faturamentoParcelas.length > 1
+                      ? ` · ${os.faturamentoParcelas.length} parcelas`
+                      : null}
+                  </dd>
+                </div>
+              )}
             </dl>
+            {os.faturamentoPendente === true &&
+              os.faturamentoStatus === "pendente" &&
+              Number(os.faturamentoTotal ?? 0) > 0 && (
+                <div className="mt-4">
+                  <Button type="button" size="sm" variant="secondary" onClick={() => setCobrancaOpen(true)}>
+                    Gerar cobrança
+                  </Button>
+                </div>
+              )}
           </section>
 
           <section className="rounded-xl border border-border bg-card p-5">
@@ -359,6 +392,14 @@ export default function OSDetalhe() {
       <ImpressaoModal os={os} open={printOpen} onOpenChange={setPrintOpen} />
       <EtiquetaModal os={os} open={etiqOpen} onOpenChange={setEtiqOpen} />
       <ModoBancadaModal os={os} open={bancadaOpen} onOpenChange={setBancadaOpen} />
+      <GerarCobrancaModal
+        os={os}
+        open={cobrancaOpen}
+        onOpenChange={(open) => {
+          setCobrancaOpen(open);
+          if (!open) void refresh();
+        }}
+      />
     </OperacoesLayout>
   );
 }

@@ -3,7 +3,7 @@
 import type { Prisma } from "@/generated/prisma"
 import type { OrdemServico, OSStatus } from "@/types/os"
 import { prisma, withPrismaSafe } from "@/lib/prisma"
-import { hydrateOSRows } from "@/lib/operacoes/services/hydration-service"
+import { hydrateOSRows, type PrismaOSRow } from "@/lib/operacoes/services/hydration-service"
 
 /** Payload lido do Prisma + hidratação (mesmo shape usado pelo Operações HUB). */
 export type OrdemServicoLeitura = OrdemServico & { operacaoStatus?: OSStatus }

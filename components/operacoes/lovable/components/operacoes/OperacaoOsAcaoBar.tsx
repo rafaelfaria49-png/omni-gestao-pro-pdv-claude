@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { OperacaoHubAcaoInput } from "@/app/actions/operacoes";
 import type { OrdemServico } from "@/types/os";
 import { getOperacaoStatusMeta, normalizeOperacaoStatus } from "@/components/operacoes/lovable/utils/os-status";
@@ -33,6 +33,7 @@ import {
   ThumbsDown,
   Truck,
 } from "lucide-react";
+import { validateOrcamentoEstoque, type EstoqueOrcamentoIssue } from "@/api/os";
 
 export function OperacaoOsAcaoBar({ os, onDone }: { os: OrdemServico; onDone?: () => void }) {
   const { applyHubAcao, refresh } = useOS();
@@ -41,6 +42,12 @@ export function OperacaoOsAcaoBar({ os, onDone }: { os: OrdemServico; onDone?: (
   const [obsInterna, setObsInterna] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [confirmForceServicoOpen, setConfirmForceServicoOpen] = useState(false);
+  const [confirmEntregaOpen, setConfirmEntregaOpen] = useState(false);
+  const [entregaEstoque, setEntregaEstoque] = useState<{
+    loading: boolean;
+    ok: boolean;
+    issues: EstoqueOrcamentoIssue[];
+  }>({ loading: false, ok: true, issues: [] });
 
   const st = useMemo(() => normalizeOperacaoStatus(os.status), [os.status]);
   const meta = useMemo(() => getOperacaoStatusMeta(st), [st]);
@@ -78,6 +85,18 @@ export function OperacaoOsAcaoBar({ os, onDone }: { os: OrdemServico; onDone?: (
   const podeEntregar = st === "pronta";
   const podeCancelar = st !== "entregue" && st !== "cancelada";
   const podeObs = st !== "entregue" && st !== "cancelada";
+
+  useEffect(() => {
+    if (!confirmEntregaOpen) return;
+    let cancelled = false;
+    setEntregaEstoque({ loading: true, ok: true, issues: [] });
+    void validateOrcamentoEstoque(os.id).then((r) => {
+      if (!cancelled) setEntregaEstoque({ loading: false, ok: r.ok, issues: r.issues });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [confirmEntregaOpen, os.id]);
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-4">
@@ -182,7 +201,7 @@ export function OperacaoOsAcaoBar({ os, onDone }: { os: OrdemServico; onDone?: (
           variant="default"
           disabled={busy || !podeEntregar}
           className="gap-1.5"
-          onClick={() => void run({ kind: "entregar_cliente" })}
+          onClick={() => setConfirmEntregaOpen(true)}
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Truck className="h-3.5 w-3.5" />}
           Entregar ao cliente
@@ -277,6 +296,53 @@ export function OperacaoOsAcaoBar({ os, onDone }: { os: OrdemServico; onDone?: (
               }}
             >
               Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmEntregaOpen} onOpenChange={setConfirmEntregaOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar entrega ao cliente?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Ao entregar, o sistema tentará baixar o estoque real das peças vinculadas ao catálogo (idempotente).
+                </p>
+                {entregaEstoque.loading ? (
+                  <div className="flex items-center gap-2 py-2 text-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Verificando disponibilidade…
+                  </div>
+                ) : !entregaEstoque.ok ? (
+                  <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive">
+                    <p className="font-medium">Estoque insuficiente para concluir a entrega.</p>
+                    <ul className="mt-1 list-inside list-disc">
+                      {entregaEstoque.issues.map((i) => (
+                        <li key={i.produtoId}>
+                          {i.nome}: necessário {i.necessario}, disponível {i.disponivel}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 text-[11px]">Ajuste o orçamento ou repor estoque antes de entregar.</p>
+                  </div>
+                ) : (
+                  <p className="text-emerald-600 dark:text-emerald-400">Estoque compatível com o planejado.</p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy || entregaEstoque.loading || !entregaEstoque.ok}
+              onClick={() => {
+                setConfirmEntregaOpen(false);
+                void run({ kind: "entregar_cliente" });
+              }}
+            >
+              Confirmar entrega
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
