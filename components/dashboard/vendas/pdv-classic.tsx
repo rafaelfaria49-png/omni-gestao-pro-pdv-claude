@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { KeyboardEvent as ReactKeyboardEvent } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -36,6 +36,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
+import { TrocasDevolucao } from "./trocas-devolucao"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useCaixa } from "../caixa/caixa-provider"
@@ -165,7 +166,7 @@ export function PdvClassic({
   const { mode: studioThemeMode } = useStudioTheme()
   const classicStudio = studioThemeMode === "classic"
   const lojaKey = lojaAtivaId ?? opsLojaIdFromStorageKey(opsStorageKey)
-  const { adicionarEntrada, adicionarSaida } = useCaixa()
+  const { adicionarEntrada, adicionarSaida, sessaoId } = useCaixa()
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente, ordens } = useOperationsStore()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { toast } = useToast()
@@ -193,9 +194,9 @@ export function PdvClassic({
   const [attrDialogOpen, setAttrDialogOpen] = useState(false)
   const [attrProduct, setAttrProduct] = useState<Product | null>(null)
   const [attrSelections, setAttrSelections] = useState<Record<string, string>>({})
-  const [operationType, setOperationType] = useState<
-    "sangria" | "suprimento" | "devolucao" | "fechamento" | null
-  >(null)
+  const [operationType, setOperationType] = useState<"sangria" | "suprimento" | null>(null)
+  const [fechamentoCaixaSignal, setFechamentoCaixaSignal] = useState(0)
+  const [showDevolucaoModal, setShowDevolucaoModal] = useState(false)
   const [operationValue, setOperationValue] = useState("")
   const [operationReason, setOperationReason] = useState("")
   const [cashHistory, setCashHistory] = useState<
@@ -836,19 +837,35 @@ export function PdvClassic({
     setPendingOnAccount(false)
   }
 
-  const openOperation = (type: "sangria" | "suprimento" | "devolucao" | "fechamento") => {
+  const openOperation = (type: "sangria" | "suprimento") => {
     setShowOperationsMenu(false)
     setOperationType(type)
     setOperationValue("")
     setOperationReason("")
   }
 
+  const requestFechamentoCaixa = () => {
+    setShowOperationsMenu(false)
+    setFechamentoCaixaSignal((n) => n + 1)
+  }
+
+  const labelOperacaoCaixa = (t: string) =>
+    t === "sangria" ? "Sangria" : t === "suprimento" ? "Suprimento" : t
+
   const saveOperation = () => {
     if (!operationType) return
     const value = parseFloat(operationValue) || 0
     if (value <= 0) return
+    const reason = operationReason.trim()
+    if (!reason) {
+      toast({
+        title: "Motivo obrigatório",
+        description: "Informe o motivo da sangria ou do suprimento.",
+        variant: "destructive",
+      })
+      return
+    }
     const op = operationType
-    const reason = operationReason || "Sem motivo informado"
     setCashHistory((prev) => [
       {
         id: `${Date.now()}`,
@@ -867,10 +884,34 @@ export function PdvClassic({
         detail: `R$ ${value.toFixed(2)} — ${reason}`,
       })
     }
-    if (op === "suprimento") adicionarEntrada(value)
+    if (op === "suprimento") {
+      adicionarEntrada(value)
+      appendAuditLog({
+        action: "suprimento_caixa",
+        userLabel: auditUser(),
+        detail: `R$ ${value.toFixed(2)} — ${reason}`,
+      })
+    }
+    if (lojaAtivaId && sessaoId) {
+      void fetch("/api/ops/caixa/operacao", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": lojaAtivaId,
+        },
+        body: JSON.stringify({
+          sessaoId,
+          tipo: op,
+          valor: value,
+          motivo: reason,
+          operador: auditUser(),
+        }),
+      }).catch(() => {})
+    }
     setOperationType(null)
     toast({
-      title: op === "sangria" ? "Sangria gerada" : "Operacao registrada",
+      title: op === "sangria" ? "Sangria gerada" : "Reforço registrado",
       description: `Valor de R$ ${value.toFixed(2)} registrado com sucesso.`,
     })
   }
@@ -1220,6 +1261,7 @@ export function PdvClassic({
             variant="pdv"
             openAberturaSignal={voiceOpenCaixaSignal}
             onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
+            openFechamentoSignal={fechamentoCaixaSignal}
           />
           <PdvOmniClassicShell
               isModoRapido={isModoRapido}
@@ -1345,6 +1387,7 @@ export function PdvClassic({
                 variant="pdv"
                 openAberturaSignal={voiceOpenCaixaSignal}
                 onOpenAberturaSignalConsumed={onVoiceOpenCaixaConsumed}
+                openFechamentoSignal={fechamentoCaixaSignal}
               />
               <div className="shrink-0 border-b border-border bg-background py-2.5">
                   <div className="px-1 sm:px-2">
@@ -2138,10 +2181,14 @@ export function PdvClassic({
               <Button variant="outline" className="w-full justify-start border-primary/30 hover:bg-primary/10" onClick={() => openOperation("suprimento")}>
                 Reforço (Suprimento)
               </Button>
-              <Button variant="outline" className="w-full justify-start border-primary/30 hover:bg-primary/10" onClick={() => openOperation("devolucao")}>
+              <Button
+                variant="outline"
+                className="w-full justify-start border-primary/30 hover:bg-primary/10"
+                onClick={() => { setShowOperationsMenu(false); setShowDevolucaoModal(true) }}
+              >
                 Troca / Devolução
               </Button>
-              <Button variant="outline" className="w-full justify-start border-primary/30 hover:bg-primary/10" onClick={() => openOperation("fechamento")}>
+              <Button variant="outline" className="w-full justify-start border-primary/30 hover:bg-primary/10" onClick={() => requestFechamentoCaixa()}>
                 Fechamento de Caixa
               </Button>
             </CardContent>
@@ -2174,6 +2221,16 @@ export function PdvClassic({
         onReadScale={handleLerBalança}
         scaleBusy={scaleBusy}
       />
+
+      <Dialog open={showDevolucaoModal} onOpenChange={setShowDevolucaoModal}>
+        <DialogContent className="max-h-[min(90vh,900px)] w-[min(100vw-2rem,42rem)] overflow-y-auto border-border bg-card p-0">
+          <div className="max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+            <Suspense fallback={<div className="py-8 text-center text-muted-foreground">Carregando…</div>}>
+              <TrocasDevolucao />
+            </Suspense>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showKeyboardHelp} onOpenChange={setShowKeyboardHelp}>
         <DialogContent className="max-w-lg border-border bg-card">
@@ -2216,14 +2273,7 @@ export function PdvClassic({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <HandCoins className="h-5 w-5 text-primary" />
-              Registrar{" "}
-              {operationType === "suprimento"
-                ? "Reforço"
-                : operationType === "devolucao"
-                  ? "Troca/Devolução"
-                  : operationType === "fechamento"
-                    ? "Fechamento"
-                    : "Sangria"}
+              Registrar {operationType === "suprimento" ? "Reforço (suprimento)" : "Sangria"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
@@ -2238,11 +2288,12 @@ export function PdvClassic({
               />
             </div>
             <div className="space-y-1">
-              <Label>Motivo</Label>
+              <Label>Motivo (obrigatório)</Label>
               <Input
                 value={operationReason}
                 onChange={(e) => setOperationReason(e.target.value)}
                 className="border-border bg-secondary"
+                placeholder="Ex.: Troco para troco, compra de troco..."
               />
             </div>
             <Button onClick={saveOperation} className="w-full bg-primary hover:bg-primary/90">
@@ -2261,8 +2312,8 @@ export function PdvClassic({
                 key={h.id}
                 className="flex justify-between gap-2 rounded-md border border-neutral-200/80 bg-background px-2 py-1.5 text-sm"
               >
-                <span>
-                  {h.type} — {h.reason}
+                <span className="min-w-0 flex-1 break-words text-left">
+                  {labelOperacaoCaixa(h.type)} — {h.reason}
                 </span>
                 <span className="font-medium tabular-nums">R$ {h.value.toFixed(2)}</span>
               </div>

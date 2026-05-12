@@ -150,6 +150,8 @@ type OpsState = {
   inventory: InventoryItem[]
   ordens: OrdemServico[]
   caixa: CaixaState
+  /** ID da sessão de caixa persistida no servidor (POST /api/ops/caixa/abrir). */
+  caixaSessaoId: string | null
   dailyLedger: DailyLedger
   sales: SaleRecord[]
   devolucoes: DevolucaoRecord[]
@@ -178,12 +180,14 @@ const defaultState: OpsState = {
   devolucoes: [],
   orcamentos: [],
   customerCredits: {},
+  caixaSessaoId: null,
 }
 
 interface OperationsContextType {
   inventory: InventoryItem[]
   ordens: OrdemServico[]
   caixa: CaixaState
+  caixaSessaoId: string | null
   dailyLedger: DailyLedger
   sales: SaleRecord[]
   devolucoes: DevolucaoRecord[]
@@ -197,6 +201,7 @@ interface OperationsContextType {
   adicionarEntrada: (valor: number) => void
   adicionarSaida: (valor: number) => void
   getSaldoAtual: () => number
+  setCaixaSessaoId: (id: string | null) => void
   incrementOsAbertasDia: () => void
   getSaldoCreditoCliente: (cpf: string) => number
   finalizeSaleTransaction: (input: {
@@ -237,6 +242,10 @@ function parseLocalRest(raw: string, prev: OpsState): Partial<OpsState> | null {
         ...parsed.caixa,
         dataAbertura: parsed.caixa?.dataAbertura ? new Date(parsed.caixa.dataAbertura) : prev.caixa.dataAbertura,
       },
+      caixaSessaoId:
+        typeof (parsed as { caixaSessaoId?: unknown }).caixaSessaoId === "string"
+          ? ((parsed as { caixaSessaoId: string }).caixaSessaoId || null)
+          : prev.caixaSessaoId,
       sales: Array.isArray(parsed.sales) ? parsed.sales : prev.sales,
       devolucoes: Array.isArray(parsed.devolucoes) ? parsed.devolucoes : prev.devolucoes,
       customerCredits:
@@ -315,6 +324,7 @@ function saveCaixaSnapshot(storeId: string, caixa: CaixaState): void {
 function toPersistedRest(state: OpsState): Omit<OpsState, "inventory" | "ordens"> {
   return {
     caixa: state.caixa,
+    caixaSessaoId: state.caixaSessaoId,
     dailyLedger: state.dailyLedger,
     sales: state.sales,
     devolucoes: state.devolucoes,
@@ -598,6 +608,7 @@ export function OperationsProvider({
   const fecharCaixa = useCallback(() => {
     setState((prev) => ({
       ...prev,
+      caixaSessaoId: null,
       caixa: {
         isOpen: false,
         saldoInicial: 0,
@@ -606,6 +617,10 @@ export function OperationsProvider({
         totalSaidas: 0,
       },
     }))
+  }, [])
+
+  const setCaixaSessaoId = useCallback((id: string | null) => {
+    setState((prev) => ({ ...prev, caixaSessaoId: id }))
   }, [])
 
   const adicionarEntrada = useCallback((valor: number) => {
@@ -658,6 +673,7 @@ export function OperationsProvider({
         inventory: current.inventory.map((i) => ({ ...i })),
         ordens: current.ordens.map((o) => ({ ...o })),
         caixa: { ...current.caixa },
+        caixaSessaoId: current.caixaSessaoId,
         dailyLedger: ensureLedger(current.dailyLedger),
         sales: [...current.sales],
         devolucoes: [...current.devolucoes],
@@ -900,6 +916,7 @@ export function OperationsProvider({
       inventory: state.inventory,
       ordens: state.ordens,
       caixa: state.caixa,
+      caixaSessaoId: state.caixaSessaoId,
       dailyLedger: state.dailyLedger,
       sales: state.sales,
       devolucoes: state.devolucoes,
@@ -913,6 +930,7 @@ export function OperationsProvider({
       adicionarEntrada,
       adicionarSaida,
       getSaldoAtual,
+      setCaixaSessaoId,
       incrementOsAbertasDia,
       getSaldoCreditoCliente,
       finalizeSaleTransaction,
@@ -928,6 +946,7 @@ export function OperationsProvider({
       adicionarEntrada,
       adicionarSaida,
       getSaldoAtual,
+      setCaixaSessaoId,
       incrementOsAbertasDia,
       getSaldoCreditoCliente,
       finalizeSaleTransaction,

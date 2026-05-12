@@ -12,6 +12,7 @@ export type AuditAction =
   | "sale_finalized"
   | "stock_manual"
   | "sangria_caixa"
+  | "suprimento_caixa"
   | "caixa_aberto"
   | "desconto_elevado"
   | "os_status_alterado"

@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, ReactNode } from "react"
+import { createContext, useCallback, useContext, type ReactNode } from "react"
 import { useOperationsStore } from "@/lib/operations-store"
 
 interface CaixaState {
@@ -18,6 +18,9 @@ interface CaixaContextType {
   adicionarEntrada: (valor: number) => void
   adicionarSaida: (valor: number) => void
   getSaldoAtual: () => number
+  /** ID da sessão no servidor (persistido em localStorage via OperationsProvider). */
+  sessaoId: string | null
+  setSessaoId: (id: string | null) => void
 }
 
 const CaixaContext = createContext<CaixaContextType | undefined>(undefined)
@@ -25,22 +28,39 @@ const CaixaContext = createContext<CaixaContextType | undefined>(undefined)
 export function CaixaProvider({ children }: { children: ReactNode }) {
   const {
     caixa,
-    abrirCaixa,
-    fecharCaixa,
+    caixaSessaoId,
+    setCaixaSessaoId,
+    abrirCaixa: _abrirCaixa,
+    fecharCaixa: _fecharCaixa,
     adicionarEntrada,
     adicionarSaida,
     getSaldoAtual,
   } = useOperationsStore()
 
+  const abrirCaixa = useCallback(
+    (saldoInicial: number) => {
+      _abrirCaixa(saldoInicial)
+    },
+    [_abrirCaixa]
+  )
+
+  const fecharCaixa = useCallback(() => {
+    _fecharCaixa()
+  }, [_fecharCaixa])
+
   return (
-    <CaixaContext.Provider value={{ 
-      caixa, 
-      abrirCaixa, 
-      fecharCaixa, 
-      adicionarEntrada, 
-      adicionarSaida,
-      getSaldoAtual 
-    }}>
+    <CaixaContext.Provider
+      value={{
+        caixa,
+        abrirCaixa,
+        fecharCaixa,
+        adicionarEntrada,
+        adicionarSaida,
+        getSaldoAtual,
+        sessaoId: caixaSessaoId,
+        setSessaoId: setCaixaSessaoId,
+      }}
+    >
       {children}
     </CaixaContext.Provider>
   )
@@ -51,7 +71,7 @@ const defaultCaixaState: CaixaState = {
   saldoInicial: 0,
   dataAbertura: null,
   totalEntradas: 0,
-  totalSaidas: 0
+  totalSaidas: 0,
 }
 
 const defaultContext: CaixaContextType = {
@@ -60,7 +80,9 @@ const defaultContext: CaixaContextType = {
   fecharCaixa: () => {},
   adicionarEntrada: () => {},
   adicionarSaida: () => {},
-  getSaldoAtual: () => 0
+  getSaldoAtual: () => 0,
+  sessaoId: null,
+  setSessaoId: () => {},
 }
 
 export function useCaixa() {

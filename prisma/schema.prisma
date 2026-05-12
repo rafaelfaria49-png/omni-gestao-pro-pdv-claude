@@ -87,6 +87,7 @@ model Store {
   whatsappEtiquetas      WhatsAppEtiqueta[]
   whatsappAiSetting      WhatsAppAiSetting?
   whatsappAutomationLogs WhatsAppAutomationLog[]
+  sessoesCaixa           SessaoCaixa[]
 
   @@index([profile])
   @@map("stores")
@@ -1291,6 +1292,59 @@ model AuditoriaFinanceira {
   @@index([storeId, entidadeId])
   @@index([storeId, createdAt])
   @@map("auditorias_financeiras")
+}
+
+// ─── PDV Enterprise — Sessões e Operações de Caixa ───────────────────────────
+
+enum SessaoCaixaStatus {
+  ABERTA
+  FECHADA
+}
+
+/**
+ * Sessão de caixa PDV: abertura → fechamento com saldo inicial/final.
+ * Persiste no servidor para auditoria e dashboards sem remover o localStorage fast-path.
+ */
+model SessaoCaixa {
+  id           String             @id @default(cuid())
+  storeId      String             @map("storeId")
+  store        Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  operador     String             @default("") @map("operador")
+  saldoInicial Float              @default(0) @map("saldoInicial")
+  saldoFinal   Float?             @map("saldoFinal")
+  saldoContado Float?             @map("saldoContado")
+  observacao   String             @default("") @map("observacao")
+  status       SessaoCaixaStatus  @default(ABERTA) @map("status")
+  abertaEm     DateTime           @default(now()) @map("abertaEm")
+  fechadaEm    DateTime?          @map("fechadaEm")
+  /** Snapshot de totais do dia (ledger) no momento do fechamento. */
+  payload      Json?              @map("payload") @db.JsonB
+  operacoes    CaixaOperacao[]
+
+  @@index([storeId, status])
+  @@index([storeId, abertaEm])
+  @@map("sessoes_caixa")
+}
+
+/**
+ * Operações avulsas durante a sessão: sangria, suprimento, devolução.
+ */
+model CaixaOperacao {
+  id       String      @id @default(cuid())
+  sessaoId String      @map("sessaoId")
+  sessao   SessaoCaixa @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  storeId  String      @map("storeId")
+  /** "sangria" | "suprimento" | "devolucao" */
+  tipo     String      @map("tipo")
+  valor    Float       @default(0) @map("valor")
+  motivo   String      @default("") @map("motivo")
+  operador String      @default("") @map("operador")
+  at       DateTime    @default(now()) @map("at")
+  payload  Json?       @map("payload") @db.JsonB
+
+  @@index([sessaoId])
+  @@index([storeId, at])
+  @@map("caixa_operacoes")
 }
 
 // ─── NextAuth / Admin Auth ───────────────────────────────────────────────────
