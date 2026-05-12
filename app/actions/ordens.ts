@@ -3,7 +3,7 @@
 import type { Prisma } from "@/generated/prisma"
 import type { OrdemServico, OSStatus } from "@/types/os"
 import { prisma, withPrismaSafe } from "@/lib/prisma"
-import { hydrateOSRows, type PrismaOSRow } from "@/lib/operacoes/services/hydration-service"
+import { hydrateOSRows } from "@/lib/operacoes/services/hydration-service"
 
 /** Payload lido do Prisma + hidratação (mesmo shape usado pelo Operações HUB). */
 export type OrdemServicoLeitura = OrdemServico & { operacaoStatus?: OSStatus }
@@ -20,7 +20,29 @@ function normalizeLojaId(lojaId: string): string | null {
   return id.length > 0 ? id : null
 }
 
-function mapRows(rows: Awaited<ReturnType<typeof prisma.ordemServico.findMany>>): PrismaOSRow[] {
+type DbOrdemRow = {
+  id: string
+  storeId: string
+  numero: string | null
+  clienteId: string | null
+  defeito: string
+  status: "Aberto" | "EmAnalise" | "Pronto" | "Entregue"
+  payload: unknown
+  createdAt: Date
+  updatedAt: Date
+  valorTotal: unknown
+  valorBase: unknown
+  itens?: {
+    id: string
+    tipo: string
+    descricao: string
+    quantidade: number
+    precoUnitario: number
+    produtoId: string | null
+  }[]
+}
+
+function mapRows(rows: DbOrdemRow[]): PrismaOSRow[] {
   return rows.map((r) => ({
     id: r.id,
     storeId: r.storeId,
@@ -33,6 +55,17 @@ function mapRows(rows: Awaited<ReturnType<typeof prisma.ordemServico.findMany>>)
     updatedAt: r.updatedAt,
     valorTotal: Number(r.valorTotal ?? 0) || 0,
     valorBase: Number(r.valorBase ?? 0) || 0,
+    itensPersistidos:
+      Array.isArray(r.itens) && r.itens.length > 0
+        ? r.itens.map((it) => ({
+            id: it.id,
+            tipo: it.tipo,
+            descricao: it.descricao,
+            quantidade: it.quantidade,
+            precoUnitario: it.precoUnitario,
+            produtoId: it.produtoId ?? null,
+          }))
+        : undefined,
   }))
 }
 
@@ -62,12 +95,12 @@ export async function listOrdens(lojaId: string, filters?: ListOrdensFilters): P
         where,
         orderBy: { updatedAt: "desc" },
         take: 500,
-      })
+      }) as Promise<DbOrdemRow[]>
     },
-    [] as Awaited<ReturnType<typeof prisma.ordemServico.findMany>>
+    [] as DbOrdemRow[]
   )
 
-  return hydrateOSRows<OrdemServicoLeitura>(mapRows(rows))
+  return hydrateOSRows<OrdemServicoLeitura>(mapRows(rows as DbOrdemRow[]))
 }
 
 /**
@@ -82,11 +115,14 @@ export async function getOrdem(lojaId: string, osId: string): Promise<OrdemServi
     (db) =>
       db.ordemServico.findFirst({
         where: { id, storeId },
+        include: {
+          itens: { orderBy: { id: "asc" } },
+        },
       }),
-    null as Awaited<ReturnType<typeof prisma.ordemServico.findFirst>>
+    null as (DbOrdemRow & { id: string }) | null,
   )
 
   if (!row) return null
-  const [out] = hydrateOSRows<OrdemServicoLeitura>(mapRows([row]))
+  const [out] = hydrateOSRows<OrdemServicoLeitura>(mapRows([row as DbOrdemRow]))
   return out ?? null
 }

@@ -165,6 +165,7 @@ export type EventoTipo =
   | "financeiro_conta_receber_atualizada"
   | "financeiro_conta_receber_cancelada"
   | "financeiro_sync_erro"
+  | "operacao_cobranca_gerada"
   | "anexo_adicionado"
   | "anexo_removido"
   | "observacao"
@@ -240,6 +241,21 @@ export interface OrdemServico {
   faturamentoCriadoEm?: string;
   /** Referência humana + id estável da OS (ex.: código · uuid). */
   faturamentoReferencia?: string;
+  /** Modo escolhido em “Gerar cobrança” (espelhado no payload da Conta a Receber). */
+  faturamentoModoCobranca?: "avista" | "parcelado" | "carteira" | "dinheiro_pix_cartao";
+  faturamentoParcelas?: { numero: number; valor: number; vencimentoIso: string }[];
+  /** Rótulo auxiliar para forma de quitação (carteira / dinheiro-PIX-cartão / etc.). */
+  faturamentoFormaPagamento?: string;
+
+  /** Espelho de `ordem_servico_item` (rascunho do orçamento; após entrega vira ledger de baixa). */
+  itensPersistidos?: {
+    id: string;
+    tipo: string;
+    descricao: string;
+    quantidade: number;
+    precoUnitario: number;
+    produtoId?: string | null;
+  }[];
 
   /** Política: histórico de revisões quando orçamento já aprovado é alterado. */
   orcamentoHistorico?: {

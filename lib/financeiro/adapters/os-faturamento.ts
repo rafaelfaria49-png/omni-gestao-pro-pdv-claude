@@ -15,6 +15,9 @@ type MinimalOS = Pick<OrdemServico, "id" | "storeId" | "clienteId" | "cliente" |
   faturamentoTotal?: number;
   faturamentoCriadoEm?: string;
   faturamentoReferencia?: string;
+  faturamentoModoCobranca?: string;
+  faturamentoParcelas?: unknown;
+  faturamentoFormaPagamento?: string;
   faturamentoRevisadoEm?: string;
   faturamentoValorAnterior?: number;
   faturamentoValorAtual?: number;
@@ -66,13 +69,21 @@ export function buildContaReceberFromOS(os: MinimalOS): {
   const clienteNome = safeStr(os.cliente?.nome) || "Cliente";
 
   const baseDate = safeStr(os.faturamentoCriadoEm) ? new Date(os.faturamentoCriadoEm as string) : new Date();
-  const venc = new Date(baseDate);
-  venc.setDate(venc.getDate() + 30);
+  const parcelasRaw = (os as { faturamentoParcelas?: unknown }).faturamentoParcelas;
+  const parcelas = Array.isArray(parcelasRaw) ? parcelasRaw : undefined;
+  const primeiroVenc = parcelas?.[0] && isRecord(parcelas[0] as unknown) ? safeStr((parcelas[0] as { vencimentoIso?: unknown }).vencimentoIso) : "";
+  const venc = primeiroVenc ? new Date(primeiroVenc) : new Date(baseDate);
+  if (!primeiroVenc) {
+    venc.setDate(venc.getDate() + 30);
+  }
   const vencimento = new Intl.DateTimeFormat("pt-BR").format(venc);
 
   const codigo = safeStr((os as { codigo?: unknown }).codigo);
   const ordemNumero = codigo || `OS-${os.id.slice(-6)}`;
   const descricao = `OS ${ordemNumero} — Faturamento`;
+
+  const modoCobranca = safeStr((os as { faturamentoModoCobranca?: unknown }).faturamentoModoCobranca);
+  const formaPagamento = safeStr((os as { faturamentoFormaPagamento?: unknown }).faturamentoFormaPagamento);
 
   const payload = buildContaReceberPayload({
     origem: FINANCEIRO_ORIGEM.OS,
@@ -82,6 +93,7 @@ export function buildContaReceberFromOS(os: MinimalOS): {
     clienteNome,
     faturamentoReferencia: getFaturamentoReferenceFromOS(os),
     orcamento: os.orcamento ?? null,
+    parcelas: parcelas ?? undefined,
     createdFrom: FINANCEIRO_CREATED_FROM_OPERACOES_HUB_V2,
     statusOperacional: (os.status ?? "") as OSStatus,
     // Política: revisão pós-aprovação (quando aplicável)
@@ -90,6 +102,10 @@ export function buildContaReceberFromOS(os: MinimalOS): {
     valorNovo: safeNum(os.faturamentoValorAtual) || undefined,
     revisadoEm: safeStr(os.faturamentoRevisadoEm) || undefined,
     orcamentoRevisaoAtual: isRecord(os.orcamentoRevisaoAtual) ? os.orcamentoRevisaoAtual : undefined,
+    metadata: {
+      ...(modoCobranca ? { modoCobranca } : {}),
+      ...(formaPagamento ? { formaPagamento } : {}),
+    },
   }) as unknown as Prisma.InputJsonValue;
 
   const scalars = {

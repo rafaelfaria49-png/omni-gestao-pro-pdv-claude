@@ -15,6 +15,15 @@ export type PrismaOSRow = {
   /** Colunas Prisma — usadas quando o JSONB não traz clienteId/orçamento fiéis. */
   valorTotal: number;
   valorBase: number;
+  /** Itens Prisma (quando a leitura inclui `itens`). */
+  itensPersistidos?: {
+    id: string;
+    tipo: string;
+    descricao: string;
+    quantidade: number;
+    precoUnitario: number;
+    produtoId: string | null;
+  }[];
 };
 
 /**
@@ -110,6 +119,9 @@ function applyPrismaEnrichment<T extends OrdemServico & { operacaoStatus?: OSSta
   const orc = mergeOrcamentoFromPrismaRow(r, next as unknown as OrdemServico);
   if (orc) {
     next = { ...next, orcamento: orc } as T;
+  }
+  if (Array.isArray(r.itensPersistidos) && r.itensPersistidos.length > 0) {
+    next = { ...next, itensPersistidos: r.itensPersistidos } as T;
   }
   return next;
 }

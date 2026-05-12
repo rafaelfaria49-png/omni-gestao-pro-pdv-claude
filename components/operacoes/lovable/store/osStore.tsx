@@ -23,7 +23,7 @@ import type { CatalogoServico } from "@/types/servico";
 import type { AtendimentoRapido } from "@/types/atendimento";
 import * as osApi from "@/api/os";
 import type { SalvarOrcamentoEvento } from "@/api/os";
-import type { OperacaoHubAcaoInput } from "@/app/actions/operacoes";
+import type { OperacaoHubAcaoInput, GerarCobrancaModo } from "@/app/actions/operacoes";
 import * as clientesApi from "@/api/clientes";
 import * as estoqueApi from "@/api/estoque";
 import * as lojasApi from "@/api/lojas";
@@ -82,6 +82,9 @@ interface OSContextValue {
   // novos pontos de integração (estoque + vendas)
   addPecaFromEstoque: (osId: string, peca: PecaUsada, autor?: string) => Promise<void>;
   faturarOS: (osId: string, autor?: string) => Promise<Venda | undefined>;
+
+  validateOrcamentoEstoque: (osId: string) => Promise<{ ok: boolean; issues: { produtoId: string; nome: string; necessario: number; disponivel: number }[] }>;
+  gerarCobrancaOS: (osId: string, input: { modo: GerarCobrancaModo; numParcelas?: number }, autor?: string) => Promise<OrdemServico>;
 
   /** Ações operacionais seguras (Fase 2) — validação no servidor + timeline. */
   applyHubAcao: (osId: string, acao: OperacaoHubAcaoInput, autor?: string) => Promise<OrdemServico>;
@@ -225,6 +228,12 @@ export function OSProvider({ children, initialStoreId }: { children: ReactNode; 
         setVendas((prev) => [...prev, venda]);
         setPecasEstoque(await estoqueApi.listPecas(storeId));
         return venda;
+      },
+      validateOrcamentoEstoque: (osId) => osApi.validateOrcamentoEstoque(osId),
+      gerarCobrancaOS: async (osId, input, autor = DEFAULT_AUTOR) => {
+        const updated = await osApi.gerarCobrancaOS(osId, input, autor);
+        replaceOS(updated);
+        return updated;
       },
       applyHubAcao: async (osId, acao, autor = DEFAULT_AUTOR) => {
         const updated = await osApi.runOperacaoHubAcao(osId, acao, autor);

@@ -40,6 +40,8 @@ import {
   readTimelinePayload,
 } from "@/lib/operacoes/services/operacao-hub-flow";
 import { buildFaturamentoFromOrcamento, buildFaturamentoRecusadoOrcamento } from "@/lib/os/faturamento";
+import { syncOrdemServicoDraftItensFromOrcamento, loadOrcamentoFromOsRow } from "@/lib/operacoes/services/os-prisma-itens-sync";
+import { buildEstoqueMovimentosFromOS } from "@/lib/operacoes/adapters/os-estoque";
 
 export type OSPrioridade = "baixa" | "media" | "alta" | "critica";
 
@@ -605,6 +607,126 @@ export async function applyOperacaoHubAcao(
       throw new Error(`Ação não suportada: ${k}`);
     }
   }
+}
+
+export async function syncOperacaoItensComOrcamento(storeId: string, osId: string): Promise<void> {
+  const { orcamento, payload } = await loadOrcamentoFromOsRow(storeId, osId);
+  if (!orcamento || !payload) return;
+  await syncOrdemServicoDraftItensFromOrcamento({ storeId, osId, orcamento, payload });
+}
+
+export type EstoqueOrcamentoIssue = {
+  produtoId: string;
+  nome: string;
+  necessario: number;
+  disponivel: number;
+};
+
+export async function validateOrcamentoEstoqueAction(
+  storeId: string,
+  osId: string,
+): Promise<{ ok: boolean; issues: EstoqueOrcamentoIssue[] }> {
+  const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const current = asOperacoesPayload<OperacoesOSPayload>(row?.payload as unknown);
+  if (!current) return { ok: true, issues: [] };
+  const { items } = await buildEstoqueMovimentosFromOS(current as unknown as OrdemServico);
+  const issues: EstoqueOrcamentoIssue[] = [];
+  for (const it of items) {
+    const p = await prisma.produto.findFirst({
+      where: { id: it.produtoId, storeId },
+      select: { stock: true, name: true },
+    });
+    if (!p) {
+      issues.push({ produtoId: it.produtoId, nome: it.nome, necessario: it.quantidade, disponivel: 0 });
+      continue;
+    }
+    if (p.stock < it.quantidade) {
+      issues.push({ produtoId: it.produtoId, nome: p.name, necessario: it.quantidade, disponivel: p.stock });
+    }
+  }
+  return { ok: issues.length === 0, issues };
+}
+
+export type GerarCobrancaModo = "avista" | "parcelado" | "carteira" | "dinheiro_pix_cartao";
+
+export type GerarCobrancaParcelaOS = { numero: number; valor: number; vencimentoIso: string };
+
+function montarParcelasCobranca(total: number, modo: GerarCobrancaModo, numParcelas?: number): GerarCobrancaParcelaOS[] {
+  const t = Math.round(Number(total) * 100) / 100;
+  const base = new Date();
+  if (modo === "parcelado") {
+    const n = Math.min(24, Math.max(2, Math.floor(numParcelas ?? 2)));
+    const cents = Math.round(t * 100);
+    const each = Math.floor(cents / n);
+    const rest = cents - each * n;
+    const out: GerarCobrancaParcelaOS[] = [];
+    for (let i = 0; i < n; i++) {
+      const c = each + (i < rest ? 1 : 0);
+      const d = new Date(base);
+      d.setMonth(d.getMonth() + i + 1);
+      d.setHours(12, 0, 0, 0);
+      out.push({ numero: i + 1, valor: c / 100, vencimentoIso: d.toISOString() });
+    }
+    return out;
+  }
+  const d = new Date(base);
+  d.setDate(d.getDate() + 30);
+  d.setHours(12, 0, 0, 0);
+  return [{ numero: 1, valor: t, vencimentoIso: d.toISOString() }];
+}
+
+export async function gerarCobrancaOSAction(
+  storeId: string,
+  osId: string,
+  input: { modo: GerarCobrancaModo; numParcelas?: number },
+  autor = "Operador",
+): Promise<OperacoesOSPayload> {
+  const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const current = asOperacoesPayload<OperacoesOSPayload>(existing?.payload as unknown);
+  if (!current) throw new Error("OS não encontrada");
+
+  const st = normalizeOperacaoStatus(current.status);
+  const allowed: OSStatus[] = ["aprovado", "em_execucao", "aguardando_peca", "pronta", "entregue"];
+  if (!allowed.includes(st)) {
+    throw new Error("Gere cobrança somente com OS aprovada, em execução, pronta ou entregue.");
+  }
+  const pendenteOk =
+    current.faturamentoPendente === true &&
+    current.faturamentoStatus === "pendente" &&
+    Number(current.faturamentoTotal) > 0;
+  if (!pendenteOk) {
+    throw new Error("Não há faturamento pendente nesta OS (aprove o orçamento primeiro).");
+  }
+
+  const total = Number(current.faturamentoTotal);
+  const parcelas = montarParcelasCobranca(total, input.modo, input.numParcelas);
+  const formaPagamento =
+    input.modo === "carteira"
+      ? "carteira"
+      : input.modo === "dinheiro_pix_cartao"
+        ? "dinheiro_pix_cartao"
+        : input.modo === "avista"
+          ? "avista"
+          : "parcelado";
+
+  const tl = readTimelinePayload(current);
+  const ev: EventoTimeline = {
+    id: newTimelineId(),
+    tipo: "operacao_cobranca_gerada",
+    titulo: "Cobrança",
+    autor,
+    autorTipo: "usuario",
+    conteudo: `Cobrança registrada no financeiro (modo: ${input.modo}).`,
+    metadata: { modo: input.modo, parcelas: parcelas.length },
+    criadoEm: nowIso(),
+  };
+
+  return updateOSPayload(storeId, osId, {
+    faturamentoModoCobranca: input.modo,
+    faturamentoParcelas: parcelas,
+    faturamentoFormaPagamento: formaPagamento,
+    timeline: [...tl, ev],
+  } as Partial<OperacoesOSPayload>);
 }
 
 // ── Vendas (para o HUB de Operações) ─────────────────────────────────────────

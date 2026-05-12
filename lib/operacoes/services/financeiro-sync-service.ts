@@ -7,6 +7,9 @@ export type OperacoesSyncPatch = {
   faturamentoTotal?: number;
   faturamentoCriadoEm?: string;
   faturamentoReferencia?: string;
+  faturamentoModoCobranca?: string;
+  faturamentoParcelas?: unknown;
+  faturamentoFormaPagamento?: string;
   orcamento?: unknown;
 };
 
@@ -21,6 +24,9 @@ export function shouldSyncFinanceiroFromPatch(patch: Partial<OperacoesSyncPatch>
     patch.faturamentoTotal !== undefined ||
     patch.faturamentoCriadoEm !== undefined ||
     patch.faturamentoReferencia !== undefined ||
+    patch.faturamentoModoCobranca !== undefined ||
+    patch.faturamentoParcelas !== undefined ||
+    patch.faturamentoFormaPagamento !== undefined ||
     patch.orcamento !== undefined
   );
 }

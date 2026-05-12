@@ -44,6 +44,7 @@ export async function somaPecasEValidaEstoque(
 export async function restaurarEstoqueItensOrdem(tx: Tx, ordemServicoId: string): Promise<void> {
   const antigos = await tx.ordemServicoItem.findMany({ where: { ordemServicoId } })
   for (const a of antigos) {
+    if (!a.produtoId) continue
     await tx.produto.update({
       where: { id: a.produtoId },
       data: { stock: { increment: a.quantidade } },
@@ -66,8 +67,11 @@ export async function baixarEstoqueECriarItens(
       data: {
         ordemServicoId,
         produtoId: row.produtoId,
+        tipo: "peca",
+        descricao: "",
         quantidade: row.quantidade,
         precoUnitario: row.precoUnitario,
+        observacao: "",
       },
     })
   }

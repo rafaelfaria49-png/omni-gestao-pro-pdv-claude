@@ -500,13 +500,21 @@ model OrdemServicoItem {
   id             String       @id @default(cuid())
   ordemServicoId String       @map("ordemServicoId")
   ordemServico   OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
-  produtoId      String       @map("produtoId")
-  produto        Produto      @relation(fields: [produtoId], references: [id], onDelete: Restrict)
-  quantidade     Int          @map("quantidade")
+  /**
+   * Peça vinculada ao catálogo (estoque). Nulo quando `tipo = "servico"` (mão de obra sem SKU).
+   */
+  produtoId String?  @map("produtoId")
+  produto   Produto? @relation(fields: [produtoId], references: [id], onDelete: Restrict)
+  /** peca | servico */
+  tipo       String @default("peca") @map("tipo")
+  /** Rótulo persistido (nome da peça ou descrição do serviço). */
+  descricao  String @default("") @map("descricao")
+  quantidade Int    @map("quantidade")
   /**
    * Preço unitário no momento da baixa (snapshot).
    */
-  precoUnitario  Float        @map("precoUnitario")
+  precoUnitario Float @map("precoUnitario")
+  observacao    String @default("") @map("observacao") @db.Text
 
   @@index([ordemServicoId])
   @@index([produtoId])
@@ -982,11 +990,22 @@ model Venda {
   total                Float               @default(0) @map("total")
   at                   DateTime            @default(now()) @map("at")
   clienteNome          String?             @map("clienteNome")
+  /**
+   * Status do ciclo de vida da venda.
+   * concluida | cancelada | parcialmente_devolvida | devolvida
+   */
+  status               String              @default("concluida") @map("status")
+  /** Operador que realizou a venda (extraído de payload.cashierId). */
+  operador             String?             @map("operador")
+  canceladaEm          DateTime?           @map("canceladaEm")
+  canceladaPor         String?             @map("canceladaPor")
+  motivoCancelamento   String?             @map("motivoCancelamento")
   contaReceberTituloId String?             @map("contaReceberTituloId")
   contaReceberTitulo   ContaReceberTitulo? @relation(fields: [contaReceberTituloId], references: [id], onDelete: SetNull)
   itens                ItemVenda[]
 
   @@index([storeId])
+  @@index([storeId, status])
   @@index([contaReceberTituloId])
   @@map("vendas")
 }

@@ -5,32 +5,67 @@ import {
   Search, RefreshCw, ReceiptText, User, Calendar,
   ShoppingBag, TrendingUp, BarChart3, AlertTriangle,
   Printer, Eye, XCircle, ChevronLeft, ChevronRight,
+  CheckCircle, Filter, X, Tag, Clock, DollarSign,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Separator } from "@/components/ui/separator"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
+import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
+import { useToast } from "@/hooks/use-toast"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type VendaItem = {
   id: string
+  dbId: string
   at: string
   cliente: string
   total: number
-  status: "pago"
+  status: string
+  operador: string | null
   formaPagamento: string
   quantidadeItens: number
   cancelada: boolean
+  canceladaEm: string | null
+  motivoCancelamento: string | null
 }
 
 type Kpis = {
   totalVendas: number
   faturamento: number
   cancelamentos: number
+  devolvidas: number
+  concluidas: number
+  ticketMedio: number
 }
 
 type ApiResponse = {
@@ -38,6 +73,34 @@ type ApiResponse = {
   vendas: VendaItem[]
   total: number
   kpis: Kpis
+}
+
+type VendaDetalhe = {
+  id: string
+  dbId: string
+  at: string
+  clienteNome: string | null
+  clienteCpf: string | null
+  total: number
+  desconto: number
+  status: string
+  operador: string | null
+  canceladaEm: string | null
+  canceladaPor: string | null
+  motivoCancelamento: string | null
+  sessaoId: string | null
+  pagamentos: Array<{ label: string; valor: number }>
+  itens: Array<{ id: string; nome: string; quantidade: number; precoUnitario: number; lineTotal: number }>
+  devolucoes: Array<{
+    id: string
+    localId: string
+    at: string
+    tipo: string
+    valorTotal: number
+    operador: string
+    motivo: string
+    itens: Array<{ nome: string; quantidade: number; valorTotal: number }>
+  }>
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -60,23 +123,60 @@ function fmtDate(iso: string) {
   }
 }
 
+function statusLabel(s: string): string {
+  const map: Record<string, string> = {
+    concluida: "Concluída",
+    cancelada: "Cancelada",
+    devolvida: "Devolvida",
+    parcialmente_devolvida: "Dev. Parcial",
+  }
+  return map[s] ?? s
+}
+
+function statusBadgeClass(s: string): string {
+  if (s === "cancelada") return "border-destructive/30 bg-destructive/10 text-destructive"
+  if (s === "devolvida" || s === "parcialmente_devolvida") return "border-warning/30 bg-warning/10 text-warning"
+  return "border-success/20 bg-success/10 text-success"
+}
+
 const PAGE_SIZE = 20
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function VendasArquivoGeral() {
-  const { lojaAtivaId } = useLojaAtiva()
+  const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   const storeId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID
+  const { toast } = useToast()
 
+  // Filters
   const [busca, setBusca] = useState("")
   const [buscaInput, setBuscaInput] = useState("")
+  const [statusFiltro, setStatusFiltro] = useState("todos")
+  const [pagamentoFiltro, setPagamentoFiltro] = useState("todos")
   const [page, setPage] = useState(0)
+  const [showFilters, setShowFilters] = useState(false)
 
+  // Data
   const [loading, setLoading] = useState(true)
   const [apiError, setApiError] = useState(false)
   const [vendas, setVendas] = useState<VendaItem[]>([])
   const [total, setTotal] = useState(0)
-  const [kpis, setKpis] = useState<Kpis>({ totalVendas: 0, faturamento: 0, cancelamentos: 0 })
+  const [kpis, setKpis] = useState<Kpis>({ totalVendas: 0, faturamento: 0, cancelamentos: 0, devolvidas: 0, concluidas: 0, ticketMedio: 0 })
+
+  // Detalhe drawer
+  const [detalheOpen, setDetalheOpen] = useState(false)
+  const [detalheLoading, setDetalheLoading] = useState(false)
+  const [detalhe, setDetalhe] = useState<VendaDetalhe | null>(null)
+
+  // Cupom modal
+  const [cupomOpen, setCupomOpen] = useState(false)
+  const [cupomData, setCupomData] = useState<CupomData | null>(null)
+
+  // Cancel dialog
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null)
+  const [cancelMotivo, setCancelMotivo] = useState("")
+  const [cancelLoading, setCancelLoading] = useState(false)
+  const [cancelConfirmForcar, setCancelConfirmForcar] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -87,6 +187,8 @@ export function VendasArquivoGeral() {
         take: String(PAGE_SIZE),
         skip: String(page * PAGE_SIZE),
         ...(busca ? { q: busca } : {}),
+        ...(statusFiltro !== "todos" ? { status: statusFiltro } : {}),
+        ...(pagamentoFiltro !== "todos" ? { pagamento: pagamentoFiltro } : {}),
       })
       const res = await fetch(`/api/vendas/historico?${params}`, {
         credentials: "include",
@@ -97,44 +199,149 @@ export function VendasArquivoGeral() {
       const data = (await res.json()) as ApiResponse
       setVendas(data.vendas ?? [])
       setTotal(data.total ?? 0)
-      setKpis(data.kpis ?? { totalVendas: 0, faturamento: 0, cancelamentos: 0 })
+      setKpis(data.kpis ?? { totalVendas: 0, faturamento: 0, cancelamentos: 0, devolvidas: 0, concluidas: 0, ticketMedio: 0 })
     } catch {
       setApiError(true)
     } finally {
       setLoading(false)
     }
-  }, [storeId, page, busca])
+  }, [storeId, page, busca, statusFiltro, pagamentoFiltro])
+
+  useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    load()
-  }, [load])
-
-  // Debounce search
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setPage(0)
-      setBusca(buscaInput)
-    }, 400)
+    const t = setTimeout(() => { setPage(0); setBusca(buscaInput) }, 400)
     return () => clearTimeout(t)
   }, [buscaInput])
 
+  // Reset page on filter change
+  useEffect(() => { setPage(0) }, [statusFiltro, pagamentoFiltro])
+
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
+  // ── Detalhe ──────────────────────────────────────────────────────────────────
+  const openDetalhe = useCallback(async (vendaId: string) => {
+    setDetalheOpen(true)
+    setDetalheLoading(true)
+    setDetalhe(null)
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(vendaId)}`, {
+        credentials: "include",
+        headers: { "x-assistec-loja-id": storeId },
+      })
+      const data = await res.json()
+      if (data.ok) setDetalhe(data.venda)
+    } catch {
+      toast({ title: "Erro", description: "Não foi possível carregar o detalhe da venda.", variant: "destructive" })
+    } finally {
+      setDetalheLoading(false)
+    }
+  }, [storeId, toast])
+
+  // ── Cupom ────────────────────────────────────────────────────────────────────
+  const openCupom = useCallback((d: VendaDetalhe) => {
+    const lojaNome = empresaDocumentos.nomeFantasia || empresaDocumentos.razaoSocial || "Loja"
+    const lojaCnpj = empresaDocumentos.cnpj || undefined
+    const lojaEndereco = getEnderecoDocumentos() || undefined
+
+    setCupomData({
+      numeroPedido: d.id,
+      at: d.at,
+      lojaNome,
+      lojaCnpj,
+      lojaEndereco,
+      clienteNome: d.clienteNome,
+      clienteCpf: d.clienteCpf,
+      operador: d.operador,
+      sessaoId: d.sessaoId,
+      itens: d.itens,
+      pagamentos: d.pagamentos,
+      total: d.total,
+      desconto: d.desconto,
+      status: d.status,
+    })
+    setCupomOpen(true)
+  }, [empresaDocumentos])
+
+  const openCupomFromRow = useCallback(async (vendaId: string) => {
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(vendaId)}`, {
+        credentials: "include",
+        headers: { "x-assistec-loja-id": storeId },
+      })
+      const data = await res.json()
+      if (data.ok) openCupom(data.venda)
+    } catch {
+      toast({ title: "Erro", description: "Não foi possível carregar os dados do cupom.", variant: "destructive" })
+    }
+  }, [storeId, openCupom, toast])
+
+  // ── Cancelamento ─────────────────────────────────────────────────────────────
+  const handleCancelar = useCallback(async (forcar = false) => {
+    if (!cancelandoId || !cancelMotivo.trim()) return
+    setCancelLoading(true)
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(cancelandoId)}/cancelar`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": storeId,
+        },
+        body: JSON.stringify({
+          motivo: cancelMotivo.trim(),
+          canceladaPor: "Operador",
+          forcar,
+        }),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        if (data.requireConfirm && !forcar) {
+          setCancelConfirmForcar(true)
+          return
+        }
+        toast({ title: "Erro", description: data.error ?? "Falha ao cancelar venda.", variant: "destructive" })
+        return
+      }
+      toast({ title: "Venda cancelada", description: `${cancelandoId} cancelada com sucesso.` })
+      setCancelandoId(null)
+      setCancelMotivo("")
+      setCancelConfirmForcar(false)
+      // Refresh detail if open
+      if (detalhe?.id === cancelandoId) {
+        await openDetalhe(cancelandoId)
+      }
+      load()
+    } catch {
+      toast({ title: "Erro", description: "Falha ao cancelar venda.", variant: "destructive" })
+    } finally {
+      setCancelLoading(false)
+    }
+  }, [cancelandoId, cancelMotivo, storeId, detalhe, openDetalhe, load, toast])
+
   // ── KPI Cards ──────────────────────────────────────────────────────────────
+
   const kpiCards = [
     {
-      label: "Vendas concluídas",
-      value: kpis.totalVendas.toLocaleString("pt-BR"),
-      icon: ShoppingBag,
-      tone: "text-info",
-      bg: "bg-info/10",
-    },
-    {
-      label: "Faturamento total",
-      value: fmtBrl(kpis.faturamento),
-      icon: TrendingUp,
+      label: "Concluídas",
+      value: kpis.concluidas.toLocaleString("pt-BR"),
+      icon: CheckCircle,
       tone: "text-success",
       bg: "bg-success/10",
+    },
+    {
+      label: "Faturamento líquido",
+      value: fmtBrl(kpis.faturamento),
+      icon: TrendingUp,
+      tone: "text-primary",
+      bg: "bg-primary/10",
+    },
+    {
+      label: "Ticket médio",
+      value: fmtBrl(kpis.ticketMedio),
+      icon: DollarSign,
+      tone: "text-info",
+      bg: "bg-info/10",
     },
     {
       label: "Cancelamentos",
@@ -144,6 +351,8 @@ export function VendasArquivoGeral() {
       bg: "bg-destructive/10",
     },
   ]
+
+  const hasActiveFilters = statusFiltro !== "todos" || pagamentoFiltro !== "todos" || busca !== ""
 
   return (
     <div className="space-y-6 pb-8">
@@ -157,19 +366,19 @@ export function VendasArquivoGeral() {
       </div>
 
       {/* KPI bar */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpiCards.map((k) => (
           <Card key={k.label} className="border-border bg-card">
-            <CardContent className="flex items-center gap-4 pt-5 pb-4">
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${k.bg}`}>
-                <k.icon className={`h-5 w-5 ${k.tone}`} />
+            <CardContent className="flex items-center gap-3 pt-4 pb-3">
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${k.bg}`}>
+                <k.icon className={`h-4 w-4 ${k.tone}`} />
               </div>
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground truncate">{k.label}</p>
+                <p className="text-[11px] text-muted-foreground truncate">{k.label}</p>
                 {loading ? (
-                  <Skeleton className="mt-1 h-6 w-24" />
+                  <Skeleton className="mt-1 h-5 w-20" />
                 ) : (
-                  <p className="text-xl font-bold text-foreground">{k.value}</p>
+                  <p className="text-base font-bold text-foreground leading-tight">{k.value}</p>
                 )}
               </div>
             </CardContent>
@@ -177,32 +386,109 @@ export function VendasArquivoGeral() {
         ))}
       </div>
 
-      {/* Search + controls */}
+      {/* Search + filters */}
       <Card className="border-border bg-card">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <ReceiptText className="h-4 w-4 text-muted-foreground" />
             Registros de vendas
+            {hasActiveFilters && (
+              <Badge variant="secondary" className="ml-auto text-[10px] bg-primary/10 text-primary border-primary/20">
+                Filtros ativos
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row gap-3 sm:items-end sm:justify-between">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="Buscar por cliente ou ID da venda…"
-              value={buscaInput}
-              onChange={(e) => setBuscaInput(e.target.value)}
-            />
+        <CardContent className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Buscar por cliente ou ID da venda…"
+                value={buscaInput}
+                onChange={(e) => setBuscaInput(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={showFilters ? "default" : "outline"}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setShowFilters((v) => !v)}
+              >
+                <Filter className="h-4 w-4" />
+                Filtros
+              </Button>
+              <p className="text-xs text-muted-foreground whitespace-nowrap hidden sm:block">
+                {loading ? "Carregando…" : `${total.toLocaleString("pt-BR")} venda${total !== 1 ? "s" : ""}`}
+              </p>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={load} title="Atualizar">
+                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-muted-foreground whitespace-nowrap">
-              {loading ? "Carregando…" : `${total.toLocaleString("pt-BR")} venda${total !== 1 ? "s" : ""}`}
-            </p>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={load} title="Atualizar">
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
+
+          {/* Expandable filters */}
+          {showFilters && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-1 border-t border-border">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <Tag className="h-3 w-3" /> Status
+                </label>
+                <Select value={statusFiltro} onValueChange={setStatusFiltro}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Todos os status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os status</SelectItem>
+                    <SelectItem value="concluida">Concluída</SelectItem>
+                    <SelectItem value="cancelada">Cancelada</SelectItem>
+                    <SelectItem value="devolvida">Devolvida</SelectItem>
+                    <SelectItem value="parcialmente_devolvida">Dev. Parcial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <DollarSign className="h-3 w-3" /> Pagamento
+                </label>
+                <Select value={pagamentoFiltro} onValueChange={setPagamentoFiltro}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Todas as formas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todas as formas</SelectItem>
+                    <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                    <SelectItem value="pix">Pix</SelectItem>
+                    <SelectItem value="cartaoDebito">Débito</SelectItem>
+                    <SelectItem value="cartaoCredito">Crédito</SelectItem>
+                    <SelectItem value="carne">Carnê</SelectItem>
+                    <SelectItem value="aPrazo">A Prazo</SelectItem>
+                    <SelectItem value="creditoVale">Vale/Crédito</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {hasActiveFilters && (
+                <div className="sm:col-span-2 flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground gap-1.5 h-8"
+                    onClick={() => {
+                      setStatusFiltro("todos")
+                      setPagamentoFiltro("todos")
+                      setBuscaInput("")
+                      setBusca("")
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Limpar filtros
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -220,7 +506,6 @@ export function VendasArquivoGeral() {
           </Button>
         </div>
       ) : loading ? (
-        /* Skeleton rows */
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
@@ -233,43 +518,50 @@ export function VendasArquivoGeral() {
           ))}
         </div>
       ) : vendas.length === 0 ? (
-        /* Premium empty state */
         <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border bg-card px-8 py-16 text-center shadow-card">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
             <BarChart3 className="h-7 w-7 text-primary/70" />
           </div>
           <div className="space-y-1.5">
             <h3 className="text-base font-semibold text-foreground">
-              {busca ? "Nenhuma venda encontrada" : "Nenhuma venda registrada"}
+              {hasActiveFilters ? "Nenhuma venda encontrada" : "Nenhuma venda registrada"}
             </h3>
             <p className="max-w-sm text-sm text-muted-foreground">
-              {busca
-                ? `Nenhum resultado para "${busca}". Tente outro termo de busca.`
+              {hasActiveFilters
+                ? "Nenhum resultado com os filtros aplicados. Ajuste os filtros ou limpe a busca."
                 : "As vendas realizadas pelo PDV aparecerão aqui automaticamente após a sincronização com o banco."}
             </p>
           </div>
-          {busca && (
-            <Button variant="outline" size="sm" onClick={() => { setBuscaInput(""); setBusca(""); }}>
-              Limpar busca
+          {hasActiveFilters && (
+            <Button variant="outline" size="sm" onClick={() => {
+              setStatusFiltro("todos")
+              setPagamentoFiltro("todos")
+              setBuscaInput("")
+              setBusca("")
+            }}>
+              Limpar filtros
             </Button>
           )}
         </div>
       ) : (
-        /* Sale rows */
         <div className="space-y-2">
           {vendas.map((v) => (
             <div
               key={v.id}
-              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-border bg-card p-4 hover:bg-panel/60 transition-colors"
+              className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border bg-card p-4 transition-colors ${
+                v.cancelada
+                  ? "border-destructive/20 opacity-75 hover:opacity-100"
+                  : "border-border hover:bg-panel/60"
+              }`}
             >
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-mono text-sm font-semibold text-foreground">{v.id}</span>
                   <Badge
                     variant="secondary"
-                    className="border border-success/20 bg-success/10 text-[10px] font-semibold text-success px-1.5 py-0"
+                    className={`border text-[10px] font-semibold px-1.5 py-0 ${statusBadgeClass(v.status)}`}
                   >
-                    {v.status.toUpperCase()}
+                    {statusLabel(v.status)}
                   </Badge>
                   {v.formaPagamento !== "—" && (
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
@@ -290,20 +582,32 @@ export function VendasArquivoGeral() {
                     <ShoppingBag className="h-3 w-3" />
                     {v.quantidadeItens} item{v.quantidadeItens !== 1 ? "s" : ""}
                   </span>
+                  {v.operador && (
+                    <span className="inline-flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      {v.operador}
+                    </span>
+                  )}
                 </div>
+                {v.cancelada && v.motivoCancelamento && (
+                  <p className="text-[11px] text-destructive/70 italic">
+                    Cancelada: {v.motivoCancelamento}
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center gap-2 justify-end shrink-0">
                 <div className="text-right mr-1">
-                  <p className="font-bold text-foreground">{fmtBrl(v.total)}</p>
+                  <p className={`font-bold ${v.cancelada ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                    {fmtBrl(v.total)}
+                  </p>
                 </div>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  disabled
-                  className="gap-1.5 text-xs opacity-60"
-                  title="Em breve"
+                  className="gap-1.5 text-xs"
+                  onClick={() => void openCupomFromRow(v.id)}
                 >
                   <Printer className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Imprimir</span>
@@ -312,9 +616,8 @@ export function VendasArquivoGeral() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  disabled
-                  className="gap-1.5 text-xs opacity-60"
-                  title="Em breve"
+                  className="gap-1.5 text-xs"
+                  onClick={() => void openDetalhe(v.id)}
                 >
                   <Eye className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Detalhes</span>
@@ -350,6 +653,258 @@ export function VendasArquivoGeral() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ── Detalhe Drawer ─────────────────────────────────────────────────────── */}
+      <Sheet open={detalheOpen} onOpenChange={setDetalheOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0 bg-card border-border">
+          <SheetHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-border">
+            <SheetTitle className="text-lg font-bold text-foreground">
+              {detalhe ? `Venda ${detalhe.id}` : "Detalhes da Venda"}
+            </SheetTitle>
+            {detalhe && (
+              <SheetDescription className="text-xs text-muted-foreground">
+                {fmtDate(detalhe.at)} · {detalhe.operador ?? "Operador"} · {statusLabel(detalhe.status)}
+              </SheetDescription>
+            )}
+          </SheetHeader>
+
+          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+            {detalheLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-8 w-full" />
+                ))}
+              </div>
+            ) : detalhe ? (
+              <>
+                {/* Status banner */}
+                {detalhe.status !== "concluida" && (
+                  <div className={`flex items-center gap-2 rounded-lg border px-4 py-3 ${statusBadgeClass(detalhe.status)}`}>
+                    {detalhe.status === "cancelada" ? (
+                      <XCircle className="h-4 w-4 shrink-0" />
+                    ) : (
+                      <Clock className="h-4 w-4 shrink-0" />
+                    )}
+                    <div className="text-sm">
+                      <p className="font-semibold">{statusLabel(detalhe.status)}</p>
+                      {detalhe.canceladaEm && (
+                        <p className="text-[11px] opacity-80">{fmtDate(detalhe.canceladaEm)}</p>
+                      )}
+                      {detalhe.motivoCancelamento && (
+                        <p className="text-[11px] opacity-80">Motivo: {detalhe.motivoCancelamento}</p>
+                      )}
+                      {detalhe.canceladaPor && (
+                        <p className="text-[11px] opacity-80">Por: {detalhe.canceladaPor}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Client + Operator info */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Informações</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Cliente</p>
+                      <p className="font-medium text-foreground">{detalhe.clienteNome ?? "—"}</p>
+                    </div>
+                    {detalhe.clienteCpf && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">CPF</p>
+                        <p className="font-medium text-foreground">{detalhe.clienteCpf}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs text-muted-foreground">Operador</p>
+                      <p className="font-medium text-foreground">{detalhe.operador ?? "—"}</p>
+                    </div>
+                    {detalhe.sessaoId && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Sessão caixa</p>
+                        <p className="font-mono text-[11px] text-foreground truncate">{detalhe.sessaoId}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Separator className="bg-border" />
+
+                {/* Items */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Itens ({detalhe.itens.length})
+                  </h3>
+                  {detalhe.itens.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum item registrado</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {detalhe.itens.map((it) => (
+                        <div key={it.id} className="flex items-center justify-between text-sm py-1">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-foreground truncate">{it.nome}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {it.quantidade}x {fmtBrl(it.precoUnitario)}
+                            </p>
+                          </div>
+                          <p className="font-semibold text-foreground ml-4 shrink-0">{fmtBrl(it.lineTotal)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Separator className="bg-border" />
+
+                {/* Payments + Total */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pagamento</h3>
+                  {detalhe.pagamentos.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">—</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {detalhe.pagamentos.map((pg, i) => (
+                        <div key={i} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">{pg.label}</span>
+                          <span className="font-medium text-foreground">{fmtBrl(pg.valor)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(detalhe.desconto ?? 0) > 0 && (
+                    <div className="flex justify-between text-sm text-destructive">
+                      <span>Desconto</span>
+                      <span>-{fmtBrl(detalhe.desconto)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-base text-foreground pt-1 border-t border-border">
+                    <span>Total</span>
+                    <span>{fmtBrl(detalhe.total)}</span>
+                  </div>
+                </div>
+
+                {/* Devoluções vinculadas */}
+                {detalhe.devolucoes.length > 0 && (
+                  <>
+                    <Separator className="bg-border" />
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        Devoluções ({detalhe.devolucoes.length})
+                      </h3>
+                      {detalhe.devolucoes.map((dev) => (
+                        <div key={dev.id} className="rounded-lg border border-border bg-background/40 p-3 text-sm space-y-1">
+                          <div className="flex justify-between">
+                            <Badge variant="outline" className="text-[10px]">
+                              {dev.tipo === "vale_credito" ? "Vale/Crédito" : dev.tipo === "troca" ? "Troca" : "Estoque"}
+                            </Badge>
+                            <span className="font-semibold text-destructive">{fmtBrl(dev.valorTotal)}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{fmtDate(dev.at)} · {dev.operador || "Operador"}</p>
+                          {dev.motivo && <p className="text-xs text-muted-foreground">Motivo: {dev.motivo}</p>}
+                          {dev.itens.map((it, i) => (
+                            <p key={i} className="text-xs text-foreground/70">{it.quantidade}x {it.nome}</p>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-col items-center gap-3 py-12 text-center">
+                <AlertTriangle className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Não foi possível carregar o detalhe.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Drawer actions */}
+          {detalhe && !detalheLoading && (
+            <div className="shrink-0 border-t border-border px-6 py-4 space-y-2">
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 h-10 gap-2 text-sm"
+                  onClick={() => openCupom(detalhe)}
+                >
+                  <Printer className="h-4 w-4" />
+                  Imprimir recibo
+                </Button>
+                {detalhe.status !== "cancelada" && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-10 gap-2 text-sm text-destructive border-destructive/30 hover:bg-destructive/5"
+                    onClick={() => {
+                      setCancelandoId(detalhe.id)
+                      setCancelMotivo("")
+                      setCancelConfirmForcar(false)
+                    }}
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Cancelar venda
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* ── Cancel Dialog ──────────────────────────────────────────────────────── */}
+      <AlertDialog open={!!cancelandoId} onOpenChange={(o) => !o && setCancelandoId(null)}>
+        <AlertDialogContent className="border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">
+              {cancelConfirmForcar ? "Confirmar cancelamento com devoluções" : "Cancelar venda"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              {cancelConfirmForcar
+                ? "Esta venda possui devoluções registradas. O cancelamento irá apenas marcar a venda — as devoluções serão mantidas. Deseja continuar?"
+                : `Informe o motivo do cancelamento da venda ${cancelandoId ?? ""}.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {!cancelConfirmForcar && (
+            <div className="py-2">
+              <Input
+                placeholder="Motivo do cancelamento (obrigatório)…"
+                value={cancelMotivo}
+                onChange={(e) => setCancelMotivo(e.target.value)}
+                className="bg-background border-border"
+                autoFocus
+              />
+            </div>
+          )}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="border-border"
+              onClick={() => {
+                setCancelandoId(null)
+                setCancelMotivo("")
+                setCancelConfirmForcar(false)
+              }}
+            >
+              Voltar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={cancelLoading || (!cancelConfirmForcar && !cancelMotivo.trim())}
+              onClick={() => void handleCancelar(cancelConfirmForcar)}
+            >
+              {cancelLoading ? "Cancelando…" : cancelConfirmForcar ? "Confirmar mesmo assim" : "Cancelar venda"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Cupom Modal ────────────────────────────────────────────────────────── */}
+      {cupomData && (
+        <CupomNaoFiscal
+          isOpen={cupomOpen}
+          onClose={() => setCupomOpen(false)}
+          data={cupomData}
+        />
       )}
     </div>
   )

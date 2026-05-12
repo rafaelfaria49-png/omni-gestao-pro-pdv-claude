@@ -1,0 +1,143 @@
+/**
+ * GET /api/vendas/[id]
+ *
+ * Retorna detalhe completo de uma venda:
+ * - Dados normalizados (status, operador, datas)
+ * - Itens da venda
+ * - Devoluções vinculadas
+ * - Payload JSON (pagamentos, descontos, cpf)
+ */
+import { NextResponse } from "next/server"
+import { prisma, prismaEnsureConnected } from "@/lib/prisma"
+import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const revalidate = 0
+
+const PAYMENT_LABELS: Record<keyof PaymentBreakdownFull, string> = {
+  dinheiro: "Dinheiro",
+  pix: "Pix",
+  cartaoDebito: "Débito",
+  cartaoCredito: "Crédito",
+  carne: "Carnê",
+  aPrazo: "A Prazo",
+  creditoVale: "Vale/Crédito",
+}
+
+function extractPayments(payload: unknown): Array<{ label: string; valor: number }> {
+  if (!payload || typeof payload !== "object") return []
+  const pb = (payload as Record<string, unknown>).paymentBreakdown as
+    | Partial<PaymentBreakdownFull>
+    | undefined
+  if (!pb) return []
+  const result: Array<{ label: string; valor: number }> = []
+  for (const [k, v] of Object.entries(pb)) {
+    const val = Number(v) || 0
+    if (val > 0) {
+      result.push({
+        label: PAYMENT_LABELS[k as keyof PaymentBreakdownFull] ?? k,
+        valor: val,
+      })
+    }
+  }
+  return result
+}
+
+function extractDiscount(payload: unknown): number {
+  if (!payload || typeof payload !== "object") return 0
+  const p = payload as Record<string, unknown>
+  const d = p.discountTotal ?? p.discountReais
+  return typeof d === "number" ? d : 0
+}
+
+function extractCustomerCpf(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null
+  const cpf = (payload as Record<string, unknown>).customerCpf
+  return typeof cpf === "string" && cpf.trim() ? cpf.trim() : null
+}
+
+export async function GET(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const pedidoId = params.id?.trim()
+
+  if (!pedidoId) {
+    return NextResponse.json({ ok: false, error: "ID da venda obrigatório" }, { status: 400 })
+  }
+
+  try {
+    await prismaEnsureConnected()
+
+    const venda = await prisma.venda.findFirst({
+      where: { pedidoId, storeId },
+      include: {
+        itens: true,
+      },
+    })
+
+    if (!venda) {
+      return NextResponse.json({ ok: false, error: "Venda não encontrada" }, { status: 404 })
+    }
+
+    // Buscar devoluções vinculadas via vendaLocalId
+    const devolucoes = await prisma.devolucaoVenda.findMany({
+      where: { storeId, vendaLocalId: pedidoId },
+      include: { itens: true },
+      orderBy: { at: "desc" },
+    })
+
+    // Buscar sessão de caixa — sessaoId pode vir do payload
+    const sessaoIdPayload = venda.payload && typeof venda.payload === "object"
+      ? ((venda.payload as Record<string, unknown>).sessaoId as string | undefined)
+      : undefined
+
+    return NextResponse.json({
+      ok: true,
+      venda: {
+        id: venda.pedidoId,
+        dbId: venda.id,
+        at: venda.at.toISOString(),
+        clienteNome: venda.clienteNome || null,
+        clienteCpf: extractCustomerCpf(venda.payload),
+        total: venda.total,
+        desconto: extractDiscount(venda.payload),
+        status: venda.status,
+        operador: venda.operador || null,
+        canceladaEm: venda.canceladaEm?.toISOString() ?? null,
+        canceladaPor: venda.canceladaPor ?? null,
+        motivoCancelamento: venda.motivoCancelamento ?? null,
+        sessaoId: sessaoIdPayload ?? null,
+        pagamentos: extractPayments(venda.payload),
+        itens: venda.itens.map((it) => ({
+          id: it.id,
+          nome: it.nome,
+          quantidade: it.quantidade,
+          precoUnitario: it.precoUnitario,
+          lineTotal: it.lineTotal,
+        })),
+        devolucoes: devolucoes.map((d) => ({
+          id: d.id,
+          localId: d.localId,
+          at: d.at.toISOString(),
+          tipo: d.tipo,
+          valorTotal: d.valorTotal,
+          operador: d.operador,
+          motivo: d.motivo,
+          itens: d.itens.map((it) => ({
+            nome: it.nome,
+            quantidade: it.quantidade,
+            valorTotal: it.valorTotal,
+          })),
+        })),
+      },
+    })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error("[vendas/detalhe]", msg)
+    return NextResponse.json({ ok: false, error: "Falha ao carregar venda" }, { status: 503 })
+  }
+}

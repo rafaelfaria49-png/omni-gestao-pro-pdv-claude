@@ -5,6 +5,8 @@ export type SalePayload = {
   at?: string
   total?: number
   customerName?: string
+  /** Operador/caixa que realizou a venda (extraído de SaleRecord.cashierId). */
+  cashierId?: string
   lines?: Array<{
     inventoryId?: string
     name?: string
@@ -40,6 +42,9 @@ export async function upsertVendaInTransaction(
   const clienteNome =
     typeof sale.customerName === "string" && sale.customerName.trim() ? sale.customerName.trim() : null
 
+  const operador =
+    typeof sale.cashierId === "string" && sale.cashierId.trim() ? sale.cashierId.trim() : null
+
   const lines = Array.isArray(sale.lines) ? sale.lines : []
 
   const v = await tx.venda.upsert({
@@ -51,6 +56,7 @@ export async function upsertVendaInTransaction(
       total,
       at,
       clienteNome,
+      operador,
     },
     update: {
       storeId: lojaId,
@@ -58,6 +64,7 @@ export async function upsertVendaInTransaction(
       total,
       at,
       clienteNome,
+      ...(operador ? { operador } : {}),
     },
   })
 

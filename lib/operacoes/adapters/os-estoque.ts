@@ -115,12 +115,19 @@ export async function buildEstoqueMovimentosFromOS(os: OrdemServico): Promise<{
         ignored.push({ source: group.source, ref: p.id || p.nome, reason: "no_produto_match" });
         continue;
       }
+      const unitFromPeca =
+        typeof (p as { valorUnitario?: unknown }).valorUnitario === "number"
+          ? Number((p as { valorUnitario?: number }).valorUnitario)
+          : undefined;
       items.push({
         source: group.source,
         produtoId: resolved.produtoId,
         nome: resolved.nome,
         quantidade,
-        precoUnitario: resolved.precoUnitario,
+        precoUnitario:
+          unitFromPeca !== undefined && Number.isFinite(unitFromPeca) && unitFromPeca >= 0
+            ? unitFromPeca
+            : resolved.precoUnitario,
       });
     }
   }
@@ -191,12 +198,19 @@ export async function consumeEstoqueFromOS(params: { storeId: string; osId: stri
         const depois = anterior - it.quantidade;
 
         await tx.produto.update({ where: { id: p.id }, data: { stock: { decrement: it.quantidade } } });
+        const unit =
+          typeof it.precoUnitario === "number" && Number.isFinite(it.precoUnitario) && it.precoUnitario >= 0
+            ? it.precoUnitario
+            : p.price;
         await tx.ordemServicoItem.create({
           data: {
             ordemServicoId: params.osId,
             produtoId: p.id,
+            tipo: "peca",
+            descricao: it.nome || p.name,
             quantidade: it.quantidade,
-            precoUnitario: p.price,
+            precoUnitario: unit,
+            observacao: "",
           },
         });
 
@@ -265,6 +279,7 @@ export async function restoreEstoqueFromOS(params: {
       // Restaura estoque a partir de OrdemServicoItem real
       const itens = await tx.ordemServicoItem.findMany({ where: { ordemServicoId: params.osId } });
       for (const it of itens) {
+        if (!it.produtoId) continue;
         await tx.produto.update({ where: { id: it.produtoId }, data: { stock: { increment: it.quantidade } } });
       }
       await tx.ordemServicoItem.deleteMany({ where: { ordemServicoId: params.osId } });
@@ -304,11 +319,13 @@ export type EstoqueDeltaItem = {
   createdAt: string;
 };
 
-function sumByProdutoIdFromItens(itens: { produtoId: string; quantidade: number }[]): Map<string, number> {
+function sumByProdutoIdFromItens(itens: { produtoId: string | null; quantidade: number }[]): Map<string, number> {
   const m = new Map<string, number>();
   for (const it of itens) {
-    const prev = m.get(it.produtoId) ?? 0;
-    m.set(it.produtoId, prev + Math.floor(Number(it.quantidade) || 0));
+    const pid = typeof it.produtoId === "string" ? it.produtoId.trim() : "";
+    if (!pid) continue;
+    const prev = m.get(pid) ?? 0;
+    m.set(pid, prev + Math.floor(Number(it.quantidade) || 0));
   }
   return m;
 }
@@ -397,14 +414,22 @@ export async function applyEstoqueDelta(params: {
           });
           await tx.produto.update({ where: { id: d.produtoId }, data: { stock: { decrement: d.diferenca } } });
           await tx.ordemServicoItem.create({
-            data: { ordemServicoId: params.osId, produtoId: d.produtoId, quantidade: d.diferenca, precoUnitario: p.price },
+            data: {
+              ordemServicoId: params.osId,
+              produtoId: d.produtoId,
+              tipo: "peca",
+              descricao: "",
+              quantidade: d.diferenca,
+              precoUnitario: p.price,
+              observacao: "",
+            },
           });
         } else {
           const toRestore = Math.abs(d.diferenca);
           await tx.produto.update({ where: { id: d.produtoId }, data: { stock: { increment: toRestore } } });
 
           let remaining = toRestore;
-          const rows = itens.filter((it) => it.produtoId === d.produtoId);
+          const rows = itens.filter((it) => it.produtoId && it.produtoId === d.produtoId);
           for (const it of rows) {
             if (remaining <= 0) break;
             const q = Math.floor(Number(it.quantidade) || 0);

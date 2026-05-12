@@ -14,7 +14,19 @@ import type {
 } from "@/types/os";
 import { reservarPeca } from "./estoque";
 import { criarVendaDeOS } from "./vendas";
-import { createOS, listOS, updateOSPayload, updateOSStatus, applyOperacaoHubAcao, type OperacaoHubAcaoInput } from "@/app/actions/operacoes";
+import {
+  createOS,
+  listOS,
+  updateOSPayload,
+  updateOSStatus,
+  applyOperacaoHubAcao,
+  syncOperacaoItensComOrcamento,
+  validateOrcamentoEstoqueAction,
+  gerarCobrancaOSAction,
+  type OperacaoHubAcaoInput,
+  type GerarCobrancaModo,
+  type EstoqueOrcamentoIssue,
+} from "@/app/actions/operacoes";
 import { listOrdens as listOrdensPrisma, getOrdem } from "@/app/actions/ordens";
 import { buildFaturamentoFromOrcamento, buildFaturamentoRecusadoOrcamento } from "@/lib/os/faturamento";
 import { snapshotGarantia } from "@/lib/os/garantia";
@@ -23,6 +35,21 @@ import { normalizeOperacaoStatus } from "@/components/operacoes/lovable/utils/os
 import { normalizePecaUsada, normalizePecasUsadas } from "@/components/operacoes/lovable/utils/pecas-normalization";
 
 let CURRENT_STORE_ID = "loja-1";
+
+export type { GerarCobrancaModo, EstoqueOrcamentoIssue };
+
+export async function validateOrcamentoEstoque(osId: string): Promise<{ ok: boolean; issues: EstoqueOrcamentoIssue[] }> {
+  return validateOrcamentoEstoqueAction(CURRENT_STORE_ID, osId);
+}
+
+export async function gerarCobrancaOS(
+  osId: string,
+  input: { modo: GerarCobrancaModo; numParcelas?: number },
+  autor?: string,
+): Promise<OrdemServico> {
+  const patched = await gerarCobrancaOSAction(CURRENT_STORE_ID, osId, input, autor ?? "Operador");
+  return patched as unknown as OrdemServico;
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
@@ -86,6 +113,7 @@ export async function criarOrcamentoRascunho(osId: string, autor: string): Promi
     orcamento: novo,
     timeline,
   } as Partial<OrdemServico>);
+  await syncOperacaoItensComOrcamento(CURRENT_STORE_ID, osId);
   return patched as unknown as OrdemServico;
 }
 
@@ -121,6 +149,7 @@ export async function salvarOrcamento(
     orcamento: merged,
     timeline,
   } as Partial<OrdemServico>);
+  await syncOperacaoItensComOrcamento(CURRENT_STORE_ID, osId);
   return patched as unknown as OrdemServico;
 }
 
@@ -144,6 +173,7 @@ export async function enviarOrcamentoAoCliente(osId: string, autor: string): Pro
     orcamento,
     timeline,
   } as Partial<OrdemServico>);
+  await syncOperacaoItensComOrcamento(CURRENT_STORE_ID, osId);
   return patched as unknown as OrdemServico;
 }
 
@@ -224,6 +254,13 @@ export async function runOperacaoHubAcao(
   autor?: string,
 ): Promise<OrdemServico> {
   const updated = await applyOperacaoHubAcao(CURRENT_STORE_ID, osId, acao, autor ?? "Operador");
+  if (
+    acao.kind === "aprovar_orcamento" ||
+    acao.kind === "reprovar_orcamento" ||
+    acao.kind === "enviar_orcamento"
+  ) {
+    await syncOperacaoItensComOrcamento(CURRENT_STORE_ID, osId);
+  }
   return updated as unknown as OrdemServico;
 }
 
@@ -315,6 +352,7 @@ export async function approveOrcamento(osId: string, autor: string): Promise<Ord
     timeline,
     ...faturamento,
   } as Partial<OrdemServico>);
+  await syncOperacaoItensComOrcamento(CURRENT_STORE_ID, osId);
   return patched as unknown as OrdemServico;
 }
 
@@ -343,6 +381,7 @@ export async function rejectOrcamento(osId: string, autor: string, motivo?: stri
     timeline,
     ...faturamento,
   } as Partial<OrdemServico>);
+  await syncOperacaoItensComOrcamento(CURRENT_STORE_ID, osId);
   return patched as unknown as OrdemServico;
 }
 
