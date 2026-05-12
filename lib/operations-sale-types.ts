@@ -25,6 +25,8 @@ export interface SaleRecord {
   at: string
   lines: SaleLineRecord[]
   total: number
+  /** Total de descontos aplicados na venda (quando persistido pelo PDV). */
+  discountTotal?: number
   customerCpf?: string
   customerName?: string
   paymentBreakdown: PaymentBreakdownFull
