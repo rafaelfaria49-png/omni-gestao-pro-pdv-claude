@@ -10,6 +10,7 @@ import {
   type NovoReceberInput,
   type NovoPagarInput,
   type TipoCarteira,
+  type DREMensal,
 } from "../context/FinanceiroRealContext";
 import { toast } from "sonner";
 import {
@@ -107,6 +108,9 @@ import {
   Pie,
   Cell,
   Legend,
+  ComposedChart,
+  Area,
+  ReferenceLine,
 } from "recharts";
 
 export const Route = createFileRoute("/financeiro" as never)({
@@ -231,8 +235,61 @@ function StatCard({
   );
 }
 
+// Helpers DRE
+function crescBadge(pct: number) {
+  if (Math.abs(pct) < 1) return null;
+  const up = pct >= 0;
+  const Icon = up ? TrendingUp : TrendingDown;
+  return (
+    <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${up ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
+      <Icon className="h-3 w-3" />
+      {Math.abs(pct).toFixed(1)}%
+    </span>
+  );
+}
+
+function DRECard({
+  title,
+  value,
+  hint,
+  icon: Icon,
+  tone,
+  badge,
+}: {
+  title: string;
+  value: string;
+  hint?: string;
+  icon: any;
+  tone?: "default" | "positive" | "negative" | "warning";
+  badge?: React.ReactNode;
+}) {
+  const toneCls =
+    tone === "positive" ? "text-primary" :
+    tone === "negative" ? "text-destructive" :
+    tone === "warning" ? "text-amber-600" : "text-foreground";
+  return (
+    <Card className="rounded-xl">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="space-y-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground truncate">{title}</p>
+              {badge}
+            </div>
+            <p className={`text-xl font-semibold tracking-tight ${toneCls}`}>{value}</p>
+            {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+          </div>
+          <div className="rounded-lg bg-muted p-2 text-muted-foreground shrink-0">
+            <Icon className="h-4 w-4" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function VisaoGeral() {
-  const { summaryR, summaryP, analytics, receber, pagar, fluxoCaixa, saldoTotalCarteiras, carteiras: listaCarteiras } = useFinanceiroReal();
+  const { summaryR, summaryP, analytics, receber, pagar, fluxoCaixa, saldoTotalCarteiras, carteiras: listaCarteiras, dre, loadingDRE } = useFinanceiroReal();
 
   // Preferência: fluxo-caixa real → fallback analytics/summaryR/P
   const totalReceber = fluxoCaixa?.totalReceberAberto ?? summaryR?.totalAberto ?? 0;
@@ -252,24 +309,43 @@ function VisaoGeral() {
     mesAtual?.mes?.trim() ||
     new Date().toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
 
-  // Alertas: usa fluxo-caixa real quando disponível, fallback para summaryR/P
-  const alertItems: { msg: string; val: string; urgente?: boolean }[] = fluxoCaixa?.alertas?.map((a) => ({
-    msg: a.mensagem,
-    val: a.valor != null ? fmt(a.valor) : "",
-    urgente: a.urgente,
-  })) ?? (
-    [
-      summaryP && summaryP.totalVencido > 0
-        ? { msg: `${summaryP.quantidade} contas a pagar — ${fmt(summaryP.totalVencido)} em atraso`, val: fmt(summaryP.totalVencido), urgente: true }
-        : null,
-      summaryR && summaryR.totalVencido > 0
-        ? { msg: `A receber — ${fmt(summaryR.totalVencido)} vencido de clientes`, val: fmt(summaryR.totalVencido), urgente: false }
-        : null,
-    ] as Array<{ msg: string; val: string; urgente?: boolean } | null>
-  ).filter((x): x is { msg: string; val: string; urgente?: boolean } => x !== null);
+  // DRE dados
+  const dreReceita = dre?.receitaBruta ?? 0;
+  const dreLucro = dre?.lucroLiquido ?? 0;
+  const dreMargemLiq = dre?.margemLiquida ?? 0;
+  const dreTicket = dre?.ticketMedio ?? 0;
+  const drePeriodo = dre?.periodo.label ?? periodoResultado;
+  const dreComp = dre?.comparativo ?? null;
+  const dreTendencia = dre?.tendencia ?? "estavel";
+  const dreHistorico = dre?.historico6Meses ?? [];
+
+  // Alertas: fluxo-caixa + DRE gerencial, urgentes primeiro
+  type AlertItem = { msg: string; val: string; urgente?: boolean };
+  const alertItems: AlertItem[] = [
+    ...(fluxoCaixa?.alertas?.map((a) => ({
+      msg: a.mensagem,
+      val: a.valor != null ? fmt(a.valor) : "",
+      urgente: a.urgente,
+    })) ?? (
+      [
+        summaryP && summaryP.totalVencido > 0
+          ? { msg: `${summaryP.quantidade} contas a pagar — ${fmt(summaryP.totalVencido)} em atraso`, val: fmt(summaryP.totalVencido), urgente: true }
+          : null,
+        summaryR && summaryR.totalVencido > 0
+          ? { msg: `A receber — ${fmt(summaryR.totalVencido)} vencido de clientes`, val: fmt(summaryR.totalVencido), urgente: false }
+          : null,
+      ] as Array<AlertItem | null>
+    ).filter((x): x is AlertItem => x !== null)),
+    ...(dre?.alertas?.map((a) => ({
+      msg: a.mensagem,
+      val: a.valor != null ? `${Math.abs(a.valor).toFixed(1)}${a.tipo.includes("margem") || a.tipo.includes("despesa") ? "%" : ""}` : "",
+      urgente: a.urgente,
+    })) ?? []),
+  ].sort((a, b) => Number(b.urgente) - Number(a.urgente));
 
   return (
     <div className="space-y-4">
+      {/* ── Saldo + receber/pagar + resultado ── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {saldoReal !== null
           ? <StatCard title="Saldo realizado" value={fmt(saldoReal)} hint="Entradas − saídas efetivadas" icon={Wallet} tone={saldoReal >= 0 ? "positive" : "negative"} />
@@ -286,6 +362,51 @@ function VisaoGeral() {
         <StatCard title="Lucro líquido" value={fmt(lucro)} hint="Consolidado no período exibido" icon={PiggyBank} tone={lucro >= 0 ? "positive" : "negative"} />
       </div>
 
+      {/* ── Resultado Gerencial (DRE) ── */}
+      <div className="flex items-center gap-2 pt-1">
+        <BarChart3 className="h-4 w-4 text-primary" />
+        <p className="text-sm font-semibold text-foreground">Resultado Gerencial</p>
+        <Badge variant="outline" className="text-[10px] gap-1">
+          {dreTendencia === "positiva" ? <TrendingUp className="h-3 w-3 text-primary" /> : dreTendencia === "negativa" ? <TrendingDown className="h-3 w-3 text-destructive" /> : <Percent className="h-3 w-3" />}
+          {dreTendencia === "positiva" ? "Tendência positiva" : dreTendencia === "negativa" ? "Tendência negativa" : "Estável"}
+        </Badge>
+        {loadingDRE && <span className="text-xs text-muted-foreground animate-pulse">calculando...</span>}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <DRECard
+          title="Receita líquida"
+          value={fmt(dreReceita)}
+          hint={drePeriodo}
+          icon={ArrowDownCircle}
+          tone={dreReceita > 0 ? "positive" : "default"}
+          badge={dreComp ? crescBadge(dreComp.receitaCrescimento) : undefined}
+        />
+        <DRECard
+          title="Lucro líquido"
+          value={fmt(dreLucro)}
+          hint={dreComp ? `Ant.: ${fmt(dreComp.lucroMesAnterior)}` : undefined}
+          icon={PiggyBank}
+          tone={dreLucro > 0 ? "positive" : dreLucro < 0 ? "negative" : "default"}
+          badge={dreComp ? crescBadge(dreComp.lucroCrescimento) : undefined}
+        />
+        <DRECard
+          title="Margem líquida"
+          value={`${dreMargemLiq.toFixed(1)}%`}
+          hint={dreMargemLiq >= 10 ? "Saudável (≥10%)" : dreMargemLiq > 0 ? "Atenção (<10%)" : "Prejuízo"}
+          icon={Percent}
+          tone={dreMargemLiq >= 15 ? "positive" : dreMargemLiq > 0 ? "warning" : "negative"}
+        />
+        <DRECard
+          title="Ticket médio"
+          value={fmt(dreTicket)}
+          hint={`${dre?.totalTransacoes ?? 0} transações`}
+          icon={Receipt}
+          tone="default"
+        />
+      </div>
+
+      {/* ── Alertas financeiros ── */}
       <Card className="rounded-xl">
         <CardHeader>
           <div className="flex items-center gap-2">
@@ -316,6 +437,43 @@ function VisaoGeral() {
         </CardContent>
       </Card>
 
+      {/* ── DRE Mensal — últimos 6 meses ── */}
+      {dreHistorico.length > 0 && (
+        <Card className="rounded-xl">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              <CardTitle className="text-base">DRE Mensal — Receita · Despesa · Lucro</CardTitle>
+            </div>
+            <CardDescription>Últimos 6 meses</CardDescription>
+          </CardHeader>
+          <CardContent className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={dreHistorico}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={12} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--color-popover)",
+                    border: "1px solid var(--color-border)",
+                    borderRadius: 8,
+                    color: "var(--color-popover-foreground)",
+                  }}
+                  formatter={(value: number) => [fmt(value)]}
+                />
+                <Legend />
+                <Bar dataKey="receita" name="Receita" fill="var(--color-primary)" opacity={0.85} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="despesa" name="Despesa" fill="var(--color-chart-3)" opacity={0.75} radius={[4, 4, 0, 0]} />
+                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="var(--color-chart-2)" strokeWidth={2.5} dot={{ r: 4 }} />
+                <ReferenceLine y={0} stroke="var(--color-border)" strokeDasharray="4 2" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Evolução entradas vs saídas ── */}
       <Card className="rounded-xl">
         <CardHeader>
           <CardTitle className="text-base">Evolução — entradas vs. saídas</CardTitle>
@@ -343,6 +501,7 @@ function VisaoGeral() {
         </CardContent>
       </Card>
 
+      {/* ── Fluxo automático ── */}
       <Card className="rounded-xl">
         <CardHeader>
           <div className="flex items-center gap-2">

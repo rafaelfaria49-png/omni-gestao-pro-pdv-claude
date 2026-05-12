@@ -126,6 +126,50 @@ export type NovaCarteiraInput = {
   icone?: string
 }
 
+// ── DRE types ─────────────────────────────────────────────────────────────────
+
+export type DRELinha = { categoria: string; valor: number; percentual: number }
+
+export type DREComparativo = {
+  receitaCrescimento: number
+  lucroCrescimento: number
+  despesaCrescimento: number
+  receitaMesAnterior: number
+  lucroMesAnterior: number
+}
+
+export type AlertaDRE = {
+  tipo: "margem_baixa" | "lucro_negativo" | "queda_receita" | "despesas_altas" | "fluxo_pressionado"
+  mensagem: string
+  valor?: number
+  urgente: boolean
+}
+
+export type DREMensal = {
+  periodo: { mes: number; ano: number; label: string }
+  receitaBruta: number
+  receitasDetalhadas: DRELinha[]
+  custos: number
+  custosDetalhados: DRELinha[]
+  despesasFixas: number
+  despesasFixasDetalhadas: DRELinha[]
+  despesasVariaveis: number
+  despesasVariaveisDetalhadas: DRELinha[]
+  totalDespesas: number
+  lucroBruto: number
+  lucroLiquido: number
+  margemBruta: number
+  margemLiquida: number
+  margemDespesas: number
+  ticketMedio: number
+  totalTransacoes: number
+  totalMovimentacoes: number
+  comparativo: DREComparativo | null
+  tendencia: "positiva" | "negativa" | "estavel"
+  historico6Meses: { mes: string; receita: number; despesa: number; lucro: number }[]
+  alertas: AlertaDRE[]
+}
+
 export type TransferenciaCarteiraInput = {
   origemId: string
   destinoId: string
@@ -146,11 +190,14 @@ type FinanceiroRealState = {
   carteiras: CarteiraPublica[]
   loadingCarteiras: boolean
   saldoTotalCarteiras: number
+  dre: DREMensal | null
+  loadingDRE: boolean
   loading: boolean
   error: string | null
   reload: () => void
   refreshFluxoCaixa: () => Promise<void>
   refreshCarteiras: () => Promise<void>
+  refreshDRE: (mes?: number, ano?: number) => Promise<void>
   criarCarteira: (data: NovaCarteiraInput) => Promise<CarteiraPublica>
   transferirEntreCarteiras: (data: TransferenciaCarteiraInput) => Promise<void>
   liquidarReceber: (id: string, observacao?: string) => Promise<void>
@@ -278,6 +325,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [carteiras, setCarteiras] = useState<CarteiraPublica[]>([])
   const [loadingCarteiras, setLoadingCarteiras] = useState(true)
   const [saldoTotalCarteiras, setSaldoTotalCarteiras] = useState(0)
+  const [dre, setDRE] = useState<DREMensal | null>(null)
+  const [loadingDRE, setLoadingDRE] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -380,9 +429,30 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     await refreshCarteiras()
   }, [refreshCarteiras])
 
+  const refreshDRE = useCallback(async (mes?: number, ano?: number) => {
+    setLoadingDRE(true)
+    try {
+      const lojaId = getLojaId()
+      const params = new URLSearchParams()
+      if (mes) params.set("mes", String(mes))
+      if (ano) params.set("ano", String(ano))
+      const url = `/api/financeiro/dre${params.toString() ? `?${params.toString()}` : ""}`
+      const res = await fetch(url, {
+        headers: { "x-assistec-loja-id": lojaId },
+      })
+      const json = (await res.json()) as Record<string, unknown>
+      if (json.ok) setDRE(json.dre as DREMensal)
+    } catch {
+      // silencioso — DRE é complementar
+    } finally {
+      setLoadingDRE(false)
+    }
+  }, [])
+
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { void refreshFluxoCaixa() }, [refreshFluxoCaixa])
   useEffect(() => { void refreshCarteiras() }, [refreshCarteiras])
+  useEffect(() => { void refreshDRE() }, [refreshDRE])
 
   const callApi = useCallback(async (path: string, body: Record<string, unknown>, method: "POST" | "PATCH" = "POST"): Promise<Record<string, unknown>> => {
     const lojaId = getLojaId()
@@ -457,8 +527,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
         receber, pagar, summaryR, summaryP, analytics,
         fluxoCaixa, loadingFluxoCaixa,
         carteiras, loadingCarteiras, saldoTotalCarteiras,
+        dre, loadingDRE,
         loading, error, reload: fetchData,
-        refreshFluxoCaixa, refreshCarteiras,
+        refreshFluxoCaixa, refreshCarteiras, refreshDRE,
         criarCarteira, transferirEntreCarteiras,
         liquidarReceber, receberParcial, estornarReceber, criarReceber,
         liquidarPagar, pagarParcial, estornarPagar, criarPagar,

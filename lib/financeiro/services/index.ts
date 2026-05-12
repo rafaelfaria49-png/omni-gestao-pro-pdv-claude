@@ -1,5 +1,6 @@
 export * from "./carteira-service"
 export * from "./carteiras-service"
+export * from "./dre-service"
 export * from "./contas-pagar-service"
 export * from "./contas-receber-service"
 export * from "./movimento-service"
