@@ -55,6 +55,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { useOperationsStore } from "@/lib/operations-store"
+import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { PDV_PRODUCTS_BASE, mergePdvCatalogWithInventory, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -739,6 +740,7 @@ function EditarAtalhosModal({
 
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
   const { inventory, finalizeSaleTransaction } = useOperationsStore()
+  const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const mergedCatalog = useMemo(() => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory), [inventory])
   const inputRef = useRef<HTMLInputElement | null>(null)
   const customerInputRef = useRef<HTMLInputElement | null>(null)
@@ -943,6 +945,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       },
       customerName: customerName.trim() || undefined,
       openCaixaIfClosed: false,
+      auditMeta: { cashierId },
     })
 
     if (!result.ok) {
