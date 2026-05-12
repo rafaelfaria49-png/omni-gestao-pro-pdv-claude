@@ -177,6 +177,108 @@ export type TransferenciaCarteiraInput = {
   descricao?: string
 }
 
+// ── Relatórios Avançados types ────────────────────────────────────────────────
+
+export type PresetPeriodo = "hoje" | "ontem" | "7dias" | "30dias" | "estemes" | "mespassado" | "personalizado"
+
+export type FiltrosFinanceiros = {
+  preset: PresetPeriodo
+  dataInicio?: string
+  dataFim?: string
+  carteiraId?: string
+}
+
+export type CategoriaLinha = {
+  categoria: string
+  total: number
+  percentual: number
+  qtd: number
+  media: number
+}
+
+export type RankingItem = {
+  label: string
+  valor: number
+  percentual: number
+  tipo: "entrada" | "saida"
+}
+
+export type IndicadoresExecutivos = {
+  receitaTotal: number
+  despesaTotal: number
+  lucroLiquido: number
+  margemLiquida: number
+  ticketMedio: number
+  saldoConsolidado: number
+  crescimentoMensal: number
+  crescimentoAnual: number
+  inadimplencia: number
+  receberPendente: number
+  pagarPendente: number
+  maiorDespesa: { descricao: string; valor: number } | null
+  maiorCategoriaReceita: string | null
+  carteiraTop: { nome: string; saldo: number } | null
+}
+
+export type ResumoExecutivo = {
+  periodo: { dataInicio: string; dataFim: string; dias: number }
+  indicadores: IndicadoresExecutivos
+  receitasPorCategoria: CategoriaLinha[]
+  despesasPorCategoria: CategoriaLinha[]
+  topReceitas: RankingItem[]
+  topDespesas: RankingItem[]
+}
+
+export type FluxoPeriodo = {
+  periodo: string
+  label: string
+  entrada: number
+  saida: number
+  saldo: number
+  acumulado: number
+}
+
+export type ComparativoMensal = {
+  mes: string
+  mesLabel: string
+  ano: number
+  entrada: number
+  saida: number
+  lucro: number
+  margem: number
+}
+
+export type ComparativoAnual = {
+  ano: number
+  entrada: number
+  saida: number
+  lucro: number
+  margem: number
+  crescimento: number
+}
+
+export type AnaliseCarteira = {
+  id: string
+  nome: string
+  tipo: string
+  saldoAtual: number
+  saldoInicial: number
+  totalEntradas: number
+  totalSaidas: number
+  qtdMovimentacoes: number
+  participacao: number
+}
+
+export type RelatoriosAvancados = {
+  resumo: ResumoExecutivo | null
+  fluxo: FluxoPeriodo[]
+  comparativoMensal: ComparativoMensal[]
+  comparativoAnual: ComparativoAnual[]
+  analiseCarteiras: AnaliseCarteira[]
+  topReceitas: RankingItem[]
+  topDespesas: RankingItem[]
+}
+
 // ── Auditoria / Conciliação / Fechamento types ────────────────────────────────
 
 export type AuditoriaPublica = {
@@ -275,6 +377,13 @@ type FinanceiroRealState = {
   pagarParcial: (id: string, valor: number, observacao?: string) => Promise<void>
   estornarPagar: (id: string, motivo?: string) => Promise<void>
   criarPagar: (data: NovoPagarInput) => Promise<void>
+  // ── FASE 12 ──
+  relatorios: RelatoriosAvancados
+  loadingRelatorios: boolean
+  filtrosFinanceiros: FiltrosFinanceiros
+  setFiltrosFinanceiros: (f: FiltrosFinanceiros) => void
+  refreshRelatorios: (filtros?: FiltrosFinanceiros) => Promise<void>
+  exportarRelatorio: (tipo: string, formato: "csv" | "xlsx", filtros?: FiltrosFinanceiros) => void
   // ── FASE 11 ──
   auditoriaFinanceira: AuditoriaPublica[]
   conciliacoes: ConciliacaoPublica[]
@@ -409,6 +518,11 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [saldoTotalCarteiras, setSaldoTotalCarteiras] = useState(0)
   const [dre, setDRE] = useState<DREMensal | null>(null)
   const [loadingDRE, setLoadingDRE] = useState(true)
+  const emptyRelatorios: RelatoriosAvancados = { resumo: null, fluxo: [], comparativoMensal: [], comparativoAnual: [], analiseCarteiras: [], topReceitas: [], topDespesas: [] }
+  const [relatorios, setRelatorios] = useState<RelatoriosAvancados>(emptyRelatorios)
+  const [loadingRelatorios, setLoadingRelatorios] = useState(false)
+  const [filtrosFinanceiros, setFiltrosFinanceiros] = useState<FiltrosFinanceiros>({ preset: "estemes" })
+
   const [auditoriaFinanceira, setAuditoriaFinanceira] = useState<AuditoriaPublica[]>([])
   const [conciliacoes, setConciliacoes] = useState<ConciliacaoPublica[]>([])
   const [fechamentos, setFechamentos] = useState<FechamentoPublico[]>([])
@@ -537,6 +651,72 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
       setLoadingDRE(false)
     }
   }, [])
+
+  const buildRelatoriosParams = (f: FiltrosFinanceiros): string => {
+    const params = new URLSearchParams()
+    const lojaId = getLojaId()
+    params.set("storeId", lojaId)
+    if (f.preset !== "personalizado") {
+      params.set("preset", f.preset)
+    } else {
+      if (f.dataInicio) params.set("dataInicio", f.dataInicio)
+      if (f.dataFim) params.set("dataFim", f.dataFim)
+    }
+    if (f.carteiraId) params.set("carteiraId", f.carteiraId)
+    return params.toString()
+  }
+
+  const refreshRelatorios = useCallback(async (filtros?: FiltrosFinanceiros) => {
+    const f = filtros ?? filtrosFinanceiros
+    setLoadingRelatorios(true)
+    try {
+      const lojaId = getLojaId()
+      const headers = { "x-assistec-loja-id": lojaId }
+      const qs = buildRelatoriosParams(f)
+
+      const [resumoRes, rankRes, indicRes, fluxoRes] = await Promise.all([
+        fetch(`/api/financeiro/relatorios/resumo?${qs}`, { headers }),
+        fetch(`/api/financeiro/relatorios/rankings?${qs}`, { headers }),
+        fetch(`/api/financeiro/relatorios/indicadores?${qs}`, { headers }),
+        fetch(`/api/financeiro/relatorios/fluxo?${qs}&agrupamento=mes`, { headers }),
+      ])
+      const [resumoJson, rankJson, indicJson, fluxoJson] = await Promise.all([
+        resumoRes.json(), rankRes.json(), indicRes.json(), fluxoRes.json()
+      ]) as [Record<string, unknown>, Record<string, unknown>, Record<string, unknown>, Record<string, unknown>]
+
+      setRelatorios({
+        resumo: resumoJson.ok ? (resumoJson as unknown as ResumoExecutivo) : null,
+        fluxo: Array.isArray(fluxoJson.fluxo) ? (fluxoJson.fluxo as FluxoPeriodo[]) : [],
+        comparativoMensal: Array.isArray(indicJson.comparativoMensal) ? (indicJson.comparativoMensal as ComparativoMensal[]) : [],
+        comparativoAnual: Array.isArray(indicJson.comparativoAnual) ? (indicJson.comparativoAnual as ComparativoAnual[]) : [],
+        analiseCarteiras: Array.isArray(rankJson.carteiras) ? (rankJson.carteiras as AnaliseCarteira[]) : [],
+        topReceitas: Array.isArray(rankJson.topReceitas) ? (rankJson.topReceitas as RankingItem[]) : [],
+        topDespesas: Array.isArray(rankJson.topDespesas) ? (rankJson.topDespesas as RankingItem[]) : [],
+      })
+    } catch { /* silencioso */ } finally {
+      setLoadingRelatorios(false)
+    }
+  }, [filtrosFinanceiros])
+
+  const exportarRelatorio = useCallback((tipo: string, formato: "csv" | "xlsx", filtros?: FiltrosFinanceiros) => {
+    const f = filtros ?? filtrosFinanceiros
+    const lojaId = getLojaId()
+    const params = new URLSearchParams({ tipo, formato, "x-assistec-loja-id": lojaId })
+    if (f.preset !== "personalizado") {
+      params.set("preset", f.preset)
+    } else {
+      if (f.dataInicio) params.set("dataInicio", f.dataInicio)
+      if (f.dataFim) params.set("dataFim", f.dataFim)
+    }
+    const url = `/api/financeiro/relatorios/exportar?${params.toString()}`
+    // Trigger download via anchor
+    const a = document.createElement("a")
+    a.href = url
+    a.setAttribute("x-assistec-loja-id", lojaId)
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }, [filtrosFinanceiros])
 
   const refreshAuditoria = useCallback(async () => {
     setLoadingAuditoria(true)
@@ -716,6 +896,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
         fluxoCaixa, loadingFluxoCaixa,
         carteiras, loadingCarteiras, saldoTotalCarteiras,
         dre, loadingDRE,
+        relatorios, loadingRelatorios, filtrosFinanceiros, setFiltrosFinanceiros,
+        refreshRelatorios, exportarRelatorio,
         auditoriaFinanceira, conciliacoes, fechamentos, resumoConciliacao,
         loadingAuditoria, loadingConciliacao, loadingFechamentos,
         refreshAuditoria, refreshConciliacao, refreshFechamentos,

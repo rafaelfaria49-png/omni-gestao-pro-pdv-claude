@@ -13,6 +13,8 @@ import {
   type DREMensal,
   type FechamentoPublico,
   type ConciliacaoPublica,
+  type PresetPeriodo,
+  type FiltrosFinanceiros,
 } from "../context/FinanceiroRealContext";
 import { toast } from "sonner";
 import {
@@ -1127,12 +1129,112 @@ function GestaoCarteiras() {
   );
 }
 
+// ── Filtros de período ────────────────────────────────────────────────────────
+
+const PRESETS: { v: PresetPeriodo; label: string }[] = [
+  { v: "hoje", label: "Hoje" },
+  { v: "ontem", label: "Ontem" },
+  { v: "7dias", label: "7 dias" },
+  { v: "30dias", label: "30 dias" },
+  { v: "estemes", label: "Este mês" },
+  { v: "mespassado", label: "Mês passado" },
+  { v: "personalizado", label: "Personalizado" },
+];
+
+function FiltrosPeriodo() {
+  const { filtrosFinanceiros, setFiltrosFinanceiros, refreshRelatorios, loadingRelatorios } = useFinanceiroReal();
+
+  function handlePreset(v: PresetPeriodo) {
+    const newF = { ...filtrosFinanceiros, preset: v };
+    setFiltrosFinanceiros(newF);
+    void refreshRelatorios(newF);
+  }
+  function handleDates(field: "dataInicio" | "dataFim", v: string) {
+    const newF = { ...filtrosFinanceiros, [field]: v, preset: "personalizado" as PresetPeriodo };
+    setFiltrosFinanceiros(newF);
+  }
+  function handleApply() { void refreshRelatorios(filtrosFinanceiros); }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+      {PRESETS.map((p) => (
+        <button
+          key={p.v}
+          onClick={() => handlePreset(p.v)}
+          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${filtrosFinanceiros.preset === p.v ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
+        >
+          {p.label}
+        </button>
+      ))}
+      {filtrosFinanceiros.preset === "personalizado" && (
+        <div className="flex items-center gap-2">
+          <Input type="date" value={filtrosFinanceiros.dataInicio ?? ""} onChange={(e) => handleDates("dataInicio", e.target.value)} className="h-7 w-36 text-xs" />
+          <span className="text-xs text-muted-foreground">até</span>
+          <Input type="date" value={filtrosFinanceiros.dataFim ?? ""} onChange={(e) => handleDates("dataFim", e.target.value)} className="h-7 w-36 text-xs" />
+          <Button size="sm" onClick={handleApply} disabled={loadingRelatorios} className="h-7 px-3 text-xs">
+            <RefreshCw className={`h-3 w-3 mr-1 ${loadingRelatorios ? "animate-spin" : ""}`} />Aplicar
+          </Button>
+        </div>
+      )}
+      {loadingRelatorios && filtrosFinanceiros.preset !== "personalizado" && (
+        <RefreshCw className="h-3 w-3 animate-spin text-muted-foreground" />
+      )}
+    </div>
+  );
+}
+
+// ── Botões de exportação ──────────────────────────────────────────────────────
+
+function ExportButton({ tipo, label, filtros }: { tipo: string; label: string; filtros?: FiltrosFinanceiros }) {
+  const { exportarRelatorio, filtrosFinanceiros } = useFinanceiroReal();
+  const f = filtros ?? filtrosFinanceiros;
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-xs text-muted-foreground w-36 truncate">{label}</span>
+      <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={() => exportarRelatorio(tipo, "csv", f)}>
+        <Download className="h-3 w-3" />CSV
+      </Button>
+      <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={() => exportarRelatorio(tipo, "xlsx", f)}>
+        <Download className="h-3 w-3" />XLSX
+      </Button>
+    </div>
+  );
+}
+
+// ── StatKPI ────────────────────────────────────────────────────────────────────
+
+function KPICard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-muted/30 p-4">
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{label}</p>
+      <p className={`text-xl font-bold ${color ?? ""}`}>{value}</p>
+      {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
 function Relatorios() {
-  const { analytics, summaryR, summaryP, receber, carteiras: listaCarteiras } = useFinanceiroReal();
+  const { analytics, summaryR, summaryP, receber, relatorios, loadingRelatorios, filtrosFinanceiros, refreshRelatorios } = useFinanceiroReal();
+
+  // Load on mount
+  useEffect(() => { void refreshRelatorios(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fmt = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+  const pctStr = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
+
+  const ind = relatorios.resumo?.indicadores;
+  const comparativoMensal = relatorios.comparativoMensal;
+  const topR = relatorios.topReceitas;
+  const topD = relatorios.topDespesas;
+  const analiseCarteiras = relatorios.analiseCarteiras;
+  const receitasCat = relatorios.resumo?.receitasPorCategoria ?? [];
+  const despesasCat = relatorios.resumo?.despesasPorCategoria ?? [];
+
+  // Fallback: dados do DRE/analytics existente para gráficos
   const receitasOrigem = analytics?.receitasOrigem ?? [];
   const despesasCategoria = analytics?.despesasCategoria ?? [];
-  const resultadoLoja = analytics?.resultadoLoja ?? [];
 
+  // Fallback inadimplência do context existente
   const vencidas = summaryR?.totalVencido ?? 0;
   const atrasosByCliente = useMemo(() => {
     const m = new Map<string, { cliente: string; total: number }>();
@@ -1147,167 +1249,269 @@ function Relatorios() {
   const denom = (summaryR?.totalPago ?? 0) + (summaryR?.totalAberto ?? 0) + (summaryR?.totalVencido ?? 0);
   const taxa = denom > 0 ? (vencidas / denom) * 100 : 0;
 
-  const receitaBruta = summaryR?.totalPago ?? 0;
-  const despesas = summaryP?.totalPago ?? 0;
-  const lucroLiquido = receitaBruta - despesas;
-  const margem = receitaBruta > 0 ? (lucroLiquido / receitaBruta) * 100 : 0;
+  const receitaBruta = ind?.receitaTotal ?? summaryR?.totalPago ?? 0;
+  const despesas = ind?.despesaTotal ?? summaryP?.totalPago ?? 0;
+  const lucroLiquido = ind?.lucroLiquido ?? receitaBruta - despesas;
+  const margem = ind?.margemLiquida ?? (receitaBruta > 0 ? (lucroLiquido / receitaBruta) * 100 : 0);
+
+  const TTSTYLE = { background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 8 };
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-base">Receitas por origem</CardTitle>
-        </CardHeader>
-        <CardContent className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={receitasOrigem}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={50}
-                outerRadius={90}
-                paddingAngle={2}
-              >
-                {receitasOrigem.map((_, i) => (
-                  <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: "var(--color-popover)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 8,
-                }}
-              />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+    <div className="space-y-5 min-w-0">
+      {/* Filtros globais */}
+      <FiltrosPeriodo />
 
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-base">Despesas por categoria</CardTitle>
-        </CardHeader>
-        <CardContent className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={despesasCategoria} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis type="number" stroke="var(--color-muted-foreground)" fontSize={12} />
-              <YAxis dataKey="name" type="category" stroke="var(--color-muted-foreground)" fontSize={12} width={90} />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--color-popover)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 8,
-                }}
-              />
-              <Bar dataKey="value" fill="var(--color-chart-2)" radius={[0, 6, 6, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-xl lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-base">Resultado por loja</CardTitle>
-          <CardDescription>Comparativo receita x despesa</CardDescription>
-        </CardHeader>
-        <CardContent className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={resultadoLoja}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="loja" stroke="var(--color-muted-foreground)" fontSize={12} />
-              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--color-popover)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 8,
-                }}
-              />
-              <Legend />
-              <Bar dataKey="receita" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="despesa" fill="var(--color-chart-3)" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-base">Fluxo por carteira</CardTitle>
-          <CardDescription>Saldo atual de cada carteira</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {listaCarteiras.filter((c) => c.ativo).map((c) => (
-            <div key={c.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2.5">
-              <span className="text-sm">{c.nome}</span>
-              <span className={`text-sm font-semibold ${c.saldoAtual < 0 ? "text-destructive" : ""}`}>{fmt(c.saldoAtual)}</span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-base">Inadimplência</CardTitle>
-          <CardDescription>Contas vencidas e clientes em atraso</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Vencidas</p>
-              <p className="text-lg font-semibold text-destructive">{fmt(vencidas)}</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Clientes</p>
-              <p className="text-lg font-semibold">{clientesAtraso}</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Taxa</p>
-              <p className="text-lg font-semibold">{taxa.toFixed(1)}%</p>
-            </div>
+      {/* 1. KPIs Executivos */}
+      <div>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">Visão Executiva</h3>
+        {loadingRelatorios ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 animate-pulse">
+            {Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-20 rounded-xl bg-muted" />)}
           </div>
-          {atrasosByCliente.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum cliente em atraso com base nos dados atuais.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <KPICard label="Receita total" value={fmt(receitaBruta)} color="text-green-600 dark:text-green-400" sub={ind?.crescimentoMensal !== undefined ? `${pctStr(ind.crescimentoMensal)} vs mês ant.` : undefined} />
+            <KPICard label="Despesa total" value={fmt(despesas)} color="text-red-600 dark:text-red-400" />
+            <KPICard label="Lucro líquido" value={fmt(lucroLiquido)} color={lucroLiquido >= 0 ? "text-primary" : "text-destructive"} />
+            <KPICard label="Margem líquida" value={`${margem.toFixed(1)}%`} color={margem >= 20 ? "text-green-600 dark:text-green-400" : margem >= 0 ? "text-amber-600 dark:text-amber-400" : "text-destructive"} />
+            <KPICard label="Ticket médio" value={fmt(ind?.ticketMedio ?? 0)} />
+            <KPICard label="Saldo consolidado" value={fmt(ind?.saldoConsolidado ?? 0)} />
+            <KPICard label="A receber" value={fmt(ind?.receberPendente ?? 0)} color="text-blue-600 dark:text-blue-400" />
+            <KPICard label="A pagar" value={fmt(ind?.pagarPendente ?? 0)} color="text-orange-600 dark:text-orange-400" />
+          </div>
+        )}
+      </div>
+
+      {/* 2. Comparativo Mensal */}
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center justify-between">
+            Comparativo Mensal
+            <ExportButton tipo="movimentacoes" label="" />
+          </CardTitle>
+          <CardDescription className="text-xs">Últimos 12 meses — receita, despesa e lucro</CardDescription>
+        </CardHeader>
+        <CardContent className="h-72">
+          {comparativoMensal.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Sem dados ainda.</p>
           ) : (
-            atrasosByCliente.map((i) => (
-              <div key={i.cliente} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2.5">
-                <div>
-                  <p className="text-sm font-medium">{i.cliente}</p>
-                  <p className="text-xs text-muted-foreground">Em atraso</p>
-                </div>
-                <span className="text-sm font-semibold text-destructive">{fmt(i.total)}</span>
-              </div>
-            ))
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={comparativoMensal} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="mesLabel" stroke="var(--color-muted-foreground)" fontSize={11} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip contentStyle={TTSTYLE} formatter={(v: number) => fmt(v)} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="entrada" name="Receita" fill="var(--color-primary)" radius={[4, 4, 0, 0]} opacity={0.85} />
+                <Bar dataKey="saida" name="Despesa" fill="hsl(0 72% 51%)" radius={[4, 4, 0, 0]} opacity={0.85} />
+                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="hsl(142 71% 45%)" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
           )}
         </CardContent>
       </Card>
 
-      <Card className="rounded-xl lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-base">Lucro líquido</CardTitle>
-          <CardDescription>Resumo consolidado do período</CardDescription>
+      {/* 3. Fluxo de período */}
+      {relatorios.fluxo.length > 0 && (
+        <Card className="rounded-2xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Fluxo de Caixa Acumulado</CardTitle>
+            <CardDescription className="text-xs">Evolução mês a mês no período selecionado</CardDescription>
+          </CardHeader>
+          <CardContent className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={relatorios.fluxo} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                <XAxis dataKey="label" stroke="var(--color-muted-foreground)" fontSize={11} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip contentStyle={TTSTYLE} formatter={(v: number) => fmt(v)} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="entrada" name="Entradas" fill="var(--color-primary)" radius={[4, 4, 0, 0]} opacity={0.8} />
+                <Bar dataKey="saida" name="Saídas" fill="hsl(0 72% 51%)" radius={[4, 4, 0, 0]} opacity={0.8} />
+                <Line type="monotone" dataKey="acumulado" name="Acumulado" stroke="hsl(217 91% 60%)" strokeWidth={2} dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 4. Rankings */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="rounded-2xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="h-4 w-4 text-green-500" />Top Receitas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {topR.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum dado.</p> : (
+              <div className="space-y-2">
+                {topR.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs truncate font-medium">{r.label}</p>
+                      <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-green-500" style={{ width: `${Math.min(100, r.percentual)}%` }} />
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-green-600 dark:text-green-400">{fmt(r.valor)}</p>
+                      <p className="text-[10px] text-muted-foreground">{r.percentual.toFixed(1)}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2"><TrendingDown className="h-4 w-4 text-red-500" />Top Despesas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {topD.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum dado.</p> : (
+              <div className="space-y-2">
+                {topD.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs truncate font-medium">{r.label}</p>
+                      <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-full rounded-full bg-red-500" style={{ width: `${Math.min(100, r.percentual)}%` }} />
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs font-semibold text-red-600 dark:text-red-400">{fmt(r.valor)}</p>
+                      <p className="text-[10px] text-muted-foreground">{r.percentual.toFixed(1)}%</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 5. Categorias */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="rounded-2xl">
+          <CardHeader className="pb-3"><CardTitle className="text-base">Receitas por Categoria</CardTitle></CardHeader>
+          <CardContent className="h-64">
+            {receitasCat.length === 0 && receitasOrigem.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sem dados.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={receitasCat.length > 0 ? receitasCat.map((c) => ({ name: c.categoria, value: c.total })) : receitasOrigem} dataKey="value" nameKey="name" innerRadius={45} outerRadius={85} paddingAngle={2}>
+                    {(receitasCat.length > 0 ? receitasCat : receitasOrigem).map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={TTSTYLE} formatter={(v: number) => fmt(v)} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl">
+          <CardHeader className="pb-3"><CardTitle className="text-base">Despesas por Categoria</CardTitle></CardHeader>
+          <CardContent className="h-64">
+            {despesasCat.length === 0 && despesasCategoria.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sem dados.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={despesasCat.length > 0 ? despesasCat.map((c) => ({ name: c.categoria, value: c.total })) : despesasCategoria} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis type="number" stroke="var(--color-muted-foreground)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                  <YAxis dataKey="name" type="category" stroke="var(--color-muted-foreground)" fontSize={11} width={80} />
+                  <Tooltip contentStyle={TTSTYLE} formatter={(v: number) => fmt(v)} />
+                  <Bar dataKey="value" fill="hsl(0 72% 51%)" radius={[0, 4, 4, 0]} opacity={0.85} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 6. Análise de Carteiras */}
+      {analiseCarteiras.length > 0 && (
+        <Card className="rounded-2xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" />Análise de Carteiras</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[560px]">
+                <thead>
+                  <tr className="border-b border-border text-xs text-muted-foreground">
+                    <th className="text-left py-2 pr-4 font-medium">Carteira</th>
+                    <th className="text-right py-2 pr-4 font-medium">Saldo Atual</th>
+                    <th className="text-right py-2 pr-4 font-medium">Entradas</th>
+                    <th className="text-right py-2 pr-4 font-medium">Saídas</th>
+                    <th className="text-right py-2 pr-4 font-medium">Movimentações</th>
+                    <th className="text-right py-2 font-medium">Part. %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analiseCarteiras.map((c) => (
+                    <tr key={c.id} className="border-b border-border/50 hover:bg-muted/30">
+                      <td className="py-2 pr-4 font-medium">{c.nome}</td>
+                      <td className={`py-2 pr-4 text-right font-semibold ${c.saldoAtual < 0 ? "text-destructive" : ""}`}>{fmt(c.saldoAtual)}</td>
+                      <td className="py-2 pr-4 text-right text-green-600 dark:text-green-400">{fmt(c.totalEntradas)}</td>
+                      <td className="py-2 pr-4 text-right text-red-600 dark:text-red-400">{fmt(c.totalSaidas)}</td>
+                      <td className="py-2 pr-4 text-right text-muted-foreground">{c.qtdMovimentacoes}</td>
+                      <td className="py-2 text-right text-muted-foreground">{c.participacao.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 7. Inadimplência */}
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Inadimplência</CardTitle>
+          <CardDescription className="text-xs">Contas vencidas e clientes em atraso</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <KPICard label="Vencidas" value={fmt(vencidas)} color="text-destructive" />
+            <KPICard label="Clientes" value={String(clientesAtraso)} />
+            <KPICard label="Taxa" value={`${taxa.toFixed(1)}%`} color={taxa > 10 ? "text-destructive" : taxa > 5 ? "text-amber-600 dark:text-amber-400" : ""} />
+          </div>
+          {atrasosByCliente.length > 0 && (
+            <div className="space-y-2 mt-2">
+              {atrasosByCliente.map((i) => (
+                <div key={i.cliente} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2.5">
+                  <div>
+                    <p className="text-sm font-medium">{i.cliente}</p>
+                    <p className="text-xs text-muted-foreground">Em atraso</p>
+                  </div>
+                  <span className="text-sm font-semibold text-destructive">{fmt(i.total)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 8. Exportação */}
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2"><Download className="h-4 w-4 text-primary" />Exportar Relatórios</CardTitle>
+          <CardDescription className="text-xs">Baixe os dados do período selecionado em CSV ou XLSX.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Receita bruta</p>
-              <p className="text-lg font-semibold text-primary">{fmt(receitaBruta)}</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Despesas</p>
-              <p className="text-lg font-semibold text-destructive">{fmt(despesas)}</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Lucro líquido</p>
-              <p className={`text-lg font-semibold ${lucroLiquido >= 0 ? "text-primary" : "text-destructive"}`}>{fmt(lucroLiquido)}</p>
-            </div>
-            <div className="rounded-lg border border-border bg-muted/30 p-3">
-              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Margem</p>
-              <p className="text-lg font-semibold">{margem.toFixed(0)}%</p>
-            </div>
+          <div className="space-y-3">
+            <ExportButton tipo="movimentacoes" label="Movimentações" />
+            <ExportButton tipo="receber" label="Contas a Receber" />
+            <ExportButton tipo="pagar" label="Contas a Pagar" />
+            <ExportButton tipo="conciliacoes" label="Conciliações" />
+            <ExportButton tipo="auditoria" label="Log de Auditoria" />
+            <ExportButton tipo="fluxo" label="Fluxo de Caixa" />
           </div>
         </CardContent>
       </Card>
