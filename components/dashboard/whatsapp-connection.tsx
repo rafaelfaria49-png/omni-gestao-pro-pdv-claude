@@ -10,6 +10,7 @@ import { type OrdemServico, getNextNumeroOS } from "@/components/dashboard/os/or
 import { parseVoiceIntent, voiceNormalize } from "@/lib/voice-intents"
 import { useOperationsStore } from "@/lib/operations-store"
 import { appendAuditLog } from "@/lib/audit-log"
+import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected"
 
@@ -35,6 +36,7 @@ export function WhatsAppConnection() {
     const nome = config.empresa.nomeFantasia.trim()
     return nome ? nome.split(" ")[0] : "Operador"
   }, [config.empresa.nomeFantasia])
+  const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
 
   useEffect(() => {
     const onDailyReport = () => {
@@ -117,6 +119,7 @@ export function WhatsAppConnection() {
         paymentBreakdown: { dinheiro: 0, pix: value, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: 0 },
         openCaixaIfClosed: true,
         saldoInicialAoAbrir: 0,
+        auditMeta: { cashierId },
       })
 
       if (!result.ok) {

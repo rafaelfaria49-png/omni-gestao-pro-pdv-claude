@@ -89,6 +89,7 @@ model Store {
   whatsappAutomationLogs WhatsAppAutomationLog[]
   sessoesCaixa           SessaoCaixa[]
   devolucoes             DevolucaoVenda[]
+  garantiasOrdemServico  GarantiaOrdemServico[]
 
   @@index([profile])
   @@map("stores")
@@ -487,13 +488,36 @@ model OrdemServico {
   createdAt    DateTime           @default(now()) @map("createdAt")
   updatedAt    DateTime           @default(now()) @updatedAt @map("updatedAt")
 
-  itens OrdemServicoItem[]
+  itens                  OrdemServicoItem[]
+  garantiasOperacionais  GarantiaOrdemServico[]
 
   @@index([storeId])
   @@index([clienteId])
   @@index([numero])
   @@index([status])
   @@map("ordens_servico")
+}
+
+/// Garantia operacional persistida (complementa o snapshot JSON em `payload.garantia`).
+model GarantiaOrdemServico {
+  id             String       @id @default(cuid())
+  storeId        String       @map("storeId")
+  store          Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  ordemServicoId String       @map("ordemServicoId")
+  ordemServico   OrdemServico @relation(fields: [ordemServicoId], references: [id], onDelete: Cascade)
+  prazoDias      Int          @map("prazoDias")
+  cobertura      String       @default("") @map("cobertura") @db.Text
+  observacoes    String       @default("") @map("observacoes") @db.Text
+  dataInicio     DateTime     @map("dataInicio")
+  dataFim        DateTime     @map("dataFim")
+  /// ativa | expirada | cancelada
+  status         String       @default("ativa") @map("status")
+  createdAt      DateTime     @default(now()) @map("createdAt")
+
+  @@index([storeId])
+  @@index([ordemServicoId])
+  @@index([status])
+  @@map("garantia_ordem_servico")
 }
 
 model OrdemServicoItem {

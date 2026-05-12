@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
-import { Monitor, Check, Zap, Wrench, LayoutGrid } from "lucide-react";
+import { Monitor, Check, Zap, Wrench, LayoutGrid, ShoppingCart, MessageCircle, FileText, ExternalLink } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/components/configuracoes-v3/lib/utils";
 import { ConfigEmpresaProvider } from "@/lib/config-empresa";
 import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
@@ -282,6 +283,153 @@ function PdvSectionContent() {
           <Button type="button" onClick={() => void handleSave()} disabled={controlsDisabled || draftLayout === savedLayout}>
             {saving ? "Salvando…" : "Salvar alterações"}
           </Button>
+        </div>
+      </div>
+
+      {/* Fluxos integrados — informativos */}
+      <div>
+        <div className="mb-4">
+          <h2 className="text-base font-semibold text-foreground">Outros fluxos de venda</h2>
+          <p className="text-sm font-normal text-muted-foreground">
+            Fluxos integrados ao sistema que não são selecionáveis como layout principal, mas registram
+            vendas no mesmo motor central.
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          {/* PDV Supermercado */}
+          <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <ShoppingCart className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-semibold text-foreground">PDV Supermercado</h4>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-success/30 bg-success/5 text-success">
+                    Ativo
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Ativado automaticamente em lojas do ramo Variedades / Supermercado. Usa o mesmo motor de
+                  venda, sessão de caixa, histórico e cupom.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-surface p-3 space-y-1.5 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <span>Persiste no banco</span>
+                <Check className="h-3.5 w-3.5 text-success" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Sessão de caixa</span>
+                <Check className="h-3.5 w-3.5 text-success" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Histórico de vendas</span>
+                <Check className="h-3.5 w-3.5 text-success" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Cupom não fiscal</span>
+                <Check className="h-3.5 w-3.5 text-success" />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Ativável via configurações → ramo de atividade &quot;Variedades&quot;.
+            </p>
+          </div>
+
+          {/* PDV WhatsApp */}
+          <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <MessageCircle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-semibold text-foreground">PDV WhatsApp</h4>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-info/30 bg-info/5 text-info">
+                    Integrado
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Registra vendas via comando de voz / texto no WhatsApp HUB. Integrado ao motor central de
+                  vendas e ao caixa.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-surface p-3 space-y-1.5 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <span>Persiste no banco</span>
+                <Check className="h-3.5 w-3.5 text-success" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Abre caixa automático</span>
+                <Check className="h-3.5 w-3.5 text-success" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Histórico de vendas</span>
+                <Check className="h-3.5 w-3.5 text-success" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Layout selecionável</span>
+                <span className="text-muted-foreground/60">Não aplicável</span>
+              </div>
+            </div>
+            <a
+              href="/dashboard/whatsapp"
+              className="text-[11px] text-primary underline-offset-2 hover:underline flex items-center gap-1"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Acessar WhatsApp HUB
+            </a>
+          </div>
+
+          {/* OS → Venda */}
+          <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-semibold text-foreground">OS → Venda</h4>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-warning/30 bg-warning/5 text-warning">
+                    Fluxo próprio
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                  Faturamento de Ordens de Serviço gera venda diretamente no banco (via Operações HUB).
+                  Não usa sessão de caixa — é um fluxo de cobrança separado.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-lg border border-border bg-surface p-3 space-y-1.5 text-xs text-muted-foreground">
+              <div className="flex items-center justify-between">
+                <span>Persiste no banco</span>
+                <Check className="h-3.5 w-3.5 text-success" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Histórico de vendas</span>
+                <Check className="h-3.5 w-3.5 text-success" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Sessão de caixa</span>
+                <span className="text-muted-foreground/60">Não aplicável</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Cancelamento PDV</span>
+                <span className="text-muted-foreground/60">Via OS HUB</span>
+              </div>
+            </div>
+            <a
+              href="/dashboard/operacoes"
+              className="text-[11px] text-primary underline-offset-2 hover:underline flex items-center gap-1"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Acessar Operações HUB
+            </a>
+          </div>
         </div>
       </div>
     </div>

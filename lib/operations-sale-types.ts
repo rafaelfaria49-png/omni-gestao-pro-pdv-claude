@@ -32,6 +32,8 @@ export interface SaleRecord {
   paymentBreakdown: PaymentBreakdownFull
   /** Auditoria: operador do caixa (id local do dispositivo). */
   cashierId?: string
+  /** Sessão de caixa ativa no momento da venda (persiste no payload JSON da Venda). */
+  sessaoId?: string
   /** Auditoria: supervisor/admin que autorizou desconto manual (id local quando disponível). */
   discountAuthorizedByAdminId?: string
   /** Desconto manual no checkout (somente auditoria). */

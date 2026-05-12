@@ -792,6 +792,7 @@ export function OperationsProvider({
         customerName: customerName?.trim() || undefined,
         paymentBreakdown: pb,
         cashierId: auditMeta?.cashierId,
+        sessaoId: current.caixaSessaoId ?? undefined,
         discountAuthorizedByAdminId: auditMeta?.discountAuthorizedByAdminId,
         discountReais: auditMeta?.discountReais,
         discountPercent: auditMeta?.discountPercent,

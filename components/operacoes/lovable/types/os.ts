@@ -353,6 +353,17 @@ export const CHECKLIST_PADRAO: { id: string; label: string }[] = [
   { id: "outros", label: "Outros" },
 ];
 
+/** Itens padrão do checklist técnico (pós-reparo). */
+export const CHECKLIST_TECNICO_PADRAO: { id: string; label: string }[] = [
+  { id: "liga", label: "Aparelho liga" },
+  { id: "touch_ok", label: "Touch OK" },
+  { id: "biometria_ok", label: "Biometria OK" },
+  { id: "camera_ok", label: "Câmera OK" },
+  { id: "wifi_ok", label: "Wi-Fi OK" },
+  { id: "bluetooth_ok", label: "Bluetooth OK" },
+  { id: "carregando_ok", label: "Carregando OK" },
+];
+
 export const PRIORIDADE_CONFIG: Record<
   OSPrioridade,
   { label: string; color: string; ordem: number }
