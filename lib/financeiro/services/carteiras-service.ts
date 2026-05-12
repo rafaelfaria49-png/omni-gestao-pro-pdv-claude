@@ -1,0 +1,270 @@
+/**
+ * Service de CarteiraFinanceira — contas/carteiras do HUB Financeiro.
+ *
+ * Invariantes:
+ *  - `storeId` obrigatório em todas as operações
+ *  - `saldoAtual` é sempre recalculado a partir das MovimentacaoFinanceira vinculadas
+ *  - Transferências são transacionais: saída + entrada em uma única operação atômica
+ *  - Tipos aceitos: caixa | banco | pix | dinheiro | credito | debito | investimento
+ */
+
+import { prisma } from "@/lib/prisma"
+import type { CarteiraFinanceira, Prisma } from "@/generated/prisma"
+
+// ─── tipos públicos ────────────────────────────────────────────────────────────
+
+export const TIPOS_CARTEIRA = [
+  "caixa",
+  "banco",
+  "pix",
+  "dinheiro",
+  "credito",
+  "debito",
+  "investimento",
+] as const
+
+export type TipoCarteira = (typeof TIPOS_CARTEIRA)[number]
+
+export type CarteiraPublica = {
+  id: string
+  storeId: string
+  nome: string
+  tipo: TipoCarteira
+  saldoInicial: number
+  saldoAtual: number
+  ativo: boolean
+  cor: string
+  icone: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type CriarCarteiraInput = {
+  storeId: string
+  nome: string
+  tipo?: TipoCarteira
+  saldoInicial?: number
+  cor?: string
+  icone?: string
+}
+
+export type AtualizarCarteiraInput = {
+  id: string
+  storeId: string
+  nome?: string
+  tipo?: TipoCarteira
+  saldoInicial?: number
+  ativo?: boolean
+  cor?: string
+  icone?: string
+}
+
+export type TransferenciaInput = {
+  storeId: string
+  origemId: string
+  destinoId: string
+  valor: number
+  descricao?: string
+}
+
+export type TransferenciaResult = {
+  ok: boolean
+  saidaId?: string
+  entradaId?: string
+  origemSaldo?: number
+  destinoSaldo?: number
+  error?: string
+}
+
+// ─── helpers internos ─────────────────────────────────────────────────────────
+
+function toPublica(c: CarteiraFinanceira): CarteiraPublica {
+  return {
+    id: c.id,
+    storeId: c.storeId,
+    nome: c.nome,
+    tipo: c.tipo as TipoCarteira,
+    saldoInicial: c.saldoInicial,
+    saldoAtual: c.saldoAtual,
+    ativo: c.ativo,
+    cor: c.cor,
+    icone: c.icone,
+    createdAt: c.createdAt.toISOString(),
+    updatedAt: c.updatedAt.toISOString(),
+  }
+}
+
+function safeMoney(v: number): number {
+  return Math.round((v ?? 0) * 100) / 100
+}
+
+// ─── listarCarteiras ──────────────────────────────────────────────────────────
+
+export async function listarCarteiras(
+  storeId: string,
+  apenasAtivas = false
+): Promise<CarteiraPublica[]> {
+  const where: Prisma.CarteiraFinanceiraWhereInput = { storeId }
+  if (apenasAtivas) where.ativo = true
+
+  const rows = await prisma.carteiraFinanceira.findMany({
+    where,
+    orderBy: [{ ativo: "desc" }, { nome: "asc" }],
+  })
+
+  return rows.map(toPublica)
+}
+
+// ─── criarCarteira ────────────────────────────────────────────────────────────
+
+export async function criarCarteira(
+  input: CriarCarteiraInput
+): Promise<CarteiraPublica> {
+  const saldo = safeMoney(input.saldoInicial ?? 0)
+
+  const row = await prisma.carteiraFinanceira.create({
+    data: {
+      storeId: input.storeId,
+      nome: input.nome.trim(),
+      tipo: input.tipo ?? "caixa",
+      saldoInicial: saldo,
+      saldoAtual: saldo,
+      ativo: true,
+      cor: input.cor ?? "#6366f1",
+      icone: input.icone ?? "wallet",
+    },
+  })
+
+  return toPublica(row)
+}
+
+// ─── atualizarCarteira ────────────────────────────────────────────────────────
+
+export async function atualizarCarteira(
+  input: AtualizarCarteiraInput
+): Promise<CarteiraPublica> {
+  const { id, storeId, ...fields } = input
+
+  const data: Prisma.CarteiraFinanceiraUpdateInput = {}
+  if (fields.nome !== undefined) data.nome = fields.nome.trim()
+  if (fields.tipo !== undefined) data.tipo = fields.tipo
+  if (fields.cor !== undefined) data.cor = fields.cor
+  if (fields.icone !== undefined) data.icone = fields.icone
+  if (fields.ativo !== undefined) data.ativo = fields.ativo
+  if (fields.saldoInicial !== undefined) {
+    data.saldoInicial = safeMoney(fields.saldoInicial)
+  }
+
+  const row = await prisma.carteiraFinanceira.update({
+    where: { id, storeId },
+    data,
+  })
+
+  return toPublica(row)
+}
+
+// ─── recalcularSaldoCarteira ─────────────────────────────────────────────────
+/**
+ * Recalcula `saldoAtual` somando saldoInicial + entradas - saídas
+ * a partir das movimentações vinculadas.
+ */
+export async function recalcularSaldoCarteira(
+  id: string,
+  storeId: string
+): Promise<CarteiraPublica> {
+  const carteira = await prisma.carteiraFinanceira.findFirst({
+    where: { id, storeId },
+  })
+  if (!carteira) throw new Error(`Carteira não encontrada: ${id}`)
+
+  const [entradas, saidas] = await Promise.all([
+    prisma.movimentacaoFinanceira.aggregate({
+      where: { carteiraId: id, storeId, tipo: "entrada" },
+      _sum: { valor: true },
+    }),
+    prisma.movimentacaoFinanceira.aggregate({
+      where: { carteiraId: id, storeId, tipo: "saida" },
+      _sum: { valor: true },
+    }),
+  ])
+
+  const totalEntradas = safeMoney(entradas._sum.valor ?? 0)
+  const totalSaidas = safeMoney(saidas._sum.valor ?? 0)
+  const saldoAtual = safeMoney(carteira.saldoInicial + totalEntradas - totalSaidas)
+
+  const updated = await prisma.carteiraFinanceira.update({
+    where: { id },
+    data: { saldoAtual },
+  })
+
+  return toPublica(updated)
+}
+
+// ─── transferirEntreCarteiras ─────────────────────────────────────────────────
+/**
+ * Transação atômica:
+ *  1. Cria MovimentacaoFinanceira saída na carteira origem
+ *  2. Cria MovimentacaoFinanceira entrada na carteira destino
+ *  3. Recalcula saldoAtual de ambas
+ */
+export async function transferirEntreCarteiras(
+  input: TransferenciaInput
+): Promise<TransferenciaResult> {
+  const { storeId, origemId, destinoId, valor, descricao } = input
+  const valorMoney = safeMoney(valor)
+
+  if (valorMoney <= 0) {
+    return { ok: false, error: "Valor de transferência deve ser maior que zero." }
+  }
+  if (origemId === destinoId) {
+    return { ok: false, error: "Origem e destino não podem ser iguais." }
+  }
+
+  const [origem, destino] = await Promise.all([
+    prisma.carteiraFinanceira.findFirst({ where: { id: origemId, storeId } }),
+    prisma.carteiraFinanceira.findFirst({ where: { id: destinoId, storeId } }),
+  ])
+
+  if (!origem) return { ok: false, error: `Carteira de origem não encontrada: ${origemId}` }
+  if (!destino) return { ok: false, error: `Carteira de destino não encontrada: ${destinoId}` }
+
+  const descricaoBase =
+    descricao?.trim() ||
+    `Transferência: ${origem.nome} → ${destino.nome}`
+
+  const [saida, entrada] = await prisma.$transaction([
+    prisma.movimentacaoFinanceira.create({
+      data: {
+        storeId,
+        tipo: "saida",
+        origem: "transferencia",
+        descricao: `${descricaoBase} (saída)`,
+        valor: valorMoney,
+        carteiraId: origemId,
+      },
+    }),
+    prisma.movimentacaoFinanceira.create({
+      data: {
+        storeId,
+        tipo: "entrada",
+        origem: "transferencia",
+        descricao: `${descricaoBase} (entrada)`,
+        valor: valorMoney,
+        carteiraId: destinoId,
+      },
+    }),
+  ])
+
+  const [origemAtualizada, destinoAtualizado] = await Promise.all([
+    recalcularSaldoCarteira(origemId, storeId),
+    recalcularSaldoCarteira(destinoId, storeId),
+  ])
+
+  return {
+    ok: true,
+    saidaId: saida.id,
+    entradaId: entrada.id,
+    origemSaldo: origemAtualizada.saldoAtual,
+    destinoSaldo: destinoAtualizado.saldoAtual,
+  }
+}

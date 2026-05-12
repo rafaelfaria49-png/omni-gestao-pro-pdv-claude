@@ -29,7 +29,7 @@ export type FluxoCaixaProximo = {
 }
 
 export type AlertaFinanceiro = {
-  tipo: "vencido_receber" | "vencido_pagar" | "caixa_negativo" | "alto_pagar_mes" | "proximo_vencimento"
+  tipo: "vencido_receber" | "vencido_pagar" | "caixa_negativo" | "alto_pagar_mes" | "proximo_vencimento" | "carteira_negativa" | "saldo_critico"
   mensagem: string
   valor?: number
   urgente: boolean
@@ -117,6 +117,7 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
     todasMovs,
     todosReceber,
     todosPagar,
+    todasCarteiras,
   ] = await Promise.all([
     prisma.movimentacaoFinanceira.findMany({
       where: { storeId: sid },
@@ -130,6 +131,10 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
     prisma.contaPagarTitulo.findMany({
       where: { storeId: sid },
       select: { id: true, descricao: true, valor: true, vencimento: true, status: true, payload: true },
+    }),
+    prisma.carteiraFinanceira.findMany({
+      where: { storeId: sid, ativo: true },
+      select: { id: true, nome: true, tipo: true, saldoAtual: true },
     }),
   ])
 
@@ -285,6 +290,33 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
       valor: saidasMes,
       urgente: saidasMes >= entradasMes,
     })
+  }
+
+  // Alertas de carteiras: negativas e saldo crítico (<= 100)
+  for (const c of todasCarteiras) {
+    const saldo = safeMoney(c.saldoAtual)
+    if (c.tipo === "caixa" && saldo < 0) {
+      alertas.push({
+        tipo: "caixa_negativo",
+        mensagem: `Caixa "${c.nome}" está negativo: ${saldo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`,
+        valor: saldo,
+        urgente: true,
+      })
+    } else if (saldo < 0) {
+      alertas.push({
+        tipo: "carteira_negativa",
+        mensagem: `Carteira "${c.nome}" (${c.tipo}) está negativa: ${saldo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`,
+        valor: saldo,
+        urgente: true,
+      })
+    } else if (saldo > 0 && saldo <= 100) {
+      alertas.push({
+        tipo: "saldo_critico",
+        mensagem: `Saldo crítico em "${c.nome}": ${saldo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} restantes`,
+        valor: saldo,
+        urgente: saldo <= 20,
+      })
+    }
   }
 
   const venceHojeReceber = proximosReceberItems.filter((x) => x.diasRestantes === 0)

@@ -58,6 +58,7 @@ model Store {
   contasReceber          ContaReceberTitulo[]
   contasPagar            ContaPagarTitulo[]
   movimentacoes          MovimentacaoFinanceira[]
+  carteiras              CarteiraFinanceira[]
   fornecedores           Fornecedor[]
   financialAccounts      FinancialAccount[]
   financialCategories    FinancialCategory[]
@@ -855,30 +856,70 @@ model ContaReceberTitulo {
   @@map("contas_receber_titulos")
 }
 
-model MovimentacaoFinanceira {
+/**
+ * Carteira / conta financeira do HUB Financeiro (caixa, banco, PIX, dinheiro, etc.).
+ * Modelo nativo do OmniGestão — separado do FinancialAccount (Finance Pro page).
+ */
+model CarteiraFinanceira {
   id           String   @id @default(cuid())
   storeId      String   @default("loja-1") @map("storeId")
   store        Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  nome         String   @map("nome")
+  /**
+   * "caixa" | "banco" | "pix" | "dinheiro" | "credito" | "debito" | "investimento"
+   */
+  tipo         String   @default("caixa") @map("tipo")
+  saldoInicial Float    @default(0) @map("saldoInicial")
+  saldoAtual   Float    @default(0) @map("saldoAtual")
+  ativo        Boolean  @default(true) @map("ativo")
+  /**
+   * Cor hex p/ UI, ex.: "#22c55e"
+   */
+  cor          String   @default("#6366f1") @map("cor")
+  /**
+   * Ícone (nome Lucide), ex.: "wallet", "landmark", etc.
+   */
+  icone        String   @default("wallet") @map("icone")
+  createdAt    DateTime @default(now()) @map("createdAt")
+  updatedAt    DateTime @updatedAt @map("updatedAt")
+
+  movimentacoes MovimentacaoFinanceira[]
+
+  @@index([storeId])
+  @@index([storeId, ativo])
+  @@map("carteiras_financeiras")
+}
+
+model MovimentacaoFinanceira {
+  id           String              @id @default(cuid())
+  storeId      String              @default("loja-1") @map("storeId")
+  store        Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
   /**
    * "entrada" | "saida"
    */
-  tipo         String   @default("entrada") @map("tipo")
+  tipo         String              @default("entrada") @map("tipo")
   /**
    * "os" | "venda" | "manual" | "pagar" | etc
    */
-  origem       String   @default("manual") @map("origem")
+  origem       String              @default("manual") @map("origem")
   /**
    * Id de referência (ContaReceberTitulo/ContaPagarTitulo/Venda/etc.)
    */
-  referenciaId String?  @map("referenciaId")
-  descricao    String   @default("") @map("descricao")
-  valor        Float    @default(0) @map("valor")
-  createdAt    DateTime @default(now()) @map("createdAt")
+  referenciaId String?             @map("referenciaId")
+  descricao    String              @default("") @map("descricao")
+  valor        Float               @default(0) @map("valor")
+  /**
+   * Carteira que recebe ou debita esta movimentação (opcional).
+   */
+  carteiraId   String?             @map("carteiraId")
+  carteira     CarteiraFinanceira? @relation(fields: [carteiraId], references: [id], onDelete: SetNull)
+  createdAt    DateTime            @default(now()) @map("createdAt")
 
   @@index([storeId])
   @@index([tipo])
   @@index([origem])
   @@index([referenciaId])
+  @@index([carteiraId])
   @@index([createdAt])
   @@map("movimentacoes_financeiras")
 }

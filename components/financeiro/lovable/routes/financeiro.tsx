@@ -9,6 +9,7 @@ import {
   type ContaPagar,
   type NovoReceberInput,
   type NovoPagarInput,
+  type TipoCarteira,
 } from "../context/FinanceiroRealContext";
 import { toast } from "sonner";
 import {
@@ -160,13 +161,21 @@ const statusBadge = (s: StatusReceber | StatusPagar) => {
   );
 };
 
-// carteiras não têm modelo Prisma — usadas apenas em GestaoCarteiras e selects de configuração.
-const carteiras = [
-  { id: "1", nome: "Caixa Loja Centro", tipo: "Caixa", icon: Store, saldo: 0 },
-  { id: "2", nome: "Banco Inter PJ", tipo: "Banco", icon: Landmark, saldo: 0 },
-  { id: "3", nome: "Dinheiro", tipo: "Dinheiro", icon: Banknote, saldo: 0 },
-  { id: "4", nome: "Cartão Stone", tipo: "Cartão", icon: CreditCard, saldo: 0 },
-];
+// Mapeamento de tipo de carteira → ícone Lucide
+function tipoToIcon(tipo: string) {
+  switch (tipo) {
+    case "banco": return Landmark;
+    case "pix": return Zap;
+    case "dinheiro": return Banknote;
+    case "credito":
+    case "debito": return CreditCard;
+    case "investimento": return TrendingUp;
+    default: return Store; // caixa
+  }
+}
+
+// Tipo minimal para seleção em modais
+type CarteiraRef = { id: string; nome: string };
 
 // receber[] and pagar[] removed — data now comes from FinanceiroRealProvider via useFinanceiroReal()
 // fluxoMensal, movimentacoes, receitasOrigem, despesasCategoria, resultadoLoja now come from analytics via useFinanceiroReal()
@@ -223,8 +232,7 @@ function StatCard({
 }
 
 function VisaoGeral() {
-  const { summaryR, summaryP, analytics, receber, pagar, fluxoCaixa } = useFinanceiroReal();
-  const totalCarteiras = carteiras.reduce((a, c) => a + c.saldo, 0);
+  const { summaryR, summaryP, analytics, receber, pagar, fluxoCaixa, saldoTotalCarteiras, carteiras: listaCarteiras } = useFinanceiroReal();
 
   // Preferência: fluxo-caixa real → fallback analytics/summaryR/P
   const totalReceber = fluxoCaixa?.totalReceberAberto ?? summaryR?.totalAberto ?? 0;
@@ -265,7 +273,7 @@ function VisaoGeral() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {saldoReal !== null
           ? <StatCard title="Saldo realizado" value={fmt(saldoReal)} hint="Entradas − saídas efetivadas" icon={Wallet} tone={saldoReal >= 0 ? "positive" : "negative"} />
-          : <StatCard title="Saldo em carteiras" value={fmt(totalCarteiras)} hint={`${carteiras.length} carteiras ativas`} icon={Wallet} />
+          : <StatCard title="Saldo em carteiras" value={fmt(saldoTotalCarteiras)} hint={`${listaCarteiras.filter(c => c.ativo).length} carteiras ativas`} icon={Wallet} />
         }
         <StatCard title="A receber" value={fmt(totalReceber)} hint="Em aberto" icon={ArrowDownCircle} tone="positive" />
         <StatCard title="A pagar" value={fmt(totalPagar)} hint="Em aberto" icon={ArrowUpCircle} tone="negative" />
@@ -838,31 +846,23 @@ function FluxoCaixa() {
 }
 
 function GestaoCarteiras() {
+  const { carteiras, loadingCarteiras, transferirEntreCarteiras } = useFinanceiroReal();
   const [openNova, setOpenNova] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
-  const [carteirasState, setCarteirasState] = useState(carteiras);
   const [movModal, setMovModal] = useState<{ tipo: "entrada" | "saida"; carteiraId: string } | null>(null);
 
-  const handleMov = (carteiraId: string, valor: number, tipo: "entrada" | "saida") => {
-    setCarteirasState((prev) =>
-      prev.map((c) =>
-        c.id === carteiraId ? { ...c, saldo: c.saldo + (tipo === "entrada" ? valor : -valor) } : c,
-      ),
-    );
-    toast.success(tipo === "entrada" ? "Entrada registrada" : "Saída registrada");
-    setMovModal(null);
-  };
+  const ativasRef: CarteiraRef[] = carteiras
+    .filter((c) => c.ativo)
+    .map((c) => ({ id: c.id, nome: c.nome }));
 
-  const handleTransfer = (origem: string, destino: string, valor: number) => {
-    setCarteirasState((prev) =>
-      prev.map((c) => {
-        if (c.id === origem) return { ...c, saldo: c.saldo - valor };
-        if (c.id === destino) return { ...c, saldo: c.saldo + valor };
-        return c;
-      }),
-    );
-    toast.success("Transferência realizada");
-    setOpenTransfer(false);
+  const handleTransfer = async (origem: string, destino: string, valor: number) => {
+    try {
+      await transferirEntreCarteiras({ origemId: origem, destinoId: destino, valor });
+      toast.success("Transferência realizada com sucesso!");
+      setOpenTransfer(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro na transferência");
+    }
   };
 
   return (
@@ -886,47 +886,62 @@ function GestaoCarteiras() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {carteirasState.map((c) => {
-              const Icon = c.icon;
-              return (
-                <div
-                  key={c.id}
-                  className="rounded-xl border border-border bg-card p-4"
-                >
-                  <div className="mb-3 flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                        <Icon className="h-4 w-4" />
+          {loadingCarteiras ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">Carregando carteiras...</div>
+          ) : carteiras.filter((c) => c.ativo).length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-muted-foreground">Nenhuma carteira cadastrada.</p>
+              <Button size="sm" className="mt-3 gap-1" onClick={() => setOpenNova(true)}>
+                <Plus className="h-4 w-4" /> Criar primeira carteira
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {carteiras.filter((c) => c.ativo).map((c) => {
+                const Icon = tipoToIcon(c.tipo);
+                const negativo = c.saldoAtual < 0;
+                return (
+                  <div key={c.id} className="rounded-xl border border-border bg-card p-4">
+                    <div className="mb-3 flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="rounded-lg p-2"
+                          style={{ backgroundColor: `${c.cor}22`, color: c.cor }}
+                        >
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold">{c.nome}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{c.tipo}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold">{c.nome}</p>
-                        <p className="text-xs text-muted-foreground">{c.tipo}</p>
-                      </div>
+                      {negativo && (
+                        <Badge variant="destructive" className="text-xs">Negativo</Badge>
+                      )}
+                    </div>
+                    <p className={`text-2xl font-semibold tracking-tight ${negativo ? "text-destructive" : ""}`}>
+                      {fmt(c.saldoAtual)}
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => setMovModal({ tipo: "entrada", carteiraId: c.id })}>
+                        <ArrowDownLeft className="h-3.5 w-3.5" /> Entrada
+                      </Button>
+                      <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => setMovModal({ tipo: "saida", carteiraId: c.id })}>
+                        <ArrowUpRight className="h-3.5 w-3.5" /> Saída
+                      </Button>
                     </div>
                   </div>
-                  <p className="text-2xl font-semibold tracking-tight">
-                    {fmt(c.saldo)}
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => setMovModal({ tipo: "entrada", carteiraId: c.id })}>
-                      <ArrowDownLeft className="h-3.5 w-3.5" /> Entrada
-                    </Button>
-                    <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => setMovModal({ tipo: "saida", carteiraId: c.id })}>
-                      <ArrowUpRight className="h-3.5 w-3.5" /> Saída
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
       <NovaCarteiraModal open={openNova} onOpenChange={setOpenNova} />
       <TransferenciaModal
         open={openTransfer}
         onOpenChange={setOpenTransfer}
-        carteiras={carteirasState}
+        carteiras={ativasRef}
         onConfirm={handleTransfer}
       />
       <MovimentacaoModal
@@ -934,15 +949,18 @@ function GestaoCarteiras() {
         onOpenChange={(v) => !v && setMovModal(null)}
         tipo={movModal?.tipo ?? "entrada"}
         carteiraId={movModal?.carteiraId ?? ""}
-        carteiras={carteirasState}
-        onConfirm={handleMov}
+        carteiras={ativasRef}
+        onConfirm={() => {
+          toast.success(movModal?.tipo === "entrada" ? "Entrada registrada" : "Saída registrada");
+          setMovModal(null);
+        }}
       />
     </div>
   );
 }
 
 function Relatorios() {
-  const { analytics, summaryR, summaryP, receber } = useFinanceiroReal();
+  const { analytics, summaryR, summaryP, receber, carteiras: listaCarteiras } = useFinanceiroReal();
   const receitasOrigem = analytics?.receitasOrigem ?? [];
   const despesasCategoria = analytics?.despesasCategoria ?? [];
   const resultadoLoja = analytics?.resultadoLoja ?? [];
@@ -1054,10 +1072,10 @@ function Relatorios() {
           <CardDescription>Saldo atual de cada carteira</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {carteiras.map((c) => (
+          {listaCarteiras.filter((c) => c.ativo).map((c) => (
             <div key={c.id} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2.5">
               <span className="text-sm">{c.nome}</span>
-              <span className="text-sm font-semibold">{fmt(c.saldo)}</span>
+              <span className={`text-sm font-semibold ${c.saldoAtual < 0 ? "text-destructive" : ""}`}>{fmt(c.saldoAtual)}</span>
             </div>
           ))}
         </CardContent>
@@ -1130,6 +1148,7 @@ function Relatorios() {
 }
 
 function Configuracoes() {
+  const { carteiras: listaCarteiras } = useFinanceiroReal();
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card className="rounded-xl">
@@ -1173,10 +1192,10 @@ function Configuracoes() {
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
             <Label>Recebimentos</Label>
-            <Select defaultValue="2">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select>
+              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
               <SelectContent>
-                {carteiras.map((c) => (
+                {listaCarteiras.filter((c) => c.ativo).map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                 ))}
               </SelectContent>
@@ -1184,10 +1203,10 @@ function Configuracoes() {
           </div>
           <div className="space-y-1.5">
             <Label>Pagamentos</Label>
-            <Select defaultValue="2">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Select>
+              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
               <SelectContent>
-                {carteiras.map((c) => (
+                {listaCarteiras.filter((c) => c.ativo).map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                 ))}
               </SelectContent>
@@ -1364,7 +1383,7 @@ function NovoRecebimentoModal({
   onOpenChange: (v: boolean) => void;
   onSave: (data: NovoReceberInput) => Promise<void>;
 }) {
-  const { receber } = useFinanceiroReal();
+  const { receber, carteiras: listaCarteiras } = useFinanceiroReal();
   const clientesUnicos = useMemo(
     () => Array.from(new Set(receber.map((r) => r.cliente).filter(Boolean))).sort(),
     [receber],
@@ -1455,7 +1474,7 @@ function NovoRecebimentoModal({
             <Select>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {carteiras.map((c) => (
+                {listaCarteiras.filter((c) => c.ativo).map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                 ))}
               </SelectContent>
@@ -1550,7 +1569,7 @@ function NovaContaModal({
   onOpenChange: (v: boolean) => void;
   onSave: (data: NovoPagarInput) => Promise<void>;
 }) {
-  const { pagar } = useFinanceiroReal();
+  const { pagar, carteiras: listaCarteiras } = useFinanceiroReal();
   const fornecedoresUnicos = useMemo(
     () => Array.from(new Set(pagar.map((p) => p.fornecedor).filter(Boolean))).sort(),
     [pagar],
@@ -1644,7 +1663,7 @@ function NovaContaModal({
             <Select>
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {carteiras.map((c) => (
+                {listaCarteiras.filter((c) => c.ativo).map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                 ))}
               </SelectContent>
@@ -1739,6 +1758,17 @@ function NovaContaModal({
   );
 }
 
+const CORES_CARTEIRA = [
+  { label: "Índigo", value: "#6366f1" },
+  { label: "Verde", value: "#22c55e" },
+  { label: "Azul", value: "#3b82f6" },
+  { label: "Laranja", value: "#f97316" },
+  { label: "Rosa", value: "#ec4899" },
+  { label: "Roxo", value: "#a855f7" },
+  { label: "Âmbar", value: "#f59e0b" },
+  { label: "Ciano", value: "#06b6d4" },
+];
+
 function NovaCarteiraModal({
   open,
   onOpenChange,
@@ -1746,10 +1776,38 @@ function NovaCarteiraModal({
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
-  const [ativa, setAtiva] = useState(true);
+  const { criarCarteira } = useFinanceiroReal();
+  const [nome, setNome] = useState("");
+  const [tipo, setTipo] = useState<TipoCarteira>("caixa");
+  const [saldoInicial, setSaldoInicial] = useState(0);
+  const [cor, setCor] = useState("#6366f1");
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => {
+    setNome("");
+    setTipo("caixa");
+    setSaldoInicial(0);
+    setCor("#6366f1");
+  };
+
+  const handleSave = async () => {
+    if (!nome.trim()) { toast.error("Nome da carteira é obrigatório."); return; }
+    setSaving(true);
+    try {
+      await criarCarteira({ nome: nome.trim(), tipo, saldoInicial, cor });
+      toast.success("Carteira criada com sucesso!");
+      onOpenChange(false);
+      reset();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar carteira");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+    <Dialog open={open} onOpenChange={(v) => { if (!saving) { onOpenChange(v); if (!v) reset(); } }}>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Nova carteira</DialogTitle>
           <DialogDescription>
@@ -1758,57 +1816,66 @@ function NovaCarteiraModal({
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Nome da carteira</Label>
-            <Input placeholder="Ex.: Banco Inter PJ" />
+            <Label>Nome da carteira *</Label>
+            <Input
+              placeholder="Ex.: Banco Inter PJ, Caixa Loja..."
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              disabled={saving}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Tipo</Label>
-            <Select defaultValue="banco">
+            <Select value={tipo} onValueChange={(v) => setTipo(v as TipoCarteira)} disabled={saving}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="caixa">Caixa</SelectItem>
                 <SelectItem value="banco">Banco</SelectItem>
-                <SelectItem value="cartao">Cartão</SelectItem>
-                <SelectItem value="digital">Digital</SelectItem>
-                <SelectItem value="pessoal">Pessoal</SelectItem>
+                <SelectItem value="pix">PIX</SelectItem>
+                <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                <SelectItem value="credito">Cartão de Crédito</SelectItem>
+                <SelectItem value="debito">Cartão de Débito</SelectItem>
+                <SelectItem value="investimento">Investimento</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
             <Label>Saldo inicial (R$)</Label>
-            <Input type="number" step="0.01" placeholder="0,00" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Banco</Label>
-            <Input placeholder="Ex.: Inter, Bradesco..." />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Agência</Label>
-            <Input placeholder="0000" />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Conta</Label>
-            <Input placeholder="00000-0" />
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              value={saldoInicial}
+              onChange={(e) => setSaldoInicial(Number(e.target.value))}
+              disabled={saving}
+            />
           </div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Observações</Label>
-            <Textarea rows={3} placeholder="Notas internas..." />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3 sm:col-span-2">
-            <div>
-              <p className="text-sm font-medium">Carteira ativa</p>
-              <p className="text-xs text-muted-foreground">
-                Carteiras inativas não aparecem nos lançamentos
-              </p>
+            <Label>Cor da carteira</Label>
+            <div className="flex flex-wrap gap-2">
+              {CORES_CARTEIRA.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  title={c.label}
+                  onClick={() => setCor(c.value)}
+                  className="h-7 w-7 rounded-full border-2 transition-transform hover:scale-110"
+                  style={{
+                    backgroundColor: c.value,
+                    borderColor: cor === c.value ? "var(--color-foreground)" : "transparent",
+                  }}
+                />
+              ))}
             </div>
-            <Switch checked={ativa} onCheckedChange={setAtiva} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => { onOpenChange(false); reset(); }} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={() => onOpenChange(false)}>Salvar</Button>
+          <Button onClick={handleSave} disabled={saving || !nome.trim()}>
+            {saving ? "Salvando..." : "Criar carteira"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1828,6 +1895,7 @@ function ReceberContaModal({
   conta: ContaReceber | null;
   onConfirm: (valor: number, total: boolean) => void;
 }) {
+  const { carteiras: listaCarteiras } = useFinanceiroReal();
   const [valorAgora, setValorAgora] = useState<number>(0);
   const [desconto, setDesconto] = useState<number>(0);
   const [juros, setJuros] = useState<number>(0);
@@ -1924,7 +1992,7 @@ function ReceberContaModal({
             <Select value={carteira} onValueChange={setCarteira}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {carteiras.map((c) => (
+                {listaCarteiras.filter((c) => c.ativo).map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                 ))}
               </SelectContent>
@@ -2247,6 +2315,7 @@ function PagarContaModal({
   conta: ContaPagar | null;
   onConfirm: (valor: number, total: boolean) => void;
 }) {
+  const { carteiras: listaCarteiras } = useFinanceiroReal();
   const [valor, setValor] = useState(0);
   const [parcial, setParcial] = useState(false);
 
@@ -2309,7 +2378,7 @@ function PagarContaModal({
             <Select defaultValue="2">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {carteiras.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+                {listaCarteiras.filter((c) => c.ativo).map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -2432,7 +2501,7 @@ function HistoricoPagarModal({
 
 /* ===================== Carteiras: Movimentação / Transferência ===================== */
 
-type CarteiraItem = (typeof carteiras)[number];
+type CarteiraItem = CarteiraRef;
 
 function MovimentacaoModal({
   open,
@@ -2447,7 +2516,7 @@ function MovimentacaoModal({
   tipo: "entrada" | "saida";
   carteiraId: string;
   carteiras: CarteiraItem[];
-  onConfirm: (carteiraId: string, valor: number, tipo: "entrada" | "saida") => void;
+  onConfirm: () => void;
 }) {
   const [valor, setValor] = useState(0);
   const [carteira, setCarteira] = useState(carteiraId);
@@ -2526,7 +2595,7 @@ function MovimentacaoModal({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={() => onConfirm(carteira, valor, tipo)}>Confirmar</Button>
+          <Button onClick={() => onConfirm()}>Confirmar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -95,6 +95,44 @@ export type NovoPagarInput = {
   categoria?: string
 }
 
+export type TipoCarteira =
+  | "caixa"
+  | "banco"
+  | "pix"
+  | "dinheiro"
+  | "credito"
+  | "debito"
+  | "investimento"
+
+export type CarteiraPublica = {
+  id: string
+  storeId: string
+  nome: string
+  tipo: TipoCarteira
+  saldoInicial: number
+  saldoAtual: number
+  ativo: boolean
+  cor: string
+  icone: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type NovaCarteiraInput = {
+  nome: string
+  tipo?: TipoCarteira
+  saldoInicial?: number
+  cor?: string
+  icone?: string
+}
+
+export type TransferenciaCarteiraInput = {
+  origemId: string
+  destinoId: string
+  valor: number
+  descricao?: string
+}
+
 // ── Context shape ─────────────────────────────────────────────────────────────
 
 type FinanceiroRealState = {
@@ -105,10 +143,16 @@ type FinanceiroRealState = {
   analytics: AnalyticsFinanceiro | null
   fluxoCaixa: FluxoCaixa | null
   loadingFluxoCaixa: boolean
+  carteiras: CarteiraPublica[]
+  loadingCarteiras: boolean
+  saldoTotalCarteiras: number
   loading: boolean
   error: string | null
   reload: () => void
   refreshFluxoCaixa: () => Promise<void>
+  refreshCarteiras: () => Promise<void>
+  criarCarteira: (data: NovaCarteiraInput) => Promise<CarteiraPublica>
+  transferirEntreCarteiras: (data: TransferenciaCarteiraInput) => Promise<void>
   liquidarReceber: (id: string, observacao?: string) => Promise<void>
   receberParcial: (id: string, valor: number, observacao?: string) => Promise<void>
   estornarReceber: (id: string, motivo?: string) => Promise<void>
@@ -231,6 +275,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [analytics, setAnalytics] = useState<AnalyticsFinanceiro | null>(null)
   const [fluxoCaixa, setFluxoCaixa] = useState<FluxoCaixa | null>(null)
   const [loadingFluxoCaixa, setLoadingFluxoCaixa] = useState(true)
+  const [carteiras, setCarteiras] = useState<CarteiraPublica[]>([])
+  const [loadingCarteiras, setLoadingCarteiras] = useState(true)
+  const [saldoTotalCarteiras, setSaldoTotalCarteiras] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -285,8 +332,57 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refreshCarteiras = useCallback(async () => {
+    setLoadingCarteiras(true)
+    try {
+      const lojaId = getLojaId()
+      const res = await fetch("/api/financeiro/carteiras", {
+        headers: { "x-assistec-loja-id": lojaId },
+      })
+      const json = (await res.json()) as Record<string, unknown>
+      if (json.ok) {
+        setCarteiras(Array.isArray(json.carteiras) ? (json.carteiras as CarteiraPublica[]) : [])
+        setSaldoTotalCarteiras(typeof json.saldoTotal === "number" ? json.saldoTotal : 0)
+      }
+    } catch {
+      // silencioso
+    } finally {
+      setLoadingCarteiras(false)
+    }
+  }, [])
+
+  const criarCarteira = useCallback(async (data: NovaCarteiraInput): Promise<CarteiraPublica> => {
+    const lojaId = getLojaId()
+    const res = await fetch("/api/financeiro/carteiras", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify(data),
+    })
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok || json.ok === false) {
+      throw new Error(safeStr(json.error) || "Falha ao criar carteira")
+    }
+    await refreshCarteiras()
+    return json.carteira as CarteiraPublica
+  }, [refreshCarteiras])
+
+  const transferirEntreCarteiras = useCallback(async (data: TransferenciaCarteiraInput): Promise<void> => {
+    const lojaId = getLojaId()
+    const res = await fetch("/api/financeiro/carteiras/transferencia", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify(data),
+    })
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (!res.ok || json.ok === false) {
+      throw new Error(safeStr(json.error) || "Falha na transferência")
+    }
+    await refreshCarteiras()
+  }, [refreshCarteiras])
+
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { void refreshFluxoCaixa() }, [refreshFluxoCaixa])
+  useEffect(() => { void refreshCarteiras() }, [refreshCarteiras])
 
   const callApi = useCallback(async (path: string, body: Record<string, unknown>, method: "POST" | "PATCH" = "POST"): Promise<Record<string, unknown>> => {
     const lojaId = getLojaId()
@@ -360,8 +456,10 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
       value={{
         receber, pagar, summaryR, summaryP, analytics,
         fluxoCaixa, loadingFluxoCaixa,
+        carteiras, loadingCarteiras, saldoTotalCarteiras,
         loading, error, reload: fetchData,
-        refreshFluxoCaixa,
+        refreshFluxoCaixa, refreshCarteiras,
+        criarCarteira, transferirEntreCarteiras,
         liquidarReceber, receberParcial, estornarReceber, criarReceber,
         liquidarPagar, pagarParcial, estornarPagar, criarPagar,
       }}
