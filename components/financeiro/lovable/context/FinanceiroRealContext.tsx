@@ -177,6 +177,73 @@ export type TransferenciaCarteiraInput = {
   descricao?: string
 }
 
+// ── Auditoria / Conciliação / Fechamento types ────────────────────────────────
+
+export type AuditoriaPublica = {
+  id: string
+  storeId: string
+  entidade: string
+  entidadeId: string | null
+  acao: string
+  antes: unknown
+  depois: unknown
+  usuarioId: string | null
+  usuarioNome: string | null
+  ip: string | null
+  createdAt: string
+}
+
+export type StatusConciliacao = "pendente" | "conciliado" | "divergente"
+
+export type ConciliacaoPublica = {
+  id: string
+  storeId: string
+  carteiraId: string
+  carteiraNome: string
+  dataReferencia: string
+  saldoSistema: number
+  saldoInformado: number
+  diferenca: number
+  status: StatusConciliacao
+  observacao: string | null
+  conciliadoPor: string | null
+  conciliadoEm: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type TipoFechamento = "diario" | "mensal"
+export type StatusFechamento = "fechado" | "reaberto"
+
+export type FechamentoPublico = {
+  id: string
+  storeId: string
+  tipo: TipoFechamento
+  dataReferencia: string
+  mes: number
+  ano: number
+  status: StatusFechamento
+  saldoSistema: number
+  saldoInformado: number | null
+  diferenca: number
+  observacao: string | null
+  fechadoPor: string | null
+  reabertoPor: string | null
+  fechadoEm: string | null
+  reabertoEm: string | null
+  snapshotDRE: unknown
+  createdAt: string
+  updatedAt: string
+}
+
+export type ResumoConciliacao = {
+  total: number
+  conciliadas: number
+  divergentes: number
+  pendentes: number
+  totalDivergencia: number
+}
+
 // ── Context shape ─────────────────────────────────────────────────────────────
 
 type FinanceiroRealState = {
@@ -208,6 +275,21 @@ type FinanceiroRealState = {
   pagarParcial: (id: string, valor: number, observacao?: string) => Promise<void>
   estornarPagar: (id: string, motivo?: string) => Promise<void>
   criarPagar: (data: NovoPagarInput) => Promise<void>
+  // ── FASE 11 ──
+  auditoriaFinanceira: AuditoriaPublica[]
+  conciliacoes: ConciliacaoPublica[]
+  fechamentos: FechamentoPublico[]
+  resumoConciliacao: ResumoConciliacao | null
+  loadingAuditoria: boolean
+  loadingConciliacao: boolean
+  loadingFechamentos: boolean
+  refreshAuditoria: () => Promise<void>
+  refreshConciliacao: () => Promise<void>
+  refreshFechamentos: () => Promise<void>
+  fecharDia: (opts?: { observacao?: string; saldoInformado?: number }) => Promise<FechamentoPublico>
+  fecharMes: (mes: number, ano: number, opts?: { observacao?: string; saldoInformado?: number }) => Promise<FechamentoPublico>
+  reabrirFechamento: (id: string, motivo: string) => Promise<FechamentoPublico>
+  conciliarCarteira: (carteiraId: string, saldoInformado: number, opts?: { observacao?: string }) => Promise<ConciliacaoPublica>
 }
 
 const FinanceiroRealContext = createContext<FinanceiroRealState | null>(null)
@@ -327,6 +409,13 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const [saldoTotalCarteiras, setSaldoTotalCarteiras] = useState(0)
   const [dre, setDRE] = useState<DREMensal | null>(null)
   const [loadingDRE, setLoadingDRE] = useState(true)
+  const [auditoriaFinanceira, setAuditoriaFinanceira] = useState<AuditoriaPublica[]>([])
+  const [conciliacoes, setConciliacoes] = useState<ConciliacaoPublica[]>([])
+  const [fechamentos, setFechamentos] = useState<FechamentoPublico[]>([])
+  const [resumoConciliacao, setResumoConciliacao] = useState<ResumoConciliacao | null>(null)
+  const [loadingAuditoria, setLoadingAuditoria] = useState(false)
+  const [loadingConciliacao, setLoadingConciliacao] = useState(false)
+  const [loadingFechamentos, setLoadingFechamentos] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -449,10 +538,109 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const refreshAuditoria = useCallback(async () => {
+    setLoadingAuditoria(true)
+    try {
+      const lojaId = getLojaId()
+      const res = await fetch("/api/financeiro/auditoria?take=30", {
+        headers: { "x-assistec-loja-id": lojaId },
+      })
+      const json = (await res.json()) as Record<string, unknown>
+      if (json.ok) setAuditoriaFinanceira(Array.isArray(json.items) ? (json.items as AuditoriaPublica[]) : [])
+    } catch { /* silencioso */ } finally {
+      setLoadingAuditoria(false)
+    }
+  }, [])
+
+  const refreshConciliacao = useCallback(async () => {
+    setLoadingConciliacao(true)
+    try {
+      const lojaId = getLojaId()
+      const [listRes, resumoRes] = await Promise.all([
+        fetch("/api/financeiro/conciliacao", { headers: { "x-assistec-loja-id": lojaId } }),
+        fetch("/api/financeiro/conciliacao?resumo=1", { headers: { "x-assistec-loja-id": lojaId } }),
+      ])
+      const [listJson, resumoJson] = await Promise.all([listRes.json(), resumoRes.json()]) as [Record<string, unknown>, Record<string, unknown>]
+      if (listJson.ok) setConciliacoes(Array.isArray(listJson.items) ? (listJson.items as ConciliacaoPublica[]) : [])
+      if (resumoJson.ok) setResumoConciliacao(resumoJson.resumo as ResumoConciliacao)
+    } catch { /* silencioso */ } finally {
+      setLoadingConciliacao(false)
+    }
+  }, [])
+
+  const refreshFechamentos = useCallback(async () => {
+    setLoadingFechamentos(true)
+    try {
+      const lojaId = getLojaId()
+      const res = await fetch("/api/financeiro/fechamentos", {
+        headers: { "x-assistec-loja-id": lojaId },
+      })
+      const json = (await res.json()) as Record<string, unknown>
+      if (json.ok) setFechamentos(Array.isArray(json.items) ? (json.items as FechamentoPublico[]) : [])
+    } catch { /* silencioso */ } finally {
+      setLoadingFechamentos(false)
+    }
+  }, [])
+
+  const fecharDia = useCallback(async (opts?: { observacao?: string; saldoInformado?: number }): Promise<FechamentoPublico> => {
+    const lojaId = getLojaId()
+    const res = await fetch("/api/financeiro/fechamentos/fechar-dia", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify(opts ?? {}),
+    })
+    const json = (await res.json()) as Record<string, unknown>
+    if (!res.ok || json.ok === false) throw new Error(safeStr(json.error) || `Falha ${res.status}`)
+    void refreshFechamentos()
+    return json.fechamento as FechamentoPublico
+  }, [refreshFechamentos])
+
+  const fecharMes = useCallback(async (mes: number, ano: number, opts?: { observacao?: string; saldoInformado?: number }): Promise<FechamentoPublico> => {
+    const lojaId = getLojaId()
+    const res = await fetch("/api/financeiro/fechamentos/fechar-mes", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify({ mes, ano, ...opts }),
+    })
+    const json = (await res.json()) as Record<string, unknown>
+    if (!res.ok || json.ok === false) throw new Error(safeStr(json.error) || `Falha ${res.status}`)
+    void refreshFechamentos()
+    return json.fechamento as FechamentoPublico
+  }, [refreshFechamentos])
+
+  const reabrirFechamento = useCallback(async (id: string, motivo: string): Promise<FechamentoPublico> => {
+    const lojaId = getLojaId()
+    const res = await fetch(`/api/financeiro/fechamentos/${id}/reabrir`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify({ motivo }),
+    })
+    const json = (await res.json()) as Record<string, unknown>
+    if (!res.ok || json.ok === false) throw new Error(safeStr(json.error) || `Falha ${res.status}`)
+    void refreshFechamentos()
+    return json.fechamento as FechamentoPublico
+  }, [refreshFechamentos])
+
+  const conciliarCarteira = useCallback(async (carteiraId: string, saldoInformado: number, opts?: { observacao?: string }): Promise<ConciliacaoPublica> => {
+    const lojaId = getLojaId()
+    const res = await fetch("/api/financeiro/conciliacao", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      body: JSON.stringify({ carteiraId, saldoInformado, observacao: opts?.observacao }),
+    })
+    const json = (await res.json()) as Record<string, unknown>
+    if (!res.ok || json.ok === false) throw new Error(safeStr(json.error) || `Falha ${res.status}`)
+    void refreshConciliacao()
+    return json.conciliacao as ConciliacaoPublica
+  }, [refreshConciliacao])
+
   useEffect(() => { fetchData() }, [fetchData])
   useEffect(() => { void refreshFluxoCaixa() }, [refreshFluxoCaixa])
   useEffect(() => { void refreshCarteiras() }, [refreshCarteiras])
   useEffect(() => { void refreshDRE() }, [refreshDRE])
+  useEffect(() => { void refreshAuditoria() }, [refreshAuditoria])
+  useEffect(() => { void refreshConciliacao() }, [refreshConciliacao])
+  useEffect(() => { void refreshFechamentos() }, [refreshFechamentos])
 
   const callApi = useCallback(async (path: string, body: Record<string, unknown>, method: "POST" | "PATCH" = "POST"): Promise<Record<string, unknown>> => {
     const lojaId = getLojaId()
@@ -528,6 +716,10 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
         fluxoCaixa, loadingFluxoCaixa,
         carteiras, loadingCarteiras, saldoTotalCarteiras,
         dre, loadingDRE,
+        auditoriaFinanceira, conciliacoes, fechamentos, resumoConciliacao,
+        loadingAuditoria, loadingConciliacao, loadingFechamentos,
+        refreshAuditoria, refreshConciliacao, refreshFechamentos,
+        fecharDia, fecharMes, reabrirFechamento, conciliarCarteira,
         loading, error, reload: fetchData,
         refreshFluxoCaixa, refreshCarteiras, refreshDRE,
         criarCarteira, transferirEntreCarteiras,

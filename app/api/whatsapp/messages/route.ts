@@ -27,6 +27,8 @@ export async function GET(req: Request) {
     const conversationId = (url.searchParams.get("conversationId") ?? "").trim()
     if (!conversationId) return badRequest("conversationId obrigatório na query.")
 
+    console.info("[whatsapp/messages:GET] storeId=%s conversationId=%s", storeId, conversationId)
+
     const take = Math.min(200, Math.max(10, Number(url.searchParams.get("take") ?? "80") || 80))
 
     const rows = await prisma.whatsAppMessage.findMany({
@@ -34,6 +36,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: "asc" },
       take,
     })
+    console.info("[whatsapp/messages:GET] storeId=%s conversationId=%s rows=%d", storeId, conversationId, rows.length)
     return json({ ok: true, messages: rows })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

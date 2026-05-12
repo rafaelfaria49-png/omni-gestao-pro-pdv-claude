@@ -11,6 +11,8 @@ import {
   type NovoPagarInput,
   type TipoCarteira,
   type DREMensal,
+  type FechamentoPublico,
+  type ConciliacaoPublica,
 } from "../context/FinanceiroRealContext";
 import { toast } from "sonner";
 import {
@@ -56,6 +58,13 @@ import {
   Download,
   Copy,
   AlertCircle,
+  ShieldCheck,
+  Lock,
+  Unlock,
+  RefreshCw,
+  CalendarCheck,
+  Scale,
+  ListChecks,
 } from "lucide-react";
 import {
   Card,
@@ -1306,6 +1315,435 @@ function Relatorios() {
   );
 }
 
+// ── helpers de status ─────────────────────────────────────────────────────────
+
+function FechamentoBadge({ status }: { status: string }) {
+  if (status === "fechado") return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 text-xs font-medium"><Lock className="h-3 w-3 mr-1" />Fechado</Badge>;
+  if (status === "reaberto") return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 text-xs font-medium"><Unlock className="h-3 w-3 mr-1" />Reaberto</Badge>;
+  return <Badge variant="outline" className="text-xs">Aberto</Badge>;
+}
+
+function ConciliacaoBadge({ status }: { status: string }) {
+  if (status === "conciliado") return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0 text-xs"><CheckCircle2 className="h-3 w-3 mr-1" />Conciliado</Badge>;
+  if (status === "divergente") return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 text-xs"><AlertCircle className="h-3 w-3 mr-1" />Divergente</Badge>;
+  return <Badge variant="outline" className="text-xs text-muted-foreground"><Clock className="h-3 w-3 mr-1" />Pendente</Badge>;
+}
+
+function fmtDate(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+// ── Modal de fechamento ───────────────────────────────────────────────────────
+
+function FecharModal({
+  tipo, open, onClose,
+}: { tipo: "dia" | "mes"; open: boolean; onClose: () => void }) {
+  const { fecharDia, fecharMes } = useFinanceiroReal();
+  const [loading, setLoading] = useState(false);
+  const [obs, setObs] = useState("");
+  const now = new Date();
+
+  async function handleConfirm() {
+    if (loading) return;
+    setLoading(true);
+    try {
+      if (tipo === "dia") {
+        await fecharDia({ observacao: obs || undefined });
+        toast.success("Dia fechado com sucesso.");
+      } else {
+        await fecharMes(now.getMonth() + 1, now.getFullYear(), { observacao: obs || undefined });
+        toast.success("Mês fechado com sucesso.");
+      }
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao fechar período.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-border">
+        <h3 className="text-lg font-semibold mb-1">
+          {tipo === "dia" ? "Fechar dia de hoje" : `Fechar mês ${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`}
+        </h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Após o fechamento, alterações neste período serão bloqueadas até reabertura manual.
+        </p>
+        <div className="mb-4">
+          <label className="text-xs font-medium text-muted-foreground">Observação (opcional)</label>
+          <Input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Ex: Conferência realizada, sem divergências." className="mt-1" />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={loading}>Cancelar</Button>
+          <Button size="sm" onClick={handleConfirm} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white">
+            <Lock className="h-4 w-4 mr-1" />{loading ? "Fechando..." : "Confirmar Fechamento"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal de reabertura ───────────────────────────────────────────────────────
+
+function ReopenModal({
+  fechamento, open, onClose,
+}: { fechamento: FechamentoPublico | null; open: boolean; onClose: () => void }) {
+  const { reabrirFechamento } = useFinanceiroReal();
+  const [loading, setLoading] = useState(false);
+  const [motivo, setMotivo] = useState("");
+
+  async function handleConfirm() {
+    if (loading || !fechamento) return;
+    if (motivo.trim().length < 5) { toast.error("Informe o motivo (mín. 5 caracteres)."); return; }
+    setLoading(true);
+    try {
+      await reabrirFechamento(fechamento.id, motivo.trim());
+      toast.success("Fechamento reaberto.");
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao reabrir.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!open || !fechamento) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-border">
+        <h3 className="text-lg font-semibold mb-1">Reabrir Fechamento</h3>
+        <p className="text-sm text-muted-foreground mb-1">
+          {fechamento.tipo === "diario" ? `Dia ${fechamento.dataReferencia}` : `Mês ${String(fechamento.mes).padStart(2, "0")}/${fechamento.ano}`}
+        </p>
+        <p className="text-xs text-muted-foreground mb-4">Informe o motivo da reabertura para registro de auditoria.</p>
+        <div className="mb-4">
+          <label className="text-xs font-medium text-muted-foreground">Motivo <span className="text-red-500">*</span></label>
+          <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex: Lançamento esquecido, estorno necessário..." className="mt-1" />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={loading}>Cancelar</Button>
+          <Button size="sm" onClick={handleConfirm} disabled={loading} className="bg-amber-600 hover:bg-amber-700 text-white">
+            <Unlock className="h-4 w-4 mr-1" />{loading ? "Reabrindo..." : "Confirmar Reabertura"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal de conciliação ──────────────────────────────────────────────────────
+
+function ConciliarModal({
+  carteiras, open, onClose,
+}: { carteiras: { id: string; nome: string; saldoAtual: number }[]; open: boolean; onClose: () => void }) {
+  const { conciliarCarteira } = useFinanceiroReal();
+  const [loading, setLoading] = useState(false);
+  const [carteiraId, setCarteiraId] = useState("");
+  const [saldo, setSaldo] = useState("");
+  const [obs, setObs] = useState("");
+
+  async function handleConfirm() {
+    if (!carteiraId) { toast.error("Selecione uma carteira."); return; }
+    const val = parseFloat(saldo.replace(",", "."));
+    if (!Number.isFinite(val)) { toast.error("Informe um saldo válido."); return; }
+    setLoading(true);
+    try {
+      const result = await conciliarCarteira(carteiraId, val, { observacao: obs || undefined });
+      if (result.status === "conciliado") toast.success("Carteira conciliada. Sem divergências.");
+      else toast.warning(`Divergência de ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.abs(result.diferenca))}`);
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha na conciliação.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-border">
+        <h3 className="text-lg font-semibold mb-1">Conciliar Carteira</h3>
+        <p className="text-sm text-muted-foreground mb-4">Informe o saldo real da carteira para comparação com o sistema.</p>
+        <div className="mb-3">
+          <label className="text-xs font-medium text-muted-foreground">Carteira <span className="text-red-500">*</span></label>
+          <select value={carteiraId} onChange={(e) => setCarteiraId(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
+            <option value="">Selecionar...</option>
+            {carteiras.map((c) => (
+              <option key={c.id} value={c.id}>{c.nome} (sistema: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(c.saldoAtual)})</option>
+            ))}
+          </select>
+        </div>
+        <div className="mb-3">
+          <label className="text-xs font-medium text-muted-foreground">Saldo Informado (R$) <span className="text-red-500">*</span></label>
+          <Input value={saldo} onChange={(e) => setSaldo(e.target.value)} placeholder="0,00" type="number" step="0.01" className="mt-1" />
+        </div>
+        <div className="mb-4">
+          <label className="text-xs font-medium text-muted-foreground">Observação</label>
+          <Input value={obs} onChange={(e) => setObs(e.target.value)} placeholder="Opcional" className="mt-1" />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button variant="outline" size="sm" onClick={onClose} disabled={loading}>Cancelar</Button>
+          <Button size="sm" onClick={handleConfirm} disabled={loading} className="bg-primary text-primary-foreground">
+            <Scale className="h-4 w-4 mr-1" />{loading ? "Conciliando..." : "Conciliar"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── AuditoriaFechamento ───────────────────────────────────────────────────────
+
+function AuditoriaFechamento() {
+  const {
+    auditoriaFinanceira, conciliacoes, fechamentos, resumoConciliacao,
+    loadingAuditoria, loadingConciliacao, loadingFechamentos,
+    refreshAuditoria, refreshConciliacao, refreshFechamentos,
+    carteiras: listaCarteiras,
+  } = useFinanceiroReal();
+  const fmt = (n: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
+
+  const [showFecharDia, setShowFecharDia] = useState(false);
+  const [showFecharMes, setShowFecharMes] = useState(false);
+  const [reopenTarget, setReopenTarget] = useState<FechamentoPublico | null>(null);
+  const [showConciliar, setShowConciliar] = useState(false);
+
+  // Alertas derivados
+  const alertas: { tipo: string; msg: string; urgente: boolean }[] = [];
+  const hoje = new Date().toISOString().slice(0, 10);
+  const mesAtual = new Date().getMonth() + 1;
+  const anoAtual = new Date().getFullYear();
+
+  const fechadoHoje = fechamentos.find((f) => f.tipo === "diario" && f.dataReferencia === hoje && f.status === "fechado");
+  const fechadoMes = fechamentos.find((f) => f.tipo === "mensal" && f.mes === mesAtual && f.ano === anoAtual && f.status === "fechado");
+  const reabertoRecente = fechamentos.find((f) => f.status === "reaberto" && f.reabertoEm && (Date.now() - new Date(f.reabertoEm).getTime()) < 24 * 60 * 60 * 1000);
+  const divergentes = conciliacoes.filter((c) => c.status === "divergente");
+
+  if (!fechadoHoje) alertas.push({ tipo: "fechamento_pendente", msg: "Fechamento do dia ainda não realizado.", urgente: false });
+  if (divergentes.length > 0) alertas.push({ tipo: "divergencia", msg: `${divergentes.length} carteira(s) com divergência de saldo.`, urgente: true });
+  if (fechadoMes) alertas.push({ tipo: "periodo_fechado", msg: `Mês ${String(mesAtual).padStart(2,"0")}/${anoAtual} está fechado. Operações bloqueadas.`, urgente: false });
+  if (reabertoRecente) alertas.push({ tipo: "reaberto", msg: `Fechamento reaberto recentemente: ${reabertoRecente.observacao ?? "sem motivo"}`, urgente: true });
+
+  const acaoLabel: Record<string, string> = {
+    criar: "Criou", editar: "Editou", excluir: "Excluiu", liquidar: "Liquidou",
+    estornar: "Estornou", fechar: "Fechou", reabrir: "Reabriu", conciliar: "Conciliou",
+    transferir: "Transferiu", cancelar: "Cancelou",
+  };
+  const entidadeLabel: Record<string, string> = {
+    movimentacao: "Movimentação", receber: "Conta a receber", pagar: "Conta a pagar",
+    carteira: "Carteira", dre: "DRE", fechamento: "Fechamento", conciliacao: "Conciliação",
+  };
+
+  return (
+    <div className="space-y-5 min-w-0">
+      {/* Modals */}
+      <FecharModal tipo="dia" open={showFecharDia} onClose={() => { setShowFecharDia(false); void refreshFechamentos(); }} />
+      <FecharModal tipo="mes" open={showFecharMes} onClose={() => { setShowFecharMes(false); void refreshFechamentos(); }} />
+      <ReopenModal fechamento={reopenTarget} open={!!reopenTarget} onClose={() => { setReopenTarget(null); void refreshFechamentos(); }} />
+      <ConciliarModal
+        carteiras={listaCarteiras.filter((c) => c.ativo).map((c) => ({ id: c.id, nome: c.nome, saldoAtual: c.saldoAtual }))}
+        open={showConciliar}
+        onClose={() => { setShowConciliar(false); void refreshConciliacao(); }}
+      />
+
+      {/* Alertas */}
+      {alertas.length > 0 && (
+        <div className="space-y-2">
+          {alertas.map((a, i) => (
+            <div key={i} className={`flex items-start gap-3 rounded-xl p-3 border text-sm ${a.urgente ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300" : "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300"}`}>
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{a.msg}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 1. Card de Fechamento */}
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="flex items-center gap-2 text-base"><CalendarCheck className="h-4 w-4 text-primary" />Fechamento Financeiro</CardTitle>
+            <div className="flex gap-2 flex-wrap">
+              <Button size="sm" variant="outline" onClick={() => setShowFecharDia(true)} disabled={!!fechadoHoje} className="text-xs">
+                <Lock className="h-3 w-3 mr-1" />Fechar Dia
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setShowFecharMes(true)} disabled={!!fechadoMes} className="text-xs">
+                <Lock className="h-3 w-3 mr-1" />Fechar Mês
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => void refreshFechamentos()} className="text-xs text-muted-foreground" title="Atualizar">
+                <RefreshCw className={`h-3 w-3 ${loadingFechamentos ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingFechamentos ? (
+            <p className="text-sm text-muted-foreground animate-pulse">Carregando...</p>
+          ) : fechamentos.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum fechamento registrado.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
+                <thead>
+                  <tr className="border-b border-border text-xs text-muted-foreground">
+                    <th className="text-left py-2 pr-4 font-medium">Tipo</th>
+                    <th className="text-left py-2 pr-4 font-medium">Referência</th>
+                    <th className="text-right py-2 pr-4 font-medium">Saldo Sistema</th>
+                    <th className="text-right py-2 pr-4 font-medium">Diferença</th>
+                    <th className="text-left py-2 pr-4 font-medium">Status</th>
+                    <th className="text-left py-2 font-medium">Fechado em</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {fechamentos.slice(0, 10).map((f) => (
+                    <tr key={f.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="py-2 pr-4">
+                        <Badge variant="outline" className="text-xs capitalize">{f.tipo}</Badge>
+                      </td>
+                      <td className="py-2 pr-4 font-mono text-xs">{f.tipo === "diario" ? f.dataReferencia : `${String(f.mes).padStart(2,"0")}/${f.ano}`}</td>
+                      <td className="py-2 pr-4 text-right font-medium">{fmt(f.saldoSistema)}</td>
+                      <td className={`py-2 pr-4 text-right text-xs ${f.diferenca !== 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                        {f.diferenca === 0 ? "—" : fmt(f.diferenca)}
+                      </td>
+                      <td className="py-2 pr-4"><FechamentoBadge status={f.status} /></td>
+                      <td className="py-2 text-xs text-muted-foreground">{fmtDate(f.fechadoEm)}</td>
+                      <td className="py-2 pl-2">
+                        {f.status === "fechado" && (
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-amber-600 hover:text-amber-700"
+                            onClick={() => setReopenTarget(f)}>
+                            <Unlock className="h-3 w-3 mr-1" />Reabrir
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 2. Card de Conciliação */}
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="flex items-center gap-2 text-base"><Scale className="h-4 w-4 text-primary" />Conciliação de Carteiras</CardTitle>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setShowConciliar(true)} className="text-xs">
+                <Scale className="h-3 w-3 mr-1" />Nova Conciliação
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => void refreshConciliacao()} className="text-xs text-muted-foreground" title="Atualizar">
+                <RefreshCw className={`h-3 w-3 ${loadingConciliacao ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
+          </div>
+          {resumoConciliacao && (
+            <div className="flex gap-4 text-xs text-muted-foreground mt-1 flex-wrap">
+              <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-green-500" />{resumoConciliacao.conciliadas} conciliadas</span>
+              <span className="flex items-center gap-1"><AlertCircle className="h-3 w-3 text-red-500" />{resumoConciliacao.divergentes} divergentes</span>
+              {resumoConciliacao.totalDivergencia > 0 && (
+                <span className="text-red-600 font-medium">Divergência total: {fmt(resumoConciliacao.totalDivergencia)}</span>
+              )}
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          {loadingConciliacao ? (
+            <p className="text-sm text-muted-foreground animate-pulse">Carregando...</p>
+          ) : conciliacoes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma conciliação registrada. Clique em "Nova Conciliação" para iniciar.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[520px]">
+                <thead>
+                  <tr className="border-b border-border text-xs text-muted-foreground">
+                    <th className="text-left py-2 pr-4 font-medium">Carteira</th>
+                    <th className="text-left py-2 pr-4 font-medium">Data</th>
+                    <th className="text-right py-2 pr-4 font-medium">Saldo Sistema</th>
+                    <th className="text-right py-2 pr-4 font-medium">Saldo Informado</th>
+                    <th className="text-right py-2 pr-4 font-medium">Diferença</th>
+                    <th className="text-left py-2 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {conciliacoes.slice(0, 15).map((c: ConciliacaoPublica) => (
+                    <tr key={c.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="py-2 pr-4 font-medium">{c.carteiraNome}</td>
+                      <td className="py-2 pr-4 text-xs text-muted-foreground font-mono">{c.dataReferencia}</td>
+                      <td className="py-2 pr-4 text-right">{fmt(c.saldoSistema)}</td>
+                      <td className="py-2 pr-4 text-right">{fmt(c.saldoInformado)}</td>
+                      <td className={`py-2 pr-4 text-right text-xs font-medium ${c.diferenca !== 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                        {c.diferenca === 0 ? "✓" : fmt(c.diferenca)}
+                      </td>
+                      <td className="py-2"><ConciliacaoBadge status={c.status} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 3. Card de Auditoria */}
+      <Card className="rounded-2xl">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="flex items-center gap-2 text-base"><ListChecks className="h-4 w-4 text-primary" />Log de Auditoria</CardTitle>
+            <Button size="sm" variant="ghost" onClick={() => void refreshAuditoria()} className="text-xs text-muted-foreground" title="Atualizar">
+              <RefreshCw className={`h-3 w-3 ${loadingAuditoria ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+          <CardDescription className="text-xs">Últimas 30 operações financeiras registradas.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingAuditoria ? (
+            <p className="text-sm text-muted-foreground animate-pulse">Carregando...</p>
+          ) : auditoriaFinanceira.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhuma operação registrada ainda.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[480px]">
+                <thead>
+                  <tr className="border-b border-border text-xs text-muted-foreground">
+                    <th className="text-left py-2 pr-4 font-medium">Ação</th>
+                    <th className="text-left py-2 pr-4 font-medium">Entidade</th>
+                    <th className="text-left py-2 pr-4 font-medium">Usuário</th>
+                    <th className="text-left py-2 font-medium">Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditoriaFinanceira.slice(0, 20).map((a) => (
+                    <tr key={a.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="py-2 pr-4">
+                        <Badge variant="outline" className="text-xs capitalize">{acaoLabel[a.acao] ?? a.acao}</Badge>
+                      </td>
+                      <td className="py-2 pr-4 text-muted-foreground text-xs">{entidadeLabel[a.entidade] ?? a.entidade}</td>
+                      <td className="py-2 pr-4 text-xs">{a.usuarioNome ?? <span className="text-muted-foreground">Sistema</span>}</td>
+                      <td className="py-2 text-xs text-muted-foreground whitespace-nowrap">
+                        {new Date(a.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 function Configuracoes() {
   const { carteiras: listaCarteiras } = useFinanceiroReal();
   return (
@@ -1467,6 +1905,7 @@ function FinanceiroHubInner() {
         { v: "pagar", label: "A pagar", icon: ArrowUpCircle, comp: <ContasPagar /> },
         { v: "fluxo", label: "Fluxo de caixa", icon: BarChart3, comp: <FluxoCaixa />, hubBadge: "Preview" as const },
         { v: "carteiras", label: "Carteiras", icon: Wallet, comp: <GestaoCarteiras />, hubBadge: "Demo" as const },
+        { v: "auditoria", label: "Auditoria", icon: ShieldCheck, comp: <AuditoriaFechamento /> },
         { v: "relatorios", label: "Relatórios", icon: FileText, comp: <Relatorios />, hubBadge: "Preview" as const },
         { v: "config", label: "Configurações", icon: Settings, comp: <Configuracoes />, hubBadge: "Demo" as const },
       ] as const,

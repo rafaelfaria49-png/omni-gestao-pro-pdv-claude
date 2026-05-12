@@ -26,6 +26,7 @@ import {
   createMovimentacaoEntradaFromReceber,
   estornarMovimentacaoPorReferencia,
 } from "@/lib/financeiro/services/movimentacoes-service"
+import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -242,6 +243,18 @@ export async function PATCH(req: Request) {
 
   try {
     await prismaEnsureConnected()
+
+    // Bloqueio de período fechado para operações de mutação
+    if (["liquidar", "parcial", "estornar"].includes(parsed.data.op)) {
+      const lock = await verificarPeriodoFechado(storeId, new Date())
+      if (lock.fechado) {
+        return err(
+          "Período financeiro fechado. Reabra o fechamento para alterar lançamentos.",
+          "periodo_fechado",
+          409,
+        )
+      }
+    }
 
     if (parsed.data.op === "liquidar") {
       const res = await liquidarContaReceber({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel: "financeiro_hub" })

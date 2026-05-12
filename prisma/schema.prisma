@@ -59,6 +59,9 @@ model Store {
   contasPagar            ContaPagarTitulo[]
   movimentacoes          MovimentacaoFinanceira[]
   carteiras              CarteiraFinanceira[]
+  fechamentos            FechamentoFinanceiro[]
+  conciliacoes           ConciliacaoFinanceira[]
+  auditorias             AuditoriaFinanceira[]
   fornecedores           Fornecedor[]
   financialAccounts      FinancialAccount[]
   financialCategories    FinancialCategory[]
@@ -918,6 +921,7 @@ model CarteiraFinanceira {
   updatedAt    DateTime @updatedAt @map("updatedAt")
 
   movimentacoes MovimentacaoFinanceira[]
+  conciliacoes  ConciliacaoFinanceira[]
 
   @@index([storeId])
   @@index([storeId, ativo])
@@ -1173,6 +1177,120 @@ model FinancialAttachment {
 
   @@index([transactionId])
   @@map("financial_attachments")
+}
+
+// ─── Auditoria / Conciliação / Fechamento Financeiro ─────────────────────────
+
+/**
+ * Fechamento financeiro diário ou mensal.
+ * Congela o estado do fluxo no momento do fechamento e permite reabertura controlada.
+ */
+model FechamentoFinanceiro {
+  id              String    @id @default(cuid())
+  storeId         String    @default("loja-1") @map("storeId")
+  store           Store     @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /**
+   * "diario" | "mensal"
+   */
+  tipo            String    @default("diario") @map("tipo")
+  /**
+   * yyyy-mm-dd para diário; 1º dia do mês para mensal
+   */
+  dataReferencia  String    @map("dataReferencia")
+  mes             Int       @map("mes")
+  ano             Int       @map("ano")
+  /**
+   * "aberto" | "fechado" | "reaberto"
+   */
+  status          String    @default("fechado") @map("status")
+  saldoSistema    Float     @default(0) @map("saldoSistema")
+  saldoInformado  Float?    @map("saldoInformado")
+  diferenca       Float     @default(0) @map("diferenca")
+  observacao      String?   @map("observacao") @db.Text
+  snapshotDRE     Json?     @map("snapshotDRE") @db.JsonB
+  fechadoPor      String?   @map("fechadoPor")
+  reabertoPor     String?   @map("reabertoPor")
+  fechadoEm       DateTime? @map("fechadoEm")
+  reabertoEm      DateTime? @map("reabertoEm")
+  createdAt       DateTime  @default(now()) @map("createdAt")
+  updatedAt       DateTime  @updatedAt @map("updatedAt")
+
+  @@unique([storeId, tipo, dataReferencia], name: "fechamento_store_tipo_data")
+  @@index([storeId])
+  @@index([storeId, tipo])
+  @@index([storeId, mes, ano])
+  @@map("fechamentos_financeiros")
+}
+
+/**
+ * Conciliação de saldo de carteira financeira (sistema vs. informado).
+ */
+model ConciliacaoFinanceira {
+  id              String             @id @default(cuid())
+  storeId         String             @default("loja-1") @map("storeId")
+  store           Store              @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  carteiraId      String             @map("carteiraId")
+  carteira        CarteiraFinanceira @relation(fields: [carteiraId], references: [id], onDelete: Restrict)
+  /**
+   * yyyy-mm-dd data da conciliação
+   */
+  dataReferencia  String             @map("dataReferencia")
+  saldoSistema    Float              @default(0) @map("saldoSistema")
+  saldoInformado  Float              @default(0) @map("saldoInformado")
+  diferenca       Float              @default(0) @map("diferenca")
+  /**
+   * "pendente" | "conciliado" | "divergente"
+   */
+  status          String             @default("pendente") @map("status")
+  observacao      String?            @map("observacao") @db.Text
+  conciliadoPor   String?            @map("conciliadoPor")
+  conciliadoEm    DateTime?          @map("conciliadoEm")
+  createdAt       DateTime           @default(now()) @map("createdAt")
+  updatedAt       DateTime           @updatedAt @map("updatedAt")
+
+  @@index([storeId])
+  @@index([carteiraId])
+  @@index([storeId, dataReferencia])
+  @@index([storeId, status])
+  @@map("conciliacoes_financeiras")
+}
+
+/**
+ * Log imutável de auditoria de operações financeiras.
+ * Nunca atualizar nem deletar — append-only.
+ */
+model AuditoriaFinanceira {
+  id           String   @id @default(cuid())
+  storeId      String   @default("loja-1") @map("storeId")
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /**
+   * "movimentacao" | "receber" | "pagar" | "carteira" | "dre" | "fechamento" | "conciliacao"
+   */
+  entidade     String   @map("entidade")
+  entidadeId   String?  @map("entidadeId")
+  /**
+   * "criar" | "editar" | "excluir" | "liquidar" | "estornar" | "fechar" | "reabrir" | "conciliar"
+   */
+  acao         String   @map("acao")
+  /**
+   * Estado antes da operação (JSON snapshot)
+   */
+  antes        Json?    @map("antes") @db.JsonB
+  /**
+   * Estado depois da operação (JSON snapshot)
+   */
+  depois       Json?    @map("depois") @db.JsonB
+  usuarioId    String?  @map("usuarioId")
+  usuarioNome  String?  @map("usuarioNome")
+  ip           String?  @map("ip")
+  userAgent    String?  @map("userAgent")
+  createdAt    DateTime @default(now()) @map("createdAt")
+
+  @@index([storeId])
+  @@index([storeId, entidade])
+  @@index([storeId, entidadeId])
+  @@index([storeId, createdAt])
+  @@map("auditorias_financeiras")
 }
 
 // ─── NextAuth / Admin Auth ───────────────────────────────────────────────────

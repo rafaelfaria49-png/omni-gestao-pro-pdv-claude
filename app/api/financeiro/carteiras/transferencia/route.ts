@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { transferirEntreCarteiras } from "@/lib/financeiro/services/carteiras-service"
+import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 
 function getStoreId(req: NextRequest): string {
   return (
@@ -36,6 +37,11 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(body)
   if (!parsed.success) {
     return err(parsed.error.errors[0]?.message ?? "Dados inválidos.", "VALIDATION_ERROR")
+  }
+
+  const lock = await verificarPeriodoFechado(storeId, new Date())
+  if (lock.fechado) {
+    return err("Período financeiro fechado. Reabra o fechamento para alterar lançamentos.", "periodo_fechado", 409)
   }
 
   const result = await transferirEntreCarteiras({ storeId, ...parsed.data })

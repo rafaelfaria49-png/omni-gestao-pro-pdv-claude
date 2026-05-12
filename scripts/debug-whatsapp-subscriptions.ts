@@ -153,25 +153,96 @@ async function main() {
   // ══════════════════════════════════════════════════════════════════════════
   section("2/7 · Validação do Token de Acesso")
 
-  const meRes = await graphGet("me", ACCESS_TOKEN, "id,name,type")
-  if (!meRes.ok) {
-    err(`Token inválido ou expirado: ${meRes.error}`)
-    findings.push("❌ ACCESS_TOKEN inválido ou expirado — verifique no Meta Business Suite")
+  // Preferência: debug_token com APP_ID|APP_SECRET (retorna type, scopes, validade).
+  // Fallback: /me?fields=id,name (sem field "type" — inválido para System User).
+  let tokenType = "desconhecido"
+  let tokenUserId = ""
+  let tokenValid = false
 
-    const errData = meRes.data as { error?: { code?: number; type?: string } } | null
-    if (errData?.error?.code === 190) {
-      err("Código 190 = token expirado. Gerar novo token permanente no Meta.")
-    } else if (errData?.error?.type === "OAuthException") {
-      err("OAuthException = problema de autenticação no token.")
+  if (APP_ACCESS_TOKEN) {
+    info("Usando /debug_token com App Access Token para validação detalhada...")
+    const dtUrl = new URL(`${BASE_URL}/debug_token`)
+    dtUrl.searchParams.set("input_token", ACCESS_TOKEN)
+    dtUrl.searchParams.set("access_token", APP_ACCESS_TOKEN)
+
+    const dtController = new AbortController()
+    const dtTimeout = setTimeout(() => dtController.abort(), 10_000)
+    let dtData: unknown = null
+    let dtStatus = 0
+    let dtOk = false
+    try {
+      const dtFetch = await fetch(dtUrl.toString(), { signal: dtController.signal })
+      dtStatus = dtFetch.status
+      dtData = await dtFetch.json()
+      dtOk = dtFetch.ok
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      err(`debug_token fetch error: ${msg}`)
     }
-    console.log()
-    process.exit(1)
-  }
+    clearTimeout(dtTimeout)
 
-  const me = meRes.data as { id?: string; name?: string; type?: string }
-  ok(`Token válido — id=${me.id ?? "?"} name=${me.name ?? "(sistema)"} type=${me.type ?? "?"}`)
-  if (me.name?.toLowerCase().includes("system") || me.type === "application") {
-    info("Token de usuário do sistema (system user token) — adequado para produção.")
+    if (dtOk && dtData) {
+      const dt = (dtData as { data?: {
+        is_valid?: boolean
+        type?: string
+        app_id?: string
+        user_id?: string
+        expires_at?: number
+        scopes?: string[]
+        error?: { message?: string; code?: number }
+      } }).data
+
+      if (dt?.error || !dt?.is_valid) {
+        err(`Token inválido: ${dt?.error?.message ?? "is_valid=false"}`)
+        findings.push("❌ ACCESS_TOKEN inválido — verificar no Meta Business Suite")
+        if (dt?.error?.code === 190) err("Código 190 = token expirado. Gerar novo token permanente.")
+        console.log(); process.exit(1)
+      }
+
+      tokenValid = true
+      tokenType = dt?.type ?? "desconhecido"
+      tokenUserId = dt?.user_id ?? ""
+      const expiresAt = dt?.expires_at ?? 0
+      const scopes = dt?.scopes ?? []
+
+      ok(`Token válido ✓`)
+      ok(`  type      = ${tokenType}`)
+      ok(`  app_id    = ${dt?.app_id ?? "?"}`)
+      ok(`  user_id   = ${maskId(tokenUserId)}`)
+      info(`  expires_at= ${expiresAt === 0 ? "não expira (token permanente) ✓" : new Date(expiresAt * 1000).toISOString()}`)
+      info(`  scopes    = ${scopes.slice(0, 8).join(", ") || "(nenhum)"}${scopes.length > 8 ? "..." : ""}`)
+
+      if (tokenType === "SYSTEM_USER") {
+        ok("System User token — adequado para produção ✓")
+      } else if (tokenType === "USER") {
+        warn("Token de usuário pessoal (não system user) — pode expirar. Use System User token para produção.")
+        findings.push("⚠️ Usar System User token em vez de token de usuário pessoal")
+      }
+
+      if (!scopes.includes("whatsapp_business_messaging") && !scopes.includes("business_management")) {
+        warn("Permissão whatsapp_business_messaging/business_management não encontrada nos scopes.")
+        findings.push("⚠️ Token pode não ter permissões suficientes para webhooks WhatsApp")
+      }
+    } else {
+      err(`debug_token falhou (HTTP ${dtStatus}): ${JSON.stringify(dtData)?.slice(0, 200)}`)
+      findings.push("❌ Não foi possível validar token com debug_token")
+    }
+  } else {
+    // Fallback: /me sem field type (type não é suportado em System User tokens)
+    info("APP_ACCESS_TOKEN não disponível — usando /me?fields=id,name (validação básica)")
+    const meRes = await graphGet("me", ACCESS_TOKEN, "id,name")
+    if (!meRes.ok) {
+      err(`Token inválido ou expirado: ${meRes.error}`)
+      findings.push("❌ ACCESS_TOKEN inválido — verificar no Meta Business Suite")
+      const errData = meRes.data as { error?: { code?: number } } | null
+      if (errData?.error?.code === 190) err("Código 190 = token expirado.")
+      console.log(); process.exit(1)
+    }
+    const me = meRes.data as { id?: string; name?: string }
+    tokenValid = true
+    tokenUserId = me.id ?? ""
+    ok(`Token válido (validação básica) — id=${maskId(me.id ?? "")} name="${me.name ?? "(sistema)"}"`)
+    warn("Para validação completa (type, scopes, validade): definir WHATSAPP_APP_ID + WHATSAPP_APP_SECRET")
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -238,8 +309,21 @@ async function main() {
     err(`Erro ao consultar subscribed_apps: ${subsRes.error}`)
     findings.push("❌ Não foi possível verificar subscribed_apps — verificar permissão whatsapp_business_management")
   } else {
-    const subsData = subsRes.data as { data?: Array<{ id?: string; name?: string; link?: string }> }
-    const apps = subsData.data ?? []
+    // Meta API retorna { data: [{ whatsapp_business_api_data: { id, name, link } }] }
+    const subsData = subsRes.data as {
+      data?: Array<{
+        whatsapp_business_api_data?: { id?: string; name?: string; link?: string }
+        id?: string
+        name?: string
+      }>
+    }
+    const rawApps = subsData.data ?? []
+
+    // Normalizar: suporta resposta aninhada (whatsapp_business_api_data) ou plana
+    const apps = rawApps.map((a) => ({
+      id: a.whatsapp_business_api_data?.id ?? a.id,
+      name: a.whatsapp_business_api_data?.name ?? a.name,
+    }))
 
     if (apps.length === 0) {
       err("NENHUM app inscrito nesta WABA — esta é a causa raiz do inbound não chegar!")
@@ -261,7 +345,7 @@ async function main() {
         if (match) {
           ok(`  → id=${app.id} name="${app.name ?? "?"}" ← ESTE APP ✓`)
         } else {
-          info(`  → id=${app.id} name="${app.name ?? "?"}"`)
+          info(`  → id=${app.id ?? "(sem id)"} name="${app.name ?? "?"}"`)
         }
       }
 
@@ -441,18 +525,15 @@ async function main() {
   console.log()
 
   if (APP_ID) {
-    const appRes = await graphGet(APP_ID, ACCESS_TOKEN, "id,name,link,category,status")
+    // Usar App Access Token para leitura do app — mais confiável que user token
+    const appTokenToUse = APP_ACCESS_TOKEN || ACCESS_TOKEN
+    const appRes = await graphGet(APP_ID, appTokenToUse, "id,name")
     if (!appRes.ok) {
-      warn(`Não foi possível verificar modo do app: ${appRes.error}`)
+      warn(`Não foi possível verificar app ${maskId(APP_ID)}: ${appRes.error}`)
+      info("Isso pode ocorrer com System User tokens sem permissão de leitura do app.")
     } else {
-      const app = appRes.data as { id?: string; name?: string; category?: string; status?: string }
+      const app = appRes.data as { id?: string; name?: string }
       ok(`App: id=${app.id ?? "?"} name="${app.name ?? "?"}"`)
-
-      // Meta não expõe diretamente "Development" vs "Live" via API pública
-      // O indicador mais próximo é o status geral do app
-      if (app.status) {
-        info(`App status: ${app.status}`)
-      }
 
       warn("AÇÃO MANUAL NECESSÁRIA: Verificar se app está em 'Development' ou 'Live'")
       info("→ Abrir: developers.facebook.com → Seu App → topo da página")
