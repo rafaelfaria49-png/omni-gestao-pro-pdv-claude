@@ -6,11 +6,13 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { X } from "lucide-react";
+import { X, ClipboardList, PlusCircle } from "lucide-react";
 import { slaRestante } from "@/lib/os/format";
+import { useNavigate } from "react-router-dom";
 
 export function OSKanban() {
-  const { ordens, moveStatus, tecnicos } = useOS();
+  const { ordens, moveStatus, tecnicos, loading } = useOS();
+  const navigate = useNavigate();
   const [dragOver, setDragOver] = useState<OSStatus | null>(null);
   const [, setDraggingId] = useState<string | null>(null);
 
@@ -51,6 +53,54 @@ export function OSKanban() {
     moveStatus(osId, status);
     toast.success(`${os.codigo} movida para ${status.replace("_", " ")}`);
   };
+
+  if (loading) {
+    return (
+      <div className="min-w-0 space-y-4">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-8 w-[140px] animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
+        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {PIPELINE.map((col) => (
+            <div key={col.id} className="flex flex-col rounded-2xl border border-border bg-card/50 p-3">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+                <div className="h-5 w-7 animate-pulse rounded-full bg-muted" />
+              </div>
+              <div className="flex flex-col gap-2">
+                {Array.from({ length: col.id === "aberta" ? 2 : 1 }).map((_, i) => (
+                  <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (!loading && ordens.length === 0) {
+    return (
+      <div className="flex min-h-[380px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
+          <ClipboardList className="h-8 w-8 text-muted-foreground/60" />
+        </div>
+        <h3 className="mt-5 text-base font-semibold text-foreground">Nenhuma ordem de serviço cadastrada</h3>
+        <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">
+          Crie a primeira OS para começar a acompanhar o pipeline operacional desta unidade.
+        </p>
+        <Button
+          className="mt-6 gap-2"
+          onClick={() => navigate("/operacoes")}
+        >
+          <PlusCircle className="h-4 w-4" />
+          Criar primeira OS
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-w-0 space-y-4">

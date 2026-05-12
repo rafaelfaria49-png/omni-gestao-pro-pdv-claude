@@ -7,8 +7,6 @@ import {
   ShieldCheck,
   Users,
   Zap,
-  TrendingUp,
-  TrendingDown,
   Wrench,
 } from "lucide-react";
 import { HubCard, type HubCardProps } from "@/components/operacoes/HubCard";
@@ -106,7 +104,7 @@ const OperacoesHub = () => {
       status: "ativo",
       primaryValue: atendimentos.length,
       primaryLabel: "Registros",
-      metrics: [{ label: "Médio", value: "4m" }],
+      metrics: [],
       action: "Atender agora",
       accent: "from-violet-500/10 to-transparent",
     },
@@ -130,7 +128,7 @@ const OperacoesHub = () => {
       status: stats.garantiasAtivas > 0 ? "atencao" : "neutro",
       primaryValue: stats.garantiasAtivas,
       primaryLabel: "Garantias ativas",
-      metrics: [{ label: "NPS", value: 86 }],
+      metrics: [],
       action: "Revisar",
       accent: "from-amber-500/10 to-transparent",
     },
@@ -161,31 +159,23 @@ const OperacoesHub = () => {
   ];
 
   const kpis = [
-    { label: "OS abertas", value: String(stats.abertas), trend: "+18%", up: true },
-    { label: "Atrasadas (SLA)", value: String(stats.atrasadas), trend: stats.atrasadas > 0 ? "+1" : "0", up: stats.atrasadas === 0 },
-    { label: "Aguardando aprov.", value: String(stats.aguardando), trend: "+0", up: true },
-    { label: "Prontas", value: String(stats.prontas), trend: "+2", up: true },
+    { label: "OS abertas", value: String(stats.abertas), trend: null, up: true },
+    { label: "Atrasadas (SLA)", value: String(stats.atrasadas), trend: null, up: stats.atrasadas === 0 },
+    { label: "Aguardando aprov.", value: String(stats.aguardando), trend: null, up: true },
+    { label: "Prontas", value: String(stats.prontas), trend: null, up: true },
   ];
 
   return (
     <OperacoesLayout>
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {kpis.map((k) => {
-          const positive = !k.trend.startsWith("-");
-          const Trend = positive ? TrendingUp : TrendingDown;
-          return (
-            <div key={k.label} className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/30">
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">{k.label}</div>
-              <div className="mt-2 flex items-baseline justify-between">
-                <span className="text-2xl font-semibold">{k.value}</span>
-                <span className={`inline-flex items-center gap-1 text-xs font-medium ${k.up ? "text-emerald-500" : "text-rose-500"}`}>
-                  <Trend className="h-3 w-3" />
-                  {k.trend}
-                </span>
-              </div>
+        {kpis.map((k) => (
+          <div key={k.label} className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/30">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">{k.label}</div>
+            <div className="mt-2">
+              <span className={`text-2xl font-semibold ${!k.up && Number(k.value) > 0 ? "text-rose-500" : ""}`}>{k.value}</span>
             </div>
-          );
-        })}
+          </div>
+        ))}
       </section>
 
       <section className="mt-8">
