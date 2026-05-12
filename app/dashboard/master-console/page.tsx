@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Store, Users, Wallet, RefreshCw, AlertTriangle } from "lucide-react";
+import { Store, Users, Wallet, RefreshCw, AlertTriangle, Plus } from "lucide-react";
 import { KpiCard } from "@/components/master-console/KpiCard";
 import { StoreList, type Store as StoreType } from "@/components/master-console/StoreList";
 import { TeamPanel } from "@/components/master-console/TeamPanel";
@@ -23,7 +23,10 @@ const MasterConsolePage = () => {
       };
       const mapped: StoreType[] = (data.stores ?? []).map((s) => {
         const addr = s.address as Record<string, string> | null | undefined;
-        const city = addr?.cidade && addr?.estado ? `${addr.cidade}, ${addr.estado}` : (addr?.cidade ?? "—");
+        const city =
+          addr?.cidade && addr?.estado
+            ? `${addr.cidade}, ${addr.estado}`
+            : (addr?.cidade ?? "—");
         return {
           id: s.id,
           name: s.name || s.id,
@@ -98,8 +101,8 @@ const MasterConsolePage = () => {
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
         <KpiCard
           label="Lojas Ativas"
-          value={String(stores.length)}
-          trend={stores.length === 1 ? "Loja principal" : `${stores.length} unidades`}
+          value={String(stores.length || 0)}
+          trend={stores.length === 1 ? "Loja principal" : stores.length > 1 ? `${stores.length} unidades` : "Sem lojas"}
           icon={Store}
           tone="info"
         />
@@ -108,19 +111,23 @@ const MasterConsolePage = () => {
       </div>
 
       {stores.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-border bg-card px-8 py-16 text-center shadow-card">
+        /* ── Zero-stores onboarding ── */
+        <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border bg-card px-8 py-16 text-center shadow-card">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <Store className="h-7 w-7 text-primary" />
+            <Store className="h-7 w-7 text-primary/70" />
           </div>
-          <div className="space-y-1">
-            <h3 className="text-base font-semibold text-foreground">
-              Nenhuma filial adicional cadastrada
-            </h3>
+          <div className="space-y-1.5">
+            <h3 className="text-base font-semibold text-foreground">Configure sua primeira unidade</h3>
             <p className="max-w-sm text-sm text-muted-foreground">
-              Sua loja principal já está ativa. Adicione novas unidades quando quiser gerenciar
-              outras lojas.
+              Cadastre sua loja principal para começar a usar vendas, financeiro, estoque e operações.
             </p>
           </div>
+          <Button size="sm" variant="outline" className="gap-2" onClick={() => {
+            window.location.href = "/dashboard/unidades";
+          }}>
+            <Plus className="h-4 w-4" />
+            Criar primeira unidade
+          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_400px]">
