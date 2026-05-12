@@ -88,6 +88,7 @@ model Store {
   whatsappAiSetting      WhatsAppAiSetting?
   whatsappAutomationLogs WhatsAppAutomationLog[]
   sessoesCaixa           SessaoCaixa[]
+  devolucoes             DevolucaoVenda[]
 
   @@index([profile])
   @@map("stores")
@@ -1004,6 +1005,58 @@ model ItemVenda {
   @@map("venda_itens")
 }
 
+// ─── PDV Enterprise — Devoluções ─────────────────────────────────────────────
+
+/**
+ * Documento de devolução/troca PDV.
+ * - `localId` = id gerado no localStorage (DEV-YYYY-NNNN), usado para idempotência.
+ * - `tipo`: "vale_credito" | "somente_estoque" | "troca"
+ * - `sessaoId`: opcional, vincula à sessão de caixa ativa no momento.
+ * - `vendaId`: opcional, venda original. Null se venda só existe no localStorage.
+ */
+model DevolucaoVenda {
+  id             String      @id @default(cuid())
+  storeId        String      @map("storeId")
+  store          Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /** Chave de negócio local (DEV-2026-0001). Unique por loja. */
+  localId        String      @map("localId")
+  vendaLocalId   String      @default("") @map("vendaLocalId")
+  sessaoId       String?     @map("sessaoId")
+  sessao         SessaoCaixa? @relation(fields: [sessaoId], references: [id], onDelete: SetNull)
+  /** "vale_credito" | "somente_estoque" | "troca" */
+  tipo           String      @map("tipo")
+  valorTotal     Float       @default(0) @map("valorTotal")
+  creditoEmitido Float       @default(0) @map("creditoEmitido")
+  clienteNome    String      @default("") @map("clienteNome")
+  clienteDoc     String      @default("") @map("clienteDoc")
+  operador       String      @default("") @map("operador")
+  motivo         String      @default("") @map("motivo")
+  observacao     String      @default("") @map("observacao")
+  at             DateTime    @default(now()) @map("at")
+  /** Snapshot com linhas e contexto. */
+  payload        Json?       @map("payload") @db.JsonB
+  itens          ItemDevolucaoVenda[]
+
+  @@unique([storeId, localId])
+  @@index([storeId, at])
+  @@index([storeId, vendaLocalId])
+  @@map("devolucoes_venda")
+}
+
+model ItemDevolucaoVenda {
+  id            String         @id @default(cuid())
+  devolucaoId   String         @map("devolucaoId")
+  devolucao     DevolucaoVenda @relation(fields: [devolucaoId], references: [id], onDelete: Cascade)
+  inventoryId   String?        @map("inventoryId")
+  nome          String         @default("") @map("nome")
+  quantidade    Int            @default(1) @map("quantidade")
+  valorUnitario Float          @default(0) @map("valorUnitario")
+  valorTotal    Float          @default(0) @map("valorTotal")
+
+  @@index([devolucaoId])
+  @@map("itens_devolucao_venda")
+}
+
 /**
  * Usuários internos do sistema (operadores e administradores).
  */
@@ -1320,6 +1373,7 @@ model SessaoCaixa {
   /** Snapshot de totais do dia (ledger) no momento do fechamento. */
   payload      Json?              @map("payload") @db.JsonB
   operacoes    CaixaOperacao[]
+  devolucoes   DevolucaoVenda[]
 
   @@index([storeId, status])
   @@index([storeId, abertaEm])

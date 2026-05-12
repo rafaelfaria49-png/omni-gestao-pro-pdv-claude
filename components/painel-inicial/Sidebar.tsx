@@ -17,6 +17,7 @@ import {
   MessageCircle,
   Database,
   Bot,
+  History,
   type LucideIcon,
 } from "lucide-react";
 import { financeiroV2Enabled } from "@/lib/feature-flags";
@@ -57,6 +58,7 @@ const hubsItems: Item[] = [
   { to: "/dashboard/operacoes-v2",   label: "Operações HUB",  icon: Activity,    badge: "Novo" },
   { to: "/dashboard/cadastros-v2",   label: "Cadastros HUB",  icon: Database      },
   { to: "/vendas-hub",               label: "Vendas HUB",     icon: ShoppingCart  },
+  { to: "/dashboard/caixa/historico", label: "Histórico de Caixa", icon: History },
   { to: "/dashboard/marketplace",    label: "Marketplace",    icon: Store         },
   ...(financeiroV2Enabled
     ? [{ to: "/dashboard/financeiro-v2", label: "Financeiro HUB", icon: Wallet } satisfies Item]

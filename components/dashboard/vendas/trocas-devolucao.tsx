@@ -15,11 +15,15 @@ import { buildValeTrocaEscPos } from "@/lib/escpos"
 import { sendEscPosViaProxy, downloadEscPosFile, openThermalHtmlPrint, escapeHtml } from "@/lib/thermal-print"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useToast } from "@/hooks/use-toast"
+import { useLojaAtiva } from "@/lib/loja-ativa"
+import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 
 export function TrocasDevolucao() {
   const { config } = useConfigEmpresa()
   const { toast } = useToast()
   const { sales, registrarDevolucao, inventory } = useOperationsStore()
+  const { lojaAtivaId } = useLojaAtiva()
+  const { sessaoId } = useCaixa()
   const searchParams = useSearchParams()
 
   const [busca, setBusca] = useState("")
@@ -213,6 +217,43 @@ export function TrocasDevolucao() {
       userLabel: `${nomeLoja} (PDV)`,
       detail: `${r.devolucaoId} | venda ${sale.id} | modo ${mode} | crédito ${r.creditIssued.toFixed(2)}`,
     })
+
+    // Persistir devolução no servidor — fire-and-forget, não bloqueia o fluxo local
+    if (lojaAtivaId) {
+      const itensServidor = lines.map((req) => {
+        const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
+        const valorUnitario = sl ? sl.lineTotal / sl.quantity : 0
+        return {
+          inventoryId: req.inventoryId,
+          nome: sl?.name ?? "",
+          quantidade: req.quantity,
+          valorUnitario,
+          valorTotal: Math.round(valorUnitario * req.quantity * 100) / 100,
+        }
+      })
+      const valorTotalDev = itensServidor.reduce((s, i) => s + i.valorTotal, 0)
+
+      fetch("/api/ops/devolucao", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": lojaAtivaId,
+        },
+        body: JSON.stringify({
+          localId: r.devolucaoId,
+          vendaLocalId: sale.id,
+          sessaoId: sessaoId ?? undefined,
+          tipo: mode,
+          valorTotal: valorTotalDev,
+          creditoEmitido: r.creditIssued,
+          clienteNome: nome,
+          clienteDoc: cpf,
+          operador: nomeLoja,
+          itens: itensServidor,
+          payload: { saleId: sale.id, linhas: lines },
+        }),
+      }).catch(() => {/* non-blocking */})
+    }
 
     setLastDevolucao({
       id: r.devolucaoId,
