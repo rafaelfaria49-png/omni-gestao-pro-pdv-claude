@@ -1,12 +1,16 @@
+"use client";
+
 import { useState } from "react";
+import { Copy, Printer } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Printer } from "lucide-react";
 import type { OrdemServico } from "@/types/os";
 import { brl, dt } from "@/lib/os/format";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { registrarDocumentoImpressoAction } from "@/app/actions/operacoes";
 
-type Modelo = "entrada" | "orcamento" | "garantia" | "entrega";
+type Modelo = "entrada" | "orcamento" | "garantia" | "entrega" | "operacional";
 
 interface Props {
   os: OrdemServico;
@@ -20,24 +24,100 @@ const MODELOS: { id: Modelo; label: string }[] = [
   { id: "orcamento", label: "Orçamento" },
   { id: "garantia", label: "Termo de garantia" },
   { id: "entrega", label: "Comprovante de entrega" },
+  { id: "operacional", label: "Documento operacional" },
 ];
+
+function buildResumoOperacional(os: OrdemServico): string {
+  const lines: string[] = [
+    `OmniGestão Pro — ${os.codigo}`,
+    `Cliente: ${os.cliente.nome}`,
+    `Equipamento: ${os.equipamento.tipo} · ${os.equipamento.marca} ${os.equipamento.modelo}`,
+    `IMEI/S/N: ${os.equipamento.numeroSerie ?? "—"}`,
+    `Defeito: ${os.equipamento.defeitoRelatado}`,
+  ];
+  if (os.orcamento) {
+    lines.push("— Peças —");
+    for (const p of os.orcamento.pecas) {
+      lines.push(`${p.quantidade}× ${p.nome} · ${brl(p.valorUnitario * p.quantidade)}`);
+    }
+    lines.push("— Serviços —");
+    for (const s of os.orcamento.servicos) {
+      lines.push(`${s.descricao} · ${brl(s.valor)}`);
+    }
+    lines.push(`TOTAL: ${brl(os.orcamento.total)}`);
+  }
+  if (os.checklistTecnico?.length) {
+    lines.push("— Checklist técnico —");
+    for (const c of os.checklistTecnico) {
+      lines.push(`${c.ok ? "[x]" : "[ ]"} ${c.label}`);
+    }
+  }
+  if (os.garantia.ativa) {
+    lines.push(`— Garantia — ${os.garantia.prazoDias ?? "?"} dias · até ${os.garantia.fimEm ? dt(os.garantia.fimEm) : "—"}`);
+  }
+  if (os.retirada?.confirmado) {
+    lines.push(
+      `— Retirada — ${os.retirada.retiradoPor ?? "—"} em ${os.retirada.retiradoEm ? dt(os.retirada.retiradoEm) : "—"}`,
+    );
+    if (os.retirada.assinaturaTexto) lines.push(`Assinatura: ${os.retirada.assinaturaTexto}`);
+  }
+  lines.push("", "Documento operacional — não fiscal.");
+  return lines.join("\n");
+}
 
 export function ImpressaoModal({ os, open, onOpenChange, modeloInicial = "entrada" }: Props) {
   const [modelo, setModelo] = useState<Modelo>(modeloInicial);
 
+  const registrarImpresso = async () => {
+    try {
+      await registrarDocumentoImpressoAction(os.storeId, os.id, "Operador");
+    } catch {
+      // best-effort: impressão ainda ocorre
+    }
+  };
+
+  const handlePrint = async () => {
+    await registrarImpresso();
+    window.print();
+  };
+
+  const handleCopy = async () => {
+    const text = buildResumoOperacional(os);
+    try {
+      await navigator.clipboard.writeText(text);
+      await registrarImpresso();
+      toast.success("Resumo copiado para a área de transferência");
+    } catch {
+      toast.error("Não foi possível copiar o resumo");
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[92vw] max-w-5xl max-h-[90vh] overflow-y-auto">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        @media print {
+          body * { visibility: hidden !important; }
+          .print-area, .print-area * { visibility: visible !important; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; background: white; color: black; }
+          .no-print { display: none !important; }
+        }
+      `,
+        }}
+      />
+      <DialogContent className="no-print w-[92vw] max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Printer className="h-5 w-5" /> Imprimir documento
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 no-print">
           {MODELOS.map((m) => (
             <button
               key={m.id}
+              type="button"
               onClick={() => setModelo(m.id)}
               className={cn(
                 "rounded-md border px-3 py-1.5 text-sm transition-colors",
@@ -49,13 +129,11 @@ export function ImpressaoModal({ os, open, onOpenChange, modeloInicial = "entrad
           ))}
         </div>
 
-        {/* Preview A4 */}
-        <div className="mx-auto w-full max-w-[600px] rounded-lg border border-border bg-card p-6 text-[11px] leading-relaxed text-foreground shadow-inner">
+        <div className="print-area mx-auto w-full max-w-[600px] rounded-lg border border-border bg-card p-6 text-[11px] leading-relaxed text-foreground shadow-inner">
           <header className="flex items-start justify-between border-b border-border pb-3">
             <div>
               <div className="text-base font-bold">OmniGestão Pro · Assistência Técnica</div>
-              <div className="text-muted-foreground">Rua das Flores, 123 — São Paulo/SP · CNPJ 12.345.678/0001-90</div>
-              <div className="text-muted-foreground">Tel: (11) 4002-8922 · contato@omnigestao.pro</div>
+              <div className="text-muted-foreground">Documento operacional (não fiscal)</div>
             </div>
             <div className="text-right">
               <div className="font-mono text-sm font-semibold">{os.codigo}</div>
@@ -68,19 +146,23 @@ export function ImpressaoModal({ os, open, onOpenChange, modeloInicial = "entrad
           </h2>
 
           <Section title="Cliente">
-            <div>{os.cliente.nome} {os.cliente.documento && `· ${os.cliente.documento}`}</div>
+            <div>
+              {os.cliente.nome} {os.cliente.documento && `· ${os.cliente.documento}`}
+            </div>
             <div className="text-muted-foreground">{os.cliente.telefone}</div>
           </Section>
 
           <Section title="Equipamento">
-            <div>{os.equipamento.tipo} · {os.equipamento.marca} {os.equipamento.modelo}</div>
-            {os.equipamento.numeroSerie && <div className="text-muted-foreground">S/N: {os.equipamento.numeroSerie}</div>}
+            <div>
+              {os.equipamento.tipo} · {os.equipamento.marca} {os.equipamento.modelo}
+            </div>
+            {os.equipamento.numeroSerie && <div className="text-muted-foreground">IMEI / S/N: {os.equipamento.numeroSerie}</div>}
             {os.equipamento.acessorios && os.equipamento.acessorios.length > 0 && (
               <div className="text-muted-foreground">Acessórios: {os.equipamento.acessorios.join(", ")}</div>
             )}
           </Section>
 
-          {(modelo === "entrada" || modelo === "garantia") && (
+          {(modelo === "entrada" || modelo === "garantia" || modelo === "operacional") && (
             <Section title="Defeito relatado">
               <p>{os.equipamento.defeitoRelatado}</p>
             </Section>
@@ -101,13 +183,15 @@ export function ImpressaoModal({ os, open, onOpenChange, modeloInicial = "entrad
             </Section>
           )}
 
-          {(modelo === "orcamento" || modelo === "entrega") && os.orcamento && (
-            <Section title="Itens">
+          {(modelo === "orcamento" || modelo === "entrega" || modelo === "operacional") && os.orcamento && (
+            <Section title="Peças e serviços">
               <table className="w-full text-[10px]">
                 <tbody>
                   {os.orcamento.pecas.map((p) => (
                     <tr key={p.id} className="border-b border-border/40">
-                      <td>{p.quantidade}× {p.nome}</td>
+                      <td>
+                        {p.quantidade}× {p.nome}
+                      </td>
                       <td className="text-right">{brl(p.valorUnitario * p.quantidade)}</td>
                     </tr>
                   ))}
@@ -126,17 +210,57 @@ export function ImpressaoModal({ os, open, onOpenChange, modeloInicial = "entrad
             </Section>
           )}
 
-          {modelo === "garantia" && os.garantia.termo && (
-            <Section title={`Termo de garantia (${os.garantia.prazoDias ?? 0} dias)`}>
+          {modelo === "operacional" && os.checklistTecnico && os.checklistTecnico.length > 0 && (
+            <Section title="Checklist técnico">
+              <ul className="list-inside list-disc text-[10px]">
+                {os.checklistTecnico.map((c) => (
+                  <li key={c.id}>
+                    {c.ok ? "✓" : "○"} {c.label}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {(modelo === "garantia" || modelo === "operacional") && os.garantia.termo && (
+            <Section title={`Garantia (${os.garantia.prazoDias ?? 0} dias)`}>
               <p className="whitespace-pre-line text-[10px]">{os.garantia.termo}</p>
+            </Section>
+          )}
+
+          {modelo === "operacional" && os.garantiasOperacionais && os.garantiasOperacionais.length > 0 && (
+            <Section title="Garantias registradas (banco)">
+              <ul className="space-y-1 text-[10px]">
+                {os.garantiasOperacionais.map((g) => (
+                  <li key={g.id}>
+                    {g.status} · {g.prazoDias}d · {dt(g.dataInicio)} → {dt(g.dataFim)}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+
+          {modelo === "operacional" && (
+            <Section title="Retirada">
+              {os.retirada?.confirmado ? (
+                <div className="text-[10px]">
+                  <div>Confirmado: sim</div>
+                  <div>Por: {os.retirada.retiradoPor ?? "—"}</div>
+                  <div>Em: {os.retirada.retiradoEm ? dt(os.retirada.retiradoEm) : "—"}</div>
+                  {os.retirada.observacao && <div>Obs.: {os.retirada.observacao}</div>}
+                  {os.retirada.assinaturaTexto && <div>Assinatura: {os.retirada.assinaturaTexto}</div>}
+                </div>
+              ) : (
+                <div className="text-[10px] text-muted-foreground">Retirada ainda não confirmada.</div>
+              )}
             </Section>
           )}
 
           <Section title="Termos gerais">
             <ul className="list-inside list-disc text-[10px] text-muted-foreground">
-              <li>Equipamento não retirado em 90 dias será considerado abandonado.</li>
-              <li>A loja não se responsabiliza por dados não previamente comunicados.</li>
-              <li>Garantia válida apenas mediante apresentação desta OS.</li>
+              <li>Equipamento não retirado em 90 dias poderá ser considerado abandonado, conforme política da loja.</li>
+              <li>A loja não se responsabiliza por dados não comunicados previamente.</li>
+              <li>Este documento é operacional e não substitui nota fiscal.</li>
             </ul>
           </Section>
 
@@ -146,9 +270,14 @@ export function ImpressaoModal({ os, open, onOpenChange, modeloInicial = "entrad
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
-          <Button onClick={() => window.print()} className="gap-2">
+        <div className="no-print mt-4 flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Fechar
+          </Button>
+          <Button variant="outline" className="gap-2" onClick={() => void handleCopy()}>
+            <Copy className="h-4 w-4" /> Copiar resumo
+          </Button>
+          <Button onClick={() => void handlePrint()} className="gap-2">
             <Printer className="h-4 w-4" /> Imprimir
           </Button>
         </div>

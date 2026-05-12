@@ -4,6 +4,7 @@ import type { Prisma } from "@/generated/prisma"
 import type { OrdemServico, OSStatus } from "@/types/os"
 import { prisma, withPrismaSafe } from "@/lib/prisma"
 import { hydrateOSRows, type PrismaOSRow } from "@/lib/operacoes/services/hydration-service"
+import { expirarGarantiasVencidas } from "@/lib/operacoes/services/garantia-operacional-service"
 
 /** Payload lido do Prisma + hidratação (mesmo shape usado pelo Operações HUB). */
 export type OrdemServicoLeitura = OrdemServico & { operacaoStatus?: OSStatus }
@@ -40,6 +41,18 @@ type DbOrdemRow = {
     precoUnitario: number
     produtoId: string | null
   }[]
+  garantiasOperacionais?: {
+    id: string
+    storeId: string
+    ordemServicoId: string
+    prazoDias: number
+    cobertura: string
+    observacoes: string
+    dataInicio: Date
+    dataFim: Date
+    status: string
+    createdAt: Date
+  }[]
 }
 
 function mapRows(rows: DbOrdemRow[]): PrismaOSRow[] {
@@ -66,6 +79,7 @@ function mapRows(rows: DbOrdemRow[]): PrismaOSRow[] {
             produtoId: it.produtoId ?? null,
           }))
         : undefined,
+    garantiasOperacionais: r.garantiasOperacionais,
   }))
 }
 
@@ -112,13 +126,16 @@ export async function getOrdem(lojaId: string, osId: string): Promise<OrdemServi
   if (!storeId || !id) return null
 
   const row = await withPrismaSafe(
-    (db) =>
-      db.ordemServico.findFirst({
+    async (db) => {
+      await expirarGarantiasVencidas(db, { storeId, ordemServicoId: id })
+      return db.ordemServico.findFirst({
         where: { id, storeId },
         include: {
           itens: { orderBy: { id: "asc" } },
+          garantiasOperacionais: { orderBy: { createdAt: "desc" } },
         },
-      }),
+      })
+    },
     null as (DbOrdemRow & { id: string }) | null,
   )
 

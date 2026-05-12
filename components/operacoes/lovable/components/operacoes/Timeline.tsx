@@ -4,6 +4,7 @@ import {
   Ban,
   CheckCircle2,
   FileText,
+  ListChecks,
   MessageSquare,
   MinusCircle,
   Paperclip,
@@ -11,11 +12,13 @@ import {
   PlusCircle,
   PackageCheck,
   PackageX,
+  Printer,
   Receipt,
   RefreshCw,
   ShieldCheck,
   Stethoscope,
   Truck,
+  UserCheck,
   UserPlus,
   XCircle,
 } from "lucide-react";
@@ -63,6 +66,10 @@ const ICON: Record<EventoTipo, typeof FileText> = {
   mensagem_interna: MessageSquare,
   peca_adicionada: FileText,
   garantia_acionada: ShieldCheck,
+  garantia_gerada: ShieldCheck,
+  checklist_finalizado: ListChecks,
+  retirada_confirmada: UserCheck,
+  documento_impresso: Printer,
   ia_sugestao: Bot,
 };
 
@@ -92,6 +99,10 @@ const COLOR: Partial<Record<EventoTipo, string>> = {
   financeiro_sync_erro: "text-rose-500",
   operacao_cobranca_gerada: "text-emerald-500",
   garantia_acionada: "text-emerald-500",
+  garantia_gerada: "text-emerald-500",
+  checklist_finalizado: "text-sky-500",
+  retirada_confirmada: "text-emerald-600",
+  documento_impresso: "text-muted-foreground",
   ia_sugestao: "text-violet-500",
   mensagem_cliente: "text-sky-500",
 };

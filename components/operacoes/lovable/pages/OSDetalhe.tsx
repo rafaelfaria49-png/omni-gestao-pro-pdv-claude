@@ -14,6 +14,9 @@ import { Timeline } from "@/components/operacoes/Timeline";
 import { OrcamentoPanel } from "@/components/operacoes/OrcamentoPanel";
 import { AnexosPanel } from "@/components/operacoes/AnexosPanel";
 import { ObservacoesPanel } from "@/components/operacoes/ObservacoesPanel";
+import { ChecklistTecnicoPanel } from "@/components/operacoes/ChecklistTecnicoPanel";
+import { RetiradaPanel } from "@/components/operacoes/RetiradaPanel";
+import { GarantiaOperacionalCard } from "@/components/operacoes/GarantiaOperacionalCard";
 import { IASugestaoModal } from "@/components/operacoes/IASugestaoModal";
 import { RetornoGarantiaModal } from "@/components/operacoes/RetornoGarantiaModal";
 import { PortalClienteModal } from "@/components/operacoes/PortalClienteModal";
@@ -284,6 +287,8 @@ export default function OSDetalhe() {
             </section>
           )}
 
+          <ChecklistTecnicoPanel os={os} />
+
           {os.servicosCatalogo && os.servicosCatalogo.length > 0 && (
             <section className="rounded-xl border border-border bg-card p-5">
               <div className="mb-3 text-sm font-semibold">Serviços contratados</div>
@@ -382,6 +387,8 @@ export default function OSDetalhe() {
           )}
 
           <OrcamentoPanel os={os} />
+          <GarantiaOperacionalCard os={os} />
+          <RetiradaPanel os={os} />
           <AnexosPanel os={os} />
         </aside>
       </div>

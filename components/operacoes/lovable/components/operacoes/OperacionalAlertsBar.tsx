@@ -14,6 +14,13 @@ function daysSince(iso: string | undefined): number {
   return Math.max(0, Math.floor((Date.now() - t) / 86400000));
 }
 
+function daysUntil(iso: string | undefined): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return null;
+  return Math.ceil((t - Date.now()) / 86400000);
+}
+
 export function OperacionalAlertsBar({
   os,
   produtosCatalogo = [],
@@ -44,6 +51,43 @@ export function OperacionalAlertsBar({
       const d = daysSince(os.atualizadoEm || os.criadoEm);
       if (d >= 3) {
         out.push({ key: "pronta", tone: "warn", text: `OS pronta há ${d} dias — retirada/entrega pendente.` });
+      }
+      if (!os.retirada?.confirmado) {
+        out.push({ key: "pronta-sem-retirada", tone: "warn", text: "OS pronta — retirada ainda não confirmada." });
+      }
+    }
+
+    if (["em_execucao", "pronta"].includes(st)) {
+      const tech = os.checklistTecnico ?? [];
+      if (tech.length === 0) {
+        out.push({ key: "chk-tech-empty", tone: "warn", text: "Checklist técnico não preenchido — salve na seção técnica." });
+      } else if (tech.some((x) => !x.ok)) {
+        out.push({ key: "chk-tech-inc", tone: "warn", text: "Checklist técnico com itens pendentes." });
+      }
+    }
+
+    if (["em_execucao", "pronta", "entregue", "aprovado", "aguardando_peca"].includes(st) && (os.anexos?.length ?? 0) === 0) {
+      out.push({ key: "sem-anexo", tone: "warn", text: "Nenhum anexo na OS — considere registrar fotos/comprovantes." });
+    }
+
+    const garantias = os.garantiasOperacionais ?? [];
+    if (garantias.some((x) => x.status === "expirada")) {
+      out.push({ key: "gar-db-exp", tone: "danger", text: "Existe registro de garantia operacional expirada no banco." });
+    }
+
+    const gDb = garantias.find((x) => x.status === "ativa");
+    if (gDb) {
+      const left = daysUntil(gDb.dataFim);
+      if (left !== null && left <= 7 && left >= 0) {
+        out.push({ key: "gar-venc", tone: "warn", text: `Garantia operacional (banco) vence em ${left} dia(s).` });
+      }
+    } else if (os.garantia.ativa && os.garantia.fimEm) {
+      const left = daysUntil(os.garantia.fimEm);
+      if (left !== null && left <= 7 && left >= 0) {
+        out.push({ key: "gar-payload", tone: "warn", text: `Garantia (payload) vence em ${left} dia(s).` });
+      }
+      if (left !== null && left < 0) {
+        out.push({ key: "gar-payload-exp", tone: "danger", text: "Garantia (payload) expirada — verifique retorno." });
       }
     }
 

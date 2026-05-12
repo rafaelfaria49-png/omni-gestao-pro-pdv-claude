@@ -1,4 +1,4 @@
-import type { Orcamento, OrdemServico, OSStatus, Servico } from "@/types/os";
+import type { GarantiaOrdemServicoLeitura, Orcamento, OrdemServico, OSStatus, Servico } from "@/types/os";
 import { normalizeOperacaoStatus, prismaStatusToOperacaoStatus } from "@/components/operacoes/lovable/utils/os-status";
 import { asOperacoesPayload } from "@/lib/operacoes/services/os-helpers";
 
@@ -23,6 +23,18 @@ export type PrismaOSRow = {
     quantidade: number;
     precoUnitario: number;
     produtoId: string | null;
+  }[];
+  garantiasOperacionais?: {
+    id: string;
+    storeId: string;
+    ordemServicoId: string;
+    prazoDias: number;
+    cobertura: string;
+    observacoes: string;
+    dataInicio: Date;
+    dataFim: Date;
+    status: string;
+    createdAt: Date;
   }[];
 };
 
@@ -99,6 +111,23 @@ function mergeOrcamentoFromPrismaRow(r: PrismaOSRow, m: OrdemServico): Orcamento
   };
 }
 
+function mapGarantiasOperacionais(
+  rows: NonNullable<PrismaOSRow["garantiasOperacionais"]>,
+): GarantiaOrdemServicoLeitura[] {
+  return rows.map((r) => ({
+    id: r.id,
+    ordemServicoId: r.ordemServicoId,
+    storeId: r.storeId,
+    prazoDias: r.prazoDias,
+    cobertura: r.cobertura,
+    observacoes: r.observacoes,
+    dataInicio: r.dataInicio.toISOString(),
+    dataFim: r.dataFim.toISOString(),
+    status: r.status as GarantiaOrdemServicoLeitura["status"],
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
 function applyPrismaEnrichment<T extends OrdemServico & { operacaoStatus?: OSStatus }>(
   r: PrismaOSRow,
   base: T,
@@ -122,6 +151,9 @@ function applyPrismaEnrichment<T extends OrdemServico & { operacaoStatus?: OSSta
   }
   if (Array.isArray(r.itensPersistidos) && r.itensPersistidos.length > 0) {
     next = { ...next, itensPersistidos: r.itensPersistidos } as T;
+  }
+  if (Array.isArray(r.garantiasOperacionais) && r.garantiasOperacionais.length > 0) {
+    next = { ...next, garantiasOperacionais: mapGarantiasOperacionais(r.garantiasOperacionais) } as T;
   }
   return next;
 }

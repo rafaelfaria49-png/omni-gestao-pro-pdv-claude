@@ -188,9 +188,12 @@ export function OSProvider({ children, initialStoreId }: { children: ReactNode; 
           .then(replaceOS);
       },
       addAnexo: (osId, anexo) => {
-        void osApi
-          .addAnexo(osId, { ...anexo, id: uid("an"), enviadoEm: new Date().toISOString() })
-          .then(replaceOS);
+        const a = anexo as Anexo;
+        const full: Anexo =
+          typeof a.id === "string" && a.id.length > 0
+            ? { ...a, enviadoEm: a.enviadoEm || new Date().toISOString() }
+            : { ...(anexo as Omit<Anexo, "id" | "enviadoEm">), id: uid("an"), enviadoEm: new Date().toISOString() };
+        void osApi.addAnexo(osId, full).then(replaceOS);
       },
       removeAnexo: (osId, anexoId, autor = DEFAULT_AUTOR) => {
         void osApi.removeAnexo(osId, anexoId, autor).then(replaceOS);

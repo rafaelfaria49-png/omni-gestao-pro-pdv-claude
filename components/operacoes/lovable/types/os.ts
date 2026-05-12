@@ -111,7 +111,17 @@ export interface Orcamento {
   observacoes?: string;
 }
 
-export type AnexoTipo = "foto_antes" | "foto_depois" | "video" | "laudo" | "nota" | "outro";
+export type AnexoTipo =
+  | "foto_antes"
+  | "foto_depois"
+  | "foto_defeito"
+  | "video"
+  | "audio"
+  | "laudo"
+  | "nota"
+  | "comprovante"
+  | "documento_tecnico"
+  | "outro";
 
 export interface Anexo {
   id: string;
@@ -173,6 +183,10 @@ export type EventoTipo =
   | "mensagem_interna"
   | "peca_adicionada"
   | "garantia_acionada"
+  | "garantia_gerada"
+  | "checklist_finalizado"
+  | "retirada_confirmada"
+  | "documento_impresso"
   | "ia_sugestao";
 
 export interface EventoTimeline {
@@ -194,6 +208,39 @@ export interface Garantia {
   fimEm?: string;           // calculado
   termo?: string;           // texto/condições
   acionamentos?: number;    // quantas vezes voltou
+}
+
+/** Modo de cálculo do prazo ao registrar garantia na entrega. */
+export type GarantiaOperacionalModo = "catalogo" | "dias_30" | "dias_90" | "personalizada";
+
+export interface GarantiaOrdemServicoLeitura {
+  id: string;
+  ordemServicoId: string;
+  storeId: string;
+  prazoDias: number;
+  cobertura: string;
+  observacoes: string;
+  dataInicio: string;
+  dataFim: string;
+  status: "ativa" | "expirada" | "cancelada";
+  createdAt: string;
+}
+
+/** Checklist técnico de bancada (pós-reparo). */
+export interface ChecklistTecnicoItem {
+  id: string;
+  label: string;
+  ok: boolean;
+}
+
+/** Retirada / conferência na mão do cliente. */
+export interface RetiradaCliente {
+  confirmado: boolean;
+  retiradoPor?: string;
+  retiradoEm?: string;
+  observacao?: string;
+  /** Assinatura em texto (fase simples — sem canvas biométrico). */
+  assinaturaTexto?: string;
 }
 
 export interface ObservacaoTecnica {
@@ -306,6 +353,20 @@ export interface OrdemServico {
     tipo: "consumo" | "restauracao";
     createdAt: string;
   }[];
+
+  /** Modo de prazo da garantia operacional ao entregar (30 / 90 / personalizada / catálogo). */
+  garantiaOperacionalModo?: GarantiaOperacionalModo;
+  /** Dias quando `garantiaOperacionalModo = personalizada`. */
+  garantiaOperacionalPrazoCustom?: number;
+
+  /** Checklist técnico (bancada). */
+  checklistTecnico?: ChecklistTecnicoItem[];
+
+  /** Retirada confirmada pelo cliente. */
+  retirada?: RetiradaCliente;
+
+  /** Garantias persistidas no Prisma (leitura enriquecida). */
+  garantiasOperacionais?: GarantiaOrdemServicoLeitura[];
 }
 
 // ----------------------------------------------------------------------------

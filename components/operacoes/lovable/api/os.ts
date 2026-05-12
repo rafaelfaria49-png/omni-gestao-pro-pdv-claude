@@ -3,13 +3,16 @@
 import { nowIso, uid } from "./_helpers";
 import type {
   Anexo,
+  ChecklistTecnicoItem,
   EventoTimeline,
   EventoTipo,
+  GarantiaOperacionalModo,
   ObservacaoTecnica,
   Orcamento,
   OrdemServico,
   OSStatus,
   PecaUsada,
+  RetiradaCliente,
   Tecnico,
 } from "@/types/os";
 import { reservarPeca } from "./estoque";
@@ -23,6 +26,10 @@ import {
   syncOperacaoItensComOrcamento,
   validateOrcamentoEstoqueAction,
   gerarCobrancaOSAction,
+  salvarChecklistTecnicoOperacaoAction,
+  confirmarRetiradaOperacaoAction,
+  salvarPreferenciaGarantiaOperacionalAction,
+  criarGarantiaOperacionalManualAction,
   type OperacaoHubAcaoInput,
   type GerarCobrancaModo,
   type EstoqueOrcamentoIssue,
@@ -40,6 +47,36 @@ export type { GerarCobrancaModo, EstoqueOrcamentoIssue };
 
 export async function validateOrcamentoEstoque(osId: string): Promise<{ ok: boolean; issues: EstoqueOrcamentoIssue[] }> {
   return validateOrcamentoEstoqueAction(CURRENT_STORE_ID, osId);
+}
+
+export async function salvarChecklistTecnico(
+  osId: string,
+  checklistTecnico: ChecklistTecnicoItem[],
+  autor: string,
+): Promise<OrdemServico> {
+  const updated = await salvarChecklistTecnicoOperacaoAction(CURRENT_STORE_ID, osId, checklistTecnico, autor);
+  return updated as unknown as OrdemServico;
+}
+
+export async function confirmarRetirada(osId: string, input: RetiradaCliente): Promise<OrdemServico> {
+  const updated = await confirmarRetiradaOperacaoAction(CURRENT_STORE_ID, osId, input);
+  return updated as unknown as OrdemServico;
+}
+
+export async function salvarPreferenciaGarantiaOperacional(
+  osId: string,
+  input: { modo: GarantiaOperacionalModo; prazoCustom?: number },
+): Promise<OrdemServico> {
+  const updated = await salvarPreferenciaGarantiaOperacionalAction(CURRENT_STORE_ID, osId, input);
+  return updated as unknown as OrdemServico;
+}
+
+export async function criarGarantiaOperacionalManual(
+  osId: string,
+  input: { prazoDias: number; observacoes?: string },
+): Promise<OrdemServico> {
+  const updated = await criarGarantiaOperacionalManualAction(CURRENT_STORE_ID, osId, input);
+  return updated as unknown as OrdemServico;
 }
 
 export async function gerarCobrancaOS(

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, FileText, ImageIcon, Lock, Receipt, Upload, Video, X } from "lucide-react";
+import { Camera, Download, FileText, ImageIcon, Lock, Music, Receipt, Upload, Video, X } from "lucide-react";
 import type { Anexo, OrdemServico } from "@/types/os";
 import { useOS } from "@/store/osStore";
 import { Button } from "@/components/ui/button";
@@ -7,23 +7,31 @@ import { dt } from "@/lib/os/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { categoriaFromTipo, buildLocalIdbUrl, toCanonicalFromPayload, toPayloadFromCanonical } from "@/components/operacoes/lovable/services/anexos/helpers";
-import { putLocalBlob, deleteLocalBlob } from "@/components/operacoes/lovable/services/anexos/storage";
-import { resolvePreviewUrl, revokePreviewUrlFor, gcPreviewCache } from "@/components/operacoes/lovable/services/anexos/preview";
+import { putLocalBlob, deleteLocalBlob, getLocalBlob } from "@/components/operacoes/lovable/services/anexos/storage";
+import { resolvePreviewUrl, revokePreviewUrlFor, gcPreviewCache, isLocalIdbUrl, localIdbKeyFromUrl } from "@/components/operacoes/lovable/services/anexos/preview";
 
 const TIPO_LABEL: Record<Anexo["tipo"], string> = {
-  foto_antes: "Antes",
-  foto_depois: "Depois",
+  foto_antes: "Foto aparelho",
+  foto_depois: "Foto depois",
+  foto_defeito: "Foto defeito",
   video: "Vídeo",
-  laudo: "Laudo",
+  audio: "Áudio",
+  laudo: "Laudo PDF",
   nota: "Nota fiscal",
+  comprovante: "Comprovante",
+  documento_tecnico: "Doc. técnico",
   outro: "Outro",
 };
 
 const BOTOES: { tipo: Anexo["tipo"]; label: string; icon: typeof Camera; accept: string }[] = [
-  { tipo: "foto_antes", label: "Foto antes", icon: Camera, accept: "image/*" },
+  { tipo: "foto_antes", label: "Foto aparelho", icon: Camera, accept: "image/*" },
+  { tipo: "foto_defeito", label: "Foto defeito", icon: Camera, accept: "image/*" },
   { tipo: "foto_depois", label: "Foto depois", icon: Camera, accept: "image/*" },
   { tipo: "video", label: "Vídeo", icon: Video, accept: "video/*" },
+  { tipo: "audio", label: "Áudio", icon: Music, accept: "audio/*" },
   { tipo: "laudo", label: "Laudo PDF", icon: FileText, accept: "application/pdf" },
+  { tipo: "comprovante", label: "Comprovante", icon: Receipt, accept: "application/pdf,image/*" },
+  { tipo: "documento_tecnico", label: "Doc. técnico", icon: FileText, accept: "application/pdf" },
   { tipo: "nota", label: "Nota fiscal", icon: Receipt, accept: "application/pdf,image/*" },
   { tipo: "outro", label: "Outro", icon: Upload, accept: "*" },
 ];
@@ -119,6 +127,31 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
     toast.success("Anexo removido");
   };
 
+  const handleDownload = async (a: CanonicalAnexoLike, preview: string | null) => {
+    try {
+      if (a.storageProvider === "local-idb" && isLocalIdbUrl(a.url)) {
+        const key = localIdbKeyFromUrl(a.url);
+        const blob = await getLocalBlob(key);
+        if (!blob) {
+          toast.error("Arquivo não encontrado no armazenamento local");
+          return;
+        }
+        const u = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = u;
+        link.download = a.nome || "anexo";
+        link.click();
+        URL.revokeObjectURL(u);
+        toast.success("Download iniciado");
+        return;
+      }
+      const openUrl = preview && preview.length > 0 ? preview : a.url;
+      if (openUrl) window.open(openUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      toast.error("Falha ao baixar anexo");
+    }
+  };
+
   return (
     <div className="rounded-xl border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border p-4">
@@ -172,7 +205,7 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
                   <FileText className="mr-1 h-4 w-4" /> {a.nome}
                 </div>
               )}
-              <div className="absolute inset-x-0 top-0 flex items-center justify-between p-1.5">
+              <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-1 p-1.5">
                 <span className={cn(
                   "rounded-full border px-1.5 py-0.5 text-[9px] font-medium backdrop-blur",
                   a.publico
@@ -181,18 +214,32 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
                 )}>
                   {a.publico ? "Público" : <><Lock className="inline h-2.5 w-2.5" /> Privado</>}
                 </span>
-                <button
-                  type="button"
-                  onClick={(ev) => {
-                    ev.preventDefault();
-                    ev.stopPropagation();
-                    void handleRemove(a);
-                  }}
-                  className="rounded-md border border-border bg-background/40 p-1 text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100"
-                  title="Remover anexo"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={(ev) => {
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      void handleDownload(a, preview);
+                    }}
+                    className="rounded-md border border-border bg-background/40 p-1 text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100"
+                    title="Baixar / abrir"
+                  >
+                    <Download className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(ev) => {
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      void handleRemove(a);
+                    }}
+                    className="rounded-md border border-border bg-background/40 p-1 text-muted-foreground opacity-0 backdrop-blur transition-opacity group-hover:opacity-100"
+                    title="Remover anexo"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
               </div>
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-1.5">
                 <div className="text-[10px] font-medium text-white">{TIPO_LABEL[a.tipo]}</div>

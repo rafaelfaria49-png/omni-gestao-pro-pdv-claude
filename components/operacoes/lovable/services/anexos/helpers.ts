@@ -2,9 +2,9 @@ import type { Anexo, AnexoTipo } from "@/types/os";
 import type { AnexoCategoria, CanonicalAnexo, StorageProviderId } from "./types";
 
 export function categoriaFromTipo(tipo: AnexoTipo): AnexoCategoria {
-  if (tipo === "foto_antes" || tipo === "foto_depois") return "equipamento";
-  if (tipo === "laudo") return "diagnostico";
-  if (tipo === "nota") return "comprovante";
+  if (tipo === "foto_antes" || tipo === "foto_depois" || tipo === "foto_defeito") return "equipamento";
+  if (tipo === "laudo" || tipo === "documento_tecnico") return "diagnostico";
+  if (tipo === "nota" || tipo === "comprovante" || tipo === "audio") return "comprovante";
   if (tipo === "video") return "bancada";
   return "outros";
 }

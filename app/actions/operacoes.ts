@@ -4,17 +4,20 @@ import { prisma, withPrismaSafe } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import type { Prisma } from "@/generated/prisma";
 import type {
+  ChecklistTecnicoItem,
   EventoTimeline,
   Garantia,
+  GarantiaOperacionalModo,
   Orcamento,
   OrdemServico,
   OSStatus,
   ObservacaoTecnica,
   PecaUsada,
+  RetiradaCliente,
   Servico,
 } from "@/types/os";
 import type { Venda, VendaStatus, VendaOrigem } from "@/types/venda";
-import { snapshotGarantia } from "@/lib/os/garantia";
+import { snapshotGarantia, snapshotGarantiaOperacional } from "@/lib/os/garantia";
 import { cancelContaReceberFromOS, upsertContaReceberFromOS } from "@/lib/financeiro/adapters/os-faturamento";
 import { asOperacoesPayload, nowIso } from "@/lib/operacoes/services/os-helpers";
 import { listOrdens as listOrdensRead } from "@/app/actions/ordens";
@@ -23,7 +26,7 @@ import { syncFinanceiroAfterOSPayloadUpdate } from "@/lib/operacoes/services/fin
 import { appendTimelineEvent, makeTimelineEvent } from "@/lib/operacoes/services/timeline-service";
 import { toPrismaStatus } from "@/lib/operacoes/services/status-service";
 import { applyApprovedBudgetPolicy } from "@/lib/operacoes/services/orcamento-policy-service";
-import { applyEstoqueDelta, consumeEstoqueFromOS, restoreEstoqueFromOS } from "@/lib/operacoes/adapters/os-estoque";
+import { applyEstoqueDelta, buildEstoqueMovimentosFromOS, consumeEstoqueFromOS, restoreEstoqueFromOS } from "@/lib/operacoes/adapters/os-estoque";
 import {
   normalizeOperacaoStatus,
   prismaStatusToOperacaoStatus,
@@ -41,7 +44,12 @@ import {
 } from "@/lib/operacoes/services/operacao-hub-flow";
 import { buildFaturamentoFromOrcamento, buildFaturamentoRecusadoOrcamento } from "@/lib/os/faturamento";
 import { syncOrdemServicoDraftItensFromOrcamento, loadOrcamentoFromOsRow } from "@/lib/operacoes/services/os-prisma-itens-sync";
-import { buildEstoqueMovimentosFromOS } from "@/lib/operacoes/adapters/os-estoque";
+import {
+  cancelarGarantiasAtivasOrdem,
+  criarGarantiaOrdemServicoDb,
+  expirarGarantiasVencidas,
+  possuiGarantiaAtiva,
+} from "@/lib/operacoes/services/garantia-operacional-service";
 
 export type OSPrioridade = "baixa" | "media" | "alta" | "critica";
 
@@ -181,24 +189,18 @@ export async function updateOSStatus(
     const entregueEm = next.entregueEm ?? nowIso();
     next.entregueEm = entregueEm;
 
-    const snap = snapshotGarantia(next, entregueEm);
+    const snap = snapshotGarantiaOperacional(next, entregueEm);
     if (snap?.prazoDias && snap.prazoDias > 0) {
       next.garantia = snap;
-
-      const ev: EventoTimeline = {
-        id: `ev_${Date.now()}`,
-        tipo: "garantia_acionada",
-        autor: "Sistema",
-        autorTipo: "sistema",
-        conteudo: `Garantia vinculada (${snap.prazoDias} dias).`,
-        criadoEm: nowIso(),
-      };
-      next.timeline = [...(next.timeline ?? []), ev];
     }
   }
 
   if (options?.appendTimeline?.length) {
     next.timeline = [...(next.timeline ?? []), ...options.appendTimeline];
+  }
+
+  if (currentEff === "entregue" && effective !== "entregue") {
+    await cancelarGarantiasAtivasOrdem(prisma, { storeId, ordemServicoId: osId });
   }
 
   await prisma.ordemServico.update({
@@ -238,6 +240,30 @@ export async function updateOSStatus(
         osId,
         ev: makeTimelineEvent("estoque_sync_erro", "Falha ao consumir estoque real ao finalizar a OS.", { error: r.error }),
       });
+    }
+  }
+
+  if (effective === "entregue" && next.garantia?.ativa && (next.garantia.prazoDias ?? 0) > 0) {
+    try {
+      await expirarGarantiasVencidas(prisma, { storeId, ordemServicoId: osId });
+      const created = await criarGarantiaOrdemServicoDb(prisma, {
+        storeId,
+        ordemServicoId: osId,
+        garantia: next.garantia as Garantia,
+      });
+      if (created) {
+        await appendTimelineEvent<OperacoesOSPayload>(prisma, {
+          storeId,
+          osId,
+          ev: makeTimelineEvent(
+            "garantia_gerada",
+            `Garantia operacional registrada (${created.prazoDias} dias).`,
+            { garantiaId: created.id },
+          ),
+        });
+      }
+    } catch {
+      // Não quebra transição de status se persistência de garantia falhar.
     }
   }
 
@@ -721,12 +747,180 @@ export async function gerarCobrancaOSAction(
     criadoEm: nowIso(),
   };
 
-  return updateOSPayload(storeId, osId, {
+  const patched = await updateOSPayload(storeId, osId, {
     faturamentoModoCobranca: input.modo,
     faturamentoParcelas: parcelas,
     faturamentoFormaPagamento: formaPagamento,
     timeline: [...tl, ev],
   } as Partial<OperacoesOSPayload>);
+
+  const stAfter = normalizeOperacaoStatus(patched.status);
+  if (stAfter === "entregue" && patched.garantia?.ativa && (patched.garantia.prazoDias ?? 0) > 0) {
+    try {
+      await expirarGarantiasVencidas(prisma, { storeId, ordemServicoId: osId });
+      const has = await possuiGarantiaAtiva(prisma, { storeId, ordemServicoId: osId });
+      if (!has) {
+        const created = await criarGarantiaOrdemServicoDb(prisma, {
+          storeId,
+          ordemServicoId: osId,
+          garantia: patched.garantia as Garantia,
+        });
+        if (created) {
+          await appendTimelineEvent<OperacoesOSPayload>(prisma, {
+            storeId,
+            osId,
+            ev: makeTimelineEvent(
+              "garantia_gerada",
+              `Garantia operacional sincronizada (${created.prazoDias} dias) após registro de cobrança.`,
+              { garantiaId: created.id },
+            ),
+          });
+        }
+      }
+    } catch {
+      // Cobrança já persistida; falha de garantia não reverte financeiro.
+    }
+  }
+
+  const refreshed = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const out = asOperacoesPayload<OperacoesOSPayload>(refreshed?.payload as unknown);
+  if (!out) return patched;
+  return out;
+}
+
+export async function salvarChecklistTecnicoOperacaoAction(
+  storeId: string,
+  osId: string,
+  checklistTecnico: ChecklistTecnicoItem[],
+  autor = "Operador",
+): Promise<OperacoesOSPayload> {
+  const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const current = asOperacoesPayload<OperacoesOSPayload>(existing?.payload as unknown);
+  if (!current) throw new Error("OS não encontrada");
+  const prev = Array.isArray(current.checklistTecnico) ? current.checklistTecnico : [];
+  const allOk = checklistTecnico.length > 0 && checklistTecnico.every((x) => x.ok);
+  const wasAllOk = prev.length > 0 && prev.every((x) => x.ok);
+  const tl = readTimelinePayload(current);
+  const timeline =
+    allOk && !wasAllOk
+      ? [
+          ...tl,
+          makeTimelineEvent("checklist_finalizado", `Checklist técnico concluído (${checklistTecnico.length} itens).`, {
+            autor,
+          }),
+        ]
+      : tl;
+  return updateOSPayload(storeId, osId, { checklistTecnico, timeline } as Partial<OperacoesOSPayload>);
+}
+
+export async function confirmarRetiradaOperacaoAction(
+  storeId: string,
+  osId: string,
+  input: RetiradaCliente,
+  autor = "Operador",
+): Promise<OperacoesOSPayload> {
+  const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const current = asOperacoesPayload<OperacoesOSPayload>(existing?.payload as unknown);
+  if (!current) throw new Error("OS não encontrada");
+  const tl = readTimelinePayload(current);
+  const retirada: RetiradaCliente = {
+    confirmado: Boolean(input.confirmado),
+    retiradoPor: input.retiradoPor?.trim() || undefined,
+    retiradoEm: input.confirmado ? (input.retiradoEm ?? nowIso()) : undefined,
+    observacao: input.observacao?.trim() || undefined,
+    assinaturaTexto: input.assinaturaTexto?.trim() || undefined,
+  };
+  const nome = retirada.retiradoPor?.trim();
+  const timeline = input.confirmado
+    ? [
+        ...tl,
+        makeTimelineEvent(
+          "retirada_confirmada",
+          nome ? `Retirada confirmada por ${nome}.` : "Retirada confirmada.",
+          { autor },
+        ),
+      ]
+    : tl;
+  return updateOSPayload(storeId, osId, { retirada, timeline } as Partial<OperacoesOSPayload>);
+}
+
+export async function registrarDocumentoImpressoAction(
+  storeId: string,
+  osId: string,
+  autor = "Operador",
+): Promise<void> {
+  await appendTimelineEvent<OperacoesOSPayload>(prisma, {
+    storeId,
+    osId,
+    ev: makeTimelineEvent("documento_impresso", "Documento operacional impresso ou copiado.", { autor }),
+  });
+  revalidatePath("/dashboard/operacoes-v2");
+}
+
+export async function salvarPreferenciaGarantiaOperacionalAction(
+  storeId: string,
+  osId: string,
+  input: { modo: GarantiaOperacionalModo; prazoCustom?: number },
+): Promise<OperacoesOSPayload> {
+  return updateOSPayload(storeId, osId, {
+    garantiaOperacionalModo: input.modo,
+    garantiaOperacionalPrazoCustom: input.modo === "personalizada" ? input.prazoCustom : undefined,
+  } as Partial<OperacoesOSPayload>);
+}
+
+export async function criarGarantiaOperacionalManualAction(
+  storeId: string,
+  osId: string,
+  input: { prazoDias: number; observacoes?: string },
+  autor = "Operador",
+): Promise<OperacoesOSPayload> {
+  const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const current = asOperacoesPayload<OperacoesOSPayload>(existing?.payload as unknown);
+  if (!current) throw new Error("OS não encontrada");
+  const st = normalizeOperacaoStatus(current.status);
+  if (!["pronta", "entregue"].includes(st)) {
+    throw new Error("Garantia manual disponível apenas com OS pronta ou entregue.");
+  }
+  const dias = Math.min(3650, Math.max(1, Math.trunc(Number(input.prazoDias))));
+  const inicio = current.entregueEm ?? nowIso();
+  const fim = new Date(inicio);
+  fim.setDate(fim.getDate() + dias);
+  const garantia: Garantia = {
+    ...(current.garantia ?? { ativa: false }),
+    ativa: true,
+    prazoDias: dias,
+    inicioEm: inicio,
+    fimEm: fim.toISOString(),
+    termo: current.garantia?.termo ?? `Garantia operacional de ${dias} dias (registro manual).`,
+  };
+  await updateOSPayload(storeId, osId, { garantia } as Partial<OperacoesOSPayload>);
+  try {
+    await expirarGarantiasVencidas(prisma, { storeId, ordemServicoId: osId });
+    const created = await criarGarantiaOrdemServicoDb(prisma, {
+      storeId,
+      ordemServicoId: osId,
+      garantia,
+      observacoes: input.observacoes,
+    });
+    if (created) {
+      await appendTimelineEvent<OperacoesOSPayload>(prisma, {
+        storeId,
+        osId,
+        ev: makeTimelineEvent(
+          "garantia_gerada",
+          `Garantia operacional registrada manualmente (${created.prazoDias} dias).`,
+          { garantiaId: created.id, autor },
+        ),
+      });
+    }
+  } catch {
+    // Payload já atualizado; persistência de linha em garantia é best-effort.
+  }
+  const refreshed = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
+  const out = asOperacoesPayload<OperacoesOSPayload>(refreshed?.payload as unknown);
+  if (!out) throw new Error("OS não encontrada");
+  revalidatePath("/dashboard/operacoes-v2");
+  return out;
 }
 
 // ── Vendas (para o HUB de Operações) ─────────────────────────────────────────
