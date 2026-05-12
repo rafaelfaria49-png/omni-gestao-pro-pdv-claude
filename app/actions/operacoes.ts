@@ -9,6 +9,7 @@ import type {
   Orcamento,
   OrdemServico,
   OSStatus,
+  ObservacaoTecnica,
   PecaUsada,
   Servico,
 } from "@/types/os";
@@ -27,6 +28,18 @@ import {
   normalizeOperacaoStatus,
   prismaStatusToOperacaoStatus,
 } from "@/components/operacoes/lovable/utils/os-status";
+import {
+  assertOperacaoStatusTransition,
+  type OperacaoTransitionOptions,
+  assertOrcamentoAprovavel,
+  assertOrcamentoRecusavel,
+  assertPodeAguardarPeca,
+  assertPodeEnviarOrcamento,
+  assertPodeIniciarDiagnostico,
+  assertPodeMarcarPronta,
+  readTimelinePayload,
+} from "@/lib/operacoes/services/operacao-hub-flow";
+import { buildFaturamentoFromOrcamento, buildFaturamentoRecusadoOrcamento } from "@/lib/os/faturamento";
 
 export type OSPrioridade = "baixa" | "media" | "alta" | "critica";
 
@@ -140,7 +153,8 @@ export async function createOS(
 export async function updateOSStatus(
   storeId: string,
   osId: string,
-  status: OSStatus
+  status: OSStatus,
+  options?: OperacaoTransitionOptions & { appendTimeline?: EventoTimeline[] },
 ): Promise<OperacoesOSPayload> {
   const existing = await prisma.ordemServico.findFirst({
     where: { id: osId, storeId },
@@ -151,14 +165,17 @@ export async function updateOSStatus(
   const current = asOperacoesPayload<OperacoesOSPayload>(existing.payload as unknown);
   if (!current) throw new Error("OS sem payload (incompatível)");
 
+  const currentEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
   const effective = normalizeOperacaoStatus(status);
+  assertOperacaoStatusTransition(currentEff, effective, options);
+
   const next: OperacoesOSPayload = {
     ...(current as OperacoesOSPayload),
     status: effective,
     operacaoStatus: effective,
     atualizadoEm: nowIso(),
   };
-  if (status === "entregue") {
+  if (effective === "entregue") {
     const entregueEm = next.entregueEm ?? nowIso();
     next.entregueEm = entregueEm;
 
@@ -178,6 +195,10 @@ export async function updateOSStatus(
     }
   }
 
+  if (options?.appendTimeline?.length) {
+    next.timeline = [...(next.timeline ?? []), ...options.appendTimeline];
+  }
+
   await prisma.ordemServico.update({
     where: { id: osId },
     data: { status: toPrismaStatus(effective), payload: next as unknown as Prisma.InputJsonValue },
@@ -185,7 +206,7 @@ export async function updateOSStatus(
 
   // Restauração automática do estoque quando a OS sai de "entregue" ou é cancelada.
   // Importante: falhas NÃO podem quebrar a transição de status.
-  if ((current as OperacoesOSPayload).status === "entregue" && effective !== "entregue") {
+  if (normalizeOperacaoStatus((current as OperacoesOSPayload).status) === "entregue" && effective !== "entregue") {
     const r = await restoreEstoqueFromOS({ storeId, osId, motivo: "automatico" });
     if (!r.ok) {
       await appendTimelineEvent<OperacoesOSPayload>(prisma, {
@@ -207,7 +228,7 @@ export async function updateOSStatus(
 
   // Consumo real de estoque (idempotente) apenas quando a OS vira entregue.
   // Importante: falhas NÃO podem quebrar a transição de status.
-  if (status === "entregue") {
+  if (effective === "entregue") {
     const r = await consumeEstoqueFromOS({ storeId, osId, osPayload: next as unknown as OrdemServico });
     if (!r.ok) {
       await appendTimelineEvent<OperacoesOSPayload>(prisma, {
@@ -225,7 +246,8 @@ export async function updateOSStatus(
 export async function updateOSPayload(
   storeId: string,
   osId: string,
-  patch: Partial<OperacoesOSPayload>
+  patch: Partial<OperacoesOSPayload>,
+  transitionOpts?: OperacaoTransitionOptions,
 ): Promise<OperacoesOSPayload> {
   const existing = await prisma.ordemServico.findFirst({
     where: { id: osId, storeId },
@@ -249,9 +271,25 @@ export async function updateOSPayload(
     makeTimelineEvent,
   });
 
+  const nextEff = normalizeOperacaoStatus((nextWithPolicy as OperacoesOSPayload).status);
+  const curEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
+  if (nextEff !== curEff) {
+    assertOperacaoStatusTransition(curEff, nextEff, transitionOpts);
+  }
+
+  const prismaSt = toPrismaStatus(nextEff);
+  const rowUpdate: Prisma.OrdemServicoUpdateInput = {
+    payload: nextWithPolicy as unknown as Prisma.InputJsonValue,
+    status: prismaSt,
+  };
+  const orcTotal = (nextWithPolicy as OperacoesOSPayload).orcamento?.total;
+  if (typeof orcTotal === "number" && Number.isFinite(orcTotal)) {
+    rowUpdate.valorTotal = orcTotal;
+  }
+
   await prisma.ordemServico.update({
     where: { id: osId },
-    data: { payload: nextWithPolicy as unknown as Prisma.InputJsonValue },
+    data: rowUpdate,
   });
 
   // Delta de estoque após revisão de orçamento aprovado (se já consumiu estoque real e ainda não restaurou).
@@ -281,6 +319,292 @@ export async function updateOSPayload(
 
   revalidatePath("/dashboard/operacoes-v2");
   return nextWithPolicy;
+}
+
+function newTimelineId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `ev_${Date.now()}`;
+}
+
+function recalcularOrcamentoTotals(o: Orcamento): Orcamento {
+  const pecasSum = o.pecas.reduce(
+    (s, p) => s + Math.max(0, p.quantidade * p.valorUnitario - (p.desconto ?? 0)),
+    0,
+  );
+  const servSum = o.servicos.reduce((s, x) => s + Math.max(0, x.valor - (x.desconto ?? 0)), 0);
+  const total = Math.max(0, pecasSum + servSum - o.desconto);
+  return { ...o, total, atualizadoEm: nowIso() };
+}
+
+export type OperacaoHubAcaoInput =
+  | { kind: "iniciar_diagnostico" }
+  | { kind: "enviar_orcamento" }
+  | { kind: "aprovar_orcamento" }
+  | { kind: "reprovar_orcamento"; motivo?: string }
+  | { kind: "iniciar_servico"; iniciarSemAprovacaoConfirmado?: boolean }
+  | { kind: "aguardar_peca" }
+  | { kind: "marcar_pronta" }
+  | { kind: "entregar_cliente" }
+  | { kind: "cancelar"; motivo?: string }
+  | { kind: "adicionar_observacao"; texto: string; interna?: boolean };
+
+/**
+ * Ações operacionais seguras do Operações HUB (Fase 2): valida fluxo, atualiza payload/timeline e sincroniza status Prisma.
+ */
+export async function applyOperacaoHubAcao(
+  storeId: string,
+  osId: string,
+  acao: OperacaoHubAcaoInput,
+  autor = "Operador",
+): Promise<OperacoesOSPayload> {
+  const existing = await prisma.ordemServico.findFirst({
+    where: { id: osId, storeId },
+    select: { payload: true },
+  });
+  if (!existing?.payload) throw new Error("OS não encontrada");
+
+  const base = asOperacoesPayload<OperacoesOSPayload>(existing.payload as unknown);
+  if (!base) throw new Error("OS sem payload (incompatível)");
+  const current = base as OperacoesOSPayload;
+  const st = normalizeOperacaoStatus(current.status);
+  const tl = readTimelinePayload(current);
+
+  switch (acao.kind) {
+    case "iniciar_diagnostico": {
+      assertPodeIniciarDiagnostico(current);
+      assertOperacaoStatusTransition(st, "diagnostico");
+      const ev: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "diagnostico_registrado",
+        titulo: "Diagnóstico",
+        autor,
+        autorTipo: "usuario",
+        conteudo: "Diagnóstico iniciado.",
+        criadoEm: nowIso(),
+      };
+      return updateOSPayload(storeId, osId, {
+        status: "diagnostico",
+        operacaoStatus: "diagnostico",
+        timeline: [...tl, ev],
+      });
+    }
+    case "enviar_orcamento": {
+      assertPodeEnviarOrcamento(current);
+      const orc = current.orcamento;
+      if (!orc) throw new Error("Crie um orçamento antes de enviar.");
+      assertOperacaoStatusTransition(st, "aguardando_aprovacao");
+      const orcamento = recalcularOrcamentoTotals({
+        ...orc,
+        status: "enviado",
+        enviadoEm: orc.enviadoEm ?? nowIso(),
+      });
+      const ev: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "orcamento_enviado",
+        titulo: "Orçamento",
+        autor,
+        autorTipo: "usuario",
+        conteudo: "Orçamento enviado ao cliente.",
+        criadoEm: nowIso(),
+      };
+      return updateOSPayload(storeId, osId, {
+        orcamento,
+        status: "aguardando_aprovacao",
+        timeline: [...tl, ev],
+      });
+    }
+    case "aprovar_orcamento": {
+      assertOrcamentoAprovavel(current.orcamento);
+      assertOperacaoStatusTransition(st, "aprovado");
+      const orcamento = recalcularOrcamentoTotals({
+        ...current.orcamento!,
+        status: "aprovado",
+        respondidoEm: nowIso(),
+      });
+      const virtual: OrdemServico = { ...(current as unknown as OrdemServico), orcamento, status: "aprovado" };
+      const garantiaSnap = snapshotGarantia(virtual, nowIso());
+      const garantia: Garantia = garantiaSnap ?? (current.garantia ?? { ativa: false });
+      const faturamento = buildFaturamentoFromOrcamento({
+        os: { id: current.id, codigo: current.codigo },
+        orcamento,
+        criadoEm: nowIso(),
+      });
+      const ev1: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "orcamento_aprovado",
+        titulo: "Orçamento aprovado",
+        autor,
+        autorTipo: "usuario",
+        conteudo: "Orçamento aprovado.",
+        criadoEm: nowIso(),
+      };
+      const ev2: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "faturamento_os_pendente",
+        titulo: "Faturamento",
+        autor: "Sistema",
+        autorTipo: "sistema",
+        conteudo: "Orçamento aprovado e faturamento pendente criado.",
+        criadoEm: nowIso(),
+      };
+      return updateOSPayload(storeId, osId, {
+        status: "aprovado",
+        orcamento,
+        garantia,
+        timeline: [...tl, ev1, ev2],
+        ...faturamento,
+      } as Partial<OperacoesOSPayload>);
+    }
+    case "reprovar_orcamento": {
+      assertOrcamentoRecusavel(current.orcamento);
+      assertOperacaoStatusTransition(st, "diagnostico");
+      const orcamento = recalcularOrcamentoTotals({
+        ...current.orcamento!,
+        status: "recusado",
+        respondidoEm: nowIso(),
+      });
+      const faturamento = buildFaturamentoRecusadoOrcamento();
+      const ev1: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "orcamento_recusado",
+        titulo: "Orçamento recusado",
+        autor,
+        autorTipo: "usuario",
+        conteudo: acao.motivo?.trim() ? acao.motivo.trim() : "Orçamento recusado.",
+        criadoEm: nowIso(),
+      };
+      const ev2: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "faturamento_os_cancelado",
+        titulo: "Faturamento",
+        autor: "Sistema",
+        autorTipo: "sistema",
+        conteudo: "Orçamento recusado; faturamento cancelado.",
+        criadoEm: nowIso(),
+      };
+      return updateOSPayload(storeId, osId, {
+        status: "diagnostico",
+        orcamento,
+        timeline: [...tl, ev1, ev2],
+        ...faturamento,
+      } as Partial<OperacoesOSPayload>);
+    }
+    case "iniciar_servico": {
+      const transitionOpts: OperacaoTransitionOptions | undefined = acao.iniciarSemAprovacaoConfirmado
+        ? { allowIniciarServicoSemAprovacao: true }
+        : undefined;
+      assertOperacaoStatusTransition(st, "em_execucao", transitionOpts);
+      const ev: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "servico_iniciado",
+        titulo: "Serviço em execução",
+        autor,
+        autorTipo: "usuario",
+        conteudo: acao.iniciarSemAprovacaoConfirmado
+          ? "Serviço iniciado sem aprovação formal (confirmado pelo operador)."
+          : "Serviço iniciado após aprovação do orçamento.",
+        criadoEm: nowIso(),
+      };
+      return updateOSPayload(
+        storeId,
+        osId,
+        {
+          status: "em_execucao",
+          timeline: [...tl, ev],
+        },
+        transitionOpts,
+      );
+    }
+    case "aguardar_peca": {
+      assertPodeAguardarPeca(current);
+      assertOperacaoStatusTransition(st, "aguardando_peca");
+      const ev: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "mudanca_status",
+        titulo: "Aguardando peça",
+        autor,
+        autorTipo: "usuario",
+        conteudo: "Serviço pausado aguardando peça.",
+        criadoEm: nowIso(),
+      };
+      return updateOSPayload(storeId, osId, {
+        status: "aguardando_peca",
+        timeline: [...tl, ev],
+      });
+    }
+    case "marcar_pronta": {
+      assertPodeMarcarPronta(current);
+      assertOperacaoStatusTransition(st, "pronta");
+      const ev: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "servico_concluido",
+        titulo: "Serviço concluído",
+        autor,
+        autorTipo: "usuario",
+        conteudo: "OS marcada como pronta para retirada.",
+        criadoEm: nowIso(),
+      };
+      return updateOSPayload(storeId, osId, {
+        status: "pronta",
+        timeline: [...tl, ev],
+      });
+    }
+    case "entregar_cliente": {
+      assertOperacaoStatusTransition(st, "entregue");
+      const ev: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "entrega_cliente",
+        titulo: "Entrega",
+        autor,
+        autorTipo: "usuario",
+        conteudo: "Equipamento entregue ao cliente.",
+        criadoEm: nowIso(),
+      };
+      return updateOSStatus(storeId, osId, "entregue", { appendTimeline: [ev] });
+    }
+    case "cancelar": {
+      assertOperacaoStatusTransition(st, "cancelada");
+      const ev: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "os_cancelada",
+        titulo: "Cancelamento",
+        autor,
+        autorTipo: "usuario",
+        conteudo: acao.motivo?.trim() ? `OS cancelada. Motivo: ${acao.motivo.trim()}` : "OS cancelada.",
+        criadoEm: nowIso(),
+      };
+      return updateOSStatus(storeId, osId, "cancelada", { appendTimeline: [ev] });
+    }
+    case "adicionar_observacao": {
+      const txt = acao.texto.trim();
+      if (!txt) throw new Error("Digite uma observação.");
+      if (st === "entregue") throw new Error("OS entregue não aceita novas observações por este fluxo.");
+      const obs: ObservacaoTecnica = {
+        id: `ob_${newTimelineId()}`,
+        autor,
+        conteudo: txt,
+        interna: acao.interna ?? false,
+        criadoEm: nowIso(),
+      };
+      const observacoes = [...(current.observacoes ?? []), obs];
+      const ev: EventoTimeline = {
+        id: newTimelineId(),
+        tipo: "observacao",
+        titulo: obs.interna ? "Observação interna" : "Observação",
+        autor,
+        autorTipo: "usuario",
+        conteudo: obs.interna ? "Observação interna registrada." : "Observação registrada.",
+        criadoEm: nowIso(),
+      };
+      return updateOSPayload(storeId, osId, {
+        observacoes,
+        timeline: [...tl, ev],
+      });
+    }
+    default: {
+      const k = (acao as { kind?: string }).kind ?? "desconhecida";
+      throw new Error(`Ação não suportada: ${k}`);
+    }
+  }
 }
 
 // ── Vendas (para o HUB de Operações) ─────────────────────────────────────────

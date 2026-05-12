@@ -5,8 +5,10 @@ import {
   ShieldCheck, Tag, User, Wrench,
 } from "lucide-react";
 import { OperacoesLayout } from "@/components/operacoes/OperacoesLayout";
+import { OperacaoOsAcaoBar } from "@/components/operacoes/OperacaoOsAcaoBar";
 import { useOS } from "@/store/osStore";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { PrioridadeBadge, SLABadge } from "@/components/operacoes/badges";
 import { Timeline } from "@/components/operacoes/Timeline";
 import { OrcamentoPanel } from "@/components/operacoes/OrcamentoPanel";
@@ -18,7 +20,8 @@ import { PortalClienteModal } from "@/components/operacoes/PortalClienteModal";
 import { ImpressaoModal } from "@/components/operacoes/ImpressaoModal";
 import { EtiquetaModal } from "@/components/operacoes/EtiquetaModal";
 import { ModoBancadaModal } from "@/components/operacoes/ModoBancadaModal";
-import { ORIGEM_LABEL, PIPELINE, type OrdemServico, type OSStatus } from "@/types/os";
+import { ORIGEM_LABEL, type OrdemServico } from "@/types/os";
+import { getOperacaoStatusMeta, normalizeOperacaoStatus } from "@/components/operacoes/lovable/utils/os-status";
 import * as osApi from "@/api/os";
 import { brl, dt } from "@/lib/os/format";
 import { cn } from "@/lib/utils";
@@ -32,7 +35,7 @@ const ESTADO_BADGE: Record<string, string> = {
 
 export default function OSDetalhe() {
   const { id = "" } = useParams();
-  const { getOS, moveStatus, updateChecklist, storeId, loading: hubLoading } = useOS();
+  const { getOS, updateChecklist, storeId, loading: hubLoading, refresh } = useOS();
   const fromList = getOS(id);
   /** idle = ainda não resolveu leitura avulsa; loading; done + os */
   const [detailRead, setDetailRead] = useState<
@@ -106,7 +109,8 @@ export default function OSDetalhe() {
     );
   }
 
-  const currentIndex = PIPELINE.findIndex((p) => p.id === os.status);
+  const operacaoSt = normalizeOperacaoStatus(os.status);
+  const operacaoMeta = getOperacaoStatusMeta(operacaoSt);
   const cycle = (s: "ok" | "ruim" | "nao_testado"): "ok" | "ruim" | "nao_testado" =>
     s === "nao_testado" ? "ok" : s === "ok" ? "ruim" : "nao_testado";
 
@@ -139,6 +143,9 @@ export default function OSDetalhe() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className={operacaoMeta.badgeClass}>
+            {operacaoMeta.label}
+          </Badge>
           <PrioridadeBadge value={os.prioridade} />
           <SLABadge prazo={os.sla.prazo} />
           {os.garantia.ativa && (
@@ -173,34 +180,39 @@ export default function OSDetalhe() {
         )}
       </div>
 
-      {/* Pipeline */}
-      <div className="mt-5 flex items-center gap-1 overflow-x-auto rounded-xl border border-border bg-card p-2">
-        {PIPELINE.map((p, i) => {
-          const active = p.id === os.status;
-          const past = i < currentIndex;
-          return (
-            <button
-              key={p.id}
-              onClick={() => {
-                moveStatus(os.id, p.id as OSStatus);
-                toast.success(`Movido para ${p.label}`);
-              }}
-              className={cn(
-                "flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors",
-                active && "bg-primary text-primary-foreground",
-                past && !active && "bg-primary/10 text-primary",
-                !active && !past && "text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {i + 1}. {p.label}
-            </button>
-          );
-        })}
+      <div className="mt-5">
+        <OperacaoOsAcaoBar os={os} onDone={() => void refresh()} />
       </div>
 
       {/* Conteúdo */}
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          <section className="rounded-xl border border-border bg-card p-5">
+            <div className="text-sm font-semibold">Resumo financeiro</div>
+            <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-muted-foreground">Valor orçamento</dt>
+                <dd className="font-medium">{os.orcamento ? brl(os.orcamento.total) : "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Valor total (Prisma)</dt>
+                <dd className="font-medium">
+                  {typeof os.prismaValorTotal === "number" ? brl(os.prismaValorTotal) : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Valor base (Prisma)</dt>
+                <dd className="font-medium">
+                  {typeof os.prismaValorBase === "number" ? brl(os.prismaValorBase) : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Atualizado em</dt>
+                <dd className="font-medium">{dt(os.atualizadoEm)}</dd>
+              </div>
+            </dl>
+          </section>
+
           <section className="rounded-xl border border-border bg-card p-5">
             <div className="text-sm font-semibold">Defeito relatado</div>
             <p className="mt-2 text-sm text-foreground/90">{os.equipamento.defeitoRelatado}</p>
@@ -257,6 +269,19 @@ export default function OSDetalhe() {
           )}
 
           <ObservacoesPanel os={os} />
+
+          <section className="rounded-xl border border-border bg-card">
+            <details className="group">
+              <summary className="cursor-pointer border-b border-border p-4 text-sm font-semibold">
+                Dados do payload (JSON)
+              </summary>
+              <div className="max-h-72 overflow-auto p-4">
+                <pre className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-muted-foreground">
+                  {JSON.stringify(os, null, 2)}
+                </pre>
+              </div>
+            </details>
+          </section>
 
           <section className="rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border p-4">

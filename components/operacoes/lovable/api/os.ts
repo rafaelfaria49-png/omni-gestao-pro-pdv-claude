@@ -14,7 +14,7 @@ import type {
 } from "@/types/os";
 import { reservarPeca } from "./estoque";
 import { criarVendaDeOS } from "./vendas";
-import { createOS, listOS, updateOSPayload, updateOSStatus } from "@/app/actions/operacoes";
+import { createOS, listOS, updateOSPayload, updateOSStatus, applyOperacaoHubAcao, type OperacaoHubAcaoInput } from "@/app/actions/operacoes";
 import { listOrdens as listOrdensPrisma, getOrdem } from "@/app/actions/ordens";
 import { buildFaturamentoFromOrcamento, buildFaturamentoRecusadoOrcamento } from "@/lib/os/faturamento";
 import { snapshotGarantia } from "@/lib/os/garantia";
@@ -203,15 +203,28 @@ export async function criarOS(
 }
 
 export async function moveStatus(osId: string, status: OSStatus, autor: string): Promise<OrdemServico> {
-  // mantém timeline via patch incremental
   const effective = normalizeOperacaoStatus(status);
-  const updated = await updateOSStatus(CURRENT_STORE_ID, osId, effective);
-  const nextTimeline = [
-    ...readTimeline((updated as unknown as { timeline?: unknown }).timeline),
-    newEvent("mudanca_status", autor, "usuario", `Status alterado para "${effective}".`, { para: effective }),
-  ];
-  const patched = await updateOSPayload(CURRENT_STORE_ID, osId, { timeline: nextTimeline } as Partial<OrdemServico>);
-  return patched as unknown as OrdemServico;
+  try {
+    const updated = await updateOSStatus(CURRENT_STORE_ID, osId, effective);
+    const nextTimeline = [
+      ...readTimeline((updated as unknown as { timeline?: unknown }).timeline),
+      newEvent("mudanca_status", autor, "usuario", `Status alterado para "${effective}".`, { para: effective }),
+    ];
+    const patched = await updateOSPayload(CURRENT_STORE_ID, osId, { timeline: nextTimeline } as Partial<OrdemServico>);
+    return patched as unknown as OrdemServico;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Não foi possível alterar o status.";
+    throw new Error(msg);
+  }
+}
+
+export async function runOperacaoHubAcao(
+  osId: string,
+  acao: OperacaoHubAcaoInput,
+  autor?: string,
+): Promise<OrdemServico> {
+  const updated = await applyOperacaoHubAcao(CURRENT_STORE_ID, osId, acao, autor ?? "Operador");
+  return updated as unknown as OrdemServico;
 }
 
 export async function assignTecnico(osId: string, tecnico: Tecnico, autor: string): Promise<OrdemServico> {
@@ -274,7 +287,7 @@ export async function approveOrcamento(osId: string, autor: string): Promise<Ord
     respondidoEm: nowIso(),
   });
 
-  const virtual: OrdemServico = { ...base, orcamento, status: "em_execucao" };
+  const virtual: OrdemServico = { ...base, orcamento, status: "aprovado" };
   const ts = nowIso();
   const garantiaSnap = snapshotGarantia(virtual, ts);
   const garantia = garantiaSnap ?? base.garantia;
@@ -297,7 +310,7 @@ export async function approveOrcamento(osId: string, autor: string): Promise<Ord
   ];
   const patched = await updateOSPayload(CURRENT_STORE_ID, osId, {
     orcamento,
-    status: "em_execucao",
+    status: "aprovado",
     garantia,
     timeline,
     ...faturamento,
@@ -326,6 +339,7 @@ export async function rejectOrcamento(osId: string, autor: string, motivo?: stri
   ];
   const patched = await updateOSPayload(CURRENT_STORE_ID, osId, {
     orcamento,
+    status: "diagnostico",
     timeline,
     ...faturamento,
   } as Partial<OrdemServico>);

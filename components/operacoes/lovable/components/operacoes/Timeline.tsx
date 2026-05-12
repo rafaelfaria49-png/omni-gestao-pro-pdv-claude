@@ -1,6 +1,7 @@
 import {
   Bot,
   Banknote,
+  Ban,
   CheckCircle2,
   FileText,
   MessageSquare,
@@ -13,6 +14,8 @@ import {
   Receipt,
   RefreshCw,
   ShieldCheck,
+  Stethoscope,
+  Truck,
   UserPlus,
   XCircle,
 } from "lucide-react";
@@ -33,6 +36,11 @@ const ICON: Record<EventoTipo, typeof FileText> = {
   orcamento_aprovado_editado_sem_valor: FileText,
   orcamento_aprovado_revisado: RefreshCw,
   orcamento_recusado: XCircle,
+  diagnostico_registrado: Stethoscope,
+  servico_iniciado: PlayCircle,
+  servico_concluido: CheckCircle2,
+  entrega_cliente: Truck,
+  os_cancelada: Ban,
   faturamento_os_pendente: Banknote,
   faturamento_os_cancelado: Banknote,
   faturamento_os_revisado: RefreshCw,
@@ -60,6 +68,11 @@ const ICON: Record<EventoTipo, typeof FileText> = {
 const COLOR: Partial<Record<EventoTipo, string>> = {
   orcamento_aprovado: "text-emerald-500",
   orcamento_recusado: "text-rose-500",
+  diagnostico_registrado: "text-sky-500",
+  servico_iniciado: "text-indigo-500",
+  servico_concluido: "text-emerald-500",
+  entrega_cliente: "text-emerald-600",
+  os_cancelada: "text-rose-600",
   orcamento_aprovado_editado_sem_valor: "text-muted-foreground",
   orcamento_aprovado_revisado: "text-amber-500",
   faturamento_os_pendente: "text-amber-500",
@@ -98,6 +111,9 @@ export function Timeline({ eventos }: { eventos: EventoTimeline[] }) {
                 <span className="font-medium text-foreground">{ev.autor}</span>
                 <span>{dt(ev.criadoEm)}</span>
               </div>
+              {ev.titulo && (
+                <div className="mt-1 text-xs font-semibold text-foreground">{ev.titulo}</div>
+              )}
               <p className="mt-1 text-sm text-foreground/90">{ev.conteudo}</p>
             </div>
           </li>

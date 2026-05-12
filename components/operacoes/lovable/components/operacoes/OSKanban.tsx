@@ -1,6 +1,7 @@
 import { useMemo, useState, type DragEvent } from "react";
 import { useOS } from "@/store/osStore";
 import { PIPELINE, type OSStatus, type OSPrioridade } from "@/types/os";
+import { getOperacaoStatusMeta } from "@/components/operacoes/lovable/utils/os-status";
 import { OSCard } from "./OSCard";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -32,7 +33,7 @@ export function OSKanban() {
       if (fTipo && o.equipamento.tipo !== fTipo) return false;
       if (fSla === "atraso" && slaRestante(o.sla.prazo).status !== "estourado") return false;
       if (fGar === "ativa" && !o.garantia.ativa) return false;
-      if (fAgPeca === "sim" && o.status !== "aguardando_aprovacao") return false;
+      if (fAgPeca === "sim" && !["aguardando_aprovacao", "aguardando_peca"].includes(o.status)) return false;
       return true;
     });
   }, [ordens, fTecnico, fPrioridade, fTipo, fSla, fGar, fAgPeca]);
@@ -50,8 +51,14 @@ export function OSKanban() {
     if (!osId) return;
     const os = ordens.find((o) => o.id === osId);
     if (!os || os.status === status) return;
-    moveStatus(osId, status);
-    toast.success(`${os.codigo} movida para ${status.replace("_", " ")}`);
+    void (async () => {
+      try {
+        await moveStatus(osId, status);
+        toast.success(`${os.codigo} movida para ${getOperacaoStatusMeta(status).label}`);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Não foi possível mover a OS.");
+      }
+    })();
   };
 
   if (loading) {

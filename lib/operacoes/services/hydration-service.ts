@@ -104,6 +104,8 @@ function applyPrismaEnrichment<T extends OrdemServico & { operacaoStatus?: OSSta
     storeId,
     status: effective as unknown as T["status"],
     operacaoStatus: effective,
+    prismaValorBase: r.valorBase,
+    prismaValorTotal: r.valorTotal,
   } as T;
   const orc = mergeOrcamentoFromPrismaRow(r, next as unknown as OrdemServico);
   if (orc) {

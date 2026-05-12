@@ -9,7 +9,9 @@ export type OSStatus =
   | "aberta"
   | "diagnostico"
   | "aguardando_aprovacao"
+  | "aprovado"
   | "em_execucao"
+  | "aguardando_peca"
   | "pronta"
   | "entregue"
   | "cancelada";
@@ -144,6 +146,11 @@ export type EventoTipo =
   | "orcamento_aprovado_editado_sem_valor"
   | "orcamento_aprovado_revisado"
   | "orcamento_recusado"
+  | "diagnostico_registrado"
+  | "servico_iniciado"
+  | "servico_concluido"
+  | "entrega_cliente"
+  | "os_cancelada"
   | "faturamento_os_pendente"
   | "faturamento_os_cancelado"
   | "faturamento_os_revisado"
@@ -170,6 +177,8 @@ export type EventoTipo =
 export interface EventoTimeline {
   id: string;
   tipo: EventoTipo;
+  /** Título curto para exibição na timeline (opcional). */
+  titulo?: string;
   autor: string;            // nome ou "Sistema" / "IA"
   autorTipo: "usuario" | "cliente" | "sistema" | "ia";
   conteudo: string;
@@ -252,6 +261,10 @@ export interface OrdemServico {
   faturamentoValorAnterior?: number;
   faturamentoValorAtual?: number;
 
+  /** Valores persistidos nas colunas Prisma (fonte quando o payload não reflete). */
+  prismaValorBase?: number;
+  prismaValorTotal?: number;
+
   /** Estoque (real) — marcadores/idempotência no payload. */
   estoqueConsumido?: boolean;
   estoqueConsumidoEm?: string;
@@ -285,11 +298,14 @@ export interface OrdemServico {
 
 export const PIPELINE: { id: OSStatus; label: string; descricao: string }[] = [
   { id: "aberta", label: "Aberto", descricao: "OS recém-criada, aguardando triagem" },
-  { id: "diagnostico", label: "Em análise", descricao: "Técnico avaliando o equipamento" },
-  { id: "aguardando_aprovacao", label: "Aguardando peça", descricao: "Aguardando aprovação ou chegada de peça" },
-  { id: "em_execucao", label: "Em reparo", descricao: "Reparo em andamento" },
+  { id: "diagnostico", label: "Diagnóstico", descricao: "Técnico avaliando o equipamento" },
+  { id: "aguardando_aprovacao", label: "Aguardando aprovação", descricao: "Orçamento enviado ou aguardando resposta" },
+  { id: "aprovado", label: "Aprovado", descricao: "Orçamento aprovado; aguardando início do serviço" },
+  { id: "em_execucao", label: "Em execução", descricao: "Reparo em andamento" },
+  { id: "aguardando_peca", label: "Aguardando peça", descricao: "Serviço pausado aguardando peça" },
   { id: "pronta", label: "Pronto", descricao: "Pronto para retirada/entrega" },
   { id: "entregue", label: "Entregue", descricao: "Equipamento devolvido ao cliente" },
+  { id: "cancelada", label: "Cancelada", descricao: "OS encerrada sem conclusão" },
 ];
 
 // ----------------------------------------------------------------------------

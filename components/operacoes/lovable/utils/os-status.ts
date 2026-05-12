@@ -14,7 +14,9 @@ export const OPERACAO_STATUS_PIPELINE: OperacaoStatusCanonico[] = [
   "aberta",
   "diagnostico",
   "aguardando_aprovacao",
+  "aprovado",
   "em_execucao",
+  "aguardando_peca",
   "pronta",
   "entregue",
   "cancelada",
@@ -54,10 +56,19 @@ const META: Record<OperacaoStatusCanonico, OperacaoStatusMeta> = {
   },
   aguardando_aprovacao: {
     id: "aguardando_aprovacao",
-    label: "Aguardando aprovação/peça",
-    description: "Aguardando aprovação do cliente ou chegada de peça",
+    label: "Aguardando aprovação",
+    description: "Orçamento enviado ou aguardando resposta do cliente",
     order: 30,
     badgeClass: "border-amber-500/20 bg-amber-500/10 text-amber-600",
+    prisma: "EmAnalise",
+    final: false,
+  },
+  aprovado: {
+    id: "aprovado",
+    label: "Aprovado",
+    description: "Orçamento aprovado; aguardando início do serviço",
+    order: 35,
+    badgeClass: "border-teal-500/20 bg-teal-500/10 text-teal-600",
     prisma: "EmAnalise",
     final: false,
   },
@@ -67,6 +78,15 @@ const META: Record<OperacaoStatusCanonico, OperacaoStatusMeta> = {
     description: "Reparo em andamento",
     order: 40,
     badgeClass: "border-indigo-500/20 bg-indigo-500/10 text-indigo-600",
+    prisma: "EmAnalise",
+    final: false,
+  },
+  aguardando_peca: {
+    id: "aguardando_peca",
+    label: "Aguardando peça",
+    description: "Serviço pausado aguardando peça",
+    order: 45,
+    badgeClass: "border-amber-500/20 bg-amber-500/10 text-amber-700",
     prisma: "EmAnalise",
     final: false,
   },
@@ -106,7 +126,6 @@ const ALIASES: Record<string, OperacaoStatusCanonico> = {
   novo: "aberta",
   "em_analise": "diagnostico",
   "em-analise": "diagnostico",
-  "aguardando_peca": "aguardando_aprovacao",
   "em_reparo": "em_execucao",
   pronto: "pronta",
   finalizado: "entregue",
@@ -151,8 +170,7 @@ export function canTransitionOperacaoStatus(from: unknown, to: unknown): boolean
   const b = normalizeOperacaoStatus(to);
   if (a === b) return true;
   if (isFinalOperacaoStatus(a)) return false;
-  // regra conservadora: permite avançar na ordem, ou cancelar a qualquer momento
+  // regra conservadora: permite avançar na ordem, ou cancelar a qualquer momento (exceto estados finais já bloqueados acima)
   if (b === "cancelada") return true;
   return META[b].order >= META[a].order;
 }
-
