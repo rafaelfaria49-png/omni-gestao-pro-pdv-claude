@@ -1,5 +1,10 @@
 "use client"
 
+/**
+ * Legado / experimental: shell visual "Neon" sem qualquer import no projeto.
+ * Não faz parte do fluxo em `/dashboard/vendas` nem da Configurações V3; mantido de propósito (sem remover nesta fase).
+ */
+
 import type { KeyboardEvent } from "react"
 import { Barcode, Sparkles, Zap } from "lucide-react"
 import { Badge } from "@/components/ui/badge"

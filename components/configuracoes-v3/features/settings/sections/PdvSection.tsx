@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/configuracoes-v3/components/ui/radio-group";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/components/configuracoes-v3/lib/utils";
 import { ConfigEmpresaProvider } from "@/lib/config-empresa";
@@ -19,59 +20,68 @@ import {
   writeOmnigestaoPdvModoPreferencia,
 } from "@/lib/omnigestao-pdv-modo";
 
-/** Mesma chave que `vendas-pdv.tsx` / `configuracoes-sistema.tsx` (layout classic vs supermercado no navegador). */
+/** Mesma chave que `vendas-pdv.tsx` — layout principal no browser: `classic` | `supermercado`. */
 const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout";
 
 /**
- * Chave em `printerConfig` — preferência de layout V3 (fonte de verdade após salvar).
- * Valores: `classico` | `rapido` | `assistencia` | `supermercado` (legado: `ia` → assistência).
+ * Espelho em `printerConfig` só para compatibilidade com a UI V3 / relatórios.
+ * Valores oficiais gravados: `classico` | `assistencia` | `supermercado`.
+ * Legado lido: `rapido` (tratado como Classic + modo rápido), `ia` → assistência.
+ * O runtime do PDV em `/dashboard/vendas` usa `@omnigestao:pdv-layout`, `omni-pdv-classic-layout` e `omnigestao-pdv-modo`, não este campo isoladamente.
  */
 const V3_PDV_SECTION_CARD_KEY = "v3PdvSectionCard";
 
-type LayoutId = "classico" | "rapido" | "assistencia" | "supermercado";
+/**
+ * Espelho V3 do modo inicial no PDV Clássico/Omni (`normal` | `rapido`).
+ * Runtime: `omnigestao-pdv-modo` + URL `?modo=rapido` quando aplicável.
+ */
+const V3_PDV_CLASSIC_MODO_KEY = "v3PdvClassicModoInicial";
 
-interface PdvLayout {
-  id: LayoutId;
+type PdvFlowId = "classico" | "assistencia" | "supermercado";
+
+type ClassicModoInicial = "normal" | "rapido";
+
+interface PdvFlowOption {
+  id: PdvFlowId;
   name: string;
   description: string;
   icon: React.ElementType;
 }
 
-/** Número fixo de opções de layout na UI (Clássico, Rápido, Assistência, Supermercado). */
-export const PDV_LAYOUTS_COUNT = 4 as const;
+/** Três fluxos oficiais na UI (Classic/Omni, Assistência, Supermercado). Modo rápido e venda completa são internos ao Classic. */
+export const PDV_LAYOUTS_COUNT = 3 as const;
 
-const LAYOUTS: PdvLayout[] = [
-  { id: "classico", name: "PDV Clássico", description: "Layout tradicional com grid de produtos e carrinho lateral.", icon: LayoutGrid },
+const FLOWS: PdvFlowOption[] = [
   {
-    id: "rapido",
-    name: "PDV Rápido",
-    description: "Modo rápido com atalhos e fluxo enxuto.",
-    icon: Zap,
+    id: "classico",
+    name: "PDV Clássico / Omni Classic",
+    description:
+      "Shell principal de vendas (grade, bipe, atalhos). Inclui modo balcão, modo rápido e venda completa no mesmo fluxo — não são PDVs separados.",
+    icon: LayoutGrid,
   },
   {
     id: "assistencia",
     name: "PDV Assistência",
-    description: "Fluxo de balcão para assistência técnica, peças e atendimento.",
+    description: "Fluxo especializado para assistência técnica, peças e atendimento.",
     icon: Wrench,
   },
   {
     id: "supermercado",
     name: "PDV Supermercado",
-    description: "Fluxo dedicado para variedades/supermercado.",
+    description: "Fluxo de alto giro com visão em tabela e painel lateral.",
     icon: Store,
   },
 ];
 
 /**
- * Motor real (rota: `/dashboard/vendas`):
- * - Clássico + Rápido: `PdvClassic` → `PdvOmniClassicShell` (`classicLayoutKind=lovable`); Rápido só liga `isModoRapido` + LS `omnigestao-pdv-modo=rapido`.
+ * Motor real (rota `/dashboard/vendas`):
+ * - Classic/Omni: `PdvClassic` → `PdvOmniClassicShell` com `pdvClassicLayout=lovable`; modo rápido = `isModoRapido` + LS `omnigestao-pdv-modo` (+ query `?modo=rapido`).
  * - Assistência: `PdvClassic` → `PdvAssistenciaEnterprise` (`pdvClassicLayout=services`).
- * - Supermercado: `PdvSupermercado` (layout `classic` vs `supermercado` em `vendas-pdv.tsx`).
+ * - Supermercado: `PdvSupermercado` quando `@omnigestao:pdv-layout=supermercado` (e heurísticas em `vendas-pdv.tsx`).
  */
 
-const PDV_CARD_TEST_ID: Record<LayoutId, string> = {
+const PDV_CARD_TEST_ID: Record<PdvFlowId, string> = {
   classico: "pdv-classic",
-  rapido: "pdv-rapido",
   assistencia: "pdv-assistencia",
   supermercado: "pdv-supermercado",
 };
@@ -87,27 +97,17 @@ function readLocalPdvMain(): "classic" | "supermercado" {
   return "classic";
 }
 
-function isLayoutId(v: unknown): v is LayoutId {
-  return v === "classico" || v === "rapido" || v === "assistencia" || v === "supermercado";
+function isOfficialFlowCard(v: unknown): v is PdvFlowId {
+  return v === "classico" || v === "assistencia" || v === "supermercado";
 }
 
-/**
- * Prioridade (preferência gravada na unidade vence o estado local “solto”):
- * 1) `printerConfig.v3PdvSectionCard` salvo pelo utilizador (4 layouts).
- * 2) LS `@omnigestao:pdv-layout=supermercado` (binário no PDV; alinhar se servidor ainda não tiver chave).
- * 3) `omnigestao-pdv-modo=rapido` (só se não houver card persistido compatível).
- * 4) `pdvParams.pdvClassicLayout=services` → assistência (legado sem card).
- * 5) Clássico.
- */
-function resolveActiveLayoutId(printerConfig: Record<string, unknown> | null): LayoutId {
+function resolveFlowFromPrinterConfig(printerConfig: Record<string, unknown> | null): PdvFlowId {
   const rawCard = printerConfig?.[V3_PDV_SECTION_CARD_KEY];
   if (rawCard === "ia") return "assistencia";
-  if (isLayoutId(rawCard)) return rawCard;
+  if (rawCard === "rapido") return "classico";
+  if (isOfficialFlowCard(rawCard)) return rawCard;
 
   if (readLocalPdvMain() === "supermercado") return "supermercado";
-
-  const modo = readOmnigestaoPdvModoPreferencia();
-  if (modo === "rapido") return "rapido";
 
   const pdvParamsRaw = printerConfig?.pdvParams;
   const pdvParams =
@@ -115,6 +115,18 @@ function resolveActiveLayoutId(printerConfig: Record<string, unknown> | null): L
   if (pdvParams?.pdvClassicLayout === "services") return "assistencia";
 
   return "classico";
+}
+
+function resolveClassicModoInicial(printerConfig: Record<string, unknown> | null, flow: PdvFlowId): ClassicModoInicial {
+  if (flow !== "classico") return "normal";
+
+  const rawCard = printerConfig?.[V3_PDV_SECTION_CARD_KEY];
+  if (rawCard === "rapido") return "rapido";
+
+  const mirror = printerConfig?.[V3_PDV_CLASSIC_MODO_KEY];
+  if (mirror === "rapido" || mirror === "normal") return mirror;
+
+  return readOmnigestaoPdvModoPreferencia() === "rapido" ? "rapido" : "normal";
 }
 
 function safePrinterRecord(raw: unknown): Record<string, unknown> {
@@ -127,22 +139,33 @@ function PdvSectionContent() {
   const { hydrated, settings, pdvParams, refresh, storeId } = useStoreSettings();
 
   const [remotePrinterConfig, setRemotePrinterConfig] = useState<Record<string, unknown>>({});
-  const [draftLayout, setDraftLayout] = useState<LayoutId>("classico");
-  const [savedLayout, setSavedLayout] = useState<LayoutId>("classico");
+  const [draftFlow, setDraftFlow] = useState<PdvFlowId>("classico");
+  const [savedFlow, setSavedFlow] = useState<PdvFlowId>("classico");
+  const [draftClassicModo, setDraftClassicModo] = useState<ClassicModoInicial>("normal");
+  const [savedClassicModo, setSavedClassicModo] = useState<ClassicModoInicial>("normal");
   const [saving, setSaving] = useState(false);
 
   const syncFromServer = useCallback(() => {
     const base = safePrinterRecord(settings?.printerConfig);
     setRemotePrinterConfig(base);
-    const id = resolveActiveLayoutId(base);
-    setDraftLayout(id);
-    setSavedLayout(id);
+    const flow = resolveFlowFromPrinterConfig(base);
+    const modo = resolveClassicModoInicial(base, flow);
+    setDraftFlow(flow);
+    setSavedFlow(flow);
+    setDraftClassicModo(modo);
+    setSavedClassicModo(modo);
   }, [settings?.printerConfig]);
 
   useEffect(() => {
     if (!hydrated) return;
     syncFromServer();
   }, [hydrated, syncFromServer, storeId]);
+
+  const dirty = useMemo(() => {
+    if (draftFlow !== savedFlow) return true;
+    if (draftFlow === "classico" && draftClassicModo !== savedClassicModo) return true;
+    return false;
+  }, [draftFlow, savedFlow, draftClassicModo, savedClassicModo]);
 
   const noLoja = !lojaAtivaId?.trim();
   const busy = !hydrated || saving;
@@ -152,7 +175,8 @@ function PdvSectionContent() {
       : "";
 
   const handleCancel = () => {
-    setDraftLayout(savedLayout);
+    setDraftFlow(savedFlow);
+    setDraftClassicModo(savedClassicModo);
   };
 
   const handleSave = async () => {
@@ -169,16 +193,19 @@ function PdvSectionContent() {
     try {
       const base = safePrinterRecord(remotePrinterConfig);
       const classicLayoutKind: "services" | "lovable" =
-        draftLayout === "assistencia" ? "services" : "lovable";
+        draftFlow === "assistencia" ? "services" : "lovable";
       const nextPdvParams = {
         ...pdvParams,
         pdvClassicLayout: classicLayoutKind,
       };
 
+      const mirrorModo: ClassicModoInicial = draftFlow === "classico" ? draftClassicModo : "normal";
+
       const nextPrinter: Record<string, unknown> = {
         ...base,
         pdvParams: nextPdvParams,
-        [V3_PDV_SECTION_CARD_KEY]: draftLayout,
+        [V3_PDV_SECTION_CARD_KEY]: draftFlow,
+        [V3_PDV_CLASSIC_MODO_KEY]: mirrorModo,
       };
 
       const res = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
@@ -198,17 +225,13 @@ function PdvSectionContent() {
 
       try {
         if (typeof window !== "undefined") {
-          if (draftLayout === "supermercado") {
+          if (draftFlow === "supermercado") {
             localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "supermercado");
             writeOmnigestaoPdvModoPreferencia("normal");
-          } else if (draftLayout === "rapido") {
-            localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "classic");
-            writePdvClassicLayout("lovable");
-            writeOmnigestaoPdvModoPreferencia("rapido");
           } else {
             localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "classic");
-            writePdvClassicLayout(draftLayout === "assistencia" ? "services" : "lovable");
-            writeOmnigestaoPdvModoPreferencia("normal");
+            writePdvClassicLayout(draftFlow === "assistencia" ? "services" : "lovable");
+            writeOmnigestaoPdvModoPreferencia(draftFlow === "classico" && draftClassicModo === "rapido" ? "rapido" : "normal");
           }
           notifyPdvMainLayoutChanged();
         }
@@ -217,9 +240,13 @@ function PdvSectionContent() {
       }
 
       setRemotePrinterConfig(nextPrinter);
-      setSavedLayout(draftLayout);
+      setSavedFlow(draftFlow);
+      setSavedClassicModo(draftFlow === "classico" ? draftClassicModo : "normal");
       await refresh();
-      toast({ title: "PDV atualizado", description: "Preferências gravadas para a unidade ativa. Recarregue o PDV se já estiver aberto." });
+      toast({
+        title: "PDV atualizado",
+        description: "Preferências gravadas para a unidade ativa. Recarregue o PDV se já estiver aberto.",
+      });
     } catch (e) {
       toast({
         title: "Não foi possível salvar",
@@ -237,8 +264,8 @@ function PdvSectionContent() {
     <div className="space-y-6">
       <SectionHeader
         icon={<Monitor className="h-5 w-5" />}
-        title="Tema do PDV"
-        description="Defina como será a tela de vendas — configurável por loja."
+        title="Layout e modo do PDV"
+        description="Escolha o fluxo principal de venda e, no Clássico/Omni, se o caixa inicia em modo normal ou rápido. Configurável por unidade."
       />
 
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft">
@@ -255,25 +282,26 @@ function PdvSectionContent() {
             </div>
           </div>
           <p className="text-sm font-normal text-muted-foreground">
-            As alterações valem para a unidade ativa. Salve para gravar no servidor e no navegador deste aparelho.
+            As alterações valem para a unidade ativa. Salve para gravar no servidor e no navegador deste aparelho
+            (`@omnigestao:pdv-layout`, `omni-pdv-classic-layout`, `omnigestao-pdv-modo`).
           </p>
         </div>
       </div>
 
       <div className="min-w-0 w-full overflow-visible">
         <div className="mb-4 min-w-0">
-          <h2 className="text-base font-semibold text-foreground">Layouts do PDV</h2>
+          <h2 className="text-base font-semibold text-foreground">Fluxos principais</h2>
           <p className="text-sm font-normal text-muted-foreground">
-            Escolha o estilo principal do ponto de venda. A alteração vale para este navegador e é gravada na unidade ativa.
+            O PDV Clássico é um único fluxo: modo balcão, modo rápido e venda completa coexistem no mesmo ecrã. Assistência e Supermercado trocam o layout raiz em `/dashboard/vendas`.
           </p>
         </div>
 
         <div
-          className="grid w-full min-w-0 auto-rows-fr gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4"
-          data-pdv-layout-cards={String(LAYOUTS.length)}
+          className="grid w-full min-w-0 auto-rows-fr gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+          data-pdv-layout-cards={String(FLOWS.length)}
         >
-          {LAYOUTS.map((opt) => {
-            const active = draftLayout === opt.id;
+          {FLOWS.map((opt) => {
+            const active = draftFlow === opt.id;
             const Icon = opt.icon;
             return (
               <div
@@ -324,7 +352,7 @@ function PdvSectionContent() {
                     variant={active ? "secondary" : "default"}
                     disabled={active || controlsDisabled}
                     onClick={() => {
-                      setDraftLayout(opt.id);
+                      setDraftFlow(opt.id);
                     }}
                   >
                     {active ? "Selecionado" : "Selecionar"}
@@ -335,11 +363,54 @@ function PdvSectionContent() {
           })}
         </div>
 
+        {draftFlow === "classico" ? (
+          <div
+            className="mt-6 rounded-xl border border-border bg-card p-5 shadow-soft"
+            data-testid="pdv-classic-modo-inicial"
+          >
+            <div className="mb-3 flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <Zap className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <h3 className="text-sm font-semibold text-foreground">Modo inicial no PDV Clássico</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  O modo rápido não é um PDV separado: apenas define se o caixa abre já em fluxo enxuto (`omnigestao-pdv-modo` e
+                  `?modo=rapido` quando o browser redireciona). Venda completa continua a ser escolhida dentro do próprio
+                  ecrã de venda.
+                </p>
+              </div>
+            </div>
+            <Label className="text-sm font-medium text-foreground">Ao abrir /dashboard/vendas</Label>
+            <RadioGroup
+              className="mt-2 gap-3"
+              value={draftClassicModo}
+              onValueChange={(v) => {
+                if (v === "normal" || v === "rapido") setDraftClassicModo(v);
+              }}
+              disabled={controlsDisabled}
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="normal" id="pdv-modo-normal" />
+                <Label htmlFor="pdv-modo-normal" className="cursor-pointer font-normal">
+                  Normal (modo balcão / completo no ecrã)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="rapido" id="pdv-modo-rapido" />
+                <Label htmlFor="pdv-modo-rapido" className="cursor-pointer font-normal">
+                  Rápido por padrão (foco em bipe e fluxo enxuto)
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+        ) : null}
+
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving || noLoja || draftLayout === savedLayout}>
+          <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving || noLoja || !dirty}>
             Cancelar
           </Button>
-          <Button type="button" onClick={() => void handleSave()} disabled={controlsDisabled || draftLayout === savedLayout}>
+          <Button type="button" onClick={() => void handleSave()} disabled={controlsDisabled || !dirty}>
             {saving ? "Salvando…" : "Salvar alterações"}
           </Button>
         </div>

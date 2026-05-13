@@ -20,6 +20,12 @@ type PdvLayout = "classic" | "supermercado"
 const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout"
 const RAMO_ATUACAO_STORAGE_PREFIX = "@omnigestao:ramo-atuacao:"
 
+/**
+ * Runtime do PDV: `@omnigestao:pdv-layout` (classic vs supermercado), `omni-pdv-classic-layout`
+ * (lovable vs services) e hidratação de `pdvParams.pdvClassicLayout`. Modo rápido vem de
+ * `omnigestao-pdv-modo` / query `?modo=rapido` em `vendas-page-client`, não de `printerConfig.v3PdvSectionCard`.
+ */
+
 export function VendasPDV(props: VendasPDVProps) {
   const [layout, setLayout] = useState<PdvLayout>("classic")
   const [classicLayout, setClassicLayout] = useState<PdvClassicLayoutKind>(() =>
