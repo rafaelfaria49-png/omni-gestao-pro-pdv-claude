@@ -18,6 +18,8 @@ import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { formatPhoneBrInput, isValidPhoneBr } from "@/lib/phone-br"
 import { useToast } from "@/hooks/use-toast"
+import { EmptyState } from "@/components/ui/states/EmptyState"
+import { LoadingState } from "@/components/ui/states/LoadingState"
 
 type ClienteRow = {
   id: string
@@ -265,8 +267,8 @@ export default function DashboardClientesPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-black">Clientes</h1>
-            <p className="text-sm text-black/70">Cadastro e gerenciamento de clientes</p>
+            <h1 className="text-2xl font-bold text-foreground">Clientes</h1>
+            <p className="text-sm text-muted-foreground">Cadastro e gerenciamento de clientes</p>
           </div>
 
           <button
@@ -280,22 +282,25 @@ export default function DashboardClientesPage() {
 
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="flex-1">
-              <label className="text-sm text-black/70">Buscar por nome</label>
-              <div className="mt-1 flex gap-2">
+            <div className="flex-1 min-w-0">
+              <label htmlFor="clientes-busca" className="text-sm text-muted-foreground">
+                Buscar por nome
+              </label>
+              <div className="mt-1 flex min-w-0 gap-2">
                 <input
+                  id="clientes-busca"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") setQuery(search)
                   }}
                   placeholder="Ex.: João"
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-black placeholder:text-black/50 focus:outline-none focus:ring-2 focus:ring-red-600/40"
+                  className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
                 />
                 <button
                   type="button"
                   onClick={() => setQuery(search)}
-                  className="h-10 rounded-md border border-border bg-background px-4 text-black transition-colors hover:bg-muted"
+                  className="h-10 rounded-md border border-border bg-background px-4 text-foreground transition-colors hover:bg-muted"
                 >
                   Buscar
                 </button>
@@ -305,49 +310,54 @@ export default function DashboardClientesPage() {
                     setSearch("")
                     setQuery("")
                   }}
-                  className="h-10 rounded-md border border-border bg-background px-4 text-black/70 transition-colors hover:bg-muted"
+                  className="h-10 rounded-md border border-border bg-background px-4 text-muted-foreground transition-colors hover:bg-muted"
                 >
                   Limpar
                 </button>
               </div>
             </div>
 
-            <div className="text-sm text-black/70">{loading ? "Carregando…" : `${filteredRows.length} cliente(s)`}</div>
+            <div className="text-sm text-muted-foreground">{loading ? "Carregando…" : `${filteredRows.length} cliente(s)`}</div>
           </div>
 
           {listError ? (
             <div className="mt-4 rounded-md border border-red-700/50 bg-red-950/30 px-4 py-3 text-sm text-red-200">{listError}</div>
           ) : null}
 
-          <div className="mt-4 overflow-hidden rounded-lg border border-border">
+          <div className="mt-4 overflow-x-auto overflow-hidden rounded-lg border border-border">
             <table className="w-full text-sm">
               <thead className="bg-background/60">
                 <tr className="text-left">
-                  <th className="px-4 py-3 font-semibold text-black">Nome</th>
-                  <th className="px-4 py-3 font-semibold text-black">Telefone</th>
-                  <th className="px-4 py-3 font-semibold text-black">Data de Cadastro</th>
-                  <th className="px-4 py-3 text-right font-semibold text-black">Ações</th>
+                  <th className="px-4 py-3 font-semibold text-foreground">Nome</th>
+                  <th className="px-4 py-3 font-semibold text-foreground">Telefone</th>
+                  <th className="px-4 py-3 font-semibold text-foreground">Data de Cadastro</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-black/70">
-                      Carregando lista…
+                    <td colSpan={4} className="p-0">
+                      <LoadingState message="Carregando clientes…" />
                     </td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-black/70">
-                      Nenhum cliente encontrado.
+                    <td colSpan={4} className="p-2">
+                      <EmptyState
+                        compact
+                        title="Nenhum cliente encontrado"
+                        description="Ajuste a busca ou cadastre um novo cliente."
+                        action={{ label: "Novo cliente", onClick: openCreateModal }}
+                      />
                     </td>
                   </tr>
                 ) : (
                   filteredRows.map((r) => (
                     <tr key={r.id} className="border-t border-border transition-colors hover:bg-muted/40">
-                      <td className="px-4 py-3 text-black">{r.name}</td>
-                      <td className="px-4 py-3 text-black">{displayPhone(r.phone)}</td>
-                      <td className="px-4 py-3 text-black/70">{formatDateBr(r.createdAt)}</td>
+                      <td className="px-4 py-3 text-foreground">{r.name}</td>
+                      <td className="px-4 py-3 text-foreground">{displayPhone(r.phone)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{formatDateBr(r.createdAt)}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex flex-wrap justify-end gap-2">
                           <button
@@ -382,7 +392,7 @@ export default function DashboardClientesPage() {
 
       {modalOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           onMouseDown={(e) => {
@@ -392,17 +402,17 @@ export default function DashboardClientesPage() {
           <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-black">
+                <h2 className="text-lg font-semibold text-foreground">
                   {modalMode === "edit" ? "Editar Cliente" : "Novo Cliente"}
                 </h2>
-                <p className="text-sm text-black/70">
+                <p className="text-sm text-muted-foreground">
                   {modalMode === "edit" ? "Atualize os dados do cliente." : "Informe os dados básicos para cadastro."}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={closeModal}
-                className="h-9 w-9 rounded-md border border-border bg-background text-black/70 transition-colors hover:bg-muted"
+                className="h-9 w-9 rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted"
                 aria-label="Fechar"
               >
                 ×
@@ -411,37 +421,42 @@ export default function DashboardClientesPage() {
 
             <div className="mt-4 space-y-3">
               <div>
-                <label className="text-sm text-black/70">
+                <label htmlFor="cliente-nome" className="text-sm text-muted-foreground">
                   Nome <span className="text-red-400">*</span>
                 </label>
                 <input
+                  id="cliente-nome"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Nome do cliente"
-                  className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-black placeholder:text-black/50 focus:outline-none focus:ring-2 focus:ring-red-600/40"
+                  className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
                 />
               </div>
               <div>
-                <label className="text-sm text-black/70">
+                <label htmlFor="cliente-telefone" className="text-sm text-muted-foreground">
                   Telefone <span className="text-red-400">*</span>
                 </label>
                 <input
+                  id="cliente-telefone"
                   value={phone}
                   onChange={(e) => setPhone(formatPhoneBrInput(e.target.value))}
                   placeholder="(14) 99999-9999"
                   inputMode="numeric"
                   autoComplete="tel"
-                  className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-black placeholder:text-black/50 focus:outline-none focus:ring-2 focus:ring-red-600/40"
+                  className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
                 />
               </div>
               <div>
-                <label className="text-sm text-black/70">E-mail (opcional)</label>
+                <label htmlFor="cliente-email" className="text-sm text-muted-foreground">
+                  E-mail (opcional)
+                </label>
                 <input
+                  id="cliente-email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="cliente@email.com"
                   type="email"
-                  className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-black placeholder:text-black/50 focus:outline-none focus:ring-2 focus:ring-red-600/40"
+                  className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
                 />
               </div>
             </div>
@@ -454,7 +469,7 @@ export default function DashboardClientesPage() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="h-10 rounded-md border border-border bg-background px-4 text-black transition-colors hover:bg-muted"
+                className="h-10 rounded-md border border-border bg-background px-4 text-foreground transition-colors hover:bg-muted"
                 disabled={submitting}
               >
                 Cancelar
@@ -475,11 +490,11 @@ export default function DashboardClientesPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
         <AlertDialogContent className="border-border bg-card">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-black">Excluir cliente?</AlertDialogTitle>
+            <AlertDialogTitle className="text-foreground">Excluir cliente?</AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               {deleteTarget ? (
                 <>
-                  Tem certeza que deseja excluir <span className="font-medium text-black">{deleteTarget.name}</span>? Esta ação
+                  Tem certeza que deseja excluir <span className="font-medium text-foreground">{deleteTarget.name}</span>? Esta ação
                   não pode ser desfeita.
                 </>
               ) : null}

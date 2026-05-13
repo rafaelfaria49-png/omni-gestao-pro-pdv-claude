@@ -123,6 +123,8 @@ import {
   Area,
   ReferenceLine,
 } from "recharts";
+import { EmptyState } from "@/components/ui/states/EmptyState";
+import { LoadingState } from "@/components/ui/states/LoadingState";
 
 export const Route = createFileRoute("/financeiro" as never)({
   head: () => ({
@@ -428,7 +430,12 @@ function VisaoGeral() {
         </CardHeader>
         <CardContent className="space-y-2">
           {alertItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-1">Nenhum alerta com base nos dados atuais da loja.</p>
+            <EmptyState
+              compact
+              dashboardLink={false}
+              title="Nenhum alerta no momento"
+              description="Não há itens que exijam atenção com base nos dados atuais da loja."
+            />
           ) : (
             alertItems.map((a, i) => (
               <div
@@ -458,7 +465,7 @@ function VisaoGeral() {
             </div>
             <CardDescription>Últimos 6 meses</CardDescription>
           </CardHeader>
-          <CardContent className="h-72">
+          <CardContent className="h-72 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={dreHistorico}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -490,7 +497,7 @@ function VisaoGeral() {
           <CardTitle className="text-base">Evolução — entradas vs. saídas</CardTitle>
           <CardDescription>Últimos 6 meses</CardDescription>
         </CardHeader>
-        <CardContent className="h-72">
+        <CardContent className="h-72 min-w-0">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={fluxoMensal}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -621,7 +628,7 @@ function ContasReceber() {
 
   const list = receber.filter((r) => filter === "todos" || r.status === filter);
 
-  if (loading) return <div className="py-12 text-center text-sm text-muted-foreground">Carregando títulos...</div>;
+  if (loading) return <LoadingState message="Carregando títulos a receber…" />;
   if (error) return (
     <div className="space-y-3 py-8 text-center">
       <p className="text-sm text-destructive">{error}</p>
@@ -630,7 +637,7 @@ function ContasReceber() {
   );
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <Card className="rounded-xl">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -658,7 +665,7 @@ function ContasReceber() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="min-w-0 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -802,7 +809,7 @@ function ContasPagar() {
 
   const list = pagar.filter((r) => filter === "todos" || r.status === filter);
 
-  if (loading) return <div className="py-12 text-center text-sm text-muted-foreground">Carregando títulos...</div>;
+  if (loading) return <LoadingState message="Carregando títulos a pagar…" />;
   if (error) return (
     <div className="space-y-3 py-8 text-center">
       <p className="text-sm text-destructive">{error}</p>
@@ -811,7 +818,7 @@ function ContasPagar() {
   );
 
   return (
-    <>
+    <div className="min-w-0 space-y-4">
     <Card className="rounded-xl">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -836,7 +843,7 @@ function ContasPagar() {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="overflow-x-auto">
+        <div className="min-w-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -903,7 +910,7 @@ function ContasPagar() {
       onConfirm={handleEstorno}
     />
     <HistoricoPagarModal open={modal === "historico"} onOpenChange={(v) => !v && setModal(null)} conta={selected} />
-    </>
+    </div>
   );
 }
 
@@ -920,8 +927,8 @@ function FluxoCaixa() {
     .reduce((a, m) => a + m.valor, 0);
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+    <div className="min-w-0 space-y-4">
+      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard title="Entradas (período)" value={fmt(totEntrada)} icon={ArrowDownLeft} tone="positive" />
         <StatCard title="Saídas (período)" value={fmt(totSaida)} icon={ArrowUpRight} tone="negative" />
         <StatCard title="Saldo do período" value={fmt(totEntrada - totSaida)} icon={Wallet} tone="positive" />
@@ -949,7 +956,7 @@ function FluxoCaixa() {
             </Select>
           </div>
         </CardHeader>
-        <CardContent className="h-72">
+        <CardContent className="h-72 min-w-0">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={fluxoMensal}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -1036,7 +1043,7 @@ function GestaoCarteiras() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <Card className="rounded-xl">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1057,16 +1064,17 @@ function GestaoCarteiras() {
         </CardHeader>
         <CardContent>
           {loadingCarteiras ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">Carregando carteiras...</div>
+            <LoadingState message="Carregando carteiras…" />
           ) : carteiras.filter((c) => c.ativo).length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-sm text-muted-foreground">Nenhuma carteira cadastrada.</p>
-              <Button size="sm" className="mt-3 gap-1" onClick={() => setOpenNova(true)}>
-                <Plus className="h-4 w-4" /> Criar primeira carteira
-              </Button>
-            </div>
+            <EmptyState
+              compact
+              dashboardLink={false}
+              title="Nenhuma carteira cadastrada"
+              description="Crie uma carteira para consolidar saldos por loja, banco ou caixa."
+              action={{ label: "Criar primeira carteira", onClick: () => setOpenNova(true) }}
+            />
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {carteiras.filter((c) => c.ativo).map((c) => {
                 const Icon = tipoToIcon(c.tipo);
                 const negativo = c.saldoAtual < 0;
@@ -1189,12 +1197,26 @@ function ExportButton({ tipo, label, filtros }: { tipo: string; label: string; f
   const { exportarRelatorio, filtrosFinanceiros } = useFinanceiroReal();
   const f = filtros ?? filtrosFinanceiros;
   return (
-    <div className="flex items-center gap-1">
-      <span className="text-xs text-muted-foreground w-36 truncate">{label}</span>
-      <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={() => exportarRelatorio(tipo, "csv", f)}>
+    <div className="flex min-w-0 items-center gap-1" title={label.trim() ? undefined : `Exportar ${tipo}`}>
+      {label.trim() ? <span className="text-xs text-muted-foreground w-36 truncate">{label}</span> : null}
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs gap-1"
+        type="button"
+        aria-label={`Exportar ${tipo} em CSV`}
+        onClick={() => exportarRelatorio(tipo, "csv", f)}
+      >
         <Download className="h-3 w-3" />CSV
       </Button>
-      <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={() => exportarRelatorio(tipo, "xlsx", f)}>
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-7 px-2 text-xs gap-1"
+        type="button"
+        aria-label={`Exportar ${tipo} em Excel`}
+        onClick={() => exportarRelatorio(tipo, "xlsx", f)}
+      >
         <Download className="h-3 w-3" />XLSX
       </Button>
     </div>
@@ -1291,9 +1313,14 @@ function Relatorios() {
           </CardTitle>
           <CardDescription className="text-xs">Últimos 12 meses — receita, despesa e lucro</CardDescription>
         </CardHeader>
-        <CardContent className="h-72">
+        <CardContent className="h-72 min-w-0">
           {comparativoMensal.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Sem dados ainda.</p>
+            <EmptyState
+              compact
+              dashboardLink={false}
+              title="Sem dados para comparativo"
+              description="Aplique os filtros de período ou aguarde movimentações no financeiro."
+            />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={comparativoMensal} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
@@ -1318,7 +1345,7 @@ function Relatorios() {
             <CardTitle className="text-base">Fluxo de Caixa Acumulado</CardTitle>
             <CardDescription className="text-xs">Evolução mês a mês no período selecionado</CardDescription>
           </CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64 min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={relatorios.fluxo} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -1394,7 +1421,7 @@ function Relatorios() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="rounded-2xl">
           <CardHeader className="pb-3"><CardTitle className="text-base">Receitas por Categoria</CardTitle></CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64 min-w-0">
             {receitasCat.length === 0 && receitasOrigem.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem dados.</p>
             ) : (
@@ -1415,7 +1442,7 @@ function Relatorios() {
 
         <Card className="rounded-2xl">
           <CardHeader className="pb-3"><CardTitle className="text-base">Despesas por Categoria</CardTitle></CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64 min-w-0">
             {despesasCat.length === 0 && despesasCategoria.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem dados.</p>
             ) : (
@@ -1440,7 +1467,7 @@ function Relatorios() {
             <CardTitle className="text-base flex items-center gap-2"><Wallet className="h-4 w-4 text-primary" />Análise de Carteiras</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            <div className="min-w-0 overflow-x-auto">
               <table className="w-full text-sm min-w-[560px]">
                 <thead>
                   <tr className="border-b border-border text-xs text-muted-foreground">
@@ -1789,11 +1816,16 @@ function AuditoriaFechamento() {
         </CardHeader>
         <CardContent>
           {loadingFechamentos ? (
-            <p className="text-sm text-muted-foreground animate-pulse">Carregando...</p>
+            <LoadingState message="Carregando fechamentos…" inline />
           ) : fechamentos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum fechamento registrado.</p>
+            <EmptyState
+              compact
+              dashboardLink={false}
+              title="Nenhum fechamento registrado"
+              description="Os fechamentos diários e mensais aparecerão aqui quando forem concluídos."
+            />
           ) : (
-            <div className="overflow-x-auto">
+            <div className="min-w-0 overflow-x-auto">
               <table className="w-full text-sm min-w-[480px]">
                 <thead>
                   <tr className="border-b border-border text-xs text-muted-foreground">
@@ -1862,11 +1894,16 @@ function AuditoriaFechamento() {
         </CardHeader>
         <CardContent>
           {loadingConciliacao ? (
-            <p className="text-sm text-muted-foreground animate-pulse">Carregando...</p>
+            <LoadingState message="Carregando conciliações…" inline />
           ) : conciliacoes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma conciliação registrada. Clique em "Nova Conciliação" para iniciar.</p>
+            <EmptyState
+              compact
+              dashboardLink={false}
+              title="Nenhuma conciliação registrada"
+              description='Clique em "Nova conciliação" para iniciar o processo.'
+            />
           ) : (
-            <div className="overflow-x-auto">
+            <div className="min-w-0 overflow-x-auto">
               <table className="w-full text-sm min-w-[520px]">
                 <thead>
                   <tr className="border-b border-border text-xs text-muted-foreground">
@@ -1911,11 +1948,16 @@ function AuditoriaFechamento() {
         </CardHeader>
         <CardContent>
           {loadingAuditoria ? (
-            <p className="text-sm text-muted-foreground animate-pulse">Carregando...</p>
+            <LoadingState message="Carregando auditoria…" inline />
           ) : auditoriaFinanceira.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma operação registrada ainda.</p>
+            <EmptyState
+              compact
+              dashboardLink={false}
+              title="Nenhuma operação na auditoria"
+              description="As movimentações sensíveis aparecerão aqui quando houver registros."
+            />
           ) : (
-            <div className="overflow-x-auto">
+            <div className="min-w-0 overflow-x-auto">
               <table className="w-full text-sm min-w-[480px]">
                 <thead>
                   <tr className="border-b border-border text-xs text-muted-foreground">
@@ -2117,10 +2159,10 @@ function FinanceiroHubInner() {
   );
 
   return (
-    <div className="w-full min-w-0 bg-background text-foreground antialiased">
-      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
-        <header className="mb-6 flex flex-col gap-2 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden bg-background text-foreground antialiased">
+      <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-6 sm:px-8 sm:py-10">
+        <header className="mb-6 flex min-w-0 flex-col gap-2 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
               OmniGestão Pro
             </p>
@@ -2132,7 +2174,7 @@ function FinanceiroHubInner() {
               misturam dados reais com trechos ilustrativos.
             </p>
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex min-w-0 flex-col items-end gap-2">
             <Badge variant="outline" className="w-fit gap-1">
               <Store className="h-3 w-3" /> Multi-loja
             </Badge>
@@ -2144,8 +2186,8 @@ function FinanceiroHubInner() {
           </div>
         </header>
 
-        <Tabs defaultValue="visao" className="w-full">
-          <TabsList className="mb-6 grid w-full grid-cols-3 gap-1 sm:grid-cols-7">
+        <Tabs defaultValue="visao" className="w-full min-w-0">
+          <TabsList className="mb-6 grid w-full min-w-0 grid-cols-3 gap-1 sm:grid-cols-7">
             {tabs.map((t) => {
               const Icon = t.icon;
               const badge = "hubBadge" in t ? t.hubBadge : undefined;
@@ -2166,7 +2208,7 @@ function FinanceiroHubInner() {
             })}
           </TabsList>
           {tabs.map((t) => (
-            <TabsContent key={t.v} value={t.v} className="space-y-4">
+            <TabsContent key={t.v} value={t.v} className="space-y-4 min-w-0 overflow-x-hidden">
               {t.comp}
             </TabsContent>
           ))}

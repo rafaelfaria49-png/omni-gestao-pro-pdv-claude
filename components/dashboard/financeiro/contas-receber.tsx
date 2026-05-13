@@ -768,18 +768,6 @@ export function ContasReceber() {
     return list
   }, [contas, filtro, busca])
 
-  useEffect(() => {
-    if (process.env.NODE_ENV !== "development") return
-    console.log("[contas-receber] DADOS_RECEBIDOS:", {
-      lojaKey,
-      opsStorageKey,
-      storageKey: contasReceberStorageKey(lojaKey),
-      contasLen: contas.length,
-      filtradasLen: contasFiltradas.length,
-      filtro,
-    })
-  }, [lojaKey, opsStorageKey, contas.length, contasFiltradas.length, filtro])
-
   const recebidosTabela = useMemo(() => {
     const q = normBuscaTxt(busca)
     let titulos = contas.filter((c) => (c.status || "").toLowerCase() === "pago")
@@ -1880,9 +1868,6 @@ export function ContasReceber() {
         : c
     )
     persist(next)
-    console.log("[Contas a Receber] Salvar alterações — total de títulos na tabela (localStorage):", next.length, {
-      loja: lojaKey,
-    })
     setEditOpen(false)
     toast({ title: "Título atualizado" })
   }

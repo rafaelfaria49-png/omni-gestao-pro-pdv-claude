@@ -39,6 +39,8 @@ import { resolveLojaIdParaConsultaClientes } from "@/lib/clientes-loja-resolve"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { formatPhoneBrInput, isValidPhoneBr } from "@/lib/phone-br"
 import { ConsultoriaIA } from "@/components/dashboard/servicos/consultoria-ia"
+import { EmptyState } from "@/components/ui/states/EmptyState"
+import { LoadingState } from "@/components/ui/states/LoadingState"
 
 type ClienteOpt = { id: string; name: string; phone: string | null }
 
@@ -854,8 +856,8 @@ export default function DashboardOsPage() {
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-black">Ordens de Serviço</h1>
-            <p className="text-sm text-black/70">Gestão de ordens de serviço</p>
+            <h1 className="text-2xl font-bold text-foreground">Ordens de Serviço</h1>
+            <p className="text-sm text-muted-foreground">Gestão de ordens de serviço</p>
           </div>
 
           <button
@@ -885,21 +887,24 @@ export default function DashboardOsPage() {
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex-1">
-              <label className="text-sm text-black/70">Buscar (cliente, equipamento, defeito)</label>
-              <div className="mt-1 flex gap-2">
+              <label htmlFor="os-busca" className="text-sm text-muted-foreground">
+                Buscar (cliente, equipamento, defeito)
+              </label>
+              <div className="mt-1 flex min-w-0 gap-2">
                 <input
+                  id="os-busca"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") setQuery(search)
                   }}
                   placeholder="Ex.: iPhone ou nome do cliente"
-                  className="h-10 w-full rounded-md border border-border bg-background px-3 text-black placeholder:text-black/50 focus:outline-none focus:ring-2 focus:ring-red-600/40"
+                  className="h-10 w-full min-w-0 rounded-md border border-border bg-background px-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/40"
                 />
                 <button
                   type="button"
                   onClick={() => setQuery(search)}
-                  className="h-10 rounded-md border border-border bg-background px-4 text-black transition-colors hover:bg-muted"
+                  className="h-10 rounded-md border border-border bg-background px-4 text-foreground transition-colors hover:bg-muted"
                 >
                   Buscar
                 </button>
@@ -909,14 +914,14 @@ export default function DashboardOsPage() {
                     setSearch("")
                     setQuery("")
                   }}
-                  className="h-10 rounded-md border border-border bg-background px-4 text-black/70 transition-colors hover:bg-muted"
+                  className="h-10 rounded-md border border-border bg-background px-4 text-muted-foreground transition-colors hover:bg-muted"
                 >
                   Limpar
                 </button>
               </div>
             </div>
 
-            <div className="text-sm text-black/70">{loading ? "Carregando…" : `${filteredRows.length} OS`}</div>
+            <div className="text-sm text-muted-foreground">{loading ? "Carregando…" : `${filteredRows.length} OS`}</div>
           </div>
 
           {listError ? (
@@ -927,44 +932,49 @@ export default function DashboardOsPage() {
             <table className="w-full min-w-[800px] text-sm">
               <thead className="bg-background/60">
                 <tr className="text-left">
-                  <th className="px-4 py-3 font-semibold text-black">Cliente</th>
-                  <th className="px-4 py-3 font-semibold text-black">Equipamento</th>
-                  <th className="px-4 py-3 font-semibold text-black">Status</th>
-                  <th className="px-4 py-3 font-semibold text-black">Valor</th>
-                  <th className="px-4 py-3 text-right font-semibold text-black">Ações</th>
+                  <th className="px-4 py-3 font-semibold text-foreground">Cliente</th>
+                  <th className="px-4 py-3 font-semibold text-foreground">Equipamento</th>
+                  <th className="px-4 py-3 font-semibold text-foreground">Status</th>
+                  <th className="px-4 py-3 font-semibold text-foreground">Valor</th>
+                  <th className="px-4 py-3 text-right font-semibold text-foreground">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-black/70">
-                      Carregando…
+                    <td colSpan={5} className="p-0">
+                      <LoadingState message="Carregando ordens de serviço…" />
                     </td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-black/70">
-                      Nenhuma OS encontrada.
+                    <td colSpan={5} className="p-2">
+                      <EmptyState
+                        compact
+                        title="Nenhuma OS encontrada"
+                        description="Ajuste a busca ou crie uma nova ordem de serviço."
+                        action={{ label: "Nova OS", onClick: openCreateModal }}
+                      />
                     </td>
                   </tr>
                 ) : (
                   filteredRows.map((r) => (
                     <tr key={r.id} className="border-t border-border transition-colors hover:bg-muted/40">
-                      <td className="px-4 py-3 text-black">
+                      <td className="px-4 py-3 text-foreground">
                         <div className="font-medium">{clienteNomeExibicao(r)}</div>
-                        <div className="text-xs text-black/70 tabular-nums">OS {r.id.slice(0, 8)}…</div>
+                        <div className="text-xs text-muted-foreground tabular-nums">OS {r.id.slice(0, 8)}…</div>
                       </td>
-                      <td className="max-w-[200px] truncate px-4 py-3 text-black" title={r.equipamento}>
+                      <td className="max-w-[200px] truncate px-4 py-3 text-foreground" title={r.equipamento}>
                         {r.equipamento}
                       </td>
-                      <td className="px-4 py-3 text-black">{labelStatusOS(r.status)}</td>
-                      <td className="px-4 py-3 tabular-nums text-black">{formatMoney(r.valorTotal)}</td>
+                      <td className="px-4 py-3 text-foreground">{labelStatusOS(r.status)}</td>
+                      <td className="px-4 py-3 tabular-nums text-foreground">{formatMoney(r.valorTotal)}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="inline-flex flex-wrap justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => handlePrint(r)}
-                            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-zinc-600 bg-transparent px-3 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800"
+                            className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-transparent px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                           >
                             <Printer className="h-3.5 w-3.5" />
                             Via cliente
@@ -973,6 +983,7 @@ export default function DashboardOsPage() {
                             type="button"
                             onClick={() => handleWhatsApp(r)}
                             title="WhatsApp"
+                            aria-label="Abrir WhatsApp do cliente"
                             className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#1AAE52] bg-[#25D366] text-white shadow-sm transition-colors hover:bg-[#1FB85A] active:bg-[#169947]"
                           >
                             <WhatsAppIcon className="h-4 w-4 drop-shadow-[0_1px_0_rgba(0,0,0,0.45)]" />
@@ -1009,7 +1020,7 @@ export default function DashboardOsPage() {
 
       {modalOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           onMouseDown={(e) => {
@@ -1019,13 +1030,13 @@ export default function DashboardOsPage() {
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-xl">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-black">{modalMode === "edit" ? "Editar OS" : "Nova OS"}</h2>
-                <p className="text-sm text-black/70">Cliente, equipamento, peças do estoque e valores.</p>
+                <h2 className="text-lg font-semibold text-foreground">{modalMode === "edit" ? "Editar OS" : "Nova OS"}</h2>
+                <p className="text-sm text-muted-foreground">Cliente, equipamento, peças do estoque e valores.</p>
               </div>
               <button
                 type="button"
                 onClick={closeModal}
-                className="h-9 w-9 shrink-0 rounded-md border border-border bg-background text-black/70 transition-colors hover:bg-muted"
+                className="h-9 w-9 shrink-0 rounded-md border border-border bg-background text-muted-foreground transition-colors hover:bg-muted"
                 aria-label="Fechar"
               >
                 ×
@@ -1257,8 +1268,8 @@ export default function DashboardOsPage() {
 
                 <TabsContent value="checklist" className="mt-4 space-y-3">
               <div className="rounded-lg border border-border bg-background/40 p-3">
-                <p className="text-sm font-medium text-black">Checklist de entrada</p>
-                <p className="text-xs text-black/70">Marque rapidamente o estado do aparelho na entrada.</p>
+                <p className="text-sm font-medium text-foreground">Checklist de entrada</p>
+                <p className="text-xs text-muted-foreground">Marque rapidamente o estado do aparelho na entrada.</p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   {(
                     [
@@ -1270,14 +1281,14 @@ export default function DashboardOsPage() {
                     ] as const
                   ).map(([label, value, setValue]) => (
                     <div key={label} className="flex items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2">
-                      <span className="text-sm font-medium text-black">{label}</span>
+                      <span className="text-sm font-medium text-foreground">{label}</span>
                       <div className="inline-flex overflow-hidden rounded-md border border-border">
                         <button
                           type="button"
                           onClick={() => setValue("ok")}
                           className={cn(
                             "h-8 px-3 text-xs font-semibold transition-colors",
-                            value === "ok" ? "bg-emerald-600 text-white" : "bg-background text-black hover:bg-muted"
+                            value === "ok" ? "bg-emerald-600 text-white" : "bg-background text-foreground hover:bg-muted"
                           )}
                         >
                           OK
@@ -1287,7 +1298,7 @@ export default function DashboardOsPage() {
                           onClick={() => setValue("nok")}
                           className={cn(
                             "h-8 px-3 text-xs font-semibold transition-colors border-l border-border",
-                            value === "nok" ? "bg-red-600 text-white" : "bg-background text-black hover:bg-muted"
+                            value === "nok" ? "bg-red-600 text-white" : "bg-background text-foreground hover:bg-muted"
                           )}
                         >
                           N/OK
@@ -1297,7 +1308,7 @@ export default function DashboardOsPage() {
                           onClick={() => setValue("nt")}
                           className={cn(
                             "h-8 px-3 text-xs font-semibold transition-colors border-l border-border",
-                            value === "nt" ? "bg-black text-white" : "bg-background text-black hover:bg-muted"
+                            value === "nt" ? "bg-foreground text-background" : "bg-background text-foreground hover:bg-muted"
                           )}
                         >
                           N/T
@@ -1309,22 +1320,22 @@ export default function DashboardOsPage() {
               </div>
 
               <div className="rounded-lg border border-border bg-background/40 p-3">
-                <p className="text-sm font-medium text-black">Acessórios</p>
-                <p className="text-xs text-black/70">Selecione o que veio junto com o aparelho.</p>
+                <p className="text-sm font-medium text-foreground">Acessórios</p>
+                <p className="text-xs text-muted-foreground">Selecione o que veio junto com o aparelho.</p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-black">
+                  <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
                     <input type="checkbox" checked={accChip} onChange={(e) => setAccChip(e.target.checked)} />
                     Chip
                   </label>
-                  <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-black">
+                  <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
                     <input type="checkbox" checked={accCartaoSd} onChange={(e) => setAccCartaoSd(e.target.checked)} />
                     Cartão SD
                   </label>
-                  <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-black">
+                  <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
                     <input type="checkbox" checked={accCapinha} onChange={(e) => setAccCapinha(e.target.checked)} />
                     Capinha
                   </label>
-                  <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-black">
+                  <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
                     <input type="checkbox" checked={accCarregador} onChange={(e) => setAccCarregador(e.target.checked)} />
                     Carregador
                   </label>
@@ -1507,7 +1518,7 @@ export default function DashboardOsPage() {
               <button
                 type="button"
                 onClick={closeModal}
-                className="h-10 rounded-md border border-border bg-background px-4 text-black transition-colors hover:bg-muted"
+                className="h-10 rounded-md border border-border bg-background px-4 text-foreground transition-colors hover:bg-muted"
                 disabled={submitting}
               >
                 Cancelar
@@ -1643,12 +1654,12 @@ export default function DashboardOsPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
         <AlertDialogContent className="border-border bg-card">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-black">Excluir ordem de serviço?</AlertDialogTitle>
+            <AlertDialogTitle className="text-foreground">Excluir ordem de serviço?</AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               {deleteTarget ? (
                 <>
                   Confirma a exclusão da OS de{" "}
-                  <span className="font-medium text-black">{clienteNomeExibicao(deleteTarget)}</span> —{" "}
+                  <span className="font-medium text-foreground">{clienteNomeExibicao(deleteTarget)}</span> —{" "}
                   {deleteTarget.equipamento}? O estoque das peças será devolvido.
                 </>
               ) : null}

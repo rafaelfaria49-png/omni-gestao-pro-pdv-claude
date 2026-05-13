@@ -59,24 +59,6 @@ export default function CadastrosV2Client() {
       o.el.style.outlineOffset = "-1px";
     });
 
-    // eslint-disable-next-line no-console
-    console.groupCollapsed("[CadastrosV2] overflow offenders (top 10)");
-    // eslint-disable-next-line no-console
-    console.table(
-      top.map((o) => ({
-        tag: o.tag,
-        id: o.id || "(none)",
-        className: o.className?.slice(0, 120) || "(none)",
-        clientWidth: o.clientWidth,
-        scrollWidth: o.scrollWidth,
-        delta: o.delta,
-      }))
-    );
-    // eslint-disable-next-line no-console
-    console.log("root clientWidth", root.clientWidth, "root scrollWidth", root.scrollWidth);
-    // eslint-disable-next-line no-console
-    console.groupEnd();
-
     return () => {
       top.forEach((o) => {
         o.el.style.outline = "";
