@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
-import { Monitor, Check, Zap, Wrench, LayoutGrid, ShoppingCart, MessageCircle, FileText, ExternalLink } from "lucide-react";
+import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,10 @@ import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
 import { notifyPdvMainLayoutChanged, writePdvClassicLayout } from "@/lib/pdv-classic-layout";
 import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name";
+import {
+  readOmnigestaoPdvModoPreferencia,
+  writeOmnigestaoPdvModoPreferencia,
+} from "@/lib/omnigestao-pdv-modo";
 
 /** Mesma chave que `vendas-pdv.tsx` / `configuracoes-sistema.tsx` (layout classic vs supermercado no navegador). */
 const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout";
@@ -21,7 +25,7 @@ const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout";
 /** Chave opcional em `printerConfig` para preservar preferência visual do card selecionado no V3. */
 const V3_PDV_SECTION_CARD_KEY = "v3PdvSectionCard";
 
-type LayoutId = "classico" | "rapido" | "assistencia";
+type LayoutId = "classico" | "rapido" | "assistencia" | "supermercado";
 
 interface PdvLayout {
   id: LayoutId;
@@ -32,12 +36,23 @@ interface PdvLayout {
 
 const LAYOUTS: PdvLayout[] = [
   { id: "classico", name: "PDV Clássico", description: "Layout tradicional com grid de produtos e carrinho lateral.", icon: LayoutGrid },
-  { id: "rapido", name: "PDV Rápido", description: "Foco em código de barras e teclas de atalho para alta rotatividade.", icon: Zap },
+  {
+    id: "rapido",
+    name: "PDV Rápido",
+    description: "Mesmo motor Clássico com fluxo enxuto e atalhos; use /dashboard/vendas?modo=rapido ou o PDV aplicará a preferência salva.",
+    icon: Zap,
+  },
   {
     id: "assistencia",
     name: "PDV Assistência",
     description: "Foco em assistência técnica, venda de peças e atendimento no balcão.",
     icon: Wrench,
+  },
+  {
+    id: "supermercado",
+    name: "PDV Supermercado",
+    description: "Tela dedicada com busca e fluxo orientado a variedades / alto giro no mesmo motor de vendas e caixa.",
+    icon: Store,
   },
 ];
 
@@ -52,11 +67,12 @@ function readLocalPdvMain(): "classic" | "supermercado" {
   return "classic";
 }
 
-function layoutIdFromPrinterAndLocal(
-  localMain: "classic" | "supermercado",
-  printerConfig: Record<string, unknown> | null
-): LayoutId {
-  if (localMain === "supermercado") return "rapido";
+/** Resolve o card ativo a partir do LS de layout + preferência de modo rápido + settings remotos. */
+function resolveActiveLayoutId(printerConfig: Record<string, unknown> | null): LayoutId {
+  const localMain = readLocalPdvMain();
+  if (localMain === "supermercado") return "supermercado";
+  const modo = readOmnigestaoPdvModoPreferencia();
+  if (modo === "rapido") return "rapido";
   const pdvParamsRaw = printerConfig?.pdvParams;
   const pdvParams =
     pdvParamsRaw && typeof pdvParamsRaw === "object" ? (pdvParamsRaw as Record<string, unknown>) : null;
@@ -83,8 +99,7 @@ function PdvSectionContent() {
   const syncFromServer = useCallback(() => {
     const base = safePrinterRecord(settings?.printerConfig);
     setRemotePrinterConfig(base);
-    const localMain = readLocalPdvMain();
-    const id = layoutIdFromPrinterAndLocal(localMain, base);
+    const id = resolveActiveLayoutId(base);
     setDraftLayout(id);
     setSavedLayout(id);
   }, [settings?.printerConfig]);
@@ -122,7 +137,9 @@ function PdvSectionContent() {
         draftLayout === "assistencia" ? "services" : "lovable";
       const nextPdvParams = {
         ...pdvParams,
-        ...(draftLayout === "rapido" ? {} : { pdvClassicLayout: classicLayoutKind }),
+        ...(draftLayout === "rapido" || draftLayout === "supermercado"
+          ? {}
+          : { pdvClassicLayout: classicLayoutKind }),
       };
 
       const nextPrinter: Record<string, unknown> = {
@@ -151,11 +168,17 @@ function PdvSectionContent() {
 
       try {
         if (typeof window !== "undefined") {
-          if (draftLayout === "rapido") {
+          if (draftLayout === "supermercado") {
             localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "supermercado");
+            writeOmnigestaoPdvModoPreferencia("normal");
+          } else if (draftLayout === "rapido") {
+            localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "classic");
+            writePdvClassicLayout("lovable");
+            writeOmnigestaoPdvModoPreferencia("rapido");
           } else {
             localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "classic");
             writePdvClassicLayout(draftLayout === "assistencia" ? "services" : "lovable");
+            writeOmnigestaoPdvModoPreferencia("normal");
           }
           notifyPdvMainLayoutChanged();
         }
@@ -209,11 +232,13 @@ function PdvSectionContent() {
 
       <div>
         <div className="mb-4">
-          <h2 className="text-base font-semibold text-foreground">Layout do PDV</h2>
-          <p className="text-sm font-normal text-muted-foreground">Escolha o estilo de operação do ponto de venda.</p>
+          <h2 className="text-base font-semibold text-foreground">Layouts do PDV</h2>
+          <p className="text-sm font-normal text-muted-foreground">
+            Escolha o estilo principal do ponto de venda. A alteração vale para este navegador e é gravada na unidade ativa.
+          </p>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {LAYOUTS.map((opt) => {
             const active = draftLayout === opt.id;
             const Icon = opt.icon;
@@ -221,7 +246,7 @@ function PdvSectionContent() {
               <div
                 key={opt.id}
                 className={cn(
-                  "relative flex min-h-[17rem] flex-col gap-6 rounded-xl border bg-card p-6 shadow-soft transition-all",
+                  "relative flex min-h-[17rem] min-w-0 flex-col gap-6 rounded-xl border bg-card p-6 shadow-soft transition-all",
                   active ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/40 hover:shadow-card",
                 )}
               >
@@ -291,56 +316,13 @@ function PdvSectionContent() {
         <div className="mb-4">
           <h2 className="text-base font-semibold text-foreground">Outros fluxos de venda</h2>
           <p className="text-sm font-normal text-muted-foreground">
-            Fluxos integrados ao sistema que não são selecionáveis como layout principal, mas registram
-            vendas no mesmo motor central.
+            Integrações que compartilham o motor de vendas, caixa e histórico, sem substituir o layout principal acima.
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          {/* PDV Supermercado */}
-          <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                <ShoppingCart className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-semibold text-foreground">PDV Supermercado</h4>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-success/30 bg-success/5 text-success">
-                    Ativo
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Ativado automaticamente em lojas do ramo Variedades / Supermercado. Usa o mesmo motor de
-                  venda, sessão de caixa, histórico e cupom.
-                </p>
-              </div>
-            </div>
-            <div className="rounded-lg border border-border bg-surface p-3 space-y-1.5 text-xs text-muted-foreground">
-              <div className="flex items-center justify-between">
-                <span>Persiste no banco</span>
-                <Check className="h-3.5 w-3.5 text-success" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Sessão de caixa</span>
-                <Check className="h-3.5 w-3.5 text-success" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Histórico de vendas</span>
-                <Check className="h-3.5 w-3.5 text-success" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Cupom não fiscal</span>
-                <Check className="h-3.5 w-3.5 text-success" />
-              </div>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              Ativável via configurações → ramo de atividade &quot;Variedades&quot;.
-            </p>
-          </div>
-
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
           {/* PDV WhatsApp */}
-          <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
+          <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
                 <MessageCircle className="h-5 w-5" />
@@ -386,7 +368,7 @@ function PdvSectionContent() {
           </div>
 
           {/* OS → Venda */}
-          <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
+          <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
                 <FileText className="h-5 w-5" />
@@ -423,7 +405,7 @@ function PdvSectionContent() {
               </div>
             </div>
             <a
-              href="/dashboard/operacoes"
+              href="/dashboard/operacoes-v2"
               className="text-[11px] text-primary underline-offset-2 hover:underline flex items-center gap-1"
             >
               <ExternalLink className="h-3 w-3" />

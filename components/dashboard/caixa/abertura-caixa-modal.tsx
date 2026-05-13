@@ -44,6 +44,8 @@ const fmtDateTime = (d: Date) =>
     minute: "2-digit",
   })
 
+const RECEIPT_TITLE = "COMPROVANTE DE ABERTURA DE CAIXA"
+
 export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps) {
   const { abrirCaixa, setSessaoId } = useCaixa()
   const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
@@ -119,14 +121,14 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
   const handleCopiar = async () => {
     if (!comprovante) return
     const text = [
-      "=== COMPROVANTE DE ABERTURA ===",
+      RECEIPT_TITLE,
       `Loja: ${comprovante.loja}`,
       `Data/Hora: ${comprovante.hora}`,
       `Saldo Inicial: ${fmt(comprovante.saldo)}`,
       comprovante.operador ? `Operador: ${comprovante.operador}` : "",
       comprovante.sessaoId ? `Sessão: ${comprovante.sessaoId}` : "",
       comprovante.observacao ? `Observação: ${comprovante.observacao}` : "",
-      "==============================",
+      "—",
     ]
       .filter(Boolean)
       .join("\n")
@@ -141,7 +143,7 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
   const handleImprimir = () => {
     if (!comprovante) return
     const inner = `
-      <div style="text-align:center;font-weight:700">ABERTURA DE CAIXA</div>
+      <div style="text-align:center;font-weight:700">${escapeHtml(RECEIPT_TITLE)}</div>
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
       <p><strong>Loja:</strong> ${escapeHtml(comprovante.loja)}</p>
       <p><strong>Data/Hora:</strong> ${escapeHtml(comprovante.hora)}</p>
@@ -150,7 +152,7 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
       ${comprovante.sessaoId ? `<p><strong>Sessão:</strong> ${escapeHtml(comprovante.sessaoId)}</p>` : ""}
       ${comprovante.observacao ? `<p><strong>Obs.:</strong> ${escapeHtml(comprovante.observacao)}</p>` : ""}
     `
-    openThermalHtmlPrint(inner, "Abertura de caixa")
+    openThermalHtmlPrint(inner, RECEIPT_TITLE)
   }
 
   const handleClose = () => {
@@ -164,9 +166,9 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-md bg-card border-border p-0">
-        <div className="flex max-h-[90vh] flex-col overflow-hidden">
-          <DialogHeader className="shrink-0 px-6 pb-2 pt-6">
+      <DialogContent className="flex max-h-[min(92dvh,720px)] max-w-md flex-col gap-0 overflow-hidden border-border bg-card p-0 sm:max-w-md">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <DialogHeader className="shrink-0 border-b border-border px-6 pb-3 pt-6 pr-14">
             <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
               {step === "comprovante" ? (
                 <CheckCircle2 className="w-6 h-6 text-emerald-500" />
@@ -182,9 +184,9 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
             </DialogDescription>
           </DialogHeader>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pb-8 pt-2">
             {step === "form" ? (
-              <div className="space-y-6 pt-4">
+              <div className="space-y-6 pt-2">
                 {/* Ícone Central */}
                 <div className="flex justify-center">
                   <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center">
@@ -263,8 +265,12 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
                   </div>
                 </div>
 
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  O valor informado será usado como troco inicial para as vendas do dia.
+                </p>
+
                 {/* Botões */}
-                <div className="flex gap-3">
+                <div className="flex gap-3 pt-1">
                   <Button
                     variant="outline"
                     onClick={handleClose}
@@ -273,21 +279,17 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
                     Cancelar
                   </Button>
                   <Button
-                    onClick={handleAbrirCaixa}
+                    onClick={() => void handleAbrirCaixa()}
                     className="flex-1 h-12 bg-primary hover:bg-primary/90 font-semibold"
                   >
                     <Unlock className="w-4 h-4 mr-2" />
                     Abrir Caixa
                   </Button>
                 </div>
-
-                <p className="text-xs text-center text-muted-foreground">
-                  O valor informado será usado como troco inicial para as vendas do dia.
-                </p>
               </div>
             ) : (
               /* ── Comprovante ── */
-              <div className="space-y-6 pt-4">
+              <div className="space-y-5 pt-2">
                 <div className="flex justify-center">
                   <div className="w-20 h-20 rounded-full bg-emerald-500/10 border-2 border-emerald-500/30 flex items-center justify-center">
                     <CheckCircle2 className="w-10 h-10 text-emerald-500" />
@@ -295,9 +297,9 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
                 </div>
 
                 <Card className="bg-secondary border-border">
-                  <CardContent className="pt-4 pb-4 space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground text-center">
-                      Comprovante de Abertura
+                  <CardContent className="space-y-3 pt-4 pb-4">
+                    <p className="text-center text-xs font-semibold uppercase tracking-wide text-foreground">
+                      {RECEIPT_TITLE}
                     </p>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
@@ -336,26 +338,26 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
                   </CardContent>
                 </Card>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <Button
                     variant="outline"
-                    className="h-11 border-border gap-2"
+                    className="h-11 gap-2 border-border"
                     onClick={handleImprimir}
                   >
                     <Printer className="w-4 h-4" />
-                    Imprimir
+                    Imprimir comprovante
                   </Button>
                   <Button
                     variant="outline"
-                    className="h-11 border-border gap-2"
-                    onClick={handleCopiar}
+                    className="h-11 gap-2 border-border"
+                    onClick={() => void handleCopiar()}
                   >
                     <Copy className="w-4 h-4" />
-                    Copiar
+                    Copiar resumo
                   </Button>
                 </div>
 
-                <Button onClick={handleClose} className="w-full h-12 gap-2">
+                <Button onClick={handleClose} className="h-12 w-full gap-2">
                   <X className="w-4 h-4" />
                   Fechar
                 </Button>
