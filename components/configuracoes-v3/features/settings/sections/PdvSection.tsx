@@ -240,8 +240,8 @@ function PdvSectionContent() {
         </div>
       </div>
 
-      <div>
-        <div className="mb-4">
+      <div className="min-w-0 w-full overflow-visible">
+        <div className="mb-4 min-w-0">
           <h2 className="text-base font-semibold text-foreground">Layouts do PDV</h2>
           <p className="text-sm font-normal text-muted-foreground">
             Escolha o estilo principal do ponto de venda. A alteração vale para este navegador e é gravada na unidade ativa.
@@ -249,28 +249,31 @@ function PdvSectionContent() {
         </div>
 
         <div
-          className="grid min-w-0 gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+          className="grid w-full min-w-0 auto-rows-fr gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4"
           data-pdv-layout-cards={String(LAYOUTS.length)}
         >
           {LAYOUTS.map((opt) => {
             const active = draftLayout === opt.id;
             const Icon = opt.icon;
+            const isSuper = opt.id === "supermercado";
             return (
               <div
                 key={opt.id}
+                data-testid={isSuper ? "pdv-supermercado-card" : undefined}
                 className={cn(
-                  "relative flex min-h-[17rem] min-w-0 flex-col gap-6 rounded-xl border bg-card p-6 shadow-soft transition-all",
+                  "relative flex min-h-[17rem] w-full min-w-0 max-w-none flex-col gap-6 rounded-xl border bg-card p-6 shadow-soft transition-all",
                   active ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/40 hover:shadow-card",
+                  isSuper && "border-2 border-blue-500 bg-yellow-50",
                 )}
               >
                 {active && (
-                  <div className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-glow">
+                  <div className="absolute -right-2 -top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-glow">
                     <Check className="h-4 w-4" />
                   </div>
                 )}
 
-                <div className="overflow-hidden rounded-lg border border-border bg-surface">
-                  <div className="flex h-32">
+                <div className="rounded-lg border border-border bg-surface">
+                  <div className="flex min-h-32 h-auto">
                     <div className="flex-1 grid grid-cols-3 gap-1.5 p-2">
                       {Array.from({ length: 6 }).map((_, i) => (
                         <div key={i} className="rounded bg-card border border-border" />
@@ -313,6 +316,13 @@ function PdvSectionContent() {
             );
           })}
         </div>
+
+        <p
+          className="mt-3 rounded border border-dashed border-border bg-muted/40 px-2 py-1.5 text-center text-xs font-medium text-foreground"
+          data-testid="pdv-layouts-debug-count"
+        >
+          DEBUG: 4 cards renderizados
+        </p>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving || noLoja || draftLayout === savedLayout}>
