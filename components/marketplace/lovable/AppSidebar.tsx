@@ -47,8 +47,8 @@ export function AppSidebar() {
       </nav>
       <div className="mt-auto p-4">
         <div className="rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-3 text-xs">
-          <p className="font-semibold text-sidebar-accent-foreground">Plano Premium</p>
-          <p className="mt-0.5 text-muted-foreground">Conexões ilimitadas</p>
+          <p className="font-semibold text-sidebar-accent-foreground">Marketplace</p>
+          <p className="mt-0.5 text-muted-foreground">Conexões por unidade</p>
         </div>
       </div>
     </aside>

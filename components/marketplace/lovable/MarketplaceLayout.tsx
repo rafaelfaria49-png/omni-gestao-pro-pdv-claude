@@ -12,7 +12,6 @@ import {
   Package,
   ArrowUpRight,
   Plus,
-  Settings2,
   Pencil,
   Pause,
   RefreshCw,
@@ -43,20 +42,31 @@ import {
   Search as SearchIcon,
 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { MarketplaceSettingsDrawer } from "./MarketplaceSettingsDrawer";
 import { useToast } from "@/hooks/use-toast";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
+import { useMarketplaceConnections } from "@/components/marketplace/use-marketplace-connections";
+import { MarketplaceConnectionsReal } from "@/components/marketplace/MarketplaceConnectionsReal";
 
 const PENDING_TOAST_DESCRIPTION =
   "Funcionalidade em preparação. Integração real será ativada nas próximas etapas.";
 
-/* ---------- Mock data ---------- */
-const summary = [
-  { label: "Vendas hoje", value: "R$ 28.940", delta: "+12,4%", icon: TrendingUp, tone: "text-success" },
-  { label: "Pedidos ativos", value: "146", delta: "+8 novos", icon: ShoppingCart, tone: "text-info" },
-  { label: "Marketplaces conectados", value: "4", delta: "100% saudáveis", icon: Plug, tone: "text-primary" },
-  { label: "Produtos ativos", value: "1.284", delta: "+24 hoje", icon: Package, tone: "text-warning" },
-];
+function formatTimeAgoPt(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  const diffMs = Date.now() - d.getTime();
+  if (diffMs < 0) return "—";
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "agora";
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  const days = Math.floor(h / 24);
+  return `há ${days} d`;
+}
 
 const alerts = [
   {
@@ -93,24 +103,7 @@ const alerts = [
   },
 ];
 
-type Channel = {
-  name: string;
-  initials: string;
-  color: string;
-  status: "connected" | "disconnected" | "error";
-  lastSync: string;
-};
-
-const channels: Channel[] = [
-  { name: "Mercado Livre", initials: "ML", color: "bg-yellow-400 text-black", status: "connected", lastSync: "há 4 min" },
-  { name: "Shopee", initials: "SH", color: "bg-orange-500 text-white", status: "connected", lastSync: "há 7 min" },
-  { name: "Amazon", initials: "AM", color: "bg-zinc-900 text-white", status: "error", lastSync: "há 2 h" },
-  { name: "Magalu", initials: "MG", color: "bg-blue-600 text-white", status: "connected", lastSync: "há 9 min" },
-  { name: "TikTok Shop", initials: "TT", color: "bg-black text-white", status: "disconnected", lastSync: "—" },
-  { name: "Instagram", initials: "IG", color: "bg-gradient-to-br from-pink-500 via-fuchsia-500 to-amber-400 text-white", status: "connected", lastSync: "há 12 min" },
-  { name: "Ruby", initials: "RB", color: "bg-rose-600 text-white", status: "disconnected", lastSync: "—" },
-];
-
+/* ---------- Mock data (Fase 1: conexões reais em componente dedicado) ---------- */
 const quickActions = [
   { id: "publish", label: "Publicar produto", icon: Plus, primary: true },
   { id: "sync", label: "Sincronizar agora", icon: RefreshCw },
@@ -284,25 +277,82 @@ function nfeBadge(status: NfeStatus) {
   return map[status];
 }
 
-function channelStatusPill(s: Channel["status"]) {
-  if (s === "connected") return <StatusPill status="online" label="Conectado" />;
-  if (s === "error") return <StatusPill status="error" label="Erro" />;
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-      <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
-      Desconectado
-    </span>
-  );
-}
-
-/* ---------- Page ---------- */
 export default function MarketplaceLayout() {
   const { toast } = useToast();
+  const { data: session } = useSession();
+  const { lojaAtivaId } = useLojaAtiva();
+  const mpHub = useMarketplaceConnections(lojaAtivaId);
+
+  const lastGlobalSync = useMemo(() => {
+    let max: string | null = null;
+    for (const c of mpHub.connections) {
+      if (!c.lastSyncAt) continue;
+      if (!max || new Date(c.lastSyncAt) > new Date(max)) max = c.lastSyncAt;
+    }
+    return max;
+  }, [mpHub.connections]);
+
+  const summary = useMemo(
+    () => [
+      { label: "Vendas hoje", value: "R$ 28.940", delta: "+12,4%", icon: TrendingUp, tone: "text-success" },
+      { label: "Pedidos ativos", value: "146", delta: "+8 novos", icon: ShoppingCart, tone: "text-info" },
+      {
+        label: "Marketplaces conectados",
+        value: String(mpHub.connectedCount),
+        delta: mpHub.connectedCount > 0 ? "Canais ativos" : "Nenhum canal",
+        icon: Plug,
+        tone: "text-primary",
+      },
+      { label: "Produtos ativos", value: "1.284", delta: "+24 hoje", icon: Package, tone: "text-warning" },
+    ],
+    [mpHub.connectedCount],
+  );
+
   const showPendingToast = () =>
     toast({
       title: "Integração pendente",
       description: PENDING_TOAST_DESCRIPTION,
     });
+
+  const syncAllConnected = async () => {
+    const sid = lojaAtivaId?.trim();
+    if (!sid) {
+      toast({
+        title: "Unidade não selecionada",
+        description: "Selecione a loja no cabeçalho para sincronizar.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const targets = mpHub.connections.filter((c) => c.status === "CONNECTED");
+    if (targets.length === 0) {
+      toast({ title: "Nada para sincronizar", description: "Conecte ao menos um canal primeiro." });
+      return;
+    }
+    for (const c of targets) {
+      const r = await fetch(`/api/marketplace/connections/${encodeURIComponent(c.id)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          [ASSISTEC_LOJA_HEADER]: sid,
+        },
+        body: JSON.stringify({ simulateSync: true }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => null)) as { error?: string } | null;
+        toast({
+          title: "Sincronização interrompida",
+          description: j?.error || `Erro ${r.status}`,
+          variant: "destructive",
+        });
+        await mpHub.refetch();
+        return;
+      }
+    }
+    await mpHub.refetch();
+    toast({ title: "Sincronização concluída", description: "Todos os canais conectados foram processados." });
+  };
 
   const [autos, setAutos] = useState(() => Object.fromEntries(automations.map((a) => [a.id, a.on])));
   const [productFilterChannel, setProductFilterChannel] = useState<string>("all");
@@ -337,8 +387,6 @@ export default function MarketplaceLayout() {
 
   const currentConv = conversations.find((c) => c.id === activeConv) ?? conversations[0];
 
-  const hasConnections = channels.some((c) => c.status === "connected");
-
   return (
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <div className="flex min-w-0 flex-1 flex-col">
@@ -365,10 +413,17 @@ export default function MarketplaceLayout() {
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
             </button>
             <div className="flex items-center gap-2 rounded-full border border-border bg-card pr-3 pl-1 py-1">
-              <div className="grid h-7 w-7 place-items-center rounded-full bg-primary/15 text-primary text-xs font-bold">
-                RM
+              <div className="grid h-7 w-7 place-items-center rounded-full bg-primary/15 text-primary text-[10px] font-bold">
+                {(() => {
+                  const raw = (session?.user?.name || session?.user?.email || "?").trim();
+                  const parts = raw.split(/\s+/).filter(Boolean);
+                  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+                  return raw.slice(0, 2).toUpperCase() || "?";
+                })()}
               </div>
-              <span className="text-xs font-medium">Rafael M.</span>
+              <span className="text-xs font-medium max-w-[10rem] truncate">
+                {(session?.user?.name || session?.user?.email || "Conta").trim()}
+              </span>
             </div>
           </div>
         </header>
@@ -377,7 +432,9 @@ export default function MarketplaceLayout() {
         <div className="px-4 sm:px-8 pt-8 pb-4 animate-fade-in">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-[11px] font-medium text-muted-foreground mb-3">
             <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-soft" />
-            {channels.filter((c) => c.status === "connected").length} canais conectados • Última sincronização há 4 min
+            {mpHub.connectedCount}{" "}
+            {mpHub.connectedCount === 1 ? "canal conectado" : "canais conectados"} · Última sincronização{" "}
+            {formatTimeAgoPt(lastGlobalSync)}
           </div>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="min-w-0">
@@ -388,8 +445,9 @@ export default function MarketplaceLayout() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={showPendingToast}
-                title="Integração pendente"
+                type="button"
+                onClick={() => void syncAllConnected()}
+                title="Sincronizar todos os canais conectados"
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
               >
                 <RefreshCw className="h-4 w-4" /> Sincronizar agora
@@ -441,26 +499,6 @@ export default function MarketplaceLayout() {
             })}
           </section>
 
-          {/* ============ Onboarding (se vazio) ============ */}
-          {!hasConnections && (
-            <section className="surface-card rounded-2xl border border-dashed border-primary/40 bg-card p-8 text-center">
-              <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary mb-4">
-                <Plug className="h-6 w-6" />
-              </div>
-              <h2 className="font-display text-xl font-bold">Conecte seu primeiro marketplace para começar a vender</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Integre seus canais em poucos cliques e centralize toda a operação aqui.
-              </p>
-              <button
-                onClick={showPendingToast}
-                title="Integração pendente"
-                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-              >
-                <Plus className="h-4 w-4" /> Conectar marketplace
-              </button>
-            </section>
-          )}
-
           {/* ============ Central de alertas ============ */}
           <section>
             <SectionHeader
@@ -505,63 +543,14 @@ export default function MarketplaceLayout() {
             </div>
           </section>
 
-          {/* ============ Conexões ============ */}
+          {/* ============ Conexões (dados reais) ============ */}
           <section>
             <SectionHeader
               icon={Plug}
-              title="Conectar marketplaces"
-              subtitle="Centralize suas vendas integrando seus canais"
-              action={
-                <button
-                  onClick={showPendingToast}
-                  title="Integração pendente"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Adicionar canal
-                </button>
-              }
+              title="Conexões de marketplace"
+              subtitle="Contas vinculadas a esta unidade, com histórico de sincronização persistido"
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-              {channels.map((c) => (
-                <div
-                  key={c.name}
-                  className="surface-card surface-card-hover rounded-2xl border border-border bg-card p-5 flex flex-col gap-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className={cn("grid h-11 w-11 place-items-center rounded-xl font-bold text-sm", c.color)}>
-                      {c.initials}
-                    </div>
-                    {channelStatusPill(c.status)}
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">{c.name}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Última sincronização: <span className="font-medium text-foreground/80">{c.lastSync}</span>
-                    </p>
-                  </div>
-                  <button
-                    onClick={showPendingToast}
-                    title="Integração pendente"
-                    className={cn(
-                      "mt-auto inline-flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-                      c.status === "connected"
-                        ? "border border-border bg-muted/60 hover:bg-muted text-foreground"
-                        : "bg-primary text-primary-foreground hover:bg-primary/90",
-                    )}
-                  >
-                    {c.status === "connected" ? (
-                      <>
-                        <Settings2 className="h-3.5 w-3.5" /> Gerenciar
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="h-3.5 w-3.5" /> Conectar
-                      </>
-                    )}
-                  </button>
-                </div>
-              ))}
-            </div>
+            <MarketplaceConnectionsReal storeId={lojaAtivaId} hub={mpHub} />
           </section>
 
           {/* ============ Ações rápidas ============ */}
