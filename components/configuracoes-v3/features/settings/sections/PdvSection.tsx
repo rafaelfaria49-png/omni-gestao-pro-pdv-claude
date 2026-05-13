@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { SectionHeader } from "../components/SectionHeader";
 import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
@@ -59,6 +60,14 @@ const LAYOUTS: PdvLayout[] = [
   },
 ];
 
+/** Marcadores DOM de diagnóstico (alinhados ao pedido; ids internos mantêm-se em pt). */
+const PDV_CARD_TEST_ID: Record<LayoutId, string> = {
+  classico: "pdv-classic",
+  rapido: "pdv-rapido",
+  assistencia: "pdv-assistencia",
+  supermercado: "pdv-supermercado",
+};
+
 function readLocalPdvMain(): "classic" | "supermercado" {
   if (typeof window === "undefined") return "classic";
   try {
@@ -90,6 +99,7 @@ function safePrinterRecord(raw: unknown): Record<string, unknown> {
 }
 
 function PdvSectionContent() {
+  const pathname = usePathname();
   const { toast } = useToast();
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
   const { hydrated, settings, pdvParams, refresh, storeId } = useStoreSettings();
@@ -111,6 +121,16 @@ function PdvSectionContent() {
     if (!hydrated) return;
     syncFromServer();
   }, [hydrated, syncFromServer, storeId]);
+
+  useEffect(() => {
+    console.log("[PDV DEBUG]", {
+      component: "PdvSectionContent",
+      pathname,
+      hydrated,
+      layoutCount: LAYOUTS.length,
+      layoutIds: LAYOUTS.map((x) => x.id),
+    });
+  }, [pathname, hydrated]);
 
   const noLoja = !lojaAtivaId?.trim();
   const busy = !hydrated || saving;
@@ -212,8 +232,9 @@ function PdvSectionContent() {
         role="alert"
         className="rounded-lg border-2 border-primary bg-primary/15 px-4 py-3 text-center text-base font-bold tracking-tight text-foreground shadow-sm"
         data-pdv-layouts-active-banner="v4"
+        data-pdv-trace-component="PdvSection-v3-real"
       >
-        PDV LAYOUTS V4 ATIVO — 4 layouts
+        COMPONENTE V3 REAL — PdvSection.tsx · PDV LAYOUTS V4 ATIVO — 4 layouts (array LAYOUTS.length=4)
       </div>
 
       <SectionHeader
@@ -260,13 +281,19 @@ function PdvSectionContent() {
             return (
               <div
                 key={opt.id}
-                data-testid={isSuper ? "pdv-supermercado-card" : undefined}
+                data-testid={PDV_CARD_TEST_ID[opt.id]}
                 className={cn(
                   "relative flex min-h-[17rem] w-full min-w-0 max-w-none flex-col gap-6 rounded-xl border bg-card p-6 shadow-soft transition-all",
                   active ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/40 hover:shadow-card",
                   isSuper && "border-2 border-blue-500 bg-yellow-50",
                 )}
               >
+                <span
+                  className="text-[10px] font-mono font-semibold leading-none text-muted-foreground"
+                  data-pdv-card-debug-label={opt.id}
+                >
+                  DEBUG-ID: {opt.id}
+                </span>
                 {active && (
                   <div className="absolute -right-2 -top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-glow">
                     <Check className="h-4 w-4" />
@@ -446,11 +473,23 @@ function PdvSectionContent() {
   );
 }
 
+function PdvSectionMountLog() {
+  const pathname = usePathname();
+  useEffect(() => {
+    console.log("[PDV DEBUG]", {
+      component: "PdvSection (export + providers shell)",
+      pathname,
+    });
+  }, [pathname]);
+  return null;
+}
+
 export function PdvSection() {
   return (
     <ConfigEmpresaProvider>
       <LojaAtivaProvider>
         <StoreSettingsProvider>
+          <PdvSectionMountLog />
           <PdvSectionContent />
         </StoreSettingsProvider>
       </LojaAtivaProvider>

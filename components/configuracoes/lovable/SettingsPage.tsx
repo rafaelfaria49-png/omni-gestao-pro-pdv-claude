@@ -40,6 +40,14 @@ export default function SettingsPage() {
 
   return (
     <div className="lovable-settings">
+      <p
+        role="status"
+        className="border-b-2 border-warning bg-warning/20 px-3 py-2 text-center text-xs font-mono font-bold text-foreground"
+        data-pdv-trace-shell="SettingsPage-lovable"
+      >
+        COMPONENTE LEGADO — SettingsPage (components/configuracoes/lovable/SettingsPage.tsx) — shell Lovable; não
+        há import desta página em app/ no grep actual
+      </p>
       <div className="lovable-settings-app flex min-h-screen flex-col bg-surface text-foreground">
         <div className="lovable-settings-shell flex-1">
           <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-8 sm:py-10">
