@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, type JSX } from "react";
-import { usePathname } from "next/navigation";
+import { useState, type JSX } from "react";
 import { Menu } from "lucide-react";
 import { SETTINGS_SECTIONS, SectionId } from "./features/settings/sections";
 import { SettingsSidebar } from "./features/settings/components/SettingsSidebar";
@@ -37,18 +36,8 @@ const SECTION_COMPONENTS: Record<SectionId, () => JSX.Element> = {
 };
 
 export default function ConfiguracoesV3Page() {
-  const pathname = usePathname();
   const [active, setActive] = useState<SectionId>("aparencia");
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    console.log("[PDV DEBUG]", {
-      component: "ConfiguracoesV3Page",
-      pathname,
-      activeSection: active,
-      pdvSectionMounted: active === "pdv",
-    });
-  }, [pathname, active]);
 
   const Active = SECTION_COMPONENTS[active];
   const currentLabel = SETTINGS_SECTIONS.find((s) => s.id === active)?.label ?? "";
@@ -68,14 +57,6 @@ export default function ConfiguracoesV3Page() {
 
         {/* Conteúdo */}
         <main className="flex-1 min-w-0 flex flex-col">
-          <p
-            role="status"
-            className="shrink-0 border-b border-info/40 bg-info/15 px-3 py-1.5 text-center text-[11px] font-mono font-bold leading-tight text-foreground"
-            data-pdv-trace-shell="ConfiguracoesV3Page"
-          >
-            COMPONENTE SHELL: ConfiguracoesV3Page — app/dashboard/configuracoes → secção &quot;pdv&quot; usa
-            ./features/settings/sections/PdvSection
-          </p>
           {/* Top bar mobile */}
           <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>

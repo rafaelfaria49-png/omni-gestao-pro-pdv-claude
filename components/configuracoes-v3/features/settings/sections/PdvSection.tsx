@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import { SectionHeader } from "../components/SectionHeader";
 import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
@@ -23,7 +22,10 @@ import {
 /** Mesma chave que `vendas-pdv.tsx` / `configuracoes-sistema.tsx` (layout classic vs supermercado no navegador). */
 const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout";
 
-/** Chave opcional em `printerConfig` para preservar preferência visual do card selecionado no V3. */
+/**
+ * Chave em `printerConfig` — preferência de layout V3 (fonte de verdade após salvar).
+ * Valores: `classico` | `rapido` | `assistencia` | `supermercado` (legado: `ia` → assistência).
+ */
 const V3_PDV_SECTION_CARD_KEY = "v3PdvSectionCard";
 
 type LayoutId = "classico" | "rapido" | "assistencia" | "supermercado";
@@ -43,24 +45,30 @@ const LAYOUTS: PdvLayout[] = [
   {
     id: "rapido",
     name: "PDV Rápido",
-    description: "Mesmo motor Clássico com fluxo enxuto e atalhos; use /dashboard/vendas?modo=rapido ou o PDV aplicará a preferência salva.",
+    description: "Modo rápido com atalhos e fluxo enxuto.",
     icon: Zap,
   },
   {
     id: "assistencia",
     name: "PDV Assistência",
-    description: "Foco em assistência técnica, venda de peças e atendimento no balcão.",
+    description: "Fluxo de balcão para assistência técnica, peças e atendimento.",
     icon: Wrench,
   },
   {
     id: "supermercado",
     name: "PDV Supermercado",
-    description: "Tela dedicada com busca e fluxo orientado a variedades / alto giro no mesmo motor de vendas e caixa.",
+    description: "Fluxo dedicado para variedades/supermercado.",
     icon: Store,
   },
 ];
 
-/** Marcadores DOM de diagnóstico (alinhados ao pedido; ids internos mantêm-se em pt). */
+/**
+ * Motor real (rota: `/dashboard/vendas`):
+ * - Clássico + Rápido: `PdvClassic` → `PdvOmniClassicShell` (`classicLayoutKind=lovable`); Rápido só liga `isModoRapido` + LS `omnigestao-pdv-modo=rapido`.
+ * - Assistência: `PdvClassic` → `PdvAssistenciaEnterprise` (`pdvClassicLayout=services`).
+ * - Supermercado: `PdvSupermercado` (layout `classic` vs `supermercado` em `vendas-pdv.tsx`).
+ */
+
 const PDV_CARD_TEST_ID: Record<LayoutId, string> = {
   classico: "pdv-classic",
   rapido: "pdv-rapido",
@@ -79,18 +87,33 @@ function readLocalPdvMain(): "classic" | "supermercado" {
   return "classic";
 }
 
-/** Resolve o card ativo a partir do LS de layout + preferência de modo rápido + settings remotos. */
+function isLayoutId(v: unknown): v is LayoutId {
+  return v === "classico" || v === "rapido" || v === "assistencia" || v === "supermercado";
+}
+
+/**
+ * Prioridade (preferência gravada na unidade vence o estado local “solto”):
+ * 1) `printerConfig.v3PdvSectionCard` salvo pelo utilizador (4 layouts).
+ * 2) LS `@omnigestao:pdv-layout=supermercado` (binário no PDV; alinhar se servidor ainda não tiver chave).
+ * 3) `omnigestao-pdv-modo=rapido` (só se não houver card persistido compatível).
+ * 4) `pdvParams.pdvClassicLayout=services` → assistência (legado sem card).
+ * 5) Clássico.
+ */
 function resolveActiveLayoutId(printerConfig: Record<string, unknown> | null): LayoutId {
-  const localMain = readLocalPdvMain();
-  if (localMain === "supermercado") return "supermercado";
+  const rawCard = printerConfig?.[V3_PDV_SECTION_CARD_KEY];
+  if (rawCard === "ia") return "assistencia";
+  if (isLayoutId(rawCard)) return rawCard;
+
+  if (readLocalPdvMain() === "supermercado") return "supermercado";
+
   const modo = readOmnigestaoPdvModoPreferencia();
   if (modo === "rapido") return "rapido";
+
   const pdvParamsRaw = printerConfig?.pdvParams;
   const pdvParams =
     pdvParamsRaw && typeof pdvParamsRaw === "object" ? (pdvParamsRaw as Record<string, unknown>) : null;
   if (pdvParams?.pdvClassicLayout === "services") return "assistencia";
-  const card = printerConfig?.[V3_PDV_SECTION_CARD_KEY];
-  if (card === "assistencia" || card === "ia") return "assistencia";
+
   return "classico";
 }
 
@@ -99,7 +122,6 @@ function safePrinterRecord(raw: unknown): Record<string, unknown> {
 }
 
 function PdvSectionContent() {
-  const pathname = usePathname();
   const { toast } = useToast();
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
   const { hydrated, settings, pdvParams, refresh, storeId } = useStoreSettings();
@@ -121,16 +143,6 @@ function PdvSectionContent() {
     if (!hydrated) return;
     syncFromServer();
   }, [hydrated, syncFromServer, storeId]);
-
-  useEffect(() => {
-    console.log("[PDV DEBUG]", {
-      component: "PdvSectionContent",
-      pathname,
-      hydrated,
-      layoutCount: LAYOUTS.length,
-      layoutIds: LAYOUTS.map((x) => x.id),
-    });
-  }, [pathname, hydrated]);
 
   const noLoja = !lojaAtivaId?.trim();
   const busy = !hydrated || saving;
@@ -160,19 +172,14 @@ function PdvSectionContent() {
         draftLayout === "assistencia" ? "services" : "lovable";
       const nextPdvParams = {
         ...pdvParams,
-        ...(draftLayout === "rapido" || draftLayout === "supermercado"
-          ? {}
-          : { pdvClassicLayout: classicLayoutKind }),
+        pdvClassicLayout: classicLayoutKind,
       };
 
       const nextPrinter: Record<string, unknown> = {
         ...base,
         pdvParams: nextPdvParams,
+        [V3_PDV_SECTION_CARD_KEY]: draftLayout,
       };
-
-      if (draftLayout === "assistencia") nextPrinter[V3_PDV_SECTION_CARD_KEY] = "assistencia";
-      else if (draftLayout === "classico") nextPrinter[V3_PDV_SECTION_CARD_KEY] = "classico";
-      else Reflect.deleteProperty(nextPrinter, V3_PDV_SECTION_CARD_KEY);
 
       const res = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
         method: "PUT",
@@ -228,15 +235,6 @@ function PdvSectionContent() {
 
   return (
     <div className="space-y-6">
-      <div
-        role="alert"
-        className="rounded-lg border-2 border-primary bg-primary/15 px-4 py-3 text-center text-base font-bold tracking-tight text-foreground shadow-sm"
-        data-pdv-layouts-active-banner="v4"
-        data-pdv-trace-component="PdvSection-v3-real"
-      >
-        COMPONENTE V3 REAL — PdvSection.tsx · PDV LAYOUTS V4 ATIVO — 4 layouts (array LAYOUTS.length=4)
-      </div>
-
       <SectionHeader
         icon={<Monitor className="h-5 w-5" />}
         title="Tema do PDV"
@@ -277,7 +275,6 @@ function PdvSectionContent() {
           {LAYOUTS.map((opt) => {
             const active = draftLayout === opt.id;
             const Icon = opt.icon;
-            const isSuper = opt.id === "supermercado";
             return (
               <div
                 key={opt.id}
@@ -285,15 +282,8 @@ function PdvSectionContent() {
                 className={cn(
                   "relative flex min-h-[17rem] w-full min-w-0 max-w-none flex-col gap-6 rounded-xl border bg-card p-6 shadow-soft transition-all",
                   active ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/40 hover:shadow-card",
-                  isSuper && "border-2 border-blue-500 bg-yellow-50",
                 )}
               >
-                <span
-                  className="text-[10px] font-mono font-semibold leading-none text-muted-foreground"
-                  data-pdv-card-debug-label={opt.id}
-                >
-                  DEBUG-ID: {opt.id}
-                </span>
                 {active && (
                   <div className="absolute -right-2 -top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-glow">
                     <Check className="h-4 w-4" />
@@ -344,13 +334,6 @@ function PdvSectionContent() {
             );
           })}
         </div>
-
-        <p
-          className="mt-3 rounded border border-dashed border-border bg-muted/40 px-2 py-1.5 text-center text-xs font-medium text-foreground"
-          data-testid="pdv-layouts-debug-count"
-        >
-          DEBUG: 4 cards renderizados
-        </p>
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving || noLoja || draftLayout === savedLayout}>
@@ -465,23 +448,8 @@ function PdvSectionContent() {
           </div>
         </div>
       </div>
-
-      <p className="text-center text-xs text-muted-foreground pt-2 border-t border-border/60">
-        Layouts disponíveis: {PDV_LAYOUTS_COUNT}
-      </p>
     </div>
   );
-}
-
-function PdvSectionMountLog() {
-  const pathname = usePathname();
-  useEffect(() => {
-    console.log("[PDV DEBUG]", {
-      component: "PdvSection (export + providers shell)",
-      pathname,
-    });
-  }, [pathname]);
-  return null;
 }
 
 export function PdvSection() {
@@ -489,7 +457,6 @@ export function PdvSection() {
     <ConfigEmpresaProvider>
       <LojaAtivaProvider>
         <StoreSettingsProvider>
-          <PdvSectionMountLog />
           <PdvSectionContent />
         </StoreSettingsProvider>
       </LojaAtivaProvider>
