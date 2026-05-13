@@ -29,3 +29,23 @@ export type MarketplaceCatalogProductDTO = {
   /** Vínculos desta unidade; filtrados por `connectionId` na query quando informado. */
   links: MarketplaceProductLinkDTO[]
 }
+
+/** Linha do painel “Anúncios por canal” (Fase 3). */
+export type MarketplaceAnnouncementRowDTO = {
+  link: MarketplaceProductLinkDTO
+  produtoId: string
+  produtoName: string
+  produtoSku: string | null
+  connectionId: string
+  connectionAccountName: string
+  provider: string
+}
+
+export type MarketplaceSyncLogEntryDTO = {
+  id: string
+  message: string
+  createdAt: string
+  connectionId: string
+  produtoId: string | null
+  productLinkId: string | null
+}

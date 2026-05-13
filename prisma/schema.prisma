@@ -159,18 +159,25 @@ model MarketplaceConnection {
 
 /**
  * Histórico de sincronização simulada / futura sync real.
+ * Opcionalmente amarrado a produto e vínculo (Fase 3 — filtros na UI).
  */
 model MarketplaceSyncLog {
-  id           String                 @id @default(cuid())
-  storeId      String                 @map("storeId")
-  store        Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  connectionId String                 @map("connectionId")
-  connection   MarketplaceConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  message      String                 @map("message")
-  createdAt    DateTime               @default(now()) @map("createdAt")
+  id             String                  @id @default(cuid())
+  storeId        String                  @map("storeId")
+  store          Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  connectionId   String                  @map("connectionId")
+  connection     MarketplaceConnection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  produtoId      String?                 @map("produtoId")
+  produto        Produto?                @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  productLinkId  String?                 @map("productLinkId")
+  productLink    MarketplaceProductLink? @relation(fields: [productLinkId], references: [id], onDelete: SetNull)
+  message        String                  @map("message")
+  createdAt      DateTime                @default(now()) @map("createdAt")
 
   @@index([storeId])
   @@index([connectionId, createdAt])
+  @@index([storeId, produtoId, createdAt])
+  @@index([productLinkId, createdAt])
   @@map("marketplace_sync_logs")
 }
 
@@ -195,6 +202,8 @@ model MarketplaceProductLink {
   metadata     Json?                        @map("metadata") @db.JsonB
   createdAt    DateTime                     @default(now()) @map("createdAt")
   updatedAt    DateTime                     @updatedAt @map("updatedAt")
+
+  syncLogs MarketplaceSyncLog[]
 
   @@unique([connectionId, produtoId], name: "marketplace_product_link_connection_produto")
   @@index([storeId])
@@ -716,6 +725,7 @@ model Produto {
   media                     ProductMedia[]
   marketplaceListings     MarketplaceListing[]
   marketplaceProductLinks MarketplaceProductLink[]
+  marketplaceSyncLogs     MarketplaceSyncLog[]
 
   @@unique([storeId, sku], name: "storeId_sku")
   @@unique([storeId, barcode], name: "storeId_barcode")

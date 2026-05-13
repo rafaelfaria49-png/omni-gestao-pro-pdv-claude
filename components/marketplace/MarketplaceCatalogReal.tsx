@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Loader2, Package, RefreshCw, Upload } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
@@ -56,6 +56,15 @@ export function MarketplaceCatalogReal({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busyProductId, setBusyProductId] = useState<string | null>(null)
+  const prevStoreRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const sid = storeId?.trim() ?? ""
+    if (prevStoreRef.current !== null && prevStoreRef.current !== sid && sid) {
+      setConnectionId("")
+    }
+    prevStoreRef.current = sid || null
+  }, [storeId])
 
   useEffect(() => {
     if (!connectionId && connections.length > 0) {

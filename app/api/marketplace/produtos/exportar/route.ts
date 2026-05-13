@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { requireMarketplaceApi } from "@/lib/marketplace/api-gate"
+import { allowMarketplaceSimulateErrors } from "@/lib/marketplace/simulate-flags"
 import { exportMarketplaceProducts } from "@/lib/marketplace/services/marketplace-products-service"
 import { prismaEnsureConnected } from "@/lib/prisma"
 
@@ -26,7 +27,8 @@ export async function POST(req: Request) {
     : typeof b.productId === "string" && b.productId.trim()
       ? [b.productId.trim()]
       : []
-  const simulatePublishError = Boolean(b.simulatePublishError)
+  const simulatePublishError =
+    allowMarketplaceSimulateErrors() && Boolean(b.simulatePublishError)
 
   if (!connectionId) {
     return NextResponse.json({ error: "connectionId é obrigatório." }, { status: 400 })

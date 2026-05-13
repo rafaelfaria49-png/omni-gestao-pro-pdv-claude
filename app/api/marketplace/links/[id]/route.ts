@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { requireMarketplaceApi } from "@/lib/marketplace/api-gate"
 import { allowMarketplaceSimulateErrors } from "@/lib/marketplace/simulate-flags"
-import { patchMarketplaceProductLink } from "@/lib/marketplace/services/marketplace-products-service"
+import { patchMarketplaceLinkById } from "@/lib/marketplace/services/marketplace-products-service"
 import { prismaEnsureConnected } from "@/lib/prisma"
 
 export const runtime = "nodejs"
@@ -14,9 +14,9 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   const gate = await requireMarketplaceApi(req)
   if (!gate.ok) return gate.response
 
-  const { id: produtoId } = await ctx.params
-  if (!produtoId?.trim()) {
-    return NextResponse.json({ error: "id do produto inválido" }, { status: 400 })
+  const { id: linkId } = await ctx.params
+  if (!linkId?.trim()) {
+    return NextResponse.json({ error: "id do vínculo inválido" }, { status: 400 })
   }
 
   let body: unknown
@@ -27,23 +27,22 @@ export async function PATCH(req: Request, ctx: RouteCtx) {
   }
 
   const b = body && typeof body === "object" ? (body as Record<string, unknown>) : {}
-  const connectionId = typeof b.connectionId === "string" ? b.connectionId.trim() : ""
-  const action = b.action === "sync" || b.action === "update_stock" ? b.action : null
+  const action =
+    b.action === "sync" || b.action === "update_stock" || b.action === "republicate" ? b.action : null
   const simulateError = allowMarketplaceSimulateErrors() && Boolean(b.simulateError)
 
-  if (!connectionId) {
-    return NextResponse.json({ error: "connectionId é obrigatório." }, { status: 400 })
-  }
   if (!action) {
-    return NextResponse.json({ error: "action inválida. Use: sync | update_stock." }, { status: 400 })
+    return NextResponse.json(
+      { error: "action inválida. Use: sync | update_stock | republicate." },
+      { status: 400 },
+    )
   }
 
   await prismaEnsureConnected()
   try {
-    const link = await patchMarketplaceProductLink({
+    const link = await patchMarketplaceLinkById({
       storeId: gate.storeId,
-      produtoId: produtoId.trim(),
-      connectionId,
+      linkId: linkId.trim(),
       action,
       simulateError,
     })

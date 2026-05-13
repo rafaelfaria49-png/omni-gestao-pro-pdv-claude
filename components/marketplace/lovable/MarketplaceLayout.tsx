@@ -19,6 +19,7 @@ import {
   Sparkles,
   Boxes,
   Tag,
+  Tags,
   MessageSquare,
   AlertTriangle,
   AlertCircle,
@@ -49,6 +50,7 @@ import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { useMarketplaceConnections } from "@/components/marketplace/use-marketplace-connections";
 import { MarketplaceConnectionsReal } from "@/components/marketplace/MarketplaceConnectionsReal";
 import { MarketplaceCatalogReal } from "@/components/marketplace/MarketplaceCatalogReal";
+import { MarketplaceAnnouncementsPanel } from "@/components/marketplace/MarketplaceAnnouncementsPanel";
 
 const PENDING_TOAST_DESCRIPTION =
   "Funcionalidade em preparação. Integração real será ativada nas próximas etapas.";
@@ -581,6 +583,20 @@ export default function MarketplaceLayout() {
               connections={mpHub.connections}
               onProductCount={setCatalogProductCount}
               onCatalogActivity={() => mpHub.refetch()}
+            />
+          </section>
+
+          {/* ============ Anúncios por canal (Fase 3) ============ */}
+          <section>
+            <SectionHeader
+              icon={Tags}
+              title="Anúncios por canal"
+              subtitle="Painel operacional dos vínculos MarketplaceProductLink — filtros, ações simuladas e logs por produto/canal"
+            />
+            <MarketplaceAnnouncementsPanel
+              storeId={lojaAtivaId}
+              connections={mpHub.connections}
+              onActivity={() => mpHub.refetch()}
             />
           </section>
 
