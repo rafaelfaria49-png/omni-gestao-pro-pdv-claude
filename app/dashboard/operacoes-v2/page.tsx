@@ -25,7 +25,7 @@ const OperacoesHubIsolated = dynamic(
 export default function OperacoesV2Page() {
   return (
     <Suspense fallback={<OperacoesV2LoadingFallback />}>
-      <div className="-mx-4 min-w-0 sm:-mx-6 lg:-mx-8">
+      <div className="-mx-4 min-w-0 overflow-x-hidden sm:-mx-6 lg:-mx-8">
         <OperacoesHubIsolated />
       </div>
     </Suspense>

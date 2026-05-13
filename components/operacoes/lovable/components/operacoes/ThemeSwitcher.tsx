@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils";
 export type HubTheme = "light" | "soft-ice" | "midnight" | "black";
 
 const themes: { id: HubTheme; label: string; swatch: string }[] = [
-  { id: "light", label: "Light", swatch: "bg-white border-slate-300" },
-  { id: "soft-ice", label: "Soft Ice", swatch: "bg-slate-100 border-slate-300" },
-  { id: "midnight", label: "Midnight", swatch: "bg-slate-800 border-slate-700" },
-  { id: "black", label: "Black", swatch: "bg-[#020617] border-slate-800" },
+  { id: "light", label: "Light", swatch: "bg-background border-border" },
+  { id: "soft-ice", label: "Soft Ice", swatch: "bg-muted border-border" },
+  { id: "midnight", label: "Midnight", swatch: "bg-card border-border" },
+  { id: "black", label: "Black", swatch: "bg-foreground border-border" },
 ];
 
 interface Props {

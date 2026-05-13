@@ -1238,9 +1238,9 @@ export function PdvClassic({
 
   if (storePdvGate.block) {
     return (
-      <div className="flex min-h-[360px] w-full flex-1 flex-col items-center justify-center gap-4 rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center backdrop-blur-xl">
-        <h2 className="text-xl font-black text-white">Cadastre o nome da empresa desta unidade</h2>
-        <p className="max-w-lg text-base text-white/70">
+      <div className="flex min-h-[360px] w-full flex-1 flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-muted/40 px-6 py-10 text-center backdrop-blur-xl">
+        <h2 className="text-xl font-black text-foreground">Cadastre o nome da empresa desta unidade</h2>
+        <p className="max-w-lg text-base text-muted-foreground">
           O PDV fica bloqueado até a unidade <strong>{lojaAtivaId}</strong> ter um <strong>Nome fantasia</strong> salvo no
           banco. Acesse <strong>Configurações → Dados da Empresa</strong>, preencha e salve.
         </p>
@@ -1446,7 +1446,7 @@ export function PdvClassic({
             </>
 
             {saleMode === "balcao" && (
-            <div className="shrink-0 border-b border-dashed border-neutral-200/80 bg-background py-2 dark:border-white/10">
+            <div className="shrink-0 border-b border-dashed border-border bg-background py-2 dark:border-white/10">
               <div className="space-y-2 px-1 sm:px-2">
                 <div className="flex flex-col items-center gap-4 sm:flex-row">
                   <div className="relative w-full flex-1">
@@ -1473,7 +1473,7 @@ export function PdvClassic({
                             setSelectedCustomer(null)
                             setCustomerSearch("")
                           }}
-                          className="text-black/70 hover:text-destructive"
+                          className="text-muted-foreground hover:text-destructive"
                         >
                           <X className="h-4 w-4" />
                         </Button>
@@ -1495,8 +1495,8 @@ export function PdvClassic({
                             >
                               <div className="flex items-center justify-between">
                                 <div>
-                                  <p className="text-sm font-medium text-black">{customer.name}</p>
-                                  <p className="text-xs text-black/70">{customer.phone}</p>
+                                  <p className="text-sm font-medium text-foreground">{customer.name}</p>
+                                  <p className="text-xs text-muted-foreground">{customer.phone}</p>
                                 </div>
                                 {customer.saldoDevedor && customer.saldoDevedor > 0 && (
                                   <Badge variant="destructive" className="text-xs">
@@ -1507,7 +1507,7 @@ export function PdvClassic({
                             </button>
                           ))
                         ) : (
-                          <div className="px-4 py-2 text-center text-sm text-black/70">Nenhum cliente encontrado</div>
+                          <div className="px-4 py-2 text-center text-sm text-muted-foreground">Nenhum cliente encontrado</div>
                         )}
                       </div>
                     )}
@@ -1516,7 +1516,7 @@ export function PdvClassic({
                   {selectedCustomer && (
                     <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
                       <User className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium text-black">{selectedCustomer.name}</span>
+                      <span className="text-sm font-medium text-foreground">{selectedCustomer.name}</span>
                       {selectedCustomer.saldoDevedor && selectedCustomer.saldoDevedor > 0 && (
                         <Badge variant="outline" className="border-amber-500/50 text-xs text-amber-500">
                           Deve R$ {selectedCustomer.saldoDevedor.toFixed(2)}
@@ -1530,7 +1530,7 @@ export function PdvClassic({
           )}
 
           {saleMode === "completa" && (
-            <div className="shrink-0 border-b border-neutral-200/80 bg-background py-2 dark:border-white/10">
+            <div className="shrink-0 border-b border-border bg-background py-2 dark:border-white/10">
               <div className="px-1 sm:px-2">
                 <div className="flex flex-col gap-4 lg:flex-row">
                   <div className="relative flex-1">
@@ -1618,7 +1618,7 @@ export function PdvClassic({
             </div>
           )}
 
-          <div className="shrink-0 border-b border-neutral-200/70 py-2.5 dark:border-white/10">
+          <div className="shrink-0 border-b border-border py-2.5 dark:border-white/10">
             <div className="px-1 sm:px-2">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -1654,7 +1654,7 @@ export function PdvClassic({
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-12 shrink-0 border-2 border-black/20 px-4 text-base font-semibold text-foreground hover:bg-neutral-100 dark:border-white/10 dark:hover:bg-black/80"
+                  className="h-12 shrink-0 border-2 border-border px-4 text-base font-semibold text-foreground hover:bg-muted/80 dark:border-white/10 dark:hover:bg-black/80"
                 >
                   <Barcode className="mr-2 h-5 w-5 text-foreground/55 dark:text-white/55" />
                   Leitor
@@ -1664,15 +1664,15 @@ export function PdvClassic({
           </div>
 
           {pdvUiMode !== "scanner" && (
-            <div className="shrink-0 border-b border-neutral-200/70 py-2 dark:border-white/10">
+            <div className="shrink-0 border-b border-border py-2 dark:border-white/10">
               <div className="px-1 sm:px-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-base font-extrabold text-black sm:text-lg">Serviços rápidos</p>
+                  <p className="text-base font-extrabold text-foreground sm:text-lg">Serviços rápidos</p>
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-11 border-2 border-black/20 px-3 text-sm font-bold text-black"
+                    className="h-11 border-2 border-border px-3 text-sm font-bold text-foreground"
                     onClick={() => setShowKeyboardHelp(true)}
                   >
                     <Keyboard className="mr-1.5 h-4 w-4" /> Atalhos
@@ -1680,14 +1680,14 @@ export function PdvClassic({
                 </div>
                 <div className="mt-2 flex flex-wrap items-stretch gap-2">
                   {quickItems.length === 0 ? (
-                    <p className="w-full text-sm text-black/70">Configure em Configurações → Personalização do PDV.</p>
+                    <p className="w-full text-sm text-muted-foreground">Configure em Configurações → Personalização do PDV.</p>
                   ) : (
                     quickItems.map((item) => (
                       <button
                         key={item.id}
                         type="button"
                         onClick={() => addQuickItem(item)}
-                        className="inline-flex min-h-[56px] max-w-full min-w-0 flex-1 basis-[calc(50%-4px)] items-center justify-between gap-2 rounded-xl border-2 border-black/20 bg-neutral-100 px-3 py-2.5 text-left text-base font-bold shadow-sm transition-colors hover:bg-neutral-200 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:border-primary/50 dark:hover:bg-black/70 sm:basis-auto sm:text-lg"
+                        className="inline-flex min-h-[56px] max-w-full min-w-0 flex-1 basis-[calc(50%-4px)] items-center justify-between gap-2 rounded-xl border-2 border-border bg-muted px-3 py-2.5 text-left text-base font-bold shadow-sm transition-colors hover:bg-muted/70 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:border-primary/50 dark:hover:bg-black/70 sm:basis-auto sm:text-lg"
                       >
                         <span className="truncate text-foreground dark:text-white">{item.name}</span>
                         <span className="shrink-0 font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
@@ -1725,7 +1725,7 @@ export function PdvClassic({
                       key={comp.id}
                       type="button"
                       onClick={() => addComplemento(selectedProduct.id, comp.name, comp.price)}
-                      className="inline-flex shrink-0 items-center gap-1 rounded border border-primary/40 bg-white px-2 py-0.5 text-[10px] text-foreground hover:bg-primary/10 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:border-primary/50"
+                      className="inline-flex shrink-0 items-center gap-1 rounded border border-primary/40 bg-background px-2 py-0.5 text-[10px] text-foreground hover:bg-primary/10 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:border-primary/50"
                     >
                       <Plus className="h-3 w-3 text-foreground/55 dark:text-white/55" />
                       <span className="max-w-[120px] truncate dark:text-white">{comp.name}</span>
@@ -1739,7 +1739,7 @@ export function PdvClassic({
             ) : null}
 
             {filteredProducts.length === 0 ? (
-              <p className="py-8 text-center text-base font-medium text-black/75">
+              <p className="py-8 text-center text-base font-medium text-muted-foreground">
                 {!searchTrim
                   ? "Telas, baterias e conectores ficam ocultos até você buscar. Digite o nome ou a categoria."
                   : "Nenhum produto encontrado."}
@@ -1751,13 +1751,13 @@ export function PdvClassic({
                     key={product.id}
                     type="button"
                     onClick={() => addToCart(product)}
-                    className="min-h-[118px] w-full rounded-xl border-2 border-black/12 bg-white px-3 py-3 text-left shadow-sm transition-colors hover:border-black/30 hover:bg-neutral-50 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:border-primary/50 dark:hover:bg-black/70 sm:px-4 sm:py-3.5"
+                    className="min-h-[118px] w-full rounded-xl border-2 border-border bg-card px-3 py-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/50 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:border-primary/50 dark:hover:bg-black/70 sm:px-4 sm:py-3.5"
                   >
                     <div className="flex flex-col gap-1.5">
                       <span className="line-clamp-2 min-h-0 break-words text-left text-base font-bold leading-snug text-foreground dark:text-white sm:text-[1.05rem]">
                         {product.name}
                       </span>
-                      <div className="flex items-baseline justify-between gap-2 border-t border-black/5 pt-1.5 dark:border-white/5">
+                      <div className="flex items-baseline justify-between gap-2 border-t border-border/80 pt-1.5 dark:border-white/5">
                         <span className="shrink-0 text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400 sm:text-lg">
                           {product.vendaPorPeso ? `R$ ${product.price.toFixed(2)}/kg` : `R$ ${product.price.toFixed(2)}`}
                         </span>
@@ -1767,7 +1767,7 @@ export function PdvClassic({
                           </span>
                           <Badge
                             variant={product.stock <= 5 ? "destructive" : "secondary"}
-                            className="shrink-0 border-black/10 text-xs font-semibold sm:text-sm dark:border-white/10"
+                            className="shrink-0 border-border text-xs font-semibold sm:text-sm dark:border-white/10"
                           >
                             {product.vendaPorPeso ? `${product.stock} kg` : `${product.stock} un`}
                           </Badge>
@@ -1918,7 +1918,7 @@ export function PdvClassic({
                       setCart((prev) => prev.map((i) => (i.lineId === lastId ? { ...i, quantity: next } : i)))
                     }}
                     step={cart.length && cart[cart.length - 1].vendaPorPeso ? "0.001" : "1"}
-                    className="mt-1 h-9 border-2 border-black/15 bg-neutral-50 text-sm font-semibold text-foreground dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md"
+                    className="mt-1 h-9 border-2 border-border bg-muted/50 text-sm font-semibold text-foreground dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md"
                   />
                 </div>
 
@@ -2304,13 +2304,13 @@ export function PdvClassic({
       </Dialog>
 
       {cashHistory.length > 0 && (
-        <div className="max-h-36 shrink-0 overflow-y-auto overflow-x-hidden border-t border-neutral-200/80 bg-background px-1 py-2">
-          <p className="mb-2 text-sm font-semibold text-black">Histórico financeiro do caixa</p>
+        <div className="max-h-36 shrink-0 overflow-y-auto overflow-x-hidden border-t border-border bg-background px-1 py-2">
+          <p className="mb-2 text-sm font-semibold text-foreground">Histórico financeiro do caixa</p>
           <div className="space-y-1.5">
             {cashHistory.slice(0, 6).map((h) => (
               <div
                 key={h.id}
-                className="flex justify-between gap-2 rounded-md border border-neutral-200/80 bg-background px-2 py-1.5 text-sm"
+                className="flex justify-between gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
               >
                 <span className="min-w-0 flex-1 break-words text-left">
                   {labelOperacaoCaixa(h.type)} — {h.reason}
