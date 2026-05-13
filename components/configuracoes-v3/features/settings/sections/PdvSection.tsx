@@ -214,6 +214,13 @@ function PdvSectionContent() {
         description="Defina como será a tela de vendas — configurável por loja."
       />
 
+      <p
+        className="rounded-md border-2 border-destructive bg-destructive/10 px-3 py-2 text-center text-sm font-semibold tracking-tight text-destructive"
+        data-debug-pdv-config="v4"
+      >
+        DEBUG PDV CONFIG v4 - commit e14cfaa
+      </p>
+
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1.5 sm:max-w-xs sm:flex-1">
