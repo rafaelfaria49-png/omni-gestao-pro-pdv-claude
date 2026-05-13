@@ -1484,6 +1484,8 @@ model AdminUser {
   password  String
   role      UserRole @default(OPERADOR)
   lojaId    String?
+  /** Conta ativa; inativos não autenticam no painel. */
+  active    Boolean  @default(true) @map("active")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
