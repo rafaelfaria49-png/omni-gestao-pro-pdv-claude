@@ -26,6 +26,8 @@ export type EnterprisePermissions = {
     caixaHistorico: boolean
     marketplace: boolean
     financeiro: boolean
+    /** Central `/dashboard/relatorios` (vendas + inteligência; financeiro só com hub financeiro). */
+    relatorios: boolean
   }
   /** Administração */
   admin: { masterConsole: boolean; unidades: boolean; configuracoes: boolean }
@@ -64,6 +66,7 @@ const FULL: EnterprisePermissions = {
     caixaHistorico: true,
     marketplace: true,
     financeiro: true,
+    relatorios: true,
   },
   admin: { masterConsole: true, unidades: true, configuracoes: true },
   pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: true, devolucao: true },
@@ -127,6 +130,7 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
           caixaHistorico: true,
           marketplace: false,
           financeiro: false,
+          relatorios: false,
         },
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true },
@@ -155,6 +159,7 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
           caixaHistorico: false,
           marketplace: false,
           financeiro: false,
+          relatorios: false,
         },
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         pdv: { abrirCaixa: false, fecharCaixa: false, cancelarVenda: false, devolucao: false },
@@ -184,6 +189,7 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
           caixaHistorico: true,
           marketplace: false,
           financeiro: false,
+          relatorios: true,
         },
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true },

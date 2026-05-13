@@ -20,6 +20,7 @@ import {
   Database,
   Bot,
   History,
+  BarChart3,
   type LucideIcon,
 } from "lucide-react";
 import { financeiroV2Enabled } from "@/lib/feature-flags";
@@ -42,7 +43,9 @@ type Item = {
 };
 
 function isRouteActive(path: string, to: string): boolean {
-  if (to === "/vendas-hub") return path.startsWith("/vendas-hub");
+  if (to === "/vendas-hub")
+    return path.startsWith("/vendas-hub") || path.startsWith("/dashboard/vendas-hub");
+  if (to === "/dashboard/relatorios") return path === to || path.startsWith(`${to}/`);
   return (
     path === to ||
     (to !== "/dashboard" && to !== "/" && path.startsWith(`${to}/`))
@@ -111,6 +114,12 @@ const hubsItems: Item[] = [
           visible: (p: EnterprisePermissions) => p.hubs.financeiro,
         } satisfies Item,
       ]),
+  {
+    to: "/dashboard/relatorios",
+    label: "Relatórios",
+    icon: BarChart3,
+    visible: (p) => p.hubs.relatorios,
+  },
 ];
 
 // ── ADMINISTRAÇÃO ─────────────────────────────────────────────────────────────

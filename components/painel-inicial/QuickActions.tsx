@@ -10,27 +10,55 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
+import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions";
+import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions";
 
 type Action = {
   label: string;
   hint: string;
   icon: LucideIcon;
   shortcut: string;
+  visible?: (p: EnterprisePermissions) => boolean;
 };
 
 const actions: Action[] = [
-  { label: "Nova Venda", hint: "PDV rápido", icon: ShoppingCart, shortcut: "N V" },
-  { label: "Nova OS", hint: "Abrir ordem", icon: Wrench, shortcut: "N O" },
-  { label: "Orçamento", hint: "Criar proposta", icon: FileText, shortcut: "N P" },
-  { label: "Receber", hint: "Baixar conta", icon: Receipt, shortcut: "N R" },
-  { label: "Cliente", hint: "Cadastrar", icon: UserPlus, shortcut: "N C" },
-  { label: "Produto", hint: "Adicionar item", icon: Package, shortcut: "N I" },
+  { label: "Nova Venda", hint: "PDV rápido", icon: ShoppingCart, shortcut: "N V", visible: (p) => p.hubs.vendas },
+  {
+    label: "Nova OS",
+    hint: "Abrir ordem",
+    icon: Wrench,
+    shortcut: "N O",
+    visible: (p) => p.hubs.operacoes,
+  },
+  {
+    label: "Orçamento",
+    hint: "Criar proposta",
+    icon: FileText,
+    shortcut: "N P",
+    visible: (p) => p.hubs.operacoes || p.hubs.vendas,
+  },
+  {
+    label: "Receber",
+    hint: "Baixar conta",
+    icon: Receipt,
+    shortcut: "N R",
+    visible: (p) => p.hubs.financeiro && p.financeiro.view,
+  },
+  { label: "Cliente", hint: "Cadastrar", icon: UserPlus, shortcut: "N C", visible: (p) => p.hubs.cadastros },
+  { label: "Produto", hint: "Adicionar item", icon: Package, shortcut: "N I", visible: (p) => p.hubs.cadastros },
 ];
 
 export function QuickActions() {
   const router = useRouter();
   const { toast } = useToast();
+  const perms = useEnterprisePermissions();
+
+  const filtered = useMemo(() => {
+    if (!perms) return actions;
+    return actions.filter((a) => (a.visible ? a.visible(perms) : true));
+  }, [perms]);
 
   const handleAction = (label: Action["label"]) => {
     switch (label) {
@@ -38,7 +66,7 @@ export function QuickActions() {
         router.push("/dashboard/vendas");
         return;
       case "Nova OS":
-        router.push("/dashboard/os");
+        router.push("/dashboard/operacoes-v2");
         return;
       case "Cliente":
         router.push("/dashboard/clientes");
@@ -54,9 +82,17 @@ export function QuickActions() {
     }
   };
 
+  if (filtered.length === 0) {
+    return (
+      <p className="text-center text-sm text-muted-foreground py-4">
+        Nenhum atalho rápido disponível para o seu perfil.
+      </p>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-      {actions.map((a) => {
+      {filtered.map((a) => {
         const Icon = a.icon;
         return (
           <button
@@ -69,9 +105,7 @@ export function QuickActions() {
               <Icon className="h-3.5 w-3.5" strokeWidth={2} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[12.5px] font-medium tracking-tight truncate">
-                {a.label}
-              </div>
+              <div className="text-[12.5px] font-medium tracking-tight truncate">{a.label}</div>
               <div className="text-[10.5px] text-muted-foreground truncate">{a.hint}</div>
             </div>
             <kbd className="hidden xl:inline-flex font-mono text-[9.5px] text-muted-foreground bg-background/60 border border-border rounded px-1 py-0.5">

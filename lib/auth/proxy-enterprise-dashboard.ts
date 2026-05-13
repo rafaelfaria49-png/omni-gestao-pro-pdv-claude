@@ -35,7 +35,13 @@ export function enterpriseDashboardRedirect(origin: string, pathname: string, se
   if (block(pathname.includes("cadastros"))) {
     if (!perms.hubs.cadastros) return denyHome(origin)
   }
-  if (block(pathname.startsWith("/vendas-hub"))) {
+  if (
+    block(
+      pathname.startsWith("/vendas-hub") ||
+        pathname === `${DASH}/vendas-hub` ||
+        pathname.startsWith(`${DASH}/vendas-hub/`),
+    )
+  ) {
     if (!perms.hubs.vendas) return denyHome(origin)
   }
   if (block(pathname.includes("/vendas"))) {
@@ -49,6 +55,40 @@ export function enterpriseDashboardRedirect(origin: string, pathname: string, se
   }
   if (block(pathname.includes("marketplace"))) {
     if (!perms.hubs.marketplace) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/relatorios` || pathname.startsWith(`${DASH}/relatorios/`))) {
+    if (!perms.hubs.relatorios) return denyHome(origin)
+  }
+  // Rotas legadas / atalhos fora do HUB — mesma matriz da sidebar.
+  if (block(pathname === `${DASH}/clientes` || pathname.startsWith(`${DASH}/clientes/`))) {
+    if (!perms.hubs.cadastros) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/estoque` || pathname.startsWith(`${DASH}/estoque/`))) {
+    if (!perms.hubs.cadastros) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/produtos` || pathname.startsWith(`${DASH}/produtos/`))) {
+    if (!perms.hubs.cadastros) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/cadastros` || pathname.startsWith(`${DASH}/cadastros/`))) {
+    if (!perms.hubs.cadastros) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/os` || pathname.startsWith(`${DASH}/os/`))) {
+    if (!perms.hubs.operacoes) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/historico-vendas` || pathname.startsWith(`${DASH}/historico-vendas/`))) {
+    if (!perms.hubs.vendas) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/pdv` || pathname.startsWith(`${DASH}/pdv/`))) {
+    if (!perms.hubs.vendas) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/orcamentos` || pathname.startsWith(`${DASH}/orcamentos/`))) {
+    if (!perms.hubs.operacoes && !perms.hubs.vendas) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/expedicao` || pathname.startsWith(`${DASH}/expedicao/`))) {
+    if (!perms.hubs.operacoes) return denyHome(origin)
+  }
+  if (block(pathname === `${DASH}/whatsapp-automation` || pathname.startsWith(`${DASH}/whatsapp-automation/`))) {
+    if (!perms.hubs.whatsapp) return denyHome(origin)
   }
   if (block(pathname.includes("master-console"))) {
     if (!perms.admin.masterConsole) return denyHome(origin)

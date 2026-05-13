@@ -1,7 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 import { cn } from "@/lib/utils";
+import { DashboardAccessAlerts } from "@/components/enterprise/DashboardAccessAlerts";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 
@@ -23,6 +25,9 @@ export function AppShell({
             !noPadding && "px-4 py-6 sm:px-6 lg:px-8",
           )}
         >
+          <Suspense fallback={null}>
+            <DashboardAccessAlerts />
+          </Suspense>
           {children}
         </main>
       </div>

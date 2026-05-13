@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
+import { useSession } from "next-auth/react";
 import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions";
+import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,8 +18,58 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
+type NovoItem = {
+  label: string;
+  href: string;
+  icon: typeof ShoppingCart;
+  kbd: string;
+  visible?: (p: EnterprisePermissions) => boolean;
+};
+
+const novoItems: NovoItem[] = [
+  {
+    label: "Nova Venda",
+    href: "/dashboard/vendas",
+    icon: ShoppingCart,
+    kbd: "N V",
+    visible: (p) => p.hubs.vendas,
+  },
+  {
+    label: "Nova OS",
+    href: "/dashboard/operacoes-v2",
+    icon: Wrench,
+    kbd: "N O",
+    visible: (p) => p.hubs.operacoes,
+  },
+  {
+    label: "Novo Cliente",
+    href: "/dashboard/clientes",
+    icon: UserPlus,
+    kbd: "N C",
+    visible: (p) => p.hubs.cadastros,
+  },
+  {
+    label: "Novo Produto",
+    href: "/dashboard/estoque",
+    icon: Package,
+    kbd: "N P",
+    visible: (p) => p.hubs.cadastros,
+  },
+];
+
 export function Topbar() {
   const { credits, loading, error } = useUserCredits();
+  const { data: session, status } = useSession();
+
+  const perms = useMemo(() => {
+    if (status !== "authenticated" || !session?.user?.role) return null;
+    return getEnterprisePermissions(session.user.role);
+  }, [status, session?.user?.role]);
+
+  const novoFiltered = useMemo(() => {
+    if (!perms) return novoItems;
+    return novoItems.filter((i) => (i.visible ? i.visible(perms) : true));
+  }, [perms]);
 
   const creditsValue = typeof credits === "number" ? credits : null;
   const showLow = !loading && !error && creditsValue !== null && creditsValue <= 100;
@@ -27,10 +81,20 @@ export function Topbar() {
       ? null
       : `Créditos: ${new Intl.NumberFormat("pt-BR").format(credits ?? 0)}`;
 
+  const initials = useMemo(() => {
+    const name = session?.user?.name?.trim() || session?.user?.email?.trim() || "";
+    if (!name) return "OG";
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase().slice(0, 2);
+    return name.slice(0, 2).toUpperCase();
+  }, [session?.user?.name, session?.user?.email]);
+
+  const displayName = session?.user?.name?.trim() || session?.user?.email?.split("@")[0] || "Usuário";
+  const displayEmail = session?.user?.email || "";
+
   return (
     <header className="h-14 shrink-0 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-30">
       <div className="h-full flex items-center gap-2 px-4 sm:px-6">
-        {/* Breadcrumb */}
         <nav className="hidden md:flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
           <span className="hover:text-foreground cursor-pointer">Matriz</span>
           <span className="text-border">/</span>
@@ -39,7 +103,6 @@ export function Topbar() {
 
         <div className="flex-1" />
 
-        {/* Search */}
         <div className="hidden sm:block w-72">
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -54,10 +117,8 @@ export function Topbar() {
           </div>
         </div>
 
-        {/* Theme switcher */}
         <ThemeSwitcher />
 
-        {/* Credits */}
         {creditsLabel ? (
           <div className="hidden sm:inline-flex items-center rounded-full border border-border bg-surface/60 px-3 py-1.5 text-[12px] font-medium text-muted-foreground">
             {creditsLabel}
@@ -88,64 +149,45 @@ export function Topbar() {
           Comprar créditos
         </Link>
 
-        {/* Notifications */}
         <button className="relative h-8 w-8 rounded-md border border-border bg-panel hover:bg-muted/60 transition-colors grid place-items-center">
           <Bell className="h-3.5 w-3.5" strokeWidth={1.75} />
           <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-destructive ring-2 ring-background" />
         </button>
 
-        {/* New button — dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger className="hidden sm:inline-flex h-8 px-3 items-center gap-1.5 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:opacity-90 transition-opacity">
-            <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-            Novo
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
-              Criar novo
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="gap-2 cursor-pointer text-[12.5px]">
-              <Link href="/dashboard/vendas" className="flex w-full items-center gap-2">
-                <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="flex-1">Nova Venda</span>
-                <kbd className="pointer-events-none font-mono text-[9.5px] text-muted-foreground">N V</kbd>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="gap-2 cursor-pointer text-[12.5px]">
-              <Link href="/dashboard/operacoes-v2" className="flex w-full items-center gap-2">
-                <Wrench className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="flex-1">Nova OS</span>
-                <kbd className="pointer-events-none font-mono text-[9.5px] text-muted-foreground">N O</kbd>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="gap-2 cursor-pointer text-[12.5px]">
-              <Link href="/dashboard/clientes" className="flex w-full items-center gap-2">
-                <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="flex-1">Novo Cliente</span>
-                <kbd className="pointer-events-none font-mono text-[9.5px] text-muted-foreground">N C</kbd>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="gap-2 cursor-pointer text-[12.5px]">
-              <Link href="/dashboard/estoque" className="flex w-full items-center gap-2">
-                <Package className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="flex-1">Novo Produto</span>
-                <kbd className="pointer-events-none font-mono text-[9.5px] text-muted-foreground">N P</kbd>
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {novoFiltered.length > 0 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="hidden sm:inline-flex h-8 px-3 items-center gap-1.5 rounded-md bg-foreground text-background text-[12.5px] font-medium hover:opacity-90 transition-opacity">
+              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+              Novo
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                Criar novo
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {novoFiltered.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <DropdownMenuItem key={item.href} asChild className="gap-2 cursor-pointer text-[12.5px]">
+                    <Link href={item.href} className="flex w-full items-center gap-2">
+                      <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="flex-1">{item.label}</span>
+                      <kbd className="pointer-events-none font-mono text-[9.5px] text-muted-foreground">{item.kbd}</kbd>
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
 
-        {/* Profile */}
         <div className="flex items-center gap-2 pl-2 ml-1 border-l border-border">
           <Avatar className="h-7 w-7">
-            <AvatarFallback className="bg-muted text-foreground text-[11px] font-semibold">
-              AD
-            </AvatarFallback>
+            <AvatarFallback className="bg-muted text-foreground text-[11px] font-semibold">{initials}</AvatarFallback>
           </Avatar>
-          <div className="hidden lg:block leading-tight">
-            <div className="text-[12px] font-medium">Administrador</div>
-            <div className="text-[10.5px] text-muted-foreground">admin@omni.pro</div>
+          <div className="hidden lg:block leading-tight min-w-0">
+            <div className="text-[12px] font-medium truncate">{displayName}</div>
+            <div className="text-[10.5px] text-muted-foreground truncate">{displayEmail || "—"}</div>
           </div>
         </div>
       </div>
