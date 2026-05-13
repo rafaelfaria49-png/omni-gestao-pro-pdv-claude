@@ -13,6 +13,9 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:push:node": "node scripts/run-prisma-db-push.mjs",
@@ -94,6 +97,7 @@
   "devDependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
     "@eslint/eslintrc": "^3.3.5",
+    "@playwright/test": "^1.52.0",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22",

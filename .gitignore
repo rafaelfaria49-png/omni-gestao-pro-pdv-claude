@@ -23,6 +23,9 @@ prisma/*.db-journal
 # Claude Code local settings
 .claude/
 
+# Playwright E2E — sessão gerada no setup (não versionar)
+e2e/.auth/storage.json
+
 # Common ignores
 node_modules
 .next/
