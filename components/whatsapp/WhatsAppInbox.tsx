@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,8 @@ import {
   Trash2,
   Check,
 } from "lucide-react"
+import { useLojaAtiva } from "@/lib/loja-ativa"
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -84,8 +86,6 @@ type WaQuickReply = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STORE_ID = "loja-1"
-const API_HEADERS = { "x-assistec-loja-id": STORE_ID, "Content-Type": "application/json" }
 const POLL_MS = 5000
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -304,10 +304,12 @@ function QuickReplyModal({
   quickReplies,
   onClose,
   onRefresh,
+  apiHeaders,
 }: {
   quickReplies: WaQuickReply[]
   onClose: () => void
   onRefresh: () => void
+  apiHeaders: Record<string, string>
 }) {
   const [form, setForm] = useState<QRFormState>({ shortcut: "", title: "", body: "", category: "" })
   const [editId, setEditId] = useState<string | null>(null)
@@ -341,7 +343,7 @@ function QuickReplyModal({
       const method = editId ? "PATCH" : "POST"
       const res = await fetch(url, {
         method,
-        headers: API_HEADERS,
+        headers: apiHeaders,
         body: JSON.stringify({ shortcut, title: form.title.trim(), body: form.body, category: form.category.trim() }),
       })
       const data = await res.json() as { error?: string }
@@ -355,7 +357,7 @@ function QuickReplyModal({
 
   async function remove(id: string) {
     if (!confirm("Remover esta resposta rápida?")) return
-    const res = await fetch(`/api/whatsapp/quick-replies/${id}`, { method: "DELETE", headers: API_HEADERS })
+    const res = await fetch(`/api/whatsapp/quick-replies/${id}`, { method: "DELETE", headers: apiHeaders })
     if (res.ok) onRefresh()
   }
 
@@ -500,10 +502,12 @@ function EtiquetasModal({
   etiquetas,
   onClose,
   onRefresh,
+  apiHeaders,
 }: {
   etiquetas: WaEtiqueta[]
   onClose: () => void
   onRefresh: () => void
+  apiHeaders: Record<string, string>
 }) {
   const [nome, setNome] = useState("")
   const [cor, setCor] = useState(PRESET_COLORS[0])
@@ -519,7 +523,7 @@ function EtiquetasModal({
     try {
       const res = await fetch("/api/whatsapp/etiquetas", {
         method: "POST",
-        headers: API_HEADERS,
+        headers: apiHeaders,
         body: JSON.stringify({ nome: nome.trim(), cor }),
       })
       const data = await res.json() as { error?: string }
@@ -539,7 +543,7 @@ function EtiquetasModal({
     if (!editId || !editNome.trim()) return
     const res = await fetch(`/api/whatsapp/etiquetas/${editId}`, {
       method: "PATCH",
-      headers: API_HEADERS,
+      headers: apiHeaders,
       body: JSON.stringify({ nome: editNome.trim(), cor: editCor }),
     })
     if (res.ok) { setEditId(null); onRefresh() }
@@ -547,7 +551,7 @@ function EtiquetasModal({
 
   async function remove(id: string) {
     if (!confirm("Remover esta etiqueta? Será removida de todas as conversas.")) return
-    const res = await fetch(`/api/whatsapp/etiquetas/${id}`, { method: "DELETE", headers: API_HEADERS })
+    const res = await fetch(`/api/whatsapp/etiquetas/${id}`, { method: "DELETE", headers: apiHeaders })
     if (res.ok) onRefresh()
   }
 
@@ -663,12 +667,14 @@ function AddEtiquetaPopover({
   allEtiquetas,
   onClose,
   onChange,
+  apiHeaders,
 }: {
   conversationId: string
   currentEtiquetas: WaConvEtiqueta[]
   allEtiquetas: WaEtiqueta[]
   onClose: () => void
   onChange: () => void
+  apiHeaders: Record<string, string>
 }) {
   const currentIds = new Set(currentEtiquetas.map((ce) => ce.etiquetaId))
 
@@ -676,12 +682,12 @@ function AddEtiquetaPopover({
     if (currentIds.has(etiqueta.id)) {
       await fetch(`/api/whatsapp/conversations/${conversationId}/etiquetas/${etiqueta.id}`, {
         method: "DELETE",
-        headers: API_HEADERS,
+        headers: apiHeaders,
       })
     } else {
       await fetch(`/api/whatsapp/conversations/${conversationId}/etiquetas`, {
         method: "POST",
-        headers: API_HEADERS,
+        headers: apiHeaders,
         body: JSON.stringify({ etiquetaId: etiqueta.id }),
       })
     }
@@ -748,6 +754,13 @@ function EmptyChat() {
 // ─── Main inbox ───────────────────────────────────────────────────────────────
 
 export default function WhatsAppInbox() {
+  const { lojaAtivaId, lojas, storesRefreshNonce } = useLojaAtiva()
+  const apiHeaders = useMemo((): Record<string, string> | null => {
+    const id = lojaAtivaId?.trim()
+    if (!id) return null
+    return { [ASSISTEC_LOJA_HEADER]: id, "Content-Type": "application/json" }
+  }, [lojaAtivaId])
+
   const [conversations, setConversations] = useState<WaConversation[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [messages, setMessages] = useState<WaMessage[]>([])
@@ -768,6 +781,7 @@ export default function WhatsAppInbox() {
   const inputRef = useRef<HTMLInputElement>(null)
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const addLabelRef = useRef<HTMLDivElement>(null)
+  const prevLojaRef = useRef<string | null>(null)
 
   const selectedConv = conversations.find((c) => c.id === selectedId) ?? null
   const showQRDropdown = inputText.startsWith("/") && quickReplies.length > 0
@@ -786,9 +800,13 @@ export default function WhatsAppInbox() {
 
   // ── Fetch conversations ──
   const fetchConversations = useCallback(async (silent = false) => {
+    if (!apiHeaders) {
+      if (!silent) setLoadingConvs(false)
+      return
+    }
     if (!silent) setLoadingConvs(true)
     try {
-      const res = await fetch("/api/whatsapp/conversations", { headers: API_HEADERS })
+      const res = await fetch("/api/whatsapp/conversations", { headers: apiHeaders })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json() as { conversations?: WaConversation[] }
       setConversations(data.conversations ?? [])
@@ -798,44 +816,48 @@ export default function WhatsAppInbox() {
     } finally {
       if (!silent) setLoadingConvs(false)
     }
-  }, [])
+  }, [apiHeaders])
 
   // ── Fetch messages ──
   const fetchMessages = useCallback(async (convId: string, silent = false) => {
+    if (!apiHeaders) return
     if (!silent) setLoadingMsgs(true)
     try {
-      const res = await fetch(`/api/whatsapp/messages?conversationId=${convId}&take=100`, { headers: API_HEADERS })
+      const res = await fetch(`/api/whatsapp/messages?conversationId=${convId}&take=100`, { headers: apiHeaders })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json() as { messages?: WaMessage[] }
       setMessages(data.messages ?? [])
     } catch { /* keep existing */ }
     finally { if (!silent) setLoadingMsgs(false) }
-  }, [])
+  }, [apiHeaders])
 
   // ── Fetch quick replies ──
   const fetchQuickReplies = useCallback(async () => {
+    if (!apiHeaders) return
     try {
-      const res = await fetch("/api/whatsapp/quick-replies", { headers: API_HEADERS })
+      const res = await fetch("/api/whatsapp/quick-replies", { headers: apiHeaders })
       if (res.ok) {
         const data = await res.json() as { quickReplies?: WaQuickReply[] }
         setQuickReplies(data.quickReplies ?? [])
       }
     } catch { /* silent */ }
-  }, [])
+  }, [apiHeaders])
 
   // ── Fetch etiquetas ──
   const fetchEtiquetas = useCallback(async () => {
+    if (!apiHeaders) return
     try {
-      const res = await fetch("/api/whatsapp/etiquetas", { headers: API_HEADERS })
+      const res = await fetch("/api/whatsapp/etiquetas", { headers: apiHeaders })
       if (res.ok) {
         const data = await res.json() as { etiquetas?: WaEtiqueta[] }
         setEtiquetas(data.etiquetas ?? [])
       }
     } catch { /* silent */ }
-  }, [])
+  }, [apiHeaders])
 
   // ── Select conversation ──
   const selectConversation = useCallback(async (conv: WaConversation) => {
+    if (!apiHeaders) return
     setSelectedId(conv.id)
     setMessages([])
     setShowAddLabel(false)
@@ -843,7 +865,7 @@ export default function WhatsAppInbox() {
     if (conv.unreadCount > 0) {
       await fetch(`/api/whatsapp/conversations/${conv.id}`, {
         method: "PATCH",
-        headers: API_HEADERS,
+        headers: apiHeaders,
         body: JSON.stringify({ unreadCount: 0 }),
       })
       setConversations((prev) =>
@@ -851,18 +873,18 @@ export default function WhatsAppInbox() {
       )
     }
     inputRef.current?.focus()
-  }, [fetchMessages])
+  }, [apiHeaders, fetchMessages])
 
   // ── Send message ──
   const sendMessage = useCallback(async () => {
     const text = inputText.trim()
-    if (!text || !selectedId || sending) return
+    if (!text || !selectedId || sending || !apiHeaders) return
     setSending(true)
     setInputText("")
     try {
       const res = await fetch("/api/whatsapp/send", {
         method: "POST",
-        headers: API_HEADERS,
+        headers: apiHeaders,
         body: JSON.stringify({ conversationId: selectedId, text }),
       })
       if (!res.ok) {
@@ -893,7 +915,7 @@ export default function WhatsAppInbox() {
       setSending(false)
       inputRef.current?.focus()
     }
-  }, [inputText, selectedId, sending, fetchMessages])
+  }, [apiHeaders, inputText, selectedId, sending, fetchMessages])
 
   // ── After label change, refresh conversation list ──
   const onLabelChange = useCallback(async () => {
@@ -905,15 +927,34 @@ export default function WhatsAppInbox() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // ── Initial load ──
+  // ── Initial load + troca de loja ──
   useEffect(() => {
+    if (!apiHeaders || !lojaAtivaId?.trim()) return
+    const id = lojaAtivaId.trim()
+    const prev = prevLojaRef.current
+    prevLojaRef.current = id
+    if (prev !== null && prev !== id) {
+      setSelectedId(null)
+      setMessages([])
+      setSearchQuery("")
+      setLabelFilter(null)
+      setShowAddLabel(false)
+      setInputText("")
+    }
     void fetchConversations()
     void fetchQuickReplies()
     void fetchEtiquetas()
-  }, [fetchConversations, fetchQuickReplies, fetchEtiquetas])
+  }, [apiHeaders, lojaAtivaId, fetchConversations, fetchQuickReplies, fetchEtiquetas])
 
   // ── Polling ──
   useEffect(() => {
+    if (!apiHeaders) {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current)
+        pollTimerRef.current = null
+      }
+      return
+    }
     pollTimerRef.current = setInterval(async () => {
       await fetchConversations(true)
       if (selectedId) await fetchMessages(selectedId, true)
@@ -921,7 +962,7 @@ export default function WhatsAppInbox() {
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current)
     }
-  }, [fetchConversations, fetchMessages, selectedId])
+  }, [apiHeaders, fetchConversations, fetchMessages, selectedId])
 
   // ── Keyboard ──
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -944,6 +985,24 @@ export default function WhatsAppInbox() {
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
   const activeEtiquetas = etiquetas.filter((e) => e.ativo)
 
+  if (!apiHeaders) {
+    const waitingFirstStores = lojas.length === 0 && storesRefreshNonce === 0
+    return (
+      <div className="flex min-h-[280px] w-full flex-col items-center justify-center gap-3 rounded-xl border border-border bg-muted/20 px-6 py-12">
+        {waitingFirstStores ? (
+          <>
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <p className="text-center text-sm text-muted-foreground">Carregando conversas da loja ativa…</p>
+          </>
+        ) : (
+          <p className="text-center text-sm text-muted-foreground">Nenhuma loja ativa selecionada.</p>
+        )}
+      </div>
+    )
+  }
+
+  const hdr = apiHeaders
+
   return (
     <>
       {/* ── Modals ── */}
@@ -952,6 +1011,7 @@ export default function WhatsAppInbox() {
           quickReplies={quickReplies}
           onClose={() => setShowQRModal(false)}
           onRefresh={fetchQuickReplies}
+          apiHeaders={hdr}
         />
       )}
       {showEtiquetasModal && (
@@ -959,6 +1019,7 @@ export default function WhatsAppInbox() {
           etiquetas={etiquetas}
           onClose={() => setShowEtiquetasModal(false)}
           onRefresh={fetchEtiquetas}
+          apiHeaders={hdr}
         />
       )}
 
@@ -1121,7 +1182,7 @@ export default function WhatsAppInbox() {
                           onRemove={() => {
                             void fetch(
                               `/api/whatsapp/conversations/${selectedConv.id}/etiquetas/${ce.etiquetaId}`,
-                              { method: "DELETE", headers: API_HEADERS }
+                              { method: "DELETE", headers: hdr }
                             ).then(() => onLabelChange())
                           }}
                         />
@@ -1168,6 +1229,7 @@ export default function WhatsAppInbox() {
                         allEtiquetas={etiquetas}
                         onClose={() => setShowAddLabel(false)}
                         onChange={() => { void onLabelChange(); setShowAddLabel(false) }}
+                        apiHeaders={hdr}
                       />
                     )}
                   </div>
