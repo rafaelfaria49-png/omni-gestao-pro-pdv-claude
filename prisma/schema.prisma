@@ -93,8 +93,9 @@ model Store {
   garantiasOrdemServico  GarantiaOrdemServico[]
   adminUserStores        AdminUserStore[]
   omniAgentCommands      OmniAgentCommand[]
-  marketplaceConnections MarketplaceConnection[]
-  marketplaceSyncLogs  MarketplaceSyncLog[]
+  marketplaceConnections   MarketplaceConnection[]
+  marketplaceSyncLogs      MarketplaceSyncLog[]
+  marketplaceProductLinks  MarketplaceProductLink[]
 
   @@index([profile])
   @@map("stores")
@@ -112,6 +113,21 @@ enum MarketplaceConnectionStatus {
   CONNECTED    @map("connected")
   ERROR        @map("error")
   SYNCING      @map("syncing")
+}
+
+/** Estado de publicação do vínculo produto ↔ canal (simulado na Fase 2). */
+enum MarketplaceProductLinkStatus {
+  NOT_PUBLISHED @map("not_published")
+  PUBLISHED     @map("published")
+  ERROR         @map("error")
+}
+
+/** Estado de sincronização do vínculo (simulado). */
+enum MarketplaceProductSyncStatus {
+  IDLE       @map("idle")
+  PENDING    @map("pending")
+  SYNCED     @map("synced")
+  SYNC_ERROR @map("sync_error")
 }
 
 /**
@@ -133,7 +149,8 @@ model MarketplaceConnection {
   createdAt       DateTime                      @default(now()) @map("createdAt")
   updatedAt       DateTime                      @updatedAt @map("updatedAt")
 
-  syncLogs MarketplaceSyncLog[]
+  syncLogs     MarketplaceSyncLog[]
+  productLinks MarketplaceProductLink[]
 
   @@index([storeId])
   @@index([storeId, provider])
@@ -155,6 +172,34 @@ model MarketplaceSyncLog {
   @@index([storeId])
   @@index([connectionId, createdAt])
   @@map("marketplace_sync_logs")
+}
+
+/**
+ * Vínculo leve produto interno ↔ conta de marketplace (Fase 2 — sem OAuth/publicação real).
+ */
+model MarketplaceProductLink {
+  id           String                       @id @default(cuid())
+  storeId      String                       @map("storeId")
+  store        Store                        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  produtoId    String                       @map("produtoId")
+  produto      Produto                      @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  connectionId String                       @map("connectionId")
+  connection   MarketplaceConnection        @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  provider     MarketplaceProvider          @map("provider")
+  externalId   String?                      @map("externalId")
+  status       MarketplaceProductLinkStatus @default(NOT_PUBLISHED) @map("status")
+  syncStatus   MarketplaceProductSyncStatus @default(IDLE) @map("syncStatus")
+  price        Float                        @default(0) @map("price")
+  stock        Int                          @default(0) @map("stock")
+  publishedAt  DateTime?                    @map("publishedAt")
+  metadata     Json?                        @map("metadata") @db.JsonB
+  createdAt    DateTime                     @default(now()) @map("createdAt")
+  updatedAt    DateTime                     @updatedAt @map("updatedAt")
+
+  @@unique([connectionId, produtoId], name: "marketplace_product_link_connection_produto")
+  @@index([storeId])
+  @@index([storeId, produtoId])
+  @@map("marketplace_product_links")
 }
 
 /**
@@ -667,9 +712,10 @@ model Produto {
   createdAt    DateTime @default(now()) @map("createdAt")
   updatedAt    DateTime @default(now()) @updatedAt @map("updatedAt")
 
-  ordemServicoItens   OrdemServicoItem[]
-  media               ProductMedia[]
-  marketplaceListings MarketplaceListing[]
+  ordemServicoItens         OrdemServicoItem[]
+  media                     ProductMedia[]
+  marketplaceListings     MarketplaceListing[]
+  marketplaceProductLinks MarketplaceProductLink[]
 
   @@unique([storeId, sku], name: "storeId_sku")
   @@unique([storeId, barcode], name: "storeId_barcode")

@@ -12,8 +12,6 @@ import {
   Package,
   ArrowUpRight,
   Plus,
-  Pencil,
-  Pause,
   RefreshCw,
   ChevronRight,
   Zap,
@@ -41,7 +39,7 @@ import {
   Download as DownloadIcon,
   Search as SearchIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { MarketplaceSettingsDrawer } from "./MarketplaceSettingsDrawer";
@@ -50,6 +48,7 @@ import { useLojaAtiva } from "@/lib/loja-ativa";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { useMarketplaceConnections } from "@/components/marketplace/use-marketplace-connections";
 import { MarketplaceConnectionsReal } from "@/components/marketplace/MarketplaceConnectionsReal";
+import { MarketplaceCatalogReal } from "@/components/marketplace/MarketplaceCatalogReal";
 
 const PENDING_TOAST_DESCRIPTION =
   "Funcionalidade em preparação. Integração real será ativada nas próximas etapas.";
@@ -109,15 +108,6 @@ const quickActions = [
   { id: "sync", label: "Sincronizar agora", icon: RefreshCw },
   { id: "import", label: "Importar produtos", icon: Download },
   { id: "ai-desc", label: "Gerar descrição com IA", icon: Wand2, ai: true },
-];
-
-const products = [
-  { name: "Fone Bluetooth Pro X", channel: "Mercado Livre", stock: 42, status: "online" as const, price: "R$ 249,90" },
-  { name: "Mouse Gamer RGB Ultra", channel: "Shopee", stock: 8, status: "warning" as const, price: "R$ 189,00" },
-  { name: "Carregador Turbo 65W", channel: "Amazon", stock: 120, status: "online" as const, price: "R$ 129,90" },
-  { name: "Smartwatch Fit Series 7", channel: "Mercado Livre", stock: 0, status: "error" as const, price: "R$ 599,00" },
-  { name: "Câmera Web Full HD", channel: "Shopee", stock: 35, status: "syncing" as const, price: "R$ 219,00" },
-  { name: "Teclado Mecânico K2", channel: "Instagram", stock: 18, status: "online" as const, price: "R$ 349,00" },
 ];
 
 const orders = [
@@ -283,6 +273,10 @@ export default function MarketplaceLayout() {
   const { lojaAtivaId } = useLojaAtiva();
   const mpHub = useMarketplaceConnections(lojaAtivaId);
 
+  useEffect(() => {
+    if (!lojaAtivaId?.trim()) setCatalogProductCount(null);
+  }, [lojaAtivaId]);
+
   const lastGlobalSync = useMemo(() => {
     let max: string | null = null;
     for (const c of mpHub.connections) {
@@ -291,6 +285,8 @@ export default function MarketplaceLayout() {
     }
     return max;
   }, [mpHub.connections]);
+
+  const [catalogProductCount, setCatalogProductCount] = useState<number | null>(null);
 
   const summary = useMemo(
     () => [
@@ -303,9 +299,15 @@ export default function MarketplaceLayout() {
         icon: Plug,
         tone: "text-primary",
       },
-      { label: "Produtos ativos", value: "1.284", delta: "+24 hoje", icon: Package, tone: "text-warning" },
+      {
+        label: "Produtos ativos (cadastro)",
+        value: catalogProductCount != null ? String(catalogProductCount) : "—",
+        delta: "Catálogo da unidade",
+        icon: Package,
+        tone: "text-warning",
+      },
     ],
-    [mpHub.connectedCount],
+    [mpHub.connectedCount, catalogProductCount],
   );
 
   const showPendingToast = () =>
@@ -355,28 +357,15 @@ export default function MarketplaceLayout() {
   };
 
   const [autos, setAutos] = useState(() => Object.fromEntries(automations.map((a) => [a.id, a.on])));
-  const [productFilterChannel, setProductFilterChannel] = useState<string>("all");
-  const [productFilterStatus, setProductFilterStatus] = useState<string>("all");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [orderFilterChannel, setOrderFilterChannel] = useState<string>("all");
   const [orderFilterStatus, setOrderFilterStatus] = useState<string>("all");
   const [activeConv, setActiveConv] = useState<string>(conversations[0].id);
   const [draft, setDraft] = useState("");
 
-  const channelOptions = useMemo(
-    () => ["all", ...Array.from(new Set(products.map((p) => p.channel)))],
-    [],
-  );
-
   const orderChannelOptions = useMemo(
     () => ["all", ...Array.from(new Set(orders.map((o) => o.channel)))],
     [],
-  );
-
-  const filteredProducts = products.filter(
-    (p) =>
-      (productFilterChannel === "all" || p.channel === productFilterChannel) &&
-      (productFilterStatus === "all" || p.status === productFilterStatus),
   );
 
   const filteredOrders = orders.filter(
@@ -580,126 +569,19 @@ export default function MarketplaceLayout() {
             </div>
           </section>
 
-          {/* ============ Produtos ============ */}
+          {/* ============ Produtos (cadastro real + vínculos simulados) ============ */}
           <section>
             <SectionHeader
               icon={Package}
-              title="Produtos sincronizados"
-              subtitle="Catálogo unificado em todos os canais"
-              action={
-                <div className="flex items-center gap-2">
-                  <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">
-                    <Filter className="h-3 w-3" />
-                    <select
-                      value={productFilterChannel}
-                      onChange={(e) => setProductFilterChannel(e.target.value)}
-                      className="bg-transparent outline-none text-foreground"
-                    >
-                      {channelOptions.map((c) => (
-                        <option key={c} value={c}>
-                          {c === "all" ? "Todos os canais" : c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">
-                    <Filter className="h-3 w-3" />
-                    <select
-                      value={productFilterStatus}
-                      onChange={(e) => setProductFilterStatus(e.target.value)}
-                      className="bg-transparent outline-none text-foreground"
-                    >
-                      <option value="all">Todos os status</option>
-                      <option value="online">Online</option>
-                      <option value="warning">Atenção</option>
-                      <option value="syncing">Sincronizando</option>
-                      <option value="error">Erro</option>
-                    </select>
-                  </div>
-                  <button
-                    onClick={showPendingToast}
-                    title="Integração pendente"
-                    className="text-xs font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-                  >
-                    Ver todos <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              }
+              title="Catálogo e publicação simulada"
+              subtitle="Produtos do cadastro (estoque) por unidade — exportação e sync gravam MarketplaceProductLink e MarketplaceSyncLog"
             />
-            <div className="surface-card rounded-2xl border border-border bg-card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 text-xs uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="text-left font-medium px-5 py-3">Nome</th>
-                      <th className="text-left font-medium px-5 py-3">Marketplace</th>
-                      <th className="text-left font-medium px-5 py-3">Estoque</th>
-                      <th className="text-left font-medium px-5 py-3">Status</th>
-                      <th className="text-left font-medium px-5 py-3">Preço</th>
-                      <th className="text-right font-medium px-5 py-3">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filteredProducts.map((p) => (
-                      <tr key={p.name} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-5 py-3.5 font-medium">{p.name}</td>
-                        <td className="px-5 py-3.5 text-muted-foreground">{p.channel}</td>
-                        <td className="px-5 py-3.5">
-                          <span
-                            className={cn(
-                              "font-semibold",
-                              p.stock === 0 ? "text-destructive" : p.stock < 10 ? "text-warning" : "text-foreground",
-                            )}
-                          >
-                            {p.stock}
-                          </span>
-                          <span className="text-muted-foreground ml-1 text-xs">un.</span>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <StatusPill status={p.status} />
-                        </td>
-                        <td className="px-5 py-3.5 font-semibold">{p.price}</td>
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={showPendingToast}
-                              title="Integração pendente"
-                              className="grid h-8 w-8 place-items-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
-                              aria-label="Editar (integração pendente)"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={showPendingToast}
-                              title="Integração pendente"
-                              className="grid h-8 w-8 place-items-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
-                              aria-label="Pausar (integração pendente)"
-                            >
-                              <Pause className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              onClick={showPendingToast}
-                              title="Integração pendente"
-                              className="grid h-8 w-8 place-items-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
-                              aria-label="Atualizar (integração pendente)"
-                            >
-                              <RefreshCw className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredProducts.length === 0 && (
-                      <tr>
-                        <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground">
-                          Nenhum produto encontrado com os filtros aplicados.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <MarketplaceCatalogReal
+              storeId={lojaAtivaId}
+              connections={mpHub.connections}
+              onProductCount={setCatalogProductCount}
+              onCatalogActivity={() => mpHub.refetch()}
+            />
           </section>
 
           {/* ============ Pedidos ============ */}
