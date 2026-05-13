@@ -208,18 +208,19 @@ function PdvSectionContent() {
 
   return (
     <div className="space-y-6">
+      <div
+        role="alert"
+        className="rounded-lg border-2 border-primary bg-primary/15 px-4 py-3 text-center text-base font-bold tracking-tight text-foreground shadow-sm"
+        data-pdv-layouts-active-banner="v4"
+      >
+        PDV LAYOUTS V4 ATIVO — 4 layouts
+      </div>
+
       <SectionHeader
         icon={<Monitor className="h-5 w-5" />}
         title="Tema do PDV"
         description="Defina como será a tela de vendas — configurável por loja."
       />
-
-      <p
-        className="rounded-md border-2 border-destructive bg-destructive/10 px-3 py-2 text-center text-sm font-semibold tracking-tight text-destructive"
-        data-debug-pdv-config="v4"
-      >
-        DEBUG PDV CONFIG v4 - commit e14cfaa
-      </p>
 
       <div className="rounded-xl border border-border bg-card p-6 shadow-soft">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
