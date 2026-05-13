@@ -40,6 +40,8 @@ if (isVercel) {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /** Next.js 16 — HMR/webpack dev a partir de 127.0.0.1 (ex.: Playwright com IPv4). */
+  allowedDevOrigins: ["127.0.0.1"],
   /** Next.js 16 usa Turbopack por padrão; o plugin PWA injeta webpack — config vazia evita erro de build. */
   turbopack: {},
   env,

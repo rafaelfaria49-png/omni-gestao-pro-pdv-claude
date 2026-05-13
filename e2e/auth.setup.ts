@@ -17,6 +17,25 @@ setup("autenticar e gravar sessão", async ({ page }) => {
     )
   }
 
+  /** Evita corrida com `webServer` do Playwright (setup pode arrancar antes do `npm run dev` aceitar ligações). */
+  const deadline = Date.now() + 90_000
+  let originReady = false
+  while (Date.now() < deadline) {
+    try {
+      const probe = await page.request.get("/login")
+      if (probe.ok()) {
+        originReady = true
+        break
+      }
+    } catch {
+      /* ECONNREFUSED enquanto o servidor ainda não escuta */
+    }
+    await page.waitForTimeout(400)
+  }
+  if (!originReady) {
+    throw new Error("E2E: o servidor de desenvolvimento não respondeu em GET /login dentro do tempo.")
+  }
+
   /** Selo de assinatura (httpOnly) — necessário para o proxy não redirecionar /dashboard → /meu-plano. */
   const seal = await page.request.post("/api/subscription/seal", {
     data: { vencimento: "2099-12-31", plano: "bronze", status: "ativa" },

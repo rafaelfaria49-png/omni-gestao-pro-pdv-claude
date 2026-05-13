@@ -1,22 +1,5 @@
-import type { Page } from "@playwright/test"
 import { test, expect } from "@playwright/test"
-import { dismissFirstAccessWizardIfPresent } from "../helpers"
-
-/** Abre o caixa com saldo 0 e fecha o comprovante (PDV exige caixa aberto para pagamento). */
-async function ensureCaixaAberto(page: Page) {
-  const fechado = page.getByText("Caixa Fechado", { exact: false })
-  if (!(await fechado.isVisible().catch(() => false))) return
-
-  await page.getByRole("button", { name: /Abrir Caixa/i }).first().click()
-  const dlg = page.getByRole("dialog", { name: /Abertura de Caixa/i })
-  await expect(dlg).toBeVisible({ timeout: 15_000 })
-  await dlg.getByRole("button", { name: /^Abrir Caixa$/i }).click()
-  const fecharComprovante = page.getByRole("dialog").getByRole("button", { name: /^Fechar$/i })
-  if (await fecharComprovante.isVisible({ timeout: 8_000 }).catch(() => false)) {
-    await fecharComprovante.click()
-  }
-  await expect(page.getByText("Caixa Aberto", { exact: false }).first()).toBeVisible({ timeout: 20_000 })
-}
+import { dismissFirstAccessWizardIfPresent, ensureCaixaAberto } from "../helpers"
 
 test.describe("PDV / Vendas", () => {
   test("abre vendas, área de caixa e fluxo leve de pagamento (modal)", async ({ page }) => {

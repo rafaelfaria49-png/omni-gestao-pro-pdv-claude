@@ -11,8 +11,9 @@ test.describe("Operações HUB", () => {
     })
 
     await page.getByRole("button", { name: /Abrir Kanban/i }).first().click()
+    await page.waitForURL(/\/operacoes\/os/, { timeout: 35_000 }).catch(() => {})
 
-    await expect(page.getByRole("heading", { name: /Ordens de Serviço/i })).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole("heading", { name: /Ordens de Serviço/i })).toBeVisible({ timeout: 45_000 })
 
     const detailLink = page.locator('a[href^="/operacoes/os/"]').filter({ hasText: /OS-/i }).first()
     if (await detailLink.isVisible({ timeout: 10_000 }).catch(() => false)) {
