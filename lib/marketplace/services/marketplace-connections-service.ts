@@ -12,27 +12,69 @@ const SYNC_MESSAGES = [
   "Preço atualizado",
 ] as const
 
-export async function listMarketplaceConnections(storeId: string) {
+/** Select único para listagem / API — evita uniões de payload sem `syncLogs`. */
+export const MARKETPLACE_CONNECTION_API_SELECT = Prisma.validator<Prisma.MarketplaceConnectionSelect>()({
+  id: true,
+  storeId: true,
+  provider: true,
+  accountName: true,
+  status: true,
+  metadata: true,
+  lastSyncAt: true,
+  lastSyncMessage: true,
+  createdAt: true,
+  updatedAt: true,
+  syncLogs: {
+    orderBy: { createdAt: "desc" },
+    take: 12,
+    select: { id: true, message: true, createdAt: true },
+  },
+})
+
+export type MarketplaceConnectionApiRow = Prisma.MarketplaceConnectionGetPayload<{
+  select: typeof MARKETPLACE_CONNECTION_API_SELECT
+}>
+
+export function serializeMarketplaceConnection(row: MarketplaceConnectionApiRow) {
+  return {
+    id: row.id,
+    storeId: row.storeId,
+    provider: row.provider,
+    accountName: row.accountName,
+    status: row.status,
+    metadata: row.metadata ?? null,
+    lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
+    lastSyncMessage: row.lastSyncMessage,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    recentSyncLogs: row.syncLogs.map((l) => ({
+      id: l.id,
+      message: l.message,
+      createdAt: l.createdAt.toISOString(),
+    })),
+  }
+}
+
+function metadataToPrismaCreate(
+  v: Record<string, unknown> | null | undefined
+): Prisma.InputJsonValue | typeof Prisma.DbNull | undefined {
+  if (v === undefined) return undefined
+  if (v === null) return Prisma.DbNull
+  return v as Prisma.InputJsonValue
+}
+
+function metadataToPrismaUpdate(
+  v: Record<string, unknown> | null | undefined
+): Prisma.NullableJsonNullValueInput | Prisma.InputJsonValue {
+  if (v === null) return Prisma.DbNull
+  return v as Prisma.InputJsonValue
+}
+
+export async function listMarketplaceConnections(storeId: string): Promise<MarketplaceConnectionApiRow[]> {
   return prisma.marketplaceConnection.findMany({
     where: { storeId },
     orderBy: [{ provider: "asc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      storeId: true,
-      provider: true,
-      accountName: true,
-      status: true,
-      metadata: true,
-      lastSyncAt: true,
-      lastSyncMessage: true,
-      createdAt: true,
-      updatedAt: true,
-      syncLogs: {
-        orderBy: { createdAt: "desc" },
-        take: 12,
-        select: { id: true, message: true, createdAt: true },
-      },
-    },
+    select: MARKETPLACE_CONNECTION_API_SELECT,
   })
 }
 
@@ -41,7 +83,7 @@ export async function createMarketplaceConnection(input: {
   provider: MarketplaceProvider
   accountName: string
   metadata?: Record<string, unknown> | null
-}) {
+}): Promise<MarketplaceConnectionApiRow> {
   const name = input.accountName.trim() || defaultAccountName(input.provider)
   return prisma.marketplaceConnection.create({
     data: {
@@ -51,25 +93,9 @@ export async function createMarketplaceConnection(input: {
       status: "CONNECTED",
       accessToken: TOKEN_PLACEHOLDER,
       refreshToken: "",
-      metadata: (input.metadata ?? undefined) as object | undefined,
+      metadata: metadataToPrismaCreate(input.metadata),
     },
-    select: {
-      id: true,
-      storeId: true,
-      provider: true,
-      accountName: true,
-      status: true,
-      metadata: true,
-      lastSyncAt: true,
-      lastSyncMessage: true,
-      createdAt: true,
-      updatedAt: true,
-      syncLogs: {
-        orderBy: { createdAt: "desc" },
-        take: 12,
-        select: { id: true, message: true, createdAt: true },
-      },
-    },
+    select: MARKETPLACE_CONNECTION_API_SELECT,
   })
 }
 
@@ -80,7 +106,7 @@ export async function patchMarketplaceConnection(input: {
   status?: MarketplaceConnectionStatus
   metadata?: Record<string, unknown> | null
   simulateSync?: boolean
-}) {
+}): Promise<MarketplaceConnectionApiRow | null> {
   const existing = await prisma.marketplaceConnection.findFirst({
     where: { id: input.id, storeId: input.storeId },
   })
@@ -108,23 +134,7 @@ export async function patchMarketplaceConnection(input: {
     ])
     return prisma.marketplaceConnection.findFirst({
       where: { id: input.id, storeId: input.storeId },
-      select: {
-        id: true,
-        storeId: true,
-        provider: true,
-        accountName: true,
-        status: true,
-        metadata: true,
-        lastSyncAt: true,
-        lastSyncMessage: true,
-        createdAt: true,
-        updatedAt: true,
-        syncLogs: {
-          orderBy: { createdAt: "desc" },
-          take: 12,
-          select: { id: true, message: true, createdAt: true },
-        },
-      },
+      select: MARKETPLACE_CONNECTION_API_SELECT,
     })
   }
 
@@ -132,30 +142,13 @@ export async function patchMarketplaceConnection(input: {
   if (input.accountName !== undefined) data.accountName = input.accountName.trim() || existing.accountName
   if (input.status !== undefined) data.status = input.status
   if (input.metadata !== undefined) {
-    data.metadata =
-      input.metadata === null ? Prisma.DbNull : (input.metadata as Prisma.InputJsonValue)
+    data.metadata = metadataToPrismaUpdate(input.metadata)
   }
 
   if (Object.keys(data).length === 0) {
     return prisma.marketplaceConnection.findFirst({
       where: { id: input.id, storeId: input.storeId },
-      select: {
-        id: true,
-        storeId: true,
-        provider: true,
-        accountName: true,
-        status: true,
-        metadata: true,
-        lastSyncAt: true,
-        lastSyncMessage: true,
-        createdAt: true,
-        updatedAt: true,
-        syncLogs: {
-          orderBy: { createdAt: "desc" },
-          take: 12,
-          select: { id: true, message: true, createdAt: true },
-        },
-      },
+      select: MARKETPLACE_CONNECTION_API_SELECT,
     })
   }
 
@@ -165,23 +158,7 @@ export async function patchMarketplaceConnection(input: {
   })
   return prisma.marketplaceConnection.findFirst({
     where: { id: input.id, storeId: input.storeId },
-    select: {
-      id: true,
-      storeId: true,
-      provider: true,
-      accountName: true,
-      status: true,
-      metadata: true,
-      lastSyncAt: true,
-      lastSyncMessage: true,
-      createdAt: true,
-      updatedAt: true,
-      syncLogs: {
-        orderBy: { createdAt: "desc" },
-        take: 12,
-        select: { id: true, message: true, createdAt: true },
-      },
-    },
+    select: MARKETPLACE_CONNECTION_API_SELECT,
   })
 }
 

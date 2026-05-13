@@ -5,6 +5,7 @@ import {
   defaultAccountName,
   listMarketplaceConnections,
   parseProvider,
+  serializeMarketplaceConnection,
 } from "@/lib/marketplace/services/marketplace-connections-service"
 import { prismaEnsureConnected } from "@/lib/prisma"
 
@@ -12,33 +13,13 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-function serializeConnection(row: Awaited<ReturnType<typeof listMarketplaceConnections>>[number]) {
-  return {
-    id: row.id,
-    storeId: row.storeId,
-    provider: row.provider,
-    accountName: row.accountName,
-    status: row.status,
-    metadata: row.metadata ?? null,
-    lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
-    lastSyncMessage: row.lastSyncMessage,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    recentSyncLogs: row.syncLogs.map((l) => ({
-      id: l.id,
-      message: l.message,
-      createdAt: l.createdAt.toISOString(),
-    })),
-  }
-}
-
 export async function GET(req: Request) {
   const gate = await requireMarketplaceApi(req)
   if (!gate.ok) return gate.response
   await prismaEnsureConnected()
   const rows = await listMarketplaceConnections(gate.storeId)
   return NextResponse.json({
-    connections: rows.map(serializeConnection),
+    connections: rows.map(serializeMarketplaceConnection),
   })
 }
 
@@ -73,5 +54,5 @@ export async function POST(req: Request) {
         ? ((body as { metadata?: Record<string, unknown> }).metadata ?? null)
         : null,
   })
-  return NextResponse.json({ connection: serializeConnection(row) }, { status: 201 })
+  return NextResponse.json({ connection: serializeMarketplaceConnection(row) }, { status: 201 })
 }

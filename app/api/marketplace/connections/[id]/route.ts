@@ -2,8 +2,8 @@ import { NextResponse } from "next/server"
 import { requireMarketplaceApi } from "@/lib/marketplace/api-gate"
 import {
   deleteMarketplaceConnection,
-  listMarketplaceConnections,
   patchMarketplaceConnection,
+  serializeMarketplaceConnection,
 } from "@/lib/marketplace/services/marketplace-connections-service"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import type { MarketplaceConnectionStatus } from "@/generated/prisma"
@@ -11,26 +11,6 @@ import type { MarketplaceConnectionStatus } from "@/generated/prisma"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
-
-function serializeConnection(row: Awaited<ReturnType<typeof listMarketplaceConnections>>[number]) {
-  return {
-    id: row.id,
-    storeId: row.storeId,
-    provider: row.provider,
-    accountName: row.accountName,
-    status: row.status,
-    metadata: row.metadata ?? null,
-    lastSyncAt: row.lastSyncAt?.toISOString() ?? null,
-    lastSyncMessage: row.lastSyncMessage,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    recentSyncLogs: row.syncLogs.map((l) => ({
-      id: l.id,
-      message: l.message,
-      createdAt: l.createdAt.toISOString(),
-    })),
-  }
-}
 
 const ALLOWED_STATUS: MarketplaceConnectionStatus[] = ["DISCONNECTED", "CONNECTED", "ERROR", "SYNCING"]
 
@@ -72,7 +52,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     simulateSync,
   })
   if (!row) return NextResponse.json({ error: "Conexão não encontrada" }, { status: 404 })
-  return NextResponse.json({ connection: serializeConnection(row) })
+  return NextResponse.json({ connection: serializeMarketplaceConnection(row) })
 }
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
