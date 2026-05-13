@@ -10,7 +10,7 @@ try {
   await prisma.$connect()
   const total = await prisma.cliente.count()
   const sample = await prisma.cliente.findFirst({
-    select: { id: true, nome: true, telefone: true, email: true, cpf: true },
+    select: { id: true, storeId: true, name: true, phone: true, email: true, document: true },
     orderBy: { updatedAt: "desc" },
   })
   console.log("[prisma-smoke] OK — conexão com o banco estabelecida.")
