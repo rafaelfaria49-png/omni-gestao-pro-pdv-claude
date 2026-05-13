@@ -91,9 +91,69 @@ model Store {
   devolucoes             DevolucaoVenda[]
   garantiasOrdemServico  GarantiaOrdemServico[]
   adminUserStores        AdminUserStore[]
+  omniAgentCommands      OmniAgentCommand[]
+  marketplaceConnections MarketplaceConnection[]
+  marketplaceSyncLogs  MarketplaceSyncLog[]
 
   @@index([profile])
   @@map("stores")
+}
+
+enum MarketplaceProvider {
+  MERCADO_LIVRE @map("mercado_livre")
+  SHOPEE        @map("shopee")
+  AMAZON        @map("amazon")
+  MAGALU        @map("magalu")
+}
+
+enum MarketplaceConnectionStatus {
+  DISCONNECTED @map("disconnected")
+  CONNECTED    @map("connected")
+  ERROR        @map("error")
+  SYNCING      @map("syncing")
+}
+
+/**
+ * Conta de marketplace por unidade (OAuth real na Fase 2+).
+ */
+model MarketplaceConnection {
+  id              String                        @id @default(cuid())
+  storeId         String                        @map("storeId")
+  store           Store                         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  provider        MarketplaceProvider           @map("provider")
+  accountName     String                        @map("accountName")
+  status          MarketplaceConnectionStatus   @default(DISCONNECTED) @map("status")
+  /** Placeholder até criptografia/KMS — não expor na API pública. */
+  accessToken     String                        @default("") @map("accessToken")
+  refreshToken    String                        @default("") @map("refreshToken")
+  metadata        Json?                         @map("metadata") @db.JsonB
+  lastSyncAt      DateTime?                     @map("lastSyncAt")
+  lastSyncMessage String                        @default("") @map("lastSyncMessage")
+  createdAt       DateTime                      @default(now()) @map("createdAt")
+  updatedAt       DateTime                      @updatedAt @map("updatedAt")
+
+  syncLogs MarketplaceSyncLog[]
+
+  @@index([storeId])
+  @@index([storeId, provider])
+  @@map("marketplace_connections")
+}
+
+/**
+ * Histórico de sincronização simulada / futura sync real.
+ */
+model MarketplaceSyncLog {
+  id           String                 @id @default(cuid())
+  storeId      String                 @map("storeId")
+  store        Store                  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  connectionId String                 @map("connectionId")
+  connection   MarketplaceConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  message      String                 @map("message")
+  createdAt    DateTime               @default(now()) @map("createdAt")
+
+  @@index([storeId])
+  @@index([connectionId, createdAt])
+  @@map("marketplace_sync_logs")
 }
 
 /**
@@ -1443,6 +1503,36 @@ model CaixaOperacao {
   @@index([sessaoId])
   @@index([storeId, at])
   @@map("caixa_operacoes")
+}
+
+// ─── Omni Agent HUB — comandos auditáveis (Fase 1) ──────────────────────────
+
+enum OmniAgentCommandStatus {
+  PENDENTE
+  AGUARDANDO_CONFIRMACAO
+  EXECUTADO
+  ERRO
+}
+
+/**
+ * Comando interpretado pelo Omni Agent HUB (texto → intenção → execução controlada).
+ */
+model OmniAgentCommand {
+  id               String                  @id @default(cuid())
+  storeId          String                  @map("storeId")
+  store            Store                   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /** Canal de origem: texto_interno | whatsapp | voz */
+  canal            String                  @default("texto_interno") @map("canal")
+  comandoOriginal  String                  @map("comandoOriginal") @db.Text
+  interpretacao    Json                    @map("interpretacao") @db.JsonB
+  status           OmniAgentCommandStatus  @map("status")
+  resultado        Json?                   @map("resultado") @db.JsonB
+  executadoEm      DateTime?               @map("executadoEm")
+  createdAt        DateTime                @default(now()) @map("createdAt")
+
+  @@index([storeId, createdAt])
+  @@index([storeId, status])
+  @@map("omni_agent_commands")
 }
 
 // ─── NextAuth / Admin Auth ───────────────────────────────────────────────────

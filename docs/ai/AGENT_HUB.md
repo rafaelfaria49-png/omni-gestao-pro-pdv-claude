@@ -1,29 +1,48 @@
-# Omni Agent HUB — Visão geral (mock)
+# Omni Agent HUB — Visão geral
 
 ## Resumo
 
-O **Omni Agent HUB** é a central de IA operacional do OmniGestão Pro: um conjunto de telas, fluxos e automações para capturar solicitações, interpretar intenções e acionar rotinas internas do produto (ainda em modo **mock visual premium** em várias áreas).
+O **Omni Agent HUB** é a central de IA operacional do OmniGestão Pro: comandos em linguagem natural, interpretação determinística (sem LLM autónomo nesta fase), execução controlada com permissões enterprise e trilha persistida na base de dados.
 
-## Componentes / áreas (alto nível)
+## Omni Agent HUB Real — Fase 1 (estado)
 
-- **Central IA operacional**: ponto de entrada para comandos, recomendações e diagnósticos.
-- **NLP (mock)**: parsing/extração de intenções e entidades (ex.: financeiro, OS, clientes).
-- **Inbox IA**: caixa de entrada para tarefas e eventos a serem processados pela IA (triagem e ação sugerida).
-- **WhatsApp Agent**: automações e atendimento via WhatsApp (hub dedicado + engine de simulação).
-- **Automações**: regras que reagem a eventos internos (ex.: gatilhos operacionais/financeiros).
-- **Memória do cliente**: armazenamento/consulta de contexto por cliente (visão de 360°).
-- **Relatórios IA**: insights e painéis de recomendações com base em sinais do sistema.
-- **Configurações**: ajustes de comportamento, limites, permissões e critérios (mock/placeholder).
+### O que já existia (antes da Fase 1)
 
-## Estado atual
+- **UI premium** em `components/omni-agent/OmniAgentHub.tsx`: visão geral, inbox simulada em memória, WhatsApp simulado, catálogo de comandos de exemplo, automações em memória, memória de cliente mock, relatórios mock, configurações em `localStorage`.
+- **Parser mock** local: função `interpret()` com regex para demonstração (Financeiro, Vendas, OS, etc.) sem persistência.
+- **Event bus**: não havia bus de domínio global; apenas estado React + `localStorage` e `logAudit` local.
 
-- **Status**: mock visual premium em partes relevantes (UI e fluxos demonstrativos).
-- **Integração real**: parcial/heterogênea, variando por módulo (WhatsApp/OS/Financeiro).
+### O que é mock (mantido na Fase 1)
 
-## Próximo passo (futuro)
+- Abas **Visão Geral** (gráficos/sugestões sintéticas), **WhatsApp Agent**, **Automações**, **Memória Cliente**, **Relatórios IA** (respostas aleatórias), **Configurações** (toggles locais).
+- **Feed** de “comandos recentes” com `SAMPLE_CMDS` e botão **Simular** (continuação demonstrativa).
+- Função legacy `interpret()` ainda usada por essas abas de demonstração.
 
-- Integrar de forma consistente com os módulos reais (Operações, Financeiro, Vendas, Estoque):
-  - eventos de domínio padronizados
-  - execução de ações com auditoria
-  - persistência e observabilidade (log/telemetria)
+### O que passou a ser real (Fase 1)
 
+| Peça | Ficheiros / notas |
+|------|---------------------|
+| Modelo Prisma | `OmniAgentCommand` (`omni_agent_commands`): `storeId`, `canal`, `comandoOriginal`, `interpretacao` (JSON), `status`, `resultado`, `executadoEm`, `createdAt`. |
+| Interpretador real | `lib/omni-agent/interpret.ts` — intenções: `OS_OPEN`, `CLIENT_SEARCH`, `PRODUCT_SEARCH`, `REMINDER_CREATE`, `CASHBOX_QUERY`, `FINANCE_SUMMARY`, `UNKNOWN`. |
+| Executor | `lib/omni-agent/executor.ts` — chama `createOS`, `listClientes`, `listProdutos`, Prisma `sessaoCaixa`, `getResumoExecutivo`, `logsAuditoria` (lembretes). |
+| Server actions | `app/actions/omni-agent.ts` — `submitOmniAgentCommand`, `listOmniAgentCommands`, `confirmOmniAgentCommand`, `rejectOmniAgentCommand`; gating `requireEnterpriseWith` + `workspace.omniAgent` e por intenção. |
+| Inbox real | `components/omni-agent/OmniAgentInboxReal.tsx` — filtros: pendente, aguardando confirmação, executado, erro; confirmação para escritas. |
+| UI Hub | Aba **Inbox IA** usa a inbox real; modal **Novo** grava na API; badge **Fase 1 · real**. |
+
+### Fluxo de segurança
+
+- Leituras (`CLIENT_SEARCH`, `PRODUCT_SEARCH`, `CASHBOX_QUERY`, `FINANCE_SUMMARY`): ao **Executar** no modal, registo com estado **EXECUTADO** ou **ERRO** imediato.
+- Escritas (`OS_OPEN`, `REMINDER_CREATE`): ao **Executar**, registo **AGUARDANDO_CONFIRMACAO**; só após botão **Confirmar** na inbox é que corre o executor (OS com cliente ambíguo: escolha explícita de cliente).
+- **Inbox** (modal): cria **PENDENTE**; utilizador usa **Interpretar e executar** na lista.
+- Auditoria: `logs_auditoria` com `OMNI_AGENT_EXEC_OK`, `OMNI_AGENT_EXEC_ERRO`, `OMNI_AGENT_LEMBRETE`.
+
+### Permissões (matriz)
+
+- Base: `workspace.omniAgent` (já alinhado com rota enterprise).
+- Por intenção: ver `INTENT_MODULE` em `lib/omni-agent/types.ts` (Operações/Cadastros/Caixa/Financeiro view).
+
+## Próximo passo (fases seguintes)
+
+- LLM controlado com JSON schema e limites de ferramentas.
+- Event bus de domínio e automações persistidas.
+- Unificar parser mock da UI legacy com o interpretador real onde fizer sentido.

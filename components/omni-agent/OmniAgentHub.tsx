@@ -19,6 +19,11 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
+import { interpretOmniAgentCommand } from "@/lib/omni-agent/interpret";
+import { submitOmniAgentCommand, listOmniAgentCommands } from "@/app/actions/omni-agent";
+import { OmniAgentInboxReal } from "@/components/omni-agent/OmniAgentInboxReal";
 
 type CmdStatus = "executado" | "pendente" | "recusado" | "aprovado";
 type ModuleId = "Financeiro" | "Vendas" | "OS" | "Estoque" | "Clientes" | "Lembretes" | "Relatórios" | "Geral";
@@ -124,10 +129,13 @@ function beep() {
 
 /* ============================================================ */
 export default function OmniAgentHub() {
+  const { lojaAtivaId } = useLojaAtiva();
+  const storeId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID;
   const [tab, setTab] = useState<TabId>("overview");
   const [agentOnline, setAgentOnline] = useLS<boolean>("omni-agent-online", true);
   const [compact, setCompact] = useLS<boolean>("omni-compact", false);
   const [feed, setFeed] = useState<Cmd[]>(SAMPLE_CMDS);
+  const [inboxPendingRemote, setInboxPendingRemote] = useState(0);
   const [inbox, setInbox] = useState<InboxItem[]>([
     { id: "i1", desc: "Criar despesa de R$ 120 em Combustível", module: "Financeiro", confidence: 0.96, status: "pending", original: "gastei R$ 120 em combustível", fields: { descrição: "Combustível", valor: "120", categoria: "Combustível", carteira: "Caixa", pagamento: "Dinheiro", data: "hoje" }, ts: Date.now() - 60000 * 18 },
     { id: "i2", desc: "Criar pré-OS para João / iPhone 12 sem áudio", module: "OS", confidence: 0.88, status: "pending", original: "cliente João trouxe iPhone 12 sem áudio", fields: { cliente: "João", aparelho: "iPhone 12", defeito: "sem áudio", prioridade: "normal", status: "aberto" }, ts: Date.now() - 60000 * 12 },
@@ -143,6 +151,13 @@ export default function OmniAgentHub() {
   const [now, setNow] = useState(Date.now());
   const onlineSince = useRef(Date.now());
 
+  useEffect(() => {
+    if (!storeId) return;
+    void listOmniAgentCommands(storeId, 80).then((rows) => {
+      setInboxPendingRemote(rows.filter((r) => r.status === "PENDENTE" || r.status === "AGUARDANDO_CONFIRMACAO").length);
+    }).catch(() => setInboxPendingRemote(0));
+  }, [storeId, tab]);
+
   // theme synced via global ThemeProvider
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(id); }, []);
   useEffect(() => {
@@ -157,9 +172,9 @@ export default function OmniAgentHub() {
   const stats = useMemo(() => ({
     received: feed.length + 12,
     executed: feed.filter(f => f.status === "executado" || f.status === "aprovado").length + 8,
-    pending: inbox.filter(i => i.status === "pending").length,
+    pending: inboxPendingRemote + inbox.filter(i => i.status === "pending").length,
     accuracy: 94,
-  }), [feed, inbox]);
+  }), [feed, inbox, inboxPendingRemote]);
 
   function logAudit(msg: string) { setAudit(a => [`${nowTime()} · ${msg}`, ...a].slice(0, 50)); }
   function addCmd(text: string, category = "Comando", module = "Geral", status: CmdStatus = "executado", confidence = 0.9) {
@@ -180,7 +195,7 @@ export default function OmniAgentHub() {
     else toast.success("Comando simulado executado");
   }
 
-  const pendingCount = inbox.filter(i => i.status === "pending").length;
+  const pendingCount = inboxPendingRemote + inbox.filter(i => i.status === "pending").length;
 
   return (
     <div className={cn("min-h-screen w-full bg-background text-foreground", compact && "text-[13px]")}>
@@ -191,6 +206,7 @@ export default function OmniAgentHub() {
         onSimulate={simulate}
         onNewCmd={() => setNewCmdOpen(true)}
         notifications={inbox.filter(i => i.status === "pending").slice(0, 5)}
+        inboxPendingRemote={inboxPendingRemote}
         onGotoInbox={() => setTab("inbox")}
         compact={compact}
         setCompact={setCompact}
@@ -209,7 +225,9 @@ export default function OmniAgentHub() {
               now={now} onlineSince={onlineSince.current} agentOnline={agentOnline}
             />
           )}
-          {tab === "inbox" && <InboxTab items={inbox} setItems={setInbox} logAudit={logAudit} />}
+          {tab === "inbox" && (
+            <OmniAgentInboxReal storeId={storeId} logAudit={logAudit} onPendingChange={setInboxPendingRemote} />
+          )}
           {tab === "whatsapp" && <WhatsAppTab onTest={(t) => { const r = interpret(t); addCmd(t, r.action, r.module); logAudit(`WhatsApp: ${t}`); toast.success("Comando enviado"); }} pushToInbox={pushToInbox} bumpUnread={() => setWaUnread(n => n + 1)} />}
           {tab === "commands" && <CommandsTab onSimulate={(t) => { const r = interpret(t); addCmd(t, r.action, r.module, "executado", r.confidence); if (r.confidence < 0.85) pushToInbox(t); toast.success("Comando simulado"); logAudit(`Simulou: ${t}`); }} />}
           {tab === "auto" && <AutomationsTab logAudit={logAudit} />}
@@ -221,8 +239,33 @@ export default function OmniAgentHub() {
 
       <NewCommandModal
         open={newCmdOpen} onClose={() => setNewCmdOpen(false)}
-        onSendInbox={(t) => { pushToInbox(t); logAudit(`Enviado p/ Inbox: ${t}`); toast.success("Enviado para Inbox IA"); }}
-        onExecute={(t) => { const r = interpret(t); addCmd(t, r.action, r.module, "executado", r.confidence); logAudit(`Executado: ${t}`); toast.success("Comando executado"); }}
+        storeId={storeId}
+        onSendInbox={async (t) => {
+          try {
+            await submitOmniAgentCommand({ storeId, comandoOriginal: t, mode: "inbox" });
+            logAudit(`Inbox real: ${t}`);
+            toast.success("Comando registado (pendente)");
+            void listOmniAgentCommands(storeId, 80).then((rows) => {
+              setInboxPendingRemote(rows.filter((r) => r.status === "PENDENTE" || r.status === "AGUARDANDO_CONFIRMACAO").length);
+            });
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Falha ao registar");
+          }
+        }}
+        onExecute={async (t) => {
+          try {
+            const row = await submitOmniAgentCommand({ storeId, comandoOriginal: t, mode: "run" });
+            const r = interpret(t);
+            addCmd(t, r.action, r.module, row.status === "EXECUTADO" ? "executado" : "pendente", r.confidence);
+            logAudit(`Pipeline real: ${t} → ${row.status}`);
+            toast.success(row.status === "EXECUTADO" ? "Executado no servidor" : row.status === "AGUARDANDO_CONFIRMACAO" ? "Aguardando confirmação na Inbox" : "Registado");
+            void listOmniAgentCommands(storeId, 80).then((rows) => {
+              setInboxPendingRemote(rows.filter((x) => x.status === "PENDENTE" || x.status === "AGUARDANDO_CONFIRMACAO").length);
+            });
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Falha ao executar");
+          }
+        }}
       />
 
       <Dialog open={!!details} onOpenChange={(o) => !o && setDetails(null)}>
@@ -279,7 +322,7 @@ function Row({ k, v }: { k: string; v: string }) {
 }
 
 /* ---------- Header ---------- */
-function Header({ agentOnline, setAgentOnline, onSimulate, onNewCmd, notifications, onGotoInbox, compact, setCompact, onOpenPalette }: any) {
+function Header({ agentOnline, setAgentOnline, onSimulate, onNewCmd, notifications, inboxPendingRemote, onGotoInbox, compact, setCompact, onOpenPalette }: any) {
   const [clock, setClock] = useState(nowTime());
   const [bellOpen, setBellOpen] = useState(false);
   useEffect(() => { const id = setInterval(() => setClock(nowTime()), 30000); return () => clearInterval(id); }, []);
@@ -303,13 +346,15 @@ function Header({ agentOnline, setAgentOnline, onSimulate, onNewCmd, notificatio
             {agentOnline ? "Online" : "Pausado"}
           </Badge>
           <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> {clock}</Badge>
-          <Badge variant="outline">Mock</Badge>
+          <Badge variant="outline">Fase 1 · real</Badge>
 
           <div className="relative">
             <Button variant="outline" size="sm" onClick={() => setBellOpen(o => !o)}>
               <Bell />
-              {notifications.length > 0 && (
-                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">{notifications.length}</span>
+              {(notifications.length > 0 || inboxPendingRemote > 0) && (
+                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">
+                  {Math.max(notifications.length, inboxPendingRemote)}
+                </span>
               )}
             </Button>
             {bellOpen && (
@@ -691,18 +736,25 @@ function InboxTab({ items, setItems, logAudit }: { items: InboxItem[]; setItems:
 }
 
 /* ---------- New Command Modal ---------- */
-function NewCommandModal({ open, onClose, onSendInbox, onExecute }: { open: boolean; onClose: () => void; onSendInbox: (t: string) => void; onExecute: (t: string) => void }) {
+function NewCommandModal({ open, onClose, storeId, onSendInbox, onExecute }: {
+  open: boolean;
+  onClose: () => void;
+  storeId: string;
+  onSendInbox: (t: string) => void | Promise<void>;
+  onExecute: (t: string) => void | Promise<void>;
+}) {
   const [channel, setChannel] = useState<"texto" | "whatsapp" | "voz">("texto");
   const [text, setText] = useState("");
   const [client, setClient] = useState("");
   const [moduleHint, setModuleHint] = useState<string>("auto");
-  const [result, setResult] = useState<ReturnType<typeof interpret> | null>(null);
+  const [result, setResult] = useState<{ module: string; action: string; fields: Record<string, string>; confidence: number } | null>(null);
   function reset() { setText(""); setClient(""); setResult(null); setModuleHint("auto"); setChannel("texto"); }
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Novo comando</DialogTitle></DialogHeader>
+        <p className="text-xs text-muted-foreground">Unidade ativa: {storeId}</p>
         <div className="space-y-3 text-sm">
           <div>
             <Label className="mb-1 block">Canal</Label>
@@ -724,8 +776,14 @@ function NewCommandModal({ open, onClose, onSendInbox, onExecute }: { open: bool
           </div>
           <Button variant="outline" className="w-full" onClick={() => {
             if (!text.trim()) return toast.error("Digite um comando");
-            const r = interpret(text); if (moduleHint !== "auto") r.module = moduleHint as ModuleId;
-            setResult(r); toast.success("Interpretado");
+            const r = interpretOmniAgentCommand(text);
+            setResult({
+              module: moduleHint === "auto" ? r.intent : moduleHint,
+              action: r.action,
+              fields: r.fields,
+              confidence: r.confidence,
+            });
+            toast.success("Interpretado");
           }}><Brain /> Interpretar</Button>
           {result && (
             <div className="rounded-lg border border-border bg-muted p-3 space-y-2">
@@ -744,8 +802,16 @@ function NewCommandModal({ open, onClose, onSendInbox, onExecute }: { open: bool
         </div>
         <DialogFooter className="flex-wrap gap-2">
           <Button variant="ghost" onClick={() => { reset(); onClose(); }}>Cancelar</Button>
-          <Button variant="outline" onClick={() => { if (!text.trim()) return toast.error("Digite"); onSendInbox(text.trim()); reset(); onClose(); }}><Inbox /> Inbox</Button>
-          <Button onClick={() => { if (!text.trim()) return toast.error("Digite"); onExecute(text.trim()); reset(); onClose(); }}><Play /> Executar</Button>
+          <Button variant="outline" onClick={async () => {
+            if (!text.trim()) return toast.error("Digite");
+            await onSendInbox(text.trim());
+            reset(); onClose();
+          }}><Inbox /> Inbox</Button>
+          <Button onClick={async () => {
+            if (!text.trim()) return toast.error("Digite");
+            await onExecute(text.trim());
+            reset(); onClose();
+          }}><Play /> Executar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -891,6 +957,14 @@ function WhatsAppTab({ onTest, pushToInbox, bumpUnread }: { onTest: (t: string) 
 /* ---------- Commands ---------- */
 type CmdDef = { name: string; example: string; result: string };
 const COMMAND_GROUPS: { cat: string; items: CmdDef[] }[] = [
+  { cat: "Omni Agent — testes Fase 1 (real)", items: [
+    { name: "Abrir OS (confirmação)", example: "abrir OS para João", result: "Cria OS após confirmar na Inbox" },
+    { name: "Consultar caixa", example: "consultar caixa", result: "Sessão aberta + saldo inicial" },
+    { name: "Buscar cliente", example: "buscar cliente Rafael", result: "Lista clientes do cadastro" },
+    { name: "Buscar produto", example: "buscar produto película", result: "Lista produtos" },
+    { name: "Lembrete (confirmação)", example: "criar lembrete de cobrança", result: "Regista em auditoria após confirmar" },
+    { name: "Financeiro hoje", example: "mostrar financeiro hoje", result: "Resumo via serviço de relatórios" },
+  ]},
   { cat: "Financeiro", items: [
     { name: "Registrar despesa", example: "gastei R$ 120 em combustível no dinheiro", result: "Cria despesa categorizada" },
     { name: "Criar conta a receber", example: "João vai pagar R$ 280 sexta-feira", result: "Cria recebimento previsto" },
