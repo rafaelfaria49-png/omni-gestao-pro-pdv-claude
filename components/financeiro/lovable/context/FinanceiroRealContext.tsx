@@ -701,7 +701,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const exportarRelatorio = useCallback((tipo: string, formato: "csv" | "xlsx", filtros?: FiltrosFinanceiros) => {
     const f = filtros ?? filtrosFinanceiros
     const lojaId = getLojaId()
-    const params = new URLSearchParams({ tipo, formato, "x-assistec-loja-id": lojaId })
+    // `storeId` na query: leituras via anchor não enviam header; `storeIdFromAssistecRequestForRead` ignora `x-assistec-loja-id` na URL.
+    const params = new URLSearchParams({ tipo, formato, storeId: lojaId })
     if (f.preset !== "personalizado") {
       params.set("preset", f.preset)
     } else {
@@ -709,10 +710,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
       if (f.dataFim) params.set("dataFim", f.dataFim)
     }
     const url = `/api/financeiro/relatorios/exportar?${params.toString()}`
-    // Trigger download via anchor
     const a = document.createElement("a")
     a.href = url
-    a.setAttribute("x-assistec-loja-id", lojaId)
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
