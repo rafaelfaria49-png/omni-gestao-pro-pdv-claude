@@ -34,6 +34,9 @@ interface PdvLayout {
   icon: React.ElementType;
 }
 
+/** Número fixo de opções de layout na UI (Clássico, Rápido, Assistência, Supermercado). */
+export const PDV_LAYOUTS_COUNT = 4 as const;
+
 const LAYOUTS: PdvLayout[] = [
   { id: "classico", name: "PDV Clássico", description: "Layout tradicional com grid de produtos e carrinho lateral.", icon: LayoutGrid },
   {
@@ -238,7 +241,10 @@ function PdvSectionContent() {
           </p>
         </div>
 
-        <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div
+          className="grid min-w-0 gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+          data-pdv-layout-cards={String(LAYOUTS.length)}
+        >
           {LAYOUTS.map((opt) => {
             const active = draftLayout === opt.id;
             const Icon = opt.icon;
@@ -414,6 +420,10 @@ function PdvSectionContent() {
           </div>
         </div>
       </div>
+
+      <p className="text-center text-xs text-muted-foreground pt-2 border-t border-border/60">
+        Layouts disponíveis: {PDV_LAYOUTS_COUNT}
+      </p>
     </div>
   );
 }
