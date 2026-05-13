@@ -4,7 +4,8 @@
  * Exporta dados financeiros como CSV ou XLSX.
  *
  * Query params:
- *   tipo      — movimentacoes | receber | pagar | conciliacoes | auditoria | dre | fluxo
+ *   tipo      — movimentacoes | receber | pagar | conciliacoes | auditoria | dre | fluxo |
+ *               devolucoes | sessoes_caixa | operacoes_caixa | vendas_canceladas | cobrancas_os
  *   formato   — csv | xlsx (padrão: csv)
  *   dataInicio — yyyy-mm-dd
  *   dataFim    — yyyy-mm-dd
@@ -144,17 +145,152 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
     }
   }
 
+  if (tipo === "devolucoes") {
+    const rows = await prisma.devolucaoVenda.findMany({
+      where: { storeId, at: range },
+      select: {
+        id: true, localId: true, vendaLocalId: true, tipo: true, valorTotal: true, clienteNome: true,
+        operador: true, motivo: true, at: true, sessaoId: true,
+      },
+      orderBy: { at: "desc" },
+      take: 5000,
+    })
+    return {
+      filename: "devolucoes_pdv",
+      rows: rows.map((r) => ({
+        id: r.id,
+        localId: r.localId,
+        vendaLocalId: r.vendaLocalId,
+        sessaoId: r.sessaoId ?? "",
+        tipo: r.tipo,
+        valorTotal: r.valorTotal,
+        cliente: r.clienteNome,
+        operador: r.operador,
+        motivo: r.motivo,
+        data: r.at.toISOString().slice(0, 10),
+      })),
+    }
+  }
+
+  if (tipo === "sessoes_caixa") {
+    const rows = await prisma.sessaoCaixa.findMany({
+      where: {
+        storeId,
+        abertaEm: { lte: range.lte },
+        OR: [{ fechadaEm: null }, { fechadaEm: { gte: range.gte } }],
+      },
+      select: {
+        id: true, operador: true, saldoInicial: true, saldoFinal: true, saldoContado: true,
+        status: true, abertaEm: true, fechadaEm: true, observacao: true,
+      },
+      orderBy: { abertaEm: "desc" },
+      take: 5000,
+    })
+    return {
+      filename: "sessoes_caixa",
+      rows: rows.map((r) => ({
+        id: r.id,
+        operador: r.operador,
+        saldoInicial: r.saldoInicial,
+        saldoFinal: r.saldoFinal ?? "",
+        saldoContado: r.saldoContado ?? "",
+        status: r.status,
+        abertaEm: r.abertaEm.toISOString().slice(0, 16),
+        fechadaEm: r.fechadaEm ? r.fechadaEm.toISOString().slice(0, 16) : "",
+        observacao: r.observacao,
+      })),
+    }
+  }
+
+  if (tipo === "operacoes_caixa") {
+    const rows = await prisma.caixaOperacao.findMany({
+      where: { storeId, at: range },
+      select: { id: true, sessaoId: true, tipo: true, valor: true, motivo: true, operador: true, at: true },
+      orderBy: { at: "desc" },
+      take: 5000,
+    })
+    return {
+      filename: "operacoes_caixa",
+      rows: rows.map((r) => ({
+        id: r.id,
+        sessaoId: r.sessaoId,
+        tipo: r.tipo,
+        valor: r.valor,
+        motivo: r.motivo,
+        operador: r.operador,
+        data: r.at.toISOString().slice(0, 16),
+      })),
+    }
+  }
+
+  if (tipo === "vendas_canceladas") {
+    const rows = await prisma.venda.findMany({
+      where: {
+        storeId,
+        status: "cancelada",
+        OR: [
+          { canceladaEm: { gte: range.gte, lte: range.lte } },
+          { AND: [{ canceladaEm: null }, { at: { gte: range.gte, lte: range.lte } }] },
+        ],
+      },
+      select: {
+        id: true, pedidoId: true, total: true, at: true, canceladaEm: true, canceladaPor: true, motivoCancelamento: true,
+      },
+      orderBy: [{ canceladaEm: "desc" }, { at: "desc" }],
+      take: 5000,
+    })
+    return {
+      filename: "vendas_canceladas",
+      rows: rows.map((r) => ({
+        id: r.id,
+        pedidoId: r.pedidoId,
+        total: r.total,
+        vendaEm: r.at.toISOString().slice(0, 10),
+        canceladaEm: r.canceladaEm ? r.canceladaEm.toISOString().slice(0, 16) : "",
+        canceladaPor: r.canceladaPor ?? "",
+        motivo: r.motivoCancelamento ?? "",
+      })),
+    }
+  }
+
+  if (tipo === "cobrancas_os") {
+    const rows = await prisma.contaReceberTitulo.findMany({
+      where: { storeId, localKey: { startsWith: "os-faturamento:" }, createdAt: range },
+      select: {
+        id: true, localKey: true, cliente: true, descricao: true, valor: true, status: true, vencimento: true, createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 5000,
+    })
+    return {
+      filename: "cobrancas_os",
+      rows: rows.map((r) => ({
+        id: r.id,
+        localKey: r.localKey,
+        cliente: r.cliente ?? "",
+        descricao: r.descricao,
+        valor: r.valor,
+        status: r.status,
+        vencimento: r.vencimento ?? "",
+        criadoEm: r.createdAt.toISOString().slice(0, 10),
+      })),
+    }
+  }
+
   // fluxo = movimentações simplificadas (padrão fallback)
   const rows = await prisma.movimentacaoFinanceira.findMany({
     where: { storeId, createdAt: range },
-    select: { tipo: true, descricao: true, valor: true, createdAt: true },
+    select: { tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
     orderBy: { createdAt: "asc" },
     take: 5000,
   })
   return {
     filename: "fluxo_caixa",
     rows: rows.map((r) => ({
-      tipo: r.tipo, descricao: r.descricao, valor: r.valor,
+      tipo: r.tipo,
+      descricao: r.descricao,
+      valor: r.valor,
+      origem: r.origem ?? "",
       data: r.createdAt.toISOString().slice(0, 10),
     })),
   }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { requireOpsSubscription, opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { parseDateStringSafe } from "@/lib/financeiro/contracts/valores"
+import { parseDateStringSafe, safeMoney } from "@/lib/financeiro/contracts/valores"
+import { isOrigemTransferenciaInterna } from "@/lib/financeiro/services/movimentacao-financeira-classify"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -42,7 +43,10 @@ export async function GET(req: Request) {
   try {
     await prismaEnsureConnected()
 
-    const [receber, pagar, stores, movs] = await Promise.all([
+    const now = new Date()
+    const fluxoDesde = new Date(now.getFullYear(), now.getMonth() - 5, 1, 0, 0, 0, 0)
+
+    const [receber, pagar, stores, movsFluxo, movsRecent] = await Promise.all([
       prisma.contaReceberTitulo.findMany({
         where: { storeId },
         select: { id: true, cliente: true, descricao: true, valor: true, vencimento: true, localKey: true, storeId: true, status: true, updatedAt: true },
@@ -57,6 +61,11 @@ export async function GET(req: Request) {
       }),
       prisma.store.findMany({ select: { id: true, name: true } }),
       prisma.movimentacaoFinanceira.findMany({
+        where: { storeId, createdAt: { gte: fluxoDesde } },
+        select: { id: true, tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
+        orderBy: { createdAt: "asc" },
+      }),
+      prisma.movimentacaoFinanceira.findMany({
         where: { storeId },
         select: { id: true, tipo: true, descricao: true, valor: true, origem: true, createdAt: true },
         orderBy: { createdAt: "desc" },
@@ -69,7 +78,6 @@ export async function GET(req: Request) {
     // ── Fluxo mensal (últimos 6 meses) ───────────────────────────────────────
     // Fonte primária: MovimentacaoFinanceira (entradas/saídas reais)
     // Fallback: CR/CP com status=pago (quando ainda não há movimentações reais)
-    const now = new Date()
     const keys: string[] = []
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
@@ -77,18 +85,16 @@ export async function GET(req: Request) {
     }
     const fluxoMap = new Map(keys.map((k) => [k, { entrada: 0, saida: 0 }]))
 
-    const usaMovReal = movs.length > 0
+    const usaMovReal = movsFluxo.length > 0
 
     if (usaMovReal) {
-      // Usa movimentações reais (origem != estorno para não duplicar)
-      for (const m of movs) {
+      for (const m of movsFluxo) {
         const k = `${m.createdAt.getFullYear()}-${String(m.createdAt.getMonth() + 1).padStart(2, "0")}`
         if (!fluxoMap.has(k)) continue
-        // Origens de estorno não contam no fluxo (já foram contabilizadas na operação original)
-        const isEstorno = (m.origem ?? "").startsWith("estorno")
-        if (isEstorno) continue
-        if (m.tipo === "entrada") fluxoMap.get(k)!.entrada += m.valor
-        else fluxoMap.get(k)!.saida += m.valor
+        if (isOrigemTransferenciaInterna(m.origem)) continue
+        const v = safeMoney(m.valor)
+        if (m.tipo === "entrada") fluxoMap.get(k)!.entrada = safeMoney(fluxoMap.get(k)!.entrada + v)
+        else fluxoMap.get(k)!.saida = safeMoney(fluxoMap.get(k)!.saida + v)
       }
     } else {
       // Fallback: títulos pagos (dados anteriores ao backfill)
@@ -113,8 +119,8 @@ export async function GET(req: Request) {
     // Fonte primária: MovimentacaoFinanceira real; fallback: CR/CP pagos
     const movimentacoesBase =
       usaMovReal
-        ? movs
-            .filter((m) => !(m.origem ?? "").startsWith("estorno"))
+        ? movsRecent
+            .filter((m) => !isOrigemTransferenciaInterna(m.origem))
             .map((m) => ({
               id: m.id,
               desc: m.descricao || "Movimentação",

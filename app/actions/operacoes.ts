@@ -22,7 +22,12 @@ import { cancelContaReceberFromOS, upsertContaReceberFromOS } from "@/lib/financ
 import { asOperacoesPayload, nowIso } from "@/lib/operacoes/services/os-helpers";
 import { listOrdens as listOrdensRead } from "@/app/actions/ordens";
 import { mergePayload, computeEffectiveOperacaoStatus, validatePatchIdentifiers } from "@/lib/operacoes/services/payload-service";
-import { syncFinanceiroAfterOSPayloadUpdate } from "@/lib/operacoes/services/financeiro-sync-service";
+import {
+  syncFinanceiroAfterOSPayloadUpdate,
+  shouldSyncFinanceiroFromPatch,
+  type OperacoesSyncPatch,
+} from "@/lib/operacoes/services/financeiro-sync-service";
+import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service";
 import { appendTimelineEvent, makeTimelineEvent } from "@/lib/operacoes/services/timeline-service";
 import { toPrismaStatus } from "@/lib/operacoes/services/status-service";
 import { applyApprovedBudgetPolicy } from "@/lib/operacoes/services/orcamento-policy-service";
@@ -313,6 +318,15 @@ export async function updateOSPayload(
   const orcTotal = (nextWithPolicy as OperacoesOSPayload).orcamento?.total;
   if (typeof orcTotal === "number" && Number.isFinite(orcTotal)) {
     rowUpdate.valorTotal = orcTotal;
+  }
+
+  if (shouldSyncFinanceiroFromPatch(patch as Partial<OperacoesSyncPatch>)) {
+    const lock = await verificarPeriodoFechado(storeId, new Date());
+    if (lock.fechado) {
+      throw new Error(
+        "Período financeiro fechado. Reabra o fechamento para alterar cobrança ou faturamento desta OS.",
+      );
+    }
   }
 
   await prisma.ordemServico.update({
@@ -722,6 +736,13 @@ export async function gerarCobrancaOSAction(
     Number(current.faturamentoTotal) > 0;
   if (!pendenteOk) {
     throw new Error("Não há faturamento pendente nesta OS (aprove o orçamento primeiro).");
+  }
+
+  const lockCobranca = await verificarPeriodoFechado(storeId, new Date());
+  if (lockCobranca.fechado) {
+    throw new Error(
+      "Período financeiro fechado. Reabra o fechamento para registrar ou alterar a cobrança desta OS.",
+    );
   }
 
   const total = Number(current.faturamentoTotal);

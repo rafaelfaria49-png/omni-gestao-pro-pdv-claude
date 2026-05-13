@@ -7,7 +7,7 @@
  */
 import { NextResponse } from "next/server"
 import { z } from "zod"
-import { prismaEnsureConnected } from "@/lib/prisma"
+import { prismaEnsureConnected, prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { requireAdmin } from "@/lib/require-admin"
 import {
@@ -167,6 +167,22 @@ export async function DELETE(req: Request) {
 
   try {
     await prismaEnsureConnected()
+
+    const existing = await prisma.movimentacaoFinanceira.findFirst({
+      where: { id, storeId: sid },
+      select: { createdAt: true },
+    })
+    if (!existing) {
+      return NextResponse.json({ ok: false, error: `movimentacoes-service: movimentação "${id}" não encontrada` }, { status: 404 })
+    }
+    const lock = await verificarPeriodoFechado(sid, existing.createdAt)
+    if (lock.fechado) {
+      return NextResponse.json(
+        { ok: false, error: "Período financeiro fechado. Reabra o fechamento para excluir lançamentos.", code: "periodo_fechado" },
+        { status: 409 },
+      )
+    }
+
     await deleteMovimentacao(id, sid)
     return NextResponse.json({ ok: true })
   } catch (e) {

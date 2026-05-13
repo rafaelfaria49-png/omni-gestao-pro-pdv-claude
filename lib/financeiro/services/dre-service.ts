@@ -18,6 +18,14 @@
  */
 
 import { prisma } from "@/lib/prisma"
+import {
+  isOrigemDevolucaoPdv,
+  isOrigemEstornoPagar,
+  isOrigemEstornoReceber,
+  isOrigemSangriaPdv,
+  isOrigemSuprimentoPdv,
+  isOrigemTransferenciaInterna,
+} from "./movimentacao-financeira-classify"
 
 // ─── constantes de classificação ─────────────────────────────────────────────
 
@@ -41,9 +49,9 @@ const ORIGENS_RECEITA = new Set([
   "marketplace", "legado",
 ])
 
-/** Origens que devem ser ignoradas no DRE (neutras) */
+/** Origens neutras (não entram em receita nem despesa no DRE) */
 const ORIGENS_IGNORAR = new Set([
-  "transferencia", "transferência", "ajuste", "sistema",
+  "ajuste", "sistema",
 ])
 
 // ─── tipos públicos ───────────────────────────────────────────────────────────
@@ -139,8 +147,7 @@ function isOrigemReceita(origem: string): boolean {
 function isOrigemIgnorada(origem: string): boolean {
   const o = origem.toLowerCase().trim()
   if (ORIGENS_IGNORAR.has(o)) return true
-  if (o.startsWith("estorno")) return true
-  if (o.startsWith("transfer")) return true
+  if (isOrigemTransferenciaInterna(o)) return true
   return false
 }
 
@@ -239,9 +246,16 @@ async function getDREPeriodo(
 
   for (const m of movs) {
     const v = safeMoney(m.valor)
-    const origem = (m.origem ?? "manual").toLowerCase()
+    const origemRaw = m.origem ?? "manual"
+    const origem = origemRaw.toLowerCase()
 
     if (isOrigemIgnorada(origem)) continue
+
+    // Estorno de pagamento: entrada que reduz despesa (não é receita operacional)
+    if (m.tipo === "entrada" && isOrigemEstornoPagar(origemRaw)) {
+      despVarItems.push({ categoria: "Estornos (pagamentos)", valor: -v })
+      continue
+    }
 
     if (m.tipo === "entrada") {
       if (isOrigemReceita(origem)) {
@@ -250,20 +264,36 @@ async function getDREPeriodo(
         if (origem.startsWith("os") || origem.startsWith("receber")) cat = "Serviços (OS)"
         else if (origem === "pdv" || origem === "venda") cat = "Vendas (PDV)"
         else if (origem === "marketplace") cat = "Marketplace"
+        else if (isOrigemSuprimentoPdv(origemRaw)) cat = "Suprimento de caixa (PDV)"
         receitaItems.push({ categoria: cat, valor: v })
       } else {
         receitaItems.push({ categoria: "Outras receitas", valor: v })
       }
-    } else {
-      // Saída: determinar categoria pelo CP vinculado
-      const cat = m.referenciaId ? (cpCatMap.get(m.referenciaId) ?? "Outros") : "Outros"
-      const tipo = classifyCategoria(cat)
-      const catFormatada = cat.charAt(0).toUpperCase() + cat.slice(1)
-
-      if (tipo === "custo") custoItems.push({ categoria: catFormatada, valor: v })
-      else if (tipo === "fixa") despFixaItems.push({ categoria: catFormatada, valor: v })
-      else despVarItems.push({ categoria: catFormatada, valor: v })
+      continue
     }
+
+    // Saídas
+    if (isOrigemEstornoReceber(origemRaw)) {
+      receitaItems.push({ categoria: "Estornos (recebimentos / cancelamentos)", valor: -v })
+      continue
+    }
+    if (isOrigemDevolucaoPdv(origemRaw)) {
+      receitaItems.push({ categoria: "Devoluções PDV", valor: -v })
+      continue
+    }
+    if (isOrigemSangriaPdv(origemRaw)) {
+      despVarItems.push({ categoria: "Sangria de caixa (PDV)", valor: v })
+      continue
+    }
+
+    // Demais saídas: despesa/custo via CP vinculado
+    const cat = m.referenciaId ? (cpCatMap.get(m.referenciaId) ?? "Outros") : "Outros"
+    const tipo = classifyCategoria(cat)
+    const catFormatada = cat.charAt(0).toUpperCase() + cat.slice(1)
+
+    if (tipo === "custo") custoItems.push({ categoria: catFormatada, valor: v })
+    else if (tipo === "fixa") despFixaItems.push({ categoria: catFormatada, valor: v })
+    else despVarItems.push({ categoria: catFormatada, valor: v })
   }
 
   // ── Totais ────────────────────────────────────────────────────────────────

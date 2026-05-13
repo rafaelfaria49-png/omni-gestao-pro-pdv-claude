@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { createSaida } from "@/lib/financeiro/services/movimentacoes-service"
+import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import type { Prisma } from "@/generated/prisma"
 import { z } from "zod"
 
@@ -67,6 +68,14 @@ export async function POST(req: Request) {
   })
   if (existing) {
     return NextResponse.json({ ok: true, devolucaoId: existing.id, idempotente: true })
+  }
+
+  const lock = await verificarPeriodoFechado(lojaId, new Date())
+  if (lock.fechado) {
+    return NextResponse.json(
+      { error: "Período financeiro fechado. Reabra o fechamento para registrar devoluções.", code: "periodo_fechado" },
+      { status: 409 },
+    )
   }
 
   // ── Validar sessão se fornecida ─────────────────────────────────────────────

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
+import { createEntrada, createSaida } from "@/lib/financeiro/services/movimentacoes-service"
 import type { Prisma } from "@/generated/prisma"
 import { z } from "zod"
 
@@ -44,6 +46,14 @@ export async function POST(req: Request) {
   const { sessaoId, tipo, valor, motivo, operador, payload } = parsed.data
 
   try {
+    const lock = await verificarPeriodoFechado(lojaId, new Date())
+    if (lock.fechado) {
+      return NextResponse.json(
+        { error: "Período financeiro fechado. Reabra o fechamento para registrar operações de caixa.", code: "periodo_fechado" },
+        { status: 409 },
+      )
+    }
+
     const sessao = await prisma.sessaoCaixa.findFirst({
       where: { id: sessaoId, storeId: lojaId, status: "ABERTA" },
       select: { id: true },
@@ -68,6 +78,40 @@ export async function POST(req: Request) {
       },
       select: { id: true, tipo: true, valor: true, at: true },
     })
+
+    // Sangria/suprimento: integra ao financeiro (devolução financeira continua em /api/ops/devolucao)
+    if (tipo === "sangria" || tipo === "suprimento") {
+      const origem = tipo === "sangria" ? "sangria_pdv" : "suprimento_pdv"
+      const dup = await prisma.movimentacaoFinanceira.findFirst({
+        where: { storeId: lojaId, referenciaId: op.id, origem },
+        select: { id: true },
+      })
+      if (!dup) {
+        const descBase = tipo === "sangria" ? "Sangria de caixa PDV" : "Suprimento de caixa PDV"
+        const descricao = `${descBase} — ${motivo.slice(0, 120)}`
+        try {
+          if (tipo === "sangria") {
+            await createSaida({
+              storeId: lojaId,
+              valor,
+              descricao,
+              origem,
+              referenciaId: op.id,
+            })
+          } else {
+            await createEntrada({
+              storeId: lojaId,
+              valor,
+              descricao,
+              origem,
+              referenciaId: op.id,
+            })
+          }
+        } catch (finErr) {
+          console.warn("[ops/caixa/operacao] Falha ao espelhar em MovimentacaoFinanceira:", finErr)
+        }
+      }
+    }
 
     return NextResponse.json({ ok: true, operacao: op })
   } catch (e) {

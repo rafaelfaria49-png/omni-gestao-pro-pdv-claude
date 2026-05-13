@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { parseDateStringSafe, isOverdueDateString, safeMoney } from "@/lib/financeiro/contracts/valores"
+import { isOrigemTransferenciaInterna } from "@/lib/financeiro/services/movimentacao-financeira-classify"
 
 // ─── tipos públicos ───────────────────────────────────────────────────────────
 
@@ -156,17 +157,17 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
   }
 
   for (const m of todasMovs) {
-    const isEstorno = (m.origem ?? "").startsWith("estorno")
+    const o = m.origem ?? ""
     const v = safeMoney(m.valor)
     const isEntrada = m.tipo === "entrada"
     const isSaida = m.tipo === "saida"
+    const ignoraAgregadoLoja = isOrigemTransferenciaInterna(o)
 
-    // Saldo atual: estornos são contados (eles revertem entradas/saídas)
     if (isEntrada) saldoAtual = safeMoney(saldoAtual + v)
     if (isSaida) saldoAtual = safeMoney(saldoAtual - v)
 
-    // Fluxo do período: exclui estornos para não confundir o usuário
-    if (!isEstorno) {
+    // Fluxo do período: movimentação de caixa real (inclui estornos e devoluções); transferências entre carteiras não duplicam resultado da loja
+    if (!ignoraAgregadoLoja) {
       if (m.createdAt >= todayStart && m.createdAt <= todayEnd) {
         if (isEntrada) entradasHoje = safeMoney(entradasHoje + v)
         if (isSaida) saidasHoje = safeMoney(saidasHoje + v)
@@ -177,9 +178,8 @@ export async function getFluxoCaixaResumo(storeId: string): Promise<FluxoCaixaRe
       }
     }
 
-    // Fluxo diário (inclui estornos para mostrar movimentação real)
     const k = dayKey(m.createdAt)
-    if (fluxoDiarioMap.has(k)) {
+    if (fluxoDiarioMap.has(k) && !ignoraAgregadoLoja) {
       const entry = fluxoDiarioMap.get(k)!
       if (isEntrada) entry.entrada = safeMoney(entry.entrada + v)
       if (isSaida) entry.saida = safeMoney(entry.saida + v)
