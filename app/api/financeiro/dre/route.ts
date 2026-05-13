@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getDREMensal } from "@/lib/financeiro/services/dre-service"
+import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 
 function getStoreId(req: NextRequest): string {
   return (
@@ -17,6 +18,8 @@ function err(msg: string, code: string, status = 400) {
 
 export async function GET(req: NextRequest) {
   const storeId = getStoreId(req)
+  const denied = await apiGuardFinanceiroViewOrOps(storeId)
+  if (denied) return denied
   const params = req.nextUrl.searchParams
 
   const mesRaw = params.get("mes")

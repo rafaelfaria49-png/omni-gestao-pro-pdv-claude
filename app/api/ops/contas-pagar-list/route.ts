@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prismaEnsureConnected } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import {
   listContasPagarByStore,
   buildContaPagarSummary,
@@ -88,13 +89,9 @@ function buildContaPagarRowFallback(t: {
 }
 
 export async function GET(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok) {
-    const dev = process.env.NODE_ENV === "development"
-    if (!dev) return gate.res
-  }
-
-  const storeId = opsLojaIdFromRequest(req)
+  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const denied = await apiGuardFinanceiroViewOrOps(storeId, { skipOpsInDev: true })
+  if (denied) return denied
 
   try {
     await prismaEnsureConnected()
@@ -136,7 +133,6 @@ export async function GET(req: Request) {
         source: "server",
         storeId,
         generatedAt,
-        gateBypassedInDev: !gate.ok && process.env.NODE_ENV === "development",
       },
     })
   } catch (e) {

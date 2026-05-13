@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server"
 import { prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import { getFluxoCaixaResumo } from "@/lib/financeiro/services/fluxo-caixa-service"
 
 export const runtime = "nodejs"
@@ -25,6 +26,8 @@ function err(error: string, code: string, status = 400) {
 
 export async function GET(req: Request) {
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const denied = await apiGuardFinanceiroViewOrOps(storeId)
+  if (denied) return denied
 
   try {
     await prismaEnsureConnected()

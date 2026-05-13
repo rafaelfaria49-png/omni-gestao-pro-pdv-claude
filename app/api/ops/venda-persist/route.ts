@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { upsertVendaInTransaction, type SalePayload } from "@/lib/ops-upsert-venda"
 
 export const runtime = "nodejs"
@@ -8,9 +9,6 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function POST(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok) return gate.res
-
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(
@@ -35,6 +33,13 @@ export async function POST(req: Request) {
   if (!pedidoId) {
     return NextResponse.json({ error: "sale.id inválido" }, { status: 400 })
   }
+
+  const denied = await apiGuardEnterpriseOrOps(
+    lojaId,
+    (p) => p.hubs.vendas,
+    "Sem permissão para registrar vendas.",
+  )
+  if (denied) return denied
 
   try {
     await prismaEnsureConnected()

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { auth } from "@/auth"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { createEntrada, createSaida } from "@/lib/financeiro/services/movimentacoes-service"
+import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { Prisma } from "@/generated/prisma"
 import { z } from "zod"
 
@@ -20,14 +24,11 @@ const schema = z.object({
 })
 
 export async function POST(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok) return gate.res
-
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(
       { error: "Unidade obrigatória: envie o header x-assistec-loja-id." },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -44,6 +45,20 @@ export async function POST(req: Request) {
   }
 
   const { sessaoId, tipo, valor, motivo, operador, payload } = parsed.data
+
+  const permCheck: (p: EnterprisePermissions) => boolean =
+    tipo === "devolucao" ? (p) => p.pdv.devolucao : (p) => p.pdv.abrirCaixa
+  const forbidden =
+    tipo === "devolucao"
+      ? "Sem permissão para registrar devolução no caixa."
+      : "Sem permissão para sangria ou suprimento de caixa."
+
+  const denied = await apiGuardEnterpriseOrOps(lojaId, permCheck, forbidden)
+  if (denied) return denied
+
+  const session = await auth()
+  const operadorLabel =
+    operador?.trim() || (session?.user ? getOperatorLabelFromSession(session) : "")
 
   try {
     const lock = await verificarPeriodoFechado(lojaId, new Date())
@@ -73,7 +88,7 @@ export async function POST(req: Request) {
         tipo,
         valor,
         motivo,
-        operador,
+        operador: operadorLabel,
         payload: payload ? (payload as Prisma.InputJsonValue) : undefined,
       },
       select: { id: true, tipo: true, valor: true, at: true },

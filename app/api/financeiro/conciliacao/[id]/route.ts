@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import { marcarDivergente } from "@/lib/financeiro/services/conciliacao-service"
 
@@ -25,6 +26,13 @@ export async function PATCH(
   await prismaEnsureConnected()
   const { id } = await params
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const denied = await apiGuardEnterpriseOrOps(
+    storeId,
+    (p) => p.financeiro.conciliacao,
+    "Sem permissão para conciliação financeira.",
+    { errorBody: "okFalse" },
+  )
+  if (denied) return denied
 
   let body: unknown
   try { body = await req.json() } catch {

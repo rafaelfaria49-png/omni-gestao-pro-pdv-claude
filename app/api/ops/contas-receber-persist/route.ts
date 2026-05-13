@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prismaEnsureConnected } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import type { ContaReceberRow } from "@/lib/contas-receber-types"
 import { upsertContaReceber } from "@/lib/financeiro/services"
 
@@ -21,16 +22,20 @@ function rowToScalar(r: ContaReceberRow) {
 }
 
 export async function POST(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok) return gate.res
-
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(
       { error: "Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId / lojaId." },
-      { status: 400 }
+      { status: 400 },
     )
   }
+
+  const denied = await apiGuardEnterpriseOrOps(
+    lojaId,
+    (p) => p.financeiro.edit,
+    "Sem permissão para sincronizar contas a receber.",
+  )
+  if (denied) return denied
 
   let body: unknown
   try {

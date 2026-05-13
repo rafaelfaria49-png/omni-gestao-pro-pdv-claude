@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
-import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
-import { isVencimentoExpired } from "@/lib/subscription-seal"
-import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
+import { auth } from "@/auth"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
+import { apiGuardFinanceiroEditEnterpriseOrLegacy } from "@/lib/auth/api-enterprise-guard"
 import { estornarContaPagar, buildContaPagarAuditTrail } from "@/lib/financeiro/services"
 
 export const runtime = "nodejs"
@@ -26,17 +25,6 @@ function pickTituloRef(input: { tituloId?: string | number; localKey?: string })
 }
 
 export async function POST(request: Request) {
-  const sub = await getVerifiedSubscriptionFromCookies()
-  if (!sub.ok) return NextResponse.json({ ok: false, error: "Não autorizado" }, { status: 401 })
-
-  const adminGate = await requireAdmin()
-  if (!adminGate.ok) return adminGate.res
-
-  const now = await getTrustedTimeMs()
-  if (isVencimentoExpired(now, sub.vencimento) || sub.status !== "ativa") {
-    return NextResponse.json({ ok: false, error: "Assinatura inválida" }, { status: 403 })
-  }
-
   let json: unknown
   try {
     json = await request.json()
@@ -66,6 +54,11 @@ export async function POST(request: Request) {
     )
   }
 
+  const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(storeId)
+  if (denied) return denied
+
+  const userLabel = getOperatorLabelFromSession(await auth())
+
   const ref = pickTituloRef(parsed.data)
   if (!ref.id && !ref.localKey) {
     return NextResponse.json({ ok: false, error: "Informe tituloId ou localKey." }, { status: 400 })
@@ -77,7 +70,7 @@ export async function POST(request: Request) {
     localKey: ref.localKey,
     modo: "titulo_completo",
     motivo: parsed.data.motivo,
-    userLabel: "dashboard",
+    userLabel,
   })
 
   if (!res.ok) {
@@ -89,7 +82,7 @@ export async function POST(request: Request) {
     await prisma.logsAuditoria.create({
       data: {
         action: "estorno_conta_pagar",
-        userLabel: "dashboard",
+        userLabel,
         detail: `Estorno CP (título completo) — loja ${storeId}, título ${res.data.id}`,
         metadata: JSON.stringify({
           storeId,
@@ -122,4 +115,3 @@ export async function POST(request: Request) {
     audit,
   })
 }
-

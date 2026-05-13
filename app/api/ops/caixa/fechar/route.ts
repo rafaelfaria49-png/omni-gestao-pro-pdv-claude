@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import type { Prisma } from "@/generated/prisma"
 import { z } from "zod"
 
@@ -18,14 +19,11 @@ const schema = z.object({
 })
 
 export async function POST(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok) return gate.res
-
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(
       { error: "Unidade obrigatória: envie o header x-assistec-loja-id." },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -40,6 +38,13 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 })
   }
+
+  const denied = await apiGuardEnterpriseOrOps(
+    lojaId,
+    (p) => p.pdv.fecharCaixa,
+    "Sem permissão para fechar o caixa.",
+  )
+  if (denied) return denied
 
   const { sessaoId, saldoFinal, saldoContado, observacao, payload } = parsed.data
 

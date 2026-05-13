@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import {
   listarConciliacoes,
@@ -34,6 +35,13 @@ const postSchema = z.object({
 export async function GET(req: Request) {
   await prismaEnsureConnected()
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const denied = await apiGuardEnterpriseOrOps(
+    storeId,
+    (p) => p.financeiro.conciliacao,
+    "Sem permissão para conciliação financeira.",
+    { errorBody: "okFalse" },
+  )
+  if (denied) return denied
   const url = new URL(req.url)
   const status = (url.searchParams.get("status") ?? undefined) as StatusConciliacao | undefined
   const resumo = url.searchParams.get("resumo") === "1"
@@ -55,6 +63,13 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   await prismaEnsureConnected()
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const denied = await apiGuardEnterpriseOrOps(
+    storeId,
+    (p) => p.financeiro.conciliacao,
+    "Sem permissão para conciliação financeira.",
+    { errorBody: "okFalse" },
+  )
+  if (denied) return denied
 
   let body: unknown
   try { body = await req.json() } catch { return err("Body inválido", "invalid_body") }

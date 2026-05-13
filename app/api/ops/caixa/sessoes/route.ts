@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok) return gate.res
-
   const lojaId = opsLojaIdFromRequest(req)
   if (!lojaId) {
     return NextResponse.json(
@@ -17,6 +15,13 @@ export async function GET(req: Request) {
       { status: 400 }
     )
   }
+
+  const denied = await apiGuardEnterpriseOrOps(
+    lojaId,
+    (p) => p.hubs.caixaHistorico,
+    "Sem permissão para consultar o histórico de caixa.",
+  )
+  if (denied) return denied
 
   const url = new URL(req.url)
   const status = url.searchParams.get("status") ?? undefined

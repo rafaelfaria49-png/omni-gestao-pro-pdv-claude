@@ -13,6 +13,8 @@
  */
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import { prismaEnsureConnected, prisma } from "@/lib/prisma"
 import { buildFiltroPreset, type PeriodoFiltro } from "@/lib/financeiro/services/relatorios-financeiros-service"
 
@@ -302,6 +304,19 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
 
   const tipo = url.searchParams.get("tipo") ?? "movimentacoes"
+  const exportCheck = (p: EnterprisePermissions) => {
+    if (tipo === "auditoria") return p.auditoria
+    if (tipo === "conciliacoes") return p.financeiro.conciliacao
+    return p.financeiro.edit
+  }
+  const denied = await apiGuardEnterpriseOrOps(
+    storeId,
+    exportCheck,
+    "Sem permissão para exportar estes dados.",
+    { errorBody: "okFalse" },
+  )
+  if (denied) return denied
+
   const formato = (url.searchParams.get("formato") ?? "csv").toLowerCase()
   const preset = url.searchParams.get("preset")
 

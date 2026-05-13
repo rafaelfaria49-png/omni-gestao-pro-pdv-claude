@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { auth } from "@/auth"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { z } from "zod"
 
 export const runtime = "nodejs"
@@ -14,14 +17,11 @@ const schema = z.object({
 })
 
 export async function POST(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok) return gate.res
-
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(
       { error: "Unidade obrigatória: envie o header x-assistec-loja-id." },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -37,7 +37,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 })
   }
 
-  const { saldoInicial, operador, observacao } = parsed.data
+  const denied = await apiGuardEnterpriseOrOps(
+    lojaId,
+    (p) => p.pdv.abrirCaixa,
+    "Sem permissão para abrir o caixa.",
+  )
+  if (denied) return denied
+
+  const { saldoInicial, observacao } = parsed.data
+  const session = await auth()
+  const operador =
+    parsed.data.operador?.trim() ||
+    (session?.user ? getOperatorLabelFromSession(session) : "")
 
   try {
     const sessao = await prisma.sessaoCaixa.create({

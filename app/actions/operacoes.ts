@@ -54,7 +54,11 @@ import {
   criarGarantiaOrdemServicoDb,
   expirarGarantiasVencidas,
   possuiGarantiaAtiva,
-} from "@/lib/operacoes/services/garantia-operacional-service";
+} from "@/lib/operacoes/services/garantia-operacional-service"
+import { auth } from "@/auth"
+import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
+import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator";
 
 export type OSPrioridade = "baixa" | "media" | "alta" | "critica";
 
@@ -114,7 +118,29 @@ async function nextCodigo(storeId: string): Promise<string> {
   return `OS-${year}-${seq}`;
 }
 
+async function requireOperacaoAuth(
+  storeId: string,
+  check: (p: EnterprisePermissions) => boolean,
+  message: string,
+): Promise<void> {
+  const session = await auth();
+  if (!session?.user?.id) return;
+  const g = await requireEnterpriseWith(storeId, check, message);
+  if (!g.ok) throw new Error(g.error);
+}
+
+async function resolveOperador(autor?: string): Promise<string> {
+  const t = autor?.trim();
+  if (t && t !== "Operador") return t;
+  return getOperatorLabelFromSession(await auth());
+}
+
 export async function listOS(storeId: string): Promise<OperacoesOSPayload[]> {
+  await requireOperacaoAuth(
+    storeId,
+    (p) => p.hubs.operacoes,
+    "Sem permissão para listar ordens de serviço.",
+  );
   const rows = await listOrdensRead(storeId);
   return rows as OperacoesOSPayload[];
 }
@@ -123,6 +149,7 @@ export async function createOS(
   storeId: string,
   input: Omit<OperacoesOSPayload, "id" | "codigo" | "criadoEm" | "atualizadoEm">
 ): Promise<OperacoesOSPayload> {
+  await requireOperacaoAuth(storeId, (p) => p.operacoes.criarOs, "Sem permissão para criar OS.");
   const codigo = await nextCodigo(storeId);
   const createdAtIso = nowIso();
   const payload: OperacoesOSPayload = {
@@ -182,6 +209,11 @@ export async function updateOSStatus(
 
   const currentEff = normalizeOperacaoStatus((current as OperacoesOSPayload).status);
   const effective = normalizeOperacaoStatus(status);
+  let statusPerm: (p: EnterprisePermissions) => boolean;
+  if (effective === "entregue") statusPerm = (p) => p.operacoes.entregarOs;
+  else if (effective === "cancelada") statusPerm = (p) => p.operacoes.cancelarOs;
+  else statusPerm = (p) => p.operacoes.editarOs;
+  await requireOperacaoAuth(storeId, statusPerm, "Sem permissão para alterar o status desta OS.");
   assertOperacaoStatusTransition(currentEff, effective, options);
 
   const next: OperacoesOSPayload = {
@@ -289,6 +321,7 @@ export async function updateOSPayload(
   if (!existing) throw new Error("OS não encontrada");
   const current = asOperacoesPayload<OperacoesOSPayload>(existing.payload as unknown);
   if (!current) throw new Error("OS sem payload (incompatível)");
+  await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para editar a OS.");
   validatePatchIdentifiers({ storeId, osId, patch });
   const effectiveOperacao = computeEffectiveOperacaoStatus(patch);
   const next = mergePayload<OperacoesOSPayload>({
@@ -410,6 +443,19 @@ export async function applyOperacaoHubAcao(
   const st = normalizeOperacaoStatus(current.status);
   const tl = readTimelinePayload(current);
 
+  const permForAcao = (): ((p: EnterprisePermissions) => boolean) => {
+    switch (acao.kind) {
+      case "entregar_cliente":
+        return (p) => p.operacoes.entregarOs;
+      case "cancelar":
+        return (p) => p.operacoes.cancelarOs;
+      default:
+        return (p) => p.operacoes.editarOs;
+    }
+  };
+  await requireOperacaoAuth(storeId, permForAcao(), "Sem permissão para esta ação na OS.");
+  const autorEfetivo = await resolveOperador(autor);
+
   switch (acao.kind) {
     case "iniciar_diagnostico": {
       assertPodeIniciarDiagnostico(current);
@@ -418,7 +464,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "diagnostico_registrado",
         titulo: "Diagnóstico",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: "Diagnóstico iniciado.",
         criadoEm: nowIso(),
@@ -443,7 +489,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "orcamento_enviado",
         titulo: "Orçamento",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: "Orçamento enviado ao cliente.",
         criadoEm: nowIso(),
@@ -474,7 +520,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "orcamento_aprovado",
         titulo: "Orçamento aprovado",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: "Orçamento aprovado.",
         criadoEm: nowIso(),
@@ -509,7 +555,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "orcamento_recusado",
         titulo: "Orçamento recusado",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: acao.motivo?.trim() ? acao.motivo.trim() : "Orçamento recusado.",
         criadoEm: nowIso(),
@@ -539,7 +585,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "servico_iniciado",
         titulo: "Serviço em execução",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: acao.iniciarSemAprovacaoConfirmado
           ? "Serviço iniciado sem aprovação formal (confirmado pelo operador)."
@@ -563,7 +609,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "mudanca_status",
         titulo: "Aguardando peça",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: "Serviço pausado aguardando peça.",
         criadoEm: nowIso(),
@@ -580,7 +626,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "servico_concluido",
         titulo: "Serviço concluído",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: "OS marcada como pronta para retirada.",
         criadoEm: nowIso(),
@@ -596,7 +642,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "entrega_cliente",
         titulo: "Entrega",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: "Equipamento entregue ao cliente.",
         criadoEm: nowIso(),
@@ -609,7 +655,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "os_cancelada",
         titulo: "Cancelamento",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: acao.motivo?.trim() ? `OS cancelada. Motivo: ${acao.motivo.trim()}` : "OS cancelada.",
         criadoEm: nowIso(),
@@ -622,7 +668,7 @@ export async function applyOperacaoHubAcao(
       if (st === "entregue") throw new Error("OS entregue não aceita novas observações por este fluxo.");
       const obs: ObservacaoTecnica = {
         id: `ob_${newTimelineId()}`,
-        autor,
+        autor: autorEfetivo,
         conteudo: txt,
         interna: acao.interna ?? false,
         criadoEm: nowIso(),
@@ -632,7 +678,7 @@ export async function applyOperacaoHubAcao(
         id: newTimelineId(),
         tipo: "observacao",
         titulo: obs.interna ? "Observação interna" : "Observação",
-        autor,
+        autor: autorEfetivo,
         autorTipo: "usuario",
         conteudo: obs.interna ? "Observação interna registrada." : "Observação registrada.",
         criadoEm: nowIso(),
@@ -650,6 +696,7 @@ export async function applyOperacaoHubAcao(
 }
 
 export async function syncOperacaoItensComOrcamento(storeId: string, osId: string): Promise<void> {
+  await requireOperacaoAuth(storeId, (p) => p.operacoes.editarOs, "Sem permissão para sincronizar itens da OS.");
   const { orcamento, payload } = await loadOrcamentoFromOsRow(storeId, osId);
   if (!orcamento || !payload) return;
   await syncOrdemServicoDraftItensFromOrcamento({ storeId, osId, orcamento, payload });
@@ -666,6 +713,7 @@ export async function validateOrcamentoEstoqueAction(
   storeId: string,
   osId: string,
 ): Promise<{ ok: boolean; issues: EstoqueOrcamentoIssue[] }> {
+  await requireOperacaoAuth(storeId, (p) => p.hubs.operacoes, "Sem permissão para validar estoque do orçamento.");
   const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
   const current = asOperacoesPayload<OperacoesOSPayload>(row?.payload as unknown);
   if (!current) return { ok: true, issues: [] };
@@ -725,6 +773,9 @@ export async function gerarCobrancaOSAction(
   const current = asOperacoesPayload<OperacoesOSPayload>(existing?.payload as unknown);
   if (!current) throw new Error("OS não encontrada");
 
+  await requireOperacaoAuth(storeId, (p) => p.operacoes.gerarCobranca, "Sem permissão para gerar cobrança.");
+  const autorCob = await resolveOperador(autor);
+
   const st = normalizeOperacaoStatus(current.status);
   const allowed: OSStatus[] = ["aprovado", "em_execucao", "aguardando_peca", "pronta", "entregue"];
   if (!allowed.includes(st)) {
@@ -761,7 +812,7 @@ export async function gerarCobrancaOSAction(
     id: newTimelineId(),
     tipo: "operacao_cobranca_gerada",
     titulo: "Cobrança",
-    autor,
+    autor: autorCob,
     autorTipo: "usuario",
     conteudo: `Cobrança registrada no financeiro (modo: ${input.modo}).`,
     metadata: { modo: input.modo, parcelas: parcelas.length },
@@ -815,6 +866,8 @@ export async function salvarChecklistTecnicoOperacaoAction(
   checklistTecnico: ChecklistTecnicoItem[],
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
+  await requireOperacaoAuth(storeId, (p) => p.operacoes.checklist, "Sem permissão para editar o checklist técnico.");
+  const autorCh = await resolveOperador(autor);
   const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
   const current = asOperacoesPayload<OperacoesOSPayload>(existing?.payload as unknown);
   if (!current) throw new Error("OS não encontrada");
@@ -827,7 +880,7 @@ export async function salvarChecklistTecnicoOperacaoAction(
       ? [
           ...tl,
           makeTimelineEvent("checklist_finalizado", `Checklist técnico concluído (${checklistTecnico.length} itens).`, {
-            autor,
+            autor: autorCh,
           }),
         ]
       : tl;
@@ -840,6 +893,8 @@ export async function confirmarRetiradaOperacaoAction(
   input: RetiradaCliente,
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
+  await requireOperacaoAuth(storeId, (p) => p.operacoes.retirada, "Sem permissão para registrar retirada.");
+  const autorRt = await resolveOperador(autor);
   const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
   const current = asOperacoesPayload<OperacoesOSPayload>(existing?.payload as unknown);
   if (!current) throw new Error("OS não encontrada");
@@ -858,7 +913,7 @@ export async function confirmarRetiradaOperacaoAction(
         makeTimelineEvent(
           "retirada_confirmada",
           nome ? `Retirada confirmada por ${nome}.` : "Retirada confirmada.",
-          { autor },
+          { autor: autorRt },
         ),
       ]
     : tl;
@@ -870,10 +925,16 @@ export async function registrarDocumentoImpressoAction(
   osId: string,
   autor = "Operador",
 ): Promise<void> {
+  await requireOperacaoAuth(
+    storeId,
+    (p) => p.operacoes.editarOs,
+    "Sem permissão para registrar impressão de documento.",
+  );
+  const autorDoc = await resolveOperador(autor);
   await appendTimelineEvent<OperacoesOSPayload>(prisma, {
     storeId,
     osId,
-    ev: makeTimelineEvent("documento_impresso", "Documento operacional impresso ou copiado.", { autor }),
+    ev: makeTimelineEvent("documento_impresso", "Documento operacional impresso ou copiado.", { autor: autorDoc }),
   });
   revalidatePath("/dashboard/operacoes-v2");
 }
@@ -883,6 +944,11 @@ export async function salvarPreferenciaGarantiaOperacionalAction(
   osId: string,
   input: { modo: GarantiaOperacionalModo; prazoCustom?: number },
 ): Promise<OperacoesOSPayload> {
+  await requireOperacaoAuth(
+    storeId,
+    (p) => p.operacoes.garantia,
+    "Sem permissão para alterar preferências de garantia operacional.",
+  );
   return updateOSPayload(storeId, osId, {
     garantiaOperacionalModo: input.modo,
     garantiaOperacionalPrazoCustom: input.modo === "personalizada" ? input.prazoCustom : undefined,
@@ -895,6 +961,8 @@ export async function criarGarantiaOperacionalManualAction(
   input: { prazoDias: number; observacoes?: string },
   autor = "Operador",
 ): Promise<OperacoesOSPayload> {
+  await requireOperacaoAuth(storeId, (p) => p.operacoes.garantia, "Sem permissão para registrar garantia operacional.");
+  const autorG = await resolveOperador(autor);
   const existing = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { payload: true } });
   const current = asOperacoesPayload<OperacoesOSPayload>(existing?.payload as unknown);
   if (!current) throw new Error("OS não encontrada");
@@ -930,7 +998,7 @@ export async function criarGarantiaOperacionalManualAction(
         ev: makeTimelineEvent(
           "garantia_gerada",
           `Garantia operacional registrada manualmente (${created.prazoDias} dias).`,
-          { garantiaId: created.id, autor },
+          { garantiaId: created.id, autor: autorG },
         ),
       });
     }
@@ -951,6 +1019,7 @@ function safePayloadObj(v: unknown): Record<string, unknown> | null {
 }
 
 export async function listVendasHub(storeId: string): Promise<Venda[]> {
+  await requireOperacaoAuth(storeId, (p) => p.hubs.vendas, "Sem permissão para listar vendas.");
   const rows = await prisma.venda.findMany({
     where: { storeId },
     include: { itens: true },
@@ -987,8 +1056,13 @@ export async function listVendasHub(storeId: string): Promise<Venda[]> {
 }
 
 export async function criarVendaDeOSAction(os: OrdemServico): Promise<Venda> {
-  if (!os.orcamento) throw new Error("OS sem orçamento — impossível faturar")
-  const year = new Date().getFullYear()
+  if (!os.orcamento) throw new Error("OS sem orçamento — impossível faturar");
+  await requireOperacaoAuth(
+    os.storeId,
+    (p) => p.hubs.vendas && p.operacoes.editarOs,
+    "Sem permissão para criar venda a partir da OS.",
+  );
+  const year = new Date().getFullYear();
   const count = await prisma.venda.count({ where: { storeId: os.storeId } })
   const pedidoId = `VND-${year}-${(count + 1).toString().padStart(5, "0")}`
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

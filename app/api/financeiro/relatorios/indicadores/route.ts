@@ -5,6 +5,7 @@
  */
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import {
   getIndicadoresExecutivos,
@@ -21,6 +22,8 @@ export const revalidate = 0
 export async function GET(req: Request) {
   await prismaEnsureConnected()
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const denied = await apiGuardFinanceiroViewOrOps(storeId)
+  if (denied) return denied
   const url = new URL(req.url)
 
   const preset = url.searchParams.get("preset")

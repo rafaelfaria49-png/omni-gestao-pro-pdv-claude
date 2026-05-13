@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prismaEnsureConnected } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { upsertContaPagar } from "@/lib/financeiro/services"
 
 export const runtime = "nodejs"
@@ -50,9 +51,6 @@ function rowToScalar(r: ContaPagarIncomingRow) {
 }
 
 export async function POST(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok) return gate.res
-
   const storeId = opsLojaIdFromRequestForWrite(req)
   if (!storeId) {
     return NextResponse.json(
@@ -60,6 +58,13 @@ export async function POST(req: Request) {
       { status: 400 },
     )
   }
+
+  const denied = await apiGuardEnterpriseOrOps(
+    storeId,
+    (p) => p.financeiro.edit,
+    "Sem permissão para sincronizar contas a pagar.",
+  )
+  if (denied) return denied
 
   let body: unknown
   try {

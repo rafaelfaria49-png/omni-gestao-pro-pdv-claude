@@ -10,9 +10,11 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prismaEnsureConnected, prisma } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
+import { auth } from "@/auth"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
+import { apiGuardFinanceiroEditEnterpriseOrLegacy, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import {
   buildContaPagarAuditTrail,
   buildContaPagarSummary,
@@ -108,11 +110,10 @@ const deleteQuerySchema = z.object({
 // ─── GET ──────────────────────────────────────────────────────────────────────
 
 export async function GET(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok && process.env.NODE_ENV !== "development") return gate.res
-
   const storeId = readSid(req)
   if (!storeId) return err("Unidade obrigatória", "store_missing", 400)
+  const denied = await apiGuardFinanceiroViewOrOps(storeId, { skipOpsInDev: true })
+  if (denied) return denied
 
   const url = new URL(req.url)
   const localKeyParam = url.searchParams.get("localKey")?.trim()
@@ -173,9 +174,6 @@ export async function GET(req: Request) {
 // ─── POST ─────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  const adminGate = await requireAdmin()
-  if (!adminGate.ok) return adminGate.res
-
   let json: unknown
   try { json = await req.json() } catch {
     return err("JSON inválido", "invalid_json", 400)
@@ -194,6 +192,9 @@ export async function POST(req: Request) {
   if (parsed.data.lojaId && parsed.data.lojaId !== storeId) {
     return err("storeId inconsistente (body vs header)", "store_mismatch", 400)
   }
+
+  const deniedPost = await apiGuardFinanceiroEditEnterpriseOrLegacy(storeId)
+  if (deniedPost) return deniedPost
 
   try {
     await prismaEnsureConnected()
@@ -226,9 +227,6 @@ export async function POST(req: Request) {
 // ─── PATCH ────────────────────────────────────────────────────────────────────
 
 export async function PATCH(req: Request) {
-  const adminGate = await requireAdmin()
-  if (!adminGate.ok) return adminGate.res
-
   let json: unknown
   try { json = await req.json() } catch {
     return err("JSON inválido", "invalid_json", 400)
@@ -248,6 +246,11 @@ export async function PATCH(req: Request) {
     return err("storeId inconsistente (body vs header)", "store_mismatch", 400)
   }
 
+  const deniedPatch = await apiGuardFinanceiroEditEnterpriseOrLegacy(storeId)
+  if (deniedPatch) return deniedPatch
+
+  const userLabel = getOperatorLabelFromSession(await auth())
+
   try {
     await prismaEnsureConnected()
 
@@ -264,7 +267,7 @@ export async function PATCH(req: Request) {
     }
 
     if (parsed.data.op === "liquidar") {
-      const res = await liquidarContaPagar({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel: "financeiro_hub" })
+      const res = await liquidarContaPagar({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel })
       if (!res.ok) return err(res.reason, `liquidar_${res.reason}`, 422)
       // Gerar movimentação de saída (idempotente)
       await createMovimentacaoSaidaFromPagar(
@@ -275,7 +278,7 @@ export async function PATCH(req: Request) {
     }
 
     if (parsed.data.op === "parcial") {
-      const res = await registrarPagamentoParcialContaPagar({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, userLabel: "financeiro_hub" })
+      const res = await registrarPagamentoParcialContaPagar({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, userLabel })
       if (!res.ok) return err(res.reason, `parcial_${res.reason}`, 422)
       // Gerar movimentação de saída parcial (idempotente por soma total)
       await createMovimentacaoSaidaFromPagar(
@@ -287,7 +290,7 @@ export async function PATCH(req: Request) {
     }
 
     if (parsed.data.op === "estornar") {
-      const res = await estornarContaPagar({ storeId, localKey: parsed.data.localKey, modo: "ultimo_pagamento", motivo: parsed.data.motivo, userLabel: "financeiro_hub" })
+      const res = await estornarContaPagar({ storeId, localKey: parsed.data.localKey, modo: "ultimo_pagamento", motivo: parsed.data.motivo, userLabel })
       if (!res.ok) return err(res.reason, `estornar_${res.reason}`, 422)
       // Estornar movimentação correspondente (idempotente)
       await estornarMovimentacaoPorReferencia(storeId, res.data.id, "pagar")
@@ -296,7 +299,7 @@ export async function PATCH(req: Request) {
     }
 
     // cancelar — não gera movimentação nova
-    const res = await cancelContaPagar({ storeId, localKey: parsed.data.localKey, motivo: parsed.data.motivo, userLabel: "financeiro_hub" })
+    const res = await cancelContaPagar({ storeId, localKey: parsed.data.localKey, motivo: parsed.data.motivo, userLabel })
     if (!res.ok) return err(res.reason, `cancelar_${res.reason}`, 422)
     return NextResponse.json({ ok: true, op: "cancelar" })
   } catch (e) {
@@ -310,9 +313,6 @@ export async function PATCH(req: Request) {
 // Cancelamento seguro — não destrói dados, apenas muda status para "cancelado".
 
 export async function DELETE(req: Request) {
-  const adminGate = await requireAdmin()
-  if (!adminGate.ok) return adminGate.res
-
   const storeId = readSid(req, true)
   if (!storeId) return err("Unidade obrigatória (x-assistec-loja-id)", "store_missing", 400)
 
@@ -326,9 +326,14 @@ export async function DELETE(req: Request) {
   })
   if (!body.success) return err("localKey obrigatório via query ?localKey=", "missing_localKey", 400)
 
+  const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(storeId)
+  if (denied) return denied
+
+  const userLabel = getOperatorLabelFromSession(await auth())
+
   try {
     await prismaEnsureConnected()
-    const res = await cancelContaPagar({ storeId, localKey: body.data.localKey, motivo: body.data.motivo, userLabel: "financeiro_hub" })
+    const res = await cancelContaPagar({ storeId, localKey: body.data.localKey, motivo: body.data.motivo, userLabel })
     if (!res.ok) return err(res.reason, `cancel_${res.reason}`, 422)
     return NextResponse.json({ ok: true, action: "cancelled" })
   } catch (e) {

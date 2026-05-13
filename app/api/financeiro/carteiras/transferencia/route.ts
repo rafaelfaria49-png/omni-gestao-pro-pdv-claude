@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { transferirEntreCarteiras } from "@/lib/financeiro/services/carteiras-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 
 function getStoreId(req: NextRequest): string {
   return (
@@ -26,6 +27,13 @@ const schema = z.object({
 
 export async function POST(req: NextRequest) {
   const storeId = getStoreId(req)
+  const denied = await apiGuardEnterpriseOrOps(
+    storeId,
+    (p) => p.financeiro.edit,
+    "Sem permissão para transferir entre carteiras.",
+    { errorBody: "okFalse" },
+  )
+  if (denied) return denied
 
   let body: unknown
   try {

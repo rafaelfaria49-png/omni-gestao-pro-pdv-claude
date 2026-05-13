@@ -1,33 +1,21 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
-import { isVencimentoExpired } from "@/lib/subscription-seal"
-import { getTrustedTimeMs } from "@/lib/trusted-time"
 import type { Prisma } from "@/generated/prisma"
 import { StatusOrdemServico } from "@/generated/prisma"
 import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
+import {
+  apiGuardOperacoesEditEnterpriseOrLegacySubAdmin,
+  apiGuardOperacoesHubOrLegacy,
+} from "@/lib/auth/api-enterprise-guard"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-async function requireSubscription() {
-  const sub = await getVerifiedSubscriptionFromCookies()
-  if (!sub.ok) {
-    return { ok: false as const, res: NextResponse.json({ error: "Não autorizado" }, { status: 401 }) }
-  }
-  const now = await getTrustedTimeMs()
-  if (isVencimentoExpired(now, sub.vencimento) || sub.status !== "ativa") {
-    return { ok: false as const, res: NextResponse.json({ error: "Assinatura inválida" }, { status: 403 }) }
-  }
-  return { ok: true as const, sub }
-}
-
 export async function GET(req: Request) {
-  const gate = await requireSubscription()
-  if (!gate.ok) return gate.res
   const storeId = storeIdFromAssistecRequestForRead(req)
+  const denied = await apiGuardOperacoesHubOrLegacy(storeId)
+  if (denied) return denied
   try {
     const rows = await prisma.ordemServico.findMany({
       where: { storeId },
@@ -47,10 +35,6 @@ export async function GET(req: Request) {
 }
 
 export async function PUT(req: Request) {
-  const gate = await requireSubscription()
-  if (!gate.ok) return gate.res
-  const adminGate = await requireAdmin()
-  if (!adminGate.ok) return adminGate.res
   const storeId = storeIdFromAssistecRequestForWrite(req)
   if (!storeId) {
     return NextResponse.json(
@@ -58,6 +42,9 @@ export async function PUT(req: Request) {
       { status: 400 }
     )
   }
+
+  const denied = await apiGuardOperacoesEditEnterpriseOrLegacySubAdmin(storeId)
+  if (denied) return denied
 
   let body: unknown
   try {

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { auth } from "@/auth"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { createSaida } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import type { Prisma } from "@/generated/prisma"
@@ -36,14 +39,11 @@ const schema = z.object({
 })
 
 export async function POST(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok) return gate.res
-
   const lojaId = opsLojaIdFromRequestForWrite(req)
   if (!lojaId) {
     return NextResponse.json(
       { error: "Unidade obrigatória: envie o header x-assistec-loja-id." },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -59,7 +59,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 })
   }
 
+  const denied = await apiGuardEnterpriseOrOps(
+    lojaId,
+    (p) => p.pdv.devolucao,
+    "Sem permissão para registrar devoluções.",
+  )
+  if (denied) return denied
+
   const data = parsed.data
+  const session = await auth()
+  const operadorFinal =
+    data.operador?.trim() || (session?.user ? getOperatorLabelFromSession(session) : "")
 
   // ── Idempotência: se já existir, retornar como sucesso ──────────────────────
   const existing = await prisma.devolucaoVenda.findUnique({
@@ -107,7 +117,7 @@ export async function POST(req: Request) {
           creditoEmitido: data.creditoEmitido,
           clienteNome: data.clienteNome,
           clienteDoc: data.clienteDoc,
-          operador: data.operador,
+          operador: operadorFinal,
           motivo: data.motivo,
           observacao: data.observacao,
           payload: data.payload ? (data.payload as Prisma.InputJsonValue) : undefined,

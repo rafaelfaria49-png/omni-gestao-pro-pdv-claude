@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
-import { requireOpsSubscription, opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import { parseDateStringSafe, safeMoney } from "@/lib/financeiro/contracts/valores"
 import { isOrigemTransferenciaInterna } from "@/lib/financeiro/services/movimentacao-financeira-classify"
 
@@ -35,10 +36,9 @@ function getOrigin(localKey: string | null, descricao: string): string {
 }
 
 export async function GET(req: Request) {
-  const gate = await requireOpsSubscription()
-  if (!gate.ok && process.env.NODE_ENV !== "development") return gate.res
-
-  const storeId = opsLojaIdFromRequest(req)
+  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const denied = await apiGuardFinanceiroViewOrOps(storeId, { skipOpsInDev: true })
+  if (denied) return denied
 
   try {
     await prismaEnsureConnected()

@@ -6,6 +6,7 @@ import {
   criarCarteira,
   TIPOS_CARTEIRA,
 } from "@/lib/financeiro/services/carteiras-service"
+import { apiGuardEnterpriseOrOps, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 
 function getStoreId(req: NextRequest): string {
   return (
@@ -23,6 +24,8 @@ function err(msg: string, code: string, status = 400) {
 
 export async function GET(req: NextRequest) {
   const storeId = getStoreId(req)
+  const denied = await apiGuardFinanceiroViewOrOps(storeId)
+  if (denied) return denied
   const apenasAtivas = req.nextUrl.searchParams.get("ativas") === "1"
 
   try {
@@ -50,6 +53,13 @@ const postSchema = z.object({
 
 export async function POST(req: NextRequest) {
   const storeId = getStoreId(req)
+  const denied = await apiGuardEnterpriseOrOps(
+    storeId,
+    (p) => p.financeiro.edit,
+    "Sem permissão para criar carteiras.",
+    { errorBody: "okFalse" },
+  )
+  if (denied) return denied
 
   let body: unknown
   try {

@@ -5,6 +5,7 @@ import {
   recalcularSaldoCarteira,
   TIPOS_CARTEIRA,
 } from "@/lib/financeiro/services/carteiras-service"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 
 function getStoreId(req: NextRequest): string {
   return (
@@ -35,6 +36,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const storeId = getStoreId(req)
+  const denied = await apiGuardEnterpriseOrOps(
+    storeId,
+    (p) => p.financeiro.edit,
+    "Sem permissão para alterar carteiras.",
+    { errorBody: "okFalse" },
+  )
+  if (denied) return denied
   const { id } = await params
 
   let body: unknown

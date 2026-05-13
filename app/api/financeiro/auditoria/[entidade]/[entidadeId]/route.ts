@@ -5,6 +5,7 @@
  */
 import { NextResponse } from "next/server"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { prismaEnsureConnected } from "@/lib/prisma"
 import {
   getAuditoriaPorEntidade,
@@ -26,6 +27,13 @@ export async function GET(
   await prismaEnsureConnected()
   const { entidade, entidadeId } = await params
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const denied = await apiGuardEnterpriseOrOps(
+    storeId,
+    (p) => p.auditoria,
+    "Sem permissão para auditoria financeira.",
+    { errorBody: "okFalse" },
+  )
+  if (denied) return denied
 
   if (!ENTIDADES_VALIDAS.includes(entidade as EntidadeAuditoria)) {
     return NextResponse.json({ ok: false, error: "Entidade inválida", code: "invalid_entidade" }, { status: 400 })

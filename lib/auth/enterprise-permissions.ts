@@ -38,8 +38,17 @@ export type EnterprisePermissions = {
   }
   /** Financeiro (telas + ações sensíveis) */
   financeiro: { view: boolean; edit: boolean; fecharPeriodo: boolean; conciliacao: boolean }
-  /** Operações / OS */
-  operacoes: { criarOs: boolean; entregarOs: boolean; cancelarOs: boolean }
+  /** Operações / OS (API + server actions) */
+  operacoes: {
+    criarOs: boolean
+    editarOs: boolean
+    entregarOs: boolean
+    cancelarOs: boolean
+    gerarCobranca: boolean
+    checklist: boolean
+    retirada: boolean
+    garantia: boolean
+  }
   /** Auditoria / logs sensíveis */
   auditoria: boolean
 }
@@ -59,7 +68,16 @@ const FULL: EnterprisePermissions = {
   admin: { masterConsole: true, unidades: true, configuracoes: true },
   pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: true, devolucao: true },
   financeiro: { view: true, edit: true, fecharPeriodo: true, conciliacao: true },
-  operacoes: { criarOs: true, entregarOs: true, cancelarOs: true },
+  operacoes: {
+    criarOs: true,
+    editarOs: true,
+    entregarOs: true,
+    cancelarOs: true,
+    gerarCobranca: true,
+    checklist: true,
+    retirada: true,
+    garantia: true,
+  },
   auditoria: true,
 }
 
@@ -113,7 +131,16 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true },
         financeiro: { view: false, edit: false, fecharPeriodo: false, conciliacao: false },
-        operacoes: { criarOs: false, entregarOs: false, cancelarOs: false },
+        operacoes: {
+          criarOs: false,
+          editarOs: false,
+          entregarOs: false,
+          cancelarOs: false,
+          gerarCobranca: false,
+          checklist: false,
+          retirada: false,
+          garantia: false,
+        },
         auditoria: false,
       })
     case "tecnico":
@@ -132,7 +159,16 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         pdv: { abrirCaixa: false, fecharCaixa: false, cancelarVenda: false, devolucao: false },
         financeiro: { view: false, edit: false, fecharPeriodo: false, conciliacao: false },
-        operacoes: { criarOs: true, entregarOs: true, cancelarOs: false },
+        operacoes: {
+          criarOs: true,
+          editarOs: true,
+          entregarOs: true,
+          cancelarOs: false,
+          gerarCobranca: false,
+          checklist: true,
+          retirada: true,
+          garantia: true,
+        },
         auditoria: false,
       })
     case "vendedor":
@@ -152,7 +188,16 @@ export function getEnterprisePermissions(role: string | undefined | null): Enter
         admin: { masterConsole: false, unidades: false, configuracoes: false },
         pdv: { abrirCaixa: true, fecharCaixa: true, cancelarVenda: false, devolucao: true },
         financeiro: { view: false, edit: false, fecharPeriodo: false, conciliacao: false },
-        operacoes: { criarOs: false, entregarOs: false, cancelarOs: false },
+        operacoes: {
+          criarOs: false,
+          editarOs: false,
+          entregarOs: false,
+          cancelarOs: false,
+          gerarCobranca: false,
+          checklist: false,
+          retirada: false,
+          garantia: false,
+        },
         auditoria: false,
       })
   }

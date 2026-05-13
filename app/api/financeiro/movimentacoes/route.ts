@@ -9,7 +9,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prismaEnsureConnected, prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { requireAdmin } from "@/lib/require-admin"
+import { apiGuardEnterpriseOrAdmin, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import {
   listMovimentacoes,
   createMovimentacao,
@@ -51,6 +51,8 @@ const deleteSchema = z.object({
 
 export async function GET(req: Request) {
   const sid = storeIdFromReq(req)
+  const denied = await apiGuardFinanceiroViewOrOps(sid)
+  if (denied) return denied
   const url = new URL(req.url)
 
   const tipo = url.searchParams.get("tipo")
@@ -93,9 +95,6 @@ export async function GET(req: Request) {
 // ─── POST ─────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  const adminGate = await requireAdmin()
-  if (!adminGate.ok) return adminGate.res
-
   let json: unknown
   try {
     json = await req.json()
@@ -112,6 +111,12 @@ export async function POST(req: Request) {
   }
 
   const sid = storeIdFromReq(req)
+  const denied = await apiGuardEnterpriseOrAdmin(
+    sid,
+    (p) => p.financeiro.edit,
+    "Sem permissão para lançar movimentações financeiras.",
+  )
+  if (denied) return denied
 
   try {
     await prismaEnsureConnected()
@@ -136,9 +141,6 @@ export async function POST(req: Request) {
 // ─── DELETE ───────────────────────────────────────────────────────────────────
 
 export async function DELETE(req: Request) {
-  const adminGate = await requireAdmin()
-  if (!adminGate.ok) return adminGate.res
-
   const url = new URL(req.url)
   const idParam = url.searchParams.get("id")
 
@@ -164,6 +166,12 @@ export async function DELETE(req: Request) {
   }
 
   const sid = storeIdFromReq(req)
+  const denied = await apiGuardEnterpriseOrAdmin(
+    sid,
+    (p) => p.financeiro.edit,
+    "Sem permissão para excluir movimentações financeiras.",
+  )
+  if (denied) return denied
 
   try {
     await prismaEnsureConnected()

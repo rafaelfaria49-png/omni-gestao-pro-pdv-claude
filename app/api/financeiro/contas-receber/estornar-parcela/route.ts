@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
-import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
-import { isVencimentoExpired } from "@/lib/subscription-seal"
-import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
+import { auth } from "@/auth"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
+import { apiGuardFinanceiroEditEnterpriseOrLegacy } from "@/lib/auth/api-enterprise-guard"
 
 export const runtime = "nodejs"
 
@@ -20,17 +19,6 @@ const bodySchema = z.object({
  * Auditoria de estorno de parcela / linha de recebimento (dados persistidos no cliente — localStorage).
  */
 export async function POST(request: Request) {
-  const sub = await getVerifiedSubscriptionFromCookies()
-  if (!sub.ok) {
-    return NextResponse.json({ ok: false, error: "Não autorizado" }, { status: 401 })
-  }
-  const adminGate = await requireAdmin()
-  if (!adminGate.ok) return adminGate.res
-  const now = await getTrustedTimeMs()
-  if (isVencimentoExpired(now, sub.vencimento) || sub.status !== "ativa") {
-    return NextResponse.json({ ok: false, error: "Assinatura inválida" }, { status: 403 })
-  }
-
   let json: unknown
   try {
     json = await request.json()
@@ -42,7 +30,7 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return NextResponse.json(
       { ok: false, error: "Dados inválidos", issues: parsed.error.flatten() },
-      { status: 400 }
+      { status: 400 },
     )
   }
 
@@ -52,22 +40,27 @@ export async function POST(request: Request) {
   if (!storeId) {
     return NextResponse.json(
       { ok: false, error: "Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId / lojaId." },
-      { status: 400 }
+      { status: 400 },
     )
   }
   if (lojaId !== storeId) {
     return NextResponse.json(
       { ok: false, error: "Unidade inconsistente: o corpo e o header devem referir a mesma loja." },
-      { status: 400 }
+      { status: 400 },
     )
   }
+
+  const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(storeId)
+  if (denied) return denied
+
+  const userLabel = getOperatorLabelFromSession(await auth())
 
   try {
     await prismaEnsureConnected()
     await prisma.logsAuditoria.create({
       data: {
         action: "estorno_parcela_conta_receber",
-        userLabel: "dashboard",
+        userLabel,
         detail: `Estorno de parcela/linha — loja ${lojaId}, título ${String(tituloId)}, pagamento ${pagamentoId}, valor R$ ${valorEstorno.toFixed(2)}`,
         metadata: JSON.stringify({
           lojaId,
@@ -83,7 +76,7 @@ export async function POST(request: Request) {
     console.error("[estorno-parcela-conta-receber]", e)
     return NextResponse.json(
       { ok: false, error: "Não foi possível registrar o estorno no servidor. Tente novamente." },
-      { status: 500 }
+      { status: 500 },
     )
   }
 
