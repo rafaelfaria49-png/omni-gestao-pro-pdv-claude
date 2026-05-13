@@ -94,7 +94,7 @@ export default function MarketingStudioPage() {
   const fetchMarketingPosts = useCallback(async () => {
     setPostsLoading(true)
     try {
-      const res = await fetch("/api/marketing/posts", {
+      const res = await fetch("/api/marketing/studio-ia-posts", {
         credentials: "include",
         cache: "no-store",
         headers: { [ASSISTEC_LOJA_HEADER]: lojaId },
@@ -133,7 +133,7 @@ export default function MarketingStudioPage() {
         tone: meta.tone || "",
         status: "GENERATED",
       }
-      const res = await fetch("/api/marketing/posts", {
+      const res = await fetch("/api/marketing/studio-ia-posts", {
         method: "POST",
         credentials: "include",
         headers: {
@@ -297,7 +297,7 @@ export default function MarketingStudioPage() {
       return
     }
     try {
-      const res = await fetch("/api/marketing/posts", {
+      const res = await fetch("/api/marketing/studio-ia-posts", {
         method: "POST",
         credentials: "include",
         headers: {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarClock, Pencil, Trash2, Instagram, MessageCircle, Megaphone, Hash, ImageOff } from "lucide-react";
+import { CalendarClock, Pencil, Trash2, Instagram, MessageCircle, Megaphone, Hash, ImageOff, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useStudioPreview, type PreviewSurface } from "./studio-preview-context";
-import type { MarketingSavedPost, PostStatus } from "../lib/marketing-ia-types";
+import type { MarketingSavedPost } from "../lib/marketing-ia-types";
 import { cn } from "@/lib/utils";
 
 function surfaceLabel(s: PreviewSurface): string {
@@ -37,8 +38,11 @@ function surfaceBg(s: PreviewSurface): string {
   return "bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20";
 }
 
-function statusBadge(status: PostStatus) {
-  switch (status) {
+function statusBadge(post: MarketingSavedPost) {
+  if (post.statusError) {
+    return <Badge variant="destructive" className="text-[10px] h-5">Erro</Badge>;
+  }
+  switch (post.status) {
     case "published":
       return <Badge className="bg-success/15 text-success border-success/30 text-[10px] h-5">Publicado</Badge>;
     case "scheduled":
@@ -49,7 +53,7 @@ function statusBadge(status: PostStatus) {
 }
 
 export function PostGeneratorTab() {
-  const { savedPosts, loadPostIntoPreview, deleteSavedPost, updatePostSchedule } = useStudioPreview();
+  const { savedPosts, postsLoading, loadPostIntoPreview, deleteSavedPost, updatePostSchedule } = useStudioPreview();
   const { toast } = useToast();
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
@@ -67,15 +71,23 @@ export function PostGeneratorTab() {
     setScheduleOpen(true);
   };
 
-  const confirmSchedule = () => {
+  const confirmSchedule = async () => {
     if (!schedulingId || !scheduleDate) {
       toast({ title: "Data obrigatória", description: "Escolha data e hora.", variant: "destructive" });
       return;
     }
     const iso = new Date(scheduleDate).toISOString();
-    updatePostSchedule(schedulingId, iso);
-    setScheduleOpen(false);
-    toast({ title: "Post agendado", description: "Veja no Calendário." });
+    try {
+      await updatePostSchedule(schedulingId, iso);
+      setScheduleOpen(false);
+      toast({ title: "Post agendado", description: "Gravado no banco da unidade. Veja no Calendário." });
+    } catch (e) {
+      toast({
+        title: "Erro ao agendar",
+        description: e instanceof Error ? e.message : "Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const publishedCount = savedPosts.filter((p) => p.status === "published").length;
@@ -88,7 +100,7 @@ export function PostGeneratorTab() {
         <div>
           <h2 className="text-xl font-bold text-foreground">Posts salvos</h2>
           <p className="text-sm text-muted-foreground">
-            Conteúdos do Estúdio gravados neste navegador.
+            Posts do Estúdio persistidos no banco da unidade selecionada.
           </p>
         </div>
         {savedPosts.length > 0 && (
@@ -106,7 +118,26 @@ export function PostGeneratorTab() {
         )}
       </div>
 
-      {savedPosts.length === 0 ? (
+      {postsLoading ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => (
+            <Card key={i} className="overflow-hidden border-border/60">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex gap-3">
+                  <Skeleton className="h-32 w-24 shrink-0 rounded-xl" />
+                  <div className="flex-1 space-y-2 min-w-0">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                </div>
+                <Skeleton className="h-8 w-full rounded-md" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : savedPosts.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center space-y-3">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
@@ -115,7 +146,7 @@ export function PostGeneratorTab() {
             <div>
               <p className="font-semibold text-foreground">Nenhum post criado ainda</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Crie no Estúdio IA e clique em &quot;Salvar post&quot;.
+                Crie no Estúdio IA e use &quot;Salvar post&quot;, ou preencha o calendário com IA simulada.
               </p>
             </div>
           </CardContent>
@@ -132,8 +163,18 @@ export function PostGeneratorTab() {
               }}
               onSchedule={() => openSchedule(post.id)}
               onDelete={() => {
-                deleteSavedPost(post.id);
-                toast({ title: "Post excluído" });
+                void (async () => {
+                  try {
+                    await deleteSavedPost(post.id);
+                    toast({ title: "Post excluído" });
+                  } catch (e) {
+                    toast({
+                      title: "Erro ao excluir",
+                      description: e instanceof Error ? e.message : "Tente novamente.",
+                      variant: "destructive",
+                    });
+                  }
+                })();
               }}
             />
           ))}
@@ -158,7 +199,7 @@ export function PostGeneratorTab() {
             <Button variant="outline" onClick={() => setScheduleOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={confirmSchedule}>Salvar agendamento</Button>
+            <Button onClick={() => void confirmSchedule()}>Salvar agendamento</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -206,8 +247,13 @@ function PostCard({
               </div>
             )}
             {/* Overlay de status na thumbnail */}
-            <div className="absolute bottom-1 left-1 right-1">
-              {statusBadge(post.status)}
+            <div className="absolute bottom-1 left-1 right-1 flex flex-wrap gap-0.5 justify-start">
+              {statusBadge(post)}
+              {post.iaSimulated && (
+                <Badge variant="outline" className="border-primary/50 text-primary text-[9px] h-5 gap-0.5 px-1">
+                  <Sparkles className="h-2.5 w-2.5" /> IA simulada
+                </Badge>
+              )}
             </div>
           </div>
 

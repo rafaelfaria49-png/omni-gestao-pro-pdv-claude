@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Sparkles, CalendarDays, ChevronLeft, ChevronRight, Instagram, MessageCircle, Megaphone } from "lucide-react";
+import { Sparkles, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -43,7 +43,7 @@ function surfaceDot(s: PreviewSurface): string {
 }
 
 export function CalendarTab() {
-  const { savedPosts, setSavedPosts, scheduleCurrentPostForDate, preview } = useStudioPreview();
+  const { savedPosts, scheduleCurrentPostForDate, preview, seedMonthDemoPosts } = useStudioPreview();
   const { toast } = useToast();
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
@@ -96,30 +96,20 @@ export function CalendarTab() {
     }
   };
 
-  const mockMonthIdeas = () => {
-    toast({
-      title: "Função simulada",
-      description: "Integração real de sugestões mensais será adicionada depois.",
-    });
-    const surfaces: PreviewSurface[] = ["instagram", "whatsapp", "ad"];
-    const captions = [
-      "Semana de ofertas — aproveite antes que acabe!",
-      "Novidade em destaque na vitrine.",
-      "Liquidação relâmpago só hoje.",
-    ];
-    const extras: MarketingSavedPost[] = [5, 12, 19].map((d, i) => ({
-      id: crypto.randomUUID(),
-      caption: captions[i % captions.length]!,
-      hashtags: "#promo #loja",
-      imageUrl: null,
-      previewSurface: surfaces[i % surfaces.length]!,
-      cta: "Ver ofertas",
-      template: "bomDia",
-      createdAt: new Date().toISOString(),
-      scheduledAt: new Date(viewYear, viewMonth, d, 14, 0, 0, 0).toISOString(),
-      status: "scheduled" as const,
-    }));
-    setSavedPosts((prev) => [...prev, ...extras]);
+  const handleSeedMonthSimulated = async () => {
+    try {
+      await seedMonthDemoPosts(viewYear, viewMonth);
+      toast({
+        title: "IA simulada — mês preenchido",
+        description: "Três posts de demonstração foram gravados no banco da unidade (dias 5, 12 e 19).",
+      });
+    } catch (e) {
+      toast({
+        title: "Não foi possível criar posts",
+        description: e instanceof Error ? e.message : "Verifique a unidade selecionada e tente de novo.",
+        variant: "destructive",
+      });
+    }
   };
 
   const shiftMonth = (delta: number) => {
@@ -142,9 +132,9 @@ export function CalendarTab() {
               Posts agendados aparecem no dia. Clique em um dia para agendar o rascunho atual.
             </p>
           </div>
-          <Button size="sm" className="gap-2 shrink-0" onClick={mockMonthIdeas}>
+          <Button size="sm" className="gap-2 shrink-0" onClick={() => void handleSeedMonthSimulated()}>
             <Sparkles className="h-3.5 w-3.5" />
-            Gerar mês com IA
+            Preencher mês (IA simulada)
           </Button>
         </div>
       </div>
@@ -263,7 +253,7 @@ export function CalendarTab() {
 
         {scheduledCount === 0 && savedPosts.length === 0 && (
           <p className="mt-4 rounded-lg border border-dashed border-border bg-muted/30 py-6 text-center text-sm text-muted-foreground">
-            Nenhum post ainda. Salve no Estúdio ou use &quot;Gerar mês com IA&quot;.
+            Nenhum post ainda. Salve no Estúdio ou use &quot;Preencher mês (IA simulada)&quot; para gravar exemplos no banco.
           </p>
         )}
       </div>

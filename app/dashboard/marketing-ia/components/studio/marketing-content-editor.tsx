@@ -16,8 +16,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useLojaAtiva } from "@/lib/loja-ativa";
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 
 const CONTENT_TEMPLATES = {
   promocao:
@@ -66,24 +64,6 @@ function parseCampaignResponse(raw: string): { legend: string; cta: string } {
   return { legend: legend.slice(0, 2000), cta: cta.slice(0, 120) };
 }
 
-function buildCampaignCommand(iaLabel: string, userText: string): string {
-  const safe = sanitizeForTextOrchestrate(userText) || "destaque da loja e convite para visitar";
-  return [
-    `Crie uma campanha para ${iaLabel} com base no texto: "${safe}".`,
-    "",
-    "Responda EXATAMENTE neste formato (texto puro, sem markdown, sem aspas extras nas linhas):",
-    "LEGENDA: (texto da publicação em português do Brasil, até 400 caracteres)",
-    "CTA: (uma frase curta para botão ou link, até 60 caracteres)",
-  ].join("\n");
-}
-
-function orchestratePromptForImage(userBrief: string): string {
-  const t = userBrief.trim();
-  return t
-    ? `Crie uma imagem promocional profissional para campanha em redes sociais. ${t}`
-    : "Crie uma imagem promocional moderna para loja varejista brasileira, estilo limpo e comercial.";
-}
-
 export function MarketingContentEditor() {
   const {
     preview,
@@ -95,37 +75,14 @@ export function MarketingContentEditor() {
     publishNowSimulated,
   } = useStudioPreview();
   const { toast } = useToast();
-  const { lojaAtivaId } = useLojaAtiva();
   const [generating, setGenerating] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [saving, setSaving] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleLocal, setScheduleLocal] = useState("");
 
-  const callOrchestrate = async (command: string) => {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (lojaAtivaId) headers[ASSISTEC_LOJA_HEADER] = lojaAtivaId;
-    const res = await fetch("/api/ai/orchestrate", {
-      method: "POST",
-      credentials: "include",
-      headers,
-      body: JSON.stringify({ command, brandVoice: true }),
-    });
-    const data = (await res.json().catch(() => ({}))) as {
-      type?: string;
-      data?: { message?: string; imageUrl?: string };
-      message?: string;
-      error?: string;
-      tool?: { type?: string; url?: string };
-    };
-    if (!res.ok) {
-      throw new Error(String(data.error || data.message || `Erro ${res.status}`));
-    }
-    return data;
-  };
-
   const applyTemplate = (key: keyof typeof CONTENT_TEMPLATES) => {
-    setPreview((p) => ({ ...p, caption: CONTENT_TEMPLATES[key] }));
+    setPreview((p) => ({ ...p, caption: CONTENT_TEMPLATES[key], contentSource: "simulated" }));
   };
 
   const onImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,23 +112,19 @@ export function MarketingContentEditor() {
       return;
     }
     const iaLabel = POST_TYPES.find((p) => p.id === preview.previewSurface)?.iaLabel ?? POST_TYPES[0]!.iaLabel;
-    const command = buildCampaignCommand(iaLabel, seed);
     setGenerating(true);
     try {
-      const data = await callOrchestrate(command);
-      if (data.type === "image" || data.tool?.type === "image") {
-        toast({
-          title: "Resposta incorreta",
-          description: "A IA retornou imagem. Ajuste o texto e tente de novo.",
-          variant: "destructive",
-        });
-        return;
-      }
-      const raw = String(data?.data?.message || data.message || "").trim();
-      if (!raw) throw new Error("Resposta vazia da IA.");
-      const { legend, cta: nextCta } = parseCampaignResponse(raw);
-      setPreview((p) => ({ ...p, caption: legend, campaignCta: nextCta }));
-      toast({ title: "Campanha pronta", description: "Legenda e CTA aplicados no preview." });
+      const safe = sanitizeForTextOrchestrate(seed) || "destaque da loja";
+      const fake = [
+        `LEGENDA: Campanha (${iaLabel}): ${safe.slice(0, 280)}`,
+        "CTA: Aproveitar agora na loja",
+      ].join("\n");
+      const { legend, cta: nextCta } = parseCampaignResponse(fake);
+      setPreview((p) => ({ ...p, caption: legend, campaignCta: nextCta, contentSource: "simulated" }));
+      toast({
+        title: "IA simulada",
+        description: "Texto gerado localmente (Fase 1). Salve para gravar no banco da unidade.",
+      });
     } catch (e) {
       toast({
         title: "Falha ao gerar",
@@ -184,30 +137,11 @@ export function MarketingContentEditor() {
   };
 
   const handleGerarImagem = async () => {
-    const seed = preview.caption.trim() || "destaque da campanha da loja";
     setGeneratingImage(true);
     try {
-      const data = await callOrchestrate(orchestratePromptForImage(seed));
-      const isImage = data.type === "image" || data.tool?.type === "image";
-      const imageUrl = String(data?.data?.imageUrl || data?.tool?.url || "").trim();
-      if (!isImage || !imageUrl) {
-        throw new Error("A IA não retornou uma imagem.");
-      }
-      setPreview((p) => {
-        const prev0 = p.takeMedia[0];
-        if (prev0?.startsWith("blob:")) URL.revokeObjectURL(prev0);
-        return {
-          ...p,
-          activeTake: 0,
-          takeMedia: [imageUrl, p.takeMedia[1], p.takeMedia[2]],
-        };
-      });
-      toast({ title: "Imagem gerada", description: "Preview atualizado." });
-    } catch (e) {
       toast({
-        title: "Falha ao gerar imagem",
-        description: e instanceof Error ? e.message : "Erro inesperado",
-        variant: "destructive",
+        title: "Imagens por IA",
+        description: "Fase 1: apenas conteúdo textual é persistido. Upload/geração de mídia virá depois.",
       });
     } finally {
       setGeneratingImage(false);
@@ -249,8 +183,8 @@ export function MarketingContentEditor() {
     }
   };
 
-  const handlePublishNow = () => {
-    const r = publishNowSimulated();
+  const handlePublishNow = async () => {
+    const r = await publishNowSimulated();
     if (!r.ok) {
       toast({
         title: "Crie ou selecione um post primeiro",
@@ -262,8 +196,8 @@ export function MarketingContentEditor() {
     toast({
       title: "Publicação simulada com sucesso",
       description: r.markedPublished
-        ? "Post salvo marcado como publicado."
-        : "Função simulada. Salve o post para registrar no histórico.",
+        ? "Post marcado como publicado no banco da unidade."
+        : "Salve o post antes de publicar.",
     });
   };
 
@@ -310,7 +244,7 @@ export function MarketingContentEditor() {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setPreview((s) => ({ ...s, previewSurface: p.id }))}
+                onClick={() => setPreview((s) => ({ ...s, previewSurface: p.id, contentSource: "manual" }))}
                 className={cn(
                   "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
                   preview.previewSurface === p.id
@@ -330,7 +264,7 @@ export function MarketingContentEditor() {
             id="mkt-text"
             rows={6}
             value={preview.caption}
-            onChange={(e) => setPreview((p) => ({ ...p, caption: e.target.value }))}
+            onChange={(e) => setPreview((p) => ({ ...p, caption: e.target.value, contentSource: "manual" }))}
             placeholder="Descreva sua campanha, oferta ou tom de voz…"
             className="min-h-[140px] resize-y text-[15px] leading-relaxed"
           />
@@ -342,7 +276,7 @@ export function MarketingContentEditor() {
             id="mkt-cta"
             rows={2}
             value={preview.campaignCta}
-            onChange={(e) => setPreview((p) => ({ ...p, campaignCta: e.target.value }))}
+            onChange={(e) => setPreview((p) => ({ ...p, campaignCta: e.target.value, contentSource: "manual" }))}
             placeholder="Ex.: Comprar agora, Chamar no WhatsApp…"
             className="resize-none text-sm"
           />
@@ -354,7 +288,7 @@ export function MarketingContentEditor() {
             id="mkt-tags"
             rows={2}
             value={preview.liveHashtags}
-            onChange={(e) => setPreview((p) => ({ ...p, liveHashtags: e.target.value }))}
+            onChange={(e) => setPreview((p) => ({ ...p, liveHashtags: e.target.value, contentSource: "manual" }))}
             placeholder="#sualoja #promo"
             className="resize-none text-sm"
           />
@@ -384,7 +318,7 @@ export function MarketingContentEditor() {
               ) : (
                 <Sparkles className="mr-2 h-4 w-4" />
               )}
-              Gerar campanha com IA
+              Gerar campanha (IA simulada)
             </Button>
             <Button
               type="button"
@@ -430,7 +364,7 @@ export function MarketingContentEditor() {
               <CalendarClock className="mr-2 h-4 w-4" />
               Agendar
             </Button>
-            <Button type="button" variant="outline" onClick={handlePublishNow}>
+            <Button type="button" variant="outline" onClick={() => void handlePublishNow()}>
               <Send className="mr-2 h-4 w-4" />
               Publicar agora
             </Button>
@@ -440,7 +374,7 @@ export function MarketingContentEditor() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Salvar grava no navegador (localStorage). Integração com redes reais virá depois.
+            Salvar persiste na unidade selecionada (PostgreSQL). Geração de texto nesta fase é simulada localmente.
           </p>
         </div>
       </div>

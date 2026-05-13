@@ -78,6 +78,7 @@ model Store {
   iaConversations        IaConversation[]
   iaMessages             IaMessage[]
   marketingIaPosts       MarketingIaPost[]
+  marketingPosts         MarketingPost[]
   marketingMediaJobs     MarketingMediaJob[]
   whatsappContacts       WhatsAppContact[]
   whatsappConversations  WhatsAppConversation[]
@@ -333,6 +334,36 @@ model WhatsAppAutomationLog {
   @@index([storeId, createdAt])
   @@index([action])
   @@map("whatsapp_automation_logs")
+}
+
+/**
+ * Posts do Marketing IA Hub (conteúdo editorial por unidade).
+ * Status/canal em string validada na API (pt-BR).
+ */
+model MarketingPost {
+  id          String    @id @default(cuid())
+  storeId     String    @map("storeId")
+  store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  titulo      String    @map("titulo")
+  /** instagram | facebook | whatsapp | google | geral */
+  canal       String    @map("canal")
+  /** rascunho | agendado | publicado | erro */
+  status      String    @default("rascunho") @map("status")
+  conteudo    String    @default("") @map("conteudo") @db.Text
+  legenda     String    @default("") @map("legenda") @db.Text
+  hashtags    String    @default("") @map("hashtags")
+  cta         String    @default("") @map("cta")
+  imagemUrl   String    @default("") @map("imagemUrl")
+  scheduledAt DateTime? @map("scheduledAt")
+  publishedAt DateTime? @map("publishedAt")
+  metadata    Json?     @map("metadata") @db.JsonB
+  createdAt   DateTime  @default(now()) @map("createdAt")
+  updatedAt   DateTime  @updatedAt @map("updatedAt")
+
+  @@index([storeId, status])
+  @@index([storeId, scheduledAt])
+  @@index([storeId, createdAt])
+  @@map("marketing_posts")
 }
 
 /**

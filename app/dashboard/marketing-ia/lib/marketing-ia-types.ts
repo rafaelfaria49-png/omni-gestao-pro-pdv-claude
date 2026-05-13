@@ -16,6 +16,10 @@ export type MarketingSavedPost = {
   createdAt: string;
   scheduledAt: string | null;
   status: PostStatus;
+  /** Conteúdo gerado em modo simulado (Fase 1). */
+  iaSimulated?: boolean;
+  /** Registro com status `erro` no banco. */
+  statusError?: boolean;
 };
 
 export type ConnectedAccount = {

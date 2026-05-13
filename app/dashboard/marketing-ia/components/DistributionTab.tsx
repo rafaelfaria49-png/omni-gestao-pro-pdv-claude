@@ -90,8 +90,8 @@ export function DistributionTab() {
     toast({ title: "Conta removida" });
   };
 
-  const handlePublishNow = () => {
-    const r = publishNowSimulated();
+  const handlePublishNow = async () => {
+    const r = await publishNowSimulated();
     if (!r.ok) {
       toast({ title: "Crie ou selecione um post primeiro", description: "Use o Estúdio IA ou abra um post salvo.", variant: "destructive" });
       return;
@@ -99,8 +99,8 @@ export function DistributionTab() {
     toast({
       title: "Publicação simulada com sucesso",
       description: r.markedPublished
-        ? "Post marcado como publicado. Integração real será adicionada depois."
-        : "Função simulada. Salve o post para registrar no histórico.",
+        ? "Post marcado como publicado no banco da unidade. Integração com redes virá depois."
+        : "Salve o post antes de publicar.",
     });
   };
 
@@ -217,7 +217,7 @@ export function DistributionTab() {
         {/* Botão publicar */}
         <Button
           className="btn-glow mt-4 w-full gap-2 bg-gradient-primary py-3 text-sm text-primary-foreground hover:opacity-95 shadow-glow"
-          onClick={handlePublishNow}
+          onClick={() => void handlePublishNow()}
         >
           <Send className="h-4 w-4" /> Publicar agora
         </Button>
