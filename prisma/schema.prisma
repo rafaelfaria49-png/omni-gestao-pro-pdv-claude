@@ -90,6 +90,7 @@ model Store {
   sessoesCaixa           SessaoCaixa[]
   devolucoes             DevolucaoVenda[]
   garantiasOrdemServico  GarantiaOrdemServico[]
+  adminUserStores        AdminUserStore[]
 
   @@index([profile])
   @@map("stores")
@@ -1451,6 +1452,26 @@ enum UserRole {
   ADMIN
   GERENTE
   OPERADOR
+  CAIXA
+  TECNICO
+  VENDEDOR
+}
+
+/**
+ * Vínculo N:N entre usuário admin e lojas com acesso explícito (Fase Auth Enterprise).
+ * Se vazio para o usuário, usa-se `lojaId` primária ou regras legadas na aplicação.
+ */
+model AdminUserStore {
+  id          String    @id @default(cuid())
+  adminUserId String    @map("adminUserId")
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  storeId     String    @map("storeId")
+  store       Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now()) @map("createdAt")
+
+  @@unique([adminUserId, storeId])
+  @@index([storeId])
+  @@map("admin_user_stores")
 }
 
 /**
@@ -1465,6 +1486,8 @@ model AdminUser {
   lojaId    String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  adminUserStores AdminUserStore[]
 
   // ─── Stripe / Billing ───────────────────────────────────────────────────────
   stripeCustomerId     String?   @unique

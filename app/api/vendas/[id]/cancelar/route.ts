@@ -11,8 +11,11 @@
  */
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
-import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { opsLojaIdFromRequest, requireOpsSubscription } from "@/lib/ops-api-gate"
 import { estornarMovimentacaoPorReferencia } from "@/lib/financeiro/services/movimentacoes-service"
+import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
+import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
+import { auth } from "@/auth"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -24,6 +27,21 @@ export async function POST(
 ) {
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
   const pedidoId = params.id?.trim()
+
+  const session = await auth()
+  if (session?.user) {
+    const guard = await requireEnterpriseWith(
+      storeId,
+      (p) => p.pdv.cancelarVenda,
+      "Sem permissão para cancelar vendas.",
+    )
+    if (!guard.ok) {
+      return NextResponse.json({ ok: false, error: guard.error }, { status: guard.status })
+    }
+  } else {
+    const sub = await requireOpsSubscription()
+    if (!sub.ok) return sub.res
+  }
 
   if (!pedidoId) {
     return NextResponse.json({ ok: false, error: "ID da venda obrigatório" }, { status: 400 })
@@ -84,6 +102,14 @@ export async function POST(
           requireConfirm: true,
         },
         { status: 409 }
+      )
+    }
+
+    const lock = await verificarPeriodoFechado(storeId, new Date())
+    if (lock.fechado) {
+      return NextResponse.json(
+        { ok: false, error: "Período financeiro fechado. Reabra o fechamento para cancelar vendas.", code: "periodo_fechado" },
+        { status: 409 },
       )
     }
 

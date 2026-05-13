@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import NextAuth from "next-auth"
+import type { Session } from "next-auth"
 import { authConfig } from "./auth.config"
 import {
   SUBSCRIPTION_COOKIE_NAME,
@@ -8,6 +9,7 @@ import {
 } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { STAFF_ROLE_COOKIE, STAFF_SESSION_COOKIE } from "@/lib/staff-session"
+import { enterpriseDashboardRedirect, enterpriseStoreCookieRedirect } from "@/lib/auth/proxy-enterprise-dashboard"
 
 const { auth } = NextAuth(authConfig)
 
@@ -151,6 +153,15 @@ export const proxy = auth(async (req) => {
   const inactive = verified.status !== "ativa"
   if (expired || inactive) {
     return redirectPlano()
+  }
+
+  if (pathname.startsWith("/dashboard") && session?.user) {
+    const sess = session as unknown as Session
+    const denied = enterpriseDashboardRedirect(req.nextUrl.origin, pathname, sess)
+    if (denied) return NextResponse.redirect(denied)
+    const storeCookie = req.cookies.get("assistec_active_store")?.value
+    const storeDeny = enterpriseStoreCookieRedirect(req.nextUrl.origin, sess, storeCookie)
+    if (storeDeny) return NextResponse.redirect(storeDeny)
   }
 
   if (pathname === "/logs-sistema" || pathname.startsWith("/logs-sistema/")) {

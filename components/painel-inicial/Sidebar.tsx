@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useMemo } from "react";
 import {
   LayoutDashboard,
   Sparkles,
@@ -21,6 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { financeiroV2Enabled } from "@/lib/feature-flags";
+import { getEnterprisePermissions, type EnterprisePermissions } from "@/lib/auth/enterprise-permissions";
 
 type SubItem = {
   to: string;
@@ -34,6 +37,8 @@ type Item = {
   icon: LucideIcon;
   badge?: string;
   sub?: SubItem[];
+  /** Se definido, o item só aparece quando a função retorna true. */
+  visible?: (p: EnterprisePermissions) => boolean;
 };
 
 function isRouteActive(path: string, to: string): boolean {
@@ -46,36 +51,109 @@ function isRouteActive(path: string, to: string): boolean {
 
 // ── WORKSPACE ────────────────────────────────────────────────────────────────
 const workspaceItems: Item[] = [
-  { to: "/dashboard",              label: "Painel Inicial",  icon: LayoutDashboard },
-  { to: "/dashboard/ia-mestre",    label: "IA Mestre",       icon: Sparkles, badge: "AI" },
-  { to: "/dashboard/omni-agent",   label: "Omni Agent HUB",  icon: Bot,      badge: "AI" },
+  { to: "/dashboard", label: "Painel Inicial", icon: LayoutDashboard },
+  {
+    to: "/dashboard/ia-mestre",
+    label: "IA Mestre",
+    icon: Sparkles,
+    badge: "AI",
+    visible: (p) => p.workspace.iaMestre,
+  },
+  {
+    to: "/dashboard/omni-agent",
+    label: "Omni Agent HUB",
+    icon: Bot,
+    badge: "AI",
+    visible: (p) => p.workspace.omniAgent,
+  },
 ];
 
 // ── HUBS ─────────────────────────────────────────────────────────────────────
 const hubsItems: Item[] = [
-  { to: "/dashboard/marketing-ia",   label: "Marketing IA",   icon: Megaphone,    badge: "AI" },
-  { to: "/dashboard/whatsapp",       label: "WhatsApp HUB",   icon: MessageCircle },
-  { to: "/dashboard/operacoes-v2",   label: "Operações HUB",  icon: Activity,    badge: "Novo" },
-  { to: "/dashboard/cadastros-v2",   label: "Cadastros HUB",  icon: Database      },
-  { to: "/vendas-hub",               label: "Vendas HUB",     icon: ShoppingCart  },
-  { to: "/dashboard/caixa/historico", label: "Histórico de Caixa", icon: History },
-  { to: "/dashboard/marketplace",    label: "Marketplace",    icon: Store         },
+  {
+    to: "/dashboard/marketing-ia",
+    label: "Marketing IA",
+    icon: Megaphone,
+    badge: "AI",
+    visible: (p) => p.hubs.marketingIa,
+  },
+  { to: "/dashboard/whatsapp", label: "WhatsApp HUB", icon: MessageCircle, visible: (p) => p.hubs.whatsapp },
+  {
+    to: "/dashboard/operacoes-v2",
+    label: "Operações HUB",
+    icon: Activity,
+    badge: "Novo",
+    visible: (p) => p.hubs.operacoes,
+  },
+  { to: "/dashboard/cadastros-v2", label: "Cadastros HUB", icon: Database, visible: (p) => p.hubs.cadastros },
+  { to: "/vendas-hub", label: "Vendas HUB", icon: ShoppingCart, visible: (p) => p.hubs.vendas },
+  {
+    to: "/dashboard/caixa/historico",
+    label: "Histórico de Caixa",
+    icon: History,
+    visible: (p) => p.hubs.caixaHistorico,
+  },
+  { to: "/dashboard/marketplace", label: "Marketplace", icon: Store, visible: (p) => p.hubs.marketplace },
   ...(financeiroV2Enabled
-    ? [{ to: "/dashboard/financeiro-v2", label: "Financeiro HUB", icon: Wallet } satisfies Item]
-    : [{ to: "/dashboard/financeiro", label: "Financeiro HUB", icon: Wallet } satisfies Item]),
+    ? [
+        {
+          to: "/dashboard/financeiro-v2",
+          label: "Financeiro HUB",
+          icon: Wallet,
+          visible: (p: EnterprisePermissions) => p.hubs.financeiro,
+        } satisfies Item,
+      ]
+    : [
+        {
+          to: "/dashboard/financeiro",
+          label: "Financeiro HUB",
+          icon: Wallet,
+          visible: (p: EnterprisePermissions) => p.hubs.financeiro,
+        } satisfies Item,
+      ]),
 ];
 
 // ── ADMINISTRAÇÃO ─────────────────────────────────────────────────────────────
 const administrationItems: Item[] = [
-  { to: "/dashboard/master-console", label: "Master Console", icon: Crown    },
-  { to: "/dashboard/unidades",       label: "Gestão da Rede", icon: Network  },
-  { to: "/dashboard/configuracoes",  label: "Configurações",  icon: Settings },
+  {
+    to: "/dashboard/master-console",
+    label: "Master Console",
+    icon: Crown,
+    visible: (p) => p.admin.masterConsole,
+  },
+  {
+    to: "/dashboard/unidades",
+    label: "Gestão da Rede",
+    icon: Network,
+    visible: (p) => p.admin.unidades,
+  },
+  {
+    to: "/dashboard/configuracoes",
+    label: "Configurações",
+    icon: Settings,
+    visible: (p) => p.admin.configuracoes,
+  },
 ];
+
+function filterNav(items: Item[], perms: EnterprisePermissions | null): Item[] {
+  if (!perms) return items;
+  return items.filter((i) => (i.visible ? i.visible(perms) : true));
+}
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session, status } = useSession();
+
+  const perms = useMemo(() => {
+    if (status !== "authenticated" || !session?.user?.role) return null;
+    return getEnterprisePermissions(session.user.role);
+  }, [status, session?.user?.role]);
+
+  const workspaceFiltered = useMemo(() => filterNav(workspaceItems, perms), [perms]);
+  const hubsFiltered = useMemo(() => filterNav(hubsItems, perms), [perms]);
+  const adminFiltered = useMemo(() => filterNav(administrationItems, perms), [perms]);
 
   const rowClasses = (active: boolean) =>
     [
@@ -201,13 +279,17 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {sectionLabel("Workspace", true)}
-        <div className="space-y-1">{workspaceItems.map(renderItem)}</div>
+        <div className="space-y-1">{workspaceFiltered.map(renderItem)}</div>
 
         {sectionLabel("Hubs")}
-        <div className="space-y-1">{hubsItems.map(renderItem)}</div>
+        <div className="space-y-1">{hubsFiltered.map(renderItem)}</div>
 
-        {sectionLabel("Administração")}
-        <div className="space-y-1">{administrationItems.map(renderItem)}</div>
+        {adminFiltered.length > 0 && (
+          <>
+            {sectionLabel("Administração")}
+            <div className="space-y-1">{adminFiltered.map(renderItem)}</div>
+          </>
+        )}
       </nav>
 
       {/* Footer status */}
