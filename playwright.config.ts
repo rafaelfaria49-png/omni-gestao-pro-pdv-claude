@@ -1,5 +1,8 @@
 import path from "node:path"
+import { config as loadEnv } from "dotenv"
 import { defineConfig, devices } from "@playwright/test"
+
+loadEnv({ path: path.join(__dirname, ".env") })
 
 const authFile = path.join(__dirname, "e2e", ".auth", "storage.json")
 
@@ -12,8 +15,13 @@ const authFile = path.join(__dirname, "e2e", ".auth", "storage.json")
  *
  * Comandos:
  * - `npm run test:e2e` — sobe `npm run dev` se nada estiver a ouvir na porta (reuseExistingServer)
- * - `SKIP_WEBSERVER=1 npm run test:e2e` — assume app já em http://127.0.0.1:3000
+ * - `SKIP_WEBSERVER=1 npm run test:e2e` — assume app já na mesma origem que `PLAYWRIGHT_BASE_URL`
  */
+const defaultBase =
+  process.env.PLAYWRIGHT_BASE_URL?.trim() ||
+  process.env.NEXTAUTH_URL?.trim()?.replace(/\/$/, "") ||
+  "http://localhost:3000"
+
 export default defineConfig({
   testDir: "e2e",
   fullyParallel: true,
@@ -24,13 +32,13 @@ export default defineConfig({
   timeout: 60_000,
   expect: { timeout: 20_000 },
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:3000",
+    baseURL: defaultBase,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "off",
   },
   projects: [
-    { name: "setup", testMatch: "auth.setup.ts" },
+    { name: "setup", testMatch: "auth.setup.ts", timeout: 120_000 },
     {
       name: "chromium",
       dependencies: ["setup"],
@@ -46,7 +54,7 @@ export default defineConfig({
       ? undefined
       : {
           command: "npm run dev",
-          url: "http://127.0.0.1:3000",
+          url: defaultBase,
           reuseExistingServer: true,
           timeout: 120_000,
         },

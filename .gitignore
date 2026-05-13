@@ -25,6 +25,8 @@ prisma/*.db-journal
 
 # Playwright E2E — sessão gerada no setup (não versionar)
 e2e/.auth/storage.json
+/test-results/
+/playwright-report/
 
 # Common ignores
 node_modules

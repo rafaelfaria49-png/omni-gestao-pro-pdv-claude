@@ -1,8 +1,10 @@
 import { test, expect } from "@playwright/test"
+import { dismissFirstAccessWizardIfPresent } from "../helpers"
 
 test.describe("WhatsApp inbox", () => {
   test("carrega inbox e busca; troca de loja se o seletor existir", async ({ page }) => {
     await page.goto("/dashboard/whatsapp")
+    await dismissFirstAccessWizardIfPresent(page)
 
     await expect(page.getByRole("heading", { name: /^WhatsApp$/ })).toBeVisible({ timeout: 45_000 })
 

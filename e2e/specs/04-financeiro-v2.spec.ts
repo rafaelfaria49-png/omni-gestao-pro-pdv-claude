@@ -1,8 +1,10 @@
 import { test, expect } from "@playwright/test"
+import { dismissFirstAccessWizardIfPresent } from "../helpers"
 
 test.describe("Financeiro HUB v2", () => {
   test("carrega shell, abas e conteúdo principal", async ({ page }) => {
     await page.goto("/dashboard/financeiro-v2")
+    await dismissFirstAccessWizardIfPresent(page)
 
     await expect(page.getByRole("heading", { name: /Financeiro HUB/i })).toBeVisible({
       timeout: 45_000,

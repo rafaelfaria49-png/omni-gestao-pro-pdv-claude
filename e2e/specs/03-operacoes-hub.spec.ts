@@ -1,20 +1,22 @@
 import { test, expect } from "@playwright/test"
+import { dismissFirstAccessWizardIfPresent } from "../helpers"
 
 test.describe("Operações HUB", () => {
   test("hub inicial e Kanban de OS", async ({ page }) => {
     await page.goto("/dashboard/operacoes-v2")
+    await dismissFirstAccessWizardIfPresent(page)
 
     await expect(page.getByText("Nova Ordem de Serviço", { exact: false })).toBeVisible({
       timeout: 45_000,
     })
 
-    await page.getByRole("button", { name: /Ordens em andamento/i }).click()
+    await page.getByRole("button", { name: /Abrir Kanban/i }).first().click()
 
-    await expect(page.getByRole("heading", { name: "Ordens de Serviço" })).toBeVisible()
+    await expect(page.getByRole("heading", { name: /Ordens de Serviço/i })).toBeVisible({ timeout: 30_000 })
 
-    const linkOs = page.locator('a[href*="operacoes/os"]').first()
-    if (await linkOs.isVisible().catch(() => false)) {
-      await linkOs.click()
+    const detailLink = page.locator('a[href^="/operacoes/os/"]').filter({ hasText: /OS-/i }).first()
+    if (await detailLink.isVisible({ timeout: 10_000 }).catch(() => false)) {
+      await detailLink.click()
       await expect(page.getByText("Voltar ao Kanban", { exact: false })).toBeVisible({ timeout: 25_000 })
     } else {
       await expect(
