@@ -1,23 +1,14 @@
 import { useRef, useState, useTransition } from "react";
 import {
   Sparkles, Link2, Barcode, ImagePlus, Type, Check, Loader2,
-  Store, ShoppingBag, Globe, Wand2, Layers, Tag as TagIcon,
-  Wrench, Package, CheckCircle2, AlertCircle, Image as ImageIcon,
-  Eye, Zap, Send,
+  Wand2, Layers, Tag as TagIcon, Store,
+  AlertCircle, Image as ImageIcon,
+  Send,
 } from "lucide-react";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea } from "./ui-kit";
 import { upsertProduto } from "@/app/actions/cadastros";
 
 type Source = "manual" | "link" | "barcode" | "image";
-
-const MARKETPLACES = [
-  { id: "ml", name: "Mercado Livre", icon: Store, status: "conectado" as const, color: "warning" as const },
-  { id: "shopee", name: "Shopee", icon: ShoppingBag, status: "conectado" as const, color: "danger" as const },
-  { id: "amazon", name: "Amazon", icon: Package, status: "aguardando" as const, color: "warning" as const },
-  { id: "magalu", name: "Magalu", icon: Store, status: "não conectado" as const, color: "default" as const },
-  { id: "nuvem", name: "Nuvemshop", icon: Globe, status: "conectado" as const, color: "info" as const },
-  { id: "shopify", name: "Shopify", icon: ShoppingBag, status: "não conectado" as const, color: "default" as const },
-];
 
 const STEPS = [
   "Analisando produto…",
@@ -58,8 +49,6 @@ export function ProductAIModal({
   const [running, setRunning] = useState(false);
   const [step, setStep] = useState(0);
   const [filled, setFilled] = useState(false);
-  const [autoPublish, setAutoPublish] = useState(true);
-  const [selected, setSelected] = useState<string[]>(["ml", "shopee"]);
   const [saving, startSaving] = useTransition();
 
   const nomeRef = useRef<HTMLInputElement | null>(null);
@@ -88,12 +77,9 @@ export function ProductAIModal({
     }, 450);
   };
 
-  const toggle = (id: string) =>
-    setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-
   const title = productId ? "Editar produto" : "Novo produto";
   return (
-    <Modal open={open} onClose={onClose} title={title} subtitle="Cadastro Inteligente com IA + Marketplace" size="xl">
+    <Modal open={open} onClose={onClose} title={title} subtitle="Fase 1: cadastro real no banco — fluxo IA abaixo ainda é simulado (sem OCR/voz)." size="xl">
       <div className="space-y-6">
         {/* IA SOURCE */}
         <Card className="p-5 border-primary/30 bg-primary/5">
@@ -168,25 +154,25 @@ export function ProductAIModal({
             <Field label="Nome" span={2}>
               <Input
                 ref={nomeRef}
-                defaultValue={initial?.nome ?? (filled ? "Tela iPhone 11 Original c/ Aro" : "")}
+                defaultValue={initial?.nome ?? ""}
                 placeholder="Nome do produto"
               />
             </Field>
-            <Field label="SKU"><Input ref={skuRef} defaultValue={initial?.sku ?? (filled ? "TEL-IPH11-OR-ARO" : "")} /></Field>
-            <Field label="Código de barras"><Input ref={barrasRef} defaultValue={initial?.barras ?? (filled ? "7891234500011" : "")} /></Field>
-            <Field label="Categoria"><Input ref={categoriaRef} defaultValue={initial?.categoria ?? (filled ? "Telas" : "")} /></Field>
-            <Field label="Marca"><Input ref={marcaRef} defaultValue={initial?.marca ?? (filled ? "Apple" : "")} /></Field>
-            <Field label="Modelo compatível"><Input ref={modeloRef} defaultValue={filled ? "iPhone 11" : ""} /></Field>
-            <Field label="Fornecedor provável"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? (filled ? "iParts BR" : "")} /></Field>
-            <Field label="Custo"><Input ref={custoRef} defaultValue={initial?.custo !== undefined ? String(initial.custo) : (filled ? "320" : "")} /></Field>
-            <Field label="Preço sugerido"><Input ref={precoRef} defaultValue={initial?.preco !== undefined ? String(initial.preco) : (filled ? "690" : "")} /></Field>
-            <Field label="Margem"><Input defaultValue={filled ? "53,6%" : ""} /></Field>
-            <Field label="Garantia (dias)"><Input ref={garantiaRef} defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : (filled ? "90" : "")} /></Field>
-            <Field label="NCM"><Input defaultValue={filled ? "8517.70.10" : ""} /></Field>
-            <Field label="Tributação"><Select defaultValue={filled ? "Simples" : ""}><option>Simples</option><option>Lucro Presumido</option><option>Lucro Real</option></Select></Field>
-            <Field label="Tags"><Input defaultValue={filled ? "tela, iphone, original, 11" : ""} /></Field>
+            <Field label="SKU"><Input ref={skuRef} defaultValue={initial?.sku ?? ""} /></Field>
+            <Field label="Código de barras"><Input ref={barrasRef} defaultValue={initial?.barras ?? ""} /></Field>
+            <Field label="Categoria"><Input ref={categoriaRef} defaultValue={initial?.categoria ?? ""} /></Field>
+            <Field label="Marca"><Input ref={marcaRef} defaultValue={initial?.marca ?? ""} /></Field>
+            <Field label="Modelo compatível"><Input ref={modeloRef} defaultValue="" /></Field>
+            <Field label="Fornecedor provável"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? ""} /></Field>
+            <Field label="Custo"><Input ref={custoRef} defaultValue={initial?.custo !== undefined ? String(initial.custo) : ""} /></Field>
+            <Field label="Preço sugerido"><Input ref={precoRef} defaultValue={initial?.preco !== undefined ? String(initial.preco) : ""} /></Field>
+            <Field label="Margem"><Input readOnly defaultValue="" placeholder="Calculada após custo e preço" /></Field>
+            <Field label="Garantia (dias)"><Input ref={garantiaRef} defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : ""} /></Field>
+            <Field label="NCM"><Input placeholder="Fase fiscal futura" /></Field>
+            <Field label="Tributação"><Select defaultValue=""><option value="">—</option><option>Simples</option><option>Lucro Presumido</option><option>Lucro Real</option></Select></Field>
+            <Field label="Tags"><Input placeholder="Separadas por vírgula" /></Field>
             <Field label="Descrição" span={2}>
-              <Textarea rows={3} defaultValue={filled ? "Tela LCD original para iPhone 11, com aro e suporte. Touch responsivo, cor fiel, ideal para reposição em assistência técnica. Garantia de 90 dias contra defeitos de fabricação." : ""} />
+              <Textarea rows={3} placeholder="Descrição comercial (opcional)" />
             </Field>
           </div>
         </div>
@@ -238,80 +224,23 @@ export function ProductAIModal({
             <Layers className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold text-foreground">Relacionamentos inteligentes</h3>
           </div>
-          <div className="space-y-3 text-sm">
-            <Rel label="Equipamentos" tone="info" items={["iPhone 11", "iPhone 11 Pro"]} icon={Package} />
-            <Rel label="Peças relacionadas" tone="primary" items={["Película 3D iPhone 11", "Cola B-7000", "Aro frontal"]} icon={TagIcon} />
-            <Rel label="Serviços relacionados" tone="success" items={["Troca de tela", "Limpeza interna"]} icon={Wrench} />
-            <Rel label="Checklist recomendado" tone="warning" items={["Testar touch", "Testar Face ID", "Testar carga"]} icon={CheckCircle2} />
-            <Rel label="Fornecedores sugeridos" tone="default" items={["iParts BR", "iSupply Imports"]} icon={Store} />
-          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Sugestões de equipamentos, peças relacionadas e checklists serão plugadas na fase de IA — nada aqui altera o banco ainda.
+          </p>
         </Card>
 
-        {/* MARKETPLACE */}
-        <Card className="p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Send className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Publicação Marketplace</h3>
-            </div>
-            <label className="flex items-center gap-2 text-xs text-foreground">
-              <input type="checkbox" checked={autoPublish} onChange={(e) => setAutoPublish(e.target.checked)} />
-              Publicar automaticamente após salvar
-            </label>
-          </div>
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-            {MARKETPLACES.map((m) => {
-              const Ic = m.icon;
-              const active = selected.includes(m.id);
-              const disabled = m.status === "não conectado";
-              return (
-                <button
-                  key={m.id}
-                  disabled={disabled}
-                  onClick={() => toggle(m.id)}
-                  className={`flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition ${
-                    active ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"
-                  } ${disabled ? "opacity-60" : ""}`}
-                >
-                  <div className="grid h-8 w-8 place-items-center rounded-md bg-muted text-foreground"><Ic className="h-4 w-4" /></div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-foreground">{m.name}</div>
-                    <Badge tone={m.color}>{m.status}</Badge>
-                  </div>
-                  <input type="checkbox" checked={active} readOnly className="pointer-events-none" />
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Preview anúncio */}
-          <div className="mt-4 rounded-xl border border-border bg-background p-4">
-            <div className="mb-2 flex items-center gap-2">
-              <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">Preview do anúncio</span>
-              <Badge tone="success" >Qualidade 92%</Badge>
-            </div>
-            <div className="text-sm font-semibold text-foreground">
-              {filled ? "Tela iPhone 11 Original com Aro - Garantia 90 dias - Envio Rápido" : "Título gerado pela IA aparecerá aqui"}
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {filled
-                ? "Tela LCD original para iPhone 11 com aro frontal. Touch responsivo, cor fiel, ideal para assistência técnica. Garantia oficial de 90 dias contra defeitos de fabricação. Envio em até 24h."
-                : "Descrição otimizada para SEO aparecerá aqui."}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <Badge tone="info">Categoria: Celulares › Peças › Telas</Badge>
-              <Badge>SEO: tela iphone 11</Badge>
-              <Badge>palavra-chave: original</Badge>
-              <Badge>display lcd</Badge>
-            </div>
+        {/* MARKETPLACE — apenas rótulo Fase 1; integrações reais ficam no módulo Marketplace */}
+        <Card className="p-5 opacity-80">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Send className="h-4 w-4" />
+            <span>Publicação em marketplaces: não disponível nesta fase (cadastro local apenas).</span>
           </div>
         </Card>
 
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm">Cancelar</button>
-          <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm">
-            <Zap className="h-4 w-4" /> Salvar rascunho
+          <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm" type="button">
+            Salvar rascunho
           </button>
           <button
             disabled={saving}
@@ -333,6 +262,13 @@ export function ProductAIModal({
                     preco: Number.isFinite(preco) ? preco : 0,
                     garantia: Number.isFinite(garantia) ? garantia : 0,
                     active: true,
+                    metadata: {
+                      cadastroIa: {
+                        phase: "fase1-stub",
+                        savedAt: new Date().toISOString(),
+                        source,
+                      },
+                    },
                   });
                   onSaved?.();
                   onClose();
@@ -344,25 +280,11 @@ export function ProductAIModal({
             }}
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
           >
-            <Send className="h-4 w-4" /> Salvar {autoPublish && selected.length > 0 ? `& publicar em ${selected.length}` : "produto"}
+            <Send className="h-4 w-4" /> Salvar produto
           </button>
         </div>
       </div>
     </Modal>
-  );
-}
-
-function Rel({ label, items, tone, icon: Ic }: { label: string; items: string[]; tone: any; icon: any }) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-muted text-foreground"><Ic className="h-3.5 w-3.5" /></div>
-      <div className="flex-1">
-        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-        <div className="mt-1 flex flex-wrap gap-1.5">
-          {items.map((i) => <Badge key={i} tone={tone}>{i}</Badge>)}
-        </div>
-      </div>
-    </div>
   );
 }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
+import { Prisma } from "@/generated/prisma"
+import { prisma, prismaEnsureConnected } from "@/lib/prisma"
+import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -44,28 +44,56 @@ function optTrim(body: Record<string, unknown>, ...keys: string[]): string | und
   return undefined
 }
 
+const PRODUTO_LIST_SELECT = {
+  id: true,
+  name: true,
+  stock: true,
+  price: true,
+  precoCusto: true,
+  sku: true,
+  barcode: true,
+  category: true,
+  brand: true,
+  supplierName: true,
+  warrantyDays: true,
+  active: true,
+  status: true,
+  metadata: true,
+  storeId: true,
+  createdAt: true,
+  updatedAt: true,
+} as const
+
 export async function GET(req: Request) {
+  const gate = await requireCadastrosHubApi(req, "read")
+  if (!gate.ok) return gate.response
+
   try {
     const url = new URL(req.url)
     const q = normalizeSearch(url.searchParams.get("q") ?? "")
-    const storeId = storeIdFromAssistecRequestForRead(req)
+    const activeOnly = url.searchParams.get("activeOnly") === "1" || url.searchParams.get("activeOnly") === "true"
+    const storeId = gate.storeId
 
+    await prismaEnsureConnected()
     const produtos = await prisma.produto.findMany({
       where: {
         storeId,
-        ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}),
+        ...(activeOnly ? { active: true } : {}),
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" as const } },
+                { sku: { contains: q, mode: "insensitive" as const } },
+                { barcode: { contains: q, mode: "insensitive" as const } },
+                { category: { contains: q, mode: "insensitive" as const } },
+                { brand: { contains: q, mode: "insensitive" as const } },
+                { supplierName: { contains: q, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
       },
       orderBy: { updatedAt: "desc" },
-      select: {
-        id: true,
-        name: true,
-        stock: true,
-        price: true,
-        precoCusto: true,
-        storeId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: PRODUTO_LIST_SELECT,
       take: 500,
     })
 
@@ -75,15 +103,17 @@ export async function GET(req: Request) {
     console.error("[api/produtos GET]", msg)
     return json(
       { error: "Falha ao listar produtos", ...(process.env.NODE_ENV === "development" ? { detail: msg } : {}) },
-      { status: 503 }
+      { status: 503 },
     )
   }
 }
 
 export async function POST(req: Request) {
+  const gate = await requireCadastrosHubApi(req, "write")
+  if (!gate.ok) return gate.response
+  const storeId = gate.storeId
+
   try {
-    const gate = await requireAdmin()
-    if (!gate.ok) return gate.res
     const raw = (await req.json()) as Record<string, unknown>
     const body = raw as { name?: unknown; stock?: unknown; price?: unknown }
 
@@ -94,8 +124,22 @@ export async function POST(req: Request) {
     const category = optTrim(raw, "category", "categoria")
     const sku = optTrim(raw, "sku", "codigo")
     const barcode = optTrim(raw, "barcode", "codigoBarras")
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) return badRequest("Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId.")
+    const brand = optTrim(raw, "brand", "marca") ?? ""
+    const supplierName = optTrim(raw, "supplierName", "fornecedor") ?? ""
+    const warrantyDaysRaw = parseStock(raw.warrantyDays ?? raw.garantia)
+    const warrantyDays = warrantyDaysRaw === null ? 0 : Math.max(0, warrantyDaysRaw)
+    const active = typeof raw.active === "boolean" ? raw.active : true
+    const statusStr = typeof raw.status === "string" && raw.status.trim() ? raw.status.trim() : active ? "Ativo" : "Inativo"
+
+    let metadata: Prisma.InputJsonValue | typeof Prisma.DbNull | undefined
+    if (raw.metadata !== undefined) {
+      if (raw.metadata === null) metadata = Prisma.DbNull
+      else if (typeof raw.metadata === "object" && raw.metadata !== null && !Array.isArray(raw.metadata)) {
+        metadata = raw.metadata as Prisma.InputJsonValue
+      } else {
+        return badRequest("metadata deve ser objeto JSON ou null")
+      }
+    }
 
     if (!name) return badRequest('Campo "name" é obrigatório')
     if (stock === null) return badRequest('Campo "stock" é obrigatório (número inteiro)')
@@ -104,6 +148,7 @@ export async function POST(req: Request) {
     if (price < 0) return badRequest("Preço não pode ser negativo")
     if (precoCusto < 0) return badRequest("Preço de custo não pode ser negativo")
 
+    await prismaEnsureConnected()
     const created = await prisma.produto.create({
       data: {
         name,
@@ -114,20 +159,14 @@ export async function POST(req: Request) {
         category: category ?? null,
         sku: sku ?? null,
         barcode: barcode ?? null,
+        brand,
+        supplierName,
+        warrantyDays,
+        active,
+        status: statusStr,
+        ...(metadata !== undefined ? { metadata } : {}),
       },
-      select: {
-        id: true,
-        name: true,
-        stock: true,
-        price: true,
-        precoCusto: true,
-        sku: true,
-        barcode: true,
-        category: true,
-        storeId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: PRODUTO_LIST_SELECT,
     })
 
     return json({ ok: true, produto: created }, { status: 201 })
@@ -136,7 +175,7 @@ export async function POST(req: Request) {
     console.error("[api/produtos POST]", msg)
     return json(
       { error: "Falha ao criar produto", ...(process.env.NODE_ENV === "development" ? { detail: msg } : {}) },
-      { status: 503 }
+      { status: 503 },
     )
   }
 }

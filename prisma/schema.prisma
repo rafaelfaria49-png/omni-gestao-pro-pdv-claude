@@ -662,6 +662,8 @@ model Produto {
   warrantyDays Int      @default(0) @map("warrantyDays")
   status       String   @default("Ativo") @map("status")
   active       Boolean  @default(true) @map("active")
+  /** Extensível (Fase IA: foto, voz, WhatsApp, pipeline) — não substituir colunas core. */
+  metadata     Json?    @map("metadata") @db.JsonB
   createdAt    DateTime @default(now()) @map("createdAt")
   updatedAt    DateTime @default(now()) @updatedAt @map("updatedAt")
 

@@ -40,6 +40,7 @@ import {
   upsertServico,
   upsertProduto,
 } from "@/app/actions/cadastros";
+import { catalogQualityScore } from "@/lib/cadastros/produto-quality-score";
 
 const ICONS: Record<string, any> = {
   Users, Package, Wrench, Truck, HardHat, Smartphone, AlertTriangle, RefreshCw,
@@ -340,12 +341,29 @@ function VinculosSistema() {
 }
 
 /* ───── TABLE TOOLBAR ───── */
-function Toolbar({ count, label, onNew }: { count: number; label: string; onNew?: () => void }) {
+function Toolbar({
+  count,
+  label,
+  onNew,
+  filterQuery,
+  onFilterQueryChange,
+}: {
+  count: number;
+  label: string;
+  onNew?: () => void;
+  filterQuery?: string;
+  onFilterQueryChange?: (v: string) => void;
+}) {
   return (
     <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2">
       <div className="relative min-w-0 max-w-full">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input placeholder={`Buscar em ${label.toLowerCase()}…`} className="w-64 max-w-full rounded-lg border border-input bg-card py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring" />
+        <input
+          placeholder={`Buscar em ${label.toLowerCase()}…`}
+          value={filterQuery ?? ""}
+          onChange={(e) => onFilterQueryChange?.(e.target.value)}
+          className="w-64 max-w-full rounded-lg border border-input bg-card py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+        />
       </div>
       <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-accent">
         <Filter className="h-4 w-4" /> Filtros
@@ -578,6 +596,7 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
   const m = useToggle();
   const [editing, setEditing] = useState<ProdutoDTO | null>(null);
   const [rows, setRows] = useState<ProdutoDTO[]>([]);
+  const [filterQuery, setFilterQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
@@ -615,19 +634,16 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
-  // mock por id
-  const meta: Record<string, { score: number; ia: boolean; mkt: boolean; img: boolean }> = {
-    P001: { score: 96, ia: true, mkt: true, img: true },
-    P002: { score: 88, ia: true, mkt: true, img: true },
-    P003: { score: 72, ia: false, mkt: false, img: true },
-    P004: { score: 84, ia: true, mkt: true, img: false },
-    P005: { score: 78, ia: false, mkt: true, img: true },
-    P006: { score: 65, ia: false, mkt: false, img: false },
-    P007: { score: 90, ia: true, mkt: true, img: true },
-    P008: { score: 80, ia: true, mkt: false, img: true },
-    P009: { score: 38, ia: false, mkt: false, img: false },
-    P010: { score: 82, ia: false, mkt: true, img: true },
-  };
+
+  const visibleRows = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((p) => {
+      const blob = [p.nome, p.sku, p.barras, p.categoria, p.marca, p.fornecedor].join(" ").toLowerCase();
+      return blob.includes(q);
+    });
+  }, [rows, filterQuery]);
+
   return (
     <div className="w-full min-w-0">
       <div className="mb-4 grid min-w-0 grid-cols-2 gap-3 md:grid-cols-5">
@@ -642,22 +658,52 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
         ))}
       </div>
 
-      <Toolbar count={rows.length} label="produtos" onNew={m.openIt} />
+      <Toolbar
+        count={visibleRows.length}
+        label="produtos"
+        onNew={m.openIt}
+        filterQuery={filterQuery}
+        onFilterQueryChange={setFilterQuery}
+      />
       {loading && <div className="mb-3 text-sm text-muted-foreground">Carregando produtos…</div>}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
+      {!loading && !err && rows.length === 0 && (
+        <Card className="mb-4 border-dashed border-2 border-border/80 bg-gradient-to-br from-card to-muted/20 p-10 text-center">
+          <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
+            <Package className="h-7 w-7" />
+          </div>
+          <p className="text-base font-semibold text-foreground">Nenhum produto nesta unidade</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Cadastre o primeiro item ou importe o catálogo. Os dados vêm do banco (Prisma) e alimentam estoque, PDV e OS.
+          </p>
+          <button
+            type="button"
+            onClick={m.openIt}
+            className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" /> Novo produto
+          </button>
+        </Card>
+      )}
+      {!loading && !err && rows.length > 0 && visibleRows.length === 0 && (
+        <Card className="mb-4 border border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+          Nenhum produto corresponde à busca. Limpe o filtro ou ajuste os termos.
+        </Card>
+      )}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                {["Produto", "SKU", "Categoria", "Estoque", "Preço", "Margem", "Qualidade", "Status / IA", "Ações"].map((h) => (
+                {["Produto", "SKU", "Categoria", "Estoque", "Preço", "Margem", "Qualidade", "Status", "Ações"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map((p) => {
-                const md = meta[p.id] ?? { score: 70, ia: false, mkt: false, img: true };
+              {visibleRows.map((p) => {
+                const score = catalogQualityScore(p);
+                const iaStub = p.metadata && typeof p.metadata.cadastroIa === "object";
                 return (
                   <tr key={p.id} className="hover:bg-accent/40">
                     <td className="px-4 py-3">
@@ -669,12 +715,15 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
                     <td className="px-4 py-3"><Badge tone={p.estoque === 0 ? "danger" : p.estoque < 6 ? "warning" : "success"}>{p.estoque}</Badge></td>
                     <td className="px-4 py-3 font-medium text-foreground">{p.preco ? `R$ ${p.preco}` : <span className="text-destructive">—</span>}</td>
                     <td className="px-4 py-3 text-foreground">{p.margem ? `${p.margem.toFixed(1)}%` : "—"}</td>
-                    <td className="px-4 py-3"><QualityScore value={md.score} /></td>
+                    <td className="px-4 py-3"><QualityScore value={score} /></td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1">
-                        {md.mkt && <Badge tone="success">Pronto p/ MKT</Badge>}
-                        {md.ia && <Badge tone="primary"><Sparkles className="mr-1 inline h-3 w-3" />IA</Badge>}
-                        {!md.img && <Badge tone="warning">Sem imagens</Badge>}
+                        {p.status === "Incompleto" && <Badge tone="warning">Incompleto</Badge>}
+                        {iaStub && (
+                          <Badge tone="primary">
+                            <Sparkles className="mr-1 inline h-3 w-3" /> pipeline
+                          </Badge>
+                        )}
                         <button
                           disabled={saving}
                           onClick={() => {
@@ -703,23 +752,28 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
                           className="inline-flex"
                           title="Ativar/Inativar"
                         >
-                        <Badge tone={p.status === "Ativo" ? "success" : "warning"}>{p.status}</Badge>
+                        <Badge tone={p.status === "Ativo" ? "success" : "warning"}>{p.status === "Incompleto" ? "Rascunho" : p.status}</Badge>
                         </button>
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
-                        <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground hover:border-primary" title="Gerar anúncio">Anúncio</button>
-                        <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-foreground hover:border-primary" title="Publicar">Publicar</button>
+                        <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground cursor-not-allowed" title="Fase 2" type="button" disabled>
+                          Anúncio
+                        </button>
+                        <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground cursor-not-allowed" title="Fase 2" type="button" disabled>
+                          Publicar
+                        </button>
                         <button
                           className="flex items-center gap-1 rounded-md bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/25"
-                          title="Editar"
+                          title="Editar ficha"
+                          type="button"
                           onClick={() => {
                             setEditing(p);
                             m.openIt();
                           }}
                         >
-                          <Sparkles className="h-3 w-3" /> IA
+                          <Edit3 className="h-3 w-3" /> Editar
                         </button>
                       </div>
                     </td>

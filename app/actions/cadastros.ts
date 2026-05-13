@@ -1,5 +1,6 @@
 "use server";
 
+import { Prisma } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { withPrismaSafe } from "@/lib/prisma";
@@ -660,6 +661,8 @@ export type ProdutoDTO = {
   margem: number;
   garantia: number;
   status: "Ativo" | "Inativo" | "Incompleto";
+  /** JSON extensível (IA / integrações) — Fase 1 só persiste, sem motor IA. */
+  metadata?: Record<string, unknown> | null;
 };
 
 export type ServicoDTO = {
@@ -789,12 +792,47 @@ export async function updateCliente(
   }
 }
 
-export async function listProdutos(storeId: string): Promise<ProdutoDTO[]> {
+function produtoMetadataRecord(v: unknown): Record<string, unknown> | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+  return v as Record<string, unknown>;
+}
+
+export async function listProdutos(storeId: string, opts?: { q?: string }): Promise<ProdutoDTO[]> {
+  const q = opts?.q?.trim();
   try {
     const rows = await prisma.produto.findMany({
-      where: { storeId },
+      where: {
+        storeId,
+        ...(q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" as const } },
+                { sku: { contains: q, mode: "insensitive" as const } },
+                { barcode: { contains: q, mode: "insensitive" as const } },
+                { category: { contains: q, mode: "insensitive" as const } },
+                { brand: { contains: q, mode: "insensitive" as const } },
+                { supplierName: { contains: q, mode: "insensitive" as const } },
+              ],
+            }
+          : {}),
+      },
       orderBy: { updatedAt: "desc" },
       take: 1000,
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        barcode: true,
+        category: true,
+        brand: true,
+        supplierName: true,
+        stock: true,
+        price: true,
+        precoCusto: true,
+        warrantyDays: true,
+        active: true,
+        metadata: true,
+      },
     });
     return rows.map((p) => {
       const preco = Number(p.price ?? 0);
@@ -820,6 +858,7 @@ export async function listProdutos(storeId: string): Promise<ProdutoDTO[]> {
         margem: Number.isFinite(margem) ? Number(margem.toFixed(1)) : 0,
         garantia: p.warrantyDays ?? 0,
         status,
+        metadata: produtoMetadataRecord(p.metadata),
       };
     });
   } catch (e) {
@@ -831,7 +870,19 @@ export async function listProdutos(storeId: string): Promise<ProdutoDTO[]> {
     const legacyRows = await withPrismaSafe(
       (db) =>
         db.produto.findMany({
-          where: { storeId },
+          where: {
+            storeId,
+            ...(q
+              ? {
+                  OR: [
+                    { name: { contains: q, mode: "insensitive" as const } },
+                    { sku: { contains: q, mode: "insensitive" as const } },
+                    { barcode: { contains: q, mode: "insensitive" as const } },
+                    { category: { contains: q, mode: "insensitive" as const } },
+                  ],
+                }
+              : {}),
+          },
           orderBy: { updatedAt: "desc" },
           take: 1000,
           select: {
@@ -868,6 +919,7 @@ export async function listProdutos(storeId: string): Promise<ProdutoDTO[]> {
         margem: Number.isFinite(margem) ? Number(margem.toFixed(1)) : 0,
         garantia: 0,
         status,
+        metadata: null,
       };
     });
   }
@@ -888,10 +940,31 @@ export async function upsertProduto(
     preco?: number;
     garantia?: number;
     active?: boolean;
+    metadata?: Record<string, unknown> | null;
   }
 ): Promise<{ id: string }> {
   const nome = input.nome.trim();
   if (!nome) throw new Error("Nome obrigatório");
+
+  let metadataPart: { metadata?: Prisma.InputJsonValue | typeof Prisma.DbNull } = {};
+  if (input.metadata !== undefined) {
+    if (input.id) {
+      if (input.metadata === null) {
+        metadataPart = { metadata: Prisma.DbNull };
+      } else {
+        const row = await prisma.produto.findFirst({
+          where: { id: input.id, storeId },
+          select: { metadata: true },
+        });
+        const prev = produtoMetadataRecord(row?.metadata) ?? {};
+        metadataPart = {
+          metadata: { ...prev, ...input.metadata } as Prisma.InputJsonValue,
+        };
+      }
+    } else if (input.metadata !== null) {
+      metadataPart = { metadata: input.metadata as Prisma.InputJsonValue };
+    }
+  }
 
   const common = {
     name: nome,
@@ -906,7 +979,8 @@ export async function upsertProduto(
     warrantyDays: Math.max(0, Math.trunc(input.garantia ?? 0)),
     active: input.active ?? true,
     status: input.active === false ? "Inativo" : "Ativo",
-  } as const;
+    ...metadataPart,
+  };
 
   if (input.id) {
     const existing = await prisma.produto.findFirst({ where: { id: input.id, storeId }, select: { id: true } });
