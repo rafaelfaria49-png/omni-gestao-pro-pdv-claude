@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Toaster, toast } from "sonner";
 import {
   Activity, Bot, Check, X, Edit3, Play, Plus, Copy, MessageCircle,
@@ -22,17 +22,15 @@ import { cn } from "@/lib/utils";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
 import { interpretOmniAgentCommand } from "@/lib/omni-agent/interpret";
-import { submitOmniAgentCommand, listOmniAgentCommands } from "@/app/actions/omni-agent";
+import {
+  submitOmniAgentCommand,
+  listOmniAgentCommands,
+  getOmniAgentHubStats,
+  type OmniAgentHubStatsDTO,
+  type OmniAgentCommandDTO,
+} from "@/app/actions/omni-agent";
+import { dtoToBellItem, dtoToHubFeedRow, type HubFeedRow } from "@/lib/omni-agent/hub-display";
 import { OmniAgentInboxReal } from "@/components/omni-agent/OmniAgentInboxReal";
-
-type CmdStatus = "executado" | "pendente" | "recusado" | "aprovado";
-type ModuleId = "Financeiro" | "Vendas" | "OS" | "Estoque" | "Clientes" | "Lembretes" | "Relatórios" | "Geral";
-type Cmd = { id: string; text: string; category: string; status: CmdStatus; confidence: number; time: string; ts: number; module: string };
-type InboxItem = {
-  id: string; desc: string; module: ModuleId; confidence: number;
-  status: "pending" | "approved" | "rejected"; original: string;
-  fields: Record<string, string>; ts: number;
-};
 
 const TABS = [
   { id: "overview", label: "Visão Geral", icon: Activity },
@@ -45,13 +43,6 @@ const TABS = [
   { id: "settings", label: "Configurações", icon: SettingsIcon },
 ] as const;
 type TabId = typeof TABS[number]["id"];
-
-const SAMPLE_CMDS: Cmd[] = [
-  { id: "c1", text: "gastei R$ 120 em combustível", category: "Despesa", module: "Financeiro", status: "executado", confidence: 0.96, time: "09:12", ts: Date.now() - 1000 * 60 * 18 },
-  { id: "c2", text: "cliente João trouxe iPhone 12 sem áudio", category: "Pré-OS", module: "OS", status: "pendente", confidence: 0.88, time: "09:24", ts: Date.now() - 1000 * 60 * 12 },
-  { id: "c3", text: "vendi película por R$ 40 no pix", category: "Venda", module: "Vendas", status: "executado", confidence: 0.94, time: "10:01", ts: Date.now() - 1000 * 60 * 6 },
-  { id: "c4", text: "me lembre de cobrar Maria amanhã", category: "Lembrete", module: "Lembretes", status: "pendente", confidence: 0.91, time: "10:15", ts: Date.now() - 1000 * 60 * 3 },
-];
 
 const RANDOM_CMDS = [
   "vendi capinha R$ 25 dinheiro",
@@ -83,37 +74,6 @@ function useLS<T>(key: string, def: T): [T, (v: T | ((p: T) => T)) => void] {
   return [v, setV];
 }
 
-/* ---------- mock NLP ---------- */
-function interpret(text: string): { module: ModuleId; action: string; fields: Record<string, string>; confidence: number } {
-  const t = text.toLowerCase();
-  const valor = t.match(/r?\$?\s*(\d+[.,]?\d*)/)?.[1]?.replace(",", ".") ?? "";
-  const qtd = t.match(/(\d+)\s*(capa|pelíc|unid|cabo|fone)/)?.[1] ?? "";
-  if (/(gast|despesa|paguei|comprei combust|combustív|almoço|uber)/.test(t)) {
-    const cat = /combust/.test(t) ? "Combustível" : /almoço|comida/.test(t) ? "Alimentação" : /uber/.test(t) ? "Transporte" : "Geral";
-    return { module: "Financeiro", action: "Criar despesa", fields: { descrição: text, valor, categoria: cat, carteira: "Caixa", pagamento: /pix/.test(t) ? "Pix" : "Dinheiro", data: "hoje" }, confidence: 0.94 };
-  }
-  if (/(vendi|venda)/.test(t)) {
-    const prod = /pelíc/.test(t) ? "Película" : /capa|capinha/.test(t) ? "Capa" : /cabo/.test(t) ? "Cabo" : "Produto";
-    return { module: "Vendas", action: "Registrar venda", fields: { produto: prod, valor, quantidade: "1", pagamento: /pix/.test(t) ? "Pix" : /cart/.test(t) ? "Cartão" : "Dinheiro", cliente: "" }, confidence: 0.92 };
-  }
-  if (/(os|defeito|trouxe|conserto|iphone|samsung|moto g|sem áudio|tela)/.test(t)) {
-    const cliente = t.match(/cliente\s+([a-záéíóúâê]+)/)?.[1] ?? "";
-    const aparelho = (t.match(/(iphone\s*\d+|samsung\s*\w+|moto g\w*)/)?.[0] ?? "").trim();
-    const defeito = /sem áudio/.test(t) ? "sem áudio" : /tela/.test(t) ? "tela quebrada" : /carga/.test(t) ? "não carrega" : "a verificar";
-    return { module: "OS", action: "Criar pré-OS", fields: { cliente: cliente || "—", aparelho: aparelho || "—", defeito, prioridade: "normal", status: "aberto" }, confidence: 0.88 };
-  }
-  if (/(estoque|entrada|comprei \d|recebi \d)/.test(t)) {
-    return { module: "Estoque", action: "Entrada de estoque", fields: { produto: /capa/.test(t) ? "Capa" : /pelíc/.test(t) ? "Película" : "Produto", quantidade: qtd || "1", custoUnit: valor || "0" }, confidence: 0.9 };
-  }
-  if (/(lembre|lembrar|cobrar|cobrança)/.test(t)) {
-    return { module: "Lembretes", action: "Criar lembrete", fields: { pessoa: t.match(/(maria|joão|carlos|ana|pedro)/)?.[0] ?? "—", descrição: text, data: "amanhã", prioridade: "média" }, confidence: 0.86 };
-  }
-  if (/(faturamento|vendi hoje|relatório|quanto)/.test(t)) {
-    return { module: "Relatórios", action: "Consultar relatório", fields: { pergunta: text }, confidence: 0.82 };
-  }
-  return { module: "Geral", action: "Comando livre", fields: { texto: text }, confidence: 0.6 };
-}
-
 /* simple beep without external file */
 function beep() {
   try {
@@ -134,29 +94,35 @@ export default function OmniAgentHub() {
   const [tab, setTab] = useState<TabId>("overview");
   const [agentOnline, setAgentOnline] = useLS<boolean>("omni-agent-online", true);
   const [compact, setCompact] = useLS<boolean>("omni-compact", false);
-  const [feed, setFeed] = useState<Cmd[]>(SAMPLE_CMDS);
-  const [inboxPendingRemote, setInboxPendingRemote] = useState(0);
-  const [inbox, setInbox] = useState<InboxItem[]>([
-    { id: "i1", desc: "Criar despesa de R$ 120 em Combustível", module: "Financeiro", confidence: 0.96, status: "pending", original: "gastei R$ 120 em combustível", fields: { descrição: "Combustível", valor: "120", categoria: "Combustível", carteira: "Caixa", pagamento: "Dinheiro", data: "hoje" }, ts: Date.now() - 60000 * 18 },
-    { id: "i2", desc: "Criar pré-OS para João / iPhone 12 sem áudio", module: "OS", confidence: 0.88, status: "pending", original: "cliente João trouxe iPhone 12 sem áudio", fields: { cliente: "João", aparelho: "iPhone 12", defeito: "sem áudio", prioridade: "normal", status: "aberto" }, ts: Date.now() - 60000 * 12 },
-    { id: "i3", desc: "Registrar venda de película R$ 40 Pix", module: "Vendas", confidence: 0.94, status: "pending", original: "vendi película por R$ 40 no pix", fields: { produto: "Película", valor: "40", quantidade: "1", pagamento: "Pix", cliente: "" }, ts: Date.now() - 60000 * 6 },
-    { id: "i4", desc: "Criar lembrete de cobrança para Maria", module: "Lembretes", confidence: 0.91, status: "pending", original: "me lembre de cobrar Maria amanhã", fields: { pessoa: "Maria", descrição: "Cobrar", data: "amanhã", prioridade: "alta" }, ts: Date.now() - 60000 * 3 },
-  ]);
+  const [feedRows, setFeedRows] = useState<HubFeedRow[]>([]);
+  const [hubStats, setHubStats] = useState<OmniAgentHubStatsDTO | null>(null);
   const [audit, setAudit] = useState<string[]>([`${nowTime()} · Sistema iniciado`, `${nowTime()} · Agente online`]);
   const [newCmdOpen, setNewCmdOpen] = useState(false);
-  const [details, setDetails] = useState<Cmd | null>(null);
+  const [details, setDetails] = useState<HubFeedRow | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [floatingOpen, setFloatingOpen] = useState(false);
   const [waUnread, setWaUnread] = useState(0);
   const [now, setNow] = useState(Date.now());
   const onlineSince = useRef(Date.now());
 
+  const refreshHubData = useCallback(async () => {
+      if (!storeId?.trim()) return;
+      try {
+        const [rows, stats] = await Promise.all([
+          listOmniAgentCommands(storeId, 80),
+          getOmniAgentHubStats(storeId),
+        ]);
+        setFeedRows(rows.map(dtoToHubFeedRow));
+        setHubStats(stats)
+      } catch {
+        setFeedRows([])
+        setHubStats(null)
+      }
+    }, [storeId])
+
   useEffect(() => {
-    if (!storeId) return;
-    void listOmniAgentCommands(storeId, 80).then((rows) => {
-      setInboxPendingRemote(rows.filter((r) => r.status === "PENDENTE" || r.status === "AGUARDANDO_CONFIRMACAO").length);
-    }).catch(() => setInboxPendingRemote(0));
-  }, [storeId, tab]);
+    void refreshHubData()
+  }, [refreshHubData, tab])
 
   // theme synced via global ThemeProvider
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(id); }, []);
@@ -169,33 +135,35 @@ export default function OmniAgentHub() {
     window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const stats = useMemo(() => ({
-    received: feed.length + 12,
-    executed: feed.filter(f => f.status === "executado" || f.status === "aprovado").length + 8,
-    pending: inboxPendingRemote + inbox.filter(i => i.status === "pending").length,
-    accuracy: 94,
-  }), [feed, inbox, inboxPendingRemote]);
+  const pendingCount = hubStats ? hubStats.pending + hubStats.awaitingConfirmation : 0;
+  const bellPreview = useMemo(() => {
+    return feedRows
+      .filter((r) => r.dto.status === "PENDENTE" || r.dto.status === "AGUARDANDO_CONFIRMACAO")
+      .slice(0, 5)
+      .map((r) => dtoToBellItem(r.dto))
+      .filter((x): x is NonNullable<typeof x> => x != null);
+  }, [feedRows]);
 
-  function logAudit(msg: string) { setAudit(a => [`${nowTime()} · ${msg}`, ...a].slice(0, 50)); }
-  function addCmd(text: string, category = "Comando", module = "Geral", status: CmdStatus = "executado", confidence = 0.9) {
-    const c: Cmd = { id: uid(), text, category, module, status, confidence, time: nowTime(), ts: Date.now() };
-    setFeed(prev => [c, ...prev]); return c;
+  const logAudit = (msg: string) => { setAudit(a => [`${nowTime()} · ${msg}`, ...a].slice(0, 50)); }
+
+  async function enqueueInboxText(text: string) {
+    await submitOmniAgentCommand({ storeId, comandoOriginal: text.trim(), mode: "inbox" });
+    await refreshHubData();
   }
-  function pushToInbox(text: string) {
-    const r = interpret(text);
-    const item: InboxItem = { id: uid(), desc: `${r.action} — ${text}`, module: r.module, confidence: r.confidence, status: "pending", original: text, fields: r.fields, ts: Date.now() };
-    setInbox(prev => [item, ...prev]); setWaUnread(n => n + 1); return item;
-  }
-  function simulate() {
+
+  async function simulate() {
     const t = RANDOM_CMDS[Math.floor(Math.random() * RANDOM_CMDS.length)];
-    const r = interpret(t);
-    addCmd(t, r.action, r.module, "executado", r.confidence);
-    logAudit(`Comando simulado: "${t}"`);
-    if (r.confidence < 0.85) { pushToInbox(t); toast.warning("Baixa confiança — Inbox IA"); }
-    else toast.success("Comando simulado executado");
+    try {
+      await submitOmniAgentCommand({ storeId, comandoOriginal: t, mode: "run" });
+      logAudit(`Comando simulado (pipeline real): "${t}"`);
+      await refreshHubData();
+      const interp = interpretOmniAgentCommand(t);
+      if (interp.confidence < 0.85) toast.warning("Baixa confiança — verifique na Inbox");
+      else toast.success("Comando processado no servidor");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha na simulação");
+    }
   }
-
-  const pendingCount = inboxPendingRemote + inbox.filter(i => i.status === "pending").length;
 
   return (
     <div className={cn("min-h-screen w-full bg-background text-foreground", compact && "text-[13px]")}>
@@ -205,8 +173,8 @@ export default function OmniAgentHub() {
         setAgentOnline={(v: boolean) => { setAgentOnline(v); if (v) onlineSince.current = Date.now(); logAudit(v ? "Agente ativado" : "Agente pausado"); }}
         onSimulate={simulate}
         onNewCmd={() => setNewCmdOpen(true)}
-        notifications={inbox.filter(i => i.status === "pending").slice(0, 5)}
-        inboxPendingRemote={inboxPendingRemote}
+        notifications={bellPreview}
+        pendingCount={pendingCount}
         onGotoInbox={() => setTab("inbox")}
         compact={compact}
         setCompact={setCompact}
@@ -219,20 +187,64 @@ export default function OmniAgentHub() {
         <div className="mt-6 min-w-0 animate-fade-in" key={tab}>
           {tab === "overview" && (
             <OverviewTab
-              stats={stats} feed={feed} setFeed={setFeed}
-              onDetails={setDetails} onSimulate={simulate}
-              logAudit={logAudit} pushToInbox={pushToInbox}
-              now={now} onlineSince={onlineSince.current} agentOnline={agentOnline}
+              stats={hubStats}
+              feed={feedRows}
+              onDetails={setDetails}
+              onSimulate={simulate}
+              onRefresh={() => void refreshHubData()}
+              logAudit={logAudit}
+              onEnqueueInbox={enqueueInboxText}
+              onReexecute={async (row) => {
+                try {
+                  await submitOmniAgentCommand({ storeId, comandoOriginal: row.text, mode: "run" });
+                  logAudit(`Reexecutar: ${row.text}`);
+                  await refreshHubData();
+                  toast.success("Comando reenviado ao pipeline");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Falha ao reenviar");
+                }
+              }}
+              now={now}
+              onlineSince={onlineSince.current}
+              agentOnline={agentOnline}
             />
           )}
           {tab === "inbox" && (
-            <OmniAgentInboxReal storeId={storeId} logAudit={logAudit} onPendingChange={setInboxPendingRemote} />
+            <OmniAgentInboxReal storeId={storeId} logAudit={logAudit} onCommandsChanged={refreshHubData} />
           )}
-          {tab === "whatsapp" && <WhatsAppTab onTest={(t) => { const r = interpret(t); addCmd(t, r.action, r.module); logAudit(`WhatsApp: ${t}`); toast.success("Comando enviado"); }} pushToInbox={pushToInbox} bumpUnread={() => setWaUnread(n => n + 1)} />}
-          {tab === "commands" && <CommandsTab onSimulate={(t) => { const r = interpret(t); addCmd(t, r.action, r.module, "executado", r.confidence); if (r.confidence < 0.85) pushToInbox(t); toast.success("Comando simulado"); logAudit(`Simulou: ${t}`); }} />}
+          {tab === "whatsapp" && (
+            <WhatsAppTab
+              onTest={(t) => {
+                logAudit(`WhatsApp (mock UI): ${t}`);
+                toast.success("Comando enviado (UI demo)");
+              }}
+              onSimulateIncoming={enqueueInboxText}
+              bumpUnread={() => setWaUnread((n) => n + 1)}
+            />
+          )}
+          {tab === "commands" && (
+            <CommandsTab
+              storeId={storeId}
+              onAfterPipeline={async () => {
+                await refreshHubData();
+              }}
+            />
+          )}
           {tab === "auto" && <AutomationsTab logAudit={logAudit} />}
           {tab === "memory" && <MemoryTab logAudit={logAudit} />}
-          {tab === "reports" && <ReportsTab pushToInbox={pushToInbox} logAudit={logAudit} />}
+          {tab === "reports" && (
+            <ReportsTab
+              onEnqueueFromReport={async (text) => {
+                try {
+                  await enqueueInboxText(text);
+                  toast.success("Comando na Inbox (Prisma)");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Falha");
+                }
+              }}
+              logAudit={logAudit}
+            />
+          )}
           {tab === "settings" && <SettingsTab audit={audit} />}
         </div>
       </div>
@@ -245,9 +257,7 @@ export default function OmniAgentHub() {
             await submitOmniAgentCommand({ storeId, comandoOriginal: t, mode: "inbox" });
             logAudit(`Inbox real: ${t}`);
             toast.success("Comando registado (pendente)");
-            void listOmniAgentCommands(storeId, 80).then((rows) => {
-              setInboxPendingRemote(rows.filter((r) => r.status === "PENDENTE" || r.status === "AGUARDANDO_CONFIRMACAO").length);
-            });
+            await refreshHubData();
           } catch (e) {
             toast.error(e instanceof Error ? e.message : "Falha ao registar");
           }
@@ -255,13 +265,19 @@ export default function OmniAgentHub() {
         onExecute={async (t) => {
           try {
             const row = await submitOmniAgentCommand({ storeId, comandoOriginal: t, mode: "run" });
-            const r = interpret(t);
-            addCmd(t, r.action, r.module, row.status === "EXECUTADO" ? "executado" : "pendente", r.confidence);
             logAudit(`Pipeline real: ${t} → ${row.status}`);
-            toast.success(row.status === "EXECUTADO" ? "Executado no servidor" : row.status === "AGUARDANDO_CONFIRMACAO" ? "Aguardando confirmação na Inbox" : "Registado");
-            void listOmniAgentCommands(storeId, 80).then((rows) => {
-              setInboxPendingRemote(rows.filter((x) => x.status === "PENDENTE" || x.status === "AGUARDANDO_CONFIRMACAO").length);
-            });
+            toast.success(
+              row.status === "EXECUTADO"
+                ? "Executado no servidor"
+                : row.status === "AGUARDANDO_CONFIRMACAO"
+                  ? "Aguardando confirmação na Inbox"
+                  : row.status === "PENDENTE"
+                    ? "Registado como pendente"
+                    : row.status === "ERRO"
+                      ? "Registado com erro — ver Inbox"
+                      : "Registado",
+            );
+            await refreshHubData();
           } catch (e) {
             toast.error(e instanceof Error ? e.message : "Falha ao executar");
           }
@@ -274,11 +290,13 @@ export default function OmniAgentHub() {
           {details && (
             <div className="space-y-2 text-sm">
               <Row k="Texto" v={details.text} />
-              <Row k="Categoria" v={details.category} />
+              <Row k="Ação" v={details.category} />
               <Row k="Módulo" v={details.module} />
-              <Row k="Status" v={details.status} />
+              <Row k="Intenção" v={details.intent} />
+              <Row k="Status" v={details.statusLabel} />
               <Row k="Confiança" v={`${(details.confidence * 100).toFixed(0)}%`} />
               <Row k="Horário" v={details.time} />
+              <Row k="ID" v={details.id} />
             </div>
           )}
           <DialogFooter><Button onClick={() => setDetails(null)}>Fechar</Button></DialogFooter>
@@ -308,7 +326,7 @@ export default function OmniAgentHub() {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Agente</span><Badge variant={agentOnline ? "default" : "secondary"}>{agentOnline ? "Online" : "Pausado"}</Badge></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Pendências</span><span className="font-medium">{pendingCount}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Último</span><span className="font-medium text-xs">{feed[0] ? relTime(feed[0].ts) : "—"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Último</span><span className="font-medium text-xs">{feedRows[0] ? relTime(feedRows[0].ts) : "—"}</span></div>
             <Button size="sm" className="w-full" onClick={() => { setTab("inbox"); setFloatingOpen(false); }}><Inbox /> Ir p/ Inbox</Button>
           </div>
         </div>
@@ -322,7 +340,29 @@ function Row({ k, v }: { k: string; v: string }) {
 }
 
 /* ---------- Header ---------- */
-function Header({ agentOnline, setAgentOnline, onSimulate, onNewCmd, notifications, inboxPendingRemote, onGotoInbox, compact, setCompact, onOpenPalette }: any) {
+function Header({
+  agentOnline,
+  setAgentOnline,
+  onSimulate,
+  onNewCmd,
+  notifications,
+  pendingCount,
+  onGotoInbox,
+  compact,
+  setCompact,
+  onOpenPalette,
+}: {
+  agentOnline: boolean;
+  setAgentOnline: (v: boolean) => void;
+  onSimulate: () => void;
+  onNewCmd: () => void;
+  notifications: { id: string; desc: string; module: string; confidence: number }[];
+  pendingCount: number;
+  onGotoInbox: () => void;
+  compact: boolean;
+  setCompact: (v: boolean | ((p: boolean) => boolean)) => void;
+  onOpenPalette: () => void;
+}) {
   const [clock, setClock] = useState(nowTime());
   const [bellOpen, setBellOpen] = useState(false);
   useEffect(() => { const id = setInterval(() => setClock(nowTime()), 30000); return () => clearInterval(id); }, []);
@@ -346,14 +386,14 @@ function Header({ agentOnline, setAgentOnline, onSimulate, onNewCmd, notificatio
             {agentOnline ? "Online" : "Pausado"}
           </Badge>
           <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> {clock}</Badge>
-          <Badge variant="outline">Fase 1 · real</Badge>
+          <Badge variant="outline">Fase 2 · núcleo real</Badge>
 
           <div className="relative">
             <Button variant="outline" size="sm" onClick={() => setBellOpen(o => !o)}>
               <Bell />
-              {(notifications.length > 0 || inboxPendingRemote > 0) && (
+              {(notifications.length > 0 || pendingCount > 0) && (
                 <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">
-                  {Math.max(notifications.length, inboxPendingRemote)}
+                  {Math.max(notifications.length, pendingCount)}
                 </span>
               )}
             </Button>
@@ -361,7 +401,7 @@ function Header({ agentOnline, setAgentOnline, onSimulate, onNewCmd, notificatio
               <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-border bg-popover p-2 shadow-xl z-50">
                 <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Pendências</div>
                 {notifications.length === 0 && <div className="p-3 text-sm text-muted-foreground">Nenhuma pendência</div>}
-                {notifications.map((n: InboxItem) => (
+                {notifications.map((n) => (
                   <button key={n.id} onClick={() => { setBellOpen(false); onGotoInbox(); }} className="w-full rounded-md p-2 text-left text-sm hover:bg-accent">
                     <div className="truncate font-medium">{n.desc}</div>
                     <div className="text-[10px] text-muted-foreground">{n.module} · {(n.confidence * 100).toFixed(0)}%</div>
@@ -463,7 +503,32 @@ function OnboardingChecklist() {
 }
 
 /* ---------- Overview ---------- */
-function OverviewTab({ stats, feed, setFeed, onDetails, onSimulate, logAudit, pushToInbox, now, onlineSince, agentOnline }: any) {
+
+function OverviewTab({
+  stats,
+  feed,
+  onDetails,
+  onSimulate,
+  onRefresh,
+  logAudit,
+  onEnqueueInbox,
+  onReexecute,
+  now,
+  onlineSince,
+  agentOnline,
+}: {
+  stats: OmniAgentHubStatsDTO | null;
+  feed: HubFeedRow[];
+  onDetails: (c: HubFeedRow) => void;
+  onSimulate: () => void;
+  onRefresh: () => void;
+  logAudit: (m: string) => void;
+  onEnqueueInbox: (text: string) => Promise<void>;
+  onReexecute: (c: HubFeedRow) => Promise<void>;
+  now: number;
+  onlineSince: number;
+  agentOnline: boolean;
+}) {
   const [suggestions, setSuggestions] = useState([
     { id: "s1", icon: Inbox, title: "Revisar pendências de aprovação", hint: "4 itens aguardando aprovação na Inbox IA" },
     { id: "s2", icon: Package, title: "Conferir estoque baixo", hint: "Películas e cabos abaixo do mínimo" },
@@ -479,6 +544,20 @@ function OverviewTab({ stats, feed, setFeed, onDetails, onSimulate, logAudit, pu
   const uptimeMin = Math.floor((now - onlineSince) / 60000);
   const uptimeStr = agentOnline ? `${Math.floor(uptimeMin / 60)}h ${uptimeMin % 60}min` : "—";
 
+  const today = stats?.todayCount ?? 0;
+  const executed = stats?.executed ?? 0;
+  const pendAll = stats ? stats.pending + stats.awaitingConfirmation : 0;
+  const err = stats?.error ?? 0;
+  const acc = stats?.accuracyPercent;
+
+  const lastHighlight = feed.find((f) => f.prismaStatus === "EXECUTADO") ?? feed[0];
+
+  function badgeVariantForRow(b: HubFeedRow["badgeKind"]) {
+    if (b === "ok") return "default" as const;
+    if (b === "error") return "destructive" as const;
+    return "secondary" as const;
+  }
+
   return (
     <div className="space-y-6">
       <OnboardingChecklist />
@@ -489,15 +568,33 @@ function OverviewTab({ stats, feed, setFeed, onDetails, onSimulate, logAudit, pu
             <h2 className="text-2xl font-bold">Omni Agent HUB</h2>
             <p className="text-sm text-muted-foreground">Controle sua operação por WhatsApp, voz e IA.</p>
           </div>
-          <Button onClick={onSimulate}><Sparkles /> Simular agora</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={onSimulate}><Sparkles /> Simular agora</Button>
+            <Button variant="outline" size="sm" onClick={() => void onRefresh()}><RefreshCw /> Atualizar</Button>
+          </div>
         </div>
       </Card>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat icon={MessageCircle} label="Comandos hoje" value={stats.received} hint="+12 vs ontem" />
-        <Stat icon={Check} label="Ações executadas" value={stats.executed} hint="auto + manual" />
-        <Stat icon={Bell} label="Pendências IA" value={stats.pending} hint="aguardando aprovação" />
-        <Stat icon={BarChart3} label="Acerto da IA" value={`${stats.accuracy}%`} hint={`Uptime ${uptimeStr}`} />
+        <Stat
+          icon={MessageCircle}
+          label="Comandos hoje"
+          value={today}
+          hint={stats ? `Total histórico: ${stats.total}` : "Carregando…"}
+        />
+        <Stat icon={Check} label="Executados" value={executed} hint="status EXECUTADO" />
+        <Stat
+          icon={Bell}
+          label="Pendentes + aguardando"
+          value={pendAll}
+          hint={stats ? `${stats.pending} pendentes · ${stats.awaitingConfirmation} aguard. conf.` : ""}
+        />
+        <Stat
+          icon={BarChart3}
+          label="Acerto (exec / exec+erro)"
+          value={acc != null ? `${acc}%` : "—"}
+          hint={`Erros: ${err} · Uptime UI ${uptimeStr}`}
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -529,14 +626,16 @@ function OverviewTab({ stats, feed, setFeed, onDetails, onSimulate, logAudit, pu
         </Card>
       </div>
 
-      {feed[0] && (
+      {lastHighlight && (
         <Card className="flex items-center justify-between">
           <div>
-            <div className="text-xs text-muted-foreground">Último comando executado</div>
-            <div className="font-medium truncate">{feed[0].text}</div>
-            <div className="text-xs text-muted-foreground">{relTime(feed[0].ts)}</div>
+            <div className="text-xs text-muted-foreground">Último comando (destaque)</div>
+            <div className="font-medium truncate">{lastHighlight.text}</div>
+            <div className="text-xs text-muted-foreground">
+              {relTime(lastHighlight.ts)} · {lastHighlight.statusLabel} · {lastHighlight.intent}
+            </div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => onDetails(feed[0])}><Eye /> Ver</Button>
+          <Button size="sm" variant="outline" onClick={() => onDetails(lastHighlight)}><Eye /> Ver</Button>
         </Card>
       )}
 
@@ -555,7 +654,23 @@ function OverviewTab({ stats, feed, setFeed, onDetails, onSimulate, logAudit, pu
                   </div>
                 </div>
                 <div className="mt-3 flex gap-2">
-                  <Button size="sm" onClick={() => { pushToInbox(s.title); logAudit(`Sugestão: ${s.title}`); setSuggestions(p => p.filter(x => x.id !== s.id)); toast.success("Ação criada"); }}><Play /> Executar</Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          await onEnqueueInbox(`Sugestão Omni Agent: ${s.title}`);
+                          logAudit(`Sugestão: ${s.title}`);
+                          setSuggestions((p) => p.filter((x) => x.id !== s.id));
+                          toast.success("Registado na Inbox (Prisma)");
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Falha");
+                        }
+                      })();
+                    }}
+                  >
+                    <Play /> Executar
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => { setSuggestions(p => p.filter(x => x.id !== s.id)); toast("Ignorada"); }}><X /> Ignorar</Button>
                 </div>
               </div>
@@ -568,169 +683,32 @@ function OverviewTab({ stats, feed, setFeed, onDetails, onSimulate, logAudit, pu
       <Card>
         <div className="mb-3 flex items-center justify-between">
           <h3 className="font-semibold">Comandos recentes</h3>
-          <Button variant="ghost" size="sm" onClick={onSimulate}><RefreshCw /> Simular</Button>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={() => void onRefresh()}><RefreshCw /> Atualizar</Button>
+            <Button variant="ghost" size="sm" onClick={onSimulate}><Sparkles /> Simular</Button>
+          </div>
         </div>
         <div className="space-y-2">
-          {feed.slice(0, 8).map((c: Cmd) => (
+          {feed.slice(0, 8).map((c) => (
             <div key={c.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background/40 p-3 transition-colors hover:bg-accent/40">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm">{c.text}</div>
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <Badge variant="outline">{c.category}</Badge>
-                  <span>{c.module}</span><span>· {c.time}</span><span>· {(c.confidence * 100).toFixed(0)}%</span>
+                  <span>{c.module}</span>
+                  <span>· {c.intent}</span>
+                  <span>· {c.time}</span>
+                  <span>· {(c.confidence * 100).toFixed(0)}%</span>
                 </div>
               </div>
-              <Badge variant={c.status === "executado" || c.status === "aprovado" ? "default" : "secondary"}>{c.status}</Badge>
+              <Badge variant={badgeVariantForRow(c.badgeKind)}>{c.statusLabel}</Badge>
               <Button size="sm" variant="outline" onClick={() => onDetails(c)}><Eye /> Detalhes</Button>
-              <Button size="sm" variant="ghost" onClick={() => {
-                const dup: Cmd = { ...c, id: uid(), time: nowTime(), ts: Date.now(), status: "pendente" };
-                setFeed((p: Cmd[]) => [dup, ...p]); toast.success("Reexecutado");
-              }}><RefreshCw /> Reexecutar</Button>
+              <Button size="sm" variant="ghost" onClick={() => void onReexecute(c)}><RefreshCw /> Reexecutar</Button>
             </div>
           ))}
+          {feed.length === 0 && <div className="text-sm text-muted-foreground py-4 text-center">Nenhum comando na unidade. Use Simular ou Novo.</div>}
         </div>
       </Card>
-    </div>
-  );
-}
-
-/* ---------- Inbox ---------- */
-const FIELDS_BY_MODULE: Record<string, string[]> = {
-  Financeiro: ["descrição", "valor", "categoria", "carteira", "pagamento", "data", "observação"],
-  OS: ["cliente", "aparelho", "defeito", "prioridade", "status", "observação"],
-  Vendas: ["produto", "valor", "quantidade", "pagamento", "cliente", "observação"],
-  Lembretes: ["pessoa", "descrição", "data", "prioridade", "observação"],
-  Estoque: ["produto", "quantidade", "custoUnit", "observação"],
-  Relatórios: ["pergunta", "observação"],
-  Geral: ["texto", "observação"],
-  Clientes: ["nome", "observação"],
-};
-
-function InboxTab({ items, setItems, logAudit }: { items: InboxItem[]; setItems: any; logAudit: (m: string) => void }) {
-  const [editing, setEditing] = useState<InboxItem | null>(null);
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [filter, setFilter] = useState<"all" | "pending" | "approved" | "rejected">("all");
-  const [sort, setSort] = useState<"recent" | "confidence" | "module">("recent");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [removing, setRemoving] = useState<Set<string>>(new Set());
-
-  function setStatus(id: string, status: InboxItem["status"]) {
-    setRemoving(s => new Set(s).add(id));
-    setTimeout(() => {
-      setItems((prev: InboxItem[]) => prev.map(i => i.id === id ? { ...i, status } : i));
-      setRemoving(s => { const n = new Set(s); n.delete(id); return n; });
-    }, 200);
-    logAudit(`Inbox ${status}: ${id}`);
-    toast.success(status === "approved" ? "Aprovado" : "Recusado");
-  }
-  function bulkApprove() {
-    selected.forEach(id => setItems((p: InboxItem[]) => p.map(i => i.id === id ? { ...i, status: "approved" } : i)));
-    toast.success(`${selected.size} aprovados`);
-    setSelected(new Set());
-  }
-  function openEdit(it: InboxItem) { setEditing(it); setDraft({ ...it.fields }); }
-  function save(approveAfter = false) {
-    if (!editing) return;
-    setItems((prev: InboxItem[]) => prev.map(p => p.id === editing.id ? {
-      ...p, fields: { ...draft },
-      desc: `${editing.desc.split(" — ")[0]} — ${Object.values(draft).filter(Boolean).slice(0, 3).join(" / ")}`,
-      status: approveAfter ? "approved" : p.status,
-    } : p));
-    toast.success(approveAfter ? "Salvo e aprovado" : "Edição salva");
-    setEditing(null);
-  }
-
-  const counts = {
-    pending: items.filter(i => i.status === "pending").length,
-    approved: items.filter(i => i.status === "approved").length,
-    rejected: items.filter(i => i.status === "rejected").length,
-  };
-  let visible = items.filter(i => filter === "all" || i.status === filter);
-  if (sort === "recent") visible = [...visible].sort((a, b) => b.ts - a.ts);
-  if (sort === "confidence") visible = [...visible].sort((a, b) => b.confidence - a.confidence);
-  if (sort === "module") visible = [...visible].sort((a, b) => a.module.localeCompare(b.module));
-
-  return (
-    <div className="space-y-3">
-      <Card>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-wrap gap-1 text-xs">
-            {(["all", "pending", "approved", "rejected"] as const).map(f => (
-              <Button key={f} size="sm" variant={filter === f ? "default" : "outline"} onClick={() => setFilter(f)}>
-                {f === "all" ? "Todos" : f === "pending" ? "Pendentes" : f === "approved" ? "Aprovados" : "Recusados"}
-              </Button>
-            ))}
-          </div>
-          <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
-            <span>{counts.pending} pendentes · {counts.approved} aprovados · {counts.rejected} recusados</span>
-            <select value={sort} onChange={(e) => setSort(e.target.value as any)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
-              <option value="recent">Mais recente</option>
-              <option value="confidence">Maior confiança</option>
-              <option value="module">Por módulo</option>
-            </select>
-            {selected.size > 0 && <Button size="sm" onClick={bulkApprove}><Check /> Aprovar {selected.size}</Button>}
-          </div>
-        </div>
-      </Card>
-
-      {visible.map(i => (
-        <Card key={i.id} className={cn("transition-all", removing.has(i.id) && "opacity-0 -translate-x-4")}>
-          <div className="flex flex-wrap items-start gap-3">
-            {i.status === "pending" && (
-              <input type="checkbox" checked={selected.has(i.id)} onChange={(e) => {
-                setSelected(s => { const n = new Set(s); e.target.checked ? n.add(i.id) : n.delete(i.id); return n; });
-              }} className="mt-1" />
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="font-medium">{i.desc}</div>
-              <div className="mt-1 text-xs text-muted-foreground">Original: "{i.original}"</div>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                <Badge variant="outline">{i.module}</Badge>
-                <Badge variant="secondary">{(i.confidence * 100).toFixed(0)}%</Badge>
-                <Badge variant={i.status === "approved" ? "default" : i.status === "rejected" ? "destructive" : "secondary"}>{i.status}</Badge>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => setStatus(i.id, "approved")} disabled={i.status !== "pending"}><Check /> Aprovar</Button>
-              <Button size="sm" variant="outline" onClick={() => openEdit(i)}><Edit3 /> Editar</Button>
-              <Button size="sm" variant="ghost" onClick={() => setStatus(i.id, "rejected")} disabled={i.status !== "pending"}><X /> Recusar</Button>
-            </div>
-          </div>
-        </Card>
-      ))}
-      {visible.length === 0 && <Card><div className="text-sm text-muted-foreground">Nenhum item</div></Card>}
-
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Editar ação interpretada pela IA</DialogTitle></DialogHeader>
-          {editing && (
-            <div className="space-y-3 text-sm">
-              <div className="rounded-lg border border-border bg-muted p-3 space-y-1">
-                <div><span className="text-muted-foreground">Original:</span> "{editing.original}"</div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <Badge variant="outline">Módulo: {editing.module}</Badge>
-                  <Badge variant="secondary">{(editing.confidence * 100).toFixed(0)}%</Badge>
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {(FIELDS_BY_MODULE[editing.module] ?? Object.keys(editing.fields)).map(k => (
-                  <div key={k} className="space-y-1">
-                    <Label className="capitalize">{k}</Label>
-                    {["observação", "descrição", "defeito", "pergunta", "texto"].includes(k)
-                      ? <Textarea rows={2} value={draft[k] ?? ""} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />
-                      : <Input value={draft[k] ?? ""} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} />}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <DialogFooter className="flex-wrap gap-2">
-            <Button variant="ghost" onClick={() => setEditing(null)}>Cancelar</Button>
-            <Button variant="outline" onClick={() => save(false)}><Save /> Salvar</Button>
-            <Button onClick={() => save(true)}><Check /> Salvar e aprovar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -820,7 +798,15 @@ function NewCommandModal({ open, onClose, storeId, onSendInbox, onExecute }: {
 
 /* ---------- WhatsApp ---------- */
 type ChatMsg = { from: "cliente" | "agente"; text: string; status?: "sent" | "delivered" | "read" };
-function WhatsAppTab({ onTest, pushToInbox, bumpUnread }: { onTest: (t: string) => void; pushToInbox: (t: string) => any; bumpUnread: () => void }) {
+function WhatsAppTab({
+  onTest,
+  onSimulateIncoming,
+  bumpUnread,
+}: {
+  onTest: (t: string) => void;
+  onSimulateIncoming: (t: string) => Promise<void>;
+  bumpUnread: () => void;
+}) {
   const [connected, setConnected] = useState(true);
   const [chat, setChat] = useState<ChatMsg[]>([
     { from: "cliente", text: "vendi capa por R$ 30 no pix" },
@@ -835,8 +821,13 @@ function WhatsAppTab({ onTest, pushToInbox, bumpUnread }: { onTest: (t: string) 
   function simIncoming() {
     const msgs = ["gastei 50 em uber", "abrir OS Moto G defeito carga", "vendi película R$ 40 pix", "lembrar de ligar Ana"];
     const t = msgs[Math.floor(Math.random() * msgs.length)];
-    setChat(c => [...c, { from: "cliente", text: t }]);
-    pushToInbox(t); bumpUnread(); beep();
+    setChat((c) => [...c, { from: "cliente", text: t }]);
+    void onSimulateIncoming(t)
+      .then(() => {
+        bumpUnread();
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Falha ao registar"));
+    beep();
     toast.success(`Nova mensagem: "${t}"`);
     if (!humanMode) {
       setTyping(true);
@@ -957,7 +948,7 @@ function WhatsAppTab({ onTest, pushToInbox, bumpUnread }: { onTest: (t: string) 
 /* ---------- Commands ---------- */
 type CmdDef = { name: string; example: string; result: string };
 const COMMAND_GROUPS: { cat: string; items: CmdDef[] }[] = [
-  { cat: "Omni Agent — testes Fase 1 (real)", items: [
+  { cat: "Omni Agent — núcleo real (interpretação determinística)", items: [
     { name: "Abrir OS (confirmação)", example: "abrir OS para João", result: "Cria OS após confirmar na Inbox" },
     { name: "Consultar caixa", example: "consultar caixa", result: "Sessão aberta + saldo inicial" },
     { name: "Buscar cliente", example: "buscar cliente Rafael", result: "Lista clientes do cadastro" },
@@ -976,31 +967,96 @@ const COMMAND_GROUPS: { cat: string; items: CmdDef[] }[] = [
   { cat: "Lembretes", items: [{ name: "Criar cobrança", example: "lembrar de cobrar Maria amanhã", result: "Cria lembrete" }] },
 ];
 
-function CommandsTab({ onSimulate }: { onSimulate: (t: string) => void }) {
+function CommandsTab({ storeId, onAfterPipeline }: { storeId: string; onAfterPipeline: () => Promise<void> }) {
   const [favs, setFavs] = useLS<string[]>("omni-favs", []);
   const [search, setSearch] = useState("");
   const [cat, setCat] = useState<string>("Todos");
   const [showFavs, setShowFavs] = useState(false);
-  const cats = ["Todos", ...COMMAND_GROUPS.map(g => g.cat)];
+  const [history, setHistory] = useState<OmniAgentCommandDTO[]>([]);
+  const [loadingHist, setLoadingHist] = useState(false);
+  const cats = ["Todos", ...COMMAND_GROUPS.map((g) => g.cat)];
+
+  const loadHist = useCallback(async () => {
+    if (!storeId?.trim()) return;
+    setLoadingHist(true);
+    try {
+      const rows = await listOmniAgentCommands(storeId, 40);
+      setHistory(rows);
+    } catch {
+      setHistory([]);
+    } finally {
+      setLoadingHist(false);
+    }
+  }, [storeId]);
+
+  useEffect(() => {
+    void loadHist();
+  }, [loadHist]);
+
+  async function runExample(ex: string) {
+    try {
+      await submitOmniAgentCommand({ storeId, comandoOriginal: ex, mode: "run" });
+      const interp = interpretOmniAgentCommand(ex);
+      if (interp.confidence < 0.85) toast.warning("Baixa confiança — verifique na Inbox");
+      else toast.success("Pipeline real executado");
+      await onAfterPipeline();
+      await loadHist();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao enviar comando");
+    }
+  }
 
   function toggleFav(k: string) {
     const has = favs.includes(k);
-    setFavs(has ? favs.filter(f => f !== k) : [...favs, k]);
+    setFavs(has ? favs.filter((f) => f !== k) : [...favs, k]);
     toast(has ? "Removido dos favoritos" : "Favoritado");
   }
 
   const groups = COMMAND_GROUPS
-    .filter(g => cat === "Todos" || g.cat === cat)
-    .map(g => ({ ...g, items: g.items.filter(it => {
-      const k = `${g.cat}:${it.name}`;
-      if (showFavs && !favs.includes(k)) return false;
-      const q = search.toLowerCase();
-      return !q || it.name.toLowerCase().includes(q) || it.example.toLowerCase().includes(q);
-    })}))
-    .filter(g => g.items.length > 0);
+    .filter((g) => cat === "Todos" || g.cat === cat)
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((it) => {
+        const k = `${g.cat}:${it.name}`;
+        if (showFavs && !favs.includes(k)) return false;
+        const q = search.toLowerCase();
+        return !q || it.name.toLowerCase().includes(q) || it.example.toLowerCase().includes(q);
+      }),
+    }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <div className="space-y-4">
+      <Card>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Histórico recente (Prisma)</h3>
+          <Button size="sm" variant="outline" onClick={() => void loadHist()} disabled={loadingHist}>
+            <RefreshCw className={cn("h-4 w-4", loadingHist && "animate-spin")} /> Atualizar
+          </Button>
+        </div>
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {history.length === 0 && !loadingHist && (
+            <div className="text-sm text-muted-foreground">Nenhum comando registado ainda.</div>
+          )}
+          {history.slice(0, 20).map((row) => {
+            const r = dtoToHubFeedRow(row);
+            return (
+              <div key={row.id} className="rounded-lg border border-border bg-background/40 p-2 text-xs">
+                <div className="font-medium truncate">{row.comandoOriginal}</div>
+                <div className="mt-1 flex flex-wrap gap-2 text-muted-foreground">
+                  <Badge variant="outline">{row.interpretacao.intent}</Badge>
+                  <span>{Math.round(row.interpretacao.confidence * 100)}%</span>
+                  <span>· {new Date(row.createdAt).toLocaleString("pt-BR")}</span>
+                </div>
+                <Badge className="mt-1" variant={r.badgeKind === "ok" ? "default" : r.badgeKind === "error" ? "destructive" : "secondary"}>
+                  {r.statusLabel}
+                </Badge>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
       <Card>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative flex-1 min-w-[200px]">
@@ -1012,30 +1068,37 @@ function CommandsTab({ onSimulate }: { onSimulate: (t: string) => void }) {
           </Button>
         </div>
         <div className="mt-3 flex flex-wrap gap-1">
-          {cats.map(c => (
-            <Button key={c} size="sm" variant={cat === c ? "default" : "outline"} onClick={() => setCat(c)}>{c}</Button>
+          {cats.map((c) => (
+            <Button key={c} size="sm" variant={cat === c ? "default" : "outline"} onClick={() => setCat(c)}>
+              {c}
+            </Button>
           ))}
         </div>
       </Card>
 
-      {groups.map(g => (
+      {groups.map((g) => (
         <Card key={g.cat}>
           <h3 className="mb-3 font-semibold">{g.cat}</h3>
           <div className="grid gap-2 sm:grid-cols-2">
-            {g.items.map(it => {
+            {g.items.map((it) => {
               const k = `${g.cat}:${it.name}`;
               const fav = favs.includes(k);
               return (
                 <div key={k} className="rounded-lg border border-border p-3 space-y-2 transition-colors hover:bg-accent/40">
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium flex items-center gap-2">{it.name}{fav && <Star className="h-3 w-3 fill-primary text-primary" />}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">"{it.example}"</div>
+                      <div className="text-sm font-medium flex items-center gap-2">
+                        {it.name}
+                        {fav && <Star className="h-3 w-3 fill-primary text-primary" />}
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">&quot;{it.example}&quot;</div>
                       <div className="mt-1 text-xs text-muted-foreground italic">→ {it.result}</div>
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => onSimulate(it.example)}><Play /> Simular</Button>
+                    <Button size="sm" variant="outline" onClick={() => void runExample(it.example)}>
+                      <Play /> Enviar (real)
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => toggleFav(k)}>
                       <Star className={cn("h-4 w-4", fav && "fill-primary text-primary")} /> Favoritar
                     </Button>
@@ -1046,7 +1109,11 @@ function CommandsTab({ onSimulate }: { onSimulate: (t: string) => void }) {
           </div>
         </Card>
       ))}
-      {groups.length === 0 && <Card><div className="text-sm text-muted-foreground">Nenhum comando encontrado.</div></Card>}
+      {groups.length === 0 && (
+        <Card>
+          <div className="text-sm text-muted-foreground">Nenhum comando encontrado.</div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1324,7 +1391,13 @@ function ClientList({ title, items }: { title: string; items: string[] }) {
 
 /* ---------- Reports ---------- */
 type ReportMsg = { q: string; answer: string; metrics: { label: string; value: string }[]; bars: { label: string; value: number }[]; insight: string };
-function ReportsTab({ pushToInbox, logAudit }: { pushToInbox: (t: string) => any; logAudit: (m: string) => void }) {
+function ReportsTab({
+  onEnqueueFromReport,
+  logAudit,
+}: {
+  onEnqueueFromReport: (text: string) => Promise<void>;
+  logAudit: (m: string) => void;
+}) {
   const examples = ["Quanto vendi hoje?", "Quais clientes estão devendo?", "Qual técnico tem mais OS?", "Quais produtos estão parados?"];
   const [history, setHistory] = useState<ReportMsg[]>([]);
   const [text, setText] = useState("");
@@ -1425,7 +1498,9 @@ function ReportsTab({ pushToInbox, logAudit }: { pushToInbox: (t: string) => any
             </div>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => { logAudit(`Insight: ${m.q}`); toast.success("Salvo"); }}><Save /> Salvar</Button>
-              <Button size="sm" onClick={() => { pushToInbox(`Ação a partir de relatório: ${m.q}`); toast.success("Ação na Inbox"); }}><Zap /> Gerar ação</Button>
+              <Button size="sm" onClick={() => void onEnqueueFromReport(`Ação a partir de relatório: ${m.q}`)}>
+                <Zap /> Gerar ação
+              </Button>
             </div>
           </Card>
         ))}

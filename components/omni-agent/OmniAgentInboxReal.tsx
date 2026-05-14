@@ -18,6 +18,8 @@ type Props = {
   storeId: string
   logAudit: (m: string) => void
   onPendingChange?: (n: number) => void
+  /** Chamado após carregar / confirmar / recusar — para sincronizar feed e stats no Hub. */
+  onCommandsChanged?: () => void
 }
 
 function statusLabel(s: OmniAgentCommandDTO["status"]): string {
@@ -35,7 +37,7 @@ function statusLabel(s: OmniAgentCommandDTO["status"]): string {
   }
 }
 
-export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange }: Props) {
+export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange, onCommandsChanged }: Props) {
   const [items, setItems] = useState<OmniAgentCommandDTO[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<"all" | OmniAgentCommandDTO["status"]>("all")
@@ -48,12 +50,13 @@ export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange }: Props
       const rows = await listOmniAgentCommands(storeId)
       setItems(rows)
       onPendingChange?.(rows.filter((r) => r.status === "PENDENTE" || r.status === "AGUARDANDO_CONFIRMACAO").length)
+      onCommandsChanged?.()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao carregar inbox")
     } finally {
       setLoading(false)
     }
-  }, [storeId, onPendingChange])
+  }, [storeId, onPendingChange, onCommandsChanged])
 
   useEffect(() => {
     void refresh()

@@ -82,6 +82,50 @@ export async function listOmniAgentCommands(storeId: string, take = 80): Promise
   return rows.map(toDto)
 }
 
+export type OmniAgentHubStatsDTO = {
+  todayCount: number
+  executed: number
+  pending: number
+  awaitingConfirmation: number
+  error: number
+  total: number
+  /** Taxa simples executados / (executados + erro); null se não houver amostra. */
+  accuracyPercent: number | null
+}
+
+/** Contagens reais para a Visão Geral (sem offsets mock). */
+export async function getOmniAgentHubStats(storeId: string): Promise<OmniAgentHubStatsDTO> {
+  const sid = storeId.trim()
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+
+  const base = { storeId: sid }
+  const [todayCount, pending, awaitingConfirmation, executed, error, total] = await Promise.all([
+    prisma.omniAgentCommand.count({ where: { ...base, createdAt: { gte: start } } }),
+    prisma.omniAgentCommand.count({ where: { ...base, status: "PENDENTE" } }),
+    prisma.omniAgentCommand.count({ where: { ...base, status: "AGUARDANDO_CONFIRMACAO" } }),
+    prisma.omniAgentCommand.count({ where: { ...base, status: "EXECUTADO" } }),
+    prisma.omniAgentCommand.count({ where: { ...base, status: "ERRO" } }),
+    prisma.omniAgentCommand.count({ where: base }),
+  ])
+
+  const denom = executed + error
+  const accuracyPercent = denom > 0 ? Math.round((100 * executed) / denom) : null
+
+  return {
+    todayCount,
+    executed,
+    pending,
+    awaitingConfirmation,
+    error,
+    total,
+    accuracyPercent,
+  }
+}
+
 export type SubmitOmniAgentCommandInput = {
   storeId: string
   canal?: OmniAgentCanal
