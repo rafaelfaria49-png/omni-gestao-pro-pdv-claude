@@ -5,6 +5,7 @@ import type { OmniAgentInterpretacao } from "@/lib/omni-agent/types"
 import { INTENT_MODULE } from "@/lib/omni-agent/types"
 import { interpretOmniAgentCommand, intentRequiresConfirmation } from "@/lib/omni-agent/interpret"
 import { executeOmniAgentIntent } from "@/lib/omni-agent/executor"
+import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { OmniAgentCommandStatus } from "@/generated/prisma"
@@ -290,4 +291,72 @@ export async function rejectOmniAgentCommand(commandId: string, storeId: string)
   })
   await logExec(storeId, commandId, false, "Recusado pelo utilizador.")
   return toDto(upd)
+}
+
+/** Indica se o ambiente tem credenciais WhatsApp Cloud API (Meta). Não implica número por loja. */
+export type OmniAgentWhatsAppCloudStatusDTO = {
+  configured: boolean
+  phoneNumberIdLast4?: string
+}
+
+export async function getOmniAgentWhatsAppCloudStatus(storeId: string): Promise<OmniAgentWhatsAppCloudStatusDTO> {
+  const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  const id = (process.env.WHATSAPP_PHONE_NUMBER_ID ?? "").trim()
+  const token = (process.env.WHATSAPP_ACCESS_TOKEN ?? "").trim()
+  const configured = id.length > 0 && token.length > 0
+  return {
+    configured,
+    phoneNumberIdLast4: configured && id.length >= 4 ? id.slice(-4) : configured ? id : undefined,
+  }
+}
+
+export type OmniAgentIntentCountDTO = { intent: string; count: number }
+
+export type OmniAgentReportsSnapshotDTO = {
+  stats: OmniAgentHubStatsDTO
+  intentCounts: OmniAgentIntentCountDTO[]
+  financeiroHoje: Awaited<ReturnType<typeof getResumoExecutivo>> | null
+  financeiroSemPermissao: boolean
+}
+
+export async function getOmniAgentReportsSnapshot(storeId: string): Promise<OmniAgentReportsSnapshotDTO> {
+  const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  const sid = storeId.trim()
+  const [stats, rows] = await Promise.all([
+    getOmniAgentHubStats(sid),
+    prisma.omniAgentCommand.findMany({
+      where: { storeId: sid },
+      orderBy: { createdAt: "desc" },
+      take: 400,
+      select: { interpretacao: true },
+    }),
+  ])
+
+  const map = new Map<string, number>()
+  for (const r of rows) {
+    const inter = r.interpretacao as OmniAgentInterpretacao | null
+    const k = inter?.intent ?? "UNKNOWN"
+    map.set(k, (map.get(k) ?? 0) + 1)
+  }
+  const intentCounts = [...map.entries()]
+    .map(([intent, count]) => ({ intent, count }))
+    .sort((a, b) => b.count - a.count)
+
+  let financeiroHoje: Awaited<ReturnType<typeof getResumoExecutivo>> | null = null
+  const financeGate = INTENT_MODULE.FINANCE_SUMMARY
+  const financeiroSemPermissao = !financeGate?.(g.permissions)
+
+  if (financeGate?.(g.permissions)) {
+    try {
+      financeiroHoje = await getResumoExecutivo(sid, buildFiltroPreset("hoje"))
+    } catch {
+      financeiroHoje = null
+    }
+  }
+
+  return { stats, intentCounts, financeiroHoje, financeiroSemPermissao }
 }

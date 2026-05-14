@@ -70,8 +70,10 @@ export function interpretOmniAgentCommand(text: string): OmniAgentInterpretacao 
   }
 
   if (
-    /financeiro\s+hoje|resumo\s+financeiro|mostrar\s+financeiro|indicadores\s+financeiros/.test(t) ||
-    (t.includes("financeiro") && /hoje|resumo|mostrar/.test(t))
+    /financeiro\s+hoje|resumo\s+financeiro|mostrar\s+financeiro|indicadores\s+financeiros/i.test(t) ||
+    (t.includes("financeiro") && /hoje|resumo|mostrar/.test(t)) ||
+    /qual\s+(foi\s+)?(o\s+)?(meu\s+)?faturamento|meu\s+faturamento|faturamento\s+de\s+hoje|faturamento\s+hoje/i.test(t) ||
+    (/\b(faturamento|faturei)\b/.test(t) && /\bhoje\b/.test(t))
   ) {
     return {
       intent: "FINANCE_SUMMARY",
@@ -79,6 +81,23 @@ export function interpretOmniAgentCommand(text: string): OmniAgentInterpretacao 
       confidence: 0.9,
       fields: { preset: "hoje" },
       requiresConfirmation: false,
+    }
+  }
+
+  /** Venda/despesa/entrada ainda sem executor dedicado — fila de confirmação + auditoria após confirmar. */
+  if (
+    /\bvendi\b/.test(t) ||
+    /\bregist(rar)?\s+venda\b/i.test(raw) ||
+    /\bgastei\b/.test(t) ||
+    (/\bentrada\s+de\b/.test(t) &&
+      (/\bestoque\b/.test(t) || /\bpel[ií]cul|\bcapa\b|\bpe[çc]as?\b|\bunidades?\b/i.test(raw)))
+  ) {
+    return {
+      intent: "REMINDER_CREATE",
+      action: "Triagem operacional (venda, despesa ou estoque)",
+      confidence: /\bvendi\b/.test(t) ? 0.84 : /\bgastei\b/.test(t) ? 0.82 : 0.78,
+      fields: { titulo: raw.slice(0, 120), detalhe: raw },
+      requiresConfirmation: true,
     }
   }
 
@@ -136,11 +155,11 @@ export function interpretOmniAgentCommand(text: string): OmniAgentInterpretacao 
   }
 
   return {
-    intent: "UNKNOWN",
-    action: "Sem intenção reconhecida",
-    confidence: 0.45,
-    fields: { texto: raw },
-    requiresConfirmation: false,
+    intent: "REMINDER_CREATE",
+    action: "Triagem Inbox (texto não mapeado para ação automática)",
+    confidence: 0.35,
+    fields: { titulo: `Triagem: ${raw.slice(0, 100)}`, detalhe: raw },
+    requiresConfirmation: true,
   }
 }
 

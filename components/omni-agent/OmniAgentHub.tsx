@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Toaster, toast } from "sonner";
 import {
-  Activity, Bot, Check, X, Edit3, Play, Plus, Copy, MessageCircle,
+  Activity, Bot, Check, X, Play, Plus, Copy, MessageCircle,
   Power, RefreshCw, Sparkles, Star, Send, Trash2, Download, Save,
-  Wallet, ShoppingCart, Wrench, Package, Users, Bell, BarChart3,
+  Wallet, ShoppingCart, Package, Users, Bell, BarChart3,
   Settings as SettingsIcon, Eye, QrCode, Phone, Zap, Brain, Lightbulb,
-  TrendingUp, FileText, Inbox, Search, Command as CmdIcon, Clock,
-  GripVertical, AlertTriangle, CheckCheck, UserCog, Maximize2, Minimize2,
+  Inbox, Search, Command as CmdIcon, Clock,
+  AlertTriangle, UserCog, Maximize2, Minimize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,12 +22,16 @@ import { cn } from "@/lib/utils";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
 import { interpretOmniAgentCommand } from "@/lib/omni-agent/interpret";
+import { listClientes, type ClienteDTO } from "@/app/actions/cadastros";
 import {
   submitOmniAgentCommand,
   listOmniAgentCommands,
   getOmniAgentHubStats,
+  getOmniAgentWhatsAppCloudStatus,
+  getOmniAgentReportsSnapshot,
   type OmniAgentHubStatsDTO,
   type OmniAgentCommandDTO,
+  type OmniAgentReportsSnapshotDTO,
 } from "@/app/actions/omni-agent";
 import { dtoToBellItem, dtoToHubFeedRow, type HubFeedRow } from "@/lib/omni-agent/hub-display";
 import { OmniAgentInboxReal } from "@/components/omni-agent/OmniAgentInboxReal";
@@ -144,10 +148,37 @@ export default function OmniAgentHub() {
       .filter((x): x is NonNullable<typeof x> => x != null);
   }, [feedRows]);
 
+  const waTodayCount = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    return feedRows.filter((r) => r.dto.canal === "whatsapp" && new Date(r.dto.createdAt) >= start).length;
+  }, [feedRows]);
+  const waAllCount = useMemo(() => feedRows.filter((r) => r.dto.canal === "whatsapp").length, [feedRows]);
+
   const logAudit = (msg: string) => { setAudit(a => [`${nowTime()} · ${msg}`, ...a].slice(0, 50)); }
 
   async function enqueueInboxText(text: string) {
     await submitOmniAgentCommand({ storeId, comandoOriginal: text.trim(), mode: "inbox" });
+    await refreshHubData();
+  }
+
+  async function submitWhatsappOmni(text: string) {
+    await submitOmniAgentCommand({
+      storeId,
+      canal: "whatsapp",
+      comandoOriginal: text.trim(),
+      mode: "run",
+    });
+    await refreshHubData();
+  }
+
+  async function submitAgentReportQuestion(text: string) {
+    await submitOmniAgentCommand({
+      storeId,
+      canal: "texto_interno",
+      comandoOriginal: text.trim(),
+      mode: "run",
+    });
     await refreshHubData();
   }
 
@@ -214,11 +245,13 @@ export default function OmniAgentHub() {
           )}
           {tab === "whatsapp" && (
             <WhatsAppTab
-              onTest={(t) => {
-                logAudit(`WhatsApp (mock UI): ${t}`);
-                toast.success("Comando enviado (UI demo)");
+              storeId={storeId}
+              waTodayCount={waTodayCount}
+              waAllCount={waAllCount}
+              onSubmitCommand={async (t) => {
+                await submitWhatsappOmni(t);
+                logAudit(`WhatsApp → Agent: ${t}`);
               }}
-              onSimulateIncoming={enqueueInboxText}
               bumpUnread={() => setWaUnread((n) => n + 1)}
             />
           )}
@@ -231,9 +264,19 @@ export default function OmniAgentHub() {
             />
           )}
           {tab === "auto" && <AutomationsTab logAudit={logAudit} />}
-          {tab === "memory" && <MemoryTab logAudit={logAudit} />}
+          {tab === "memory" && <MemoryTab storeId={storeId} logAudit={logAudit} />}
           {tab === "reports" && (
             <ReportsTab
+              storeId={storeId}
+              onSubmitQuestion={async (text) => {
+                try {
+                  await submitAgentReportQuestion(text);
+                  logAudit(`Relatórios IA → pergunta: ${text}`);
+                  toast.success("Pergunta enviada ao Agent — veja resultado na Inbox ou feed");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Falha");
+                }
+              }}
               onEnqueueFromReport={async (text) => {
                 try {
                   await enqueueInboxText(text);
@@ -245,7 +288,7 @@ export default function OmniAgentHub() {
               logAudit={logAudit}
             />
           )}
-          {tab === "settings" && <SettingsTab audit={audit} />}
+          {tab === "settings" && <SettingsTab audit={audit} logAudit={logAudit} />}
         </div>
       </div>
 
@@ -797,132 +840,217 @@ function NewCommandModal({ open, onClose, storeId, onSendInbox, onExecute }: {
 }
 
 /* ---------- WhatsApp ---------- */
-type ChatMsg = { from: "cliente" | "agente"; text: string; status?: "sent" | "delivered" | "read" };
+type ChatMsg = { from: "cliente" | "sistema"; text: string; at: number };
 function WhatsAppTab({
-  onTest,
-  onSimulateIncoming,
+  storeId,
+  waTodayCount,
+  waAllCount,
+  onSubmitCommand,
   bumpUnread,
 }: {
-  onTest: (t: string) => void;
-  onSimulateIncoming: (t: string) => Promise<void>;
+  storeId: string;
+  waTodayCount: number;
+  waAllCount: number;
+  onSubmitCommand: (t: string) => Promise<void>;
   bumpUnread: () => void;
 }) {
-  const [connected, setConnected] = useState(true);
-  const [chat, setChat] = useState<ChatMsg[]>([
-    { from: "cliente", text: "vendi capa por R$ 30 no pix" },
-    { from: "agente", text: "Entendi. Deseja registrar essa venda?", status: "read" },
-  ]);
-  const [typing, setTyping] = useState(false);
+  const [cloudOk, setCloudOk] = useState<boolean | null>(null);
+  const [phoneLast4, setPhoneLast4] = useState<string | undefined>();
+  const [chat, setChat] = useState<ChatMsg[]>([]);
   const [humanMode, setHumanMode] = useState(false);
-  const number = "+55 11 98888-7777";
 
-  async function copy() { try { await navigator.clipboard.writeText(number); toast.success("Copiado"); } catch { toast("Copiado"); } }
-
-  function simIncoming() {
-    const msgs = ["gastei 50 em uber", "abrir OS Moto G defeito carga", "vendi película R$ 40 pix", "lembrar de ligar Ana"];
-    const t = msgs[Math.floor(Math.random() * msgs.length)];
-    setChat((c) => [...c, { from: "cliente", text: t }]);
-    void onSimulateIncoming(t)
-      .then(() => {
-        bumpUnread();
+  useEffect(() => {
+    let cancelled = false;
+    void getOmniAgentWhatsAppCloudStatus(storeId)
+      .then((s) => {
+        if (!cancelled) {
+          setCloudOk(s.configured);
+          setPhoneLast4(s.phoneNumberIdLast4);
+        }
       })
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Falha ao registar"));
-    beep();
-    toast.success(`Nova mensagem: "${t}"`);
-    if (!humanMode) {
-      setTyping(true);
-      setTimeout(() => {
-        setTyping(false);
-        setChat(c => [...c, { from: "agente", text: "Recebido. Vou registrar para sua aprovação.", status: "sent" }]);
-        setTimeout(() => setChat(c => c.map((m, i) => i === c.length - 1 ? { ...m, status: "delivered" } : m)), 800);
-        setTimeout(() => setChat(c => c.map((m, i) => i === c.length - 1 ? { ...m, status: "read" } : m)), 1800);
-      }, 1200);
+      .catch(() => {
+        if (!cancelled) setCloudOk(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storeId]);
+
+  async function copyIdSuffix() {
+    const id = phoneLast4 ?? "";
+    if (!id) return;
+    try {
+      await navigator.clipboard.writeText(id);
+      toast.success("ID (últimos dígitos) copiado");
+    } catch {
+      toast("Copiado");
     }
   }
 
-  const recentChats = [
-    { name: "João Silva", last: "iPhone 12 sem áudio", time: "09:24", unread: 2 },
-    { name: "Maria Souza", last: "Quanto pago?", time: "ontem", unread: 0 },
-    { name: "Carlos R.", last: "Obrigado!", time: "2d", unread: 0 },
-    { name: "Ana M.", last: "Pode entregar amanhã?", time: "3d", unread: 1 },
-    { name: "Pedro L.", last: "Recebi o produto", time: "4d", unread: 0 },
-  ];
+  async function simIncoming() {
+    const msgs = ["gastei 50 em uber", "abrir OS Moto G defeito carga", "vendi película R$ 40 pix", "lembrar de ligar Ana"];
+    const t = msgs[Math.floor(Math.random() * msgs.length)];
+    try {
+      await onSubmitCommand(t);
+      const at = Date.now();
+      setChat((c) => [...c, { from: "cliente", text: t, at }]);
+      if (!humanMode) {
+        setChat((c) => [
+          ...c,
+          {
+            from: "sistema",
+            text: "Comando gravado (canal whatsapp, pipeline real). Consulte a Inbox IA para confirmar ou ver resultado.",
+            at: Date.now(),
+          },
+        ]);
+      }
+      bumpUnread();
+      beep();
+      toast.success(`Mensagem enviada ao Agent: "${t}"`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao registar");
+    }
+  }
+
+  async function runQuick(ex: string) {
+    try {
+      await onSubmitCommand(ex);
+      const at = Date.now();
+      setChat((c) => [
+        ...c,
+        { from: "cliente", text: ex, at },
+        {
+          from: "sistema",
+          text: "Comando enviado — Inbox IA / feed.",
+          at: Date.now(),
+        },
+      ]);
+      bumpUnread();
+      toast.success("Comando enviado");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha");
+    }
+  }
+
+  if (cloudOk === null) {
+    return (
+      <Card className="p-8 text-center text-sm text-muted-foreground">
+        A verificar estado do WhatsApp Cloud API…
+      </Card>
+    );
+  }
+
+  const cloudDisconnected = !cloudOk;
 
   return (
     <div className="space-y-4">
+      {cloudDisconnected && (
+        <Card className="border-dashed p-6 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">Em preparação</Badge>
+            <span className="text-sm font-medium">WhatsApp Cloud API</span>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            WhatsApp IA ainda não conectado ao WhatsApp Cloud API no ambiente deste servidor (credenciais Meta em falta ou incompletas).
+          </p>
+        </Card>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon={Phone} label="Conexão" value={connected ? "Ativa" : "Off"} />
-        <Stat icon={MessageCircle} label="Mensagens hoje" value={chat.filter(c => c.from === "cliente").length + 8} />
-        <Stat icon={Brain} label="Interpretadas" value={chat.filter(c => c.from === "cliente").length + 5} />
-        <Stat icon={Bell} label="Pendências" value={3} />
+        <Stat
+          icon={Phone}
+          label="Cloud API (servidor)"
+          value={cloudOk ? "Variáveis OK" : "Não configurado"}
+          hint={cloudOk ? "Token + phone_number_id" : "WHATSAPP_ACCESS_TOKEN + WHATSAPP_PHONE_NUMBER_ID"}
+        />
+        <Stat icon={MessageCircle} label="Comandos whatsapp hoje" value={String(waTodayCount)} />
+        <Stat icon={Brain} label="Comandos whatsapp (feed)" value={String(waAllCount)} />
+        <Stat icon={Bell} label="Inbox + confirmação" value="Ver aba Inbox IA" hint="Pendências reais" />
       </div>
 
       <Card>
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex h-32 w-32 items-center justify-center rounded-lg border-2 border-dashed border-border bg-accent">
-            <QrCode className="h-16 w-16 text-primary" />
+            <QrCode className="h-16 w-16 text-muted-foreground" />
           </div>
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
               <Phone className="h-4 w-4 text-primary" />
-              <span className="font-mono text-lg">{number}</span>
-              <Badge variant={connected ? "default" : "secondary"}>{connected ? "Conectado" : "Desconectado"}</Badge>
-              {humanMode && <Badge variant="destructive"><UserCog className="h-3 w-3 mr-1" /> Modo humano</Badge>}
+              {cloudOk ? (
+                <>
+                  <span className="font-mono text-sm text-muted-foreground">phone_number_id ···{phoneLast4 ?? "—"}</span>
+                  <Badge variant="default">Credenciais no servidor</Badge>
+                </>
+              ) : (
+                <span className="text-sm text-muted-foreground">Sem número Cloud API configurado no ambiente</span>
+              )}
+              {humanMode && (
+                <Badge variant="destructive">
+                  <UserCog className="h-3 w-3 mr-1" /> Modo humano (local)
+                </Badge>
+              )}
             </div>
+            <p className="text-xs text-muted-foreground">
+              O painel WhatsApp HUB continua a ser o local para conversas reais com clientes. Aqui apenas comandos Omni Agent com canal «whatsapp».
+            </p>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={copy}><Copy /> Copiar número</Button>
-              {connected
-                ? <Button size="sm" variant="ghost" onClick={() => { setConnected(false); toast("Desconectado"); }}>Desconectar</Button>
-                : <Button size="sm" onClick={() => { setConnected(true); toast.success("Conectado"); }}>Conectar</Button>}
-              <Button size="sm" onClick={simIncoming}><MessageCircle /> Simular mensagem</Button>
-              <Button size="sm" variant={humanMode ? "destructive" : "outline"} onClick={() => { setHumanMode(!humanMode); toast(humanMode ? "Agente reativado" : "Modo humano ativo"); }}>
-                <UserCog /> {humanMode ? "Reativar agente" : "Modo humano"}
+              {cloudOk && (
+                <Button size="sm" variant="outline" onClick={() => void copyIdSuffix()}>
+                  <Copy /> Copiar sufixo ID
+                </Button>
+              )}
+              <Button size="sm" onClick={() => void simIncoming()}>
+                <MessageCircle /> Simular mensagem
+              </Button>
+              <Badge variant="outline">Canal whatsapp → Prisma</Badge>
+              <Button
+                size="sm"
+                variant={humanMode ? "destructive" : "outline"}
+                onClick={() => {
+                  setHumanMode(!humanMode);
+                  toast(humanMode ? "Respostas automáticas locais reativadas" : "Modo humano: sem resposta automática local");
+                }}
+              >
+                <UserCog /> {humanMode ? "Reativar painel" : "Modo humano"}
               </Button>
             </div>
           </div>
         </div>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-[260px_1fr]">
+      <div className="grid gap-4 md:grid-cols-[minmax(0,280px)_1fr]">
         <Card>
-          <h3 className="mb-2 text-sm font-semibold">Conversas recentes</h3>
-          <div className="space-y-1">
-            {recentChats.map(r => (
-              <button key={r.name} className="w-full rounded-md p-2 text-left text-sm hover:bg-accent">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium truncate">{r.name}</span>
-                  {r.unread > 0 && <Badge className="h-4 min-w-4 px-1 text-[10px]">{r.unread}</Badge>}
-                </div>
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span className="truncate">{r.last}</span><span>{r.time}</span>
-                </div>
-              </button>
-            ))}
+          <h3 className="mb-2 text-sm font-semibold">Conversas Meta</h3>
+          <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-xs text-muted-foreground">
+            Lista de conversas do WhatsApp Business não está integrada a este painel. Use o{" "}
+            <span className="font-medium text-foreground">WhatsApp HUB</span> do dashboard para threads reais.
           </div>
         </Card>
 
         <Card>
-          <h3 className="mb-3 font-semibold">Conversa ativa</h3>
+          <div className="mb-3 flex items-center justify-between gap-2 flex-wrap">
+            <h3 className="font-semibold">Simulação (mensagens → Agent)</h3>
+            {cloudDisconnected && <Badge variant="secondary">Demo / teste motor</Badge>}
+          </div>
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-            {chat.map((m, i) => (
-              <div key={i} className={cn("max-w-[75%] rounded-2xl px-3 py-2 text-sm shadow-sm",
-                m.from === "cliente" ? "bg-muted rounded-bl-sm" : "ml-auto bg-primary text-primary-foreground rounded-br-sm")}>
-                {m.text}
-                {m.from === "agente" && m.status && (
-                  <div className="mt-1 flex justify-end items-center gap-1 text-[10px] opacity-80">
-                    {m.status === "sent" && <Check className="h-3 w-3" />}
-                    {m.status === "delivered" && <CheckCheck className="h-3 w-3" />}
-                    {m.status === "read" && <CheckCheck className="h-3 w-3 text-blue-300" />}
-                  </div>
-                )}
+            {chat.length === 0 ? (
+              <div className="text-xs text-muted-foreground py-4 text-center">
+                Nenhuma simulação nesta sessão. Use «Simular mensagem» ou os atalhos abaixo — tudo é persistido como OmniAgentCommand.
               </div>
-            ))}
-            {typing && (
-              <div className="ml-auto bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-3 py-2 text-sm w-16 inline-flex gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce" />
-                <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:0.15s]" />
-                <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:0.3s]" />
-              </div>
+            ) : (
+              chat.map((m, i) => (
+                <div
+                  key={`${m.at}-${i}`}
+                  className={cn(
+                    "max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm",
+                    m.from === "cliente"
+                      ? "bg-muted rounded-bl-sm"
+                      : "ml-auto border border-border bg-accent text-foreground rounded-br-sm",
+                  )}
+                >
+                  {m.text}
+                </div>
+              ))
             )}
           </div>
         </Card>
@@ -930,14 +1058,16 @@ function WhatsAppTab({
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[
-          { t: "Financeiro", e: "gastei 50 em uber" },
-          { t: "Vendas", e: "vendi capa R$ 30 pix" },
-          { t: "OS", e: "abrir OS Moto G defeito carga" },
-        ].map(c => (
+          { t: "Triagem despesa", e: "gastei 50 em uber" },
+          { t: "Triagem venda", e: "vendi capa R$ 30 pix" },
+          { t: "OS (confirmação)", e: "abrir OS Moto G defeito carga" },
+        ].map((c) => (
           <Card key={c.t}>
             <div className="font-semibold">{c.t}</div>
-            <div className="mt-1 text-xs text-muted-foreground">"{c.e}"</div>
-            <Button size="sm" className="mt-3" variant="outline" onClick={() => onTest(c.e)}><Play /> Testar</Button>
+            <div className="mt-1 text-xs text-muted-foreground">&quot;{c.e}&quot;</div>
+            <Button size="sm" className="mt-3" variant="outline" onClick={() => void runQuick(c.e)}>
+              <Play /> Enviar ao Agent
+            </Button>
           </Card>
         ))}
       </div>
@@ -1119,121 +1249,42 @@ function CommandsTab({ storeId, onAfterPipeline }: { storeId: string; onAfterPip
 }
 
 /* ---------- Automations ---------- */
-type Rule = { id: string; name: string; trigger: string; condition: string; action: string; module: string; active: boolean; runs: number; lastRun: string; logs: string[] };
 function AutomationsTab({ logAudit }: { logAudit: (m: string) => void }) {
-  const [rules, setRules] = useState<Rule[]>([
-    { id: "r1", name: "Venda Pix → Financeiro", trigger: "Nova venda", condition: "pagamento = Pix", action: "Lançar no financeiro", module: "Vendas", active: true, runs: 124, lastRun: "10:01", logs: ["10:01 · executou para venda #482"] },
-    { id: "r2", name: "OS entregue → Receber", trigger: "OS muda status", condition: "status = entregue", action: "Criar conta a receber", module: "OS", active: true, runs: 47, lastRun: "09:30", logs: ["09:30 · OS #102 entregue"] },
-    { id: "r3", name: "Estoque baixo → Alerta", trigger: "Estoque mudou", condition: "qtd < mínimo", action: "Notificar dono", module: "Estoque", active: false, runs: 12, lastRun: "ontem", logs: [] },
-    { id: "r4", name: "Inadimplente → Lembrete", trigger: "Recebimento vencido", condition: "atraso > 3 dias", action: "Criar lembrete", module: "Clientes", active: true, runs: 8, lastRun: "08:10", logs: [] },
-  ]);
-  const [editing, setEditing] = useState<Rule | null>(null);
-  const [logFor, setLogFor] = useState<Rule | null>(null);
-  const [draft, setDraft] = useState<Rule | null>(null);
-  const [filter, setFilter] = useState<"all" | "active" | "inactive">("all");
-  const [moduleFilter, setModuleFilter] = useState<string>("Todos");
-  const [creating, setCreating] = useState(false);
-
-  function update(id: string, fn: (r: Rule) => Rule) { setRules(p => p.map(x => x.id === id ? fn(x) : x)); }
-  const maxRuns = Math.max(...rules.map(r => r.runs), 1);
-  const modules = ["Todos", ...Array.from(new Set(rules.map(r => r.module)))];
-  const visible = rules.filter(r => (filter === "all" || (filter === "active" ? r.active : !r.active)) && (moduleFilter === "Todos" || r.module === moduleFilter));
-
+  const [infoOpen, setInfoOpen] = useState(false);
   return (
-    <div className="space-y-3">
-      <Card>
+    <div className="space-y-4">
+      <Card className="border-dashed p-6 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          {(["all", "active", "inactive"] as const).map(f => (
-            <Button key={f} size="sm" variant={filter === f ? "default" : "outline"} onClick={() => setFilter(f)}>
-              {f === "all" ? "Todas" : f === "active" ? "Ativas" : "Inativas"}
-            </Button>
-          ))}
-          <select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)} className="h-8 rounded-md border border-input bg-background px-2 text-xs">
-            {modules.map(m => <option key={m}>{m}</option>)}
-          </select>
-          <Button size="sm" className="ml-auto" onClick={() => { setDraft({ id: uid(), name: "", trigger: "", condition: "", action: "", module: "Vendas", active: true, runs: 0, lastRun: "—", logs: [] }); setCreating(true); }}><Plus /> Nova automação</Button>
+          <Badge variant="secondary">Em preparação</Badge>
+          <span className="text-sm font-medium">Automações Omni Agent</span>
         </div>
+        <p className="text-sm text-muted-foreground">
+          Ainda não existe motor persistido de regras (gatilho → ação) para o Omni Agent. Nada aqui é gravado na base de dados —
+          por isso as listas e contadores simulados foram removidos.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setInfoOpen(true);
+            logAudit("Automações: aberto planeamento próxima etapa");
+          }}
+        >
+          <Plus /> Próxima etapa (planeamento)
+        </Button>
       </Card>
-
-      {visible.map(r => (
-        <Card key={r.id}>
-          <div className="flex flex-wrap items-start gap-3">
-            <GripVertical className="h-5 w-5 text-muted-foreground mt-1 cursor-grab" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="font-medium">{r.name}</div>
-              <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-3">
-                <div><span className="font-medium text-foreground">Gatilho:</span> {r.trigger}</div>
-                <div><span className="font-medium text-foreground">Condição:</span> {r.condition}</div>
-                <div><span className="font-medium text-foreground">Ação:</span> {r.action}</div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <Badge variant="outline">{r.module}</Badge>
-                <Badge variant="secondary">{r.runs} execuções</Badge>
-                <Badge>{r.active ? "ativo" : "inativo"}</Badge>
-                <div className="flex items-center gap-2 ml-2 flex-1 max-w-[180px]">
-                  <div className="h-1.5 flex-1 rounded bg-muted overflow-hidden">
-                    <div className="h-full bg-primary" style={{ width: `${(r.runs / maxRuns) * 100}%` }} />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => { update(r.id, x => ({ ...x, active: !x.active })); toast(r.active ? "Desativada" : "Ativada"); }}>{r.active ? "Desativar" : "Ativar"}</Button>
-              <Button size="sm" variant="ghost" onClick={() => { setEditing(r); setDraft({ ...r }); }}><Edit3 /> Editar</Button>
-              <Button size="sm" onClick={() => {
-                const log = `${nowTime()} · teste manual`;
-                update(r.id, x => ({ ...x, runs: x.runs + 1, lastRun: nowTime(), logs: [log, ...x.logs] }));
-                logAudit(`Regra "${r.name}" testada`); toast.success("Teste OK");
-              }}><Play /> Testar</Button>
-              <Button size="sm" variant="outline" onClick={() => setLogFor(r)}><FileText /> Log</Button>
-            </div>
-          </div>
-        </Card>
-      ))}
-
-      <Dialog open={!!editing || creating} onOpenChange={(o) => { if (!o) { setEditing(null); setCreating(false); } }}>
+      <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{creating ? "Nova automação" : "Editar regra"}</DialogTitle></DialogHeader>
-          {draft && (
-            <div className="space-y-3">
-              <div><Label>Nome</Label><Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div><Label>Módulo</Label>
-                  <select value={draft.module} onChange={(e) => setDraft({ ...draft, module: e.target.value })} className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
-                    {["Vendas", "OS", "Financeiro", "Estoque", "Clientes", "Lembretes"].map(m => <option key={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div className="flex items-end justify-between"><Label>Ativa</Label><Switch checked={draft.active} onCheckedChange={(v) => setDraft({ ...draft, active: v })} /></div>
-              </div>
-              <div><Label>Gatilho</Label><Input value={draft.trigger} onChange={(e) => setDraft({ ...draft, trigger: e.target.value })} /></div>
-              <div><Label>Condição</Label><Input value={draft.condition} onChange={(e) => setDraft({ ...draft, condition: e.target.value })} /></div>
-              <div><Label>Ação</Label><Input value={draft.action} onChange={(e) => setDraft({ ...draft, action: e.target.value })} /></div>
-              <div className="rounded-lg border border-border bg-muted p-3 text-xs">
-                <div className="font-medium mb-1">Preview</div>
-                Quando <span className="font-medium">{draft.trigger || "—"}</span> e <span className="font-medium">{draft.condition || "—"}</span> → <span className="font-medium">{draft.action || "—"}</span>
-              </div>
-            </div>
-          )}
+          <DialogHeader>
+            <DialogTitle>Automações reais</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            A fase seguinte prevê persistência em base de dados, filas de gatilhos e histórico auditável por regra. Até lá, use a{" "}
+            <span className="font-medium text-foreground">Inbox IA</span> e os comandos determinísticos já suportados.
+          </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditing(null); setCreating(false); }}>Cancelar</Button>
-            <Button onClick={() => {
-              if (!draft) return;
-              if (creating) { setRules(p => [draft, ...p]); toast.success("Automação criada"); }
-              else if (editing) { update(editing.id, () => draft); toast.success("Regra salva"); }
-              setEditing(null); setCreating(false);
-            }}><Save /> Salvar</Button>
+            <Button onClick={() => setInfoOpen(false)}>Entendi</Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={!!logFor} onOpenChange={(o) => !o && setLogFor(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Log — {logFor?.name}</DialogTitle></DialogHeader>
-          <div className="space-y-1 max-h-72 overflow-y-auto">
-            {(logFor?.logs ?? []).length === 0 && <div className="text-sm text-muted-foreground">Sem execuções</div>}
-            {logFor?.logs.map((l, i) => <div key={i} className="rounded bg-muted px-2 py-1 text-xs">{l}</div>)}
-          </div>
-          <DialogFooter><Button onClick={() => setLogFor(null)}>Fechar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
@@ -1241,148 +1292,236 @@ function AutomationsTab({ logAudit }: { logAudit: (m: string) => void }) {
 }
 
 /* ---------- Memory ---------- */
-type Client = {
-  id: string; name: string; score: number; total: number; osCount: number; lastInteraction: string;
-  buys: string[]; os: string[]; msgs: string[]; prefs: string[]; pendings: string[]; notes: string[];
-  timeline: { time: string; text: string; type: "venda" | "os" | "msg" | "lembrete" }[];
-  inadimplente: boolean;
-};
-function MemoryTab({ logAudit }: { logAudit: (m: string) => void }) {
+function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: string) => void }) {
   const [extraNotes, setExtraNotes] = useLS<Record<string, string[]>>("omni-notes", {});
-  const baseClients: Client[] = [
-    { id: "k1", name: "João Silva", score: 92, total: 1240, osCount: 3, lastInteraction: "hoje 09:24", buys: ["Película R$ 40", "Capa R$ 35"], os: ["iPhone 12 - sem áudio"], msgs: ["Quando fica pronto?"], prefs: ["WhatsApp", "Pix"], pendings: ["Pagar OS #102"], notes: ["Cliente pontual"], timeline: [{ time: "09:24", text: "Trouxe iPhone 12", type: "os" }, { time: "ontem", text: "Comprou película", type: "venda" }, { time: "3d", text: "Mensagem WhatsApp", type: "msg" }], inadimplente: false },
-    { id: "k2", name: "Maria Souza", score: 48, total: 320, osCount: 0, lastInteraction: "ontem", buys: ["Cabo USB R$ 25"], os: [], msgs: ["Boa tarde!"], prefs: ["Pix"], pendings: ["Cobrar R$ 120"], notes: [], timeline: [{ time: "ontem", text: "Mensagem recebida", type: "msg" }], inadimplente: true },
-    { id: "k3", name: "Rafael Cell", score: 88, total: 2400, osCount: 12, lastInteraction: "2 dias", buys: [], os: ["Moto G - tela"], msgs: [], prefs: ["Ligação"], pendings: [], notes: ["Revendedor"], timeline: [], inadimplente: false },
-  ];
-  const [clients, setClients] = useState<Client[]>(baseClients);
-  const [sel, setSel] = useState("k1");
+  const [rows, setRows] = useState<ClienteDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [summaryOpen, setSummaryOpen] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-  const c = clients.find(x => x.id === sel)!;
-  const allNotes = [...c.notes, ...(extraNotes[c.id] ?? [])];
 
-  function update(fn: (c: Client) => Client) { setClients(prev => prev.map(x => x.id === sel ? fn(x) : x)); }
+  useEffect(() => {
+    let cancelled = false;
+    if (!storeId?.trim()) {
+      setRows([]);
+      setSel(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    void listClientes(storeId)
+      .then((list) => {
+        if (!cancelled) {
+          setRows(list);
+          setSel((prev) => {
+            if (prev && list.some((c) => c.id === prev)) return prev;
+            return list[0]?.id ?? null;
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storeId]);
 
-  const summary = `${c.name} é um cliente com score ${c.score}/100, total comprado de R$ ${c.total.toLocaleString("pt-BR")}, ${c.osCount} OS realizadas. Prefere ${c.prefs.join(", ") || "—"}. Última interação: ${c.lastInteraction}. ${c.pendings.length ? `Possui ${c.pendings.length} pendência(s).` : "Sem pendências."}`;
+  const filtered = useMemo(() => {
+    const nq = q.trim().toLowerCase();
+    if (!nq) return rows;
+    return rows.filter(
+      (c) =>
+        c.nome.toLowerCase().includes(nq) ||
+        c.telefone.toLowerCase().includes(nq) ||
+        c.documento.toLowerCase().includes(nq),
+    );
+  }, [rows, q]);
 
-  const scoreColor = c.score >= 80 ? "bg-primary" : c.score >= 50 ? "bg-yellow-500" : "bg-destructive";
-  const prefColor = (p: string) => /pix/i.test(p) ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400" : /whats/i.test(p) ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400" : /lig/i.test(p) ? "bg-blue-500/20 text-blue-700 dark:text-blue-400" : "bg-muted";
-  const typeIcon = (t: string) => t === "venda" ? ShoppingCart : t === "os" ? Wrench : t === "lembrete" ? Bell : MessageCircle;
+  const c = sel ? rows.find((x) => x.id === sel) : undefined;
+  const allNotes = c ? [...(extraNotes[c.id] ?? [])] : [];
 
   return (
-    <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-      <Card>
-        <div className="space-y-1">
-          {clients.map(cl => (
-            <button key={cl.id} onClick={() => setSel(cl.id)}
-              className={cn("w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-                sel === cl.id ? "bg-primary text-primary-foreground" : "hover:bg-accent")}>
-              <div className="font-medium flex items-center gap-1">{cl.name}{cl.inadimplente && <AlertTriangle className="h-3 w-3 text-destructive" />}</div>
-              <div className="text-[10px] opacity-70">Score {cl.score}</div>
-            </button>
-          ))}
-        </div>
-      </Card>
-      <div className="space-y-3 min-w-0">
-        <Card>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                {c.name}
-                {c.inadimplente && <Badge variant="destructive"><AlertTriangle className="h-3 w-3 mr-1" /> Inadimplente</Badge>}
-              </h3>
-              <div className="text-xs text-muted-foreground">Última: {c.lastInteraction}</div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => setNoteOpen(true)}><Plus /> Nota</Button>
-              <Button size="sm" variant="outline" onClick={() => { update(x => ({ ...x, pendings: [...x.pendings, `Lembrete em ${nowTime()}`] })); logAudit(`Lembrete p/ ${c.name}`); toast.success("Adicionado"); }}><Bell /> Lembrete</Button>
-              <Button size="sm" onClick={() => setSummaryOpen(true)}><Brain /> Resumo IA</Button>
-            </div>
+    <>
+      <div className="grid gap-4 md:grid-cols-[minmax(0,280px)_1fr]">
+        <Card className="space-y-3">
+          <div className="text-sm font-semibold">Clientes (cadastro)</div>
+          <Input placeholder="Buscar nome, telefone, documento…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="space-y-1 max-h-[480px] overflow-y-auto min-w-0">
+            {loading && <div className="text-xs text-muted-foreground">A carregar…</div>}
+            {!loading && filtered.length === 0 && (
+              <div className="text-xs text-muted-foreground py-4 text-center">Sem clientes ou sem correspondência.</div>
+            )}
+            {!loading &&
+              filtered.map((cl) => (
+                <button
+                  key={cl.id}
+                  type="button"
+                  onClick={() => setSel(cl.id)}
+                  className={cn(
+                    "w-full rounded-md px-3 py-2 text-left text-sm transition-colors min-w-0",
+                    sel === cl.id ? "bg-primary text-primary-foreground" : "hover:bg-accent",
+                  )}
+                >
+                  <div className="font-medium truncate">{cl.nome}</div>
+                  <div className="text-[10px] opacity-80 truncate">{cl.telefone}</div>
+                </button>
+              ))}
           </div>
-          <div className="mt-4 space-y-3">
-            <div>
-              <div className="flex justify-between text-xs mb-1"><span className="text-muted-foreground">Score do cliente</span><span className="font-medium">{c.score}/100</span></div>
-              <div className="h-2 rounded-full bg-muted overflow-hidden">
-                <div className={cn("h-full transition-all", scoreColor)} style={{ width: `${c.score}%` }} />
+        </Card>
+
+        <div className="space-y-3 min-w-0">
+          {!c ? (
+            <Card className="p-8 text-center text-sm text-muted-foreground">Selecione um cliente na lista.</Card>
+          ) : (
+            <>
+              <Card>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-semibold flex flex-wrap items-center gap-2">
+                      {c.nome}
+                      <Badge variant="outline">Cadastro</Badge>
+                    </h3>
+                    <div className="text-xs text-muted-foreground">
+                      {c.tipo} · {c.telefone} · última compra: {c.ultimaCompra}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setNoteOpen(true)}>
+                      <Plus /> Nota local
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        const texto = `Lembrete operacional: acompanhar cliente ${c.nome} (id ${c.id}).`;
+                        try {
+                          await submitOmniAgentCommand({ storeId, comandoOriginal: texto, mode: "run" });
+                          logAudit(`Lembrete Agent → ${c.nome}`);
+                          toast.success("Comando enviado — ver Inbox IA");
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Falha");
+                        }
+                      }}
+                    >
+                      <Bell /> Lembrete (Agent)
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setSummaryOpen(true)}>
+                      <Brain /> Resumo automático
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <Stat icon={Wallet} label="Total gasto (cad.)" value={`R$ ${Number(c.totalGasto).toFixed(2)}`} />
+                  <Stat icon={ShoppingCart} label="Status" value={c.status} />
+                  <Stat icon={Package} label="Cidade" value={c.cidade || "—"} />
+                  <Stat icon={Users} label="Tags" value={c.tags.length ? `${c.tags.length}` : "—"} />
+                </div>
+              </Card>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <ClientList title="Tags (cadastro)" items={c.tags} />
+                <ClientList
+                  title="Notas locais (navegador)"
+                  items={allNotes}
+                  emptyHint="Guardadas só neste dispositivo (chave omni-notes)."
+                />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <Stat icon={TrendingUp} label="Score" value={c.score} />
-              <Stat icon={Wallet} label="Total" value={`R$ ${c.total}`} />
-              <Stat icon={Wrench} label="OS" value={c.osCount} />
-              <Stat icon={Bell} label="Pendências" value={c.pendings.length} />
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {c.prefs.map(p => <span key={p} className={cn("rounded-full px-2 py-0.5 text-xs", prefColor(p))}>{p}</span>)}
-            </div>
-          </div>
-        </Card>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <ClientList title="Últimas compras" items={c.buys} />
-          <ClientList title="Últimas OS" items={c.os} />
-          <ClientList title="Pendências" items={c.pendings} />
-          <ClientList title="Notas" items={allNotes} />
-        </div>
-
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-semibold">Timeline</div>
-            <Button size="sm" variant="ghost" onClick={() => setExpanded(!expanded)}>{expanded ? "Recolher" : "Ver histórico completo"}</Button>
-          </div>
-          {c.timeline.length === 0 ? <div className="text-xs text-muted-foreground">Sem interações</div> : (
-            <ol className="relative border-l border-border pl-4 space-y-3">
-              {(expanded ? c.timeline : c.timeline.slice(0, 3)).map((t, i) => {
-                const I = typeIcon(t.type);
-                return (
-                  <li key={i} className="relative">
-                    <span className="absolute -left-[1.4rem] flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground"><I className="h-3 w-3" /></span>
-                    <div className="text-sm">{t.text}</div>
-                    <div className="text-[10px] text-muted-foreground">{t.time}</div>
-                  </li>
-                );
-              })}
-            </ol>
+              <Card>
+                <div className="mb-2 text-sm font-semibold">Memória operacional / timeline IA</div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Memória operacional ainda não ativada para este cliente — não há timeline unificada gerada pelo Omni Agent.
+                </p>
+                <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-xs text-muted-foreground">
+                  Use Cadastros, Operações e Financeiro para histórico real. Futuras fases consolidarão eventos (PDV, OS, WhatsApp)
+                  neste painel.
+                </div>
+              </Card>
+            </>
           )}
-        </Card>
+        </div>
       </div>
 
-      <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Adicionar nota</DialogTitle></DialogHeader>
-          <Textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Ex: cliente prefere atendimento à tarde" />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNoteOpen(false)}>Cancelar</Button>
-            <Button onClick={() => {
-              if (!noteText.trim()) return toast.error("Digite");
-              setExtraNotes({ ...extraNotes, [c.id]: [...(extraNotes[c.id] ?? []), noteText.trim()] });
-              setNoteText(""); setNoteOpen(false); toast.success("Salva");
-            }}><Save /> Salvar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {c && (
+        <>
+          <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nota local — {c.nome}</DialogTitle>
+              </DialogHeader>
+              <p className="text-xs text-muted-foreground">Armazenada apenas no navegador (localStorage, chave omni-notes).</p>
+              <Textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Ex.: prefere ser contactado de manhã"
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setNoteOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!noteText.trim()) return toast.error("Digite");
+                    setExtraNotes({ ...extraNotes, [c.id]: [...(extraNotes[c.id] ?? []), noteText.trim()] });
+                    setNoteText("");
+                    setNoteOpen(false);
+                    toast.success("Nota guardada neste navegador");
+                  }}
+                >
+                  <Save /> Guardar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Resumo IA — {c.name}</DialogTitle></DialogHeader>
-          <div className="rounded-lg border border-border bg-muted p-3 text-sm">{summary}</div>
-          <DialogFooter>
-            <Button onClick={() => setSummaryOpen(false)}>Fechar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+          <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Resumo — dados de cadastro</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Não há modelo de IA a gerar narrativa nesta fase. Apenas campos reais do cadastro:
+              </p>
+              <div className="rounded-lg border border-border bg-muted p-3 text-sm space-y-1">
+                <div>
+                  <span className="font-medium">Nome:</span> {c.nome}
+                </div>
+                <div>
+                  <span className="font-medium">Total gasto (cadastro):</span> R$ {Number(c.totalGasto).toFixed(2)}
+                </div>
+                <div>
+                  <span className="font-medium">Última compra:</span> {c.ultimaCompra}
+                </div>
+                <div>
+                  <span className="font-medium">Telefone:</span> {c.telefone}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setSummaryOpen(false)}>Fechar</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
+    </>
   );
 }
-function ClientList({ title, items }: { title: string; items: string[] }) {
+function ClientList({ title, items, emptyHint }: { title: string; items: string[]; emptyHint?: string }) {
   return (
     <Card>
       <div className="mb-2 text-sm font-semibold">{title}</div>
-      {items.length === 0 ? <div className="text-xs text-muted-foreground">Nenhum</div> : (
+      {items.length === 0 ? (
+        <div className="text-xs text-muted-foreground">{emptyHint ?? "Nenhum"}</div>
+      ) : (
         <ul className="space-y-1 text-sm">
-          {items.map((i, idx) => <li key={idx} className="rounded bg-background/40 px-2 py-1">{i}</li>)}
+          {items.map((i, idx) => (
+            <li key={idx} className="rounded bg-background/40 px-2 py-1">
+              {i}
+            </li>
+          ))}
         </ul>
       )}
     </Card>
@@ -1390,121 +1529,207 @@ function ClientList({ title, items }: { title: string; items: string[] }) {
 }
 
 /* ---------- Reports ---------- */
-type ReportMsg = { q: string; answer: string; metrics: { label: string; value: string }[]; bars: { label: string; value: number }[]; insight: string };
+function fmtBrl(n: number) {
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 function ReportsTab({
+  storeId,
+  onSubmitQuestion,
   onEnqueueFromReport,
   logAudit,
 }: {
+  storeId: string;
+  onSubmitQuestion: (text: string) => Promise<void>;
   onEnqueueFromReport: (text: string) => Promise<void>;
   logAudit: (m: string) => void;
 }) {
-  const examples = ["Quanto vendi hoje?", "Quais clientes estão devendo?", "Qual técnico tem mais OS?", "Quais produtos estão parados?"];
-  const [history, setHistory] = useState<ReportMsg[]>([]);
+  const examples = ["qual foi meu faturamento hoje?", "mostrar financeiro hoje", "consultar caixa", "buscar cliente Ana"];
+  const [snap, setSnap] = useState<OmniAgentReportsSnapshotDTO | null>(null);
+  const [loading, setLoading] = useState(true);
   const [text, setText] = useState("");
+  const [last, setLast] = useState<{ q: string; ok: boolean; detail: string } | null>(null);
 
-  const week = useMemo(() => [320, 180, 410, 260, 380, 150, 140], []);
-  const maxW = Math.max(...week);
-  const days = ["S", "T", "Q", "Q", "S", "S", "D"];
+  const load = useCallback(async () => {
+    if (!storeId?.trim()) return;
+    setLoading(true);
+    try {
+      const s = await getOmniAgentReportsSnapshot(storeId);
+      setSnap(s);
+    } catch {
+      setSnap(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [storeId]);
 
-  function build(q: string): ReportMsg {
-    const total = 800 + Math.floor(Math.random() * 800);
-    const qty = 10 + Math.floor(Math.random() * 20);
-    return {
-      q, answer: `Hoje você vendeu R$ ${total.toLocaleString("pt-BR")},00 em ${qty} vendas. Pix foi a forma mais usada.`,
-      metrics: [
-        { label: "Total vendido", value: `R$ ${total}` },
-        { label: "Vendas", value: String(qty) },
-        { label: "Ticket médio", value: `R$ ${(total / qty).toFixed(0)}` },
-        { label: "Forma principal", value: "Pix" },
-      ],
-      bars: [
-        { label: "Pix", value: 60 + Math.random() * 30 },
-        { label: "Dinheiro", value: 30 + Math.random() * 30 },
-        { label: "Cartão", value: 20 + Math.random() * 30 },
-      ],
-      insight: "Seu ticket médio subiu 12% comparado ao período anterior.",
-    };
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function ask() {
+    const q = text.trim();
+    if (!q) return toast.error("Digite uma pergunta");
+    try {
+      await onSubmitQuestion(q);
+      setLast({
+        q,
+        ok: true,
+        detail:
+          "Comando enviado (canal texto interno, interpretação determinística). Veja a Inbox IA ou o feed para estado e resultado.",
+      });
+      setText("");
+      logAudit(`Relatórios IA — pergunta: ${q}`);
+      void load();
+    } catch (e) {
+      setLast({ q, ok: false, detail: e instanceof Error ? e.message : "Erro" });
+    }
   }
-  function ask(q: string) { if (!q.trim()) return; setHistory(h => [...h, build(q)]); setText(""); }
+
+  const stats = snap?.stats;
+  const indicadores = snap?.financeiroHoje?.indicadores;
+  const maxIntent = Math.max(1, ...(snap?.intentCounts.map((x) => x.count) ?? [1]));
 
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon={TrendingUp} label="Vendas da semana" value="R$ 1.840" hint="+18%" />
-        <Stat icon={Wallet} label="Ticket médio" value="R$ 58" hint="+12%" />
-        <Stat icon={Wrench} label="OS abertas" value="12" hint="3 críticas" />
-        <Stat icon={AlertTriangle} label="Inadimplência" value="R$ 450" hint="2 clientes" />
+        <Stat icon={Activity} label="Comandos hoje" value={stats ? String(stats.todayCount) : "—"} hint="OmniAgentCommand" />
+        <Stat icon={Zap} label="Executados" value={stats ? String(stats.executed) : "—"} />
+        <Stat icon={Inbox} label="Pendente + confirmação" value={stats ? String(stats.pending + stats.awaitingConfirmation) : "—"} />
+        <Stat icon={AlertTriangle} label="Erros" value={stats ? String(stats.error) : "—"} />
       </div>
 
       <Card>
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="font-semibold">Vendas — últimos 7 dias</h3>
-          <Badge variant="secondary">Mock</Badge>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Resumo financeiro (hoje)</h3>
+          {snap?.financeiroSemPermissao ? (
+            <Badge variant="secondary">Sem permissão</Badge>
+          ) : (
+            <Badge variant="outline">Serviço real</Badge>
+          )}
         </div>
-        <div className="flex items-end gap-2" style={{ height: 128 }}>
-          {week.map((v, i) => (
-            <div key={i} className="flex-1 flex flex-col items-center gap-1">
-              <div
-                className="w-full bg-primary/80 rounded-t transition-all hover:bg-primary cursor-default"
-                style={{ height: Math.max(4, Math.round((v / maxW) * 112)) }}
-                title={`R$ ${v}`}
-              />
-              <span className="text-[10px] text-muted-foreground">{days[i]}</span>
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="text-sm text-muted-foreground">A carregar…</div>
+        ) : snap?.financeiroSemPermissao ? (
+          <div className="text-sm text-muted-foreground">
+            Esta conta não tem permissão para indicadores financeiros neste painel.
+          </div>
+        ) : !snap?.financeiroHoje ? (
+          <div className="text-sm text-muted-foreground">Sem dados ou serviço indisponível para o período.</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              ["Receita", indicadores?.receitaTotal],
+              ["Despesa", indicadores?.despesaTotal],
+              ["Lucro líquido", indicadores?.lucroLiquido],
+              ["A receber pend.", indicadores?.receberPendente],
+            ].map(([label, val]) => (
+              <div key={String(label)} className="rounded-lg border border-border bg-background/40 p-2">
+                <div className="text-[10px] text-muted-foreground">{label}</div>
+                <div className="text-sm font-semibold">{typeof val === "number" ? fmtBrl(val) : "—"}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Intenções (comandos recentes)</h3>
+          <Badge variant="secondary">Até 400 mais recentes</Badge>
+        </div>
+        {loading ? (
+          <div className="text-sm text-muted-foreground">A carregar…</div>
+        ) : !snap?.intentCounts.length ? (
+          <div className="text-sm text-muted-foreground">Nenhum comando registado ainda.</div>
+        ) : (
+          <div className="space-y-2">
+            {snap.intentCounts.map((row) => (
+              <div key={row.intent} className="flex items-center gap-3 text-xs min-w-0">
+                <span className="w-36 shrink-0 font-mono text-muted-foreground truncate">{row.intent}</span>
+                <div className="h-3 flex-1 min-w-0 rounded bg-muted overflow-hidden">
+                  <div className="h-full bg-primary" style={{ width: `${Math.round((row.count / maxIntent) * 100)}%` }} />
+                </div>
+                <span className="w-8 shrink-0 text-right font-medium">{row.count}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="border-dashed">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <Badge variant="secondary">Sem LLM</Badge>
+          <span className="text-sm font-medium">Pergunta ao Agent</span>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Não há modelo de linguagem nesta fase: o texto é interpretado por regras e vira OmniAgentCommand real (canal texto interno).
+        </p>
         <div className="flex flex-wrap gap-2">
-          <Input className="flex-1 min-w-[200px]" placeholder="Pergunte algo ao seu negócio…" value={text}
-            onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && ask(text)} />
-          <Button onClick={() => ask(text)}><Send /> Perguntar</Button>
-          <Button variant="ghost" onClick={() => { setHistory([]); toast("Histórico limpo"); }}><Trash2 /> Limpar</Button>
+          <Input
+            className="flex-1 min-w-[200px]"
+            placeholder="Pergunte algo ao seu negócio…"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void ask();
+            }}
+          />
+          <Button onClick={() => void ask()}>
+            <Send /> Perguntar
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setLast(null);
+              toast("Painel local limpo");
+            }}
+          >
+            <Trash2 /> Limpar
+          </Button>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          {examples.map(e => <Button key={e} variant="outline" size="sm" onClick={() => ask(e)}>{e}</Button>)}
+          {examples.map((e) => (
+            <Button
+              key={e}
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await onSubmitQuestion(e);
+                  setLast({ q: e, ok: true, detail: "Enviado — veja Inbox / feed." });
+                  logAudit(`Relatórios — exemplo: ${e}`);
+                  void load();
+                } catch (err) {
+                  setLast({ q: e, ok: false, detail: err instanceof Error ? err.message : "Erro" });
+                }
+              }}
+            >
+              {e}
+            </Button>
+          ))}
         </div>
+        {last && (
+          <div
+            className={cn(
+              "mt-4 rounded-lg border p-3 text-sm",
+              last.ok ? "border-border bg-muted/50" : "border-destructive/50 bg-destructive/5",
+            )}
+          >
+            <div className="text-xs text-muted-foreground mb-1">{last.ok ? "Último envio" : "Erro"}</div>
+            <div className="font-medium">{last.q}</div>
+            <div className="mt-1 text-xs">{last.detail}</div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              onClick={() => void onEnqueueFromReport(`Triagem manual a partir de relatório: ${last.q}`)}
+            >
+              <Zap /> Enfileirar na Inbox
+            </Button>
+          </div>
+        )}
       </Card>
-
-      {history.length === 0 && (
-        <Card><div className="text-sm text-muted-foreground text-center py-6">Faça uma pergunta para gerar análise</div></Card>
-      )}
-
-      <div className="space-y-3">
-        {history.map((m, i) => (
-          <Card key={i} className="space-y-3">
-            <div className="text-sm"><span className="text-muted-foreground">Você:</span> {m.q}</div>
-            <div className="rounded-lg bg-muted p-3 text-sm">{m.answer}</div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {m.metrics.map(mm => (
-                <div key={mm.label} className="rounded-lg border border-border bg-background/40 p-2">
-                  <div className="text-[10px] text-muted-foreground">{mm.label}</div>
-                  <div className="text-sm font-semibold">{mm.value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="space-y-1">
-              {m.bars.map(b => (
-                <div key={b.label} className="flex items-center gap-2 text-xs">
-                  <span className="w-16 text-muted-foreground">{b.label}</span>
-                  <div className="h-3 flex-1 rounded bg-muted overflow-hidden"><div className="h-full bg-primary" style={{ width: `${b.value}%` }} /></div>
-                  <span className="w-10 text-right">{b.value.toFixed(0)}%</span>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-start gap-2 rounded-lg border border-border bg-accent/30 p-3 text-sm">
-              <Lightbulb className="h-4 w-4 mt-0.5 text-primary" /><div className="flex-1">{m.insight}</div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={() => { logAudit(`Insight: ${m.q}`); toast.success("Salvo"); }}><Save /> Salvar</Button>
-              <Button size="sm" onClick={() => void onEnqueueFromReport(`Ação a partir de relatório: ${m.q}`)}>
-                <Zap /> Gerar ação
-              </Button>
-            </div>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 }
@@ -1521,7 +1746,7 @@ const DEFAULT_SETTINGS = {
   hours: { start: "08:00", end: "18:00", days: ["seg", "ter", "qua", "qui", "sex"] },
   plan: "Ouro",
 };
-function SettingsTab({ audit }: { audit: string[] }) {
+function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: string) => void }) {
   const [s, setS] = useLS("omni-settings", DEFAULT_SETTINGS);
   const [exportOpen, setExportOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
@@ -1534,12 +1759,39 @@ function SettingsTab({ audit }: { audit: string[] }) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      <Card className="lg:col-span-2 border-dashed">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <Badge variant="secondary">localStorage</Badge>
+          <span className="text-sm font-medium">Preferências apenas neste navegador</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          As secções abaixo gravam na chave <span className="font-mono text-foreground">omni-settings</span> (e similares). Não
+          substituem políticas no servidor nem o motor Prisma do Omni Agent.
+        </p>
+      </Card>
       <Card>
-        <h3 className="mb-3 font-semibold">Canal padrão</h3>
+        <h3 className="mb-3 font-semibold">Canal padrão (demo)</h3>
         <div className="flex flex-wrap gap-2">
-          {[["whatsapp", "WhatsApp"], ["texto", "Texto"], ["voz", "Voz"]].map(([v, l]) => (
-            <Button key={v} variant={s.channel === v ? "default" : "outline"} size="sm" onClick={() => setS({ ...s, channel: v })}>{l}</Button>
-          ))}
+          {(
+            [
+              ["whatsapp", "WhatsApp"],
+              ["texto", "Texto"],
+              ["voz", "Voz"],
+            ] as const
+          ).map(([v, l]) =>
+            v === "voz" ? (
+              <span key={v} className="inline-flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" disabled className="opacity-70">
+                  {l}
+                </Button>
+                <Badge variant="outline">Em preparação</Badge>
+              </span>
+            ) : (
+              <Button key={v} type="button" variant={s.channel === v ? "default" : "outline"} size="sm" onClick={() => setS({ ...s, channel: v })}>
+                {l}
+              </Button>
+            ),
+          )}
         </div>
         <div className="mt-4 flex items-center justify-between"><Label>Aprovação automática</Label>
           <Switch checked={s.autoApprove} onCheckedChange={(v) => setS({ ...s, autoApprove: v })} /></div>
@@ -1554,7 +1806,7 @@ function SettingsTab({ audit }: { audit: string[] }) {
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold">Permissões</h3>
+        <h3 className="mb-3 font-semibold">Permissões (demo local)</h3>
         <div className="space-y-2">
           {Object.entries(s.perms).map(([k, v]) => (
             <div key={k} className="flex items-center justify-between rounded-md border border-border p-2">
@@ -1566,7 +1818,7 @@ function SettingsTab({ audit }: { audit: string[] }) {
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold">Personalidade do agente</h3>
+        <h3 className="mb-3 font-semibold">Personalidade do agente (demo local)</h3>
         <div className="space-y-3">
           <div><Label>Nome</Label><Input value={s.agentName} onChange={(e) => setS({ ...s, agentName: e.target.value })} /></div>
           <div>
@@ -1583,7 +1835,7 @@ function SettingsTab({ audit }: { audit: string[] }) {
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold">Horário de atendimento</h3>
+        <h3 className="mb-3 font-semibold">Horário de atendimento (demo local)</h3>
         <div className="grid gap-3 grid-cols-2">
           <div><Label>Início</Label><Input type="time" value={s.hours.start} onChange={(e) => setS({ ...s, hours: { ...s.hours, start: e.target.value } })} /></div>
           <div><Label>Fim</Label><Input type="time" value={s.hours.end} onChange={(e) => setS({ ...s, hours: { ...s.hours, end: e.target.value } })} /></div>
@@ -1594,29 +1846,54 @@ function SettingsTab({ audit }: { audit: string[] }) {
           ))}
         </div>
 
-        <div className="mt-5 rounded-lg border border-border bg-gradient-to-br from-primary/10 to-accent/30 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs text-muted-foreground">Plano atual</div>
-              <div className="font-semibold flex items-center gap-2">{s.plan} <Badge>Pro</Badge></div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs text-muted-foreground">Créditos usados</div>
-              <div className="font-semibold">68%</div>
-            </div>
+        <div className="mt-5 rounded-lg border border-border bg-muted/40 p-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">Em preparação</Badge>
+            <span className="text-sm font-medium">Plano / créditos IA</span>
           </div>
-          <Progress value={68} className="mt-2" />
+          <p className="text-xs text-muted-foreground">
+            Controlo de plano e quotas por modelo ainda não está ligado a esta página. Use a consola de faturação da sua conta.
+          </p>
         </div>
       </Card>
 
       <Card className="lg:col-span-2">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="font-semibold">Auditoria</h3>
+          <h3 className="font-semibold">Auditoria (sessão)</h3>
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => toast.success("Configurações salvas")}><Save /> Salvar</Button>
-            <Button size="sm" variant="outline" onClick={() => { setS(DEFAULT_SETTINGS); toast("Restaurado"); }}><RefreshCw /> Restaurar</Button>
-            <Button size="sm" variant="outline" onClick={() => setTestOpen(true)}><Play /> Testar config</Button>
-            <Button size="sm" variant="outline" onClick={() => setExportOpen(true)}><Download /> Exportar log</Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                logAudit("Definições locais: utilizador gravou (apenas navegador)");
+                toast.success("Preferências gravadas no navegador (localStorage, chave omni-settings)");
+              }}
+            >
+              <Save /> Salvar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setS(DEFAULT_SETTINGS);
+                logAudit("Definições locais: restauro ao padrão");
+                toast("Preferências repostas ao padrão local");
+              }}
+            >
+              <RefreshCw /> Restaurar
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setTestOpen(true)}>
+              <Play /> Testar config
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setExportOpen(true);
+                logAudit("Export: pré-visualização aberta");
+              }}
+            >
+              <Download /> Exportar log
+            </Button>
           </div>
         </div>
         <div className="space-y-1 text-xs text-muted-foreground max-h-72 overflow-y-auto">
@@ -1626,31 +1903,79 @@ function SettingsTab({ audit }: { audit: string[] }) {
 
       <Dialog open={testOpen} onOpenChange={setTestOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Teste de configuração</DialogTitle></DialogHeader>
-          <div className="space-y-2 text-sm">
-            <div className="rounded-lg bg-muted p-3">
-              <div className="text-xs text-muted-foreground mb-1">Cliente diz:</div>
-              "vendi capa por R$ 30 no pix"
-            </div>
-            <div className="rounded-lg bg-primary text-primary-foreground p-3">
-              <div className="text-xs opacity-80 mb-1">{s.agentName} responde ({s.tone}):</div>
-              {s.tone === "formal" ? "Prezado, registrarei a venda de capa no valor de R$ 30,00 via Pix. Confirma?" :
-                s.tone === "amigável" ? "Show! Já vou registrar essa venda de capa R$ 30 no Pix 😊 Confirma?" :
-                "Identifiquei venda de capa R$ 30 (Pix). Posso registrar?"}
-            </div>
+          <DialogHeader>
+            <DialogTitle>Teste de configuração (local)</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Não há LLM: mostra apenas a classificação determinística de uma frase de exemplo. Nome, tom e prompt acima são
+            preferências guardadas no navegador — não alteram o servidor.
+          </p>
+          <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
+            <div className="text-xs text-muted-foreground">Texto de exemplo</div>
+            <div className="font-mono">&quot;vendi capa por R$ 30 no pix&quot;</div>
           </div>
-          <DialogFooter><Button onClick={() => setTestOpen(false)}>Fechar</Button></DialogFooter>
+          <div className="rounded-lg border border-border p-3 text-xs space-y-1 font-mono">
+            {(() => {
+              const interp = interpretOmniAgentCommand("vendi capa por R$ 30 no pix");
+              return (
+                <>
+                  <div>intent: {interp.intent}</div>
+                  <div>action: {interp.action}</div>
+                  <div>confidence: {interp.confidence}</div>
+                  <div>requiresConfirmation: {String(interp.requiresConfirmation)}</div>
+                </>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setTestOpen(false)}>Fechar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Log exportado</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Exportar preferências + auditoria</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground mb-2">
+            JSON inclui definições locais e linhas de auditoria desta sessão. Use «Descarregar» para guardar ficheiro real.
+          </p>
           <pre className="max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify({ settings: s, audit }, null, 2)}</pre>
-          <DialogFooter>
-            <Button variant="outline" onClick={async () => {
-              try { await navigator.clipboard.writeText(JSON.stringify({ settings: s, audit }, null, 2)); toast.success("Copiado"); } catch { toast("Copiado"); }
-            }}><Copy /> Copiar</Button>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(JSON.stringify({ settings: s, audit }, null, 2));
+                  toast.success("Copiado para a área de transferência");
+                  logAudit("Export: JSON copiado");
+                } catch {
+                  toast("Copiado");
+                }
+              }}
+            >
+              <Copy /> Copiar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const body = JSON.stringify({ settings: s, audit }, null, 2);
+                const blob = new Blob([body], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `omni-agent-settings-${new Date().toISOString().slice(0, 10)}.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                logAudit("Export: ficheiro JSON descarregado");
+                toast.success("Ficheiro descarregado");
+              }}
+            >
+              <Download /> Descarregar
+            </Button>
             <Button onClick={() => setExportOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
@@ -1666,7 +1991,7 @@ function CommandPalette({ open, onClose, onAction }: { open: boolean; onClose: (
   const [idx, setIdx] = useState(0);
   const actions: PaletteAction[] = [
     { type: "new", label: "Novo comando", hint: "Abrir modal", icon: Plus },
-    { type: "simulate", label: "Simular comando", hint: "Gerar mock", icon: Play },
+    { type: "simulate", label: "Simular comando", hint: "Pipeline real", icon: Play },
     { type: "tab", value: "inbox", label: "Ir para Inbox IA", hint: "Pendências", icon: Inbox },
     { type: "tab", value: "whatsapp", label: "Ir para WhatsApp Agent", hint: "Conversas", icon: MessageCircle },
     { type: "tab", value: "commands", label: "Ver Comandos IA", hint: "Catálogo", icon: Sparkles },

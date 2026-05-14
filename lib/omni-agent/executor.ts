@@ -111,7 +111,12 @@ export async function executeOmniAgentIntent(
 
   try {
     if (intent === "UNKNOWN") {
-      return { ok: false, actionLabel: interp.action, error: "Comando não reconhecido. Veja exemplos na aba Comandos IA." }
+      return {
+        ok: false,
+        actionLabel: interp.action,
+        error:
+          "Sem correspondência automática. Reformule ou use a Inbox para triagem manual (ex.: abrir OS para [nome], buscar cliente, financeiro hoje).",
+      }
     }
 
     if (intent === "CLIENT_SEARCH") {
