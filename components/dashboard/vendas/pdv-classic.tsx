@@ -1369,6 +1369,7 @@ export function PdvClassic({
               clientSearchOpen={shellClientSearchOpen}
               onClientSearchOpenChange={(open) => {
                 setShellClientSearchOpen(open)
+                if (open) setCustomerSearch("")
                 if (!open) focusShellBipe()
               }}
               clientOptions={shellClientOptions}
@@ -1380,10 +1381,14 @@ export function PdvClassic({
                 } else {
                   const c = customerResults.find((x) => x.id === row.id)
                   if (c) setSelectedCustomer(c)
+                  setCustomerSearch("")
                 }
                 setShellClientSearchOpen(false)
                 focusShellBipe()
               }}
+              clientSearchQuery={customerSearch}
+              onClientSearchQueryChange={setCustomerSearch}
+              clientSearchLoading={customerLoading}
               qtyEditOpen={shellQtyEditOpen}
               onQtyEditOpenChange={(open) => {
                 setShellQtyEditOpen(open)

@@ -72,8 +72,8 @@ import { useToast } from "@/hooks/use-toast"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
-import { listClientes, type ClienteDTO } from "@/app/actions/cadastros"
 import { appendAuditLog } from "@/lib/audit-log"
+import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 
 // ─── Cart persistence ─────────────────────────────────────────────────────────
@@ -84,6 +84,8 @@ const CART_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12h
 type CartPersisted = {
   cart: CartLine[]
   customerName: string
+  clienteId?: string | null
+  clienteDoc?: string | null
   discount: number
   savedAt: string
 }
@@ -570,146 +572,6 @@ function PaymentModal({
   )
 }
 
-// ─── ClientePickerModal ───────────────────────────────────────────────────────
-
-function ClientePickerModal({
-  open,
-  storeId,
-  onSelect,
-  onClose,
-}: {
-  open: boolean
-  storeId: string
-  onSelect: (cliente: ClienteDTO) => void
-  onClose: () => void
-}) {
-  const [clientes, setClientes] = useState<ClienteDTO[]>([])
-  const [loading, setLoading] = useState(false)
-  const [search, setSearch] = useState("")
-  const [selectedIdx, setSelectedIdx] = useState(0)
-
-  useEffect(() => {
-    if (!open) return
-    setSearch("")
-    setSelectedIdx(0)
-    setLoading(true)
-    listClientes(storeId)
-      .then((data) => setClientes(data))
-      .catch(() => setClientes([]))
-      .finally(() => setLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, storeId])
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim()
-    if (!q) return clientes
-    return clientes.filter(
-      (c) =>
-        c.nome.toLowerCase().includes(q) ||
-        c.documento.replace(/\D/g, "").includes(q) ||
-        c.telefone.replace(/\D/g, "").includes(q)
-    )
-  }, [clientes, search])
-
-  useEffect(() => { setSelectedIdx(0) }, [search])
-
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIdx((i) => Math.min(i + 1, filtered.length - 1)) }
-    if (e.key === "ArrowUp")   { e.preventDefault(); setSelectedIdx((i) => Math.max(0, i - 1)) }
-    if (e.key === "Enter" && filtered[selectedIdx]) { e.preventDefault(); onSelect(filtered[selectedIdx]) }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[80vh] max-w-md flex-col gap-0 overflow-hidden rounded-2xl border-border bg-card p-0">
-        <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
-          <DialogTitle className="flex items-center gap-2 text-foreground">
-            <User className="h-4 w-4 text-primary" />
-            Selecionar Cliente
-            <kbd className="ml-auto rounded border border-border bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
-              F2
-            </kbd>
-          </DialogTitle>
-        </DialogHeader>
-
-        {/* Campo de busca */}
-        <div className="shrink-0 border-b border-border px-4 py-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder="Nome, CPF/CNPJ ou telefone…"
-              className="h-9 rounded-xl border-border bg-background pl-9 text-sm"
-            />
-          </div>
-        </div>
-
-        {/* Lista */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Carregando clientes…
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-center">
-              <User className="h-8 w-8 text-muted-foreground/25" />
-              <p className="text-sm text-muted-foreground">
-                {search.trim()
-                  ? `Nenhum resultado para "${search}".`
-                  : "Nenhum cliente cadastrado nesta loja."}
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {filtered.map((c, idx) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => onSelect(c)}
-                  className={cn(
-                    "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-100",
-                    "hover:bg-accent",
-                    idx === selectedIdx && "bg-accent"
-                  )}
-                >
-                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                    {c.nome.slice(0, 1).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">{c.nome}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {[c.documento !== "—" ? c.documento : "", c.telefone !== "—" ? c.telefone : ""]
-                        .filter(Boolean).join(" · ")}
-                    </p>
-                  </div>
-                  {c.totalGasto > 0 && (
-                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-                      {brl(c.totalGasto)}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <DialogFooter className="shrink-0 border-t border-border px-4 py-3">
-          <p className="flex-1 text-[10px] text-muted-foreground">
-            <kbd className="rounded border border-border bg-muted px-1 font-bold">↑↓</kbd> navegar{" · "}
-            <kbd className="rounded border border-border bg-muted px-1 font-bold">Enter</kbd> selecionar
-          </p>
-          <Button variant="ghost" size="sm" className="h-7 rounded-lg text-xs" onClick={onClose}>
-            Fechar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 // ─── HelpOverlay ─────────────────────────────────────────────────────────────
 
@@ -1262,8 +1124,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [discount, setDiscount] = useState(0)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
 
-  // ── Customer (required for "A Prazo") ────────────────────────────────────────
+  // ── Customer ──────────────────────────────────────────────────────────────────
   const [customerName, setCustomerName] = useState("")
+  const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null)
+  const [selectedClienteDoc, setSelectedClienteDoc] = useState<string | null>(null)
 
   // ── Modals ───────────────────────────────────────────────────────────────────
   const [paymentOpen, setPaymentOpen] = useState(false)
@@ -1335,6 +1199,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         if (age < CART_MAX_AGE_MS && Array.isArray(data.cart) && data.cart.length > 0) {
           setCart(data.cart)
           setCustomerName(data.customerName ?? "")
+          setSelectedClienteId(data.clienteId ?? null)
+          setSelectedClienteDoc(data.clienteDoc ?? null)
           setDiscount(typeof data.discount === "number" ? data.discount : 0)
           window.setTimeout(() => {
             toast({
@@ -1358,14 +1224,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         if (cart.length === 0) {
           localStorage.removeItem(CART_STORAGE_KEY(storeIdKey))
         } else {
-          const data: CartPersisted = { cart, customerName, discount, savedAt: new Date().toISOString() }
+          const data: CartPersisted = { cart, customerName, clienteId: selectedClienteId, clienteDoc: selectedClienteDoc, discount, savedAt: new Date().toISOString() }
           localStorage.setItem(CART_STORAGE_KEY(storeIdKey), JSON.stringify(data))
         }
       } catch { /* ignore */ }
     }, 500)
     return () => { if (cartPersistTimerRef.current) clearTimeout(cartPersistTimerRef.current) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, customerName, discount, storeIdKey])
+  }, [cart, customerName, selectedClienteId, selectedClienteDoc, discount, storeIdKey])
 
   // ── Limpar selectedLineId quando a linha é removida ──────────────────────────
   useEffect(() => {
@@ -1673,15 +1539,6 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     payments: { dinheiro: number; pix: number; cartaoDebito: number; cartaoCredito: number; aPrazo: number }
   ) => {
     if (cart.length === 0) return
-    // `operations-store` exige CPF para à prazo. Mantemos a UI atual e bloqueamos esta forma aqui.
-    if (method === "a_prazo" || payments.aPrazo > 0.009) {
-      toast({
-        title: "Venda à prazo",
-        description: "Para vender à prazo é necessário cliente com CPF/CNPJ (use o PDV Clássico).",
-        variant: "destructive",
-      })
-      return
-    }
 
     const result = finalizeSaleTransaction({
       lines: cart.map((l) => ({
@@ -1697,10 +1554,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         cartaoDebito: payments.cartaoDebito,
         cartaoCredito: payments.cartaoCredito,
         carne: 0,
-        aPrazo: 0,
+        aPrazo: payments.aPrazo,
         creditoVale: 0,
       },
       customerName: customerName.trim() || undefined,
+      customerCpf: selectedClienteDoc ?? undefined,
       openCaixaIfClosed: false,
       auditMeta: { cashierId },
     })
@@ -1715,6 +1573,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     setCart([])
     setDiscount(0)
     setCustomerName("")
+    setSelectedClienteId(null)
+    setSelectedClienteDoc(null)
     setSelectedLineId(null)
     setRapidoFlashLineId(null)
     setRapidoPickIdx(0)
@@ -2116,7 +1976,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               <Input
                 ref={customerInputRef}
                 value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
+                onChange={(e) => {
+                  setCustomerName(e.target.value)
+                  setSelectedClienteId(null)
+                  setSelectedClienteDoc(null)
+                }}
                 placeholder="Cliente — A Prazo/Fiado  [F2]"
                 className="h-9 rounded-xl border-border bg-background pl-9 pr-14 text-sm"
               />
@@ -2440,11 +2304,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         )
       })()}
 
-      <ClientePickerModal
+      <PdvClientePicker
         open={clientePickerOpen}
         storeId={(lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID}
-        onSelect={(c) => {
-          setCustomerName(c.nome)
+        onSelect={(c: PdvClienteResult) => {
+          setCustomerName(c.name)
+          setSelectedClienteId(c.id)
+          setSelectedClienteDoc(c.document ?? null)
           setClientePickerOpen(false)
         }}
         onClose={() => setClientePickerOpen(false)}

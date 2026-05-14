@@ -16,8 +16,10 @@ import {
   Calculator,
   ChevronRight,
   Hash,
+  Loader2,
   PackageOpen,
   Receipt,
+  Search,
   User2,
   UserCog,
   Wifi,
@@ -322,6 +324,10 @@ export type PdvOmniClassicShellProps = {
   onClientSearchOpenChange: (open: boolean) => void
   clientOptions: Array<{ id: string; label: string }>
   onPickClient: (label: string) => void
+  /** Live search query for the F2 client picker (controlled from parent). */
+  clientSearchQuery?: string
+  onClientSearchQueryChange?: (v: string) => void
+  clientSearchLoading?: boolean
   qtyEditOpen: boolean
   onQtyEditOpenChange: (open: boolean) => void
   qtyEditDefault: string
@@ -790,21 +796,41 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             <DialogTitle>Pesquisar Cliente (F2)</DialogTitle>
             <DialogDescription>Identifique o cliente desta venda.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            {props.clientOptions.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => {
-                  props.onPickClient(c.label)
-                  props.onClientSearchOpenChange(false)
-                }}
-                className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/40"
-              >
-                <span className="font-medium text-foreground">{c.label}</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </button>
-            ))}
+          <div className="relative">
+            {props.clientSearchLoading ? (
+              <Loader2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            ) : (
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            )}
+            <Input
+              autoFocus
+              value={props.clientSearchQuery ?? ""}
+              onChange={(e) => props.onClientSearchQueryChange?.(e.target.value)}
+              placeholder="Nome, CPF/CNPJ ou telefone…"
+              className="h-9 rounded-xl border-border bg-background pl-9 text-sm"
+            />
+          </div>
+          <div className="max-h-60 space-y-1 overflow-y-auto">
+            {!(props.clientSearchQuery ?? "").trim() && props.clientOptions.length <= 1 ? (
+              <p className="py-3 text-center text-sm text-muted-foreground">
+                Digite para buscar um cliente.
+              </p>
+            ) : (
+              props.clientOptions.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    props.onPickClient(c.label)
+                    props.onClientSearchOpenChange(false)
+                  }}
+                  className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/40"
+                >
+                  <span className="font-medium text-foreground">{c.label}</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </button>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>
