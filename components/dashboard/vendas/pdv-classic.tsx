@@ -67,6 +67,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useOperationsStore } from "@/lib/operations-store"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import type { PdvClassicLayoutKind } from "@/lib/store-settings-types"
+import { writePdvClassicLayout } from "@/lib/pdv-classic-layout"
 import {
   PDV_PRODUCTS_BASE,
   mergePdvCatalogWithInventory,
@@ -1408,23 +1409,16 @@ export function PdvClassic({
                           <span>Venda Balcao (Rapida)</span>
                         </button>
                         <button
-                          onClick={() => setSaleMode("completa")}
-                          className={`flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-base font-semibold transition-all sm:flex-none ${
-                            saleMode === "completa"
-                              ? "bg-primary text-primary-foreground shadow-lg"
-                              : "text-foreground/70 hover:text-foreground"
-                          }`}
+                          onClick={() => writePdvClassicLayout("venda-completa")}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-base font-semibold transition-all sm:flex-none text-foreground/70 hover:text-foreground hover:bg-primary/10"
                         >
                           <FileText className="h-5 w-5" />
-                          <span>Venda Completa (Nota)</span>
+                          <span>Venda Completa Enterprise</span>
                         </button>
                       </div>
 
-                      <Badge
-                        variant={saleMode === "balcao" ? "secondary" : "default"}
-                        className={`px-4 py-2 text-sm ${saleMode === "completa" ? "border border-primary/30 bg-primary/20 text-primary" : ""}`}
-                      >
-                        {saleMode === "balcao" ? "Modo Rapido" : "Modo Completo - Com NF-e"}
+                      <Badge variant="secondary" className="px-4 py-2 text-sm">
+                        Modo Rápido
                       </Badge>
                       <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:w-auto sm:justify-end">
                         <span className="mr-1 text-sm font-medium text-foreground">Interface:</span>

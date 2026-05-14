@@ -145,7 +145,8 @@ const PAY_METHODS: {
     label: "Dinheiro",
     shortLabel: "Dinheiro",
     Icon: Banknote,
-    color: "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20",
+    // emerald-600 base — no hover dark, go brighter; glow controlado
+    color: "bg-emerald-600 hover:bg-emerald-500 shadow-[0_4px_12px_-2px_rgba(5,150,105,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(5,150,105,0.62)]",
     hotkey: "F1",
   },
   {
@@ -153,35 +154,40 @@ const PAY_METHODS: {
     label: "PIX",
     shortLabel: "PIX",
     Icon: QrCode,
-    color: "bg-teal-600 hover:bg-teal-700 shadow-teal-600/20",
+    // teal — sem token equivalente; mesma estrutura de glow
+    color: "bg-teal-600 hover:bg-teal-500 shadow-[0_4px_12px_-2px_rgba(13,148,136,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(13,148,136,0.62)]",
   },
   {
     id: "credito",
     label: "Cartão Crédito",
     shortLabel: "Crédito",
     Icon: CreditCard,
-    color: "bg-blue-600 hover:bg-blue-700 shadow-blue-600/20",
+    // blue-600 → token bg-info seria oklch(0.72 0.15 235) mas variação de tema; usar escala fixa para contraste garantido
+    color: "bg-blue-600 hover:bg-blue-500 shadow-[0_4px_12px_-2px_rgba(37,99,235,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(37,99,235,0.62)]",
   },
   {
     id: "debito",
     label: "Cartão Débito",
     shortLabel: "Débito",
     Icon: CreditCard,
-    color: "bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/20",
+    // indigo — sem token equivalente
+    color: "bg-indigo-600 hover:bg-indigo-500 shadow-[0_4px_12px_-2px_rgba(79,70,229,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(79,70,229,0.62)]",
   },
   {
     id: "a_prazo",
     label: "A Prazo (Fiado)",
     shortLabel: "A Prazo",
     Icon: CalendarClock,
-    color: "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20",
+    // amber-600 → token bg-warning varia entre temas; usar escala fixa
+    color: "bg-amber-600 hover:bg-amber-500 shadow-[0_4px_12px_-2px_rgba(217,119,6,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(217,119,6,0.62)]",
   },
   {
     id: "multiplo",
     label: "Pgto. Múltiplo",
     shortLabel: "Múltiplo",
     Icon: Layers,
-    color: "bg-violet-600 hover:bg-violet-700 shadow-violet-600/20",
+    // violet-600 → token bg-purple disponível mas lightness varia; escala fixa garante white-text contrast
+    color: "bg-violet-600 hover:bg-violet-500 shadow-[0_4px_12px_-2px_rgba(124,58,237,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(124,58,237,0.62)]",
     hotkey: "F12",
   },
 ]
@@ -1747,18 +1753,22 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                     setPaymentOpen(true)
                   }}
                 className={cn(
-                    "relative rounded-2xl text-xs font-bold text-white shadow-md disabled:opacity-40",
+                    "relative rounded-2xl text-xs font-bold text-white",
+                    "transition-all duration-150 ease-out",
+                    "active:scale-[0.95] active:brightness-90",
+                    "disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-1 focus-visible:ring-offset-transparent",
                     modoRapido ? "h-11" : "h-12",
                     m.color,
                   )}
                 >
                   <span className="flex flex-col items-center gap-0.5 leading-tight">
                     <span className="flex items-center gap-1">
-                      <m.Icon className="h-3.5 w-3.5 shrink-0" />
-                      {m.shortLabel}
+                      <m.Icon className="h-4 w-4 shrink-0" />
+                      <span className="tracking-wide">{m.shortLabel}</span>
                     </span>
                     {m.hotkey && (
-                      <span className="rounded border border-border/60 bg-background/20 px-1 py-px text-[9px] font-bold leading-none tracking-wider">
+                      <span className="rounded border border-white/25 bg-black/25 px-1 py-px text-[9px] font-bold leading-none tracking-widest">
                         {m.hotkey}
                       </span>
                     )}

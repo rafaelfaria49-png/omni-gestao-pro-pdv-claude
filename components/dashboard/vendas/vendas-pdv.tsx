@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { PdvClassic, type VendasPDVProps } from "./pdv-classic"
 import { PdvSupermercado } from "./pdv-supermercado"
+import { PdvVendaCompletaEnterprise } from "./pdv-venda-completa-enterprise"
 import { usePerfilLoja } from "@/lib/perfil-loja-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
@@ -13,6 +14,7 @@ import {
   PDV_CLASSIC_LAYOUT_STORAGE_KEY,
   PDV_MAIN_LAYOUT_CHANGED_EVENT,
   readPdvClassicLayout,
+  writePdvClassicLayout,
 } from "@/lib/pdv-classic-layout"
 
 type PdvLayout = "classic" | "supermercado"
@@ -101,7 +103,17 @@ export function VendasPDV(props: VendasPDVProps) {
   }, [hydrated, pdvParams.pdvClassicLayout])
 
   if (layout === "supermercado") return <PdvSupermercado {...props} />
-  // Mantemos o seletor atual (Clássico/Rápido/IA). O modo "services" é um sub-modo interno do PDV Clássico.
-  // O card "IA" ainda é placeholder (não quebrar): se algum config externo setar esse estado, caímos no Clássico.
+
+  if (classicLayout === "venda-completa") {
+    return (
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+        <PdvVendaCompletaEnterprise
+          onBack={() => writePdvClassicLayout("lovable")}
+          isModoRapido={props.isModoRapido}
+        />
+      </div>
+    )
+  }
+
   return <PdvClassic {...props} uiShell="omni-smart" classicLayoutKind={classicLayout} />
 }

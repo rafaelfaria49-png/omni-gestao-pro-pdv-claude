@@ -9,7 +9,9 @@ export function readPdvClassicLayout(): PdvClassicLayoutKind {
   if (typeof window === "undefined") return "lovable"
   try {
     const v = String(localStorage.getItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY) || "").trim()
-    return v === "services" ? "services" : "lovable"
+    if (v === "services") return "services"
+    if (v === "venda-completa") return "venda-completa"
+    return "lovable"
   } catch {
     return "lovable"
   }
