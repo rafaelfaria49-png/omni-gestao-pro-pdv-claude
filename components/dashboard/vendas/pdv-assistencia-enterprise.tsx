@@ -25,6 +25,7 @@ import {
   Check,
   ChevronDown,
   Keyboard,
+  Search,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -558,23 +559,27 @@ function EditarAtalhosModal({
   open,
   selectedServiceIds,
   selectedProductIds,
+  catalog = PDV_PRODUCTS_BASE,
   onSave,
   onClose,
 }: {
   open: boolean
   selectedServiceIds: string[]
   selectedProductIds: string[]
+  catalog?: PdvCatalogProduct[]
   onSave: (serviceIds: string[], productIds: string[]) => void
   onClose: () => void
 }) {
   const [svcIds, setSvcIds] = useState<string[]>(selectedServiceIds)
   const [prdIds, setPrdIds] = useState<string[]>(selectedProductIds)
+  const [modalSearch, setModalSearch] = useState("")
 
   // Reset to props when modal opens
   useEffect(() => {
     if (open) {
       setSvcIds(selectedServiceIds)
       setPrdIds(selectedProductIds)
+      setModalSearch("")
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -597,7 +602,25 @@ function EditarAtalhosModal({
           : prev,
     )
 
-  const allProducts = PDV_PRODUCTS_BASE.filter((p) => p.category !== "Servicos")
+  const searchLower = modalSearch.toLowerCase().trim()
+  const catalogServices = catalog.filter((p) => p.category === "Servicos")
+  const catalogProducts = catalog.filter((p) => p.category !== "Servicos")
+  const filteredServices = searchLower
+    ? catalogServices.filter(
+        (p) =>
+          p.name.toLowerCase().includes(searchLower) ||
+          p.category.toLowerCase().includes(searchLower),
+      )
+    : catalogServices
+  const filteredProducts = searchLower
+    ? catalogProducts.filter(
+        (p) =>
+          p.name.toLowerCase().includes(searchLower) ||
+          p.category.toLowerCase().includes(searchLower) ||
+          (p.sku ?? "").toLowerCase().includes(searchLower) ||
+          (p.barcode ?? "").includes(searchLower),
+      )
+    : catalogProducts
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -612,6 +635,18 @@ function EditarAtalhosModal({
           </p>
         </DialogHeader>
 
+        <div className="border-b border-border px-6 pb-3 pt-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={modalSearch}
+              onChange={(e) => setModalSearch(e.target.value)}
+              placeholder="Buscar produto ou serviço…"
+              className="h-9 rounded-xl border-border bg-background pl-9 text-sm"
+            />
+          </div>
+        </div>
+
         <ScrollArea className="max-h-[60vh]">
           <div className="space-y-5 px-6 py-4">
             {/* Services */}
@@ -625,7 +660,7 @@ function EditarAtalhosModal({
                 </Badge>
               </div>
               <div className="space-y-1.5">
-                {ALL_SERVICES.map((p) => {
+                {filteredServices.map((p) => {
                   const selected = svcIds.includes(p.id)
                   const disabled = !selected && svcIds.length >= 8
                   return (
@@ -676,7 +711,7 @@ function EditarAtalhosModal({
                 </Badge>
               </div>
               <div className="space-y-1.5">
-                {allProducts.map((p) => {
+                {filteredProducts.map((p) => {
                   const selected = prdIds.includes(p.id)
                   const disabled = !selected && prdIds.length >= 8
                   return (
@@ -790,12 +825,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   )
 
   const quickServices = useMemo(
-    () => PDV_PRODUCTS_BASE.filter((p) => atalhosSvcIds.includes(p.id)),
-    [atalhosSvcIds],
+    () => mergedCatalog.filter((p) => atalhosSvcIds.includes(p.id)),
+    [atalhosSvcIds, mergedCatalog],
   )
   const quickProducts = useMemo(
-    () => PDV_PRODUCTS_BASE.filter((p) => atalhosPrdIds.includes(p.id)),
-    [atalhosPrdIds],
+    () => mergedCatalog.filter((p) => atalhosPrdIds.includes(p.id)),
+    [atalhosPrdIds, mergedCatalog],
   )
 
   // ── Hydratação dos atalhos a partir da config persistida no banco (roda uma vez) ──
@@ -1500,15 +1535,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         open={editAtalhosOpen}
         selectedServiceIds={atalhosSvcIds}
         selectedProductIds={atalhosPrdIds}
+        catalog={mergedCatalog}
         onSave={(svcIds, prdIds) => {
           setAtalhosSvcIds(svcIds)
           setAtalhosPrdIds(prdIds)
-          const novosSvc = PDV_PRODUCTS_BASE
+          const novosSvc = mergedCatalog
             .filter((p) => svcIds.includes(p.id))
-            .map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category }))
-          const novosPrd = PDV_PRODUCTS_BASE
+            .map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, inventoryId: p.id }))
+          const novosPrd = mergedCatalog
             .filter((p) => prdIds.includes(p.id))
-            .map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category }))
+            .map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, inventoryId: p.id }))
           void saveStoreSettings({
             printerConfig: {
               ...blob,
