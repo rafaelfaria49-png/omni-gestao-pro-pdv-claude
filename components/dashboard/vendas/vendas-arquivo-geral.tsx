@@ -5,7 +5,7 @@ import {
   Search, RefreshCw, ReceiptText, User, Calendar,
   ShoppingBag, TrendingUp, BarChart3, AlertTriangle,
   Printer, Eye, XCircle, ChevronLeft, ChevronRight,
-  CheckCircle, Filter, X, Tag, Clock, DollarSign,
+  CheckCircle, Filter, X, Tag, Clock, DollarSign, UserCheck,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -153,6 +153,10 @@ export function VendasArquivoGeral() {
   const [buscaInput, setBuscaInput] = useState("")
   const [statusFiltro, setStatusFiltro] = useState("todos")
   const [pagamentoFiltro, setPagamentoFiltro] = useState("todos")
+  const [operadorFiltro, setOperadorFiltro] = useState("")
+  const [operadorInput, setOperadorInput] = useState("")
+  const [fromDate, setFromDate] = useState("")
+  const [toDate, setToDate] = useState("")
   const [page, setPage] = useState(0)
   const [showFilters, setShowFilters] = useState(false)
 
@@ -189,6 +193,9 @@ export function VendasArquivoGeral() {
         ...(busca ? { q: busca } : {}),
         ...(statusFiltro !== "todos" ? { status: statusFiltro } : {}),
         ...(pagamentoFiltro !== "todos" ? { pagamento: pagamentoFiltro } : {}),
+        ...(operadorFiltro.trim() ? { operador: operadorFiltro.trim() } : {}),
+        ...(fromDate ? { from: new Date(fromDate).toISOString() } : {}),
+        ...(toDate ? { to: new Date(toDate + "T23:59:59").toISOString() } : {}),
       })
       const res = await fetch(`/api/vendas/historico?${params}`, {
         credentials: "include",
@@ -205,7 +212,7 @@ export function VendasArquivoGeral() {
     } finally {
       setLoading(false)
     }
-  }, [storeId, page, busca, statusFiltro, pagamentoFiltro])
+  }, [storeId, page, busca, statusFiltro, pagamentoFiltro, operadorFiltro, fromDate, toDate])
 
   useEffect(() => { load() }, [load])
 
@@ -214,8 +221,13 @@ export function VendasArquivoGeral() {
     return () => clearTimeout(t)
   }, [buscaInput])
 
+  useEffect(() => {
+    const t = setTimeout(() => { setPage(0); setOperadorFiltro(operadorInput) }, 400)
+    return () => clearTimeout(t)
+  }, [operadorInput])
+
   // Reset page on filter change
-  useEffect(() => { setPage(0) }, [statusFiltro, pagamentoFiltro])
+  useEffect(() => { setPage(0) }, [statusFiltro, pagamentoFiltro, fromDate, toDate])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
@@ -352,7 +364,7 @@ export function VendasArquivoGeral() {
     },
   ]
 
-  const hasActiveFilters = statusFiltro !== "todos" || pagamentoFiltro !== "todos" || busca !== ""
+  const hasActiveFilters = statusFiltro !== "todos" || pagamentoFiltro !== "todos" || busca !== "" || fromDate !== "" || toDate !== "" || operadorFiltro !== ""
 
   return (
     <div className="space-y-6 pb-8">
@@ -469,6 +481,39 @@ export function VendasArquivoGeral() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> Data inicial
+                </label>
+                <Input
+                  type="date"
+                  className="h-9 text-sm"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> Data final
+                </label>
+                <Input
+                  type="date"
+                  className="h-9 text-sm"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <UserCheck className="h-3 w-3" /> Operador
+                </label>
+                <Input
+                  className="h-9 text-sm"
+                  placeholder="Filtrar por nome ou ID do operador…"
+                  value={operadorInput}
+                  onChange={(e) => setOperadorInput(e.target.value)}
+                />
+              </div>
               {hasActiveFilters && (
                 <div className="sm:col-span-2 flex justify-end">
                   <Button
@@ -480,6 +525,10 @@ export function VendasArquivoGeral() {
                       setPagamentoFiltro("todos")
                       setBuscaInput("")
                       setBusca("")
+                      setOperadorFiltro("")
+                      setOperadorInput("")
+                      setFromDate("")
+                      setToDate("")
                     }}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -538,6 +587,10 @@ export function VendasArquivoGeral() {
               setPagamentoFiltro("todos")
               setBuscaInput("")
               setBusca("")
+              setOperadorFiltro("")
+              setOperadorInput("")
+              setFromDate("")
+              setToDate("")
             }}>
               Limpar filtros
             </Button>

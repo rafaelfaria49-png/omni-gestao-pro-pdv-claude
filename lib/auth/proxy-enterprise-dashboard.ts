@@ -78,6 +78,9 @@ export function enterpriseDashboardRedirect(origin: string, pathname: string, se
   if (block(pathname === `${DASH}/historico-vendas` || pathname.startsWith(`${DASH}/historico-vendas/`))) {
     if (!perms.hubs.vendas) return denyHome(origin)
   }
+  if (block(pathname === `${DASH}/vendas-arquivo-geral` || pathname.startsWith(`${DASH}/vendas-arquivo-geral/`))) {
+    if (!perms.hubs.vendas) return denyHome(origin)
+  }
   if (block(pathname === `${DASH}/pdv` || pathname.startsWith(`${DASH}/pdv/`))) {
     if (!perms.hubs.vendas) return denyHome(origin)
   }
