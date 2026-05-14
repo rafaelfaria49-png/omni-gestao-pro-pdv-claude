@@ -75,6 +75,8 @@ export function QuickActions() {
         router.push("/dashboard/estoque");
         return;
       case "Orçamento":
+        router.push("/dashboard/operacoes-v2");
+        return;
       case "Receber":
       default:
         toast({ title: label, description: "Em desenvolvimento" });

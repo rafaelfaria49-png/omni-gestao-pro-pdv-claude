@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Database,
   ClipboardList,
+  FileText,
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -54,7 +55,7 @@ type MobileFullItem = {
 const mobileMenuItems: MobileMoreItem[] = [
   { icon: LayoutDashboard, label: "Painel", href: "/dashboard" },
   { icon: ShoppingCart, label: "PDV", page: "vendas", href: "/dashboard/vendas" },
-  { icon: Activity, label: "Operações (Novo)", href: "/dashboard/operacoes-v2" },
+  { icon: Activity, label: "Operações HUB", href: "/dashboard/operacoes-v2" },
   { icon: Package, label: "Estoque", page: "produtos", href: "/dashboard/estoque" },
   { icon: Menu, label: "Mais", href: "#", isMore: true },
 ]
@@ -62,8 +63,9 @@ const mobileMenuItems: MobileMoreItem[] = [
 const fullMenuItems: MobileFullItem[] = [
   { icon: Bot, label: "🤖 IA Mestre", externalPath: "/dashboard/ia-mestre" },
   { icon: MessageCircle, label: "WhatsApp HUB", externalPath: "/dashboard/whatsapp" },
-  { icon: Activity, label: "Operações HUB (Novo)", externalPath: "/dashboard/operacoes-v2" },
-  { icon: ClipboardList, label: "Ordens de Serviço (Legado)", externalPath: "/dashboard/os" },
+  { icon: Activity, label: "Operações HUB", externalPath: "/dashboard/operacoes-v2" },
+  { icon: ClipboardList, label: "OS — legado", externalPath: "/dashboard/os" },
+  { icon: FileText, label: "Orçamentos — legado", externalPath: "/dashboard/orcamentos" },
   { icon: Database, label: "Cadastros HUB", externalPath: "/dashboard/cadastros-v2" },
   { icon: LayoutDashboard, label: "Painel inicial", externalPath: "/dashboard" },
   { icon: ShoppingCart, label: "Vendas (Caixa/PDV)", page: "vendas", externalPath: "/dashboard/vendas" },

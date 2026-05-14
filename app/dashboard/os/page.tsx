@@ -41,6 +41,8 @@ import { formatPhoneBrInput, isValidPhoneBr } from "@/lib/phone-br"
 import { ConsultoriaIA } from "@/components/dashboard/servicos/consultoria-ia"
 import { EmptyState } from "@/components/ui/states/EmptyState"
 import { LoadingState } from "@/components/ui/states/LoadingState"
+import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
 
 type ClienteOpt = { id: string; name: string; phone: string | null }
 
@@ -854,10 +856,30 @@ export default function DashboardOsPage() {
   return (
     <div className="min-h-screen bg-background p-4 lg:p-6">
       <div className="mx-auto max-w-6xl space-y-6">
+        <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground" role="note">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">Legado</Badge>
+            <span className="font-medium text-foreground">Painel simplificado de ordens</span>
+          </div>
+          <p className="mt-2 leading-relaxed">
+            O fluxo oficial de OS da RafaCell é o{" "}
+            <span className="font-medium text-foreground">Operações HUB</span> — nova central operacional (diagnóstico,
+            orçamento, aprovação, peças, cobrança, entrega, timeline e garantia). Esta tela permanece disponível para
+            compatibilidade e ajustes pontuais.
+          </p>
+          <Button asChild variant="secondary" size="sm" className="mt-3">
+            <Link href="/dashboard/operacoes-v2">Ir para Operações HUB</Link>
+          </Button>
+        </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Ordens de Serviço</h1>
-            <p className="text-sm text-muted-foreground">Gestão de ordens de serviço</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold text-foreground">Ordens de Serviço</h1>
+              <Badge variant="outline" className="text-xs font-normal">
+                Legado
+              </Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">Lista simplificada — use o Operações HUB como fluxo oficial.</p>
           </div>
 
           <button

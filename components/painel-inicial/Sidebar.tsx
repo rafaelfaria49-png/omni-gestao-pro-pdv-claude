@@ -74,6 +74,13 @@ const workspaceItems: Item[] = [
 // ── HUBS ─────────────────────────────────────────────────────────────────────
 const hubsItems: Item[] = [
   {
+    to: "/dashboard/operacoes-v2",
+    label: "Operações HUB",
+    icon: Activity,
+    badge: "Oficial",
+    visible: (p) => p.hubs.operacoes,
+  },
+  {
     to: "/dashboard/marketing-ia",
     label: "Marketing IA",
     icon: Megaphone,
@@ -81,13 +88,6 @@ const hubsItems: Item[] = [
     visible: (p) => p.hubs.marketingIa,
   },
   { to: "/dashboard/whatsapp", label: "WhatsApp HUB", icon: MessageCircle, visible: (p) => p.hubs.whatsapp },
-  {
-    to: "/dashboard/operacoes-v2",
-    label: "Operações HUB",
-    icon: Activity,
-    badge: "Novo",
-    visible: (p) => p.hubs.operacoes,
-  },
   { to: "/dashboard/cadastros-v2", label: "Cadastros HUB", icon: Database, visible: (p) => p.hubs.cadastros },
   { to: "/vendas-hub", label: "Vendas HUB", icon: ShoppingCart, visible: (p) => p.hubs.vendas },
   {
