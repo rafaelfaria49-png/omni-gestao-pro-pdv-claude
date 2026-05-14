@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react"
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 
 // ── Shared types (hub + context) ──────────────────────────────────────────────
 
@@ -346,6 +347,17 @@ export type ResumoConciliacao = {
   totalDivergencia: number
 }
 
+/** Lançamento manual em carteira (POST /api/financeiro/movimentacoes). */
+export type RegistrarMovimentacaoCarteiraInput = {
+  tipo: "entrada" | "saida"
+  valor: number
+  descricao: string
+  observacao?: string
+  carteiraId: string
+  /** yyyy-mm-dd */
+  data?: string
+}
+
 // ── Context shape ─────────────────────────────────────────────────────────────
 
 type FinanceiroRealState = {
@@ -399,6 +411,10 @@ type FinanceiroRealState = {
   fecharMes: (mes: number, ano: number, opts?: { observacao?: string; saldoInformado?: number }) => Promise<FechamentoPublico>
   reabrirFechamento: (id: string, motivo: string) => Promise<FechamentoPublico>
   conciliarCarteira: (carteiraId: string, saldoInformado: number, opts?: { observacao?: string }) => Promise<ConciliacaoPublica>
+  /** Unidade ativa (sempre enviada explicitamente nas APIs do HUB). */
+  getActiveStoreId: () => string
+  /** Entrada/saída manual vinculada à carteira + recálculo de saldo. */
+  registrarMovimentacaoCarteira: (input: RegistrarMovimentacaoCarteiraInput) => Promise<void>
 }
 
 const FinanceiroRealContext = createContext<FinanceiroRealState | null>(null)
@@ -413,6 +429,13 @@ function getLojaId(): string {
     if (v) return v
   }
   return "loja-1"
+}
+
+/** Garante `x-assistec-loja-id` em toda chamada ao backend financeiro (evita drift cookie vs header). */
+function withStoreHeaders(headers?: HeadersInit): HeadersInit {
+  const h = new Headers(headers ?? undefined)
+  h.set(ASSISTEC_LOJA_HEADER, getLojaId())
+  return h
 }
 
 function safeStr(v: unknown): string {
@@ -538,9 +561,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     setError(null)
     try {
       const [rRes, pRes, aRes] = await Promise.all([
-        fetch("/api/financeiro/receber"),
-        fetch("/api/financeiro/pagar"),
-        fetch("/api/financeiro/analytics"),
+        fetch("/api/financeiro/receber", { headers: withStoreHeaders() }),
+        fetch("/api/financeiro/pagar", { headers: withStoreHeaders() }),
+        fetch("/api/financeiro/analytics", { headers: withStoreHeaders() }),
       ])
       const [rJson, pJson, aJson] = await Promise.all([
         rRes.json() as Promise<Record<string, unknown>>,
@@ -574,7 +597,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const refreshFluxoCaixa = useCallback(async () => {
     setLoadingFluxoCaixa(true)
     try {
-      const res = await fetch("/api/financeiro/fluxo-caixa")
+      const res = await fetch("/api/financeiro/fluxo-caixa", { headers: withStoreHeaders() })
       const json = (await res.json()) as Record<string, unknown>
       if (json.ok) setFluxoCaixa(json as unknown as FluxoCaixa)
     } catch {
@@ -587,9 +610,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const refreshCarteiras = useCallback(async () => {
     setLoadingCarteiras(true)
     try {
-      const lojaId = getLojaId()
       const res = await fetch("/api/financeiro/carteiras", {
-        headers: { "x-assistec-loja-id": lojaId },
+        headers: withStoreHeaders(),
       })
       const json = (await res.json()) as Record<string, unknown>
       if (json.ok) {
@@ -604,10 +626,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const criarCarteira = useCallback(async (data: NovaCarteiraInput): Promise<CarteiraPublica> => {
-    const lojaId = getLojaId()
     const res = await fetch("/api/financeiro/carteiras", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      headers: withStoreHeaders({ "content-type": "application/json" }),
       body: JSON.stringify(data),
     })
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
@@ -619,10 +640,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshCarteiras])
 
   const transferirEntreCarteiras = useCallback(async (data: TransferenciaCarteiraInput): Promise<void> => {
-    const lojaId = getLojaId()
     const res = await fetch("/api/financeiro/carteiras/transferencia", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      headers: withStoreHeaders({ "content-type": "application/json" }),
       body: JSON.stringify(data),
     })
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
@@ -635,13 +655,12 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const refreshDRE = useCallback(async (mes?: number, ano?: number) => {
     setLoadingDRE(true)
     try {
-      const lojaId = getLojaId()
       const params = new URLSearchParams()
       if (mes) params.set("mes", String(mes))
       if (ano) params.set("ano", String(ano))
       const url = `/api/financeiro/dre${params.toString() ? `?${params.toString()}` : ""}`
       const res = await fetch(url, {
-        headers: { "x-assistec-loja-id": lojaId },
+        headers: withStoreHeaders(),
       })
       const json = (await res.json()) as Record<string, unknown>
       if (json.ok) setDRE(json.dre as DREMensal)
@@ -670,8 +689,7 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     const f = filtros ?? filtrosFinanceiros
     setLoadingRelatorios(true)
     try {
-      const lojaId = getLojaId()
-      const headers = { "x-assistec-loja-id": lojaId }
+      const headers = withStoreHeaders()
       const qs = buildRelatoriosParams(f)
 
       const [resumoRes, rankRes, indicRes, fluxoRes] = await Promise.all([
@@ -720,9 +738,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const refreshAuditoria = useCallback(async () => {
     setLoadingAuditoria(true)
     try {
-      const lojaId = getLojaId()
       const res = await fetch("/api/financeiro/auditoria?take=30", {
-        headers: { "x-assistec-loja-id": lojaId },
+        headers: withStoreHeaders(),
       })
       const json = (await res.json()) as Record<string, unknown>
       if (json.ok) setAuditoriaFinanceira(Array.isArray(json.items) ? (json.items as AuditoriaPublica[]) : [])
@@ -734,10 +751,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const refreshConciliacao = useCallback(async () => {
     setLoadingConciliacao(true)
     try {
-      const lojaId = getLojaId()
       const [listRes, resumoRes] = await Promise.all([
-        fetch("/api/financeiro/conciliacao", { headers: { "x-assistec-loja-id": lojaId } }),
-        fetch("/api/financeiro/conciliacao?resumo=1", { headers: { "x-assistec-loja-id": lojaId } }),
+        fetch("/api/financeiro/conciliacao", { headers: withStoreHeaders() }),
+        fetch("/api/financeiro/conciliacao?resumo=1", { headers: withStoreHeaders() }),
       ])
       const [listJson, resumoJson] = await Promise.all([listRes.json(), resumoRes.json()]) as [Record<string, unknown>, Record<string, unknown>]
       if (listJson.ok) setConciliacoes(Array.isArray(listJson.items) ? (listJson.items as ConciliacaoPublica[]) : [])
@@ -750,9 +766,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const refreshFechamentos = useCallback(async () => {
     setLoadingFechamentos(true)
     try {
-      const lojaId = getLojaId()
       const res = await fetch("/api/financeiro/fechamentos", {
-        headers: { "x-assistec-loja-id": lojaId },
+        headers: withStoreHeaders(),
       })
       const json = (await res.json()) as Record<string, unknown>
       if (json.ok) setFechamentos(Array.isArray(json.items) ? (json.items as FechamentoPublico[]) : [])
@@ -762,10 +777,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const fecharDia = useCallback(async (opts?: { observacao?: string; saldoInformado?: number }): Promise<FechamentoPublico> => {
-    const lojaId = getLojaId()
     const res = await fetch("/api/financeiro/fechamentos/fechar-dia", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      headers: withStoreHeaders({ "content-type": "application/json" }),
       body: JSON.stringify(opts ?? {}),
     })
     const json = (await res.json()) as Record<string, unknown>
@@ -775,10 +789,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshFechamentos])
 
   const fecharMes = useCallback(async (mes: number, ano: number, opts?: { observacao?: string; saldoInformado?: number }): Promise<FechamentoPublico> => {
-    const lojaId = getLojaId()
     const res = await fetch("/api/financeiro/fechamentos/fechar-mes", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      headers: withStoreHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ mes, ano, ...opts }),
     })
     const json = (await res.json()) as Record<string, unknown>
@@ -788,10 +801,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshFechamentos])
 
   const reabrirFechamento = useCallback(async (id: string, motivo: string): Promise<FechamentoPublico> => {
-    const lojaId = getLojaId()
     const res = await fetch(`/api/financeiro/fechamentos/${id}/reabrir`, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      headers: withStoreHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ motivo }),
     })
     const json = (await res.json()) as Record<string, unknown>
@@ -801,10 +813,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshFechamentos])
 
   const conciliarCarteira = useCallback(async (carteiraId: string, saldoInformado: number, opts?: { observacao?: string }): Promise<ConciliacaoPublica> => {
-    const lojaId = getLojaId()
     const res = await fetch("/api/financeiro/conciliacao", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      headers: withStoreHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ carteiraId, saldoInformado, observacao: opts?.observacao }),
     })
     const json = (await res.json()) as Record<string, unknown>
@@ -813,19 +824,11 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     return json.conciliacao as ConciliacaoPublica
   }, [refreshConciliacao])
 
-  useEffect(() => { fetchData() }, [fetchData])
-  useEffect(() => { void refreshFluxoCaixa() }, [refreshFluxoCaixa])
-  useEffect(() => { void refreshCarteiras() }, [refreshCarteiras])
-  useEffect(() => { void refreshDRE() }, [refreshDRE])
-  useEffect(() => { void refreshAuditoria() }, [refreshAuditoria])
-  useEffect(() => { void refreshConciliacao() }, [refreshConciliacao])
-  useEffect(() => { void refreshFechamentos() }, [refreshFechamentos])
-
   const callApi = useCallback(async (path: string, body: Record<string, unknown>, method: "POST" | "PATCH" = "POST"): Promise<Record<string, unknown>> => {
     const lojaId = getLojaId()
     const res = await fetch(path, {
       method,
-      headers: { "content-type": "application/json", "x-assistec-loja-id": lojaId },
+      headers: withStoreHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ lojaId, ...body }),
     })
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
@@ -888,6 +891,44 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     await fetchData()
   }, [callApi, fetchData])
 
+  const getActiveStoreId = useCallback(() => getLojaId(), [])
+
+  const registrarMovimentacaoCarteira = useCallback(
+    async (input: RegistrarMovimentacaoCarteiraInput) => {
+      const body: Record<string, unknown> = {
+        tipo: input.tipo,
+        valor: input.valor,
+        descricao: input.descricao.trim(),
+        origem: "manual",
+        carteiraId: input.carteiraId,
+      }
+      if (input.observacao?.trim()) body.observacao = input.observacao.trim()
+      if (input.data?.trim()) body.data = input.data.trim()
+
+      const res = await fetch("/api/financeiro/movimentacoes", {
+        method: "POST",
+        headers: withStoreHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify(body),
+      })
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+      if (!res.ok || json.ok === false) {
+        throw new Error(safeStr(json.error) || `Falha ${res.status}`)
+      }
+      await Promise.all([refreshFluxoCaixa(), refreshCarteiras(), fetchData()])
+      void refreshAuditoria()
+      void refreshRelatorios(filtrosFinanceiros)
+    },
+    [fetchData, refreshFluxoCaixa, refreshCarteiras, refreshAuditoria, refreshRelatorios, filtrosFinanceiros],
+  )
+
+  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => { void refreshFluxoCaixa() }, [refreshFluxoCaixa])
+  useEffect(() => { void refreshCarteiras() }, [refreshCarteiras])
+  useEffect(() => { void refreshDRE() }, [refreshDRE])
+  useEffect(() => { void refreshAuditoria() }, [refreshAuditoria])
+  useEffect(() => { void refreshConciliacao() }, [refreshConciliacao])
+  useEffect(() => { void refreshFechamentos() }, [refreshFechamentos])
+
   return (
     <FinanceiroRealContext.Provider
       value={{
@@ -901,6 +942,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
         loadingAuditoria, loadingConciliacao, loadingFechamentos,
         refreshAuditoria, refreshConciliacao, refreshFechamentos,
         fecharDia, fecharMes, reabrirFechamento, conciliarCarteira,
+        getActiveStoreId,
+        registrarMovimentacaoCarteira,
         loading, error, reload: fetchData,
         refreshFluxoCaixa, refreshCarteiras, refreshDRE,
         criarCarteira, transferirEntreCarteiras,

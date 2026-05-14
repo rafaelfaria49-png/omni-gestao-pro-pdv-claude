@@ -9,7 +9,7 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { prismaEnsureConnected, prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { apiGuardEnterpriseOrAdmin, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
+import { apiGuardFinanceiroEditEnterpriseOrLegacy, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import {
   listMovimentacoes,
   createMovimentacao,
@@ -17,6 +17,7 @@ import {
   getResumoMovimentacoes,
 } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
+import { recalcularSaldoCarteira } from "@/lib/financeiro/services/carteiras-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -40,7 +41,10 @@ const postSchema = z.object({
     .optional()
     .default("manual"),
   referenciaId: z.string().max(128).optional(),
-  data: z.string().optional(),
+  /** yyyy-mm-dd — define data do lançamento (meio-dia local ISO). */
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  carteiraId: z.string().min(1).max(64).optional(),
+  observacao: z.string().max(2000).optional(),
 })
 
 const deleteSchema = z.object({
@@ -111,17 +115,16 @@ export async function POST(req: Request) {
   }
 
   const sid = storeIdFromReq(req)
-  const denied = await apiGuardEnterpriseOrAdmin(
-    sid,
-    (p) => p.financeiro.edit,
-    "Sem permissão para lançar movimentações financeiras.",
-  )
+  const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(sid)
   if (denied) return denied
 
   try {
     await prismaEnsureConnected()
 
-    const lock = await verificarPeriodoFechado(sid, parsed.data.data ? new Date(parsed.data.data) : new Date())
+    const dataRef = parsed.data.data
+      ? new Date(`${parsed.data.data}T12:00:00`)
+      : new Date()
+    const lock = await verificarPeriodoFechado(sid, dataRef)
     if (lock.fechado) {
       return NextResponse.json(
         { ok: false, error: "Período financeiro fechado. Reabra o fechamento para alterar lançamentos.", code: "periodo_fechado" },
@@ -129,7 +132,20 @@ export async function POST(req: Request) {
       )
     }
 
-    const mov = await createMovimentacao({ storeId: sid, ...parsed.data })
+    const obs = parsed.data.observacao?.trim()
+    const descBase = parsed.data.descricao.trim()
+    const descricaoFinal = obs ? `${descBase} — ${obs}` : descBase
+
+    const mov = await createMovimentacao({
+      storeId: sid,
+      tipo: parsed.data.tipo,
+      descricao: descricaoFinal,
+      valor: parsed.data.valor,
+      origem: parsed.data.origem,
+      referenciaId: parsed.data.referenciaId,
+      carteiraId: parsed.data.carteiraId,
+      createdAt: parsed.data.data ? dataRef : undefined,
+    })
     return NextResponse.json({ ok: true, movimentacao: mov }, { status: 201 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -166,11 +182,7 @@ export async function DELETE(req: Request) {
   }
 
   const sid = storeIdFromReq(req)
-  const denied = await apiGuardEnterpriseOrAdmin(
-    sid,
-    (p) => p.financeiro.edit,
-    "Sem permissão para excluir movimentações financeiras.",
-  )
+  const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(sid)
   if (denied) return denied
 
   try {
@@ -178,7 +190,7 @@ export async function DELETE(req: Request) {
 
     const existing = await prisma.movimentacaoFinanceira.findFirst({
       where: { id, storeId: sid },
-      select: { createdAt: true },
+      select: { createdAt: true, carteiraId: true },
     })
     if (!existing) {
       return NextResponse.json({ ok: false, error: `movimentacoes-service: movimentação "${id}" não encontrada` }, { status: 404 })
@@ -191,7 +203,11 @@ export async function DELETE(req: Request) {
       )
     }
 
+    const carteiraId = existing.carteiraId?.trim()
     await deleteMovimentacao(id, sid)
+    if (carteiraId) {
+      await recalcularSaldoCarteira(carteiraId, sid)
+    }
     return NextResponse.json({ ok: true })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

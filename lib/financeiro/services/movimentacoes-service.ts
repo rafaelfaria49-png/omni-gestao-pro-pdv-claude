@@ -10,6 +10,7 @@
 
 import { prisma } from "@/lib/prisma"
 import type { MovimentacaoFinanceira, Prisma } from "@/generated/prisma"
+import { recalcularSaldoCarteira } from "@/lib/financeiro/services/carteiras-service"
 
 // ─── tipos públicos ───────────────────────────────────────────────────────────
 
@@ -25,6 +26,10 @@ export type CreateMovimentacaoInput = {
   valor: number
   origem?: MovOrigem
   referenciaId?: string
+  /** Quando informado, atualiza saldo da carteira após o lançamento. */
+  carteiraId?: string | null
+  /** Data contábil do lançamento (sobrescreve `createdAt` na criação). */
+  createdAt?: Date
 }
 
 export type CreateFromTituloMeta = {
@@ -137,8 +142,9 @@ export async function createMovimentacao(
   if (!(valor > 0)) throw new Error("movimentacoes-service: valor deve ser > 0")
   const descricao = safeStr(input.descricao)
   if (!descricao) throw new Error("movimentacoes-service: descricao é obrigatória")
+  const carteiraId = safeStr(input.carteiraId) || null
 
-  return prisma.movimentacaoFinanceira.create({
+  const row = await prisma.movimentacaoFinanceira.create({
     data: {
       storeId,
       tipo,
@@ -146,8 +152,18 @@ export async function createMovimentacao(
       descricao,
       origem: safeStr(input.origem) || "manual",
       referenciaId: safeStr(input.referenciaId) || null,
+      carteiraId,
+      ...(input.createdAt && !Number.isNaN(input.createdAt.getTime())
+        ? { createdAt: input.createdAt }
+        : {}),
     },
   })
+
+  if (carteiraId) {
+    await recalcularSaldoCarteira(carteiraId, storeId)
+  }
+
+  return row
 }
 
 export async function createEntrada(

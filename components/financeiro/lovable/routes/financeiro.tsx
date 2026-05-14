@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useFinanceiroReal,
   FinanceiroRealProvider,
@@ -15,6 +15,7 @@ import {
   type ConciliacaoPublica,
   type PresetPeriodo,
   type FiltrosFinanceiros,
+  type RegistrarMovimentacaoCarteiraInput,
 } from "../context/FinanceiroRealContext";
 import { toast } from "sonner";
 import {
@@ -125,6 +126,8 @@ import {
 } from "recharts";
 import { EmptyState } from "@/components/ui/states/EmptyState";
 import { LoadingState } from "@/components/ui/states/LoadingState";
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
+import { isOrigemTransferenciaInterna } from "@/lib/financeiro/services/movimentacao-financeira-classify";
 
 export const Route = createFileRoute("/financeiro" as never)({
   head: () => ({
@@ -193,6 +196,84 @@ function tipoToIcon(tipo: string) {
 
 // Tipo minimal para seleção em modais
 type CarteiraRef = { id: string; nome: string };
+
+type FluxoPeriodoTab = "hoje" | "semana" | "mes" | "personalizado";
+
+function ymd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function fluxoTabDateRange(
+  period: FluxoPeriodoTab,
+  customIni?: string,
+  customFim?: string,
+): { start: Date; end: Date } {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date();
+  if (period === "hoje") {
+    start.setHours(0, 0, 0, 0);
+  } else if (period === "semana") {
+    start.setTime(end.getTime());
+    start.setDate(end.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+  } else if (period === "mes") {
+    start.setFullYear(end.getFullYear(), end.getMonth(), 1);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    const a = customIni?.trim()
+      ? new Date(`${customIni.trim()}T00:00:00`)
+      : (() => {
+          const t = new Date(end);
+          t.setDate(end.getDate() - 29);
+          return t;
+        })();
+    a.setHours(0, 0, 0, 0);
+    const b = customFim?.trim()
+      ? new Date(`${customFim.trim()}T23:59:59.999`)
+      : new Date(end.getTime());
+    return { start: a, end: b };
+  }
+  return { start, end };
+}
+
+type MovPrismaRow = {
+  id: string;
+  descricao: string;
+  tipo: string;
+  valor: number;
+  createdAt: string;
+  origem?: string | null;
+};
+
+function buildFluxoChartFromMovs(
+  movs: MovPrismaRow[],
+  start: Date,
+  end: Date,
+): { label: string; entrada: number; saida: number }[] {
+  const startKey = ymd(start);
+  const endKey = ymd(end);
+  const map = new Map<string, { entrada: number; saida: number }>();
+  for (const m of movs) {
+    if (isOrigemTransferenciaInterna(m.origem)) continue;
+    const dKey = m.createdAt.slice(0, 10);
+    if (dKey < startKey || dKey > endKey) continue;
+    const cur = map.get(dKey) ?? { entrada: 0, saida: 0 };
+    if (m.tipo === "entrada") cur.entrada += m.valor;
+    else if (m.tipo === "saida") cur.saida += m.valor;
+    map.set(dKey, cur);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([data, v]) => ({
+      label: `${data.slice(8, 10)}/${data.slice(5, 7)}`,
+      entrada: v.entrada,
+      saida: v.saida,
+    }));
+}
 
 // receber[] and pagar[] removed — data now comes from FinanceiroRealProvider via useFinanceiroReal()
 // fluxoMensal, movimentacoes, receitasOrigem, despesasCategoria, resultadoLoja now come from analytics via useFinanceiroReal()
@@ -316,7 +397,6 @@ function VisaoGeral() {
   const recebidoOS = receitasOrigem.find((x) => x.name === "Ordem de Serviço")?.value ?? 0;
   const recebidoPDV = receitasOrigem.find((x) => x.name === "PDV")?.value ?? 0;
   const atrasados = (fluxoCaixa?.totalVencidosReceber ?? 0) + (fluxoCaixa?.totalVencidosPagar ?? 0);
-  const parciaisCount = receber.filter((r) => r.status === "parcial").length;
   const mesAtual = analytics?.fluxoMensal?.at(-1);
   const periodoResultado =
     mesAtual?.mes?.trim() ||
@@ -531,21 +611,24 @@ function VisaoGeral() {
         <CardContent>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
-              { label: "Recebido OS", val: fmt(recebidoOS), icon: Wrench, tone: "primary" },
-              { label: "Recebido PDV", val: fmt(recebidoPDV), icon: ShoppingCart, tone: "primary" },
+              { label: "Recebido OS", val: recebidoOS > 0 ? fmt(recebidoOS) : "—", icon: Wrench, tone: recebidoOS > 0 ? "primary" : "muted" },
+              { label: "Recebido PDV", val: recebidoPDV > 0 ? fmt(recebidoPDV) : "—", icon: ShoppingCart, tone: recebidoPDV > 0 ? "primary" : "muted" },
               { label: "Despesas em aberto", val: fmt(totalPagar), icon: Repeat, tone: "muted" },
               {
                 label: "Próx. 7 dias",
-                val: fluxoCaixa ? fmt(fluxoCaixa.proximosRecebimentos7Dias.total + fluxoCaixa.proximosPagamentos7Dias.total) : `${parciaisCount} ativas`,
+                val:
+                  fluxoCaixa != null
+                    ? fmt(fluxoCaixa.proximosRecebimentos7Dias.total + fluxoCaixa.proximosPagamentos7Dias.total)
+                    : "—",
                 icon: CalendarClock,
                 tone: "muted",
               },
               { label: "Em atraso", val: fmt(atrasados), icon: TrendingDown, tone: atrasados > 0 ? "destructive" : "muted" },
               {
                 label: "Entradas hoje",
-                val: fluxoCaixa ? fmt(fluxoCaixa.entradasHoje) : `${parciaisCount} títulos`,
+                val: fluxoCaixa != null ? fmt(fluxoCaixa.entradasHoje) : "—",
                 icon: Percent,
-                tone: (fluxoCaixa?.entradasHoje ?? 0) > 0 ? "primary" : "muted",
+                tone: fluxoCaixa != null && fluxoCaixa.entradasHoje > 0 ? "primary" : "muted",
               },
             ].map((c) => {
               const Icon = c.icon;
@@ -736,10 +819,6 @@ function ContasReceber() {
         open={modal === "renegociar"}
         onOpenChange={(v) => !v && setModal(null)}
         conta={selected}
-        onConfirm={() => {
-          toast.success("Conta renegociada");
-          setModal(null);
-        }}
       />
     </div>
   );
@@ -915,107 +994,356 @@ function ContasPagar() {
 }
 
 function FluxoCaixa() {
-  const { analytics } = useFinanceiroReal();
-  const movimentacoes = analytics?.movimentacoes ?? [];
-  const fluxoMensal = analytics?.fluxoMensal ?? [];
-  const [periodo, setPeriodo] = useState("mes");
-  const totEntrada = movimentacoes
+  const { fluxoCaixa, loadingFluxoCaixa, refreshFluxoCaixa, getActiveStoreId } = useFinanceiroReal();
+  const [periodo, setPeriodo] = useState<FluxoPeriodoTab>("mes");
+  const [customIni, setCustomIni] = useState("");
+  const [customFim, setCustomFim] = useState("");
+  const [movRows, setMovRows] = useState<MovPrismaRow[]>([]);
+  const [loadingMovs, setLoadingMovs] = useState(false);
+
+  const range = useMemo(
+    () => fluxoTabDateRange(periodo, customIni, customFim),
+    [periodo, customIni, customFim],
+  );
+
+  const loadMovs = useCallback(async () => {
+    const di = ymd(range.start);
+    const df = ymd(range.end);
+    setLoadingMovs(true);
+    try {
+      const sid = getActiveStoreId();
+      const res = await fetch(
+        `/api/financeiro/movimentacoes?dataInicial=${encodeURIComponent(di)}&dataFinal=${encodeURIComponent(df)}&take=500`,
+        { headers: { [ASSISTEC_LOJA_HEADER]: sid } },
+      );
+      const json = (await res.json()) as Record<string, unknown>;
+      if (json.ok && Array.isArray(json.rows)) {
+        setMovRows(json.rows as MovPrismaRow[]);
+      } else {
+        setMovRows([]);
+      }
+    } catch {
+      setMovRows([]);
+    } finally {
+      setLoadingMovs(false);
+    }
+  }, [range.start, range.end, getActiveStoreId]);
+
+  useEffect(() => {
+    void loadMovs();
+  }, [loadMovs]);
+
+  const movsAgregacao = useMemo(
+    () => movRows.filter((m) => !isOrigemTransferenciaInterna(m.origem)),
+    [movRows],
+  );
+
+  const totEntrada = movsAgregacao
     .filter((m) => m.tipo === "entrada")
     .reduce((a, m) => a + m.valor, 0);
-  const totSaida = movimentacoes
+  const totSaida = movsAgregacao
     .filter((m) => m.tipo === "saida")
     .reduce((a, m) => a + m.valor, 0);
 
+  const chartData = useMemo(() => {
+    const startKey = ymd(range.start);
+    const endKey = ymd(range.end);
+    const fromFluxo = fluxoCaixa?.fluxoDiarioUltimos30Dias?.filter(
+      (d) => d.data >= startKey && d.data <= endKey,
+    );
+    if (periodo !== "personalizado" && fromFluxo && fromFluxo.length > 0) {
+      return fromFluxo.map((d) => ({ mes: d.label, entrada: d.entrada, saida: d.saida }));
+    }
+    return buildFluxoChartFromMovs(movsAgregacao, range.start, range.end);
+  }, [fluxoCaixa, range.start, range.end, movsAgregacao, periodo]);
+
+  const listaMovs = useMemo(() => {
+    return [...movsAgregacao]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 80)
+      .map((m) => ({
+        id: m.id,
+        desc: m.descricao,
+        tipo: m.tipo === "saida" ? "saida" as const : "entrada" as const,
+        valor: m.valor,
+        data: new Date(m.createdAt).toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      }));
+  }, [movsAgregacao]);
+
   return (
     <div className="min-w-0 space-y-4">
-      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard title="Entradas (período)" value={fmt(totEntrada)} icon={ArrowDownLeft} tone="positive" />
-        <StatCard title="Saídas (período)" value={fmt(totSaida)} icon={ArrowUpRight} tone="negative" />
-        <StatCard title="Saldo do período" value={fmt(totEntrada - totSaida)} icon={Wallet} tone="positive" />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="gap-1"
+          onClick={() => {
+            void refreshFluxoCaixa();
+            void loadMovs();
+          }}
+          disabled={loadingFluxoCaixa && loadingMovs}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${loadingFluxoCaixa || loadingMovs ? "animate-spin" : ""}`} />
+          Atualizar
+        </Button>
       </div>
+
+      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {loadingFluxoCaixa && !fluxoCaixa ? (
+          <>
+            <StatCard title="Saldo consolidado" value="—" hint="Carregando…" icon={Wallet} />
+            <StatCard title="Entradas hoje" value="—" icon={ArrowDownLeft} />
+            <StatCard title="Saídas hoje" value="—" icon={ArrowUpRight} />
+            <StatCard title="A receber (aberto)" value="—" icon={ArrowDownCircle} />
+          </>
+        ) : (
+          <>
+            <StatCard
+              title="Saldo consolidado"
+              value={fluxoCaixa != null ? fmt(fluxoCaixa.saldoAtual) : "—"}
+              hint="Movimentações realizadas"
+              icon={Wallet}
+              tone={fluxoCaixa != null && fluxoCaixa.saldoAtual >= 0 ? "positive" : "negative"}
+            />
+            <StatCard
+              title="Entradas hoje"
+              value={fluxoCaixa != null ? fmt(fluxoCaixa.entradasHoje) : "—"}
+              icon={ArrowDownLeft}
+              tone="positive"
+            />
+            <StatCard
+              title="Saídas hoje"
+              value={fluxoCaixa != null ? fmt(fluxoCaixa.saidasHoje) : "—"}
+              icon={ArrowUpRight}
+              tone="negative"
+            />
+            <StatCard
+              title="A receber (aberto)"
+              value={fluxoCaixa != null ? fmt(fluxoCaixa.totalReceberAberto) : "—"}
+              icon={ArrowDownCircle}
+            />
+          </>
+        )}
+      </div>
+
+      <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          title="Entradas (período filtrado)"
+          value={loadingMovs ? "—" : fmt(totEntrada)}
+          icon={ArrowDownLeft}
+          tone="positive"
+        />
+        <StatCard
+          title="Saídas (período filtrado)"
+          value={loadingMovs ? "—" : fmt(totSaida)}
+          icon={ArrowUpRight}
+          tone="negative"
+        />
+        <StatCard
+          title="Saldo do período (filtrado)"
+          value={loadingMovs ? "—" : fmt(totEntrada - totSaida)}
+          icon={Wallet}
+          tone={totEntrada - totSaida >= 0 ? "positive" : "negative"}
+        />
+      </div>
+
+      {fluxoCaixa && (
+        <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card className="rounded-xl">
+            <CardHeader>
+              <CardTitle className="text-base">Próximos recebimentos (7 dias)</CardTitle>
+              <CardDescription>Total {fmt(fluxoCaixa.proximosRecebimentos7Dias.total)}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 max-h-56 overflow-y-auto">
+              {fluxoCaixa.proximosRecebimentos7Dias.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem recebimentos previstos neste intervalo.</p>
+              ) : (
+                fluxoCaixa.proximosRecebimentos7Dias.items.map((it) => (
+                  <div key={it.id} className="flex justify-between gap-2 text-sm border-b border-border/50 pb-2">
+                    <span className="truncate">{it.descricao}</span>
+                    <span className="shrink-0 font-medium">{fmt(it.valor)}</span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+          <Card className="rounded-xl">
+            <CardHeader>
+              <CardTitle className="text-base">Próximos pagamentos (7 dias)</CardTitle>
+              <CardDescription>Total {fmt(fluxoCaixa.proximosPagamentos7Dias.total)}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 max-h-56 overflow-y-auto">
+              {fluxoCaixa.proximosPagamentos7Dias.items.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sem pagamentos previstos neste intervalo.</p>
+              ) : (
+                fluxoCaixa.proximosPagamentos7Dias.items.map((it) => (
+                  <div key={it.id} className="flex justify-between gap-2 text-sm border-b border-border/50 pb-2">
+                    <span className="truncate">{it.descricao}</span>
+                    <span className="shrink-0 font-medium">{fmt(it.valor)}</span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {fluxoCaixa && fluxoCaixa.alertas.length > 0 && (
+        <Card className="rounded-xl border-destructive/30">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+              Alertas operacionais
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {fluxoCaixa.alertas.map((a, i) => (
+              <div
+                key={i}
+                className={`rounded-lg border p-3 text-sm ${a.urgente ? "border-destructive/40 bg-destructive/5" : "border-border bg-muted/30"}`}
+              >
+                {a.mensagem}
+                {a.valor != null && <span className="ml-2 font-medium">{fmt(a.valor)}</span>}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="rounded-xl">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base">Fluxo de Caixa</CardTitle>
-            <CardDescription>Movimentações por período</CardDescription>
+            <CardDescription>Período e movimentações reais (API)</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <Select value={periodo} onValueChange={setPeriodo}>
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="hoje">Hoje</SelectItem>
-                <SelectItem value="semana">Semana</SelectItem>
-                <SelectItem value="mes">Mês</SelectItem>
-                <SelectItem value="ano">Ano</SelectItem>
-                <SelectItem value="custom">Personalizado</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select value={periodo} onValueChange={(v) => setPeriodo(v as FluxoPeriodoTab)}>
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hoje">Hoje</SelectItem>
+                  <SelectItem value="semana">Semana (7 dias)</SelectItem>
+                  <SelectItem value="mes">Mês corrente</SelectItem>
+                  <SelectItem value="personalizado">Personalizado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {periodo === "personalizado" && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={customIni}
+                  onChange={(e) => setCustomIni(e.target.value)}
+                />
+                <span className="text-xs text-muted-foreground">até</span>
+                <Input
+                  type="date"
+                  className="w-40"
+                  value={customFim}
+                  onChange={(e) => setCustomFim(e.target.value)}
+                />
+                <Button type="button" size="sm" variant="secondary" onClick={() => void loadMovs()}>
+                  Aplicar
+                </Button>
+              </div>
+            )}
           </div>
         </CardHeader>
-        <CardContent className="h-72 min-w-0">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={fluxoMensal}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={12} />
-              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--color-popover)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 8,
-                }}
-              />
-              <Legend />
-              <Bar dataKey="entrada" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="saida" fill="var(--color-chart-2)" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <CardContent className="min-h-72 min-w-0">
+          {loadingMovs && chartData.length === 0 ? (
+            <LoadingState message="Carregando série do período…" />
+          ) : chartData.length === 0 ? (
+            <EmptyState
+              compact
+              dashboardLink={false}
+              title="Sem movimentações no período"
+              description="Ajuste o filtro ou registre lançamentos em Carteiras."
+            />
+          ) : (
+            <div className="h-72 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={12} />
+                  <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "var(--color-popover)",
+                      border: "1px solid var(--color-border)",
+                      borderRadius: 8,
+                    }}
+                  />
+                  <Legend />
+                  <Bar dataKey="entrada" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="saida" fill="var(--color-chart-2)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       <Card className="rounded-xl">
         <CardHeader>
-          <CardTitle className="text-base">Movimentações recentes</CardTitle>
+          <CardTitle className="text-base">Movimentações do período</CardTitle>
+          <CardDescription>Ordenadas por data (mais recentes primeiro)</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
-          {movimentacoes.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className={`rounded-md p-1.5 ${
-                    m.tipo === "entrada"
-                      ? "bg-primary/10 text-primary"
-                      : "bg-destructive/10 text-destructive"
+          {loadingMovs ? (
+            <LoadingState message="Carregando movimentações…" inline />
+          ) : listaMovs.length === 0 ? (
+            <EmptyState
+              compact
+              dashboardLink={false}
+              title="Nenhuma movimentação"
+              description="Não há lançamentos no intervalo selecionado."
+            />
+          ) : (
+            listaMovs.map((m) => (
+              <div
+                key={m.id}
+                className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className={`rounded-md p-1.5 shrink-0 ${
+                      m.tipo === "entrada"
+                        ? "bg-primary/10 text-primary"
+                        : "bg-destructive/10 text-destructive"
+                    }`}
+                  >
+                    {m.tipo === "entrada" ? (
+                      <ArrowDownLeft className="h-4 w-4" />
+                    ) : (
+                      <ArrowUpRight className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{m.desc}</p>
+                    <p className="text-xs text-muted-foreground">{m.data}</p>
+                  </div>
+                </div>
+                <span
+                  className={`text-sm font-semibold shrink-0 ${
+                    m.tipo === "entrada" ? "text-primary" : "text-destructive"
                   }`}
                 >
-                  {m.tipo === "entrada" ? (
-                    <ArrowDownLeft className="h-4 w-4" />
-                  ) : (
-                    <ArrowUpRight className="h-4 w-4" />
-                  )}
-                </div>
-                <div>
-                  <p className="text-sm font-medium">{m.desc}</p>
-                  <p className="text-xs text-muted-foreground">{m.data}</p>
-                </div>
+                  {m.tipo === "entrada" ? "+" : "-"}
+                  {fmt(m.valor)}
+                </span>
               </div>
-              <span
-                className={`text-sm font-semibold ${
-                  m.tipo === "entrada" ? "text-primary" : "text-destructive"
-                }`}
-              >
-                {m.tipo === "entrada" ? "+" : "-"}
-                {fmt(m.valor)}
-              </span>
-            </div>
-          ))}
+            ))
+          )}
         </CardContent>
       </Card>
     </div>
@@ -1023,7 +1351,7 @@ function FluxoCaixa() {
 }
 
 function GestaoCarteiras() {
-  const { carteiras, loadingCarteiras, transferirEntreCarteiras } = useFinanceiroReal();
+  const { carteiras, loadingCarteiras, transferirEntreCarteiras, registrarMovimentacaoCarteira } = useFinanceiroReal();
   const [openNova, setOpenNova] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
   const [movModal, setMovModal] = useState<{ tipo: "entrada" | "saida"; carteiraId: string } | null>(null);
@@ -1128,9 +1456,14 @@ function GestaoCarteiras() {
         tipo={movModal?.tipo ?? "entrada"}
         carteiraId={movModal?.carteiraId ?? ""}
         carteiras={ativasRef}
-        onConfirm={() => {
-          toast.success(movModal?.tipo === "entrada" ? "Entrada registrada" : "Saída registrada");
-          setMovModal(null);
+        onConfirm={async (payload) => {
+          try {
+            await registrarMovimentacaoCarteira(payload);
+            toast.success(payload.tipo === "entrada" ? "Entrada registrada" : "Saída registrada");
+            setMovModal(null);
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Falha ao registrar movimentação");
+          }
         }}
       />
     </div>
@@ -1991,128 +2324,20 @@ function AuditoriaFechamento() {
 }
 
 function Configuracoes() {
-  const { carteiras: listaCarteiras } = useFinanceiroReal();
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <Card className="rounded-xl">
+      <Card className="rounded-xl border-dashed">
         <CardHeader>
-          <CardTitle className="text-base">Categorias financeiras</CardTitle>
-          <CardDescription>Gerencie categorias de receita e despesa</CardDescription>
+          <CardTitle className="text-base">Preferências do Financeiro</CardTitle>
+          <CardDescription>
+            Categorias, formas de pagamento, carteira padrão, regras de vencimento e integrações PDV/OS ainda não possuem persistência nesta tela.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
-          {["Vendas", "Serviços", "Fornecedores", "Folha", "Marketing", "Utilidades"].map((c) => (
-            <div key={c} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2.5">
-              <span className="text-sm">{c}</span>
-              <Badge variant="outline">ativa</Badge>
-            </div>
-          ))}
-          <Button size="sm" variant="outline" className="w-full gap-1">
-            <Plus className="h-4 w-4" /> Adicionar categoria
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-base">Formas de pagamento</CardTitle>
-          <CardDescription>Disponíveis no PDV e cobranças</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {["Dinheiro", "PIX", "Cartão de crédito", "Cartão de débito", "Boleto"].map((c) => (
-            <div key={c} className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-2.5">
-              <span className="text-sm">{c}</span>
-              <Switch defaultChecked />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-base">Carteira padrão</CardTitle>
-          <CardDescription>Usada como destino padrão de recebimentos</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Recebimentos</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>
-                {listaCarteiras.filter((c) => c.ativo).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Pagamentos</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-              <SelectContent>
-                {listaCarteiras.filter((c) => c.ativo).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-base">Regras de vencimento e recibo</CardTitle>
-          <CardDescription>Padrões aplicados automaticamente</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1.5">
-            <Label>Dias até o vencimento padrão</Label>
-            <Input type="number" defaultValue={30} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Multa por atraso (%)</Label>
-            <Input type="number" defaultValue={2} step="0.1" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Juros ao mês (%)</Label>
-            <Input type="number" defaultValue={1} step="0.1" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Texto do recibo padrão</Label>
-            <Textarea rows={2} defaultValue="Recebemos a importância referente ao serviço/produto..." />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-xl lg:col-span-2">
-        <CardHeader>
-          <CardTitle className="text-base">Integrações</CardTitle>
-          <CardDescription>Sincronização automática com outros módulos</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-md bg-primary/10 p-2 text-primary">
-                <ShoppingCart className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Integração com PDV</p>
-                <p className="text-xs text-muted-foreground">Vendas viram recebimentos</p>
-              </div>
-            </div>
-            <Switch defaultChecked />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-md bg-primary/10 p-2 text-primary">
-                <Wrench className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Integração com OS</p>
-                <p className="text-xs text-muted-foreground">Ordens viram títulos</p>
-              </div>
-            </div>
-            <Switch defaultChecked />
-          </div>
+        <CardContent className="space-y-3 text-sm text-muted-foreground">
+          <p>
+            Em uma próxima entrega, estas opções serão salvas na loja (sem alterar o fluxo já real de contas, movimentações e carteiras).
+          </p>
+          <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">Em breve</Badge>
         </CardContent>
       </Card>
     </div>
@@ -2146,14 +2371,14 @@ function FinanceiroHubInner() {
   const tabs = useMemo(
     () =>
       [
-        { v: "visao", label: "Visão geral", icon: LayoutDashboard, comp: <VisaoGeral />, hubBadge: "Preview" as const },
+        { v: "visao", label: "Visão geral", icon: LayoutDashboard, comp: <VisaoGeral /> },
         { v: "receber", label: "A receber", icon: ArrowDownCircle, comp: <ContasReceber /> },
         { v: "pagar", label: "A pagar", icon: ArrowUpCircle, comp: <ContasPagar /> },
-        { v: "fluxo", label: "Fluxo de caixa", icon: BarChart3, comp: <FluxoCaixa />, hubBadge: "Preview" as const },
-        { v: "carteiras", label: "Carteiras", icon: Wallet, comp: <GestaoCarteiras />, hubBadge: "Demo" as const },
+        { v: "fluxo", label: "Fluxo de caixa", icon: BarChart3, comp: <FluxoCaixa /> },
+        { v: "carteiras", label: "Carteiras", icon: Wallet, comp: <GestaoCarteiras /> },
         { v: "auditoria", label: "Auditoria", icon: ShieldCheck, comp: <AuditoriaFechamento /> },
-        { v: "relatorios", label: "Relatórios", icon: FileText, comp: <Relatorios />, hubBadge: "Preview" as const },
-        { v: "config", label: "Configurações", icon: Settings, comp: <Configuracoes />, hubBadge: "Demo" as const },
+        { v: "relatorios", label: "Relatórios", icon: FileText, comp: <Relatorios /> },
+        { v: "config", label: "Configurações", icon: Settings, comp: <Configuracoes />, hubBadge: "Em breve" as const },
       ] as const,
     [],
   );
@@ -2170,8 +2395,9 @@ function FinanceiroHubInner() {
               Financeiro HUB
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Centralize carteiras, contas, fluxo e relatórios em um só lugar. Abas com selo Preview/Demo ainda
-              misturam dados reais com trechos ilustrativos.
+              Contas a receber/pagar, fluxo de caixa, carteiras e auditoria usam a loja ativa (cabeçalho{" "}
+              <code className="rounded bg-muted px-1 text-[11px]">x-assistec-loja-id</code>
+              ). Relatórios agregam dados reais da API. A aba Configurações ainda não persiste preferências.
             </p>
           </div>
           <div className="flex min-w-0 flex-col items-end gap-2">
@@ -2227,12 +2453,11 @@ function NovoRecebimentoModal({
   onOpenChange: (v: boolean) => void;
   onSave: (data: NovoReceberInput) => Promise<void>;
 }) {
-  const { receber, carteiras: listaCarteiras } = useFinanceiroReal();
+  const { receber } = useFinanceiroReal();
   const clientesUnicos = useMemo(
     () => Array.from(new Set(receber.map((r) => r.cliente).filter(Boolean))).sort(),
     [receber],
   );
-  const [parcelar, setParcelar] = useState(false);
   const [saving, setSaving] = useState(false);
   const clienteRef = useRef<HTMLInputElement>(null);
   const descricaoRef = useRef<HTMLInputElement>(null);
@@ -2266,7 +2491,7 @@ function NovoRecebimentoModal({
         <DialogHeader>
           <DialogTitle>Novo recebimento</DialogTitle>
           <DialogDescription>
-            Registre um título a receber com cliente, valor e parcelamento.
+            Campos com * são gravados na API. Categoria, forma de pagamento, carteira e parcelamento múltiplo: em breve.
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -2282,113 +2507,12 @@ function NovoRecebimentoModal({
             <Input ref={descricaoRef} placeholder="Ex.: OS #882 — troca de óleo" />
           </div>
           <div className="space-y-1.5">
-            <Label>Categoria</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="vendas">Vendas</SelectItem>
-                <SelectItem value="servicos">Serviços</SelectItem>
-                <SelectItem value="outros">Outros</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
             <Label>Valor (R$) *</Label>
             <Input ref={valorRef} type="number" step="0.01" placeholder="0,00" />
           </div>
           <div className="space-y-1.5">
             <Label>Vencimento *</Label>
             <Input ref={vencimentoRef} type="date" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Forma de pagamento</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="credito">Cartão de crédito</SelectItem>
-                <SelectItem value="debito">Cartão de débito</SelectItem>
-                <SelectItem value="boleto">Boleto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Carteira destino</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {listaCarteiras.filter((c) => c.ativo).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Status</Label>
-            <Select defaultValue="pendente">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="parcial">Parcial</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3 sm:col-span-2">
-            <div>
-              <p className="text-sm font-medium">Parcelar recebimento</p>
-              <p className="text-xs text-muted-foreground">
-                Gera múltiplas parcelas mensais
-              </p>
-            </div>
-            <Switch checked={parcelar} onCheckedChange={setParcelar} />
-          </div>
-          {parcelar && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Quantidade de parcelas</Label>
-                <Input type="number" min={2} max={36} defaultValue={2} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Intervalo (dias)</Label>
-                <Input type="number" min={1} defaultValue={30} />
-              </div>
-            </>
-          )}
-          <div className="rounded-lg border border-border bg-muted/30 p-3 sm:col-span-2">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-medium">Baixa parcial / histórico</p>
-              <Badge variant="outline" className="gap-1">
-                <History className="h-3 w-3" /> 0 movimentos
-              </Badge>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Valor recebido</Label>
-                <Input type="number" step="0.01" placeholder="0,00" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Valor restante</Label>
-                <Input type="number" step="0.01" placeholder="0,00" disabled />
-              </div>
-            </div>
-            <div className="mt-2 flex gap-2">
-              <Button size="sm" variant="outline" className="gap-1">
-                <RotateCcw className="h-3.5 w-3.5" /> Estornar
-              </Button>
-              <Button size="sm" variant="outline" className="gap-1">
-                <FileText className="h-3.5 w-3.5" /> Renegociar
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Observações</Label>
-            <Textarea rows={3} placeholder="Notas internas..." />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Anexo (opcional)</Label>
-            <Input type="file" />
           </div>
         </div>
         <DialogFooter>
@@ -3035,13 +3159,22 @@ function HistoricoModal({
   onOpenChange: (v: boolean) => void;
   conta: ContaReceber | null;
 }) {
+  const { getActiveStoreId } = useFinanceiroReal();
   const [eventos, setEventos] = useState<HistoricoEvento[]>([]);
   const [loadingHist, setLoadingHist] = useState(false);
 
   useEffect(() => {
     if (!open || !conta) return;
+    const sid = getActiveStoreId();
+    if (!sid) {
+      setEventos([]);
+      setLoadingHist(false);
+      return;
+    }
     setLoadingHist(true);
-    void fetch(`/api/financeiro/receber?localKey=${encodeURIComponent(conta.id)}`)
+    void fetch(`/api/financeiro/receber?localKey=${encodeURIComponent(conta.id)}`, {
+      headers: { [ASSISTEC_LOJA_HEADER]: sid },
+    })
       .then((r) => r.json())
       .then((j: Record<string, unknown>) => {
         const hist = Array.isArray((j.titulo as { historico?: unknown })?.historico)
@@ -3051,7 +3184,7 @@ function HistoricoModal({
       })
       .catch(() => setEventos([{ tipo: "criacao", at: undefined, userLabel: "Sistema", observacao: `Conta registrada — valor ${fmt(conta.valor)}` }]))
       .finally(() => setLoadingHist(false));
-  }, [open, conta]);
+  }, [open, conta, getActiveStoreId]);
 
   if (!conta) return null;
   return (
@@ -3091,55 +3224,27 @@ function RenegociarModal({
   open,
   onOpenChange,
   conta,
-  onConfirm,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   conta: ContaReceber | null;
-  onConfirm: () => void;
 }) {
   if (!conta) return null;
   const saldo = conta.valor - conta.recebido;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Renegociar título</DialogTitle>
-          <DialogDescription>Saldo atual: {fmt(saldo)}</DialogDescription>
+          <DialogTitle>Renegociação</DialogTitle>
+          <DialogDescription>
+            Saldo em aberto: {fmt(saldo)}. O fluxo de renegociação (novo valor, parcelas, juros) ainda não está disponível no servidor.
+          </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label>Novo valor</Label>
-            <Input type="number" step="0.01" defaultValue={saldo} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Novo vencimento</Label>
-            <Input type="date" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Parcelas</Label>
-            <Input type="number" min={1} defaultValue={1} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Intervalo (dias)</Label>
-            <Input type="number" defaultValue={30} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Juros (%)</Label>
-            <Input type="number" step="0.1" defaultValue={1} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Multa (%)</Label>
-            <Input type="number" step="0.1" defaultValue={2} />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Observação</Label>
-            <Textarea rows={2} />
-          </div>
+        <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+          Em preparação: quando liberado, as alterações passarão por confirmação e auditoria como as demais operações financeiras.
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={onConfirm}>Confirmar renegociação</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -3291,13 +3396,22 @@ function HistoricoPagarModal({
   onOpenChange: (v: boolean) => void;
   conta: ContaPagar | null;
 }) {
+  const { getActiveStoreId } = useFinanceiroReal();
   const [eventos, setEventos] = useState<HistoricoEvento[]>([]);
   const [loadingHist, setLoadingHist] = useState(false);
 
   useEffect(() => {
     if (!open || !conta) return;
+    const sid = getActiveStoreId();
+    if (!sid) {
+      setEventos([]);
+      setLoadingHist(false);
+      return;
+    }
     setLoadingHist(true);
-    void fetch(`/api/financeiro/pagar?localKey=${encodeURIComponent(conta.id)}`)
+    void fetch(`/api/financeiro/pagar?localKey=${encodeURIComponent(conta.id)}`, {
+      headers: { [ASSISTEC_LOJA_HEADER]: sid },
+    })
       .then((r) => r.json())
       .then((j: Record<string, unknown>) => {
         const hist = Array.isArray((j.titulo as { historico?: unknown })?.historico)
@@ -3307,7 +3421,7 @@ function HistoricoPagarModal({
       })
       .catch(() => setEventos([{ tipo: "criacao", at: undefined, userLabel: "Sistema", observacao: `Conta registrada — valor ${fmt(conta.valor)}` }]))
       .finally(() => setLoadingHist(false));
-  }, [open, conta]);
+  }, [open, conta, getActiveStoreId]);
 
   if (!conta) return null;
   return (
@@ -3360,17 +3474,50 @@ function MovimentacaoModal({
   tipo: "entrada" | "saida";
   carteiraId: string;
   carteiras: CarteiraItem[];
-  onConfirm: () => void;
+  onConfirm: (payload: RegistrarMovimentacaoCarteiraInput) => void | Promise<void>;
 }) {
   const [valor, setValor] = useState(0);
   const [carteira, setCarteira] = useState(carteiraId);
+  const [descricao, setDescricao] = useState("");
+  const [observacao, setObservacao] = useState("");
+  const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (open) {
       setCarteira(carteiraId);
       setValor(0);
+      setDescricao("");
+      setObservacao("");
+      setData(new Date().toISOString().slice(0, 10));
     }
   }, [open, carteiraId]);
+
+  const submit = async () => {
+    if (!carteira || busy) return;
+    if (!descricao.trim()) {
+      toast.error("Informe a descrição");
+      return;
+    }
+    if (!(valor > 0)) {
+      toast.error("Informe um valor maior que zero");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload: RegistrarMovimentacaoCarteiraInput = {
+        tipo,
+        valor,
+        descricao: descricao.trim(),
+        carteiraId: carteira,
+        data: data || undefined,
+        observacao: observacao.trim() || undefined,
+      };
+      await onConfirm(payload);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -3378,7 +3525,7 @@ function MovimentacaoModal({
         <DialogHeader>
           <DialogTitle>{tipo === "entrada" ? "Nova entrada" : "Nova saída"}</DialogTitle>
           <DialogDescription>
-            {tipo === "entrada" ? "Crédito em carteira" : "Débito em carteira"}
+            {tipo === "entrada" ? "Crédito na carteira (persistido)" : "Débito na carteira (persistido)"}
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -3392,54 +3539,30 @@ function MovimentacaoModal({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Valor</Label>
-            <Input type="number" step="0.01" value={valor} onChange={(e) => setValor(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Categoria</Label>
-            <Select defaultValue="outros">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="vendas">Vendas</SelectItem>
-                <SelectItem value="servicos">Serviços</SelectItem>
-                <SelectItem value="fornecedores">Fornecedores</SelectItem>
-                <SelectItem value="folha">Folha</SelectItem>
-                <SelectItem value="outros">Outros</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Forma</Label>
-            <Select defaultValue="pix">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="cartao">Cartão</SelectItem>
-                <SelectItem value="transferencia">Transferência</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label>Valor (R$)</Label>
+            <Input type="number" step="0.01" value={valor || ""} onChange={(e) => setValor(Number(e.target.value))} />
           </div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Descrição</Label>
-            <Input placeholder="Descrição da movimentação" />
+            <Label>Descrição *</Label>
+            <Input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="Ex.: Suprimento de caixa" />
           </div>
           <div className="space-y-1.5">
-            <Label>Data</Label>
-            <Input type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Anexo</Label>
-            <Input type="file" />
+            <Label>Data do lançamento</Label>
+            <Input type="date" value={data} onChange={(e) => setData(e.target.value)} />
           </div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label>Observação</Label>
-            <Textarea rows={2} />
+            <Label>Observação (opcional)</Label>
+            <Textarea rows={2} value={observacao} onChange={(e) => setObservacao(e.target.value)} />
           </div>
+          <p className="text-xs text-muted-foreground sm:col-span-2 rounded-md border border-border bg-muted/30 p-2">
+            Categoria, forma de pagamento e anexo: em breve. O lançamento acima grava em movimentações financeiras e atualiza o saldo da carteira.
+          </p>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={() => onConfirm()}>Confirmar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancelar</Button>
+          <Button onClick={() => void submit()} disabled={busy}>
+            {busy ? "Salvando…" : "Confirmar"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
