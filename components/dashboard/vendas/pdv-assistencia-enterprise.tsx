@@ -29,6 +29,7 @@ import {
   Search,
   Star,
   Loader2,
+  Zap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -66,6 +67,8 @@ import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useToast } from "@/hooks/use-toast"
 import { useStoreSettings } from "@/lib/store-settings-provider"
+import { useLojaAtiva } from "@/lib/loja-ativa"
+import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 
 // ─── Catalog slices (defaults) ───────────────────────────────────────────────
 
@@ -81,6 +84,8 @@ for (const cat of TOP_PRODUCT_CATEGORIES) {
 
 // ─── Atalhos types + helpers ──────────────────────────────────────────────────
 
+const SHORTCUTS_STORAGE_KEY = (storeId: string) => `omnigestao:pdv-shortcuts:${storeId}`
+
 type AtalhoSaved = {
   id: string
   nome: string
@@ -89,6 +94,8 @@ type AtalhoSaved = {
   categoria?: string
   ativo?: boolean
   favorito?: boolean
+  cor?: string
+  posicao?: number
 }
 
 type AtalhoEntry = {
@@ -685,12 +692,16 @@ function TrocasModal({
 function EditarAtalhosModal({
   open,
   catalog = PDV_PRODUCTS_BASE,
+  catalogForAdd = [],
   savedAtalhos,
   onSave,
   onClose,
 }: {
   open: boolean
+  /** Catálogo completo (inclui base mock) — usado apenas para resolver atalhos já salvos. */
   catalog?: PdvCatalogProduct[]
+  /** Apenas itens reais do estoque — exibidos na aba "Adicionar do Catálogo". */
+  catalogForAdd?: PdvCatalogProduct[]
   savedAtalhos: AtalhoSaved[]
   onSave: (atalhos: AtalhoSaved[]) => void
   onClose: () => void
@@ -726,15 +737,15 @@ function EditarAtalhosModal({
   const catalogFiltered = useMemo(
     () =>
       catSearchLow
-        ? catalog.filter(
+        ? catalogForAdd.filter(
             (p) =>
               p.name.toLowerCase().includes(catSearchLow) ||
               p.category.toLowerCase().includes(catSearchLow) ||
               (p.sku ?? "").toLowerCase().includes(catSearchLow) ||
               (p.barcode ?? "").includes(catSearchLow),
           )
-        : catalog,
-    [catalog, catSearchLow],
+        : catalogForAdd,
+    [catalogForAdd, catSearchLow],
   )
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -846,8 +857,9 @@ function EditarAtalhosModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-xl rounded-2xl border-border bg-card p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
+      <DialogContent className="flex max-h-[90vh] max-w-xl flex-col gap-0 overflow-hidden rounded-2xl border-border bg-card p-0">
+        {/* Header — fixo */}
+        <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <Settings2 className="h-5 w-5 text-primary" />
             Gerenciar Atalhos Rápidos
@@ -857,8 +869,8 @@ function EditarAtalhosModal({
           </p>
         </DialogHeader>
 
-        {/* Tab nav */}
-        <div className="flex gap-5 border-b border-border px-6 pt-3">
+        {/* Tab nav — fixo */}
+        <div className="flex shrink-0 gap-5 border-b border-border px-6 pt-3">
           {([
             { id: "atalhos" as const, label: `Atalhos (${entries.length})` },
             { id: "adicionar" as const, label: "Adicionar do Catálogo" },
@@ -871,9 +883,10 @@ function EditarAtalhosModal({
           ))}
         </div>
 
-        {/* ── Tab: Atalhos ── */}
-        {modalTab === "atalhos" ? (
-          <ScrollArea className="max-h-[55vh]">
+        {/* Área de conteúdo — scrollável, ocupa espaço restante */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {modalTab === "atalhos" ? (
+            /* ── Tab: Atalhos ── */
             <div className="space-y-4 px-6 py-4">
               {/* Serviços */}
               <div>
@@ -884,7 +897,7 @@ function EditarAtalhosModal({
                   </Badge>
                 </div>
                 {svcEntries.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum serviço. Adicione na aba "Adicionar do Catálogo".</p>
+                  <p className="text-xs text-muted-foreground">Nenhum serviço. Adicione na aba &ldquo;Adicionar do Catálogo&rdquo;.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {svcEntries.map((e, gi) =>
@@ -905,7 +918,7 @@ function EditarAtalhosModal({
                   </Badge>
                 </div>
                 {prdEntries.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Nenhum produto. Adicione na aba "Adicionar do Catálogo".</p>
+                  <p className="text-xs text-muted-foreground">Nenhum produto. Adicione na aba &ldquo;Adicionar do Catálogo&rdquo;.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {prdEntries.map((e, gi) =>
@@ -915,70 +928,87 @@ function EditarAtalhosModal({
                 )}
               </div>
             </div>
-          </ScrollArea>
-        ) : (
-          /* ── Tab: Adicionar ── */
-          <>
-            <div className="border-b border-border px-6 py-3">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input autoFocus value={catSearch} onChange={(e) => setCatSearch(e.target.value)}
-                  placeholder="Buscar por nome, categoria, SKU ou código de barras…"
-                  className="h-9 rounded-xl border-border bg-background pl-9 text-sm" />
+          ) : (
+            /* ── Tab: Adicionar ── */
+            <div className="flex flex-col">
+              {/* Busca — sticky */}
+              <div className="sticky top-0 z-10 border-b border-border bg-card px-6 py-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    autoFocus
+                    value={catSearch}
+                    onChange={(e) => setCatSearch(e.target.value)}
+                    placeholder="Buscar por nome, categoria, SKU ou código de barras…"
+                    className="h-9 w-full rounded-xl border-border bg-background pl-9 text-sm"
+                  />
+                </div>
               </div>
-            </div>
-            <ScrollArea className="max-h-[50vh]">
-              <div className="space-y-1 px-6 py-3">
-                {catalogFiltered.map((p) => {
-                  const isAdded = addedIds.has(p.id)
-                  const isService = p.category === "Servicos"
-                  const outOfStock = !isService && p.stock <= 0
-                  const atLimit = isService ? svcEntries.length >= MAX_SVC : prdEntries.length >= MAX_PRD
-                  const disabled = isAdded || atLimit
 
-                  return (
-                    <div key={p.id}
-                      className={cn("flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all",
-                        isAdded ? "border-border/50 bg-muted/20 opacity-60" : "border-border bg-background hover:border-primary/30 hover:bg-muted/40")}>
-                      <div className="min-w-0 flex-1">
-                        <p className={cn("truncate font-medium", isAdded ? "text-muted-foreground" : "text-foreground")}>{p.name}</p>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                          <span className="text-[10px] text-muted-foreground">{p.category}</span>
-                          {p.sku && <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">{p.sku}</span>}
-                          {outOfStock && (
-                            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 px-1 py-px text-[9px] font-semibold text-amber-600">
-                              sem estoque
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                      <span className="shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{brl(p.price)}</span>
-                      {!isService && p.stock < 999 && (
-                        <span className={cn("shrink-0 text-[10px] tabular-nums", outOfStock ? "text-amber-500" : "text-muted-foreground")}>
-                          {p.stock}⬟
-                        </span>
-                      )}
-                      <button type="button" disabled={disabled} onClick={() => addFromCatalog(p)}
-                        className={cn("flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-bold transition",
-                          isAdded ? "cursor-default text-muted-foreground"
-                            : atLimit ? "cursor-not-allowed text-muted-foreground opacity-40"
-                              : "bg-primary/10 text-primary hover:bg-primary/20")}>
-                        {isAdded ? <><Check className="h-3 w-3" /> Adicionado</> : <><Plus className="h-3 w-3" /> Adicionar</>}
-                      </button>
-                    </div>
-                  )
-                })}
-                {catalogFiltered.length === 0 && (
+              {/* Lista de itens reais */}
+              <div className="space-y-1 px-6 py-3">
+                {catalogForAdd.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-10 text-center">
+                    <AlertTriangle className="h-6 w-6 text-muted-foreground/40" />
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Nenhum produto real encontrado nesta loja.
+                    </p>
+                    <p className="text-xs text-muted-foreground/60">
+                      Cadastre itens em Estoque para adicioná-los como atalhos.
+                    </p>
+                  </div>
+                ) : catalogFiltered.length === 0 ? (
                   <p className="py-6 text-center text-sm text-muted-foreground">
                     Nenhum resultado para &ldquo;{catSearch}&rdquo;.
                   </p>
+                ) : (
+                  catalogFiltered.map((p) => {
+                    const isAdded = addedIds.has(p.id)
+                    const isService = p.category === "Servicos"
+                    const outOfStock = !isService && p.stock <= 0
+                    const atLimit = isService ? svcEntries.length >= MAX_SVC : prdEntries.length >= MAX_PRD
+                    const disabled = isAdded || atLimit
+
+                    return (
+                      <div key={p.id}
+                        className={cn("flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all",
+                          isAdded ? "border-border/50 bg-muted/20 opacity-60" : "border-border bg-background hover:border-primary/30 hover:bg-muted/40")}>
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("truncate font-medium", isAdded ? "text-muted-foreground" : "text-foreground")}>{p.name}</p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground">{p.category}</span>
+                            {p.sku && <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">{p.sku}</span>}
+                            {outOfStock && (
+                              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 px-1 py-px text-[9px] font-semibold text-amber-600">
+                                sem estoque
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{brl(p.price)}</span>
+                        {!isService && p.stock < 999 && (
+                          <span className={cn("shrink-0 text-[10px] tabular-nums", outOfStock ? "text-amber-500" : "text-muted-foreground")}>
+                            {p.stock}⬟
+                          </span>
+                        )}
+                        <button type="button" disabled={disabled} onClick={() => addFromCatalog(p)}
+                          className={cn("flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-bold transition",
+                            isAdded ? "cursor-default text-muted-foreground"
+                              : atLimit ? "cursor-not-allowed text-muted-foreground opacity-40"
+                                : "bg-primary/10 text-primary hover:bg-primary/20")}>
+                          {isAdded ? <><Check className="h-3 w-3" /> Adicionado</> : <><Plus className="h-3 w-3" /> Adicionar</>}
+                        </button>
+                      </div>
+                    )
+                  })
                 )}
               </div>
-            </ScrollArea>
-          </>
-        )}
+            </div>
+          )}
+        </div>
 
-        <DialogFooter className="border-t border-border px-6 py-4">
+        {/* Footer — fixo */}
+        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
           <Button variant="outline" className="rounded-xl" onClick={onClose}>Cancelar</Button>
           <Button disabled={isSaving} className="rounded-xl" onClick={handleSave}>
             {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
@@ -995,8 +1025,36 @@ function EditarAtalhosModal({
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
   const { inventory, finalizeSaleTransaction } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated } = useStoreSettings()
+  const { lojaAtivaId } = useLojaAtiva()
+  const shortcutsKey = useMemo(
+    () => SHORTCUTS_STORAGE_KEY((lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID),
+    [lojaAtivaId]
+  )
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const mergedCatalog = useMemo(() => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory), [inventory])
+
+  // Apenas itens reais do estoque (sem os mocks de PDV_PRODUCTS_BASE) — passados ao modal de atalhos
+  const realCatalog = useMemo((): PdvCatalogProduct[] => {
+    if (!Array.isArray(inventory) || inventory.length === 0) return []
+    return inventory.map((inv) => {
+      const unit = inv.vendaPorPeso ? (inv.precoPorKg ?? inv.price) : inv.price
+      return {
+        id: inv.id,
+        name: inv.name,
+        barcode: inv.barcode,
+        dbId: inv.dbId,
+        sku: inv.sku,
+        codigo: inv.codigo ?? inv.sku ?? inv.id,
+        codigoBarras: inv.codigoBarras ?? inv.barcode,
+        price: unit,
+        stock: inv.stock,
+        category: inv.category ?? "Outros",
+        vendaPorPeso: inv.vendaPorPeso,
+        precoPorKg: inv.precoPorKg,
+        atributos: inv.atributos,
+      }
+    })
+  }, [inventory])
   const inputRef = useRef<HTMLInputElement | null>(null)
   const customerInputRef = useRef<HTMLInputElement | null>(null)
   const discountInputRef = useRef<HTMLInputElement | null>(null)
@@ -1057,10 +1115,26 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     return active.map((a) => mergedCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
   }, [localAtalhos, mergedCatalog])
 
-  // ── Hydratação dos atalhos a partir da config persistida no banco (roda uma vez) ──
+  // ── Hydratação dos atalhos: localStorage (fast-path) → banco (fallback) ──────
   const [hydratedFromDb, setHydratedFromDb] = useState(false)
   useEffect(() => {
-    if (!settingsHydrated || hydratedFromDb) return
+    if (hydratedFromDb) return
+
+    // Fast-path: localStorage por loja (disponível antes da resposta do servidor)
+    try {
+      const raw = localStorage.getItem(shortcutsKey)
+      if (raw) {
+        const parsed = JSON.parse(raw) as AtalhoSaved[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setLocalAtalhos(parsed)
+          setHydratedFromDb(true)
+          return
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Server fallback: aguarda hidratação do banco
+    if (!settingsHydrated) return
     const saved = pdvParams.atalhosRapidos ?? []
     if (saved.length > 0) {
       setLocalAtalhos(saved)
@@ -1071,7 +1145,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       ])
     }
     setHydratedFromDb(true)
-  }, [settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
+  }, [shortcutsKey, settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
 
   // ── Computed totals ────────────────────────────────────────────────────────────
   const subtotal = useMemo(() => cart.reduce((s, l) => s + l.price * l.qty, 0), [cart])
@@ -1513,19 +1587,17 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       </TabsTrigger>
                     )}
                   </TabsList>
-                  {!modoRapido ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-10 shrink-0 rounded-xl border-border px-3 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => setEditAtalhosOpen(true)}
-                      title="Editar Atalhos"
-                    >
-                      <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                      Editar Atalhos
-                    </Button>
-                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 shrink-0 rounded-xl border-border px-3 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setEditAtalhosOpen(true)}
+                    title="Editar Atalhos"
+                  >
+                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                    Editar Atalhos
+                  </Button>
                 </div>
 
               <TabsContent
@@ -1537,8 +1609,18 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       {quickServices.length > 0 ? (
                         quickServices.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)
                       ) : (
-                        <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
-                          Nenhum atalho configurado. Clique em &ldquo;Editar Atalhos&rdquo;.
+                        <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
+                          <p className="text-sm text-muted-foreground">Nenhum atalho de serviço configurado.</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 rounded-xl"
+                            onClick={() => setEditAtalhosOpen(true)}
+                          >
+                            <Zap className="h-3.5 w-3.5" />
+                            Editar Atalhos
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -1554,8 +1636,18 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       {quickProducts.length > 0 ? (
                         quickProducts.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)
                       ) : (
-                        <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
-                          Nenhum atalho configurado. Clique em &ldquo;Editar Atalhos&rdquo;.
+                        <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
+                          <p className="text-sm text-muted-foreground">Nenhum atalho de produto configurado.</p>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="gap-1.5 rounded-xl"
+                            onClick={() => setEditAtalhosOpen(true)}
+                          >
+                            <Zap className="h-3.5 w-3.5" />
+                            Editar Atalhos
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -1824,9 +1916,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       <EditarAtalhosModal
         open={editAtalhosOpen}
         catalog={mergedCatalog}
+        catalogForAdd={realCatalog}
         savedAtalhos={localAtalhos}
         onSave={(atalhos) => {
           setLocalAtalhos(atalhos)
+          try { localStorage.setItem(shortcutsKey, JSON.stringify(atalhos)) } catch { /* ignore */ }
           void saveStoreSettings({
             printerConfig: {
               ...blob,
