@@ -6,8 +6,12 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  HelpCircle,
   Loader2,
+  Maximize2,
+  Minimize2,
   Minus,
+  PackageSearch,
   Plus,
   Receipt,
   Search,
@@ -20,9 +24,9 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
@@ -33,12 +37,11 @@ import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import {
-  PDV_PRODUCTS_BASE,
-  mergePdvCatalogWithInventory,
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
+import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { appendAuditLog } from "@/lib/audit-log"
 import {
@@ -75,6 +78,19 @@ type CartLine = {
   price: number
   qty: number
   detail?: LineDetail
+}
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+const DRAFT_STORAGE_KEY = (storeId: string) => `omnigestao:venda-completa:${storeId}`
+
+// ── Types (extended) ───────────────────────────────────────────────────────────
+
+type DraftData = {
+  cliente: ClienteResult | null
+  cart: CartLine[]
+  discountReais: number
+  discountPercent: number
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -121,6 +137,7 @@ export function PdvVendaCompletaEnterprise({
   const [selectedCliente, setSelectedCliente] = useState<ClienteResult | null>(null)
   const [showClienteDropdown, setShowClienteDropdown] = useState(false)
   const clienteInputRef = useRef<HTMLInputElement>(null)
+  const hasDraftRestored = useRef(false)
 
   // ── Products ──────────────────────────────────────────────────────────────
   const [productQuery, setProductQuery] = useState("")
@@ -138,12 +155,31 @@ export function PdvVendaCompletaEnterprise({
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
   const [cupomOpen, setCupomOpen] = useState(false)
   const [cupomData, setCupomData] = useState<CupomData | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   // ── Catalog ───────────────────────────────────────────────────────────────
-  const products = useMemo(
-    () => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory),
-    [inventory]
-  )
+  const products = useMemo((): PdvCatalogProduct[] => {
+    if (!Array.isArray(inventory) || inventory.length === 0) return []
+    return inventory.map((inv) => {
+      const unit = inv.vendaPorPeso ? (inv.precoPorKg ?? inv.price) : inv.price
+      return {
+        id: inv.id,
+        name: inv.name,
+        barcode: inv.barcode,
+        dbId: inv.dbId,
+        sku: inv.sku,
+        codigo: inv.codigo ?? inv.sku ?? inv.id,
+        codigoBarras: inv.codigoBarras ?? inv.barcode,
+        price: unit,
+        stock: inv.stock,
+        category: inv.category ?? "Outros",
+        vendaPorPeso: inv.vendaPorPeso,
+        precoPorKg: inv.precoPorKg,
+        atributos: inv.atributos,
+      }
+    })
+  }, [inventory])
 
   const filteredProducts = useMemo(() => {
     const q = productQuery.trim()
@@ -186,6 +222,121 @@ export function PdvVendaCompletaEnterprise({
     return () => controller.abort()
   }, [clienteQuery, storeId])
 
+  // ── Draft restore (once, after inventory loads) ───────────────────────────
+  useEffect(() => {
+    if (hasDraftRestored.current) return
+    if (!Array.isArray(inventory) || inventory.length === 0) return
+    hasDraftRestored.current = true
+    try {
+      const raw = localStorage.getItem(DRAFT_STORAGE_KEY(storeId))
+      if (!raw) return
+      const draft = JSON.parse(raw) as DraftData
+      const validCart = (draft.cart ?? []).filter((line) =>
+        inventory.some((i) => i.id === line.inventoryId)
+      )
+      if (validCart.length > 0) {
+        setCart(validCart)
+        if ((draft.discountReais ?? 0) > 0) setDiscountReais(draft.discountReais)
+        if ((draft.discountPercent ?? 0) > 0) setDiscountPercent(draft.discountPercent)
+        if (draft.cliente) setSelectedCliente(draft.cliente)
+        toast({
+          title: "Rascunho restaurado",
+          description: `${validCart.length} ite${validCart.length === 1 ? "m" : "ns"} recuperado${validCart.length === 1 ? "" : "s"} do rascunho anterior.`,
+        })
+      }
+    } catch {
+      /* ignore malformed draft */
+    }
+  }, [inventory, storeId, toast])
+
+  // ── Draft save (whenever cart/cliente/desconto muda) ──────────────────────
+  useEffect(() => {
+    if (!hasDraftRestored.current) return
+    const draft: DraftData = { cliente: selectedCliente, cart, discountReais, discountPercent }
+    try {
+      if (cart.length > 0 || selectedCliente) {
+        localStorage.setItem(DRAFT_STORAGE_KEY(storeId), JSON.stringify(draft))
+      } else {
+        localStorage.removeItem(DRAFT_STORAGE_KEY(storeId))
+      }
+    } catch {
+      /* ignore quota errors */
+    }
+  }, [selectedCliente, cart, discountReais, discountPercent, storeId])
+
+  // ── Mount focus ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => clienteInputRef.current?.focus(), 80)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Fullscreen sync ───────────────────────────────────────────────────────
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener("fullscreenchange", onFsChange)
+    return () => document.removeEventListener("fullscreenchange", onFsChange)
+  }, [])
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      switch (e.key) {
+        case "F1":
+          e.preventDefault()
+          if (
+            selectedCliente !== null &&
+            cart.length > 0 &&
+            total > 0 &&
+            !isPaymentOpen &&
+            !cupomOpen &&
+            !helpOpen
+          ) {
+            setIsPaymentOpen(true)
+          }
+          break
+        case "F2":
+          e.preventDefault()
+          if (selectedCliente) {
+            setSelectedCliente(null)
+            setClienteQuery("")
+            setTimeout(() => clienteInputRef.current?.focus(), 50)
+          } else {
+            clienteInputRef.current?.focus()
+          }
+          break
+        case "F3":
+          e.preventDefault()
+          productInputRef.current?.focus()
+          break
+        case "F11":
+          e.preventDefault()
+          if (!document.fullscreenElement) {
+            void document.documentElement.requestFullscreen().catch(() => {})
+          } else {
+            void document.exitFullscreen().catch(() => {})
+          }
+          break
+        case "End":
+          e.preventDefault()
+          if (!isPaymentOpen && !cupomOpen) setHelpOpen((o) => !o)
+          break
+        case "Escape":
+          if (helpOpen) {
+            e.preventDefault()
+            setHelpOpen(false)
+          }
+          break
+      }
+    },
+    [selectedCliente, cart, total, isPaymentOpen, cupomOpen, helpOpen]
+  )
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [handleKeyDown])
+
   // ── Cart helpers ──────────────────────────────────────────────────────────
   const addToCart = useCallback(
     (product: PdvCatalogProduct) => {
@@ -224,14 +375,26 @@ export function PdvVendaCompletaEnterprise({
   )
 
   function updateQty(lineId: string, delta: number) {
+    if (delta > 0) {
+      const line = cart.find((l) => l.lineId === lineId)
+      if (line) {
+        const invItem = inventory.find((i) => i.id === line.inventoryId)
+        const isService = invItem?.category === "Servicos"
+        if (!isService && invItem && line.qty >= invItem.stock) {
+          toast({
+            title: "Estoque máximo atingido",
+            description: `${line.name}: apenas ${invItem.stock} unidade${invItem.stock === 1 ? "" : "s"} disponíve${invItem.stock === 1 ? "l" : "is"}.`,
+            variant: "destructive",
+          })
+          return
+        }
+      }
+    }
     setCart((prev) =>
       prev
         .map((l) => (l.lineId === lineId ? { ...l, qty: l.qty + delta } : l))
         .filter((l) => l.qty > 0)
     )
-    if (delta < 0 && expandedLineId === lineId) {
-      // keep expanded if still in cart
-    }
   }
 
   function removeFromCart(lineId: string) {
@@ -393,6 +556,9 @@ export function PdvVendaCompletaEnterprise({
     setIsPaymentOpen(false)
     setCupomOpen(true)
 
+    // Clear draft
+    try { localStorage.removeItem(DRAFT_STORAGE_KEY(storeId)) } catch {}
+
     // Reset
     setCart([])
     setDiscountReais(0)
@@ -442,8 +608,8 @@ export function PdvVendaCompletaEnterprise({
               </p>
               <p className="truncate text-[11px] text-muted-foreground">
                 {selectedCliente
-                  ? selectedCliente.name
-                  : "Identifique o cliente para continuar"}
+                  ? `${selectedCliente.name} · Op: ${cashierId.slice(-6)}`
+                  : `Op: ${cashierId.slice(-6)} — Identifique o cliente`}
               </p>
             </div>
           </div>
@@ -454,6 +620,34 @@ export function PdvVendaCompletaEnterprise({
               {cart.reduce((s, l) => s + l.qty, 0) === 1 ? "item" : "itens"}
             </Badge>
           )}
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (!document.fullscreenElement) {
+                void document.documentElement.requestFullscreen().catch(() => {})
+              } else {
+                void document.exitFullscreen().catch(() => {})
+              }
+            }}
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            title={isFullscreen ? "Sair da tela cheia [F11]" : "Tela cheia [F11]"}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setHelpOpen(true)}
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            title="Atalhos de teclado [END]"
+          >
+            <HelpCircle className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -508,7 +702,7 @@ export function PdvVendaCompletaEnterprise({
                   )}
                   <Input
                     ref={clienteInputRef}
-                    placeholder="Nome, CPF ou telefone…"
+                    placeholder="Nome, CPF ou telefone… [F2]"
                     value={clienteQuery}
                     onChange={(e) => {
                       setClienteQuery(e.target.value)
@@ -578,13 +772,18 @@ export function PdvVendaCompletaEnterprise({
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 ref={productInputRef}
-                placeholder="Nome, SKU ou código de barras…"
+                placeholder="Nome, SKU ou código de barras… [F3]"
                 value={productQuery}
                 onChange={(e) => setProductQuery(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && filteredProducts.length === 1) {
+                  if (e.key === "Enter") {
                     e.preventDefault()
-                    addToCart(filteredProducts[0]!)
+                    const exact = findPdvProductByScan(productQuery.trim(), products)
+                    if (exact) {
+                      addToCart(exact)
+                    } else if (filteredProducts.length === 1) {
+                      addToCart(filteredProducts[0]!)
+                    }
                   }
                 }}
                 className="h-10 border-border bg-secondary pl-9 text-sm"
@@ -596,6 +795,7 @@ export function PdvVendaCompletaEnterprise({
                 {filteredProducts.map((p) => {
                   const isService = p.category === "Servicos"
                   const outOfStock = !isService && p.stock <= 0
+                  const lowStock = !isService && !outOfStock && p.stock > 0 && p.stock <= 5
                   return (
                     <button
                       key={p.id}
@@ -603,8 +803,12 @@ export function PdvVendaCompletaEnterprise({
                       disabled={outOfStock}
                       onClick={() => addToCart(p)}
                       className={cn(
-                        "flex flex-col items-start gap-1 rounded-xl border border-border bg-card px-3 py-2.5 text-left transition-all hover:border-primary/40 hover:bg-accent active:scale-[0.98]",
-                        outOfStock && "cursor-not-allowed opacity-50"
+                        "flex flex-col items-start gap-1 rounded-xl border bg-card px-3 py-2.5 text-left transition-all active:scale-[0.98]",
+                        outOfStock
+                          ? "cursor-not-allowed border-border opacity-50"
+                          : lowStock
+                            ? "border-amber-500/30 hover:border-amber-500/60 hover:bg-amber-500/5"
+                            : "border-border hover:border-primary/40 hover:bg-accent"
                       )}
                     >
                       <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">
@@ -615,15 +819,19 @@ export function PdvVendaCompletaEnterprise({
                           className={cn(
                             "text-[10px]",
                             outOfStock
-                              ? "text-amber-500"
-                              : "text-muted-foreground"
+                              ? "text-destructive/70"
+                              : lowStock
+                                ? "font-medium text-amber-500"
+                                : "text-muted-foreground"
                           )}
                         >
                           {isService
                             ? "Serviço"
                             : outOfStock
                               ? "Sem estoque"
-                              : `${p.stock} un`}
+                              : lowStock
+                                ? `Baixo: ${p.stock} un`
+                                : `${p.stock} un`}
                         </span>
                         <span className="text-xs font-bold tabular-nums text-primary">
                           {brl(p.price)}
@@ -632,6 +840,27 @@ export function PdvVendaCompletaEnterprise({
                     </button>
                   )
                 })}
+              </div>
+            )}
+
+            {products.length === 0 && !productQuery && (
+              <div className="mt-2 flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-6 text-center">
+                <PackageSearch className="mb-1.5 h-6 w-6 text-muted-foreground/40" />
+                <p className="text-xs font-medium text-muted-foreground">
+                  Nenhum produto cadastrado
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground/60">
+                  Cadastre itens no módulo Estoque
+                </p>
+              </div>
+            )}
+
+            {filteredProducts.length === 0 && productQuery.trim() && products.length > 0 && (
+              <div className="mt-2 flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-4 text-center">
+                <Search className="mb-1 h-5 w-5 text-muted-foreground/40" />
+                <p className="text-xs text-muted-foreground">
+                  Nenhum resultado para &ldquo;{productQuery}&rdquo;
+                </p>
               </div>
             )}
           </div>
@@ -846,15 +1075,14 @@ export function PdvVendaCompletaEnterprise({
 
         {/* ── Right sidebar ─────────────────────────────────────────── */}
         <PdvPainelLateralTerminal className="w-64 shrink-0 xl:w-72">
-          <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-3">
-            {/* Total visor */}
+          {/* ── Fixed top: totals ─────────────────────────────────── */}
+          <div className="shrink-0 space-y-2 p-3 pb-1">
             <PdvVisorTotal
               label="TOTAL"
               valorFormatado={brl(total)}
               glow="soft"
             />
 
-            {/* Subtotal / desconto */}
             {subtotal !== total && subtotal > 0 && (
               <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs">
                 <div className="flex justify-between text-muted-foreground">
@@ -863,16 +1091,35 @@ export function PdvVendaCompletaEnterprise({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Desconto</span>
-                  <span className="tabular-nums text-amber-500">
-                    -{brl(discountReais)}
-                  </span>
+                  <span className="tabular-nums text-amber-500">-{brl(discountReais)}</span>
                 </div>
               </div>
             )}
 
-            {/* Items summary */}
             {cart.length > 0 && (
-              <div className="min-h-0 overflow-y-auto rounded-xl border border-border bg-card">
+              <div className="flex items-center justify-between rounded-lg border border-border bg-card px-2.5 py-1.5">
+                <span className="text-[11px] text-muted-foreground">
+                  {cart.length} ite{cart.length === 1 ? "m" : "ns"}
+                </span>
+                <Badge variant="secondary" className="tabular-nums text-[10px]">
+                  {cart.reduce((s, l) => s + l.qty, 0)} un
+                </Badge>
+              </div>
+            )}
+          </div>
+
+          {/* ── Scrollable middle: cart items ─────────────────────── */}
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
+            {cart.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <Receipt className="mb-2 h-7 w-7 text-muted-foreground/30" />
+                <p className="text-xs font-medium text-muted-foreground">Carrinho vazio</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground/50">
+                  Use [F3] para buscar produtos
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-border bg-card">
                 <div className="divide-y divide-border">
                   {cart.map((l) => (
                     <div
@@ -888,7 +1135,7 @@ export function PdvVendaCompletaEnterprise({
                             {[
                               l.detail.imei ? `IMEI: ${l.detail.imei}` : null,
                               l.detail.garantiaDias
-                                ? `${l.detail.garantiaDias}d garantia`
+                                ? `${l.detail.garantiaDias}d`
                                 : null,
                             ]
                               .filter(Boolean)
@@ -896,46 +1143,137 @@ export function PdvVendaCompletaEnterprise({
                           </p>
                         )}
                       </div>
-                      <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                        {l.qty}× {brl(l.price)}
-                      </span>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[11px] tabular-nums text-muted-foreground">
+                          {l.qty}× {brl(l.price)}
+                        </p>
+                        <p className="text-[11px] font-semibold tabular-nums text-foreground">
+                          {brl(l.price * l.qty)}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+          </div>
 
-            <Separator className="shrink-0" />
-
-            {/* Warnings */}
+          {/* ── Fixed bottom: warnings + finalize ─────────────────── */}
+          <div className="shrink-0 space-y-2 border-t border-border p-3 pt-2">
             {!selectedCliente && (
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2.5">
-                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                  Selecione o cliente para continuar
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2">
+                <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                  [F2] Selecione o cliente para continuar
                 </p>
               </div>
             )}
 
-            {cart.length === 0 && (
-              <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
-                <p className="text-xs text-muted-foreground">
-                  Adicione produtos ao carrinho
-                </p>
-              </div>
-            )}
-
-            {/* Finalizar */}
             <Button
               type="button"
               className="h-12 w-full shrink-0 rounded-xl bg-emerald-600 text-base font-bold text-zinc-950 shadow-lg hover:bg-emerald-500 disabled:opacity-50"
               disabled={!canFinalize}
               onClick={() => setIsPaymentOpen(true)}
             >
-              Finalizar Venda
+              <span>Finalizar Venda</span>
+              <kbd className="ml-2 rounded border border-zinc-950/20 bg-zinc-950/10 px-1.5 py-0.5 font-mono text-[10px] font-medium">
+                F1
+              </kbd>
             </Button>
           </div>
         </PdvPainelLateralTerminal>
       </div>
+
+      {/* Help overlay — premium grid */}
+      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <DialogContent className="max-w-md rounded-2xl border-border bg-card p-0">
+          <DialogHeader className="border-b border-border px-5 py-3">
+            <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
+              <HelpCircle className="h-4 w-4 text-primary" />
+              Atalhos — Venda Completa Enterprise
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 divide-x divide-border">
+            {/* Coluna 1: Venda */}
+            <div className="p-4">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-primary">
+                Venda
+              </p>
+              <div className="space-y-2.5">
+                {(
+                  [
+                    { key: "F1",    label: "Finalizar venda" },
+                    { key: "F2",    label: "Buscar / limpar cliente" },
+                    { key: "F3",    label: "Foco no produto" },
+                    { key: "↵",     label: "Bipe / único resultado" },
+                  ] as const
+                ).map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                    <kbd className="shrink-0 rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary">
+                      {key}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Coluna 2: Navegação + Caixa */}
+            <div className="p-4">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Navegação
+              </p>
+              <div className="space-y-2.5">
+                {(
+                  [
+                    { key: "F11", label: "Tela cheia / Sair" },
+                    { key: "END", label: "Esta ajuda" },
+                    { key: "ESC", label: "Fechar modal" },
+                  ] as const
+                ).map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                    <kbd className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-bold text-muted-foreground">
+                      {key}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mb-3 mt-5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Pagamento
+              </p>
+              <div className="space-y-2.5">
+                {(
+                  [
+                    { key: "F1", label: "Abrir modal de pagamento" },
+                  ] as const
+                ).map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                    <kbd className="shrink-0 rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary">
+                      {key}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-border px-5 py-2.5">
+            <p className="text-[11px] text-muted-foreground">
+              Operador:{" "}
+              <span className="font-mono font-medium text-foreground">{cashierId}</span>
+              {" · "}
+              Pressione{" "}
+              <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">END</kbd>{" "}
+              ou{" "}
+              <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">ESC</kbd>{" "}
+              para fechar.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* PaymentModal */}
       <PaymentModal

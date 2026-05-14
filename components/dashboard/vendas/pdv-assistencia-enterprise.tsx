@@ -67,11 +67,24 @@ import { type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
+import { useCaixa } from "../caixa/caixa-provider"
 import { useToast } from "@/hooks/use-toast"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { listClientes, type ClienteDTO } from "@/app/actions/cadastros"
+
+// ─── Cart persistence ─────────────────────────────────────────────────────────
+
+const CART_STORAGE_KEY = (storeId: string) => `omnigestao:pdv-assistencia-cart:${storeId}`
+const CART_MAX_AGE_MS = 12 * 60 * 60 * 1000 // 12h
+
+type CartPersisted = {
+  cart: CartLine[]
+  customerName: string
+  discount: number
+  savedAt: string
+}
 
 // ─── Atalhos types + helpers ──────────────────────────────────────────────────
 
@@ -694,7 +707,7 @@ const HELP_SHORTCUTS: { key: string; label: string; status: "ok" | "partial" | "
   { key: "F1",  label: "Finalizar venda (Dinheiro)",  status: "ok" },
   { key: "F2",  label: "Buscar / Selecionar cliente", status: "ok" },
   { key: "F3",  label: "Foco na busca / bipe",        status: "ok" },
-  { key: "F4",  label: "Alterar quantidade",          status: "soon" },
+  { key: "F4",  label: "Alterar quantidade (último item)", status: "ok" },
   { key: "F6",  label: "Cancelar último item",        status: "ok" },
   { key: "F8",  label: "Troca / Devolução",           status: "ok" },
   { key: "F9",  label: "Limpar carrinho",             status: "ok" },
@@ -1180,6 +1193,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     [lojaAtivaId]
   )
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
+  const { caixa } = useCaixa()
+  const storeIdKey = useMemo(
+    () => (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
+    [lojaAtivaId]
+  )
+  const cartHydratedRef = useRef(false)
+  const cartPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Somente itens reais do estoque — única fonte de catálogo no PDV Assistência
   const realCatalog = useMemo((): PdvCatalogProduct[] => {
@@ -1244,7 +1264,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [clientePickerOpen, setClientePickerOpen] = useState(false)
   const [f4QtdOpen, setF4QtdOpen] = useState(false)
   const [f4QtdValue, setF4QtdValue] = useState("")
+  const [f4LineId, setF4LineId] = useState<string | null>(null)
   const f4InputRef = useRef<HTMLInputElement>(null)
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
 
   // ── Custom atalhos ────────────────────────────────────────────────────────────
   const [localAtalhos, setLocalAtalhos] = useState<AtalhoSaved[]>([])
@@ -1292,6 +1314,56 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     setHydratedFromDb(true)
   }, [shortcutsKey, settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
 
+  // ── Restaurar carrinho do localStorage ──────────────────────────────────────
+  useEffect(() => {
+    cartHydratedRef.current = false
+    try {
+      const raw = localStorage.getItem(CART_STORAGE_KEY(storeIdKey))
+      if (raw) {
+        const data = JSON.parse(raw) as CartPersisted
+        const age = Date.now() - new Date(data.savedAt).getTime()
+        if (age < CART_MAX_AGE_MS && Array.isArray(data.cart) && data.cart.length > 0) {
+          setCart(data.cart)
+          setCustomerName(data.customerName ?? "")
+          setDiscount(typeof data.discount === "number" ? data.discount : 0)
+          window.setTimeout(() => {
+            toast({
+              title: "Carrinho restaurado",
+              description: `${data.cart.length} item${data.cart.length !== 1 ? "ns" : ""} da sessão anterior recuperados.`,
+            })
+          }, 600)
+        }
+      }
+    } catch { /* ignore */ }
+    cartHydratedRef.current = true
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeIdKey])
+
+  // ── Persistir carrinho no localStorage (debounced 500ms) ─────────────────────
+  useEffect(() => {
+    if (!cartHydratedRef.current) return
+    if (cartPersistTimerRef.current) clearTimeout(cartPersistTimerRef.current)
+    cartPersistTimerRef.current = setTimeout(() => {
+      try {
+        if (cart.length === 0) {
+          localStorage.removeItem(CART_STORAGE_KEY(storeIdKey))
+        } else {
+          const data: CartPersisted = { cart, customerName, discount, savedAt: new Date().toISOString() }
+          localStorage.setItem(CART_STORAGE_KEY(storeIdKey), JSON.stringify(data))
+        }
+      } catch { /* ignore */ }
+    }, 500)
+    return () => { if (cartPersistTimerRef.current) clearTimeout(cartPersistTimerRef.current) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, customerName, discount, storeIdKey])
+
+  // ── Limpar selectedLineId quando a linha é removida ──────────────────────────
+  useEffect(() => {
+    if (selectedLineId && !cart.some((l) => l.lineId === selectedLineId)) {
+      setSelectedLineId(null)
+    }
+  }, [cart, selectedLineId])
+
   // ── Computed totals ────────────────────────────────────────────────────────────
   const subtotal = useMemo(() => cart.reduce((s, l) => s + l.price * l.qty, 0), [cart])
   const desconto = useMemo(() => Math.min(Math.max(0, discount), subtotal), [discount, subtotal])
@@ -1313,6 +1385,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // ── Global keyboard shortcuts ─────────────────────────────────────────────────
   const openPaymentModal = (method: PayMethod) => {
     if (cart.length === 0) return
+    if (!caixa.isOpen) {
+      toast({
+        title: "Caixa fechado",
+        description: "Abra o caixa antes de finalizar a venda.",
+        variant: "destructive",
+      })
+      return
+    }
     setPaymentInitMethod(method)
     setPaymentOpen(true)
   }
@@ -1360,8 +1440,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         case "F3":  inputRef.current?.focus(); break
         case "F4":
           if (cart.length > 0) {
-            const last = cart[cart.length - 1]!
-            setF4QtdValue(String(last.qty))
+            const target = cart.find((l) => l.lineId === selectedLineId) ?? cart[cart.length - 1]!
+            setF4LineId(target.lineId)
+            setF4QtdValue(String(target.qty))
             setF4QtdOpen(true)
           }
           break
@@ -1409,7 +1490,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart.length, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen])
+  }, [cart, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct) => {
@@ -1492,10 +1573,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       return
     }
 
-    // Venda real concluída (estoque + ledger + persistência + eventos via operations-store).
+    // Venda real concluída — limpa carrinho e persistência.
+    try { localStorage.removeItem(CART_STORAGE_KEY(storeIdKey)) } catch { /* ignore */ }
     setCart([])
     setDiscount(0)
     setCustomerName("")
+    setSelectedLineId(null)
     setRapidoFlashLineId(null)
     setRapidoPickIdx(0)
     setPaymentOpen(false)
@@ -1516,7 +1599,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
-      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen) return
+      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen) return
       if (cart.length === 0) return
       e.preventDefault()
       e.stopPropagation()
@@ -1528,7 +1611,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, cart.length])
+  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, cart.length])
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -1875,6 +1958,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                     {cart.length}
                   </span>
                 )}
+                {selectedLineId && (
+                  <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                    F4 selecionado
+                  </span>
+                )}
               </p>
               <Button
                 type="button"
@@ -1915,9 +2003,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   {cart.map((l) => (
                     <div
                       key={l.lineId}
+                      onClick={() => setSelectedLineId((prev) => prev === l.lineId ? null : l.lineId)}
                       className={cn(
-                        "flex items-center gap-2 py-2.5",
-                        modoRapido && rapidoFlashLineId === l.lineId && "pdv-rapido-row-flash rounded-lg"
+                        "flex cursor-default select-none items-center gap-2 rounded-lg px-1 py-2.5 -mx-1 transition-colors duration-100",
+                        selectedLineId === l.lineId
+                          ? "bg-primary/8 ring-1 ring-inset ring-primary/20"
+                          : "hover:bg-muted/40",
+                        modoRapido && rapidoFlashLineId === l.lineId && "pdv-rapido-row-flash"
                       )}
                     >
                       {/* Title — limited width so controls always show */}
@@ -2003,17 +2095,22 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               </div>
             </div>
 
+            {/* Caixa fechado — aviso */}
+            {!caixa.isOpen && cart.length > 0 && (
+              <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                <Lock className="h-3.5 w-3.5 shrink-0" />
+                Caixa fechado — abra o caixa para finalizar.
+              </div>
+            )}
+
             {/* Payment buttons — 3×2 grid */}
             <div className="grid grid-cols-3 gap-2">
               {PAY_METHODS.map((m) => (
               <Button
                   key={m.id}
                 type="button"
-                  disabled={cart.length === 0}
-                  onClick={() => {
-                    setPaymentInitMethod(m.id)
-                    setPaymentOpen(true)
-                  }}
+                  disabled={cart.length === 0 || !caixa.isOpen}
+                  onClick={() => openPaymentModal(m.id)}
                 className={cn(
                     "relative rounded-2xl text-xs font-bold text-white",
                     "transition-all duration-150 ease-out",
@@ -2067,8 +2164,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             <AlertDialogAction
               className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
+                try { localStorage.removeItem(CART_STORAGE_KEY(storeIdKey)) } catch { /* ignore */ }
                 setCart([])
                 setDiscount(0)
+                setSelectedLineId(null)
                 setClearConfirmOpen(false)
               }}
             >
@@ -2082,6 +2181,67 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       <TrocasModal open={trocasOpen} onClose={() => setTrocasOpen(false)} />
 
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {/* F4 — alterar quantidade do item selecionado (ou último) */}
+      {(() => {
+        const f4Target = cart.find((l) => l.lineId === f4LineId) ?? cart[cart.length - 1] ?? null
+        const closeF4 = () => { setF4QtdOpen(false); setF4LineId(null); queueMicrotask(() => inputRef.current?.focus()) }
+        const confirmF4 = () => {
+          const qty = Math.max(1, Math.round(Number(f4QtdValue) || 1))
+          if (f4Target) {
+            setCart((prev) => prev.map((l) => l.lineId === f4Target.lineId ? { ...l, qty } : l))
+          }
+          closeF4()
+        }
+        return (
+          <Dialog open={f4QtdOpen} onOpenChange={(o) => { if (!o) closeF4() }}>
+            <DialogContent className="max-w-xs rounded-2xl border-border bg-card p-0 shadow-lg">
+              <DialogHeader className="border-b border-border px-6 py-4">
+                <DialogTitle className="flex items-center gap-2 text-sm font-bold text-foreground">
+                  <kbd className="rounded border border-border bg-muted px-2 py-0.5 text-[10px] font-bold">F4</kbd>
+                  Alterar Quantidade
+                </DialogTitle>
+              </DialogHeader>
+              <div className="px-6 py-4">
+                {f4Target && (
+                  <p className="mb-3 truncate text-xs font-medium text-muted-foreground">
+                    {f4Target.title}
+                  </p>
+                )}
+                <Input
+                  ref={f4InputRef}
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={f4QtdValue}
+                  onChange={(e) => setF4QtdValue(e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.preventDefault(); confirmF4() }
+                    if (e.key === "Escape") { e.preventDefault(); closeF4() }
+                  }}
+                  autoFocus
+                  className="h-12 rounded-xl text-center text-xl font-bold tabular-nums"
+                  inputMode="numeric"
+                />
+                <p className="mt-2 text-center text-[10px] text-muted-foreground">
+                  <kbd className="rounded border border-border bg-muted px-1 font-bold">Enter</kbd> confirmar ·{" "}
+                  <kbd className="rounded border border-border bg-muted px-1 font-bold">ESC</kbd> cancelar
+                </p>
+              </div>
+              <DialogFooter className="border-t border-border px-6 py-3">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={closeF4}>
+                  Cancelar
+                </Button>
+                <Button size="sm" className="rounded-xl" onClick={confirmF4}>
+                  <Check className="mr-1.5 h-3.5 w-3.5" />
+                  Confirmar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )
+      })()}
 
       <ClientePickerModal
         open={clientePickerOpen}

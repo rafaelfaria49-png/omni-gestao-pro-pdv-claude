@@ -92,10 +92,16 @@ export function VendasPDV(props: VendasPDVProps) {
   useEffect(() => {
     if (!hydrated) return
     const fromDb = pdvParams.pdvClassicLayout
+    // "venda-completa" is a runtime-only selection stored in localStorage only —
+    // never persist it to DB, so DB can only hold "lovable" or "services".
+    // If the user has already selected "venda-completa" locally, don't override it.
     if (fromDb === "services" || fromDb === "lovable") {
-      setClassicLayout(fromDb)
+      setClassicLayout((prev) => (prev === "venda-completa" ? prev : fromDb))
       try {
-        localStorage.setItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY, fromDb)
+        const current = localStorage.getItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY)
+        if (current !== "venda-completa") {
+          localStorage.setItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY, fromDb)
+        }
       } catch {
         /* ignore */
       }
