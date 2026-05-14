@@ -61,6 +61,7 @@ import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useToast } from "@/hooks/use-toast"
+import { useStoreSettings } from "@/lib/store-settings-provider"
 
 // ─── Catalog slices (defaults) ───────────────────────────────────────────────
 
@@ -740,6 +741,7 @@ function EditarAtalhosModal({
 
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
   const { inventory, finalizeSaleTransaction } = useOperationsStore()
+  const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated } = useStoreSettings()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const mergedCatalog = useMemo(() => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory), [inventory])
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -795,6 +797,24 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     () => PDV_PRODUCTS_BASE.filter((p) => atalhosPrdIds.includes(p.id)),
     [atalhosPrdIds],
   )
+
+  // ── Hydratação dos atalhos a partir da config persistida no banco (roda uma vez) ──
+  const [hydratedFromDb, setHydratedFromDb] = useState(false)
+  useEffect(() => {
+    if (!settingsHydrated || hydratedFromDb) return
+    const saved = pdvParams.atalhosRapidos ?? []
+    const svcIds = saved
+      .filter((a) => a.categoria === "Servicos")
+      .map((a) => a.id)
+      .filter((id) => PDV_PRODUCTS_BASE.some((p) => p.id === id))
+    const prdIds = saved
+      .filter((a) => a.categoria !== undefined && a.categoria !== "Servicos")
+      .map((a) => a.id)
+      .filter((id) => PDV_PRODUCTS_BASE.some((p) => p.id === id))
+    if (svcIds.length > 0) setAtalhosSvcIds(svcIds)
+    if (prdIds.length > 0) setAtalhosPrdIds(prdIds)
+    setHydratedFromDb(true)
+  }, [settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
 
   // ── Computed totals ────────────────────────────────────────────────────────────
   const subtotal = useMemo(() => cart.reduce((s, l) => s + l.price * l.qty, 0), [cart])
@@ -1483,6 +1503,24 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         onSave={(svcIds, prdIds) => {
           setAtalhosSvcIds(svcIds)
           setAtalhosPrdIds(prdIds)
+          const novosSvc = PDV_PRODUCTS_BASE
+            .filter((p) => svcIds.includes(p.id))
+            .map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category }))
+          const novosPrd = PDV_PRODUCTS_BASE
+            .filter((p) => prdIds.includes(p.id))
+            .map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category }))
+          void saveStoreSettings({
+            printerConfig: {
+              ...blob,
+              pdvParams: { ...blob.pdvParams, atalhosRapidos: [...novosSvc, ...novosPrd] },
+            },
+          }).catch(() => {
+            toast({
+              title: "Atalhos salvos localmente",
+              description: "Não foi possível sincronizar com o servidor.",
+              variant: "destructive",
+            })
+          })
         }}
         onClose={() => setEditAtalhosOpen(false)}
       />
