@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
+import { toast } from "sonner"
 
 // ── Shared types (hub + context) ──────────────────────────────────────────────
 
@@ -411,8 +412,8 @@ type FinanceiroRealState = {
   fecharMes: (mes: number, ano: number, opts?: { observacao?: string; saldoInformado?: number }) => Promise<FechamentoPublico>
   reabrirFechamento: (id: string, motivo: string) => Promise<FechamentoPublico>
   conciliarCarteira: (carteiraId: string, saldoInformado: number, opts?: { observacao?: string }) => Promise<ConciliacaoPublica>
-  /** Unidade ativa (sempre enviada explicitamente nas APIs do HUB). */
-  getActiveStoreId: () => string
+  /** Unidade ativa (cookie ou localStorage). `null` se nenhuma loja estiver selecionada — não usar fallback silencioso. */
+  getActiveStoreId: () => string | null
   /** Entrada/saída manual vinculada à carteira + recálculo de saldo. */
   registrarMovimentacaoCarteira: (input: RegistrarMovimentacaoCarteiraInput) => Promise<void>
 }
@@ -421,20 +422,31 @@ const FinanceiroRealContext = createContext<FinanceiroRealState | null>(null)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function getLojaId(): string {
-  if (typeof document === "undefined") return "loja-1"
+/** Mesma chave que `lib/loja-ativa.tsx` — evita fallback para loja errada. */
+const LOJA_ATIVA_LS = "assistec-pro-loja-ativa-v1"
+
+/** Loja ativa: cookie `assistec-active-store` ou `localStorage` da unidade. Sem `loja-1` implícito. */
+function readActiveStoreIdFromBrowser(): string | null {
+  if (typeof document === "undefined") return null
   const match = document.cookie.match(/(?:^|;\s*)assistec-active-store=([^;]+)/)
   if (match) {
     const v = decodeURIComponent(match[1]).trim()
     if (v) return v
   }
-  return "loja-1"
+  try {
+    const raw = window.localStorage.getItem(LOJA_ATIVA_LS)?.trim()
+    if (raw) return raw
+  } catch {
+    /* ignore */
+  }
+  return null
 }
 
-/** Garante `x-assistec-loja-id` em toda chamada ao backend financeiro (evita drift cookie vs header). */
+/** Garante `x-assistec-loja-id` quando há loja ativa (sem inventar unidade). */
 function withStoreHeaders(headers?: HeadersInit): HeadersInit {
   const h = new Headers(headers ?? undefined)
-  h.set(ASSISTEC_LOJA_HEADER, getLojaId())
+  const id = readActiveStoreIdFromBrowser()
+  if (id) h.set(ASSISTEC_LOJA_HEADER, id)
   return h
 }
 
@@ -559,6 +571,18 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
+    if (!readActiveStoreIdFromBrowser()) {
+      setReceber([])
+      setPagar([])
+      setSummaryR(null)
+      setSummaryP(null)
+      setAnalytics(null)
+      setError(
+        "Nenhuma loja ativa encontrada. Selecione uma unidade no canto superior do OmniGestão e recarregue esta página.",
+      )
+      setLoading(false)
+      return
+    }
     try {
       const [rRes, pRes, aRes] = await Promise.all([
         fetch("/api/financeiro/receber", { headers: withStoreHeaders() }),
@@ -595,6 +619,11 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshFluxoCaixa = useCallback(async () => {
+    if (!readActiveStoreIdFromBrowser()) {
+      setFluxoCaixa(null)
+      setLoadingFluxoCaixa(false)
+      return
+    }
     setLoadingFluxoCaixa(true)
     try {
       const res = await fetch("/api/financeiro/fluxo-caixa", { headers: withStoreHeaders() })
@@ -608,6 +637,12 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshCarteiras = useCallback(async () => {
+    if (!readActiveStoreIdFromBrowser()) {
+      setCarteiras([])
+      setSaldoTotalCarteiras(0)
+      setLoadingCarteiras(false)
+      return
+    }
     setLoadingCarteiras(true)
     try {
       const res = await fetch("/api/financeiro/carteiras", {
@@ -626,6 +661,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const criarCarteira = useCallback(async (data: NovaCarteiraInput): Promise<CarteiraPublica> => {
+    if (!readActiveStoreIdFromBrowser()) {
+      throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+    }
     const res = await fetch("/api/financeiro/carteiras", {
       method: "POST",
       headers: withStoreHeaders({ "content-type": "application/json" }),
@@ -640,6 +678,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshCarteiras])
 
   const transferirEntreCarteiras = useCallback(async (data: TransferenciaCarteiraInput): Promise<void> => {
+    if (!readActiveStoreIdFromBrowser()) {
+      throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+    }
     const res = await fetch("/api/financeiro/carteiras/transferencia", {
       method: "POST",
       headers: withStoreHeaders({ "content-type": "application/json" }),
@@ -653,6 +694,11 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshCarteiras])
 
   const refreshDRE = useCallback(async (mes?: number, ano?: number) => {
+    if (!readActiveStoreIdFromBrowser()) {
+      setDRE(null)
+      setLoadingDRE(false)
+      return
+    }
     setLoadingDRE(true)
     try {
       const params = new URLSearchParams()
@@ -673,7 +719,8 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
 
   const buildRelatoriosParams = (f: FiltrosFinanceiros): string => {
     const params = new URLSearchParams()
-    const lojaId = getLojaId()
+    const lojaId = readActiveStoreIdFromBrowser()
+    if (!lojaId) return ""
     params.set("storeId", lojaId)
     if (f.preset !== "personalizado") {
       params.set("preset", f.preset)
@@ -687,10 +734,20 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
 
   const refreshRelatorios = useCallback(async (filtros?: FiltrosFinanceiros) => {
     const f = filtros ?? filtrosFinanceiros
+    if (!readActiveStoreIdFromBrowser()) {
+      setRelatorios(emptyRelatorios)
+      setLoadingRelatorios(false)
+      return
+    }
     setLoadingRelatorios(true)
     try {
       const headers = withStoreHeaders()
       const qs = buildRelatoriosParams(f)
+      if (!qs) {
+        setRelatorios(emptyRelatorios)
+        setLoadingRelatorios(false)
+        return
+      }
 
       const [resumoRes, rankRes, indicRes, fluxoRes] = await Promise.all([
         fetch(`/api/financeiro/relatorios/resumo?${qs}`, { headers }),
@@ -718,7 +775,11 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
 
   const exportarRelatorio = useCallback((tipo: string, formato: "csv" | "xlsx", filtros?: FiltrosFinanceiros) => {
     const f = filtros ?? filtrosFinanceiros
-    const lojaId = getLojaId()
+    const lojaId = readActiveStoreIdFromBrowser()
+    if (!lojaId) {
+      toast.error("Selecione uma loja ativa para exportar relatórios.")
+      return
+    }
     // `storeId` na query: leituras via anchor não enviam header; `storeIdFromAssistecRequestForRead` ignora `x-assistec-loja-id` na URL.
     const params = new URLSearchParams({ tipo, formato, storeId: lojaId })
     if (f.preset !== "personalizado") {
@@ -736,6 +797,11 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [filtrosFinanceiros])
 
   const refreshAuditoria = useCallback(async () => {
+    if (!readActiveStoreIdFromBrowser()) {
+      setAuditoriaFinanceira([])
+      setLoadingAuditoria(false)
+      return
+    }
     setLoadingAuditoria(true)
     try {
       const res = await fetch("/api/financeiro/auditoria?take=30", {
@@ -749,6 +815,12 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshConciliacao = useCallback(async () => {
+    if (!readActiveStoreIdFromBrowser()) {
+      setConciliacoes([])
+      setResumoConciliacao(null)
+      setLoadingConciliacao(false)
+      return
+    }
     setLoadingConciliacao(true)
     try {
       const [listRes, resumoRes] = await Promise.all([
@@ -764,6 +836,11 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const refreshFechamentos = useCallback(async () => {
+    if (!readActiveStoreIdFromBrowser()) {
+      setFechamentos([])
+      setLoadingFechamentos(false)
+      return
+    }
     setLoadingFechamentos(true)
     try {
       const res = await fetch("/api/financeiro/fechamentos", {
@@ -777,6 +854,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const fecharDia = useCallback(async (opts?: { observacao?: string; saldoInformado?: number }): Promise<FechamentoPublico> => {
+    if (!readActiveStoreIdFromBrowser()) {
+      throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+    }
     const res = await fetch("/api/financeiro/fechamentos/fechar-dia", {
       method: "POST",
       headers: withStoreHeaders({ "content-type": "application/json" }),
@@ -789,6 +869,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshFechamentos])
 
   const fecharMes = useCallback(async (mes: number, ano: number, opts?: { observacao?: string; saldoInformado?: number }): Promise<FechamentoPublico> => {
+    if (!readActiveStoreIdFromBrowser()) {
+      throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+    }
     const res = await fetch("/api/financeiro/fechamentos/fechar-mes", {
       method: "POST",
       headers: withStoreHeaders({ "content-type": "application/json" }),
@@ -801,6 +884,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshFechamentos])
 
   const reabrirFechamento = useCallback(async (id: string, motivo: string): Promise<FechamentoPublico> => {
+    if (!readActiveStoreIdFromBrowser()) {
+      throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+    }
     const res = await fetch(`/api/financeiro/fechamentos/${id}/reabrir`, {
       method: "POST",
       headers: withStoreHeaders({ "content-type": "application/json" }),
@@ -813,6 +899,9 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshFechamentos])
 
   const conciliarCarteira = useCallback(async (carteiraId: string, saldoInformado: number, opts?: { observacao?: string }): Promise<ConciliacaoPublica> => {
+    if (!readActiveStoreIdFromBrowser()) {
+      throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+    }
     const res = await fetch("/api/financeiro/conciliacao", {
       method: "POST",
       headers: withStoreHeaders({ "content-type": "application/json" }),
@@ -825,7 +914,10 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [refreshConciliacao])
 
   const callApi = useCallback(async (path: string, body: Record<string, unknown>, method: "POST" | "PATCH" = "POST"): Promise<Record<string, unknown>> => {
-    const lojaId = getLojaId()
+    const lojaId = readActiveStoreIdFromBrowser()
+    if (!lojaId) {
+      throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+    }
     const res = await fetch(path, {
       method,
       headers: withStoreHeaders({ "content-type": "application/json" }),
@@ -891,10 +983,13 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     await fetchData()
   }, [callApi, fetchData])
 
-  const getActiveStoreId = useCallback(() => getLojaId(), [])
+  const getActiveStoreId = useCallback(() => readActiveStoreIdFromBrowser(), [])
 
   const registrarMovimentacaoCarteira = useCallback(
     async (input: RegistrarMovimentacaoCarteiraInput) => {
+      if (!readActiveStoreIdFromBrowser()) {
+        throw new Error("Nenhuma loja ativa. Selecione uma unidade no OmniGestão.")
+      }
       const body: Record<string, unknown> = {
         tipo: input.tipo,
         valor: input.valor,

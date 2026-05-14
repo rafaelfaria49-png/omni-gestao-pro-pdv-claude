@@ -126,6 +126,7 @@ import {
 } from "recharts";
 import { EmptyState } from "@/components/ui/states/EmptyState";
 import { LoadingState } from "@/components/ui/states/LoadingState";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { isOrigemTransferenciaInterna } from "@/lib/financeiro/services/movimentacao-financeira-classify";
 
@@ -145,6 +146,13 @@ export const Route = createFileRoute("/financeiro" as never)({
 
 const fmt = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+/** Evita R$ 0,00 quando não há base de dados carregada para o indicador. */
+const fmtOrDash = (n: number | null | undefined, show: boolean): string => {
+  if (!show) return "—";
+  if (n == null || !Number.isFinite(n)) return "—";
+  return fmt(n);
+};
 
 // StatusReceber, StatusPagar, ContaReceber, ContaPagar imported from FinanceiroRealContext
 
@@ -383,7 +391,23 @@ function DRECard({
 }
 
 function VisaoGeral() {
-  const { summaryR, summaryP, analytics, receber, pagar, fluxoCaixa, saldoTotalCarteiras, carteiras: listaCarteiras, dre, loadingDRE } = useFinanceiroReal();
+  const {
+    summaryR,
+    summaryP,
+    analytics,
+    receber,
+    pagar,
+    fluxoCaixa,
+    saldoTotalCarteiras,
+    carteiras: listaCarteiras,
+    dre,
+    loadingDRE,
+    loading,
+    error,
+  } = useFinanceiroReal();
+
+  const hasCoreFinance = fluxoCaixa != null || summaryR != null || summaryP != null;
+  const showMoneyKpis = loading || hasCoreFinance;
 
   // Preferência: fluxo-caixa real → fallback analytics/summaryR/P
   const totalReceber = fluxoCaixa?.totalReceberAberto ?? summaryR?.totalAberto ?? 0;
@@ -394,8 +418,8 @@ function VisaoGeral() {
   const saldoReal = fluxoCaixa?.saldoAtual ?? null;
   const fluxoMensal = analytics?.fluxoMensal ?? [];
   const receitasOrigem = analytics?.receitasOrigem ?? [];
-  const recebidoOS = receitasOrigem.find((x) => x.name === "Ordem de Serviço")?.value ?? 0;
-  const recebidoPDV = receitasOrigem.find((x) => x.name === "PDV")?.value ?? 0;
+  const recebidoOS = receitasOrigem.find((x) => x.name === "Ordem de Serviço")?.value;
+  const recebidoPDV = receitasOrigem.find((x) => x.name === "PDV")?.value;
   const atrasados = (fluxoCaixa?.totalVencidosReceber ?? 0) + (fluxoCaixa?.totalVencidosPagar ?? 0);
   const mesAtual = analytics?.fluxoMensal?.at(-1);
   const periodoResultado =
@@ -403,10 +427,6 @@ function VisaoGeral() {
     new Date().toLocaleDateString("pt-BR", { month: "short", year: "numeric" });
 
   // DRE dados
-  const dreReceita = dre?.receitaBruta ?? 0;
-  const dreLucro = dre?.lucroLiquido ?? 0;
-  const dreMargemLiq = dre?.margemLiquida ?? 0;
-  const dreTicket = dre?.ticketMedio ?? 0;
   const drePeriodo = dre?.periodo.label ?? periodoResultado;
   const dreComp = dre?.comparativo ?? null;
   const dreTendencia = dre?.tendencia ?? "estavel";
@@ -442,17 +462,17 @@ function VisaoGeral() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {saldoReal !== null
           ? <StatCard title="Saldo realizado" value={fmt(saldoReal)} hint="Entradas − saídas efetivadas" icon={Wallet} tone={saldoReal >= 0 ? "positive" : "negative"} />
-          : <StatCard title="Saldo em carteiras" value={fmt(saldoTotalCarteiras)} hint={`${listaCarteiras.filter(c => c.ativo).length} carteiras ativas`} icon={Wallet} />
+          : <StatCard title="Saldo em carteiras" value={showMoneyKpis ? fmt(saldoTotalCarteiras) : "—"} hint={`${listaCarteiras.filter(c => c.ativo).length} carteiras ativas`} icon={Wallet} />
         }
-        <StatCard title="A receber" value={fmt(totalReceber)} hint="Em aberto" icon={ArrowDownCircle} tone="positive" />
-        <StatCard title="A pagar" value={fmt(totalPagar)} hint="Em aberto" icon={ArrowUpCircle} tone="negative" />
-        <StatCard title="Resultado do mês" value={fmt(lucro)} hint={periodoResultado} icon={TrendingUp} tone={lucro >= 0 ? "positive" : "negative"} />
+        <StatCard title="A receber" value={fmtOrDash(totalReceber, showMoneyKpis)} hint="Em aberto" icon={ArrowDownCircle} tone="positive" />
+        <StatCard title="A pagar" value={fmtOrDash(totalPagar, showMoneyKpis)} hint="Em aberto" icon={ArrowUpCircle} tone="negative" />
+        <StatCard title="Resultado do mês" value={fmtOrDash(lucro, showMoneyKpis)} hint={periodoResultado} icon={TrendingUp} tone={lucro >= 0 ? "positive" : "negative"} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard title="Entradas mês" value={fmt(entradas)} icon={ArrowDownLeft} tone="positive" />
-        <StatCard title="Saídas mês" value={fmt(saidas)} icon={ArrowUpRight} tone="negative" />
-        <StatCard title="Lucro líquido" value={fmt(lucro)} hint="Consolidado no período exibido" icon={PiggyBank} tone={lucro >= 0 ? "positive" : "negative"} />
+        <StatCard title="Entradas mês" value={fmtOrDash(entradas, showMoneyKpis)} icon={ArrowDownLeft} tone="positive" />
+        <StatCard title="Saídas mês" value={fmtOrDash(saidas, showMoneyKpis)} icon={ArrowUpRight} tone="negative" />
+        <StatCard title="Lucro líquido" value={fmtOrDash(lucro, showMoneyKpis)} hint="Consolidado no período exibido" icon={PiggyBank} tone={lucro >= 0 ? "positive" : "negative"} />
       </div>
 
       {/* ── Resultado Gerencial (DRE) ── */}
@@ -466,38 +486,47 @@ function VisaoGeral() {
         {loadingDRE && <span className="text-xs text-muted-foreground animate-pulse">calculando...</span>}
       </div>
 
+      {!loadingDRE && !dre ? (
+        <Alert>
+          <AlertTitle>Sem dados de DRE</AlertTitle>
+          <AlertDescription>
+            Não há resultado gerencial calculado para a loja e período atuais. Quando o serviço retornar DRE, os indicadores aparecerão aqui.
+          </AlertDescription>
+        </Alert>
+      ) : (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <DRECard
           title="Receita líquida"
-          value={fmt(dreReceita)}
+          value={dre ? fmt(dre.receitaBruta) : "—"}
           hint={drePeriodo}
           icon={ArrowDownCircle}
-          tone={dreReceita > 0 ? "positive" : "default"}
+          tone={dre && dre.receitaBruta > 0 ? "positive" : "default"}
           badge={dreComp ? crescBadge(dreComp.receitaCrescimento) : undefined}
         />
         <DRECard
           title="Lucro líquido"
-          value={fmt(dreLucro)}
-          hint={dreComp ? `Ant.: ${fmt(dreComp.lucroMesAnterior)}` : undefined}
+          value={dre ? fmt(dre.lucroLiquido) : "—"}
+          hint={dre && dreComp ? `Ant.: ${fmt(dreComp.lucroMesAnterior)}` : undefined}
           icon={PiggyBank}
-          tone={dreLucro > 0 ? "positive" : dreLucro < 0 ? "negative" : "default"}
+          tone={dre && dre.lucroLiquido > 0 ? "positive" : dre && dre.lucroLiquido < 0 ? "negative" : "default"}
           badge={dreComp ? crescBadge(dreComp.lucroCrescimento) : undefined}
         />
         <DRECard
           title="Margem líquida"
-          value={`${dreMargemLiq.toFixed(1)}%`}
-          hint={dreMargemLiq >= 10 ? "Saudável (≥10%)" : dreMargemLiq > 0 ? "Atenção (<10%)" : "Prejuízo"}
+          value={dre ? `${dre.margemLiquida.toFixed(1)}%` : "—"}
+          hint={dre ? (dre.margemLiquida >= 10 ? "Saudável (≥10%)" : dre.margemLiquida > 0 ? "Atenção (<10%)" : "Prejuízo") : undefined}
           icon={Percent}
-          tone={dreMargemLiq >= 15 ? "positive" : dreMargemLiq > 0 ? "warning" : "negative"}
+          tone={dre && dre.margemLiquida >= 15 ? "positive" : dre && dre.margemLiquida > 0 ? "warning" : dre && dre.margemLiquida <= 0 ? "negative" : "default"}
         />
         <DRECard
           title="Ticket médio"
-          value={fmt(dreTicket)}
-          hint={`${dre?.totalTransacoes ?? 0} transações`}
+          value={dre ? fmt(dre.ticketMedio) : "—"}
+          hint={dre ? `${dre.totalTransacoes} transações` : undefined}
           icon={Receipt}
           tone="default"
         />
       </div>
+      )}
 
       {/* ── Alertas financeiros ── */}
       <Card className="rounded-xl">
@@ -578,6 +607,14 @@ function VisaoGeral() {
           <CardDescription>Últimos 6 meses</CardDescription>
         </CardHeader>
         <CardContent className="h-72 min-w-0">
+          {fluxoMensal.length === 0 ? (
+            <EmptyState
+              compact
+              dashboardLink={false}
+              title="Sem dados de evolução"
+              description="Não há série mensal de entradas e saídas para exibir. Verifique se há movimentações no período ou se a loja ativa está correta."
+            />
+          ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={fluxoMensal}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
@@ -596,6 +633,7 @@ function VisaoGeral() {
               <Line type="monotone" dataKey="saida" stroke="var(--color-chart-2)" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
 
@@ -611,9 +649,9 @@ function VisaoGeral() {
         <CardContent>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
-              { label: "Recebido OS", val: recebidoOS > 0 ? fmt(recebidoOS) : "—", icon: Wrench, tone: recebidoOS > 0 ? "primary" : "muted" },
-              { label: "Recebido PDV", val: recebidoPDV > 0 ? fmt(recebidoPDV) : "—", icon: ShoppingCart, tone: recebidoPDV > 0 ? "primary" : "muted" },
-              { label: "Despesas em aberto", val: fmt(totalPagar), icon: Repeat, tone: "muted" },
+              { label: "Recebido OS", val: (recebidoOS ?? 0) > 0 ? fmt(recebidoOS as number) : "—", icon: Wrench, tone: (recebidoOS ?? 0) > 0 ? "primary" : "muted" },
+              { label: "Recebido PDV", val: (recebidoPDV ?? 0) > 0 ? fmt(recebidoPDV as number) : "—", icon: ShoppingCart, tone: (recebidoPDV ?? 0) > 0 ? "primary" : "muted" },
+              { label: "Despesas em aberto", val: fmtOrDash(totalPagar, showMoneyKpis), icon: Repeat, tone: "muted" },
               {
                 label: "Próx. 7 dias",
                 val:
@@ -623,7 +661,7 @@ function VisaoGeral() {
                 icon: CalendarClock,
                 tone: "muted",
               },
-              { label: "Em atraso", val: fmt(atrasados), icon: TrendingDown, tone: atrasados > 0 ? "destructive" : "muted" },
+              { label: "Em atraso", val: fmtOrDash(atrasados, showMoneyKpis), icon: TrendingDown, tone: atrasados > 0 ? "destructive" : "muted" },
               {
                 label: "Entradas hoje",
                 val: fluxoCaixa != null ? fmt(fluxoCaixa.entradasHoje) : "—",
@@ -1009,9 +1047,14 @@ function FluxoCaixa() {
   const loadMovs = useCallback(async () => {
     const di = ymd(range.start);
     const df = ymd(range.end);
+    const sid = getActiveStoreId();
+    if (!sid) {
+      setMovRows([]);
+      setLoadingMovs(false);
+      return;
+    }
     setLoadingMovs(true);
     try {
-      const sid = getActiveStoreId();
       const res = await fetch(
         `/api/financeiro/movimentacoes?dataInicial=${encodeURIComponent(di)}&dataFinal=${encodeURIComponent(df)}&take=500`,
         { headers: { [ASSISTEC_LOJA_HEADER]: sid } },
@@ -1609,6 +1652,8 @@ function Relatorios() {
   const lucroLiquido = ind?.lucroLiquido ?? receitaBruta - despesas;
   const margem = ind?.margemLiquida ?? (receitaBruta > 0 ? (lucroLiquido / receitaBruta) * 100 : 0);
 
+  const hasRelKpiBase = relatorios.resumo != null || summaryR != null || summaryP != null;
+
   const TTSTYLE = { background: "var(--color-popover)", border: "1px solid var(--color-border)", borderRadius: 8 };
 
   return (
@@ -1625,14 +1670,14 @@ function Relatorios() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <KPICard label="Receita total" value={fmt(receitaBruta)} color="text-success" sub={ind?.crescimentoMensal !== undefined ? `${pctStr(ind.crescimentoMensal)} vs mês ant.` : undefined} />
-            <KPICard label="Despesa total" value={fmt(despesas)} color="text-destructive" />
-            <KPICard label="Lucro líquido" value={fmt(lucroLiquido)} color={lucroLiquido >= 0 ? "text-primary" : "text-destructive"} />
-            <KPICard label="Margem líquida" value={`${margem.toFixed(1)}%`} color={margem >= 20 ? "text-success" : margem >= 0 ? "text-warning" : "text-destructive"} />
-            <KPICard label="Ticket médio" value={fmt(ind?.ticketMedio ?? 0)} />
-            <KPICard label="Saldo consolidado" value={fmt(ind?.saldoConsolidado ?? 0)} />
-            <KPICard label="A receber" value={fmt(ind?.receberPendente ?? 0)} color="text-primary" />
-            <KPICard label="A pagar" value={fmt(ind?.pagarPendente ?? 0)} color="text-warning" />
+            <KPICard label="Receita total" value={hasRelKpiBase ? fmt(receitaBruta) : "—"} color="text-success" sub={ind?.crescimentoMensal !== undefined ? `${pctStr(ind.crescimentoMensal)} vs mês ant.` : undefined} />
+            <KPICard label="Despesa total" value={hasRelKpiBase ? fmt(despesas) : "—"} color="text-destructive" />
+            <KPICard label="Lucro líquido" value={hasRelKpiBase ? fmt(lucroLiquido) : "—"} color={lucroLiquido >= 0 ? "text-primary" : "text-destructive"} />
+            <KPICard label="Margem líquida" value={hasRelKpiBase ? `${margem.toFixed(1)}%` : "—"} color={margem >= 20 ? "text-success" : margem >= 0 ? "text-warning" : "text-destructive"} />
+            <KPICard label="Ticket médio" value={ind?.ticketMedio != null ? fmt(ind.ticketMedio) : "—"} />
+            <KPICard label="Saldo consolidado" value={ind?.saldoConsolidado != null ? fmt(ind.saldoConsolidado) : "—"} />
+            <KPICard label="A receber" value={ind?.receberPendente != null ? fmt(ind.receberPendente) : "—"} color="text-primary" />
+            <KPICard label="A pagar" value={ind?.pagarPendente != null ? fmt(ind.pagarPendente) : "—"} color="text-warning" />
           </div>
         )}
       </div>
@@ -2353,6 +2398,7 @@ function FinanceiroHub() {
 }
 
 function FinanceiroHubInner() {
+  const { error } = useFinanceiroReal();
   const [theme, setTheme] = useState<"light" | "soft-ice" | "midnight" | "black">("light");
 
   // Herda o tema global (data-theme) sem sobrescrever.
@@ -2411,6 +2457,13 @@ function FinanceiroHubInner() {
             </div>
           </div>
         </header>
+
+        {error ? (
+          <Alert variant={error.includes("Nenhuma loja") ? "default" : "destructive"} className="mb-4">
+            <AlertTitle>{error.includes("Nenhuma loja") ? "Loja ativa" : "Erro ao carregar"}</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <Tabs defaultValue="visao" className="w-full min-w-0">
           <TabsList className="mb-6 grid w-full min-w-0 grid-cols-3 gap-1 sm:grid-cols-7">
@@ -3264,7 +3317,6 @@ function PagarContaModal({
   conta: ContaPagar | null;
   onConfirm: (valor: number, total: boolean) => void;
 }) {
-  const { carteiras: listaCarteiras } = useFinanceiroReal();
   const [valor, setValor] = useState(0);
   const [parcial, setParcial] = useState(false);
 
@@ -3310,35 +3362,14 @@ function PagarContaModal({
             <Label>Valor pago</Label>
             <Input type="number" step="0.01" value={valor} disabled={!parcial} onChange={(e) => setValor(Number(e.target.value))} />
           </div>
-          <div className="space-y-1.5">
-            <Label>Forma</Label>
-            <Select defaultValue="pix">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="boleto">Boleto</SelectItem>
-                <SelectItem value="transferencia">Transferência</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Carteira origem</Label>
-            <Select defaultValue="2">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {listaCarteiras.filter((c) => c.ativo).map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Data</Label>
-            <Input type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Comprovante</Label>
-            <Input type="file" />
-          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">O que é gravado no servidor</p>
+          <p className="mt-1">
+            Apenas o <strong>valor</strong> e se a quitação é <strong>total ou parcial</strong>. Forma de pagamento, carteira de origem, data do comprovante e anexo ainda{" "}
+            <Badge variant="secondary" className="mx-0.5 align-middle text-[10px]">Em breve</Badge>
+            {" "}— não alteram o registo enviado hoje.
+          </p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
