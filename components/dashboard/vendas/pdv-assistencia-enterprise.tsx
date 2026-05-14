@@ -63,7 +63,7 @@ import { cn } from "@/lib/utils"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
-import { PDV_PRODUCTS_BASE, mergePdvCatalogWithInventory, type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
@@ -840,7 +840,7 @@ function TrocasModal({
 
 function EditarAtalhosModal({
   open,
-  catalog = PDV_PRODUCTS_BASE,
+  catalog = [],
   catalogForAdd = [],
   savedAtalhos,
   onSave,
@@ -1180,9 +1180,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     [lojaAtivaId]
   )
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
-  const mergedCatalog = useMemo(() => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory), [inventory])
 
-  // Apenas itens reais do estoque (sem os mocks de PDV_PRODUCTS_BASE) — passados ao modal de atalhos
+  // Somente itens reais do estoque — única fonte de catálogo no PDV Assistência
   const realCatalog = useMemo((): PdvCatalogProduct[] => {
     if (!Array.isArray(inventory) || inventory.length === 0) return []
     return inventory.map((inv) => {
@@ -1243,24 +1242,27 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [clientePickerOpen, setClientePickerOpen] = useState(false)
+  const [f4QtdOpen, setF4QtdOpen] = useState(false)
+  const [f4QtdValue, setF4QtdValue] = useState("")
+  const f4InputRef = useRef<HTMLInputElement>(null)
 
   // ── Custom atalhos ────────────────────────────────────────────────────────────
   const [localAtalhos, setLocalAtalhos] = useState<AtalhoSaved[]>([])
 
   const quickServices = useMemo(() => {
     const active = localAtalhos.filter((a) => a.categoria === "Servicos" && a.ativo !== false)
-    return active.map((a) => mergedCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
-  }, [localAtalhos, mergedCatalog])
+    return active.map((a) => realCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
+  }, [localAtalhos, realCatalog])
 
   const quickProducts = useMemo(() => {
     const active = localAtalhos.filter((a) => a.categoria !== "Servicos" && a.categoria !== undefined && a.ativo !== false)
-    return active.map((a) => mergedCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
-  }, [localAtalhos, mergedCatalog])
+    return active.map((a) => realCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
+  }, [localAtalhos, realCatalog])
 
   const quickFavorites = useMemo(() => {
     const active = localAtalhos.filter((a) => a.favorito && a.ativo !== false)
-    return active.map((a) => mergedCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
-  }, [localAtalhos, mergedCatalog])
+    return active.map((a) => realCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
+  }, [localAtalhos, realCatalog])
 
   // ── Hydratação dos atalhos: localStorage (fast-path) → banco (fallback) ──────
   const [hydratedFromDb, setHydratedFromDb] = useState(false)
@@ -1299,11 +1301,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const fullSearch = useMemo(() => {
     const raw = search.trim()
     if (!raw) return []
-    const src = realCatalog.length > 0 ? realCatalog : mergedCatalog
-    const exact = findPdvProductByScan(raw, src)
+    const exact = findPdvProductByScan(raw, realCatalog)
     if (exact) return [exact]
-    return filterPdvCatalogBySearch(src, raw).slice(0, 12)
-  }, [search, realCatalog, mergedCatalog])
+    return filterPdvCatalogBySearch(realCatalog, raw).slice(0, 12)
+  }, [search, realCatalog])
 
   useEffect(() => {
     setRapidoPickIdx(0)
@@ -1327,7 +1328,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         active instanceof HTMLSelectElement ||
         (active instanceof HTMLElement && active.isContentEditable)
 
-      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen
+      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen
 
       // END — toggle help overlay (always works)
       if (e.key === "End") {
@@ -1358,7 +1359,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         case "F2":  setClientePickerOpen((o) => !o); break
         case "F3":  inputRef.current?.focus(); break
         case "F4":
-          toast({ title: "F4 — Alterar quantidade", description: "Disponível em breve." })
+          if (cart.length > 0) {
+            const last = cart[cart.length - 1]!
+            setF4QtdValue(String(last.qty))
+            setF4QtdOpen(true)
+          }
           break
         case "F5":
           // mantido por backward-compat (mesmo comportamento que F6 e DEL)
@@ -2090,7 +2095,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
       <EditarAtalhosModal
         open={editAtalhosOpen}
-        catalog={mergedCatalog}
+        catalog={realCatalog}
         catalogForAdd={realCatalog}
         savedAtalhos={localAtalhos}
         onSave={(atalhos) => {
