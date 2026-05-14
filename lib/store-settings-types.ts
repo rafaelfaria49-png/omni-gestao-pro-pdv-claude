@@ -12,7 +12,7 @@ export type CertificadoA1Meta = {
 export type PdvClassicLayoutKind = "lovable" | "services"
 
 export type StorePdvParams = {
-  atalhosRapidos: Array<{ id: string; nome: string; preco: number; inventoryId?: string; categoria?: string }>
+  atalhosRapidos: Array<{ id: string; nome: string; preco: number; inventoryId?: string; categoria?: string; ativo?: boolean; favorito?: boolean }>
   ocultarCategoriasNoPdv: boolean
   categoriasOcultasNoPdv: string[]
   garantiaPadraoDias: number

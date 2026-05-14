@@ -24,8 +24,11 @@ import {
   RotateCcw,
   Check,
   ChevronDown,
+  ChevronUp,
   Keyboard,
   Search,
+  Star,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -74,6 +77,53 @@ for (const cat of TOP_PRODUCT_CATEGORIES) {
   const items = PDV_PRODUCTS_BASE.filter((p) => p.category === cat).slice(0, 2)
   ALL_TOP_PRODUCTS.push(...items)
   if (ALL_TOP_PRODUCTS.length >= 8) break
+}
+
+// ─── Atalhos types + helpers ──────────────────────────────────────────────────
+
+type AtalhoSaved = {
+  id: string
+  nome: string
+  preco: number
+  inventoryId?: string
+  categoria?: string
+  ativo?: boolean
+  favorito?: boolean
+}
+
+type AtalhoEntry = {
+  id: string
+  nome: string
+  preco: number
+  categoria: string
+  ativo: boolean
+  favorito: boolean
+  stockAtual: number
+  barcode?: string
+  sku?: string
+}
+
+const MAX_SVC = 8
+const MAX_PRD = 8
+
+function toAtalhoEntry(a: AtalhoSaved, catalog: PdvCatalogProduct[]): AtalhoEntry {
+  const live = catalog.find((p) => p.id === a.id)
+  const isService = (a.categoria ?? live?.category ?? "") === "Servicos"
+  return {
+    id: a.id,
+    nome: live?.name ?? a.nome,
+    preco: live?.price ?? a.preco,
+    categoria: a.categoria ?? live?.category ?? "Outros",
+    ativo: a.ativo !== false,
+    favorito: a.favorito ?? false,
+    stockAtual: live?.stock ?? (isService ? 999 : 0),
+    barcode: live?.barcode ?? live?.codigoBarras,
+    sku: live?.sku ?? live?.codigo,
+  }
+}
+
+function fromAtalhoEntry(e: AtalhoEntry): AtalhoSaved {
+  return { id: e.id, nome: e.nome, preco: e.preco, categoria: e.categoria, inventoryId: e.id, ativo: e.ativo, favorito: e.favorito }
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -165,11 +215,15 @@ function QuickCard({
   onAdd: (item: PdvCatalogProduct) => void
   isPickHighlight?: boolean
 }) {
+  const isService = item.category === "Servicos"
+  const outOfStock = !isService && item.stock <= 0
+
   return (
     <Card
       className={cn(
         "group cursor-pointer rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:bg-accent hover:shadow-md active:scale-[0.98]",
-        isPickHighlight && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+        isPickHighlight && "ring-2 ring-primary ring-offset-2 ring-offset-background",
+        outOfStock && "opacity-60"
       )}
       onClick={() => onAdd(item)}
     >
@@ -186,8 +240,11 @@ function QuickCard({
         </Badge>
       </div>
       <div className="mt-3 flex items-center justify-between">
-        <span className="text-[10px] text-muted-foreground">
-          {item.stock < 999 ? (item.stock > 0 ? `${item.stock} em estoque` : "Sem estoque") : "Serviço"}
+        <span className={cn(
+          "text-[10px]",
+          outOfStock ? "font-semibold text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+        )}>
+          {isService ? "Serviço" : outOfStock ? "Sem estoque" : `${item.stock} em estoque`}
         </span>
         <span className="grid h-6 w-6 place-items-center rounded-lg bg-primary/10 text-primary opacity-0 transition group-hover:opacity-100">
           <Plus className="h-3.5 w-3.5" />
@@ -557,70 +614,165 @@ function TrocasModal({
 
 function EditarAtalhosModal({
   open,
-  selectedServiceIds,
-  selectedProductIds,
   catalog = PDV_PRODUCTS_BASE,
+  savedAtalhos,
   onSave,
   onClose,
 }: {
   open: boolean
-  selectedServiceIds: string[]
-  selectedProductIds: string[]
   catalog?: PdvCatalogProduct[]
-  onSave: (serviceIds: string[], productIds: string[]) => void
+  savedAtalhos: AtalhoSaved[]
+  onSave: (atalhos: AtalhoSaved[]) => void
   onClose: () => void
 }) {
-  const [svcIds, setSvcIds] = useState<string[]>(selectedServiceIds)
-  const [prdIds, setPrdIds] = useState<string[]>(selectedProductIds)
-  const [modalSearch, setModalSearch] = useState("")
+  const [entries, setEntries] = useState<AtalhoEntry[]>([])
+  const [modalTab, setModalTab] = useState<"atalhos" | "adicionar">("atalhos")
+  const [catSearch, setCatSearch] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
 
-  // Reset to props when modal opens
   useEffect(() => {
-    if (open) {
-      setSvcIds(selectedServiceIds)
-      setPrdIds(selectedProductIds)
-      setModalSearch("")
-    }
+    if (!open) return
+    setEntries(savedAtalhos.map((a) => toAtalhoEntry(a, catalog)))
+    setModalTab("atalhos")
+    setCatSearch("")
+    setIsSaving(false)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const toggleSvc = (id: string) =>
-    setSvcIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((x) => x !== id)
-        : prev.length < 8
-          ? [...prev, id]
-          : prev,
-    )
+  // ── Derived ──────────────────────────────────────────────────────────────────
+  const svcEntries = useMemo(
+    () => entries.map((e, i) => ({ ...e, _idx: i })).filter((e) => e.categoria === "Servicos"),
+    [entries],
+  )
+  const prdEntries = useMemo(
+    () => entries.map((e, i) => ({ ...e, _idx: i })).filter((e) => e.categoria !== "Servicos"),
+    [entries],
+  )
+  const svcActive = svcEntries.filter((e) => e.ativo).length
+  const prdActive = prdEntries.filter((e) => e.ativo).length
+  const addedIds = useMemo(() => new Set(entries.map((e) => e.id)), [entries])
 
-  const togglePrd = (id: string) =>
-    setPrdIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((x) => x !== id)
-        : prev.length < 8
-          ? [...prev, id]
-          : prev,
-    )
+  const catSearchLow = catSearch.toLowerCase().trim()
+  const catalogFiltered = useMemo(
+    () =>
+      catSearchLow
+        ? catalog.filter(
+            (p) =>
+              p.name.toLowerCase().includes(catSearchLow) ||
+              p.category.toLowerCase().includes(catSearchLow) ||
+              (p.sku ?? "").toLowerCase().includes(catSearchLow) ||
+              (p.barcode ?? "").includes(catSearchLow),
+          )
+        : catalog,
+    [catalog, catSearchLow],
+  )
 
-  const searchLower = modalSearch.toLowerCase().trim()
-  const catalogServices = catalog.filter((p) => p.category === "Servicos")
-  const catalogProducts = catalog.filter((p) => p.category !== "Servicos")
-  const filteredServices = searchLower
-    ? catalogServices.filter(
-        (p) =>
-          p.name.toLowerCase().includes(searchLower) ||
-          p.category.toLowerCase().includes(searchLower),
-      )
-    : catalogServices
-  const filteredProducts = searchLower
-    ? catalogProducts.filter(
-        (p) =>
-          p.name.toLowerCase().includes(searchLower) ||
-          p.category.toLowerCase().includes(searchLower) ||
-          (p.sku ?? "").toLowerCase().includes(searchLower) ||
-          (p.barcode ?? "").includes(searchLower),
-      )
-    : catalogProducts
+  // ── Mutations ─────────────────────────────────────────────────────────────────
+  const moveWithinGroup = (idx: number, dir: -1 | 1) => {
+    const isService = entries[idx].categoria === "Servicos"
+    const step = dir < 0 ? -1 : 1
+    let target = -1
+    for (let i = idx + step; i >= 0 && i < entries.length; i += step) {
+      if ((entries[i].categoria === "Servicos") === isService) { target = i; break }
+    }
+    if (target === -1) return
+    setEntries((prev) => {
+      const next = [...prev]
+      ;[next[idx], next[target]] = [next[target], next[idx]]
+      return next
+    })
+  }
+
+  const toggleAtivo = (idx: number) =>
+    setEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, ativo: !e.ativo } : e)))
+
+  const toggleFavorito = (idx: number) =>
+    setEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, favorito: !e.favorito } : e)))
+
+  const removeEntry = (idx: number) =>
+    setEntries((prev) => prev.filter((_, i) => i !== idx))
+
+  const addFromCatalog = (p: PdvCatalogProduct) => {
+    if (addedIds.has(p.id)) return
+    const isService = p.category === "Servicos"
+    if (isService && svcEntries.length >= MAX_SVC) return
+    if (!isService && prdEntries.length >= MAX_PRD) return
+    setEntries((prev) => [
+      ...prev,
+      { id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false, stockAtual: p.stock, barcode: p.barcode, sku: p.sku ?? p.codigo },
+    ])
+  }
+
+  const handleSave = () => {
+    setIsSaving(true)
+    onSave(entries.map(fromAtalhoEntry))
+    onClose()
+  }
+
+  // ── Row ────────────────────────────────────────────────────────────────────
+  const renderRow = (e: AtalhoEntry & { _idx: number }, isFirstInGroup: boolean, isLastInGroup: boolean) => {
+    const isService = e.categoria === "Servicos"
+    const outOfStock = !isService && e.stockAtual <= 0
+
+    return (
+      <div
+        key={e.id}
+        className={cn(
+          "flex items-center gap-1.5 rounded-xl border px-2.5 py-2 transition-all",
+          e.ativo ? "border-border bg-background" : "border-border/50 bg-muted/30 opacity-60",
+        )}
+      >
+        {/* Reorder */}
+        <div className="flex shrink-0 flex-col">
+          <button type="button" disabled={isFirstInGroup} onClick={() => moveWithinGroup(e._idx, -1)}
+            className="grid h-5 w-5 place-items-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-20">
+            <ChevronUp className="h-3 w-3" />
+          </button>
+          <button type="button" disabled={isLastInGroup} onClick={() => moveWithinGroup(e._idx, 1)}
+            className="grid h-5 w-5 place-items-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-20">
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">{e.nome}</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+            <span className="text-[10px] text-muted-foreground">{e.categoria}</span>
+            {e.sku && <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">{e.sku}</span>}
+            {outOfStock && (
+              <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 px-1 py-px text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+                sem estoque
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Price */}
+        <span className="shrink-0 text-xs font-bold tabular-nums text-foreground">{brl(e.preco)}</span>
+
+        {/* Favorito */}
+        <button type="button" onClick={() => toggleFavorito(e._idx)} title={e.favorito ? "Remover dos favoritos" : "Favorito"}
+          className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-lg transition",
+            e.favorito ? "text-amber-500 hover:text-amber-600" : "text-muted-foreground hover:text-amber-500")}>
+          <Star className={cn("h-3.5 w-3.5", e.favorito && "fill-current")} />
+        </button>
+
+        {/* Ativo toggle */}
+        <button type="button" onClick={() => toggleAtivo(e._idx)} title={e.ativo ? "Desativar" : "Ativar"}
+          className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", e.ativo ? "bg-primary" : "bg-muted")}>
+          <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+            e.ativo ? "translate-x-4" : "translate-x-0.5")} />
+        </button>
+
+        {/* Remove */}
+        <button type="button" onClick={() => removeEntry(e._idx)}
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    )
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -628,142 +780,138 @@ function EditarAtalhosModal({
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-foreground">
             <Settings2 className="h-5 w-5 text-primary" />
-            Editar Atalhos do Grid Rápido
+            Gerenciar Atalhos Rápidos
           </DialogTitle>
           <p className="mt-1 text-xs text-muted-foreground">
-            Selecione até 8 serviços e até 8 produtos para aparecer nos atalhos. O restante fica disponível pela busca.
+            Configure até {MAX_SVC} serviços e {MAX_PRD} produtos. Reordene, ative/desative e marque favoritos.
           </p>
         </DialogHeader>
 
-        <div className="border-b border-border px-6 pb-3 pt-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={modalSearch}
-              onChange={(e) => setModalSearch(e.target.value)}
-              placeholder="Buscar produto ou serviço…"
-              className="h-9 rounded-xl border-border bg-background pl-9 text-sm"
-            />
-          </div>
+        {/* Tab nav */}
+        <div className="flex gap-5 border-b border-border px-6 pt-3">
+          {([
+            { id: "atalhos" as const, label: `Atalhos (${entries.length})` },
+            { id: "adicionar" as const, label: "Adicionar do Catálogo" },
+          ] as const).map((t) => (
+            <button key={t.id} type="button" onClick={() => setModalTab(t.id)}
+              className={cn("pb-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px",
+                modalTab === t.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+              {t.label}
+            </button>
+          ))}
         </div>
 
-        <ScrollArea className="max-h-[60vh]">
-          <div className="space-y-5 px-6 py-4">
-            {/* Services */}
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Serviços
-                </p>
-                <Badge variant="secondary" className="text-xs">
-                  {svcIds.length}/8
-                </Badge>
+        {/* ── Tab: Atalhos ── */}
+        {modalTab === "atalhos" ? (
+          <ScrollArea className="max-h-[55vh]">
+            <div className="space-y-4 px-6 py-4">
+              {/* Serviços */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Serviços</p>
+                  <Badge variant={svcActive >= MAX_SVC ? "destructive" : "secondary"} className="text-xs">
+                    {svcActive}/{MAX_SVC} ativos
+                  </Badge>
+                </div>
+                {svcEntries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum serviço. Adicione na aba "Adicionar do Catálogo".</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {svcEntries.map((e, gi) =>
+                      renderRow(e, gi === 0, gi === svcEntries.length - 1)
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="space-y-1.5">
-                {filteredServices.map((p) => {
-                  const selected = svcIds.includes(p.id)
-                  const disabled = !selected && svcIds.length >= 8
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => toggleSvc(p.id)}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm transition-all",
-                        selected
-                          ? "border-primary/40 bg-primary/10 text-foreground"
-                          : disabled
-                            ? "border-border bg-muted/20 text-muted-foreground opacity-50"
-                            : "border-border bg-background text-foreground hover:border-primary/30 hover:bg-muted/40",
-                      )}
-                    >
-                      <span>{p.name}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="tabular-nums text-muted-foreground">{brl(p.price)}</span>
-                        <span
-                          className={cn(
-                            "grid h-5 w-5 place-items-center rounded-md border",
-                            selected
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border bg-background",
-                          )}
-                        >
-                          {selected && <Check className="h-3 w-3" />}
-                        </span>
-                      </div>
-                    </button>
-                  )
-                })}
+
+              <Separator className="bg-border" />
+
+              {/* Produtos */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Produtos</p>
+                  <Badge variant={prdActive >= MAX_PRD ? "destructive" : "secondary"} className="text-xs">
+                    {prdActive}/{MAX_PRD} ativos
+                  </Badge>
+                </div>
+                {prdEntries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum produto. Adicione na aba "Adicionar do Catálogo".</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {prdEntries.map((e, gi) =>
+                      renderRow(e, gi === 0, gi === prdEntries.length - 1)
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-
-            <Separator className="bg-border" />
-
-            {/* Products */}
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Produtos
-                </p>
-                <Badge variant="secondary" className="text-xs">
-                  {prdIds.length}/8
-                </Badge>
-              </div>
-              <div className="space-y-1.5">
-                {filteredProducts.map((p) => {
-                  const selected = prdIds.includes(p.id)
-                  const disabled = !selected && prdIds.length >= 8
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => togglePrd(p.id)}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm transition-all",
-                        selected
-                          ? "border-primary/40 bg-primary/10 text-foreground"
-                          : disabled
-                            ? "border-border bg-muted/20 text-muted-foreground opacity-50"
-                            : "border-border bg-background text-foreground hover:border-primary/30 hover:bg-muted/40",
-                      )}
-                    >
-                      <span className="min-w-0 truncate">{p.name}</span>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className="text-xs text-muted-foreground">{p.category}</span>
-                        <span className="tabular-nums text-muted-foreground">{brl(p.price)}</span>
-                        <span
-                          className={cn(
-                            "grid h-5 w-5 place-items-center rounded-md border",
-                            selected
-                              ? "border-primary bg-primary text-primary-foreground"
-                              : "border-border bg-background",
-                          )}
-                        >
-                          {selected && <Check className="h-3 w-3" />}
-                        </span>
-                      </div>
-                    </button>
-                  )
-                })}
+          </ScrollArea>
+        ) : (
+          /* ── Tab: Adicionar ── */
+          <>
+            <div className="border-b border-border px-6 py-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input autoFocus value={catSearch} onChange={(e) => setCatSearch(e.target.value)}
+                  placeholder="Buscar por nome, categoria, SKU ou código de barras…"
+                  className="h-9 rounded-xl border-border bg-background pl-9 text-sm" />
               </div>
             </div>
-          </div>
-        </ScrollArea>
+            <ScrollArea className="max-h-[50vh]">
+              <div className="space-y-1 px-6 py-3">
+                {catalogFiltered.map((p) => {
+                  const isAdded = addedIds.has(p.id)
+                  const isService = p.category === "Servicos"
+                  const outOfStock = !isService && p.stock <= 0
+                  const atLimit = isService ? svcEntries.length >= MAX_SVC : prdEntries.length >= MAX_PRD
+                  const disabled = isAdded || atLimit
+
+                  return (
+                    <div key={p.id}
+                      className={cn("flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all",
+                        isAdded ? "border-border/50 bg-muted/20 opacity-60" : "border-border bg-background hover:border-primary/30 hover:bg-muted/40")}>
+                      <div className="min-w-0 flex-1">
+                        <p className={cn("truncate font-medium", isAdded ? "text-muted-foreground" : "text-foreground")}>{p.name}</p>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                          <span className="text-[10px] text-muted-foreground">{p.category}</span>
+                          {p.sku && <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">{p.sku}</span>}
+                          {outOfStock && (
+                            <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 px-1 py-px text-[9px] font-semibold text-amber-600">
+                              sem estoque
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{brl(p.price)}</span>
+                      {!isService && p.stock < 999 && (
+                        <span className={cn("shrink-0 text-[10px] tabular-nums", outOfStock ? "text-amber-500" : "text-muted-foreground")}>
+                          {p.stock}⬟
+                        </span>
+                      )}
+                      <button type="button" disabled={disabled} onClick={() => addFromCatalog(p)}
+                        className={cn("flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-bold transition",
+                          isAdded ? "cursor-default text-muted-foreground"
+                            : atLimit ? "cursor-not-allowed text-muted-foreground opacity-40"
+                              : "bg-primary/10 text-primary hover:bg-primary/20")}>
+                        {isAdded ? <><Check className="h-3 w-3" /> Adicionado</> : <><Plus className="h-3 w-3" /> Adicionar</>}
+                      </button>
+                    </div>
+                  )
+                })}
+                {catalogFiltered.length === 0 && (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    Nenhum resultado para &ldquo;{catSearch}&rdquo;.
+                  </p>
+                )}
+              </div>
+            </ScrollArea>
+          </>
+        )}
 
         <DialogFooter className="border-t border-border px-6 py-4">
-          <Button variant="outline" className="rounded-xl" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            className="rounded-xl"
-            onClick={() => {
-              onSave(svcIds, prdIds)
-              onClose()
-            }}
-          >
-            <Check className="mr-2 h-4 w-4" />
+          <Button variant="outline" className="rounded-xl" onClick={onClose}>Cancelar</Button>
+          <Button disabled={isSaving} className="rounded-xl" onClick={handleSave}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
             Salvar Atalhos
           </Button>
         </DialogFooter>
@@ -798,7 +946,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Search + catalog tab ─────────────────────────────────────────────────────
   const [search, setSearch] = useState("")
-  const [tab, setTab] = useState<"servicos" | "produtos">("servicos")
+  const [tab, setTab] = useState<"servicos" | "produtos" | "favoritos">("servicos")
 
   // ── Cart ─────────────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartLine[]>([])
@@ -817,37 +965,39 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
 
   // ── Custom atalhos ────────────────────────────────────────────────────────────
-  const [atalhosSvcIds, setAtalhosSvcIds] = useState<string[]>(() =>
-    ALL_SERVICES.slice(0, 8).map((p) => p.id),
-  )
-  const [atalhosPrdIds, setAtalhosPrdIds] = useState<string[]>(() =>
-    ALL_TOP_PRODUCTS.slice(0, 8).map((p) => p.id),
-  )
+  const [localAtalhos, setLocalAtalhos] = useState<AtalhoSaved[]>(() => [
+    ...ALL_SERVICES.slice(0, 8).map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false })),
+    ...ALL_TOP_PRODUCTS.slice(0, 8).map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false })),
+  ])
 
-  const quickServices = useMemo(
-    () => mergedCatalog.filter((p) => atalhosSvcIds.includes(p.id)),
-    [atalhosSvcIds, mergedCatalog],
-  )
-  const quickProducts = useMemo(
-    () => mergedCatalog.filter((p) => atalhosPrdIds.includes(p.id)),
-    [atalhosPrdIds, mergedCatalog],
-  )
+  const quickServices = useMemo(() => {
+    const active = localAtalhos.filter((a) => a.categoria === "Servicos" && a.ativo !== false)
+    return active.map((a) => mergedCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
+  }, [localAtalhos, mergedCatalog])
+
+  const quickProducts = useMemo(() => {
+    const active = localAtalhos.filter((a) => a.categoria !== "Servicos" && a.categoria !== undefined && a.ativo !== false)
+    return active.map((a) => mergedCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
+  }, [localAtalhos, mergedCatalog])
+
+  const quickFavorites = useMemo(() => {
+    const active = localAtalhos.filter((a) => a.favorito && a.ativo !== false)
+    return active.map((a) => mergedCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
+  }, [localAtalhos, mergedCatalog])
 
   // ── Hydratação dos atalhos a partir da config persistida no banco (roda uma vez) ──
   const [hydratedFromDb, setHydratedFromDb] = useState(false)
   useEffect(() => {
     if (!settingsHydrated || hydratedFromDb) return
     const saved = pdvParams.atalhosRapidos ?? []
-    const svcIds = saved
-      .filter((a) => a.categoria === "Servicos")
-      .map((a) => a.id)
-      .filter((id) => PDV_PRODUCTS_BASE.some((p) => p.id === id))
-    const prdIds = saved
-      .filter((a) => a.categoria !== undefined && a.categoria !== "Servicos")
-      .map((a) => a.id)
-      .filter((id) => PDV_PRODUCTS_BASE.some((p) => p.id === id))
-    if (svcIds.length > 0) setAtalhosSvcIds(svcIds)
-    if (prdIds.length > 0) setAtalhosPrdIds(prdIds)
+    if (saved.length > 0) {
+      setLocalAtalhos(saved)
+    } else {
+      setLocalAtalhos([
+        ...ALL_SERVICES.slice(0, 8).map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false })),
+        ...ALL_TOP_PRODUCTS.slice(0, 8).map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false })),
+      ])
+    }
     setHydratedFromDb(true)
   }, [settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
 
@@ -1224,25 +1374,34 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             ) : (
             <Tabs
               value={tab}
-              onValueChange={(v) => setTab(v === "produtos" ? "produtos" : "servicos")}
+              onValueChange={(v) => setTab(v as "servicos" | "produtos" | "favoritos")}
               className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden"
             >
                 {/* Tab header + Editar Atalhos */}
                 <div className="flex shrink-0 items-center gap-2">
-                  <TabsList className="flex-1 grid grid-cols-2 rounded-2xl border border-border bg-muted/60 p-1">
+                  <TabsList className={cn("flex-1 grid rounded-2xl border border-border bg-muted/60 p-1", quickFavorites.length > 0 ? "grid-cols-3" : "grid-cols-2")}>
                     <TabsTrigger
                       value="servicos"
                       className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                     >
                       Serviços ({quickServices.length})
-                </TabsTrigger>
+                    </TabsTrigger>
                     <TabsTrigger
                       value="produtos"
                       className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                     >
                       Produtos ({quickProducts.length})
-                </TabsTrigger>
-              </TabsList>
+                    </TabsTrigger>
+                    {quickFavorites.length > 0 && (
+                      <TabsTrigger
+                        value="favoritos"
+                        className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                      >
+                        <Star className="mr-1 h-3 w-3 fill-current text-amber-500" />
+                        Favoritos ({quickFavorites.length})
+                      </TabsTrigger>
+                    )}
+                  </TabsList>
                   {!modoRapido ? (
                     <Button
                       type="button"
@@ -1269,9 +1428,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       ) : (
                         <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
                           Nenhum atalho configurado. Clique em &ldquo;Editar Atalhos&rdquo;.
-                          </div>
+                        </div>
                       )}
-                  </div>
+                    </div>
                 </ScrollArea>
               </TabsContent>
 
@@ -1286,11 +1445,24 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       ) : (
                         <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
                           Nenhum atalho configurado. Clique em &ldquo;Editar Atalhos&rdquo;.
-                          </div>
+                        </div>
                       )}
-                  </div>
+                    </div>
                 </ScrollArea>
               </TabsContent>
+
+              {quickFavorites.length > 0 && (
+                <TabsContent
+                  value="favoritos"
+                  className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden outline-none data-[state=inactive]:hidden"
+                >
+                  <ScrollArea className="min-h-0 flex-1">
+                    <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {quickFavorites.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+              )}
             </Tabs>
             )}
           </div>
@@ -1533,22 +1705,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
       <EditarAtalhosModal
         open={editAtalhosOpen}
-        selectedServiceIds={atalhosSvcIds}
-        selectedProductIds={atalhosPrdIds}
         catalog={mergedCatalog}
-        onSave={(svcIds, prdIds) => {
-          setAtalhosSvcIds(svcIds)
-          setAtalhosPrdIds(prdIds)
-          const novosSvc = mergedCatalog
-            .filter((p) => svcIds.includes(p.id))
-            .map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, inventoryId: p.id }))
-          const novosPrd = mergedCatalog
-            .filter((p) => prdIds.includes(p.id))
-            .map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, inventoryId: p.id }))
+        savedAtalhos={localAtalhos}
+        onSave={(atalhos) => {
+          setLocalAtalhos(atalhos)
           void saveStoreSettings({
             printerConfig: {
               ...blob,
-              pdvParams: { ...blob.pdvParams, atalhosRapidos: [...novosSvc, ...novosPrd] },
+              pdvParams: { ...blob.pdvParams, atalhosRapidos: atalhos },
             },
           }).catch(() => {
             toast({
