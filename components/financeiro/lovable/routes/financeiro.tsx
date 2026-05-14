@@ -1625,14 +1625,14 @@ function Relatorios() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <KPICard label="Receita total" value={fmt(receitaBruta)} color="text-green-600 dark:text-green-400" sub={ind?.crescimentoMensal !== undefined ? `${pctStr(ind.crescimentoMensal)} vs mês ant.` : undefined} />
-            <KPICard label="Despesa total" value={fmt(despesas)} color="text-red-600 dark:text-red-400" />
+            <KPICard label="Receita total" value={fmt(receitaBruta)} color="text-success" sub={ind?.crescimentoMensal !== undefined ? `${pctStr(ind.crescimentoMensal)} vs mês ant.` : undefined} />
+            <KPICard label="Despesa total" value={fmt(despesas)} color="text-destructive" />
             <KPICard label="Lucro líquido" value={fmt(lucroLiquido)} color={lucroLiquido >= 0 ? "text-primary" : "text-destructive"} />
-            <KPICard label="Margem líquida" value={`${margem.toFixed(1)}%`} color={margem >= 20 ? "text-green-600 dark:text-green-400" : margem >= 0 ? "text-amber-600 dark:text-amber-400" : "text-destructive"} />
+            <KPICard label="Margem líquida" value={`${margem.toFixed(1)}%`} color={margem >= 20 ? "text-success" : margem >= 0 ? "text-warning" : "text-destructive"} />
             <KPICard label="Ticket médio" value={fmt(ind?.ticketMedio ?? 0)} />
             <KPICard label="Saldo consolidado" value={fmt(ind?.saldoConsolidado ?? 0)} />
-            <KPICard label="A receber" value={fmt(ind?.receberPendente ?? 0)} color="text-blue-600 dark:text-blue-400" />
-            <KPICard label="A pagar" value={fmt(ind?.pagarPendente ?? 0)} color="text-orange-600 dark:text-orange-400" />
+            <KPICard label="A receber" value={fmt(ind?.receberPendente ?? 0)} color="text-primary" />
+            <KPICard label="A pagar" value={fmt(ind?.pagarPendente ?? 0)} color="text-warning" />
           </div>
         )}
       </div>
@@ -1663,8 +1663,8 @@ function Relatorios() {
                 <Tooltip contentStyle={TTSTYLE} formatter={(v: number) => fmt(v)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="entrada" name="Receita" fill="var(--color-primary)" radius={[4, 4, 0, 0]} opacity={0.85} />
-                <Bar dataKey="saida" name="Despesa" fill="hsl(0 72% 51%)" radius={[4, 4, 0, 0]} opacity={0.85} />
-                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="hsl(142 71% 45%)" strokeWidth={2} dot={false} />
+                <Bar dataKey="saida" name="Despesa" fill="var(--color-destructive)" radius={[4, 4, 0, 0]} opacity={0.85} />
+                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="var(--color-success)" strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           )}
@@ -1687,8 +1687,8 @@ function Relatorios() {
                 <Tooltip contentStyle={TTSTYLE} formatter={(v: number) => fmt(v)} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Bar dataKey="entrada" name="Entradas" fill="var(--color-primary)" radius={[4, 4, 0, 0]} opacity={0.8} />
-                <Bar dataKey="saida" name="Saídas" fill="hsl(0 72% 51%)" radius={[4, 4, 0, 0]} opacity={0.8} />
-                <Line type="monotone" dataKey="acumulado" name="Acumulado" stroke="hsl(217 91% 60%)" strokeWidth={2} dot={false} />
+                <Bar dataKey="saida" name="Saídas" fill="var(--color-destructive)" radius={[4, 4, 0, 0]} opacity={0.8} />
+                <Line type="monotone" dataKey="acumulado" name="Acumulado" stroke="var(--color-primary)" strokeWidth={2} dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
@@ -1699,7 +1699,7 @@ function Relatorios() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="rounded-2xl">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="h-4 w-4 text-green-500" />Top Receitas</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="h-4 w-4 text-success" />Top Receitas</CardTitle>
           </CardHeader>
           <CardContent>
             {topR.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum dado.</p> : (
@@ -1709,11 +1709,11 @@ function Relatorios() {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs truncate font-medium">{r.label}</p>
                       <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full rounded-full bg-green-500" style={{ width: `${Math.min(100, r.percentual)}%` }} />
+                        <div className="h-full rounded-full bg-success" style={{ width: `${Math.min(100, r.percentual)}%` }} />
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-xs font-semibold text-green-600 dark:text-green-400">{fmt(r.valor)}</p>
+                      <p className="text-xs font-semibold text-success">{fmt(r.valor)}</p>
                       <p className="text-[10px] text-muted-foreground">{r.percentual.toFixed(1)}%</p>
                     </div>
                   </div>
@@ -1725,7 +1725,7 @@ function Relatorios() {
 
         <Card className="rounded-2xl">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2"><TrendingDown className="h-4 w-4 text-red-500" />Top Despesas</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2"><TrendingDown className="h-4 w-4 text-destructive" />Top Despesas</CardTitle>
           </CardHeader>
           <CardContent>
             {topD.length === 0 ? <p className="text-sm text-muted-foreground">Nenhum dado.</p> : (
@@ -1735,11 +1735,11 @@ function Relatorios() {
                     <div className="min-w-0 flex-1">
                       <p className="text-xs truncate font-medium">{r.label}</p>
                       <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full rounded-full bg-red-500" style={{ width: `${Math.min(100, r.percentual)}%` }} />
+                        <div className="h-full rounded-full bg-destructive" style={{ width: `${Math.min(100, r.percentual)}%` }} />
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="text-xs font-semibold text-red-600 dark:text-red-400">{fmt(r.valor)}</p>
+                      <p className="text-xs font-semibold text-destructive">{fmt(r.valor)}</p>
                       <p className="text-[10px] text-muted-foreground">{r.percentual.toFixed(1)}%</p>
                     </div>
                   </div>
@@ -1785,7 +1785,7 @@ function Relatorios() {
                   <XAxis type="number" stroke="var(--color-muted-foreground)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                   <YAxis dataKey="name" type="category" stroke="var(--color-muted-foreground)" fontSize={11} width={80} />
                   <Tooltip contentStyle={TTSTYLE} formatter={(v: number) => fmt(v)} />
-                  <Bar dataKey="value" fill="hsl(0 72% 51%)" radius={[0, 4, 4, 0]} opacity={0.85} />
+                  <Bar dataKey="value" fill="var(--color-destructive)" radius={[0, 4, 4, 0]} opacity={0.85} />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -1840,7 +1840,7 @@ function Relatorios() {
           <div className="grid grid-cols-3 gap-3">
             <KPICard label="Vencidas" value={fmt(vencidas)} color="text-destructive" />
             <KPICard label="Clientes" value={String(clientesAtraso)} />
-            <KPICard label="Taxa" value={`${taxa.toFixed(1)}%`} color={taxa > 10 ? "text-destructive" : taxa > 5 ? "text-amber-600 dark:text-amber-400" : ""} />
+            <KPICard label="Taxa" value={`${taxa.toFixed(1)}%`} color={taxa > 10 ? "text-destructive" : taxa > 5 ? "text-warning" : ""} />
           </div>
           {atrasosByCliente.length > 0 && (
             <div className="space-y-2 mt-2">
@@ -1882,14 +1882,14 @@ function Relatorios() {
 // ── helpers de status ─────────────────────────────────────────────────────────
 
 function FechamentoBadge({ status }: { status: string }) {
-  if (status === "fechado") return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 text-xs font-medium"><Lock className="h-3 w-3 mr-1" />Fechado</Badge>;
-  if (status === "reaberto") return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 text-xs font-medium"><Unlock className="h-3 w-3 mr-1" />Reaberto</Badge>;
+  if (status === "fechado") return <Badge className="bg-destructive/10 text-destructive border-0 text-xs font-medium"><Lock className="h-3 w-3 mr-1" />Fechado</Badge>;
+  if (status === "reaberto") return <Badge className="bg-warning/10 text-warning border-0 text-xs font-medium"><Unlock className="h-3 w-3 mr-1" />Reaberto</Badge>;
   return <Badge variant="outline" className="text-xs">Aberto</Badge>;
 }
 
 function ConciliacaoBadge({ status }: { status: string }) {
-  if (status === "conciliado") return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0 text-xs"><CheckCircle2 className="h-3 w-3 mr-1" />Conciliado</Badge>;
-  if (status === "divergente") return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 text-xs"><AlertCircle className="h-3 w-3 mr-1" />Divergente</Badge>;
+  if (status === "conciliado") return <Badge className="bg-success/10 text-success border-0 text-xs"><CheckCircle2 className="h-3 w-3 mr-1" />Conciliado</Badge>;
+  if (status === "divergente") return <Badge className="bg-destructive/10 text-destructive border-0 text-xs"><AlertCircle className="h-3 w-3 mr-1" />Divergente</Badge>;
   return <Badge variant="outline" className="text-xs text-muted-foreground"><Clock className="h-3 w-3 mr-1" />Pendente</Badge>;
 }
 
@@ -1929,7 +1929,7 @@ function FecharModal({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-border">
         <h3 className="text-lg font-semibold mb-1">
           {tipo === "dia" ? "Fechar dia de hoje" : `Fechar mês ${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`}
@@ -1978,7 +1978,7 @@ function ReopenModal({
 
   if (!open || !fechamento) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-border">
         <h3 className="text-lg font-semibold mb-1">Reabrir Fechamento</h3>
         <p className="text-sm text-muted-foreground mb-1">
@@ -2030,7 +2030,7 @@ function ConciliarModal({
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl border border-border">
         <h3 className="text-lg font-semibold mb-1">Conciliar Carteira</h3>
         <p className="text-sm text-muted-foreground mb-4">Informe o saldo real da carteira para comparação com o sistema.</p>
@@ -2121,7 +2121,7 @@ function AuditoriaFechamento() {
       {alertas.length > 0 && (
         <div className="space-y-2">
           {alertas.map((a, i) => (
-            <div key={i} className={`flex items-start gap-3 rounded-xl p-3 border text-sm ${a.urgente ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300" : "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-300"}`}>
+            <div key={i} className={`flex items-start gap-3 rounded-xl p-3 border text-sm ${a.urgente ? "bg-destructive/10 border-destructive/30 text-destructive" : "bg-warning/10 border-warning/30 text-warning"}`}>
               <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
               <span>{a.msg}</span>
             </div>

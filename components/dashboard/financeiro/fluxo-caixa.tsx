@@ -136,12 +136,12 @@ export function FluxoCaixa() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Entradas (período)</p>
-                <p className="text-2xl font-bold text-green-500">
+                <p className="text-2xl font-bold text-success">
                   R$ {resumoFinanceiro.entradas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
-                <ArrowUpRight className="w-6 h-6 text-green-500" />
+              <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center">
+                <ArrowUpRight className="w-6 h-6 text-success" />
               </div>
             </div>
           </CardContent>
@@ -152,12 +152,12 @@ export function FluxoCaixa() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Saídas (período)</p>
-                <p className="text-2xl font-bold text-red-500">
+                <p className="text-2xl font-bold text-destructive">
                   R$ {resumoFinanceiro.saidas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
               </div>
-              <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
-                <ArrowDownRight className="w-6 h-6 text-red-500" />
+              <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                <ArrowDownRight className="w-6 h-6 text-destructive" />
               </div>
             </div>
           </CardContent>
@@ -201,13 +201,13 @@ export function FluxoCaixa() {
                     <div
                       className={cn(
                         "w-10 h-10 rounded-full flex items-center justify-center",
-                        mov.tipo === "entrada" ? "bg-green-500/10" : "bg-red-500/10"
+                        mov.tipo === "entrada" ? "bg-success/10" : "bg-destructive/10"
                       )}
                     >
                       {mov.tipo === "entrada" ? (
-                        <ArrowUpRight className="w-5 h-5 text-green-500" />
+                        <ArrowUpRight className="w-5 h-5 text-success" />
                       ) : (
-                        <ArrowDownRight className="w-5 h-5 text-red-500" />
+                        <ArrowDownRight className="w-5 h-5 text-destructive" />
                       )}
                     </div>
                     <div>
@@ -218,7 +218,7 @@ export function FluxoCaixa() {
                     </div>
                   </div>
                   <p
-                    className={cn("font-semibold", mov.tipo === "entrada" ? "text-green-500" : "text-red-500")}
+                    className={cn("font-semibold", mov.tipo === "entrada" ? "text-success" : "text-destructive")}
                   >
                     {mov.tipo === "entrada" ? "+" : "-"} R${" "}
                     {mov.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}

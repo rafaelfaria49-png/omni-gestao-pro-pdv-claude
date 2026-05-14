@@ -435,7 +435,7 @@ export function GestaoCarteiras() {
                     className="flex justify-between items-center text-sm border-b border-border/60 pb-2"
                   >
                     <div>
-                      <span className={cn(m.tipo === "entrada" ? "text-green-600" : "text-red-600")}>
+                      <span className={cn(m.tipo === "entrada" ? "text-success" : "text-destructive")}>
                         {m.tipo === "entrada" ? "+" : "−"}{" "}
                         {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(m.valor)}
                       </span>

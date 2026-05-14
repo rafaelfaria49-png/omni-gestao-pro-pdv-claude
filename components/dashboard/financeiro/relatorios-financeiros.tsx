@@ -104,16 +104,16 @@ export function RelatoriosFinanceiros() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Receita Total</p>
-                <p className="text-2xl font-bold text-green-500">
+                <p className="text-2xl font-bold text-success">
                   R$ {resumoMensal.receitaTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
-                <div className="flex items-center gap-1 mt-1 text-sm text-green-500">
+                <div className="flex items-center gap-1 mt-1 text-sm text-success">
                   <ArrowUpRight className="w-4 h-4" />
                   <span>+12.5% vs mês anterior</span>
                 </div>
               </div>
-              <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center">
-                <TrendingUp className="w-7 h-7 text-green-500" />
+              <div className="w-14 h-14 rounded-full bg-success/10 flex items-center justify-center">
+                <TrendingUp className="w-7 h-7 text-success" />
               </div>
             </div>
           </CardContent>
@@ -124,16 +124,16 @@ export function RelatoriosFinanceiros() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Despesa Total</p>
-                <p className="text-2xl font-bold text-red-500">
+                <p className="text-2xl font-bold text-destructive">
                   R$ {resumoMensal.despesaTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
-                <div className="flex items-center gap-1 mt-1 text-sm text-red-500">
+                <div className="flex items-center gap-1 mt-1 text-sm text-destructive">
                   <ArrowUpRight className="w-4 h-4" />
                   <span>+8.3% vs mês anterior</span>
                 </div>
               </div>
-              <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center">
-                <TrendingDown className="w-7 h-7 text-red-500" />
+              <div className="w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
+                <TrendingDown className="w-7 h-7 text-destructive" />
               </div>
             </div>
           </CardContent>

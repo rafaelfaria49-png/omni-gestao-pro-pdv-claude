@@ -91,8 +91,8 @@ import {
 const FRASE_CONFIRMACAO_LIMPAR = "EXCLUIR TUDO"
 
 const menuBaixaClass =
-  "text-green-600 focus:text-green-700 focus:bg-green-500/15 cursor-pointer font-medium"
-const menuExcluirClass = "text-red-600 focus:text-red-700 focus:bg-red-500/15 cursor-pointer font-medium"
+  "text-success focus:text-success focus:bg-success/15 cursor-pointer font-medium"
+const menuExcluirClass = "text-destructive focus:text-destructive focus:bg-destructive/15 cursor-pointer font-medium"
 const menuEstornoClass =
   "text-orange-600 focus:text-orange-700 focus:bg-orange-500/15 cursor-pointer font-medium"
 
@@ -895,11 +895,11 @@ export function ContasReceber() {
     const s = (status || "").toLowerCase()
     switch (s) {
       case "pago":
-        return { icon: CheckCircle2, color: "text-green-500", bg: "bg-green-500/10", label: "Recebido" }
+        return { icon: CheckCircle2, color: "text-success", bg: "bg-success/10", label: "Recebido" }
       case "atrasado":
-        return { icon: AlertCircle, color: "text-red-500", bg: "bg-red-500/10", label: "Atrasado" }
+        return { icon: AlertCircle, color: "text-destructive", bg: "bg-destructive/10", label: "Atrasado" }
       default:
-        return { icon: Clock, color: "text-yellow-500", bg: "bg-yellow-500/10", label: "Pendente" }
+        return { icon: Clock, color: "text-warning", bg: "bg-warning/10", label: "Pendente" }
     }
   }
 
@@ -1930,28 +1930,28 @@ export function ContasReceber() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <p className="text-sm text-black/70">Total a receber (apenas pendentes)</p>
-            <p className="text-xl font-bold text-black">
+            <p className="text-sm text-muted-foreground">Total a receber (apenas pendentes)</p>
+            <p className="text-xl font-bold text-foreground">
               R$ {resumo.totalReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <p className="text-sm text-black/70">Pendentes</p>
-            <p className="text-xl font-bold text-yellow-500">{resumo.pendentes}</p>
+            <p className="text-sm text-muted-foreground">Pendentes</p>
+            <p className="text-xl font-bold text-warning">{resumo.pendentes}</p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <p className="text-sm text-black/70">Atrasados</p>
-            <p className="text-xl font-bold text-red-500">{resumo.atrasados}</p>
+            <p className="text-sm text-muted-foreground">Atrasados</p>
+            <p className="text-xl font-bold text-destructive">{resumo.atrasados}</p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <p className="text-sm text-black/70">Recebido (soma na lista)</p>
-            <p className="text-xl font-bold text-green-500">
+            <p className="text-sm text-muted-foreground">Recebido (soma na lista)</p>
+            <p className="text-xl font-bold text-success">
               R$ {resumo.recebidoMes.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </p>
           </CardContent>
@@ -1974,11 +1974,11 @@ export function ContasReceber() {
         </div>
         <div className="flex gap-2 flex-wrap items-end">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cr-busca-cliente" className="text-xs text-black/70">
+            <Label htmlFor="cr-busca-cliente" className="text-xs text-muted-foreground">
               Pesquisa por nome do cliente
             </Label>
           <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/70" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 id="cr-busca-cliente"
                 placeholder="Ex: Nome do cliente, CPF ou ID do pedido"
@@ -1988,7 +1988,7 @@ export function ContasReceber() {
                 aria-label="Filtrar pela coluna Cliente"
               />
           </div>
-            <p className="text-[11px] text-black/70 max-w-[14rem] leading-snug">
+            <p className="text-[11px] text-muted-foreground max-w-[14rem] leading-snug">
               Filtra por Cliente <em>ou</em> Descrição (sem diferenciar maiúsculas/minúsculas e sem acentos).
             </p>
           </div>
@@ -2011,7 +2011,7 @@ export function ContasReceber() {
         <CardContent>
           {filtro === "pago" ? (
             recebidosTabela.length === 0 ? (
-              <p className="text-sm text-black/70 py-8 text-center">
+              <p className="text-sm text-muted-foreground py-8 text-center">
                 Nenhum recebimento nesta visão. Ajuste a filtragem ou registre baixas em títulos pendentes.
               </p>
             ) : (
@@ -2019,7 +2019,7 @@ export function ContasReceber() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent shadow-sm transition-shadow hover:shadow-md">
                     <CardContent className="p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-black/70">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Total recebido hoje
                       </p>
                       <p className="mt-1 text-xl font-bold text-primary tabular-nums">
@@ -2029,18 +2029,18 @@ export function ContasReceber() {
                   </Card>
                   <Card className="border-border bg-card shadow-sm transition-shadow hover:shadow-md">
                     <CardContent className="p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-black/70">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Total a receber (mês)
                       </p>
-                      <p className="mt-1 text-xl font-bold text-black tabular-nums">
+                      <p className="mt-1 text-xl font-bold text-foreground tabular-nums">
                         R$ {recebidosResumoAba.totalAReceberMes.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </p>
-                      <p className="text-[10px] text-black/70 mt-1">Pendentes e atrasados com vencimento no mês atual.</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">Pendentes e atrasados com vencimento no mês atual.</p>
                     </CardContent>
                   </Card>
                   <Card className="border-destructive/25 bg-destructive/[0.04] shadow-sm transition-shadow hover:shadow-md">
                     <CardContent className="p-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-black/70">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Total em atraso
                       </p>
                       <p className="mt-1 text-xl font-bold text-destructive tabular-nums">
@@ -2064,10 +2064,10 @@ export function ContasReceber() {
                     return (
                       <div key={iso} className="space-y-2">
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between border-b border-border pb-2">
-                          <h3 className="text-sm font-semibold text-black capitalize">{tituloDia}</h3>
-                          <span className="text-xs text-black/70">
+                          <h3 className="text-sm font-semibold text-foreground capitalize">{tituloDia}</h3>
+                          <span className="text-xs text-muted-foreground">
                             Subtotal do dia:{" "}
-                            <span className="font-semibold tabular-nums text-black">
+                            <span className="font-semibold tabular-nums text-foreground">
                               R$ {subtotalDia.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                             </span>
                           </span>
@@ -2075,7 +2075,7 @@ export function ContasReceber() {
                         <div className="overflow-x-auto rounded-lg border border-border bg-card/50 shadow-sm">
                           <table className="w-full text-sm">
                             <thead>
-                              <tr className="border-b border-border bg-secondary/50 text-left text-black/70">
+                              <tr className="border-b border-border bg-secondary/50 text-left text-muted-foreground">
                                 <th className="p-2.5 font-medium">Cliente</th>
                                 <th className="p-2.5 font-medium text-right">Valor</th>
                                 <th className="p-2.5 font-medium">Data</th>
@@ -2093,13 +2093,13 @@ export function ContasReceber() {
                                     className="border-b border-border/70 last:border-0 transition-colors hover:bg-primary/[0.04]"
                                   >
                                     <td className="p-2.5 align-top">
-                                      <span className="font-medium text-black">{row.conta.cliente}</span>
-                                      <p className="text-[11px] text-black/70 line-clamp-1">{row.conta.descricao}</p>
+                                      <span className="font-medium text-foreground">{row.conta.cliente}</span>
+                                      <p className="text-[11px] text-muted-foreground line-clamp-1">{row.conta.descricao}</p>
                                     </td>
                                     <td className="p-2.5 align-top text-right tabular-nums font-medium">
                                       R$ {row.valorExibido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                                     </td>
-                                    <td className="p-2.5 align-top text-black/70">{row.dataExibida}</td>
+                                    <td className="p-2.5 align-top text-muted-foreground">{row.dataExibida}</td>
                                     <td className="p-2.5 align-top">
                                       <span className="inline-flex items-center gap-1.5" title={fp.label}>
                                         <span className="text-base leading-none" aria-hidden>
@@ -2108,7 +2108,7 @@ export function ContasReceber() {
                                         <span className="text-[13px]">{fp.label}</span>
                                       </span>
                                     </td>
-                                    <td className="p-2.5 align-top text-[13px] text-black/70">{row.responsavel}</td>
+                                    <td className="p-2.5 align-top text-[13px] text-muted-foreground">{row.responsavel}</td>
                                     <td className="p-2.5 align-top">
                                       <div className="flex flex-wrap items-center gap-1">
                                         <Button
@@ -2151,7 +2151,7 @@ export function ContasReceber() {
               </div>
             )
           ) : contasFiltradas.length === 0 ? (
-            <p className="text-sm text-black/70 py-8 text-center">
+            <p className="text-sm text-muted-foreground py-8 text-center">
               Nenhum título nesta visão. Importe um extrato em Configurações ou crie um novo título.
             </p>
           ) : (
@@ -2178,20 +2178,20 @@ export function ContasReceber() {
                         className="shrink-0"
                       />
                       <div className="min-w-0">
-                        <p className="font-medium text-black truncate">{conta.descricao}</p>
-                        <div className="flex items-center gap-2 text-sm text-black/70 flex-wrap">
+                        <p className="font-medium text-foreground truncate">{conta.descricao}</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
                           <User className="w-3 h-3 shrink-0" />
-                          <span className="truncate text-black">{conta.cliente}</span>
+                          <span className="truncate text-foreground">{conta.cliente}</span>
                           <span className="px-1.5 py-0.5 rounded bg-secondary text-xs shrink-0">{conta.tipo}</span>
                     </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
                     <div className="text-right">
-                        <p className="font-semibold text-black">
+                        <p className="font-semibold text-foreground">
                         R$ {conta.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </p>
-                        <div className="flex items-center justify-end gap-1 text-sm text-black/70">
+                        <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
                         <Calendar className="w-3 h-3" />
                         {conta.vencimento}
                       </div>
@@ -2411,13 +2411,13 @@ export function ContasReceber() {
           {baixaContaLive && (
             <div className="space-y-2">
               <div className="rounded-md border border-border bg-secondary/30 px-2 py-1.5 text-[13px]">
-                <p className="font-medium text-black line-clamp-2">{baixaContaLive.descricao}</p>
-                <p className="text-black">{baixaContaLive.cliente}</p>
+                <p className="font-medium text-foreground line-clamp-2">{baixaContaLive.descricao}</p>
+                <p className="text-foreground">{baixaContaLive.cliente}</p>
                 <p className="font-semibold tabular-nums">
                   R$ {baixaAbertura.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </p>
                 {baixaContaLive.total_value != null && baixaContaLive.entry_value != null && (
-                  <p className="text-[11px] text-black/70 mt-1">
+                  <p className="text-[11px] text-muted-foreground mt-1">
                     Contrato: total R${" "}
                     {Number(baixaContaLive.total_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} · entrada R${" "}
                     {Number(baixaContaLive.entry_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} · saldo em
@@ -2467,7 +2467,7 @@ export function ContasReceber() {
                         <div className="max-h-[min(280px,45vh)] overflow-y-auto overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
                           <table className="w-full text-[12px]">
                             <thead>
-                              <tr className="border-b border-border/80 bg-muted/40 text-left text-black/70">
+                              <tr className="border-b border-border/80 bg-muted/40 text-left text-muted-foreground">
                                 <th className="px-2 py-2 font-medium">#</th>
                                 <th className="px-2 py-2 font-medium">Vencimento</th>
                                 <th className="px-2 py-2 font-medium text-right">Valor</th>
@@ -2546,7 +2546,7 @@ export function ContasReceber() {
                                       </div>
                                     </td>
                                     <td className="p-0 align-middle">
-                                      <div className="flex min-h-[48px] items-center px-2 py-2.5 text-black/70 tabular-nums">
+                                      <div className="flex min-h-[48px] items-center px-2 py-2.5 text-muted-foreground tabular-nums">
                                         {venc}
                                       </div>
                                     </td>
@@ -2617,9 +2617,9 @@ export function ContasReceber() {
                             </tbody>
                           </table>
                         </div>
-                        <p className="text-[10px] text-black/70">
+                        <p className="text-[10px] text-muted-foreground">
                           Linha {baixaParcelaSel + 1}/{parcelasVencimentos.length}. O recebimento usa sempre o valor do campo{" "}
-                          <span className="font-medium text-black">Valor a receber</span> — ajuste e confirme no rodapé.
+                          <span className="font-medium text-foreground">Valor a receber</span> — ajuste e confirme no rodapé.
                         </p>
                       </div>
                     )}
@@ -2648,12 +2648,12 @@ export function ContasReceber() {
                             : String(baixaAbertura).replace(".", ",")
                         }
                       />
-                      <p className="text-[10px] text-black/70 mt-0.5">
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
                         Saldo disponível nesta parcela/operação: R${" "}
                         {baixaParcelaSugestao.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </p>
                       {baixaNParcelas > 1 && (
-                        <p className="text-[10px] text-black/70 mt-0.5">
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
                           Clique numa parcela acima para preencher o valor total; edite para abatimento parcial.
                         </p>
                       )}
@@ -2672,25 +2672,25 @@ export function ContasReceber() {
                         onChange={(e) => setBaixaProximoVenc(e.target.value)}
                         placeholder={addDaysBr(30)}
                       />
-                      <p className="text-[10px] text-black/70 mt-0.5">Sugestão automática: 30 dias para frente.</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">Sugestão automática: 30 dias para frente.</p>
                     </div>
                     <div />
                   </div>
 
                   {baixaVencOriginal?.trim() && (
-                    <p className="text-[11px] text-black/70">
+                    <p className="text-[11px] text-muted-foreground">
                       Recebendo parcela com vencimento original em: <span className="font-medium">{baixaVencOriginal}</span>
                     </p>
                   )}
 
                   <div className="flex items-end justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-[11px] text-black/70">Saldo restante (após receber)</p>
+                      <p className="text-[11px] text-muted-foreground">Saldo restante (após receber)</p>
                       <p className="text-base font-semibold tabular-nums">
                         R$ {baixaSaldoRestanteAposReceber.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </p>
                       {baixaContaLive.total_value != null && baixaContaLive.entry_value != null && (
-                        <p className="text-[11px] text-black/70 mt-1">
+                        <p className="text-[11px] text-muted-foreground mt-1">
                           Abatimento da entrada: o saldo em aberto (R${" "}
                           {baixaAbertura.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}) já considera total −
                           entrada quando o valor gravado no título está acima disso. Após receber: saldo em aberto −
@@ -2710,7 +2710,7 @@ export function ContasReceber() {
                           ) : null}
                         </p>
                       )}
-                      <p className="text-[11px] text-black/70">
+                      <p className="text-[11px] text-muted-foreground">
                         {baixaEhAbatimento
                           ? "Abatimento: o valor digitado é menor que o saldo desta parcela/operação — confirme com o botão abaixo."
                           : baixaValorNumerico > 0 && baixaValorNumerico + 0.009 < baixaAbertura
@@ -2719,7 +2719,7 @@ export function ContasReceber() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-[10px] text-black/70">Sugestão</p>
+                      <p className="text-[10px] text-muted-foreground">Sugestão</p>
                       <p className="text-xs font-medium">
                         {baixaEhAbatimento
                           ? "Confirmar abatimento"
@@ -2753,7 +2753,7 @@ export function ContasReceber() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-2 text-[11px] text-black/70"
+                            className="h-7 px-2 text-[11px] text-muted-foreground"
                             onClick={() => setBaixaHistVerTudo((v) => !v)}
                           >
                             {baixaHistVerTudo ? "Mostrar menos" : `Ver tudo (${baixaHistoricoPagamentosUi.length})`}
@@ -2765,7 +2765,7 @@ export function ContasReceber() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-1.5 text-black/70 hover:text-black"
+                            className="h-7 px-1.5 text-muted-foreground hover:text-foreground"
                             onClick={() => setLimparEstornosHistBaixaOpen(true)}
                             title="Remover linhas PENDENTE (estorno) e logs de estorno em texto"
                           >
@@ -2776,7 +2776,7 @@ export function ContasReceber() {
                       </div>
                     </div>
                     {baixaHistoricoPagamentosUi.length === 0 ? (
-                      <p className="text-[11px] text-black/70">Nenhum recebimento registrado ainda neste título.</p>
+                      <p className="text-[11px] text-muted-foreground">Nenhum recebimento registrado ainda neste título.</p>
                     ) : (
                       <ul className="space-y-1.5 max-h-32 overflow-y-auto overscroll-contain pr-1">
                         {(baixaHistVerTudo ? baixaHistoricoPagamentosUi : baixaHistoricoPagamentosUi.slice(0, 5)).map((h) => {
@@ -2797,7 +2797,7 @@ export function ContasReceber() {
                               <p
                                 className={cn(
                                   "text-[11px] text-foreground leading-snug pr-1 min-w-0 flex-1",
-                                  h.status !== "PAGO" && "line-through decoration-foreground/50 text-black/70"
+                                  h.status !== "PAGO" && "line-through decoration-foreground/50 text-muted-foreground"
                                 )}
                               >
                                 {h.status === "PAGO"
@@ -2837,7 +2837,7 @@ export function ContasReceber() {
                                     "h-7 w-7",
                                     marcadaRemocao
                                       ? "text-destructive bg-destructive/10"
-                                      : "text-black/70 hover:text-destructive"
+                                      : "text-muted-foreground hover:text-destructive"
                                   )}
                                   aria-label={
                                     marcadaRemocao
@@ -2857,7 +2857,7 @@ export function ContasReceber() {
                             </div>
                             <div className="grid grid-cols-2 gap-1.5">
                               <div>
-                                <Label className="text-[10px] text-black/70">Data do recebimento</Label>
+                                <Label className="text-[10px] text-muted-foreground">Data do recebimento</Label>
                                 <Input
                                   className={cn(
                                     "h-7 text-xs",
@@ -2878,7 +2878,7 @@ export function ContasReceber() {
                                 />
                               </div>
                               <div>
-                                <Label className="text-[10px] text-black/70">Valor (R$)</Label>
+                                <Label className="text-[10px] text-muted-foreground">Valor (R$)</Label>
                                 <Input
                                   className={cn(
                                     "h-7 text-xs",
@@ -2919,11 +2919,11 @@ export function ContasReceber() {
                 <>
                   <Button
                     type="button"
+                    variant="default"
                     size="sm"
                     className={cn(
-                      "min-h-10 px-4 text-white transition-colors",
-                      "active:scale-[0.98] active:bg-red-600 active:ring-2 active:ring-red-500/70",
-                      baixaEhAbatimento ? "bg-sky-600 hover:bg-sky-700" : "bg-green-600 hover:bg-green-700"
+                      "min-h-10 px-4 transition-colors",
+                      "active:scale-[0.98] active:bg-red-600 active:ring-2 active:ring-red-500/70"
                     )}
                     disabled={baixaRegistrando}
                     aria-busy={baixaRegistrando}
@@ -2960,13 +2960,13 @@ export function ContasReceber() {
                 </>
               )}
               {baixaModo === "marcarComRecibo" && (
-                <Button type="button" size="sm" className="bg-green-600 text-white hover:bg-green-700" onClick={confirmarMarcarComRecibo}>
+                <Button type="button" variant="default" size="sm" onClick={confirmarMarcarComRecibo}>
                   <Printer className="mr-1.5 h-3.5 w-3.5" />
                   Marcar como pago e imprimir
                 </Button>
               )}
               {baixaModo === "reemitir" && (
-                <Button type="button" size="sm" className="bg-green-600 text-white hover:bg-green-700" onClick={confirmarReemitirRecibo}>
+                <Button type="button" variant="default" size="sm" onClick={confirmarReemitirRecibo}>
                   <Printer className="mr-1.5 h-3.5 w-3.5" />
                   Imprimir recibo
                 </Button>
@@ -3020,9 +3020,9 @@ export function ContasReceber() {
                 Valor (R$)
               </Label>
               <Input id="cr-ed-val" className="h-8 text-sm" value={editValor} onChange={(e) => setEditValor(e.target.value)} />
-              <p className="text-[10px] text-black/70 mt-0.5">
+              <p className="text-[10px] text-muted-foreground mt-0.5">
                 Saldo em aberto (mesma regra do recebimento):{" "}
-                <span className="font-semibold text-black tabular-nums">
+                <span className="font-semibold text-foreground tabular-nums">
                   R$ {editSaldoEmAbertoAlinhado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </span>
               </p>
@@ -3075,7 +3075,7 @@ export function ContasReceber() {
                   className={cn(
                     "min-h-11 w-full rounded-md border px-2 text-sm font-medium transition-colors",
                     editStatus === "pendente"
-                      ? "border-sky-500 bg-sky-600 text-white shadow-sm ring-2 ring-sky-400/40"
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/40"
                       : "border-border bg-background hover:bg-red-500/10 hover:border-red-400/40 active:bg-sky-500/20"
                   )}
                   onClick={() => setEditStatus("pendente")}
@@ -3087,7 +3087,7 @@ export function ContasReceber() {
                   className={cn(
                     "min-h-11 w-full rounded-md border px-2 text-sm font-medium transition-colors",
                     editStatus === "atrasado"
-                      ? "border-sky-500 bg-sky-600 text-white shadow-sm ring-2 ring-sky-400/40"
+                      ? "border-primary bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/40"
                       : "border-border bg-background hover:bg-red-500/10 hover:border-red-400/40 active:bg-sky-500/20"
                   )}
                   onClick={() => setEditStatus("atrasado")}
@@ -3100,7 +3100,7 @@ export function ContasReceber() {
                 className={cn(
                   "min-h-10 w-full rounded-md border px-2 text-sm font-medium transition-colors",
                   editStatus === "pago"
-                    ? "border-sky-500 bg-sky-600 text-white shadow-sm ring-2 ring-sky-400/40"
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm ring-2 ring-primary/40"
                     : "border-border bg-background hover:bg-red-500/10 hover:border-red-400/40 active:bg-sky-500/20"
                 )}
                 onClick={() => setEditStatus("pago")}
@@ -3155,22 +3155,22 @@ export function ContasReceber() {
                     onChange={(e) => setEditParcelasTotal(e.target.value)}
                     placeholder="1"
                   />
-                  <p className="text-[10px] text-black/70 mt-0.5">De 1x até 12x.</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">De 1x até 12x.</p>
                 </div>
                 <div className="flex flex-col justify-end gap-0.5">
-                  <p className="text-[11px] text-black/70">Saldo em aberto (recebimento)</p>
+                  <p className="text-[11px] text-muted-foreground">Saldo em aberto (recebimento)</p>
                   <p className="text-base font-semibold tabular-nums">
                     R$ {editSaldoEmAbertoAlinhado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </p>
                   {parseValorBr(editEntradaValor) > 0.005 && (
-                    <p className="text-[10px] text-black/70">
+                    <p className="text-[10px] text-muted-foreground">
                       Após entrada avulsa (simulação): R${" "}
                       {saldoRestantePreview.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </p>
                   )}
                 </div>
               </div>
-              <p className="text-[10px] text-black/70">
+              <p className="text-[10px] text-muted-foreground">
                 Valor sugerido por parcela: R${" "}
                 {editParcelaSugestao.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 <span> (base parcelamento ÷ parcelas, alinhado ao recebimento)</span>
@@ -3194,7 +3194,7 @@ export function ContasReceber() {
             {editHistoricoPagamentos.length > 0 && (
               <div className="rounded-md border border-border bg-secondary/10 p-2 space-y-2">
                 <p className="text-[13px] font-medium">Histórico de recebimentos</p>
-                <p className="text-[10px] text-black/70">
+                <p className="text-[10px] text-muted-foreground">
                   Ajuste data e valor das linhas; as alterações serão gravadas ao clicar em Salvar alterações.
                 </p>
                 <ul className="space-y-2 max-h-52 overflow-y-auto pr-1">
@@ -3207,7 +3207,7 @@ export function ContasReceber() {
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <Label className="text-[10px] text-black/70">Data do recebimento</Label>
+                            <Label className="text-[10px] text-muted-foreground">Data do recebimento</Label>
                             <Input
                               key={`ed-hd-${h.id}-${h.dataPagamento}-${h.valor}`}
                               className="h-7 text-xs"
@@ -3224,7 +3224,7 @@ export function ContasReceber() {
                             />
                           </div>
                           <div>
-                            <Label className="text-[10px] text-black/70">Valor (R$)</Label>
+                            <Label className="text-[10px] text-muted-foreground">Valor (R$)</Label>
                             <Input
                               key={`ed-hv-${h.id}-${h.valor}-${h.dataPagamento}`}
                               className="h-7 text-xs"
@@ -3255,7 +3255,7 @@ export function ContasReceber() {
                     {editParcelasDetalhe.map((p, idx) => (
                       <div key={`ed-parc-${idx}`} className="grid gap-1.5 sm:grid-cols-2">
                         <div>
-                          <Label className="text-xs text-black/70">Parcela {idx + 1}</Label>
+                          <Label className="text-xs text-muted-foreground">Parcela {idx + 1}</Label>
                           <Input
                             className="h-8 text-sm"
                             value={p.venc}
@@ -3267,7 +3267,7 @@ export function ContasReceber() {
                           />
                         </div>
                         <div>
-                          <Label className="text-xs text-black/70">Valor (R$)</Label>
+                          <Label className="text-xs text-muted-foreground">Valor (R$)</Label>
                           <Input
                             className="h-8 text-sm"
                             value={p.valor}
@@ -3322,7 +3322,7 @@ export function ContasReceber() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-orange-600 text-white hover:bg-orange-700"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => void confirmarEstornoMovimentoCaixa()}
             >
               Estornar
@@ -3352,7 +3352,7 @@ export function ContasReceber() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
-              className="bg-orange-600 text-white hover:bg-orange-700"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => void confirmarEstornoLinha()}
             >
               Estornar

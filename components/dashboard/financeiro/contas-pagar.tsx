@@ -412,11 +412,11 @@ export function ContasPagar() {
   const getStatusConfig = (status: string) => {
     switch (status) {
       case "pago":
-        return { icon: CheckCircle2, color: "text-green-500", bg: "bg-green-500/10", label: "Pago" }
+        return { icon: CheckCircle2, color: "text-success", bg: "bg-success/10", label: "Pago" }
       case "atrasado":
-        return { icon: AlertCircle, color: "text-red-500", bg: "bg-red-500/10", label: "Atrasado" }
+        return { icon: AlertCircle, color: "text-destructive", bg: "bg-destructive/10", label: "Atrasado" }
       default:
-        return { icon: Clock, color: "text-yellow-500", bg: "bg-yellow-500/10", label: "Pendente" }
+        return { icon: Clock, color: "text-warning", bg: "bg-warning/10", label: "Pendente" }
     }
   }
 
@@ -440,19 +440,19 @@ export function ContasPagar() {
         <Card className="bg-card border-border">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Vencem hoje/amanhã</p>
-            <p className="text-xl font-bold text-yellow-500">{resumo.vencendo}</p>
+            <p className="text-xl font-bold text-warning">{resumo.vencendo}</p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Atrasados</p>
-            <p className="text-xl font-bold text-red-500">{resumo.atrasados}</p>
+            <p className="text-xl font-bold text-destructive">{resumo.atrasados}</p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Pago (marcados)</p>
-            <p className="text-xl font-bold text-green-500">
+            <p className="text-xl font-bold text-success">
               {resumo.pagoMes.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
             </p>
           </CardContent>
