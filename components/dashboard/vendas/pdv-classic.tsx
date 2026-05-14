@@ -68,6 +68,7 @@ import { useOperationsStore } from "@/lib/operations-store"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import type { PdvClassicLayoutKind } from "@/lib/store-settings-types"
 import { writePdvClassicLayout } from "@/lib/pdv-classic-layout"
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import {
   PDV_PRODUCTS_BASE,
   mergePdvCatalogWithInventory,
@@ -126,11 +127,7 @@ type PdvUiMode = "default" | "touch" | "scanner"
 
 const PDV_UI_STORAGE_KEY = "assistec-pdv-ui-mode"
 
-const MOCK_CUSTOMERS_INITIAL: Customer[] = [
-  { id: "1", name: "Joao Silva", cpf: "123.456.789-00", phone: "(11) 99999-1234", saldoDevedor: 150.0 },
-  { id: "2", name: "Maria Santos", cpf: "987.654.321-00", phone: "(11) 98888-5678", saldoDevedor: 0 },
-  { id: "3", name: "Pedro Oliveira", cpf: "456.789.123-00", phone: "(11) 97777-9012", saldoDevedor: 280.0 },
-]
+type ApiClienteResult = { id: string; name: string; phone?: string | null; email?: string | null; document?: string | null }
 
 export interface VendasPDVProps {
   linkedOsId?: string | null
@@ -174,7 +171,9 @@ export function PdvClassic({
   const [saleMode, setSaleMode] = useState<SaleMode>("balcao")
   const [searchTerm, setSearchTerm] = useState("")
   const [customerSearch, setCustomerSearch] = useState("")
-  const [customers, setCustomers] = useState<Customer[]>(() => [...MOCK_CUSTOMERS_INITIAL])
+  const [customerResults, setCustomerResults] = useState<Customer[]>([])
+  const [customerLoading, setCustomerLoading] = useState(false)
+  const customerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -388,12 +387,7 @@ export function PdvClassic({
     return products.filter((p) => productMatchesPdvSearch(p, t)).slice(0, 8)
   }, [bipeCode, products])
 
-  const filteredCustomers = customers.filter(
-    (c) =>
-      c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
-      c.cpf.includes(customerSearch) ||
-      c.phone.includes(customerSearch)
-  )
+  const filteredCustomers = customerResults
 
   const storeDisplayName = useMemo(() => {
     const n = (empresaDocumentos.nomeFantasia || configPadrao.empresa.nomeFantasia || "Loja").trim()
@@ -401,8 +395,8 @@ export function PdvClassic({
   }, [empresaDocumentos.nomeFantasia])
 
   const shellClientOptions = useMemo(
-    () => [{ id: "0", label: "CONSUMIDOR" }, ...customers.map((c) => ({ id: c.id, label: `${c.name} — CPF ${c.cpf}` }))],
-    [customers]
+    () => [{ id: "0", label: "CONSUMIDOR" }, ...customerResults.map((c) => ({ id: c.id, label: `${c.name} — CPF ${c.cpf}` }))],
+    [customerResults]
   )
 
   const shellCartRows: PdvOmniCartRow[] = useMemo(
@@ -424,6 +418,27 @@ export function PdvClassic({
     [cart, inventory]
   )
 
+  const autoSelectCustomerByPhone = useCallback(
+    async (tel: string) => {
+      const q = tel.replace(/\D/g, "")
+      if (q.length < 8) return
+      try {
+        const headers: Record<string, string> = {}
+        if (lojaKey) headers[ASSISTEC_LOJA_HEADER] = lojaKey
+        const res = await fetch(`/api/clientes?q=${encodeURIComponent(q)}`, { headers, cache: "no-store" })
+        const data = (await res.json().catch(() => null)) as { clientes?: ApiClienteResult[] } | null
+        const list = data?.clientes ?? []
+        const matched = list.find((c) => (c.phone ?? "").replace(/\D/g, "") === q)
+        if (matched) {
+          setSelectedCustomer({ id: matched.id, name: matched.name, cpf: matched.document ?? "", phone: matched.phone ?? "" })
+        }
+      } catch {
+        /* ignore — best effort */
+      }
+    },
+    [lojaKey]
+  )
+
   useEffect(() => {
     if (!linkedOsId) {
       linkedOsHydratedRef.current = null
@@ -433,8 +448,7 @@ export function PdvClassic({
       const osEarly = ordens.find((o) => o.id === linkedOsId)
       const telEarly = String(osEarly?.cliente?.telefone || "").replace(/\D/g, "")
       if (telEarly.length >= 8) {
-        const hit = customers.find((c) => c.phone.replace(/\D/g, "") === telEarly)
-        if (hit) setSelectedCustomer(hit)
+        void autoSelectCustomerByPhone(telEarly)
       }
       return
     }
@@ -481,10 +495,42 @@ export function PdvClassic({
     }
     const tel = String(os.cliente?.telefone || "").replace(/\D/g, "")
     if (tel.length >= 8) {
-      const hit = customers.find((c) => c.phone.replace(/\D/g, "") === tel)
-      if (hit) setSelectedCustomer(hit)
+      void autoSelectCustomerByPhone(tel)
     }
-  }, [linkedOsId, ordens, customers, uiShell])
+  }, [linkedOsId, ordens, autoSelectCustomerByPhone, uiShell])
+
+  useEffect(() => {
+    if (customerDebounceRef.current) clearTimeout(customerDebounceRef.current)
+    const q = customerSearch.trim()
+    if (!q) {
+      setCustomerResults([])
+      setCustomerLoading(false)
+      return
+    }
+    setCustomerLoading(true)
+    customerDebounceRef.current = setTimeout(async () => {
+      try {
+        const headers: Record<string, string> = {}
+        if (lojaKey) headers[ASSISTEC_LOJA_HEADER] = lojaKey
+        const res = await fetch(`/api/clientes?q=${encodeURIComponent(q)}`, { headers, cache: "no-store" })
+        const data = (await res.json().catch(() => null)) as { clientes?: ApiClienteResult[] } | null
+        const list = (data?.clientes ?? []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          cpf: c.document ?? "",
+          phone: c.phone ?? "",
+        }))
+        setCustomerResults(list)
+      } catch {
+        setCustomerResults([])
+      } finally {
+        setCustomerLoading(false)
+      }
+    }, 300)
+    return () => {
+      if (customerDebounceRef.current) clearTimeout(customerDebounceRef.current)
+    }
+  }, [customerSearch, lojaKey])
 
   const qtyEditDefault = useMemo(() => {
     const line = cart.find((i) => i.lineId === selectedCartLineId)
@@ -497,7 +543,6 @@ export function PdvClassic({
 
   const updateCustomerCpf = useCallback((customerId: string, cpfDigits: string) => {
     const display = formatBrDocDisplay(cpfDigits)
-    setCustomers((prev) => prev.map((c) => (c.id === customerId ? { ...c, cpf: display } : c)))
     setSelectedCustomer((prev) => (prev?.id === customerId ? { ...prev, cpf: display } : prev))
   }, [])
 
@@ -925,6 +970,9 @@ export function PdvClassic({
       if (e.key === "F1") {
         e.preventDefault()
         setShowKeyboardHelp(true)
+      } else if (e.key === "End") {
+        e.preventDefault()
+        setShowKeyboardHelp(true)
       } else if (e.key === "F2") {
         e.preventDefault()
         if (cart.length > 0) {
@@ -951,6 +999,25 @@ export function PdvClassic({
         } else {
           productInputRef.current?.focus()
         }
+      } else if (e.key === "F5") {
+        e.preventDefault()
+        customerInputRef.current?.focus()
+      } else if (e.key === "F6") {
+        e.preventDefault()
+        if (cart.length > 0) {
+          setCart((prev) => {
+            const next = prev.slice(0, -1)
+            const last = next[next.length - 1]
+            queueMicrotask(() => setSelectedCartLineId(last ? last.lineId : null))
+            return next
+          })
+        }
+      } else if (e.key === "F7") {
+        e.preventDefault()
+        if (cart.length > 0) setIsPaymentModalOpen(true)
+      } else if (e.key === "F8") {
+        e.preventDefault()
+        if (cart.length > 0) setCart([])
       } else if (e.altKey && (e.key === "d" || e.key === "D")) {
         e.preventDefault()
         if (cart.length > 0) setIsPaymentModalOpen(true)
@@ -1079,6 +1146,9 @@ export function PdvClassic({
           setInstantPayIntent(null)
           setIsPaymentModalOpen(true)
           break
+        case "End":
+          setShowKeyboardHelp(true)
+          break
         case "F2":
           setShellClientSearchOpen(true)
           break
@@ -1126,7 +1196,7 @@ export function PdvClassic({
 
   useEffect(() => {
     if (uiShell === "default") return
-    const fnKeys = new Set(["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9"])
+    const fnKeys = new Set(["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "End"])
     let ctrlDown = false
     const down = (e: globalThis.KeyboardEvent) => {
       if (shellModalBlocking) return
@@ -1308,7 +1378,7 @@ export function PdvClassic({
                   setSelectedCustomer(null)
                   setCustomerSearch("")
                 } else {
-                  const c = customers.find((x) => x.id === row.id)
+                  const c = customerResults.find((x) => x.id === row.id)
                   if (c) setSelectedCustomer(c)
                 }
                 setShellClientSearchOpen(false)
@@ -1474,9 +1544,11 @@ export function PdvClassic({
                       )}
                     </div>
 
-                    {showCustomerDropdown && customerSearch && (
+                    {showCustomerDropdown && customerSearch.trim() && (
                       <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-xl">
-                        {filteredCustomers.length > 0 ? (
+                        {customerLoading ? (
+                          <div className="px-4 py-2 text-center text-sm text-muted-foreground">Buscando…</div>
+                        ) : filteredCustomers.length > 0 ? (
                           filteredCustomers.map((customer) => (
                             <button
                               key={customer.id}
@@ -1492,16 +1564,11 @@ export function PdvClassic({
                                   <p className="text-sm font-medium text-foreground">{customer.name}</p>
                                   <p className="text-xs text-muted-foreground">{customer.phone}</p>
                                 </div>
-                                {customer.saldoDevedor && customer.saldoDevedor > 0 && (
-                                  <Badge variant="destructive" className="text-xs">
-                                    Deve R$ {customer.saldoDevedor.toFixed(2)}
-                                  </Badge>
-                                )}
                               </div>
                             </button>
                           ))
                         ) : (
-                          <div className="px-4 py-2 text-center text-sm text-muted-foreground">Nenhum cliente encontrado</div>
+                          <div className="px-4 py-2 text-center text-sm text-muted-foreground">Nenhum cliente cadastrado nesta loja.</div>
                         )}
                       </div>
                     )}
@@ -1511,11 +1578,6 @@ export function PdvClassic({
                     <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
                       <User className="h-4 w-4 text-primary" />
                       <span className="text-sm font-medium text-foreground">{selectedCustomer.name}</span>
-                      {selectedCustomer.saldoDevedor && selectedCustomer.saldoDevedor > 0 && (
-                        <Badge variant="outline" className="border-amber-500/50 text-xs text-amber-500">
-                          Deve R$ {selectedCustomer.saldoDevedor.toFixed(2)}
-                        </Badge>
-                      )}
                     </div>
                   )}
                 </div>
@@ -1549,9 +1611,11 @@ export function PdvClassic({
                       </Button>
                     </div>
 
-                    {showCustomerDropdown && customerSearch && (
+                    {showCustomerDropdown && customerSearch.trim() && (
                       <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-xl">
-                        {filteredCustomers.length > 0 ? (
+                        {customerLoading ? (
+                          <div className="px-4 py-3 text-center text-muted-foreground">Buscando…</div>
+                        ) : filteredCustomers.length > 0 ? (
                           filteredCustomers.map((customer) => (
                             <button
                               key={customer.id}
@@ -1564,12 +1628,12 @@ export function PdvClassic({
                             >
                               <p className="font-medium text-foreground">{customer.name}</p>
                               <p className="text-sm text-muted-foreground">
-                                CPF: {customer.cpf} | Tel: {customer.phone}
+                                {customer.cpf ? `Doc: ${customer.cpf} | ` : ""}Tel: {customer.phone}
                               </p>
                             </button>
                           ))
                         ) : (
-                          <div className="px-4 py-3 text-center text-muted-foreground">Nenhum cliente encontrado</div>
+                          <div className="px-4 py-3 text-center text-muted-foreground">Nenhum cliente cadastrado nesta loja.</div>
                         )}
                       </div>
                     )}
@@ -2227,37 +2291,42 @@ export function PdvClassic({
       </Dialog>
 
       <Dialog open={showKeyboardHelp} onOpenChange={setShowKeyboardHelp}>
-        <DialogContent className="max-w-lg border-border bg-card">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Keyboard className="h-5 w-5 text-primary" /> Atalhos de Teclado (PDV)
+        <DialogContent className="max-w-xl border-border bg-card p-0">
+          <div className="border-b border-border px-6 py-4">
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <Keyboard className="h-5 w-5 text-primary" />
+              Atalhos de Teclado — PDV Clássico
             </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2 text-sm">
-            <p>
-              <strong>F1:</strong> Ajuda de atalhos
-            </p>
-            <p>
-              <strong>F2:</strong> Abrir pagamento (com itens no carrinho)
-            </p>
-            <p>
-              <strong>F3:</strong> Buscar produto/serviço
-            </p>
-            <p>
-              <strong>F4:</strong> Quantidade do último item, ou busca de produto se o carrinho estiver vazio
-            </p>
-            <p>
-              <strong>Alt + D:</strong> Abrir pagamento (ajuste de desconto no checkout)
-            </p>
-            <p>
-              <strong>Alt + P:</strong> Forma de pagamento
-            </p>
-            <p>
-              <strong>F10 / Espaço:</strong> Finalizar venda
-            </p>
-            <p>
-              <strong>ESC:</strong> Fechar modais/operações
-            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">Pressione <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">F1</kbd> ou <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">End</kbd> a qualquer momento para abrir esta ajuda.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-1 p-4 sm:grid-cols-2">
+            {[
+              { key: "F1 / End", desc: "Ajuda de atalhos (este painel)" },
+              { key: "F2", desc: uiShell === "omni-smart" ? "Buscar / selecionar cliente" : "Finalizar venda (com itens)" },
+              { key: "F3", desc: uiShell === "omni-smart" ? "Buscar produto / serviço" : "Foco no campo de produto" },
+              { key: "F4", desc: uiShell === "omni-smart" ? "Editar quantidade do item selecionado" : "Quantidade do último item" },
+              { key: "F5", desc: uiShell === "omni-smart" ? "Cancelar item selecionado" : "Foco no campo de cliente" },
+              { key: "F6", desc: uiShell === "omni-smart" ? "Cancelar venda" : "Remover último item" },
+              { key: "F7", desc: uiShell === "omni-smart" ? "—" : "Finalizar / pagamento" },
+              { key: "F8", desc: uiShell === "omni-smart" ? "—" : "Limpar carrinho" },
+              { key: "F9", desc: uiShell === "omni-smart" ? "Contas a receber" : "—" },
+              { key: "F10 / Espaço", desc: "Finalizar venda" },
+              { key: "ESC", desc: "Fechar modal / remover último item (modo rápido)" },
+              { key: "Alt + D / Alt + P", desc: "Pagamento rápido" },
+            ].map(({ key, desc }) => (
+              <div key={key} className="flex items-start gap-3 rounded-lg px-3 py-2 hover:bg-muted/50">
+                <kbd className="mt-0.5 shrink-0 rounded border border-border bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">{key}</kbd>
+                <span className="text-sm text-muted-foreground">{desc}</span>
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-border px-6 py-3">
+            <button
+              onClick={() => setShowKeyboardHelp(false)}
+              className="w-full rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Fechar (ESC)
+            </button>
           </div>
         </DialogContent>
       </Dialog>

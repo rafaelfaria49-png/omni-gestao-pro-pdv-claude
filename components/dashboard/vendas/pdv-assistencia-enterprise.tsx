@@ -30,6 +30,8 @@ import {
   Star,
   Loader2,
   Zap,
+  ShoppingCart,
+  PackageSearch,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -69,18 +71,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
-
-// ─── Catalog slices (defaults) ───────────────────────────────────────────────
-
-const ALL_SERVICES = PDV_PRODUCTS_BASE.filter((p) => p.category === "Servicos")
-
-const TOP_PRODUCT_CATEGORIES = ["Peliculas", "Cabos", "Capinhas", "Carregadores", "Fones"]
-const ALL_TOP_PRODUCTS: PdvCatalogProduct[] = []
-for (const cat of TOP_PRODUCT_CATEGORIES) {
-  const items = PDV_PRODUCTS_BASE.filter((p) => p.category === cat).slice(0, 2)
-  ALL_TOP_PRODUCTS.push(...items)
-  if (ALL_TOP_PRODUCTS.length >= 8) break
-}
+import { listClientes, type ClienteDTO } from "@/app/actions/cadastros"
 
 // ─── Atalhos types + helpers ──────────────────────────────────────────────────
 
@@ -227,20 +218,24 @@ function QuickCard({
 }) {
   const isService = item.category === "Servicos"
   const outOfStock = !isService && item.stock <= 0
+  const lowStock = !isService && !outOfStock && item.stock > 0 && item.stock <= 5 && item.stock < 999
 
   return (
     <Card
       className={cn(
-        "group cursor-pointer rounded-2xl border border-border bg-card p-4 shadow-sm transition-all hover:border-primary/40 hover:bg-accent hover:shadow-md active:scale-[0.98]",
+        "group cursor-pointer rounded-2xl border border-border bg-card p-4 shadow-sm",
+        "transition-all duration-150",
+        "hover:border-primary/30 hover:bg-accent/60 hover:shadow-md",
+        "active:scale-[0.97] active:shadow-sm",
         isPickHighlight && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-        outOfStock && "opacity-60"
+        outOfStock && "opacity-55 hover:opacity-70"
       )}
       onClick={() => onAdd(item)}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{item.category}</p>
+          <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">{item.category}</p>
         </div>
         <Badge
           variant="secondary"
@@ -251,12 +246,27 @@ function QuickCard({
       </div>
       <div className="mt-3 flex items-center justify-between">
         <span className={cn(
-          "text-[10px]",
-          outOfStock ? "font-semibold text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+          "text-[10px] font-medium",
+          outOfStock
+            ? "text-amber-600 dark:text-amber-400"
+            : lowStock
+              ? "text-amber-500 dark:text-amber-300"
+              : "text-muted-foreground"
         )}>
-          {isService ? "Serviço" : outOfStock ? "Sem estoque" : `${item.stock} em estoque`}
+          {isService
+            ? "Serviço"
+            : outOfStock
+              ? "Sem estoque"
+              : lowStock
+                ? `Baixo: ${item.stock} unid.`
+                : `${item.stock} em estoque`}
         </span>
-        <span className="grid h-6 w-6 place-items-center rounded-lg bg-primary/10 text-primary opacity-0 transition group-hover:opacity-100">
+        <span className={cn(
+          "grid h-6 w-6 place-items-center rounded-lg transition-all duration-150",
+          outOfStock
+            ? "bg-muted/60 text-muted-foreground/40"
+            : "bg-primary/10 text-primary opacity-0 group-hover:opacity-100"
+        )}>
           <Plus className="h-3.5 w-3.5" />
         </span>
       </div>
@@ -537,24 +547,163 @@ function PaymentModal({
   )
 }
 
+// ─── ClientePickerModal ───────────────────────────────────────────────────────
+
+function ClientePickerModal({
+  open,
+  storeId,
+  onSelect,
+  onClose,
+}: {
+  open: boolean
+  storeId: string
+  onSelect: (cliente: ClienteDTO) => void
+  onClose: () => void
+}) {
+  const [clientes, setClientes] = useState<ClienteDTO[]>([])
+  const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState("")
+  const [selectedIdx, setSelectedIdx] = useState(0)
+
+  useEffect(() => {
+    if (!open) return
+    setSearch("")
+    setSelectedIdx(0)
+    setLoading(true)
+    listClientes(storeId)
+      .then((data) => setClientes(data))
+      .catch(() => setClientes([]))
+      .finally(() => setLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, storeId])
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return clientes
+    return clientes.filter(
+      (c) =>
+        c.nome.toLowerCase().includes(q) ||
+        c.documento.replace(/\D/g, "").includes(q) ||
+        c.telefone.replace(/\D/g, "").includes(q)
+    )
+  }, [clientes, search])
+
+  useEffect(() => { setSelectedIdx(0) }, [search])
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIdx((i) => Math.min(i + 1, filtered.length - 1)) }
+    if (e.key === "ArrowUp")   { e.preventDefault(); setSelectedIdx((i) => Math.max(0, i - 1)) }
+    if (e.key === "Enter" && filtered[selectedIdx]) { e.preventDefault(); onSelect(filtered[selectedIdx]) }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex max-h-[80vh] max-w-md flex-col gap-0 overflow-hidden rounded-2xl border-border bg-card p-0">
+        <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            <User className="h-4 w-4 text-primary" />
+            Selecionar Cliente
+            <kbd className="ml-auto rounded border border-border bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
+              F2
+            </kbd>
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Campo de busca */}
+        <div className="shrink-0 border-b border-border px-4 py-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              autoFocus
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder="Nome, CPF/CNPJ ou telefone…"
+              className="h-9 rounded-xl border-border bg-background pl-9 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Lista */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Carregando clientes…
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <User className="h-8 w-8 text-muted-foreground/25" />
+              <p className="text-sm text-muted-foreground">
+                {search.trim()
+                  ? `Nenhum resultado para "${search}".`
+                  : "Nenhum cliente cadastrado nesta loja."}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {filtered.map((c, idx) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onSelect(c)}
+                  className={cn(
+                    "flex w-full items-center gap-3 px-4 py-3 text-left transition-colors duration-100",
+                    "hover:bg-accent",
+                    idx === selectedIdx && "bg-accent"
+                  )}
+                >
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                    {c.nome.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">{c.nome}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {[c.documento !== "—" ? c.documento : "", c.telefone !== "—" ? c.telefone : ""]
+                        .filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  {c.totalGasto > 0 && (
+                    <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
+                      {brl(c.totalGasto)}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="shrink-0 border-t border-border px-4 py-3">
+          <p className="flex-1 text-[10px] text-muted-foreground">
+            <kbd className="rounded border border-border bg-muted px-1 font-bold">↑↓</kbd> navegar{" · "}
+            <kbd className="rounded border border-border bg-muted px-1 font-bold">Enter</kbd> selecionar
+          </p>
+          <Button variant="ghost" size="sm" className="h-7 rounded-lg text-xs" onClick={onClose}>
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── HelpOverlay ─────────────────────────────────────────────────────────────
 
 const HELP_SHORTCUTS: { key: string; label: string; status: "ok" | "partial" | "soon" }[] = [
-  { key: "F1",  label: "Finalizar venda",        status: "ok" },
-  { key: "F2",  label: "Foco no campo cliente",  status: "ok" },
-  { key: "F3",  label: "Foco na busca / bipe",   status: "ok" },
-  { key: "F4",  label: "Alterar quantidade",     status: "soon" },
-  { key: "F5",  label: "Remover último item",    status: "ok" },
-  { key: "F6",  label: "Cancelar venda",         status: "ok" },
-  { key: "F7",  label: "Desconto / Acréscimo",   status: "partial" },
-  { key: "F8",  label: "Troca / Devolução",      status: "ok" },
-  { key: "F9",  label: "Contas a Receber",       status: "soon" },
-  { key: "F10", label: "Menu de Caixa",          status: "soon" },
-  { key: "F11", label: "Tela cheia / Modo foco", status: "ok" },
-  { key: "F12", label: "Pagamento avançado",     status: "ok" },
-  { key: "END", label: "Esta ajuda",             status: "ok" },
-  { key: "DEL", label: "Remover último item",    status: "ok" },
-  { key: "ESC", label: "Fechar modal / painel",  status: "ok" },
+  { key: "F1",  label: "Finalizar venda (Dinheiro)",  status: "ok" },
+  { key: "F2",  label: "Buscar / Selecionar cliente", status: "ok" },
+  { key: "F3",  label: "Foco na busca / bipe",        status: "ok" },
+  { key: "F4",  label: "Alterar quantidade",          status: "soon" },
+  { key: "F6",  label: "Cancelar último item",        status: "ok" },
+  { key: "F8",  label: "Troca / Devolução",           status: "ok" },
+  { key: "F9",  label: "Limpar carrinho",             status: "ok" },
+  { key: "F10", label: "Desconto / Acréscimo",        status: "ok" },
+  { key: "F11", label: "Tela cheia / Modo foco",      status: "ok" },
+  { key: "F12", label: "Pagamento avançado",          status: "ok" },
+  { key: "END", label: "Esta ajuda",                  status: "ok" },
+  { key: "DEL", label: "Cancelar último item",        status: "ok" },
+  { key: "ESC", label: "Fechar modal / painel",       status: "ok" },
 ]
 
 function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -1093,12 +1242,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [trocasOpen, setTrocasOpen] = useState(false)
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [clientePickerOpen, setClientePickerOpen] = useState(false)
 
   // ── Custom atalhos ────────────────────────────────────────────────────────────
-  const [localAtalhos, setLocalAtalhos] = useState<AtalhoSaved[]>(() => [
-    ...ALL_SERVICES.slice(0, 8).map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false })),
-    ...ALL_TOP_PRODUCTS.slice(0, 8).map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false })),
-  ])
+  const [localAtalhos, setLocalAtalhos] = useState<AtalhoSaved[]>([])
 
   const quickServices = useMemo(() => {
     const active = localAtalhos.filter((a) => a.categoria === "Servicos" && a.ativo !== false)
@@ -1138,12 +1285,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     const saved = pdvParams.atalhosRapidos ?? []
     if (saved.length > 0) {
       setLocalAtalhos(saved)
-    } else {
-      setLocalAtalhos([
-        ...ALL_SERVICES.slice(0, 8).map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false })),
-        ...ALL_TOP_PRODUCTS.slice(0, 8).map((p) => ({ id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false })),
-      ])
     }
+    // Sem atalhos salvos → estado vazio honesto (empty state guia o usuário)
     setHydratedFromDb(true)
   }, [shortcutsKey, settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
 
@@ -1152,14 +1295,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const desconto = useMemo(() => Math.min(Math.max(0, discount), subtotal), [discount, subtotal])
   const total = useMemo(() => Math.max(0, subtotal - desconto), [subtotal, desconto])
 
-  // ── Full-catalog search ────────────────────────────────────────────────────────
+  // ── Full-catalog search (somente itens reais do estoque) ─────────────────────
   const fullSearch = useMemo(() => {
     const raw = search.trim()
     if (!raw) return []
-    const exact = findPdvProductByScan(raw, mergedCatalog)
+    const src = realCatalog.length > 0 ? realCatalog : mergedCatalog
+    const exact = findPdvProductByScan(raw, src)
     if (exact) return [exact]
-    return filterPdvCatalogBySearch(mergedCatalog, raw).slice(0, 12)
-  }, [search, mergedCatalog])
+    return filterPdvCatalogBySearch(src, raw).slice(0, 12)
+  }, [search, realCatalog, mergedCatalog])
 
   useEffect(() => {
     setRapidoPickIdx(0)
@@ -1183,7 +1327,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         active instanceof HTMLSelectElement ||
         (active instanceof HTMLElement && active.isContentEditable)
 
-      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen
+      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen
 
       // END — toggle help overlay (always works)
       if (e.key === "End") {
@@ -1192,7 +1336,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         return
       }
 
-      // DEL — remove last cart item (not in input, not in modal)
+      // DEL — cancelar último item (não em input, não em modal)
       if (e.key === "Delete" && !inInput && !anyModalOpen) {
         if (cart.length > 0) {
           e.preventDefault()
@@ -1206,24 +1350,28 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       if (!F_KEYS.includes(e.key)) return
       e.preventDefault()
 
-      // F2 / F3 focus inputs even when a non-blocking modal is open; rest require no modal
+      // F2 / F3 funcionam mesmo com modais não-bloqueantes abertos
       if (anyModalOpen && e.key !== "F2" && e.key !== "F3") return
 
       switch (e.key) {
         case "F1":  openPaymentModal("dinheiro"); break
-        case "F2":  customerInputRef.current?.focus(); break
+        case "F2":  setClientePickerOpen((o) => !o); break
         case "F3":  inputRef.current?.focus(); break
         case "F4":
           toast({ title: "F4 — Alterar quantidade", description: "Disponível em breve." })
           break
         case "F5":
+          // mantido por backward-compat (mesmo comportamento que F6 e DEL)
           if (!inInput && cart.length > 0) {
             setCart((prev) => prev.slice(0, -1))
             queueMicrotask(() => inputRef.current?.focus())
           }
           break
         case "F6":
-          if (cart.length > 0) setClearConfirmOpen(true)
+          if (!inInput && cart.length > 0) {
+            setCart((prev) => prev.slice(0, -1))
+            queueMicrotask(() => inputRef.current?.focus())
+          }
           break
         case "F7":
           if (!isModoRapido) {
@@ -1234,10 +1382,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           break
         case "F8": setTrocasOpen(true); break
         case "F9":
-          toast({ title: "F9 — Contas a Receber", description: "Disponível em breve." })
+          if (cart.length > 0) setClearConfirmOpen(true)
           break
         case "F10":
-          toast({ title: "F10 — Menu de Caixa", description: "Disponível em breve." })
+          if (!isModoRapido) {
+            discountInputRef.current?.focus()
+          } else {
+            toast({ title: "F10 — Desconto", description: "Disponível no modo padrão." })
+          }
           break
         case "F11":
           if (!document.fullscreenElement) {
@@ -1252,7 +1404,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart.length, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen])
+  }, [cart.length, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct) => {
@@ -1359,7 +1511,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
-      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen) return
+      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen) return
       if (cart.length === 0) return
       e.preventDefault()
       e.stopPropagation()
@@ -1371,7 +1523,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, cart.length])
+  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, cart.length])
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -1451,7 +1603,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
         <div className="flex min-h-0 w-full min-w-0 flex-1 items-stretch overflow-hidden">
         {/* ── Center: search + catalog ── */}
-        <main className="flex min-h-0 min-w-0 max-h-full flex-1 flex-col overflow-hidden border-r border-border bg-background/60 backdrop-blur-sm">
+        <main className="flex min-h-0 min-w-0 max-h-full flex-1 flex-col overflow-hidden border-r border-border bg-background">
 
           {/* Search */}
           <div className="shrink-0 p-4">
@@ -1479,7 +1631,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                     if (pick) addItem(pick)
                   }
                 }}
-                placeholder="Bipe o produto ou busque por nome / código (F1)"
+                placeholder="Bipe o produto ou busque por nome / código  [F3]"
                 className="h-14 rounded-2xl border-border bg-card pl-12 text-base font-medium placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
               />
               {search ? (
@@ -1506,11 +1658,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 </span>
                 {[
                   { key: "F1",  label: "Finalizar" },
-                  { key: "F3",  label: "Busca" },
                   { key: "F2",  label: "Cliente" },
-                  { key: "F6",  label: "Cancelar" },
-                  { key: "F8",  label: "Trocas" },
-                  { key: "F11", label: "Tela cheia" },
+                  { key: "F3",  label: "Busca" },
+                  { key: "F6",  label: "Canc. item" },
+                  { key: "F9",  label: "Limpar" },
+                  { key: "F10", label: "Desconto" },
                   { key: "F12", label: "Pgto. múltiplo" },
                 ].map(({ key, label }) => (
                   <span key={key} className="flex items-center gap-1">
@@ -1549,8 +1701,18 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       />
                     ))}
                     {fullSearch.length === 0 && (
-                      <div className="col-span-full py-12 text-center text-sm text-muted-foreground">
-                        Nenhum produto encontrado.
+                      <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
+                        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-muted/60 text-muted-foreground/40">
+                          <PackageSearch className="h-6 w-6" />
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-medium text-muted-foreground">
+                            Nenhum item encontrado
+                          </p>
+                          <p className="text-xs text-muted-foreground/70">
+                            Tente outro nome, código de barras ou SKU.
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1689,11 +1851,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 ref={customerInputRef}
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Cliente — A Prazo/Fiado  [F3]"
+                placeholder="Cliente — A Prazo/Fiado  [F2]"
                 className="h-9 rounded-xl border-border bg-background pl-9 pr-14 text-sm"
               />
               <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
-                F3
+                F2
               </kbd>
             </div>
           </div>
@@ -1730,11 +1892,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           {/* Cart lines — scroll só aqui; não estoura a viewport */}
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {cart.length === 0 ? (
-              <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-8 text-center">
-                <div className="space-y-2">
-                  <p className="text-base font-semibold text-foreground">Carrinho vazio</p>
-                  <p className="text-sm text-muted-foreground">
-                    Selecione serviços ou produtos pela grade ou pela busca.
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-muted/60 text-muted-foreground/50">
+                  <ShoppingCart className="h-7 w-7" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-foreground">Carrinho vazio</p>
+                  <p className="text-xs text-muted-foreground">
+                    Selecione itens pela grade ou use a busca.
                   </p>
                 </div>
               </div>
@@ -1912,6 +2077,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       <TrocasModal open={trocasOpen} onClose={() => setTrocasOpen(false)} />
 
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      <ClientePickerModal
+        open={clientePickerOpen}
+        storeId={(lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID}
+        onSelect={(c) => {
+          setCustomerName(c.nome)
+          setClientePickerOpen(false)
+        }}
+        onClose={() => setClientePickerOpen(false)}
+      />
 
       <EditarAtalhosModal
         open={editAtalhosOpen}
