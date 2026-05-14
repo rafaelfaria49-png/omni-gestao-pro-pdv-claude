@@ -73,6 +73,8 @@ import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { listClientes, type ClienteDTO } from "@/app/actions/cadastros"
+import { appendAuditLog } from "@/lib/audit-log"
+import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 
 // ─── Cart persistence ─────────────────────────────────────────────────────────
 
@@ -224,14 +226,18 @@ function QuickCard({
   item,
   onAdd,
   isPickHighlight,
+  reservedQty = 0,
 }: {
   item: PdvCatalogProduct
   onAdd: (item: PdvCatalogProduct) => void
   isPickHighlight?: boolean
+  reservedQty?: number
 }) {
   const isService = item.category === "Servicos"
-  const outOfStock = !isService && item.stock <= 0
-  const lowStock = !isService && !outOfStock && item.stock > 0 && item.stock <= 5 && item.stock < 999
+  const availableStock = Math.max(0, item.stock - reservedQty)
+  const outOfStock = !isService && item.stock < 999 && availableStock <= 0
+  const lowStock = !isService && !outOfStock && availableStock <= 5 && item.stock < 999
+  const hasReservation = !isService && reservedQty > 0 && item.stock < 999
 
   return (
     <Card
@@ -261,18 +267,22 @@ function QuickCard({
         <span className={cn(
           "text-[10px] font-medium",
           outOfStock
-            ? "text-amber-600 dark:text-amber-400"
+            ? "text-destructive/80"
             : lowStock
               ? "text-amber-500 dark:text-amber-300"
-              : "text-muted-foreground"
+              : hasReservation
+                ? "text-primary/70"
+                : "text-muted-foreground"
         )}>
           {isService
             ? "Serviço"
             : outOfStock
               ? "Sem estoque"
               : lowStock
-                ? `Baixo: ${item.stock} unid.`
-                : `${item.stock} em estoque`}
+                ? `Baixo: ${availableStock} unid.`
+                : hasReservation
+                  ? `${availableStock} disp. · ${reservedQty} res.`
+                  : `${availableStock} em estoque`}
         </span>
         <span className={cn(
           "grid h-6 w-6 place-items-center rounded-lg transition-all duration-150",
@@ -1369,6 +1379,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const desconto = useMemo(() => Math.min(Math.max(0, discount), subtotal), [discount, subtotal])
   const total = useMemo(() => Math.max(0, subtotal - desconto), [subtotal, desconto])
 
+  // ── Reserva operacional: qtd de cada inventoryId já no carrinho ─────────────
+  const cartQtyByInventoryId = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const l of cart) {
+      map[l.inventoryId] = (map[l.inventoryId] ?? 0) + l.qty
+    }
+    return map
+  }, [cart])
+
   // ── Full-catalog search (somente itens reais do estoque) ─────────────────────
   const fullSearch = useMemo(() => {
     const raw = search.trim()
@@ -1392,6 +1411,19 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         variant: "destructive",
       })
       return
+    }
+    const discountPct = subtotal > 0 ? (desconto / subtotal) * 100 : 0
+    appendAuditLog({
+      action: "pdv_pagamento_iniciado",
+      userLabel: cashierId.slice(0, 8),
+      detail: `Método: ${method} — Total: ${brl(total)}${discountPct >= AUDIT_DISCOUNT_ALERT_PCT ? ` — DESCONTO ${discountPct.toFixed(1)}%` : ""}`,
+    })
+    if (discountPct >= AUDIT_DISCOUNT_ALERT_PCT) {
+      appendAuditLog({
+        action: "desconto_elevado",
+        userLabel: cashierId.slice(0, 8),
+        detail: `Desconto de ${discountPct.toFixed(1)}% aplicado — ${brl(desconto)} de ${brl(subtotal)}`,
+      })
     }
     setPaymentInitMethod(method)
     setPaymentOpen(true)
@@ -1417,14 +1449,59 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         return
       }
 
-      // DEL — cancelar último item (não em input, não em modal)
+      // DEL — cancelar item selecionado ou último (não em input, não em modal)
       if (e.key === "Delete" && !inInput && !anyModalOpen) {
         if (cart.length > 0) {
           e.preventDefault()
-          setCart((prev) => prev.slice(0, -1))
+          if (selectedLineId) {
+            const line = cart.find((l) => l.lineId === selectedLineId)
+            if (line) {
+              appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
+              setCart((prev) => prev.filter((l) => l.lineId !== selectedLineId))
+              setSelectedLineId(null)
+            }
+          } else {
+            const line = cart[cart.length - 1]
+            if (line) {
+              appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
+            }
+            setCart((prev) => prev.slice(0, -1))
+          }
           queueMicrotask(() => inputRef.current?.focus())
         }
         return
+      }
+
+      // ↑↓ — navegar carrinho | Enter — abrir F4 na linha selecionada
+      if (!inInput && !anyModalOpen && cart.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault()
+          setSelectedLineId((prev) => {
+            const idx = cart.findIndex((l) => l.lineId === prev)
+            if (idx === -1 || idx === cart.length - 1) return cart[0]!.lineId
+            return cart[idx + 1]!.lineId
+          })
+          return
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault()
+          setSelectedLineId((prev) => {
+            const idx = cart.findIndex((l) => l.lineId === prev)
+            if (idx <= 0) return cart[cart.length - 1]!.lineId
+            return cart[idx - 1]!.lineId
+          })
+          return
+        }
+        if (e.key === "Enter" && selectedLineId) {
+          e.preventDefault()
+          const target = cart.find((l) => l.lineId === selectedLineId)
+          if (target) {
+            setF4LineId(target.lineId)
+            setF4QtdValue(String(target.qty))
+            setF4QtdOpen(true)
+          }
+          return
+        }
       }
 
       const F_KEYS = ["F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"]
@@ -1447,15 +1524,32 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           }
           break
         case "F5":
-          // mantido por backward-compat (mesmo comportamento que F6 e DEL)
           if (!inInput && cart.length > 0) {
-            setCart((prev) => prev.slice(0, -1))
+            if (selectedLineId) {
+              const line = cart.find((l) => l.lineId === selectedLineId)
+              if (line) appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
+              setCart((prev) => prev.filter((l) => l.lineId !== selectedLineId))
+              setSelectedLineId(null)
+            } else {
+              const line = cart[cart.length - 1]
+              if (line) appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
+              setCart((prev) => prev.slice(0, -1))
+            }
             queueMicrotask(() => inputRef.current?.focus())
           }
           break
         case "F6":
           if (!inInput && cart.length > 0) {
-            setCart((prev) => prev.slice(0, -1))
+            if (selectedLineId) {
+              const line = cart.find((l) => l.lineId === selectedLineId)
+              if (line) appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
+              setCart((prev) => prev.filter((l) => l.lineId !== selectedLineId))
+              setSelectedLineId(null)
+            } else {
+              const line = cart[cart.length - 1]
+              if (line) appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
+              setCart((prev) => prev.slice(0, -1))
+            }
             queueMicrotask(() => inputRef.current?.focus())
           }
           break
@@ -1466,7 +1560,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             toast({ title: "F7 — Desconto/Acréscimo", description: "Disponível no modo padrão." })
           }
           break
-        case "F8": setTrocasOpen(true); break
+        case "F8":
+          appendAuditLog({ action: "pdv_troca_aberta", userLabel: cashierId.slice(0, 8), detail: "Painel de trocas/devoluções aberto via F8" })
+          setTrocasOpen(true)
+          break
         case "F9":
           if (cart.length > 0) setClearConfirmOpen(true)
           break
@@ -1490,10 +1587,27 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen])
+  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct) => {
+    const isService = item.category === "Servicos"
+    if (!isService && item.stock < 999) {
+      const reserved = cartQtyByInventoryId[item.id] ?? 0
+      if (reserved >= item.stock) {
+        toast({
+          title: "Estoque insuficiente",
+          description: `"${item.name}" não tem mais unidades disponíveis (${item.stock} em estoque, ${reserved} no carrinho).`,
+          variant: "destructive",
+        })
+        return
+      }
+    }
+    appendAuditLog({
+      action: "pdv_item_adicionado",
+      userLabel: cashierId.slice(0, 8),
+      detail: `${item.name} — ${brl(item.price)}`,
+    })
     let flashId: string | null = null
     setCart((prev) => {
       const hit = prev.find((l) => l.inventoryId === item.id && Math.abs(l.price - item.price) < 0.001)
@@ -1520,6 +1634,23 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   }
 
   const changeQty = (id: string, delta: number) => {
+    if (delta > 0) {
+      const line = cart.find((l) => l.lineId === id)
+      if (line) {
+        const product = realCatalog.find((p) => p.id === line.inventoryId)
+        if (product && product.category !== "Servicos" && product.stock < 999) {
+          const reserved = cartQtyByInventoryId[line.inventoryId] ?? 0
+          if (reserved >= product.stock) {
+            toast({
+              title: "Estoque insuficiente",
+              description: `"${line.title}" não tem mais unidades disponíveis.`,
+              variant: "destructive",
+            })
+            return
+          }
+        }
+      }
+    }
     setCart((prev) =>
       prev
         .map((l) => (l.lineId === id ? { ...l, qty: Math.max(0, l.qty + delta) } : l))
@@ -1527,7 +1658,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     )
   }
 
-  const removeLine = (id: string) => setCart((prev) => prev.filter((l) => l.lineId !== id))
+  const removeLine = (id: string) => {
+    const line = cart.find((l) => l.lineId === id)
+    if (line) {
+      appendAuditLog({ action: "pdv_item_removido", userLabel: cashierId.slice(0, 8), detail: `${line.title} (qty: ${line.qty})` })
+    }
+    setCart((prev) => prev.filter((l) => l.lineId !== id))
+  }
 
   // ── Payment confirm ────────────────────────────────────────────────────────────
   const handlePaymentConfirm = (
@@ -1651,24 +1788,56 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           {!modoRapido ? (
             <button
               type="button"
-              onClick={() => setTrocasOpen(true)}
+              onClick={() => {
+                appendAuditLog({ action: "pdv_troca_aberta", userLabel: cashierId.slice(0, 8), detail: "Painel de trocas/devoluções aberto" })
+                setTrocasOpen(true)
+              }}
               className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Trocas
             </button>
           ) : null}
-          </div>
+          {/* Cart summary chip — visible when cart has items */}
+          {cart.length > 0 && (
+            <div className="hidden items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 sm:flex">
+              <ShoppingCart className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs tabular-nums text-muted-foreground">
+                <span className="font-bold text-foreground">{cart.length}</span>
+                {" item"}{cart.length !== 1 ? "ns" : ""}{" · "}
+                <span className="font-bold text-emerald-500">{brl(total)}</span>
+              </span>
+            </div>
+          )}
+        </div>
 
-        {/* Right: operator + clock */}
+        {/* Right: caixa status + operator + clock */}
         <div className="flex shrink-0 items-center gap-2">
+          {/* Caixa status indicator */}
+          <div className={cn(
+            "hidden items-center gap-1.5 rounded-xl border px-2.5 py-1.5 sm:flex",
+            caixa.isOpen
+              ? "border-emerald-500/30 bg-emerald-500/8"
+              : "border-amber-500/30 bg-amber-500/8"
+          )}>
+            {caixa.isOpen
+              ? <Unlock className="h-3.5 w-3.5 text-emerald-500" />
+              : <Lock className="h-3.5 w-3.5 text-amber-500" />
+            }
+            <span className={cn(
+              "text-xs font-semibold",
+              caixa.isOpen ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+            )}>
+              {caixa.isOpen ? "Aberto" : "Fechado"}
+            </span>
+          </div>
           {!modoRapido ? (
             <div className="hidden items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 sm:flex">
               <User className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">
-                Op: <span className="font-semibold text-foreground">Operador</span>
-            </span>
-          </div>
+                Op: <span className="font-semibold tabular-nums text-foreground">{cashierId.slice(0, 8)}</span>
+              </span>
+            </div>
           ) : null}
           <div className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2.5 py-1.5 sm:px-3">
             <Clock className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1786,6 +1955,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                         item={p}
                         onAdd={addItem}
                         isPickHighlight={modoRapido && idx === rapidoPickIdx}
+                        reservedQty={cartQtyByInventoryId[p.id] ?? 0}
                       />
                     ))}
                     {fullSearch.length === 0 && (
@@ -1856,8 +2026,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               >
                   <ScrollArea className="min-h-0 flex-1">
                     <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {quickServices.length > 0 ? (
-                        quickServices.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)
+                      {!hydratedFromDb ? (
+                        Array.from({ length: 6 }).map((_, i) => (
+                          <div key={i} className="h-24 animate-pulse rounded-2xl border border-border bg-muted/40" />
+                        ))
+                      ) : quickServices.length > 0 ? (
+                        quickServices.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} reservedQty={cartQtyByInventoryId[p.id] ?? 0} />)
                       ) : (
                         <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
                           <p className="text-sm text-muted-foreground">Nenhum atalho de serviço configurado.</p>
@@ -1883,8 +2057,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               >
                   <ScrollArea className="min-h-0 flex-1">
                     <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {quickProducts.length > 0 ? (
-                        quickProducts.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)
+                      {!hydratedFromDb ? (
+                        Array.from({ length: 6 }).map((_, i) => (
+                          <div key={i} className="h-24 animate-pulse rounded-2xl border border-border bg-muted/40" />
+                        ))
+                      ) : quickProducts.length > 0 ? (
+                        quickProducts.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} reservedQty={cartQtyByInventoryId[p.id] ?? 0} />)
                       ) : (
                         <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
                           <p className="text-sm text-muted-foreground">Nenhum atalho de produto configurado.</p>
@@ -1911,7 +2089,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 >
                   <ScrollArea className="min-h-0 flex-1">
                     <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {quickFavorites.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} />)}
+                      {quickFavorites.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} reservedQty={cartQtyByInventoryId[p.id] ?? 0} />)}
                     </div>
                   </ScrollArea>
                 </TabsContent>
@@ -2164,6 +2342,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             <AlertDialogAction
               className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
+                appendAuditLog({
+                  action: "pdv_carrinho_limpo",
+                  userLabel: cashierId.slice(0, 8),
+                  detail: `${cart.length} item${cart.length !== 1 ? "ns" : ""} removidos do carrinho`,
+                })
                 try { localStorage.removeItem(CART_STORAGE_KEY(storeIdKey)) } catch { /* ignore */ }
                 setCart([])
                 setDiscount(0)
@@ -2189,6 +2372,20 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         const confirmF4 = () => {
           const qty = Math.max(1, Math.round(Number(f4QtdValue) || 1))
           if (f4Target) {
+            const product = realCatalog.find((p) => p.id === f4Target.inventoryId)
+            if (product && product.category !== "Servicos" && product.stock < 999) {
+              const otherReserved = cart
+                .filter((l) => l.inventoryId === f4Target.inventoryId && l.lineId !== f4Target.lineId)
+                .reduce((s, l) => s + l.qty, 0)
+              if (qty + otherReserved > product.stock) {
+                toast({
+                  title: "Estoque insuficiente",
+                  description: `Disponível: ${Math.max(0, product.stock - otherReserved)} unid.`,
+                  variant: "destructive",
+                })
+                return
+              }
+            }
             setCart((prev) => prev.map((l) => l.lineId === f4Target.lineId ? { ...l, qty } : l))
           }
           closeF4()

@@ -19,6 +19,12 @@ export type AuditAction =
   | "registro_excluido"
   | "devolucao_vale"
   | "quebra_caixa"
+  | "pdv_item_adicionado"
+  | "pdv_item_removido"
+  | "pdv_carrinho_limpo"
+  | "pdv_desconto_alterado"
+  | "pdv_pagamento_iniciado"
+  | "pdv_troca_aberta"
 
 export interface AuditEntry {
   id: string
