@@ -146,7 +146,7 @@ const PAY_METHODS: {
     shortLabel: "Dinheiro",
     Icon: Banknote,
     color: "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20",
-    hotkey: "F4",
+    hotkey: "F1",
   },
   {
     id: "pix",
@@ -154,7 +154,6 @@ const PAY_METHODS: {
     shortLabel: "PIX",
     Icon: QrCode,
     color: "bg-teal-600 hover:bg-teal-700 shadow-teal-600/20",
-    hotkey: "F7",
   },
   {
     id: "credito",
@@ -162,7 +161,6 @@ const PAY_METHODS: {
     shortLabel: "Crédito",
     Icon: CreditCard,
     color: "bg-blue-600 hover:bg-blue-700 shadow-blue-600/20",
-    hotkey: "F6",
   },
   {
     id: "debito",
@@ -177,7 +175,6 @@ const PAY_METHODS: {
     shortLabel: "A Prazo",
     Icon: CalendarClock,
     color: "bg-amber-600 hover:bg-amber-700 shadow-amber-600/20",
-    hotkey: "F8",
   },
   {
     id: "multiplo",
@@ -185,7 +182,7 @@ const PAY_METHODS: {
     shortLabel: "Múltiplo",
     Icon: Layers,
     color: "bg-violet-600 hover:bg-violet-700 shadow-violet-600/20",
-    hotkey: "F10",
+    hotkey: "F12",
   },
 ]
 
@@ -520,6 +517,73 @@ function PaymentModal({
           >
             <CheckCircle2 className="mr-2 h-4 w-4" />
             Confirmar Venda
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── HelpOverlay ─────────────────────────────────────────────────────────────
+
+const HELP_SHORTCUTS: { key: string; label: string; status: "ok" | "partial" | "soon" }[] = [
+  { key: "F1",  label: "Finalizar venda",        status: "ok" },
+  { key: "F2",  label: "Foco no campo cliente",  status: "ok" },
+  { key: "F3",  label: "Foco na busca / bipe",   status: "ok" },
+  { key: "F4",  label: "Alterar quantidade",     status: "soon" },
+  { key: "F5",  label: "Remover último item",    status: "ok" },
+  { key: "F6",  label: "Cancelar venda",         status: "ok" },
+  { key: "F7",  label: "Desconto / Acréscimo",   status: "partial" },
+  { key: "F8",  label: "Troca / Devolução",      status: "ok" },
+  { key: "F9",  label: "Contas a Receber",       status: "soon" },
+  { key: "F10", label: "Menu de Caixa",          status: "soon" },
+  { key: "F11", label: "Tela cheia / Modo foco", status: "ok" },
+  { key: "F12", label: "Pagamento avançado",     status: "ok" },
+  { key: "END", label: "Esta ajuda",             status: "ok" },
+  { key: "DEL", label: "Remover último item",    status: "ok" },
+  { key: "ESC", label: "Fechar modal / painel",  status: "ok" },
+]
+
+function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md rounded-2xl border-border bg-card p-0 shadow-lg">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+            <Keyboard className="h-4 w-4 text-primary" />
+            Atalhos de Teclado — PDV Assistência
+          </DialogTitle>
+        </DialogHeader>
+        <ScrollArea className="max-h-[65vh]">
+          <div className="divide-y divide-border px-2 py-1">
+            {HELP_SHORTCUTS.map(({ key, label, status }) => (
+              <div key={key} className="flex items-center gap-3 px-4 py-2.5">
+                <kbd className="w-12 shrink-0 rounded-lg border border-border bg-muted px-2 py-1 text-center text-xs font-bold text-foreground">
+                  {key}
+                </kbd>
+                <span className="flex-1 text-sm text-foreground">{label}</span>
+                <span className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                  status === "ok"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                    : status === "partial"
+                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      : "bg-muted text-muted-foreground",
+                )}>
+                  {status === "ok" ? "Ativo" : status === "partial" ? "Parcial" : "Em breve"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+        <DialogFooter className="border-t border-border px-6 py-3">
+          <p className="flex-1 text-xs text-muted-foreground">
+            Pressione{" "}
+            <kbd className="rounded border border-border bg-muted px-1 font-bold">END</kbd>{" "}
+            a qualquer momento para abrir esta ajuda.
+          </p>
+          <Button variant="outline" size="sm" className="rounded-xl" onClick={onClose}>
+            Fechar
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -929,6 +993,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const mergedCatalog = useMemo(() => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory), [inventory])
   const inputRef = useRef<HTMLInputElement | null>(null)
   const customerInputRef = useRef<HTMLInputElement | null>(null)
+  const discountInputRef = useRef<HTMLInputElement | null>(null)
   const { toast } = useToast()
 
   // ── Time ────────────────────────────────────────────────────────────────────
@@ -963,6 +1028,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [paymentInitMethod, setPaymentInitMethod] = useState<PayMethod>("dinheiro")
   const [trocasOpen, setTrocasOpen] = useState(false)
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // ── Custom atalhos ────────────────────────────────────────────────────────────
   const [localAtalhos, setLocalAtalhos] = useState<AtalhoSaved[]>(() => [
@@ -1019,9 +1085,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     setRapidoPickIdx(0)
   }, [search, fullSearch.length])
 
-  // ── Global F-key hotkeys ──────────────────────────────────────────────────────
-  // Helper: open payment modal pre-selecting a method (only if cart isn't empty)
-  const openPayment = (method: PayMethod) => {
+  // ── Global keyboard shortcuts ─────────────────────────────────────────────────
+  const openPaymentModal = (method: PayMethod) => {
     if (cart.length === 0) return
     setPaymentInitMethod(method)
     setPaymentOpen(true)
@@ -1029,53 +1094,85 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // Ignore modifier combos and held-key repeats
-      if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return
-      // Do not intercept F5 (browser refresh) or unregistered keys
-      const HANDLED = ["F1", "F2", "F3", "F4", "F6", "F7", "F8", "F9", "F10"]
-      if (!HANDLED.includes(e.key)) return
+      if (e.repeat || e.metaKey || e.altKey) return
+
+      const active = document.activeElement
+      const inInput =
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement ||
+        (active instanceof HTMLElement && active.isContentEditable)
+
+      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen
+
+      // END — toggle help overlay (always works)
+      if (e.key === "End") {
         e.preventDefault()
+        setHelpOpen((o) => !o)
+        return
+      }
+
+      // DEL — remove last cart item (not in input, not in modal)
+      if (e.key === "Delete" && !inInput && !anyModalOpen) {
+        if (cart.length > 0) {
+          e.preventDefault()
+          setCart((prev) => prev.slice(0, -1))
+          queueMicrotask(() => inputRef.current?.focus())
+        }
+        return
+      }
+
+      const F_KEYS = ["F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"]
+      if (!F_KEYS.includes(e.key)) return
+      e.preventDefault()
+
+      // F2 / F3 focus inputs even when a non-blocking modal is open; rest require no modal
+      if (anyModalOpen && e.key !== "F2" && e.key !== "F3") return
 
       switch (e.key) {
-        // F1 / F2 — focus search bar (both mapped for convenience)
-        case "F1":
-        case "F2":
-        inputRef.current?.focus()
-          break
-        // F3 — focus customer input
-        case "F3":
-          customerInputRef.current?.focus()
-          break
-        // F4 — Dinheiro
+        case "F1":  openPaymentModal("dinheiro"); break
+        case "F2":  customerInputRef.current?.focus(); break
+        case "F3":  inputRef.current?.focus(); break
         case "F4":
-          openPayment("dinheiro")
+          toast({ title: "F4 — Alterar quantidade", description: "Disponível em breve." })
           break
-        // F6 — Cartão Crédito
+        case "F5":
+          if (!inInput && cart.length > 0) {
+            setCart((prev) => prev.slice(0, -1))
+            queueMicrotask(() => inputRef.current?.focus())
+          }
+          break
         case "F6":
-          openPayment("credito")
-          break
-        // F7 — PIX
-        case "F7":
-          openPayment("pix")
-          break
-        // F8 — A Prazo
-        case "F8":
-          openPayment("a_prazo")
-          break
-        // F9 — Clear cart (with confirmation)
-        case "F9":
           if (cart.length > 0) setClearConfirmOpen(true)
           break
-        // F10 — Múltiplo
-        case "F10":
-          openPayment("multiplo")
+        case "F7":
+          if (!isModoRapido) {
+            discountInputRef.current?.focus()
+          } else {
+            toast({ title: "F7 — Desconto/Acréscimo", description: "Disponível no modo padrão." })
+          }
           break
+        case "F8": setTrocasOpen(true); break
+        case "F9":
+          toast({ title: "F9 — Contas a Receber", description: "Disponível em breve." })
+          break
+        case "F10":
+          toast({ title: "F10 — Menu de Caixa", description: "Disponível em breve." })
+          break
+        case "F11":
+          if (!document.fullscreenElement) {
+            void document.documentElement.requestFullscreen().catch(() => {})
+          } else {
+            void document.exitFullscreen().catch(() => {})
+          }
+          break
+        case "F12": openPaymentModal("multiplo"); break
       }
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart.length])
+  }, [cart.length, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct) => {
@@ -1182,7 +1279,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
-      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen) return
+      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen) return
       if (cart.length === 0) return
       e.preventDefault()
       e.stopPropagation()
@@ -1194,7 +1291,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, cart.length])
+  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, cart.length])
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -1328,20 +1425,28 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   Atalhos:
                 </span>
                 {[
-                  { key: "F2", label: "Busca" },
-                  { key: "F3", label: "Cliente" },
-                  { key: "F4", label: "Dinheiro" },
-                  { key: "F6", label: "Cartão" },
-                  { key: "F7", label: "PIX" },
-                  { key: "F8", label: "A Prazo" },
-                  { key: "F9", label: "Cancelar" },
-                  { key: "F10", label: "Múltiplo" },
+                  { key: "F1",  label: "Finalizar" },
+                  { key: "F3",  label: "Busca" },
+                  { key: "F2",  label: "Cliente" },
+                  { key: "F6",  label: "Cancelar" },
+                  { key: "F8",  label: "Trocas" },
+                  { key: "F11", label: "Tela cheia" },
+                  { key: "F12", label: "Pgto. múltiplo" },
                 ].map(({ key, label }) => (
                   <span key={key} className="flex items-center gap-1">
                     <kbd className="rounded border border-border bg-muted px-1 py-px font-bold">{key}</kbd>
                     {label}
                   </span>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setHelpOpen(true)}
+                  className="flex items-center gap-1 rounded border border-border bg-muted px-1.5 py-px text-[10px] font-bold text-muted-foreground hover:text-foreground"
+                  title="Ver todos os atalhos"
+                >
+                  <Keyboard className="h-3 w-3" />
+                  END Ajuda
+                </button>
               </div>
             ) : null}
           </div>
@@ -1609,6 +1714,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Desconto (R$)</span>
                   <Input
+                    ref={discountInputRef}
                     value={discount ? String(discount) : ""}
                     onChange={(e) => {
                       const v = Number(String(e.target.value || "").replace(",", "."))
@@ -1702,6 +1808,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
 
       <TrocasModal open={trocasOpen} onClose={() => setTrocasOpen(false)} />
+
+      <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <EditarAtalhosModal
         open={editAtalhosOpen}
