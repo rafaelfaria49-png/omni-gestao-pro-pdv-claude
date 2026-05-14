@@ -7,7 +7,7 @@ import {
   Power, RefreshCw, Sparkles, Star, Send, Trash2, Download, Save,
   Wallet, ShoppingCart, Package, Users, Bell, BarChart3,
   Settings as SettingsIcon, Eye, QrCode, Phone, Zap, Brain, Lightbulb,
-  Inbox, Search, Command as CmdIcon, Clock,
+  Inbox, Search, Command as CmdIcon, Clock, FileText,
   AlertTriangle, UserCog, Maximize2, Minimize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,20 @@ import {
   type OmniAgentHubStatsDTO,
   type OmniAgentCommandDTO,
   type OmniAgentReportsSnapshotDTO,
+  listOmniAgentAutomations,
+  createOmniAgentAutomation,
+  updateOmniAgentAutomation,
+  setOmniAgentAutomationEnabled,
+  deleteOmniAgentAutomation,
+  listOmniAgentAutomationRuns,
+  type OmniAgentAutomationDTO,
+  type OmniAgentAutomationRunDTO,
 } from "@/app/actions/omni-agent";
+import {
+  OMNI_AGENT_AUTOMATION_TRIGGERS,
+  OMNI_AGENT_TRIGGER_LABELS,
+  type OmniAgentAutomationTriggerKey,
+} from "@/lib/omni-agent/omni-automation-triggers";
 import { dtoToBellItem, dtoToHubFeedRow, type HubFeedRow } from "@/lib/omni-agent/hub-display";
 import { OmniAgentInboxReal } from "@/components/omni-agent/OmniAgentInboxReal";
 
@@ -263,7 +276,9 @@ export default function OmniAgentHub() {
               }}
             />
           )}
-          {tab === "auto" && <AutomationsTab logAudit={logAudit} />}
+          {tab === "auto" && (
+            <AutomationsTab storeId={storeId} logAudit={logAudit} onInboxMayChange={() => void refreshHubData()} />
+          )}
           {tab === "memory" && <MemoryTab storeId={storeId} logAudit={logAudit} />}
           {tab === "reports" && (
             <ReportsTab
@@ -1249,41 +1264,357 @@ function CommandsTab({ storeId, onAfterPipeline }: { storeId: string; onAfterPip
 }
 
 /* ---------- Automations ---------- */
-function AutomationsTab({ logAudit }: { logAudit: (m: string) => void }) {
-  const [infoOpen, setInfoOpen] = useState(false);
+function AutomationsTab({
+  storeId,
+  logAudit,
+  onInboxMayChange,
+}: {
+  storeId: string;
+  logAudit: (m: string) => void;
+  onInboxMayChange: () => void;
+}) {
+  const [rows, setRows] = useState<OmniAgentAutomationDTO[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editRow, setEditRow] = useState<OmniAgentAutomationDTO | null>(null);
+  const [logFor, setLogFor] = useState<OmniAgentAutomationDTO | null>(null);
+  const [runs, setRuns] = useState<OmniAgentAutomationRunDTO[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
+
+  const [newName, setNewName] = useState("");
+  const [newTrigger, setNewTrigger] = useState<OmniAgentAutomationTriggerKey>("venda_finalizada");
+  const [newTpl, setNewTpl] = useState(
+    "[Automação Omni] Venda finalizada (venda id {{entityId}}). Revisar conciliação.",
+  );
+
+  const [editName, setEditName] = useState("");
+  const [editTpl, setEditTpl] = useState("");
+  const [editPriority, setEditPriority] = useState(0);
+
+  const load = useCallback(async () => {
+    if (!storeId?.trim()) return;
+    setLoading(true);
+    try {
+      const list = await listOmniAgentAutomations(storeId);
+      setRows(list);
+    } catch {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [storeId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!logFor) {
+      setRuns([]);
+      return;
+    }
+    let cancelled = false;
+    setRunsLoading(true);
+    void listOmniAgentAutomationRuns(storeId, { automationId: logFor.id, take: 30 })
+      .then((r) => {
+        if (!cancelled) setRuns(r);
+      })
+      .catch(() => {
+        if (!cancelled) setRuns([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRunsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [logFor, storeId]);
+
   return (
     <div className="space-y-4">
-      <Card className="border-dashed p-6 space-y-3">
+      <Card className="border-dashed p-4 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">Em preparação</Badge>
-          <span className="text-sm font-medium">Automações Omni Agent</span>
+          <Badge variant="outline">Event bus</Badge>
+          <span className="text-sm font-medium">Automações persistidas</span>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Ainda não existe motor persistido de regras (gatilho → ação) para o Omni Agent. Nada aqui é gravado na base de dados —
-          por isso as listas e contadores simulados foram removidos.
+        <p className="text-xs text-muted-foreground">
+          Gatilhos ligados a eventos de domínio (<code className="text-foreground">venda_finalizada</code>,{" "}
+          <code className="text-foreground">os_finalizada</code> → OS entregue,{" "}
+          <code className="text-foreground">conta_receber_vencida</code> quando existir emissor). Cada disparo cria um
+          comando na <span className="font-medium text-foreground">Inbox IA</span> (PENDENTE) — sem execução automática
+          perigosa. Variáveis no modelo: <code className="text-foreground">{"{{entityId}}"}</code>,{" "}
+          <code className="text-foreground">{"{{status}}"}</code>, campos do payload da venda/OS.
         </p>
+        <p className="text-xs text-muted-foreground">
+          O evento <code className="text-foreground">conta_receber_vencida</code> está definido na API, mas{" "}
+          <span className="font-medium">ainda não há emissor</span> no fluxo financeiro — pode criar a regra e ativará
+          quando o projeto ligar o disparo.
+        </p>
+      </Card>
+
+      <div className="flex flex-wrap gap-2">
         <Button
           size="sm"
-          variant="outline"
           onClick={() => {
-            setInfoOpen(true);
-            logAudit("Automações: aberto planeamento próxima etapa");
+            setNewName("");
+            setNewTrigger("venda_finalizada");
+            setNewTpl(
+              "[Automação Omni] Venda finalizada (venda id {{entityId}}). Revisar conciliação e próximos passos.",
+            );
+            setCreateOpen(true);
           }}
         >
-          <Plus /> Próxima etapa (planeamento)
+          <Plus /> Nova automação
         </Button>
-      </Card>
-      <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+        <Button size="sm" variant="outline" onClick={() => void load()}>
+          <RefreshCw /> Atualizar
+        </Button>
+      </div>
+
+      {loading ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">A carregar automações…</Card>
+      ) : rows.length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted-foreground">
+          Nenhuma automação. Recarregue a página ou verifique permissões — o servidor deveria criar regras padrão na
+          primeira consulta.
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((r) => (
+            <Card key={r.id}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="font-medium flex flex-wrap items-center gap-2">
+                    {r.name}
+                    <Badge variant="outline">{OMNI_AGENT_TRIGGER_LABELS[r.triggerKey as OmniAgentAutomationTriggerKey] ?? r.triggerKey}</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground font-mono break-all">{r.commandTemplate}</div>
+                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                    <span>Prioridade: {r.priority}</span>
+                    <span>·</span>
+                    <span>{r.runCount} execuções registadas</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`en-${r.id}`} className="text-xs text-muted-foreground">
+                      Ativa
+                    </Label>
+                    <Switch
+                      id={`en-${r.id}`}
+                      checked={r.enabled}
+                      onCheckedChange={async (v) => {
+                        try {
+                          const updated = await setOmniAgentAutomationEnabled(storeId, r.id, v);
+                          setRows((prev) => prev.map((x) => (x.id === r.id ? updated : x)));
+                          logAudit(`Automação ${updated.name}: ${v ? "ativada" : "desativada"}`);
+                          toast.success(v ? "Automação ativa" : "Automação desativada");
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Falha");
+                        }
+                      }}
+                    />
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => {
+                    setEditRow(r);
+                    setEditName(r.name);
+                    setEditTpl(r.commandTemplate);
+                    setEditPriority(r.priority);
+                  }}>
+                    Editar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setLogFor(r);
+                      logAudit(`Log automação: ${r.name}`);
+                    }}
+                  >
+                    <FileText /> Log
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-destructive"
+                    onClick={async () => {
+                      if (!confirm(`Remover automação «${r.name}»?`)) return;
+                      try {
+                        await deleteOmniAgentAutomation(storeId, r.id);
+                        logAudit(`Automação removida: ${r.name}`);
+                        toast.success("Removida");
+                        await load();
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Falha");
+                      }
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Automações reais</DialogTitle>
+            <DialogTitle>Nova automação</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            A fase seguinte prevê persistência em base de dados, filas de gatilhos e histórico auditável por regra. Até lá, use a{" "}
-            <span className="font-medium text-foreground">Inbox IA</span> e os comandos determinísticos já suportados.
-          </p>
+          <div className="space-y-3">
+            <div>
+              <Label>Nome</Label>
+              <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ex.: Minha triagem de vendas" />
+            </div>
+            <div>
+              <Label>Gatilho</Label>
+              <select
+                className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={newTrigger}
+                onChange={(e) => setNewTrigger(e.target.value as OmniAgentAutomationTriggerKey)}
+              >
+                {OMNI_AGENT_AUTOMATION_TRIGGERS.map((k) => (
+                  <option key={k} value={k}>
+                    {OMNI_AGENT_TRIGGER_LABELS[k]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label>Modelo do comando (Inbox)</Label>
+              <Textarea rows={4} value={newTpl} onChange={(e) => setNewTpl(e.target.value)} className="font-mono text-xs" />
+            </div>
+          </div>
           <DialogFooter>
-            <Button onClick={() => setInfoOpen(false)}>Entendi</Button>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  const created = await createOmniAgentAutomation(storeId, {
+                    name: newName || "Nova automação",
+                    triggerKey: newTrigger,
+                    commandTemplate: newTpl,
+                    enabled: false,
+                  });
+                  logAudit(`Automação criada: ${created.name}`);
+                  toast.success("Criada (inativa por defeito)");
+                  setCreateOpen(false);
+                  await load();
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Falha");
+                }
+              }}
+            >
+              <Save /> Criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!editRow}
+        onOpenChange={(o) => {
+          if (!o) setEditRow(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar automação</DialogTitle>
+          </DialogHeader>
+          {editRow && (
+            <div className="space-y-3">
+              <div className="text-xs text-muted-foreground">
+                Gatilho: <span className="font-mono text-foreground">{editRow.triggerKey}</span> (não editável)
+              </div>
+              <div>
+                <Label>Nome</Label>
+                <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+              </div>
+              <div>
+                <Label>Prioridade</Label>
+                <Input
+                  type="number"
+                  value={editPriority}
+                  onChange={(e) => setEditPriority(Number(e.target.value) || 0)}
+                />
+              </div>
+              <div>
+                <Label>Modelo do comando</Label>
+                <Textarea rows={5} value={editTpl} onChange={(e) => setEditTpl(e.target.value)} className="font-mono text-xs" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRow(null)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!editRow) return;
+                try {
+                  const updated = await updateOmniAgentAutomation(storeId, editRow.id, {
+                    name: editName,
+                    commandTemplate: editTpl,
+                    priority: editPriority,
+                  });
+                  setRows((prev) => prev.map((x) => (x.id === editRow.id ? updated : x)));
+                  logAudit(`Automação atualizada: ${updated.name}`);
+                  toast.success("Guardado");
+                  setEditRow(null);
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Falha");
+                }
+              }}
+            >
+              <Save /> Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!logFor} onOpenChange={(o) => !o && setLogFor(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Execuções — {logFor?.name}</DialogTitle>
+          </DialogHeader>
+          {runsLoading ? (
+            <div className="text-sm text-muted-foreground">A carregar…</div>
+          ) : runs.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Ainda não houve disparos com comando criado.</div>
+          ) : (
+            <div className="max-h-72 space-y-2 overflow-y-auto text-xs">
+              {runs.map((x) => (
+                <div key={x.id} className="rounded border border-border bg-muted/40 p-2 space-y-1">
+                  <div className="text-muted-foreground">{new Date(x.createdAt).toLocaleString("pt-BR")}</div>
+                  <div>
+                    <span className="font-medium">Evento:</span> {x.eventKey}{" "}
+                    {x.entityId ? <span className="font-mono">· {x.entityId}</span> : null}
+                  </div>
+                  <div className="font-mono break-all text-[11px]">{x.comandoGerado}</div>
+                  {x.commandId ? (
+                    <div className="text-muted-foreground">
+                      Comando: <span className="font-mono">{x.commandId}</span>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                onInboxMayChange();
+                toast.info("Abra a Inbox IA para processar comandos pendentes.");
+              }}
+            >
+              Ir à Inbox
+            </Button>
+            <Button onClick={() => setLogFor(null)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

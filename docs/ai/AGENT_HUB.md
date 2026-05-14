@@ -21,7 +21,7 @@ O **Omni Agent HUB** é a central de IA operacional do OmniGestão Pro: comandos
 ### Fase 3 (substituir mocks visuais)
 
 - **WhatsApp Agent**: sem conversas fictícias; estado Cloud API via env (`getOmniAgentWhatsAppCloudStatus`); simulação chama `submitOmniAgentCommand` com `canal: "whatsapp"`. Lista Meta/HUB aponta para o WhatsApp HUB real.
-- **Automações**: empty state honesto + modal “próxima etapa” (sem `useState` de regras falsas).
+- **Automações**: modelos `OmniAgentAutomation` + `OmniAgentAutomationRun`; UI lista/cria/edita/ativa/remove; disparo via `handleEvent` → `handleOmniAgentSystemEvents` cria `OmniAgentCommand` **PENDENTE** (Inbox). Gatilhos: `venda_finalizada`, `os_entregue` (mapeado de `os_finalizada`), `conta_receber_vencida` (evento na API; emissor financeiro ainda futuro).
 - **Memória Cliente**: `listClientes` (cadastro real); timeline IA declarada como não ativa; notas locais etiquetadas (`localStorage`).
 - **Relatórios IA**: KPIs/gráfico mock removidos; `getOmniAgentReportsSnapshot` (stats Prisma, contagens por intenção, resumo financeiro quando permitido); pergunta envia comando real (`texto_interno` + `run`).
 - **Configurações**: bloco explícito “localStorage”; voz desativada com badge; teste de config mostra `interpretOmniAgentCommand`; export com descarga JSON.
@@ -53,6 +53,6 @@ O **Omni Agent HUB** é a central de IA operacional do OmniGestão Pro: comandos
 ## Próximo passo (fases seguintes)
 
 - LLM controlado com JSON schema e limites de ferramentas.
-- Event bus de domínio e **automações persistidas** (motor de regras).
+- Emissor server-side para `conta_receber_vencida` (cron ou serviço financeiro) sem alterar UI de contas nesta fase.
 - Memória operacional por cliente (timeline unificada: PDV, OS, WhatsApp, financeiro).
 - Voz e canais adicionais ligados a políticas no servidor (não só `localStorage`).

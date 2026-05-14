@@ -16,6 +16,7 @@ const VALID_EVENTS = new Set<SystemEvent>([
   "os_status_alterado",
   "os_finalizada",
   "cliente_criado",
+  "conta_receber_vencida",
 ])
 
 export async function POST(req: NextRequest) {

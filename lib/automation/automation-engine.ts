@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
 import type { EventPayload, SystemEvent } from "@/lib/events/event-bus"
 import { subscribeAllEvents } from "@/lib/events/event-bus"
+import { handleOmniAgentSystemEvents } from "@/lib/omni-agent/omni-automation-engine"
 import { sendWhatsAppMessage, ensureDefaultEventAutomations } from "@/lib/whatsapp/whatsapp-service"
 
 type AutomationConditions = {
@@ -175,6 +176,8 @@ export async function handleEvent(event: SystemEvent, payload: EventPayload): Pr
       })
     }
   }
+
+  await handleOmniAgentSystemEvents(event, payload)
 }
 
 let clientStarted = false

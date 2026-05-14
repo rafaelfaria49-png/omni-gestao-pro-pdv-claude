@@ -7,6 +7,8 @@ import { interpretOmniAgentCommand, intentRequiresConfirmation } from "@/lib/omn
 import { executeOmniAgentIntent } from "@/lib/omni-agent/executor"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
+import { ensureDefaultOmniAgentAutomations } from "@/lib/omni-agent/omni-automation-engine"
+import { isOmniAgentAutomationTriggerKey, type OmniAgentAutomationTriggerKey } from "@/lib/omni-agent/omni-automation-triggers"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { OmniAgentCommandStatus } from "@/generated/prisma"
 
@@ -359,4 +361,189 @@ export async function getOmniAgentReportsSnapshot(storeId: string): Promise<Omni
   }
 
   return { stats, intentCounts, financeiroHoje, financeiroSemPermissao }
+}
+
+export type OmniAgentAutomationDTO = {
+  id: string
+  storeId: string
+  name: string
+  triggerKey: string
+  enabled: boolean
+  commandTemplate: string
+  priority: number
+  runCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type OmniAgentAutomationRunDTO = {
+  id: string
+  automationId: string
+  eventKey: string
+  entityId: string | null
+  comandoGerado: string
+  commandId: string | null
+  createdAt: string
+}
+
+function mapAutomationRow(r: {
+  id: string
+  storeId: string
+  name: string
+  triggerKey: string
+  enabled: boolean
+  commandTemplate: string
+  priority: number
+  createdAt: Date
+  updatedAt: Date
+  _count: { runs: number }
+}): OmniAgentAutomationDTO {
+  return {
+    id: r.id,
+    storeId: r.storeId,
+    name: r.name,
+    triggerKey: r.triggerKey,
+    enabled: r.enabled,
+    commandTemplate: r.commandTemplate,
+    priority: r.priority,
+    runCount: r._count.runs,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  }
+}
+
+export async function listOmniAgentAutomations(storeId: string): Promise<OmniAgentAutomationDTO[]> {
+  const sid = storeId.trim()
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  await ensureDefaultOmniAgentAutomations(sid)
+
+  const rows = await prisma.omniAgentAutomation.findMany({
+    where: { storeId: sid },
+    orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
+    include: { _count: { select: { runs: true } } },
+  })
+  return rows.map(mapAutomationRow)
+}
+
+export async function createOmniAgentAutomation(
+  storeId: string,
+  input: {
+    name: string
+    triggerKey: OmniAgentAutomationTriggerKey
+    commandTemplate: string
+    enabled?: boolean
+    priority?: number
+  },
+): Promise<OmniAgentAutomationDTO> {
+  const sid = storeId.trim()
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  if (!isOmniAgentAutomationTriggerKey(input.triggerKey)) {
+    throw new Error("Gatilho inválido.")
+  }
+  const name = input.name.trim()
+  if (!name) throw new Error("Nome obrigatório.")
+  const tpl = input.commandTemplate.trim()
+  if (!tpl) throw new Error("Modelo de comando obrigatório.")
+
+  const row = await prisma.omniAgentAutomation.create({
+    data: {
+      storeId: sid,
+      name,
+      triggerKey: input.triggerKey,
+      enabled: input.enabled ?? false,
+      commandTemplate: tpl,
+      priority: input.priority ?? 0,
+    },
+    include: { _count: { select: { runs: true } } },
+  })
+  return mapAutomationRow(row)
+}
+
+export async function updateOmniAgentAutomation(
+  storeId: string,
+  id: string,
+  input: { name?: string; commandTemplate?: string; priority?: number },
+): Promise<OmniAgentAutomationDTO> {
+  const sid = storeId.trim()
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  const existing = await prisma.omniAgentAutomation.findFirst({ where: { id, storeId: sid } })
+  if (!existing) throw new Error("Automação não encontrada.")
+
+  const name = input.name !== undefined ? input.name.trim() : undefined
+  if (name !== undefined && !name) throw new Error("Nome inválido.")
+  const tpl = input.commandTemplate !== undefined ? input.commandTemplate.trim() : undefined
+  if (tpl !== undefined && !tpl) throw new Error("Modelo de comando inválido.")
+
+  const row = await prisma.omniAgentAutomation.update({
+    where: { id },
+    data: {
+      ...(name !== undefined ? { name } : {}),
+      ...(tpl !== undefined ? { commandTemplate: tpl } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+    },
+    include: { _count: { select: { runs: true } } },
+  })
+  return mapAutomationRow(row)
+}
+
+export async function setOmniAgentAutomationEnabled(
+  storeId: string,
+  id: string,
+  enabled: boolean,
+): Promise<OmniAgentAutomationDTO> {
+  const sid = storeId.trim()
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  const res = await prisma.omniAgentAutomation.updateMany({ where: { id, storeId: sid }, data: { enabled } })
+  if (res.count === 0) throw new Error("Automação não encontrada.")
+
+  const updated = await prisma.omniAgentAutomation.findFirstOrThrow({
+    where: { id, storeId: sid },
+    include: { _count: { select: { runs: true } } },
+  })
+  return mapAutomationRow(updated)
+}
+
+export async function deleteOmniAgentAutomation(storeId: string, id: string): Promise<void> {
+  const sid = storeId.trim()
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  const r = await prisma.omniAgentAutomation.deleteMany({ where: { id, storeId: sid } })
+  if (r.count === 0) throw new Error("Automação não encontrada.")
+}
+
+export async function listOmniAgentAutomationRuns(
+  storeId: string,
+  opts?: { automationId?: string; take?: number },
+): Promise<OmniAgentAutomationRunDTO[]> {
+  const sid = storeId.trim()
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  const take = Math.min(opts?.take ?? 40, 100)
+  const rows = await prisma.omniAgentAutomationRun.findMany({
+    where: {
+      storeId: sid,
+      ...(opts?.automationId ? { automationId: opts.automationId } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take,
+  })
+  return rows.map((r) => ({
+    id: r.id,
+    automationId: r.automationId,
+    eventKey: r.eventKey,
+    entityId: r.entityId,
+    comandoGerado: r.comandoGerado,
+    commandId: r.commandId,
+    createdAt: r.createdAt.toISOString(),
+  }))
 }

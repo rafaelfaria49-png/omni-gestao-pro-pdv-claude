@@ -93,6 +93,7 @@ model Store {
   garantiasOrdemServico  GarantiaOrdemServico[]
   adminUserStores        AdminUserStore[]
   omniAgentCommands      OmniAgentCommand[]
+  omniAgentAutomations   OmniAgentAutomation[]
   marketplaceConnections   MarketplaceConnection[]
   marketplaceSyncLogs      MarketplaceSyncLog[]
   marketplaceProductLinks  MarketplaceProductLink[]
@@ -1619,9 +1620,51 @@ model OmniAgentCommand {
   executadoEm      DateTime?               @map("executadoEm")
   createdAt        DateTime                @default(now()) @map("createdAt")
 
+  automationRuns OmniAgentAutomationRun[]
+
   @@index([storeId, createdAt])
   @@index([storeId, status])
   @@map("omni_agent_commands")
+}
+
+/**
+ * Automações Omni Agent (gatilho de domínio → comando na Inbox, sem execução automática perigosa).
+ */
+model OmniAgentAutomation {
+  id              String   @id @default(cuid())
+  storeId         String   @map("storeId")
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name            String   @default("") @map("name")
+  /** venda_finalizada | os_entregue | conta_receber_vencida */
+  triggerKey      String   @map("triggerKey")
+  enabled         Boolean  @default(false) @map("enabled")
+  commandTemplate String   @map("commandTemplate") @db.Text
+  priority        Int      @default(0) @map("priority")
+  createdAt       DateTime @default(now()) @map("createdAt")
+  updatedAt       DateTime @updatedAt @map("updatedAt")
+
+  runs OmniAgentAutomationRun[]
+
+  @@index([storeId, enabled])
+  @@index([storeId, triggerKey])
+  @@map("omni_agent_automations")
+}
+
+model OmniAgentAutomationRun {
+  id             String   @id @default(cuid())
+  automationId String   @map("automationId")
+  automation   OmniAgentAutomation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+  storeId      String   @map("storeId")
+  eventKey     String   @map("eventKey")
+  entityId     String?  @map("entityId")
+  comandoGerado String  @map("comandoGerado") @db.Text
+  commandId    String?  @map("commandId")
+  omniCommand  OmniAgentCommand? @relation(fields: [commandId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now()) @map("createdAt")
+
+  @@index([storeId, createdAt])
+  @@index([automationId, createdAt])
+  @@map("omni_agent_automation_runs")
 }
 
 // ─── NextAuth / Admin Auth ───────────────────────────────────────────────────

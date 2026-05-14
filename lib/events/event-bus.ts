@@ -5,6 +5,8 @@ export type SystemEvent =
   | "os_status_alterado"
   | "os_finalizada"
   | "cliente_criado"
+  /** Reservado para jobs/cron ou serviços financeiros — ainda sem emissor universal no app. */
+  | "conta_receber_vencida"
 
 export type EventPayload = {
   storeId: string
