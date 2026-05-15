@@ -40,8 +40,7 @@ export default function DashboardInicioPage() {
             Vis{"\u00e3"}o geral enterprise
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            KPIs, faturamento 7D, atividades recentes e estoque crítico refletem a unidade ativa. Gráfico de
-            categorias e insights IA seguem demonstrativos.
+            Resumo operacional da unidade ativa — veja o aviso abaixo sobre dados reais e demonstrativos.
           </p>
         </div>
         <div className="hidden items-center gap-2 sm:flex">
@@ -64,12 +63,6 @@ export default function DashboardInicioPage() {
       </div>
 
       <DashboardDemoNotice />
-
-      <p className="-mt-2 text-xs text-muted-foreground">
-        KPIs, gráfico de faturamento (7D), atividades recentes e lista de estoque usam{" "}
-        <span className="font-medium text-foreground">dados reais</span> via API quando a unidade está selecionada.
-        Gráfico por categoria e insights IA continuam ilustrativos.
-      </p>
 
       {!hasStore ? (
         <div
