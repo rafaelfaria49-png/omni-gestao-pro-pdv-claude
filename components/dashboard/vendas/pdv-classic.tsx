@@ -94,6 +94,7 @@ import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { formatEntradaRapidaResumo, mergeEntradaRapida } from "@/lib/os-entrada-checklist"
 import { isOsVirtualSaleLine, osPecasInventoryId, osServicoInventoryId } from "@/lib/os-pdv-virtual-lines"
 import { productMatchesPdvSearch } from "@/lib/pdv-product-search"
+import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 
 type SaleMode = "balcao" | "completa"
 
@@ -171,9 +172,7 @@ export function PdvClassic({
   const [saleMode, setSaleMode] = useState<SaleMode>("balcao")
   const [searchTerm, setSearchTerm] = useState("")
   const [customerSearch, setCustomerSearch] = useState("")
-  const [customerResults, setCustomerResults] = useState<Customer[]>([])
-  const [customerLoading, setCustomerLoading] = useState(false)
-  const customerDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { clientes: filteredCustomers, isLoading: buscandoCliente } = useClienteSearch(customerSearch, lojaKey)
   const [cart, setCart] = useState<CartItem[]>([])
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
@@ -387,16 +386,14 @@ export function PdvClassic({
     return products.filter((p) => productMatchesPdvSearch(p, t)).slice(0, 8)
   }, [bipeCode, products])
 
-  const filteredCustomers = customerResults
-
   const storeDisplayName = useMemo(() => {
     const n = (empresaDocumentos.nomeFantasia || configPadrao.empresa.nomeFantasia || "Loja").trim()
     return n || "Loja"
   }, [empresaDocumentos.nomeFantasia])
 
   const shellClientOptions = useMemo(
-    () => [{ id: "0", label: "CONSUMIDOR" }, ...customerResults.map((c) => ({ id: c.id, label: `${c.name} — CPF ${c.cpf}` }))],
-    [customerResults]
+    () => [{ id: "0", label: "CONSUMIDOR" }, ...filteredCustomers.map((c) => ({ id: c.id, label: `${c.name}${c.phone ? ` — ${c.phone}` : ""}` }))],
+    [filteredCustomers]
   )
 
   const shellCartRows: PdvOmniCartRow[] = useMemo(
@@ -498,39 +495,6 @@ export function PdvClassic({
       void autoSelectCustomerByPhone(tel)
     }
   }, [linkedOsId, ordens, autoSelectCustomerByPhone, uiShell])
-
-  useEffect(() => {
-    if (customerDebounceRef.current) clearTimeout(customerDebounceRef.current)
-    const q = customerSearch.trim()
-    if (!q) {
-      setCustomerResults([])
-      setCustomerLoading(false)
-      return
-    }
-    setCustomerLoading(true)
-    customerDebounceRef.current = setTimeout(async () => {
-      try {
-        const headers: Record<string, string> = {}
-        if (lojaKey) headers[ASSISTEC_LOJA_HEADER] = lojaKey
-        const res = await fetch(`/api/clientes?q=${encodeURIComponent(q)}`, { headers, cache: "no-store" })
-        const data = (await res.json().catch(() => null)) as { clientes?: ApiClienteResult[] } | null
-        const list = (data?.clientes ?? []).map((c) => ({
-          id: c.id,
-          name: c.name,
-          cpf: c.document ?? "",
-          phone: c.phone ?? "",
-        }))
-        setCustomerResults(list)
-      } catch {
-        setCustomerResults([])
-      } finally {
-        setCustomerLoading(false)
-      }
-    }, 300)
-    return () => {
-      if (customerDebounceRef.current) clearTimeout(customerDebounceRef.current)
-    }
-  }, [customerSearch, lojaKey])
 
   const qtyEditDefault = useMemo(() => {
     const line = cart.find((i) => i.lineId === selectedCartLineId)
@@ -1379,8 +1343,8 @@ export function PdvClassic({
                   setSelectedCustomer(null)
                   setCustomerSearch("")
                 } else {
-                  const c = customerResults.find((x) => x.id === row.id)
-                  if (c) setSelectedCustomer(c)
+                  const c = filteredCustomers.find((x) => x.id === row.id)
+                  if (c) setSelectedCustomer({ id: c.id, name: c.name, cpf: "", phone: c.phone ?? "" })
                   setCustomerSearch("")
                 }
                 setShellClientSearchOpen(false)
@@ -1388,7 +1352,7 @@ export function PdvClassic({
               }}
               clientSearchQuery={customerSearch}
               onClientSearchQueryChange={setCustomerSearch}
-              clientSearchLoading={customerLoading}
+              clientSearchLoading={buscandoCliente}
               qtyEditOpen={shellQtyEditOpen}
               onQtyEditOpenChange={(open) => {
                 setShellQtyEditOpen(open)
@@ -1524,12 +1488,24 @@ export function PdvClassic({
                         <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/50 dark:text-white/55" />
                         <Input
                           placeholder="Selecionar cliente (opcional)..."
-                          value={customerSearch}
+                          value={selectedCustomer ? selectedCustomer.name : customerSearch}
                           onChange={(e) => {
                             setCustomerSearch(e.target.value)
+                            setSelectedCustomer(null)
                             setShowCustomerDropdown(true)
                           }}
-                          onFocus={() => setShowCustomerDropdown(true)}
+                          onFocus={() => { if (customerSearch.trim()) setShowCustomerDropdown(true) }}
+                          onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") { setShowCustomerDropdown(false); setCustomerSearch("") }
+                            if (e.key === "Enter" && filteredCustomers.length > 0) {
+                              e.preventDefault()
+                              const c = filteredCustomers[0]!
+                              setSelectedCustomer({ id: c.id, name: c.name, cpf: "", phone: c.phone ?? "" })
+                              setCustomerSearch("")
+                              setShowCustomerDropdown(false)
+                            }
+                          }}
                           ref={customerInputRef}
                           className="h-11 border-border bg-secondary pl-10 text-base font-medium text-foreground"
                         />
@@ -1549,31 +1525,27 @@ export function PdvClassic({
                       )}
                     </div>
 
-                    {showCustomerDropdown && customerSearch.trim() && (
-                      <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-xl">
-                        {customerLoading ? (
+                    {showCustomerDropdown && (filteredCustomers.length > 0 || buscandoCliente) && (
+                      <div className="absolute z-50 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+                        {buscandoCliente && filteredCustomers.length === 0 ? (
                           <div className="px-4 py-2 text-center text-sm text-muted-foreground">Buscando…</div>
-                        ) : filteredCustomers.length > 0 ? (
+                        ) : (
                           filteredCustomers.map((customer) => (
                             <button
                               key={customer.id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
                               onClick={() => {
-                                setSelectedCustomer(customer)
+                                setSelectedCustomer({ id: customer.id, name: customer.name, cpf: "", phone: customer.phone ?? "" })
                                 setCustomerSearch("")
                                 setShowCustomerDropdown(false)
                               }}
                               className="w-full border-b border-border px-4 py-2 text-left transition-colors last:border-0 hover:bg-secondary"
                             >
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-sm font-medium text-foreground">{customer.name}</p>
-                                  <p className="text-xs text-muted-foreground">{customer.phone}</p>
-                                </div>
-                              </div>
+                              <p className="text-sm font-medium text-foreground">{customer.name}</p>
+                              <p className="text-xs text-muted-foreground">{customer.phone ?? ""}</p>
                             </button>
                           ))
-                        ) : (
-                          <div className="px-4 py-2 text-center text-sm text-muted-foreground">Nenhum cliente cadastrado nesta loja.</div>
                         )}
                       </div>
                     )}
@@ -1600,12 +1572,24 @@ export function PdvClassic({
                         <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-foreground/50 dark:text-white/55" />
                         <Input
                           placeholder="Buscar cliente por nome, CPF ou telefone..."
-                          value={customerSearch}
+                          value={selectedCustomer ? selectedCustomer.name : customerSearch}
                           onChange={(e) => {
                             setCustomerSearch(e.target.value)
+                            setSelectedCustomer(null)
                             setShowCustomerDropdown(true)
                           }}
-                          onFocus={() => setShowCustomerDropdown(true)}
+                          onFocus={() => { if (customerSearch.trim()) setShowCustomerDropdown(true) }}
+                          onBlur={() => setTimeout(() => setShowCustomerDropdown(false), 200)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") { setShowCustomerDropdown(false); setCustomerSearch("") }
+                            if (e.key === "Enter" && filteredCustomers.length > 0) {
+                              e.preventDefault()
+                              const c = filteredCustomers[0]!
+                              setSelectedCustomer({ id: c.id, name: c.name, cpf: "", phone: c.phone ?? "" })
+                              setCustomerSearch("")
+                              setShowCustomerDropdown(false)
+                            }
+                          }}
                           ref={customerInputRef}
                           className="border-border bg-secondary pl-10"
                         />
@@ -1616,16 +1600,18 @@ export function PdvClassic({
                       </Button>
                     </div>
 
-                    {showCustomerDropdown && customerSearch.trim() && (
-                      <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-xl">
-                        {customerLoading ? (
+                    {showCustomerDropdown && (filteredCustomers.length > 0 || buscandoCliente) && (
+                      <div className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+                        {buscandoCliente && filteredCustomers.length === 0 ? (
                           <div className="px-4 py-3 text-center text-muted-foreground">Buscando…</div>
-                        ) : filteredCustomers.length > 0 ? (
+                        ) : (
                           filteredCustomers.map((customer) => (
                             <button
                               key={customer.id}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
                               onClick={() => {
-                                setSelectedCustomer(customer)
+                                setSelectedCustomer({ id: customer.id, name: customer.name, cpf: "", phone: customer.phone ?? "" })
                                 setCustomerSearch("")
                                 setShowCustomerDropdown(false)
                               }}
@@ -1633,12 +1619,10 @@ export function PdvClassic({
                             >
                               <p className="font-medium text-foreground">{customer.name}</p>
                               <p className="text-sm text-muted-foreground">
-                                {customer.cpf ? `Doc: ${customer.cpf} | ` : ""}Tel: {customer.phone}
+                                Tel: {customer.phone ?? ""}
                               </p>
                             </button>
                           ))
-                        ) : (
-                          <div className="px-4 py-3 text-center text-muted-foreground">Nenhum cliente cadastrado nesta loja.</div>
                         )}
                       </div>
                     )}
