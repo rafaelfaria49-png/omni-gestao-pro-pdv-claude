@@ -21,6 +21,8 @@ import {
   User,
   UserPlus,
   X,
+  FileText,
+  MapPin,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -35,11 +37,11 @@ import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
@@ -62,6 +64,28 @@ type ClienteResult = {
   phone?: string | null
   email?: string | null
   document?: string | null
+}
+
+type TipoVenda = "comum" | "garantia" | "a_prazo" | "orcamento"
+
+const TIPOS_VENDA: { value: TipoVenda; label: string }[] = [
+  { value: "comum",     label: "Venda Comum" },
+  { value: "garantia",  label: "Com Garantia" },
+  { value: "a_prazo",   label: "A Prazo" },
+  { value: "orcamento", label: "Orçamento Conv." },
+]
+
+type EnderecoEntrega = {
+  logradouro: string
+  numero: string
+  bairro: string
+  cidade: string
+  uf: string
+  cep: string
+}
+
+const EMPTY_ENDERECO: EnderecoEntrega = {
+  logradouro: "", numero: "", bairro: "", cidade: "", uf: "", cep: "",
 }
 
 type LineDetail = {
@@ -91,6 +115,9 @@ type DraftData = {
   cart: CartLine[]
   discountReais: number
   discountPercent: number
+  tipoVenda?: TipoVenda
+  observacaoGeral?: string
+  enderecoEntrega?: EnderecoEntrega
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -115,10 +142,8 @@ function paymentLabel(type: PaymentMethodType): string {
 
 export function PdvVendaCompletaEnterprise({
   onBack,
-  isModoRapido = false,
 }: {
   onBack: () => void
-  isModoRapido?: boolean
 }) {
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
@@ -132,8 +157,7 @@ export function PdvVendaCompletaEnterprise({
 
   // ── Customer ──────────────────────────────────────────────────────────────
   const [clienteQuery, setClienteQuery] = useState("")
-  const [clienteResultados, setClienteResultados] = useState<ClienteResult[]>([])
-  const [clienteLoading, setClienteLoading] = useState(false)
+  const { clientes: clienteResultados, isLoading: clienteLoading } = useClienteSearch(clienteQuery, storeId)
   const [selectedCliente, setSelectedCliente] = useState<ClienteResult | null>(null)
   const [showClienteDropdown, setShowClienteDropdown] = useState(false)
   const clienteInputRef = useRef<HTMLInputElement>(null)
@@ -157,6 +181,10 @@ export function PdvVendaCompletaEnterprise({
   const [cupomData, setCupomData] = useState<CupomData | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [tipoVenda, setTipoVenda] = useState<TipoVenda>("comum")
+  const [observacaoGeral, setObservacaoGeral] = useState("")
+  const [enderecoEntrega, setEnderecoEntrega] = useState<EnderecoEntrega>(EMPTY_ENDERECO)
+  const [showEnderecoForm, setShowEnderecoForm] = useState(false)
 
   // ── Catalog ───────────────────────────────────────────────────────────────
   const products = useMemo((): PdvCatalogProduct[] => {
@@ -195,33 +223,6 @@ export function PdvVendaCompletaEnterprise({
     [selectedCliente, getSaldoCreditoCliente]
   )
 
-  // ── Fetch clientes (real API) ─────────────────────────────────────────────
-  useEffect(() => {
-    const q = clienteQuery.trim()
-    if (!q) {
-      setClienteResultados([])
-      return
-    }
-    const controller = new AbortController()
-    setClienteLoading(true)
-    fetch(`/api/clientes?q=${encodeURIComponent(q)}`, {
-      headers: { [ASSISTEC_LOJA_HEADER]: storeId },
-      credentials: "include",
-      signal: controller.signal,
-    })
-      .then((r) => r.json())
-      .then((data: unknown) => {
-        const d = data as { clientes?: ClienteResult[] }
-        setClienteResultados(Array.isArray(d.clientes) ? d.clientes : [])
-        setClienteLoading(false)
-      })
-      .catch((err: unknown) => {
-        if (err instanceof Error && err.name === "AbortError") return
-        setClienteLoading(false)
-      })
-    return () => controller.abort()
-  }, [clienteQuery, storeId])
-
   // ── Draft restore (once, after inventory loads) ───────────────────────────
   useEffect(() => {
     if (hasDraftRestored.current) return
@@ -239,6 +240,9 @@ export function PdvVendaCompletaEnterprise({
         if ((draft.discountReais ?? 0) > 0) setDiscountReais(draft.discountReais)
         if ((draft.discountPercent ?? 0) > 0) setDiscountPercent(draft.discountPercent)
         if (draft.cliente) setSelectedCliente(draft.cliente)
+        if (draft.tipoVenda) setTipoVenda(draft.tipoVenda)
+        if (draft.observacaoGeral) setObservacaoGeral(draft.observacaoGeral)
+        if (draft.enderecoEntrega) setEnderecoEntrega(draft.enderecoEntrega)
         toast({
           title: "Rascunho restaurado",
           description: `${validCart.length} ite${validCart.length === 1 ? "m" : "ns"} recuperado${validCart.length === 1 ? "" : "s"} do rascunho anterior.`,
@@ -252,7 +256,7 @@ export function PdvVendaCompletaEnterprise({
   // ── Draft save (whenever cart/cliente/desconto muda) ──────────────────────
   useEffect(() => {
     if (!hasDraftRestored.current) return
-    const draft: DraftData = { cliente: selectedCliente, cart, discountReais, discountPercent }
+    const draft: DraftData = { cliente: selectedCliente, cart, discountReais, discountPercent, tipoVenda, observacaoGeral, enderecoEntrega }
     try {
       if (cart.length > 0 || selectedCliente) {
         localStorage.setItem(DRAFT_STORAGE_KEY(storeId), JSON.stringify(draft))
@@ -262,7 +266,7 @@ export function PdvVendaCompletaEnterprise({
     } catch {
       /* ignore quota errors */
     }
-  }, [selectedCliente, cart, discountReais, discountPercent, storeId])
+  }, [selectedCliente, cart, discountReais, discountPercent, tipoVenda, observacaoGeral, enderecoEntrega, storeId])
 
   // ── Mount focus ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -520,6 +524,11 @@ export function PdvVendaCompletaEnterprise({
       clienteDocument: selectedCliente?.document ?? undefined,
       clienteTelefone: selectedCliente?.phone ?? undefined,
       clienteEmail: selectedCliente?.email ?? undefined,
+      observacoesVenda: observacaoGeral || undefined,
+      tipoVenda,
+      enderecoEntrega: Object.values(enderecoEntrega).some((v) => v.trim() !== "")
+        ? enderecoEntrega
+        : undefined,
       linhasDetalhe,
     }).catch(() => {})
 
@@ -531,6 +540,7 @@ export function PdvVendaCompletaEnterprise({
         "Loja"
       ).trim() || "Loja"
 
+    const tipoVendaLabel = TIPOS_VENDA.find((t) => t.value === tipoVenda)?.label
     const cupom: CupomData = {
       numeroPedido: result.saleId,
       at: new Date().toISOString(),
@@ -538,6 +548,8 @@ export function PdvVendaCompletaEnterprise({
       clienteNome: selectedCliente?.name ?? null,
       clienteCpf: selectedCliente?.document ?? null,
       operador: cashierId,
+      tipoVenda: tipoVenda !== "comum" ? tipoVendaLabel : undefined,
+      observacaoGeral: observacaoGeral || undefined,
       itens: cart.map((l) => ({
         nome: l.name,
         quantidade: l.qty,
@@ -566,6 +578,10 @@ export function PdvVendaCompletaEnterprise({
     setSelectedCliente(null)
     setClienteQuery("")
     setExpandedLineId(null)
+    setTipoVenda("comum")
+    setObservacaoGeral("")
+    setEnderecoEntrega(EMPTY_ENDERECO)
+    setShowEnderecoForm(false)
   }
 
   // Adapter para PaymentModal (espera { id, name, cpf, phone })
@@ -665,34 +681,136 @@ export function PdvVendaCompletaEnterprise({
             </div>
 
             {selectedCliente ? (
-              <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {selectedCliente.name}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {[
-                      selectedCliente.document?.trim() || null,
-                      selectedCliente.phone?.trim() || null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
+              <>
+                <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {selectedCliente.name}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {[
+                        selectedCliente.document?.trim() || null,
+                        selectedCliente.phone?.trim() || null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setSelectedCliente(null)
+                      setClienteQuery("")
+                      setEnderecoEntrega(EMPTY_ENDERECO)
+                      setShowEnderecoForm(false)
+                      setTimeout(() => clienteInputRef.current?.focus(), 50)
+                    }}
+                    className="ml-2 h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setSelectedCliente(null)
-                    setClienteQuery("")
-                    setTimeout(() => clienteInputRef.current?.focus(), 50)
-                  }}
-                  className="ml-2 h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
+
+                {/* Address collapsible */}
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEnderecoForm((o) => !o)}
+                    className="flex w-full items-center justify-between rounded-lg border border-border bg-secondary px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/70"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5" />
+                      Endereço de entrega
+                      {Object.values(enderecoEntrega).some((v) => v.trim() !== "") && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      )}
+                    </span>
+                    {showEnderecoForm ? (
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+
+                  {showEnderecoForm && (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">CEP</Label>
+                        <Input
+                          placeholder="00000-000"
+                          value={enderecoEntrega.cep}
+                          onChange={(e) =>
+                            setEnderecoEntrega((prev) => ({ ...prev, cep: e.target.value }))
+                          }
+                          className="h-8 border-border bg-background text-xs"
+                          maxLength={9}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">Número</Label>
+                        <Input
+                          placeholder="Nº"
+                          value={enderecoEntrega.numero}
+                          onChange={(e) =>
+                            setEnderecoEntrega((prev) => ({ ...prev, numero: e.target.value }))
+                          }
+                          className="h-8 border-border bg-background text-xs"
+                        />
+                      </div>
+                      <div className="col-span-2 space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">Logradouro</Label>
+                        <Input
+                          placeholder="Rua, Av., etc."
+                          value={enderecoEntrega.logradouro}
+                          onChange={(e) =>
+                            setEnderecoEntrega((prev) => ({ ...prev, logradouro: e.target.value }))
+                          }
+                          className="h-8 border-border bg-background text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">Bairro</Label>
+                        <Input
+                          placeholder="Bairro"
+                          value={enderecoEntrega.bairro}
+                          onChange={(e) =>
+                            setEnderecoEntrega((prev) => ({ ...prev, bairro: e.target.value }))
+                          }
+                          className="h-8 border-border bg-background text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">Cidade</Label>
+                        <Input
+                          placeholder="Cidade"
+                          value={enderecoEntrega.cidade}
+                          onChange={(e) =>
+                            setEnderecoEntrega((prev) => ({ ...prev, cidade: e.target.value }))
+                          }
+                          className="h-8 border-border bg-background text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[11px] text-muted-foreground">UF</Label>
+                        <Input
+                          placeholder="SP"
+                          value={enderecoEntrega.uf}
+                          onChange={(e) =>
+                            setEnderecoEntrega((prev) => ({
+                              ...prev,
+                              uf: e.target.value.toUpperCase().slice(0, 2),
+                            }))
+                          }
+                          className="h-8 border-border bg-background text-xs"
+                          maxLength={2}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
               <div className="relative">
                 <div className="relative">
@@ -708,15 +826,31 @@ export function PdvVendaCompletaEnterprise({
                       setClienteQuery(e.target.value)
                       setShowClienteDropdown(true)
                     }}
-                    onFocus={() => setShowClienteDropdown(true)}
-                    onBlur={() => setTimeout(() => setShowClienteDropdown(false), 180)}
+                    onFocus={() => { if (clienteQuery.trim()) setShowClienteDropdown(true) }}
+                    onBlur={() => setTimeout(() => setShowClienteDropdown(false), 200)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") { setShowClienteDropdown(false); setClienteQuery("") }
+                      if (e.key === "Enter" && clienteResultados.length > 0) {
+                        e.preventDefault()
+                        const c = clienteResultados[0]!
+                        setSelectedCliente(c)
+                        setClienteQuery("")
+                        setShowClienteDropdown(false)
+                        setTimeout(() => productInputRef.current?.focus(), 80)
+                      }
+                    }}
                     className="h-10 border-border bg-secondary pl-9 pr-9 text-sm"
                   />
                 </div>
 
-                {showClienteDropdown && clienteQuery.trim() && (
-                  <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-border bg-card shadow-xl">
-                    {clienteResultados.length > 0 ? (
+                {showClienteDropdown && (clienteResultados.length > 0 || clienteLoading) && (
+                  <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-lg">
+                    {clienteLoading && clienteResultados.length === 0 ? (
+                      <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Buscando…
+                      </div>
+                    ) : (
                       clienteResultados.map((c) => (
                         <button
                           key={c.id}
@@ -738,21 +872,12 @@ export function PdvVendaCompletaEnterprise({
                               {c.name}
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
-                              {[c.document?.trim() || null, c.phone?.trim() || null]
-                                .filter(Boolean)
-                                .join(" · ")}
+                              {c.phone?.trim() ?? ""}
                             </p>
                           </div>
                         </button>
                       ))
-                    ) : !clienteLoading ? (
-                      <div className="flex items-center gap-3 px-4 py-3">
-                        <UserPlus className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">
-                          Nenhum cliente encontrado
-                        </p>
-                      </div>
-                    ) : null}
+                    )}
                   </div>
                 )}
               </div>
@@ -1071,6 +1196,52 @@ export function PdvVendaCompletaEnterprise({
               </div>
             )}
           </div>
+
+          {/* ── DADOS DA VENDA ──────────────────────────────────────── */}
+          <div className="shrink-0 border-t border-border bg-background px-3 py-3">
+            <div className="mb-2 flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Dados da Venda
+              </span>
+            </div>
+
+            <div className="mb-3 space-y-1.5">
+              <p className="text-[11px] font-medium text-muted-foreground">Tipo</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {TIPOS_VENDA.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setTipoVenda(t.value)}
+                    className={cn(
+                      "rounded-lg border px-2 py-2 text-left text-xs transition-all",
+                      tipoVenda === t.value
+                        ? "border-primary bg-primary/10 font-semibold text-primary"
+                        : "border-border bg-card text-muted-foreground hover:bg-secondary"
+                    )}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-2 space-y-1">
+              <Label className="text-[11px] text-muted-foreground">Observação geral</Label>
+              <Input
+                placeholder="Observação para esta venda…"
+                value={observacaoGeral}
+                onChange={(e) => setObservacaoGeral(e.target.value)}
+                className="h-8 border-border bg-secondary text-xs"
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground">
+              <span>Operador</span>
+              <span className="font-mono font-medium text-foreground">{cashierId.slice(-8)}</span>
+            </div>
+          </div>
         </div>
 
         {/* ── Right sidebar ─────────────────────────────────────────── */}
@@ -1302,3 +1473,6 @@ export function PdvVendaCompletaEnterprise({
     </div>
   )
 }
+
+/** Alias semântico para uso fora do contexto de PDV. */
+export { PdvVendaCompletaEnterprise as VendaCompletaEnterprise }
