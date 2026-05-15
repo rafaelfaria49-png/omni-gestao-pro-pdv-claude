@@ -30,6 +30,11 @@ export type DashboardEliteEstoqueItem = {
   stock: number
 }
 
+export type DashboardEliteCategoriaSlice = {
+  name: string
+  total: number
+}
+
 export type DashboardEliteData = {
   ok: true
   storeId: string
@@ -38,6 +43,7 @@ export type DashboardEliteData = {
   faturamento7d: DashboardEliteFaturamentoDia[]
   movimentos: DashboardEliteMovimento[]
   estoqueCritico: DashboardEliteEstoqueItem[]
+  vendasPorCategoria: DashboardEliteCategoriaSlice[]
 }
 
 type UseDashboardEliteResult = {
@@ -59,6 +65,7 @@ function parseElitePayload(json: unknown): DashboardEliteData | null {
   const faturamento7d = Array.isArray(o.faturamento7d) ? o.faturamento7d : []
   const movimentos = Array.isArray(o.movimentos) ? o.movimentos : []
   const estoqueCritico = Array.isArray(o.estoqueCritico) ? o.estoqueCritico : []
+  const vendasPorCategoria = Array.isArray(o.vendasPorCategoria) ? o.vendasPorCategoria : []
 
   return {
     ok: true,
@@ -81,6 +88,15 @@ function parseElitePayload(json: unknown): DashboardEliteData | null {
       .filter((x): x is DashboardEliteFaturamentoDia => x !== null),
     movimentos: movimentos as DashboardEliteMovimento[],
     estoqueCritico: estoqueCritico as DashboardEliteEstoqueItem[],
+    vendasPorCategoria: vendasPorCategoria
+      .map((row) => {
+        if (!row || typeof row !== "object") return null
+        const r = row as Record<string, unknown>
+        const name = typeof r.name === "string" ? r.name.trim() : ""
+        const total = typeof r.total === "number" ? r.total : 0
+        return name && total > 0 ? { name, total } : null
+      })
+      .filter((x): x is DashboardEliteCategoriaSlice => x !== null),
   }
 }
 

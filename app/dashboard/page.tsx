@@ -162,7 +162,13 @@ export default function DashboardInicioPage() {
             useLiveData={live}
           />
         </div>
-        <CategoryChart />
+        <CategoryChart
+          vendasPorCategoria={data?.vendasPorCategoria}
+          loading={loading && hasStore}
+          useLiveData={live}
+          hasStore={hasStore}
+          error={error}
+        />
       </div>
 
       <AiInsights />

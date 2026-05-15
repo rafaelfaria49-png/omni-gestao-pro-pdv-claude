@@ -11,11 +11,12 @@ export function DashboardDemoNotice() {
     >
       <span className="font-medium text-foreground">Painel em evolução.</span>{" "}
       Com a unidade selecionada,{" "}
-      <span className="text-foreground/90">KPIs, faturamento dos últimos 7 dias, atividades recentes e estoque crítico</span>{" "}
-      usam dados reais da sua operação via API. O{" "}
-      <span className="text-foreground/90">gráfico por categorias</span> e os{" "}
+      <span className="text-foreground/90">
+        KPIs, faturamento 7D, mix por categoria, atividades recentes e estoque crítico
+      </span>{" "}
+      usam dados reais da sua operação via API. Apenas os{" "}
       <span className="text-foreground/90">insights IA</span> abaixo permanecem{" "}
-      <span className="font-medium text-foreground">demonstrativos</span> até a próxima fase.
+      <span className="font-medium text-foreground">demonstrativos</span>.
     </div>
   );
 }
