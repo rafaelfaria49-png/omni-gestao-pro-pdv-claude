@@ -73,6 +73,7 @@ import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { appendAuditLog } from "@/lib/audit-log"
+import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 
@@ -1070,6 +1071,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     () => (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
     [lojaAtivaId]
   )
+  const [clienteQuery, setClienteQuery] = useState("")
+  const { clientes: clienteSugestoes, isLoading: buscandoCliente } = useClienteSearch(clienteQuery, storeIdKey)
+  const [showCustomerSidebarDropdown, setShowCustomerSidebarDropdown] = useState(false)
   const cartHydratedRef = useRef(false)
   const cartPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -1575,6 +1579,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     setCustomerName("")
     setSelectedClienteId(null)
     setSelectedClienteDoc(null)
+    setClienteQuery("")
     setSelectedLineId(null)
     setRapidoFlashLineId(null)
     setRapidoPickIdx(0)
@@ -1972,21 +1977,107 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           {/* Customer input */}
           <div className="shrink-0 border-b border-border px-4 py-3">
             <div className="relative">
-              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              {buscandoCliente ? (
+                <Loader2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+              ) : (
+                <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              )}
               <Input
                 ref={customerInputRef}
                 value={customerName}
                 onChange={(e) => {
-                  setCustomerName(e.target.value)
+                  const v = e.target.value
+                  setCustomerName(v)
+                  setClienteQuery(v)
                   setSelectedClienteId(null)
                   setSelectedClienteDoc(null)
+                  setShowCustomerSidebarDropdown(true)
+                }}
+                onFocus={() => {
+                  if (clienteQuery.trim()) {
+                    setShowCustomerSidebarDropdown(true)
+                  }
+                }}
+                onBlur={() => setTimeout(() => setShowCustomerSidebarDropdown(false), 180)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") { setShowCustomerSidebarDropdown(false); setClienteQuery("") }
+                  if (e.key === "Enter" && clienteSugestoes.length > 0) {
+                    e.preventDefault()
+                    const c = clienteSugestoes[0]!
+                    setCustomerName(c.name)
+                    setSelectedClienteId(c.id)
+                    setSelectedClienteDoc(null)
+                    setClienteQuery("")
+                    setShowCustomerSidebarDropdown(false)
+                  }
                 }}
                 placeholder="Cliente — A Prazo/Fiado  [F2]"
                 className="h-9 rounded-xl border-border bg-background pl-9 pr-14 text-sm"
               />
-              <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
-                F2
-              </kbd>
+              {customerName.trim() ? (
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setCustomerName("")
+                    setSelectedClienteId(null)
+                    setSelectedClienteDoc(null)
+                    setClienteQuery("")
+                    setShowCustomerSidebarDropdown(false)
+                    customerInputRef.current?.focus()
+                  }}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
+                  F2
+                </kbd>
+              )}
+              {/* Inline dropdown */}
+              {showCustomerSidebarDropdown && (clienteSugestoes.length > 0 || buscandoCliente) && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+                  {buscandoCliente && clienteSugestoes.length === 0 ? (
+                    <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Buscando…
+                    </div>
+                  ) : clienteSugestoes.length === 0 ? (
+                    <p className="px-4 py-3 text-sm text-muted-foreground">
+                      Nenhum resultado. Digite para continuar com nome livre.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {clienteSugestoes.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-accent"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setCustomerName(c.name)
+                            setSelectedClienteId(c.id)
+                            setSelectedClienteDoc(null)
+                            setClienteQuery("")
+                            setShowCustomerSidebarDropdown(false)
+                          }}
+                        >
+                          <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                            {c.name.slice(0, 1).toUpperCase()}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {c.phone ?? ""}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

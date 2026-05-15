@@ -50,22 +50,19 @@ export function useClienteSearch(
           return
         }
 
-        const data: unknown = await res.json()
-        if (Array.isArray(data)) {
-          setClientes(
-            data.map((item) => {
-              const r = item as Record<string, unknown>
-              return {
-                id: String(r["id"] ?? ""),
-                name: String(r["name"] ?? ""),
-                phone: r["phone"] != null ? String(r["phone"]) : null,
-                email: r["email"] != null ? String(r["email"]) : null,
-              }
-            }),
-          )
-        } else {
-          setClientes([])
-        }
+        const data = (await res.json()) as { clientes?: unknown }
+        const arr = Array.isArray(data?.clientes) ? (data.clientes as unknown[]) : []
+        setClientes(
+          arr.map((item) => {
+            const r = item as Record<string, unknown>
+            return {
+              id: String(r["id"] ?? ""),
+              name: String(r["name"] ?? ""),
+              phone: r["phone"] != null ? String(r["phone"]) : null,
+              email: r["email"] != null ? String(r["email"]) : null,
+            }
+          }),
+        )
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return
         setClientes([])
