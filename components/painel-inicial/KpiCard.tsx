@@ -14,6 +14,12 @@ type Props = {
   spark?: number[];
   /** Quando true, não exibe variação percentual fictícia (painel ilustrativo). */
   hideTrend?: boolean;
+  /** Exibe estado de carregamento sem alterar o layout do card. */
+  loading?: boolean;
+  /** Com hideTrend: substitui o selo "Ilustrativo" (ex.: "Ao vivo"). */
+  statusLabel?: string;
+  /** Oculta o mini spark decorativo (dados reais sem série histórica no card). */
+  hideSpark?: boolean;
 };
 
 const accentBg: Record<NonNullable<Props["accent"]>, string> = {
@@ -39,6 +45,9 @@ export function KpiCard({
   accent = "primary",
   spark = [4, 6, 5, 8, 7, 10, 9, 12, 11, 14],
   hideTrend = false,
+  loading = false,
+  statusLabel,
+  hideSpark = false,
 }: Props) {
   const positive = !hideTrend && trend >= 0;
   const data = spark.map((v, i) => ({ i, v }));
@@ -46,7 +55,12 @@ export function KpiCard({
   const gradId = `spark-${accent}-${label.replace(/\s/g, "")}`;
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 hover:border-foreground/20 transition-colors">
+    <div
+      className={[
+        "rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20",
+        loading ? "animate-pulse" : "",
+      ].join(" ")}
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <div className={`h-6 w-6 rounded-md grid place-items-center ${accentBg[accent]}`}>
@@ -56,8 +70,12 @@ export function KpiCard({
             {label}
           </span>
         </div>
-        {hideTrend ? (
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Ilustrativo</span>
+        {loading ? (
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">…</span>
+        ) : hideTrend ? (
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {statusLabel ?? "Ilustrativo"}
+          </span>
         ) : (
           <span
             className={[
@@ -85,27 +103,29 @@ export function KpiCard({
             <div className="mt-0.5 text-[11px] text-muted-foreground truncate">{hint}</div>
           )}
         </div>
-        <div className="h-10 w-20 shrink-0 -mb-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={stroke} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <Area
-                type="monotone"
-                dataKey="v"
-                stroke={stroke}
-                strokeWidth={1.5}
-                fill={`url(#${gradId})`}
-                dot={false}
-                isAnimationActive={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
+        {!hideSpark ? (
+          <div className="h-10 w-20 shrink-0 -mb-1">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={stroke} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type="monotone"
+                  dataKey="v"
+                  stroke={stroke}
+                  strokeWidth={1.5}
+                  fill={`url(#${gradId})`}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        ) : null}
       </div>
     </div>
   );
