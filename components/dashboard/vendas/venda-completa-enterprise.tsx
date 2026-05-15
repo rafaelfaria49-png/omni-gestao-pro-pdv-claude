@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  CreditCard,
   FileText,
   HelpCircle,
   Loader2,
@@ -38,11 +39,6 @@ import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-recebe
 import { appendAuditLog } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { enrichVendaEnterprise } from "@/app/actions/vendas-enterprise"
-import {
-  PaymentModal,
-  type PaymentMethod,
-  type PaymentMethodType,
-} from "./payment-modal"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -100,39 +96,40 @@ type DraftData = {
   cliente: ClienteResult | null
   cart: CartLine[]
   discountReais: number
-  discountPercent: number
   tipoVenda?: TipoVenda
   observacaoGeral?: string
   enderecoEntrega?: EnderecoEntrega
 }
 
+type FormaPagamento = "dinheiro" | "pix" | "cartao_debito" | "cartao_credito" | "a_prazo" | "carne"
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-// v2 key invalidates pre-ERP-table drafts that lack codigo/unid/discountPct
 const DRAFT_KEY = (storeId: string) => `omnigestao:venda-completa-ent-v2:${storeId}`
+
+const FORMAS_PAGAMENTO: { value: FormaPagamento; label: string }[] = [
+  { value: "dinheiro",      label: "Dinheiro" },
+  { value: "pix",           label: "PIX" },
+  { value: "cartao_debito", label: "Débito" },
+  { value: "cartao_credito",label: "Crédito" },
+  { value: "a_prazo",       label: "A Prazo" },
+  { value: "carne",         label: "Carnê" },
+]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const brl = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
 
-function paymentLabel(type: PaymentMethodType): string {
-  const labels: Record<PaymentMethodType, string> = {
-    dinheiro: "Dinheiro",
-    pix: "PIX",
-    cartao_debito: "Débito",
-    cartao_credito: "Crédito",
-    carne: "Carnê",
-    a_prazo: "A prazo",
-    credito_vale: "Crédito/Vale",
-  }
-  return labels[type] ?? type
+function formaLabel(f: FormaPagamento, parcelas: number): string {
+  if (f === "cartao_credito" && parcelas > 1) return `Crédito ${parcelas}x`
+  return FORMAS_PAGAMENTO.find((fp) => fp.value === f)?.label ?? f
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
-  const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  const { inventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
   const { pdvParams } = useStoreSettings()
   const { toast } = useToast()
@@ -163,10 +160,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
   // ── Desconto global ───────────────────────────────────────────────────────
   const [discountReais, setDiscountReais] = useState(0)
-  const [discountPercent, setDiscountPercent] = useState(0)
 
-  // ── Pagamento / Cupom ─────────────────────────────────────────────────────
+  // ── Pagamento simples ────────────────────────────────────────────────────
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento | null>(null)
+  const [parcelas, setParcelas] = useState(1)
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  // ── Cupom ─────────────────────────────────────────────────────────────────
   const [cupomOpen, setCupomOpen] = useState(false)
   const [cupomData, setCupomData] = useState<CupomData | null>(null)
 
@@ -212,7 +213,6 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     () => (selectedCliente?.document ? getSaldoCreditoCliente(selectedCliente.document) : 0),
     [selectedCliente, getSaldoCreditoCliente],
   )
-  const canFinalize = selectedCliente !== null && cart.length > 0 && total > 0
 
   // ── Draft restore ─────────────────────────────────────────────────────────
   const hasDraftRestored = useRef(false)
@@ -230,7 +230,6 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       if (validCart.length > 0) {
         setCart(validCart)
         if ((draft.discountReais ?? 0) > 0) setDiscountReais(draft.discountReais)
-        if ((draft.discountPercent ?? 0) > 0) setDiscountPercent(draft.discountPercent)
         if (draft.cliente) setSelectedCliente(draft.cliente)
         if (draft.tipoVenda) setTipoVenda(draft.tipoVenda)
         if (draft.observacaoGeral) setObservacaoGeral(draft.observacaoGeral)
@@ -240,9 +239,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           description: `${validCart.length} ite${validCart.length === 1 ? "m" : "ns"} recuperado${validCart.length === 1 ? "" : "s"}.`,
         })
       }
-    } catch {
-      /* ignore malformed draft */
-    }
+    } catch { /* ignore */ }
   }, [inventory, storeId, toast])
 
   // ── Draft save ────────────────────────────────────────────────────────────
@@ -254,7 +251,6 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           cliente: selectedCliente,
           cart,
           discountReais,
-          discountPercent,
           tipoVenda,
           observacaoGeral,
           enderecoEntrega,
@@ -263,10 +259,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       } else {
         localStorage.removeItem(DRAFT_KEY(storeId))
       }
-    } catch {
-      /* ignore quota errors */
-    }
-  }, [selectedCliente, cart, discountReais, discountPercent, tipoVenda, observacaoGeral, enderecoEntrega, storeId])
+    } catch { /* ignore */ }
+  }, [selectedCliente, cart, discountReais, tipoVenda, observacaoGeral, enderecoEntrega, storeId])
 
   // ── Mount focus ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -281,7 +275,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       switch (e.key) {
         case "F1":
           e.preventDefault()
-          if (canFinalize && !isPaymentOpen && !cupomOpen && !helpOpen) setIsPaymentOpen(true)
+          if (!isPaymentOpen && !cupomOpen && !helpOpen) handleClickFinalize()
           break
         case "F2":
           e.preventDefault()
@@ -308,7 +302,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           break
       }
     },
-    [canFinalize, selectedCliente, isPaymentOpen, cupomOpen, helpOpen],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen],
   )
 
   useEffect(() => {
@@ -386,147 +381,175 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setCart((prev) => prev.map((l) => l.lineId === lineId ? { ...l, discountPct: clamped } : l))
   }
 
-  // ── Finalization ──────────────────────────────────────────────────────────
-  function handleConfirmPayment(
-    payments: PaymentMethod[],
-    meta?: {
-      cashierId?: string
-      discountAuthorizedByAdminId?: string
-      discountReais?: number
-      discountPercent?: number
-    },
-  ) {
-    const saleLines = cart
-      .filter((l) => inventory.some((i) => i.id === l.inventoryId))
-      .map((l) => ({
-        inventoryId: l.inventoryId,
-        quantity: l.qty,
-        unitPrice: l.price * (1 - l.discountPct / 100),
-        name: l.name,
-      }))
-
-    if (saleLines.length === 0) {
-      toast({ title: "Carrinho vazio", description: "Adicione itens antes de finalizar.", variant: "destructive" })
+  // ── Validações e abertura do modal ────────────────────────────────────────
+  function handleClickFinalize() {
+    if (!selectedCliente) {
+      toast({ title: "Cliente obrigatório", description: "Selecione o cliente antes de finalizar [F2].", variant: "destructive" })
+      clienteInputRef.current?.focus()
       return
     }
-
-    let dinheiro = 0, pix = 0, cartaoDebito = 0, cartaoCredito = 0, carne = 0, aPrazo = 0, creditoVale = 0
-    for (const p of payments) {
-      if (p.type === "dinheiro") dinheiro += p.value
-      else if (p.type === "pix") pix += p.value
-      else if (p.type === "cartao_debito") cartaoDebito += p.value
-      else if (p.type === "cartao_credito") cartaoCredito += p.value
-      else if (p.type === "carne") carne += p.value
-      else if (p.type === "a_prazo") aPrazo += p.value
-      else if (p.type === "credito_vale") creditoVale += p.value
-    }
-
-    const result = finalizeSaleTransaction({
-      lines: saleLines,
-      total,
-      paymentBreakdown: { dinheiro, pix, cartaoDebito, cartaoCredito, carne, aPrazo, creditoVale },
-      auditMeta: {
-        cashierId: meta?.cashierId ?? cashierId,
-        discountAuthorizedByAdminId: meta?.discountAuthorizedByAdminId,
-        discountReais: meta?.discountReais ?? discountReais,
-        discountPercent: meta?.discountPercent ?? discountPercent,
-      },
-      customerCpf: selectedCliente?.document ?? undefined,
-      customerName: selectedCliente?.name,
-    })
-
-    if (!result.ok) {
-      toast({ title: "Falha transacional", description: result.reason, variant: "destructive" })
+    if (cart.length === 0) {
+      toast({ title: "Carrinho vazio", description: "Adicione produtos ao pedido antes de finalizar.", variant: "destructive" })
+      productInputRef.current?.focus()
       return
     }
-
-    if (aPrazo > 0.02 && selectedCliente) {
-      appendContaReceberTituloPdvAprazo({
-        lojaId: storeId,
-        saleId: result.saleId,
-        clienteNome: selectedCliente.name,
-        valor: aPrazo,
-      })
+    if (total <= 0) {
+      toast({ title: "Total inválido", description: "O valor total precisa ser maior que zero.", variant: "destructive" })
+      return
     }
-
-    appendAuditLog({
-      action: "sale_finalized",
-      userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
-      detail: `Venda Completa Enterprise ${result.saleId} | Cliente: ${selectedCliente?.name ?? "—"} | Total ${brl(total)}`,
-    })
-
-    const linhasDetalhe = cart
-      .filter((l) => l.detail && Object.values(l.detail).some(Boolean))
-      .map((l) => ({
-        inventoryId: l.inventoryId,
-        nome: l.name,
-        imei: l.detail?.imei,
-        serial: l.detail?.serial,
-        garantiaDias: l.detail?.garantiaDias,
-        observacao: l.detail?.observacao,
-      }))
-
-    void enrichVendaEnterprise({
-      pedidoId: result.saleId,
-      storeId,
-      clienteId: selectedCliente?.id,
-      clienteNome: selectedCliente?.name,
-      clienteDocument: selectedCliente?.document ?? undefined,
-      clienteTelefone: selectedCliente?.phone ?? undefined,
-      clienteEmail: selectedCliente?.email ?? undefined,
-      observacoesVenda: observacaoGeral || undefined,
-      tipoVenda,
-      enderecoEntrega: Object.values(enderecoEntrega).some((v) => v.trim() !== "")
-        ? enderecoEntrega
-        : undefined,
-      linhasDetalhe,
-    }).catch(() => {})
-
-    const storeDisplayName =
-      (empresaDocumentos.nomeFantasia || configPadrao.empresa.nomeFantasia || "Loja").trim() || "Loja"
-
-    const tipoVendaLabel = TIPOS_VENDA.find((t) => t.value === tipoVenda)?.label
-    const cupom: CupomData = {
-      numeroPedido: result.saleId,
-      at: new Date().toISOString(),
-      lojaNome: storeDisplayName,
-      clienteNome: selectedCliente?.name ?? null,
-      clienteCpf: selectedCliente?.document ?? null,
-      operador: cashierId,
-      tipoVenda: tipoVenda !== "comum" ? tipoVendaLabel : undefined,
-      observacaoGeral: observacaoGeral || undefined,
-      itens: cart.map((l) => ({
-        nome: l.name,
-        quantidade: l.qty,
-        precoUnitario: l.price,
-        lineTotal: Math.round(l.price * l.qty * (1 - l.discountPct / 100) * 100) / 100,
-      })),
-      pagamentos: payments.map((p) => ({ label: paymentLabel(p.type), valor: p.value })),
-      total,
-      desconto: discountReais > 0 ? discountReais : undefined,
+    if (!caixa.isOpen) {
+      toast({ title: "Caixa fechado", description: "Abra o caixa antes de registrar uma venda.", variant: "destructive" })
+      return
     }
-
-    setCupomData(cupom)
-    setIsPaymentOpen(false)
-    setCupomOpen(true)
-
-    try { localStorage.removeItem(DRAFT_KEY(storeId)) } catch {}
-
-    setCart([])
-    setDiscountReais(0)
-    setDiscountPercent(0)
-    setSelectedCliente(null)
-    setClienteQuery("")
-    setExpandedLineId(null)
-    setTipoVenda("comum")
-    setObservacaoGeral("")
-    setEnderecoEntrega(EMPTY_ENDERECO)
-    setShowEnderecoForm(false)
+    setFormaPagamento(null)
+    setParcelas(1)
+    setIsPaymentOpen(true)
   }
 
-  const paymentModalCustomer = selectedCliente
-    ? { id: selectedCliente.id, name: selectedCliente.name, cpf: selectedCliente.document ?? "", phone: selectedCliente.phone ?? "" }
-    : null
+  // ── Confirmação e finalização ─────────────────────────────────────────────
+  async function handleConfirmPayment() {
+    if (!formaPagamento) {
+      toast({ title: "Selecione a forma de pagamento", variant: "destructive" })
+      return
+    }
+    if (!selectedCliente || cart.length === 0 || total <= 0) return
+
+    setIsProcessing(true)
+    try {
+      const saleLines = cart
+        .filter((l) => inventory.some((i) => i.id === l.inventoryId))
+        .map((l) => ({
+          inventoryId: l.inventoryId,
+          quantity: l.qty,
+          unitPrice: l.price * (1 - l.discountPct / 100),
+          name: l.name,
+        }))
+
+      const paymentBreakdown = {
+        dinheiro:       formaPagamento === "dinheiro"      ? total : 0,
+        pix:            formaPagamento === "pix"           ? total : 0,
+        cartaoDebito:   formaPagamento === "cartao_debito" ? total : 0,
+        cartaoCredito:  formaPagamento === "cartao_credito"? total : 0,
+        aPrazo:         formaPagamento === "a_prazo"       ? total : 0,
+        carne:          formaPagamento === "carne"         ? total : 0,
+      }
+
+      const result = finalizeSaleTransaction({
+        lines: saleLines,
+        total,
+        paymentBreakdown,
+        auditMeta: {
+          cashierId,
+          discountReais,
+          discountPercent: subtotal > 0 ? (discountReais / (subtotal + totalPerLineDiscount)) * 100 : 0,
+        },
+        customerCpf: selectedCliente.document ?? undefined,
+        customerName: selectedCliente.name,
+      })
+
+      if (!result.ok) {
+        toast({ title: "Falha ao registrar venda", description: result.reason, variant: "destructive" })
+        return
+      }
+
+      if (formaPagamento === "a_prazo") {
+        appendContaReceberTituloPdvAprazo({
+          lojaId: storeId,
+          saleId: result.saleId,
+          clienteNome: selectedCliente.name,
+          valor: total,
+        })
+      }
+
+      appendAuditLog({
+        action: "sale_finalized",
+        userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
+        detail: `Venda Completa Enterprise ${result.saleId} | ${selectedCliente.name} | ${formaLabel(formaPagamento, parcelas)} | ${brl(total)}`,
+      })
+
+      const linhasDetalhe = cart
+        .filter((l) => l.detail && Object.values(l.detail).some(Boolean))
+        .map((l) => ({
+          inventoryId: l.inventoryId,
+          nome: l.name,
+          imei: l.detail?.imei,
+          serial: l.detail?.serial,
+          garantiaDias: l.detail?.garantiaDias,
+          observacao: l.detail?.observacao,
+        }))
+
+      // enrichVendaEnterprise awaited — persiste dados completos no DB
+      const enrichResult = await enrichVendaEnterprise({
+        pedidoId: result.saleId,
+        storeId,
+        clienteId: selectedCliente.id,
+        clienteNome: selectedCliente.name,
+        clienteDocument: selectedCliente.document ?? undefined,
+        clienteTelefone: selectedCliente.phone ?? undefined,
+        clienteEmail: selectedCliente.email ?? undefined,
+        observacoesVenda: observacaoGeral || undefined,
+        tipoVenda,
+        enderecoEntrega: Object.values(enderecoEntrega).some((v) => v.trim() !== "")
+          ? enderecoEntrega
+          : undefined,
+        linhasDetalhe,
+      })
+
+      if (!enrichResult.ok) {
+        // Venda local já registrada — avisa sem bloquear o fluxo
+        toast({
+          title: "Aviso de sincronização",
+          description: "Venda registrada localmente. Os dados detalhados serão sincronizados em breve.",
+        })
+      }
+
+      const storeDisplayName =
+        (empresaDocumentos.nomeFantasia || configPadrao.empresa.nomeFantasia || "Loja").trim() || "Loja"
+
+      const tipoVendaLabel = TIPOS_VENDA.find((t) => t.value === tipoVenda)?.label
+      const cupom: CupomData = {
+        numeroPedido: result.saleId,
+        at: new Date().toISOString(),
+        lojaNome: storeDisplayName,
+        clienteNome: selectedCliente.name,
+        clienteCpf: selectedCliente.document ?? null,
+        operador: cashierId,
+        tipoVenda: tipoVenda !== "comum" ? tipoVendaLabel : undefined,
+        observacaoGeral: observacaoGeral || undefined,
+        itens: cart.map((l) => ({
+          nome: l.name,
+          quantidade: l.qty,
+          precoUnitario: l.price,
+          lineTotal: Math.round(l.price * l.qty * (1 - l.discountPct / 100) * 100) / 100,
+        })),
+        pagamentos: [{ label: formaLabel(formaPagamento, parcelas), valor: total }],
+        total,
+        desconto: discountReais > 0 ? discountReais : undefined,
+      }
+
+      setCupomData(cupom)
+      setIsPaymentOpen(false)
+      setCupomOpen(true)
+
+      try { localStorage.removeItem(DRAFT_KEY(storeId)) } catch {}
+
+      setCart([])
+      setDiscountReais(0)
+      setSelectedCliente(null)
+      setClienteQuery("")
+      setExpandedLineId(null)
+      setTipoVenda("comum")
+      setObservacaoGeral("")
+      setEnderecoEntrega(EMPTY_ENDERECO)
+      setShowEnderecoForm(false)
+      setFormaPagamento(null)
+      setParcelas(1)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const canFinalize = selectedCliente !== null && cart.length > 0 && total > 0 && caixa.isOpen
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -563,6 +586,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
             <Badge variant="secondary" className="shrink-0 tabular-nums">
               {cart.reduce((s, l) => s + l.qty, 0)}{" "}
               {cart.reduce((s, l) => s + l.qty, 0) === 1 ? "item" : "itens"}
+            </Badge>
+          )}
+
+          {!caixa.isOpen && (
+            <Badge variant="destructive" className="shrink-0 text-[10px]">
+              Caixa fechado
             </Badge>
           )}
 
@@ -785,7 +814,6 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                   className="h-10 border-border bg-secondary pl-9 text-sm"
                 />
 
-                {/* Dropdown de sugestões */}
                 {showProductDropdown && filteredProducts.length > 0 && (
                   <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-lg">
                     <div className="max-h-60 overflow-y-auto">
@@ -811,10 +839,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                             </div>
                             <div className="ml-3 shrink-0 text-right">
                               <p className="text-xs font-bold tabular-nums text-primary">{brl(p.price)}</p>
-                              <p className={cn(
-                                "text-[10px]",
-                                outOfStock ? "text-destructive/70" : lowStock ? "text-amber-500" : "text-muted-foreground",
-                              )}>
+                              <p className={cn("text-[10px]", outOfStock ? "text-destructive/70" : lowStock ? "text-amber-500" : "text-muted-foreground")}>
                                 {isService ? "Serviço" : `${p.stock} un`}
                               </p>
                             </div>
@@ -834,7 +859,6 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                 )}
               </div>
 
-              {/* Sem catálogo */}
               {products.length === 0 && !productQuery && cart.length === 0 && (
                 <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-8 text-center">
                   <PackageSearch className="mb-1.5 h-6 w-6 text-muted-foreground/40" />
@@ -843,14 +867,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                 </div>
               )}
 
-              {/* Tabela ERP */}
               {cart.length === 0 && products.length > 0 ? (
                 <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-10 text-center">
                   <PackageSearch className="mb-2 h-8 w-8 text-muted-foreground/40" />
                   <p className="text-sm font-medium text-muted-foreground">Nenhum item adicionado</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground/60">
-                    Busque um produto acima para incluir no pedido
-                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground/60">Busque um produto acima</p>
                 </div>
               ) : cart.length > 0 ? (
                 <div className="overflow-x-auto rounded-xl border border-border">
@@ -873,17 +894,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                         const isExpanded = expandedLineId === line.lineId
                         const hasDetail = line.detail && Object.values(line.detail).some(Boolean)
                         const lineTotal = line.price * line.qty * (1 - line.discountPct / 100)
-
                         return (
                           <>
                             <tr key={line.lineId} className="bg-card">
-                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
-                                {idx + 1}
-                              </td>
+                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">{idx + 1}</td>
                               <td className="px-2 py-2.5">
-                                <span className="font-mono text-[10px] text-muted-foreground">
-                                  {line.codigo || "—"}
-                                </span>
+                                <span className="font-mono text-[10px] text-muted-foreground">{line.codigo || "—"}</span>
                               </td>
                               <td className="px-2 py-2.5">
                                 <p className="font-medium leading-tight text-foreground">{line.name}</p>
@@ -896,9 +912,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                   </p>
                                 )}
                               </td>
-                              <td className="px-2 py-2.5 text-center text-muted-foreground">
-                                {line.unid}
-                              </td>
+                              <td className="px-2 py-2.5 text-center text-muted-foreground">{line.unid}</td>
                               <td className="px-2 py-2.5 text-center">
                                 <input
                                   type="number"
@@ -911,9 +925,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                   className="w-14 rounded border border-border bg-background px-1.5 py-0.5 text-center text-xs font-bold tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                                 />
                               </td>
-                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
-                                {brl(line.price)}
-                              </td>
+                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">{brl(line.price)}</td>
                               <td className="px-2 py-2.5 text-center">
                                 <div className="flex items-center justify-center gap-0.5">
                                   <input
@@ -948,7 +960,6 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                                           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
                                           : "border-border bg-background text-muted-foreground hover:bg-secondary",
                                     )}
-                                    title="Detalhar item"
                                   >
                                     {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                                   </button>
@@ -1089,7 +1100,6 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         {/* ── Sidebar direita: totais + finalizar ── */}
         <div className="flex w-72 shrink-0 flex-col overflow-hidden border-l border-border bg-background">
 
-          {/* Scrollável */}
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
 
             {/* Resumo de valores */}
@@ -1097,28 +1107,23 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
               <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                 Resumo
               </p>
-
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="tabular-nums font-medium text-foreground">{brl(subtotal + totalPerLineDiscount)}</span>
                 </div>
-
                 {totalPerLineDiscount > 0 && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">Desc. por item</span>
                     <span className="tabular-nums text-amber-500">−{brl(totalPerLineDiscount)}</span>
                   </div>
                 )}
-
                 {totalPerLineDiscount > 0 && (
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal c/ desc.</span>
                     <span className="tabular-nums font-medium text-foreground">{brl(subtotal)}</span>
                   </div>
                 )}
-
-                {/* Desconto global */}
                 <div className="space-y-1 pt-1">
                   <Label className="text-[11px] text-muted-foreground">Desconto global (R$)</Label>
                   <Input
@@ -1133,14 +1138,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     className="h-8 border-border bg-background text-xs tabular-nums"
                   />
                 </div>
-
                 {discountReais > 0 && (
                   <div className="flex items-center justify-between text-xs text-amber-500">
                     <span>Desc. global</span>
                     <span className="tabular-nums">−{brl(discountReais)}</span>
                   </div>
                 )}
-
                 <div className="flex items-center justify-between border-t border-border pt-3">
                   <span className="text-base font-bold text-foreground">Total</span>
                   <span className="text-xl font-bold tabular-nums text-foreground">{brl(total)}</span>
@@ -1167,6 +1170,18 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     <span className="font-medium text-foreground">{cart.length}</span>
                   </div>
                 )}
+                <div className="flex items-center justify-between">
+                  <span>Caixa</span>
+                  <span className={cn("font-medium", caixa.isOpen ? "text-emerald-600 dark:text-emerald-400" : "text-destructive")}>
+                    {caixa.isOpen ? "Aberto" : "Fechado"}
+                  </span>
+                </div>
+                {customerStoreCredit > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span>Crédito cliente</span>
+                    <span className="font-medium text-emerald-600 dark:text-emerald-400">{brl(customerStoreCredit)}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1185,15 +1200,21 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                 </p>
               </div>
             )}
+            {!caixa.isOpen && (
+              <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-2.5 py-2">
+                <p className="text-[11px] font-medium text-destructive">
+                  Abra o caixa antes de registrar uma venda.
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Botão finalizar */}
           <div className="shrink-0 border-t border-border p-4">
             <Button
               type="button"
               className="h-12 w-full rounded-xl bg-emerald-600 text-sm font-bold text-zinc-950 shadow-lg hover:bg-emerald-500 disabled:opacity-50"
               disabled={!canFinalize}
-              onClick={() => setIsPaymentOpen(true)}
+              onClick={handleClickFinalize}
             >
               <span>Finalizar Venda</span>
               <kbd className="ml-2 rounded border border-zinc-950/20 bg-zinc-950/10 px-1.5 py-0.5 font-mono text-[10px] font-medium">
@@ -1204,9 +1225,100 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {/* ── Modais ── */}
+      {/* ── Modal de pagamento simples ── */}
+      <Dialog open={isPaymentOpen} onOpenChange={(o) => { if (!isProcessing) setIsPaymentOpen(o) }}>
+        <DialogContent className="max-w-sm rounded-2xl border-border bg-card p-0">
+          <DialogHeader className="border-b border-border px-5 py-3">
+            <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
+              <CreditCard className="h-4 w-4 text-primary" />
+              Confirmar Pagamento
+            </DialogTitle>
+          </DialogHeader>
 
-      {/* Help */}
+          <div className="space-y-4 px-5 py-4">
+            {/* Total */}
+            <div className="rounded-xl border border-border bg-background px-4 py-3 text-center">
+              {selectedCliente && (
+                <p className="mb-0.5 text-xs text-muted-foreground">{selectedCliente.name}</p>
+              )}
+              <p className="text-3xl font-bold tabular-nums text-foreground">{brl(total)}</p>
+              {discountReais > 0 && (
+                <p className="mt-0.5 text-[11px] text-amber-500">Inclui desconto de {brl(discountReais)}</p>
+              )}
+            </div>
+
+            {/* Forma de pagamento */}
+            <div className="space-y-2">
+              <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Forma de pagamento
+              </Label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {FORMAS_PAGAMENTO.map((f) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    onClick={() => { setFormaPagamento(f.value); if (f.value !== "cartao_credito") setParcelas(1) }}
+                    className={cn(
+                      "rounded-lg border px-2 py-2.5 text-center text-xs font-medium transition-all",
+                      formaPagamento === f.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:bg-secondary",
+                    )}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Parcelamento (só crédito) */}
+            {formaPagamento === "cartao_credito" && (
+              <div className="space-y-2">
+                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Parcelamento
+                </Label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setParcelas(n)}
+                      className={cn(
+                        "flex flex-col items-center rounded-lg border px-1 py-1.5 text-center transition-all",
+                        parcelas === n
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:bg-secondary",
+                      )}
+                    >
+                      <span className="text-xs font-bold">{n}x</span>
+                      <span className="text-[9px] tabular-nums">{brl(total / n)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Botão confirmar */}
+            <Button
+              type="button"
+              className="h-11 w-full rounded-xl bg-emerald-600 font-bold text-zinc-950 hover:bg-emerald-500 disabled:opacity-50"
+              disabled={!formaPagamento || isProcessing}
+              onClick={handleConfirmPayment}
+            >
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Registrando venda…
+                </span>
+              ) : (
+                `Confirmar ${formaPagamento ? formaLabel(formaPagamento, parcelas) : ""}`
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Modal de ajuda ── */}
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
         <DialogContent className="max-w-md rounded-2xl border-border bg-card p-0">
           <DialogHeader className="border-b border-border px-5 py-3">
@@ -1257,30 +1369,13 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           </div>
           <div className="border-t border-border px-5 py-2.5">
             <p className="text-[11px] text-muted-foreground">
-              Operador:{" "}
-              <span className="font-mono font-medium text-foreground">{cashierId}</span>
+              Operador: <span className="font-mono font-medium text-foreground">{cashierId}</span>
             </p>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* PaymentModal */}
-      <PaymentModal
-        isOpen={isPaymentOpen}
-        onClose={() => setIsPaymentOpen(false)}
-        cartSubtotal={subtotal}
-        total={total}
-        discountReais={discountReais}
-        discountPercent={discountPercent}
-        onDiscountReaisChange={setDiscountReais}
-        onDiscountPercentChange={setDiscountPercent}
-        selectedCustomer={paymentModalCustomer}
-        customerStoreCredit={customerStoreCredit}
-        cashierId={cashierId}
-        onConfirm={handleConfirmPayment}
-      />
-
-      {/* Cupom não fiscal */}
+      {/* ── Cupom não fiscal ── */}
       {cupomData && (
         <CupomNaoFiscal
           isOpen={cupomOpen}
