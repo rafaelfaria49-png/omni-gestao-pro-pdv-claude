@@ -178,13 +178,17 @@ export default function DashboardInicioPage() {
         <CriticalStock
           estoqueCritico={data?.estoqueCritico}
           loading={loading && hasStore}
-          useLiveData={live}
+          useLiveData={hasStore}
+          isConnected={live}
+          error={error}
           hasStore={hasStore}
         />
         <RecentActivityTable
           movimentos={data?.movimentos}
           loading={loading && hasStore}
-          useLiveData={live}
+          useLiveData={hasStore}
+          isConnected={live}
+          error={error}
           hasStore={hasStore}
         />
       </div>

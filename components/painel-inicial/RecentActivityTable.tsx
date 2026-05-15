@@ -110,6 +110,9 @@ type RecentActivityTableProps = {
   /** Exibe linhas de exemplo quando não está em modo ao vivo. */
   showDemoPreview?: boolean;
   hasStore?: boolean;
+  error?: string | null;
+  /** API carregada com sucesso (exibe selo Ao vivo). */
+  isConnected?: boolean;
 };
 
 export function RecentActivityTable({
@@ -118,10 +121,13 @@ export function RecentActivityTable({
   useLiveData = false,
   showDemoPreview = false,
   hasStore = true,
+  error = null,
+  isConnected = false,
 }: RecentActivityTableProps) {
   const showDemo = showDemoPreview && !useLiveData && !loading;
   const liveRows = useLiveData ? (movimentos ?? []) : [];
-  const isEmptyLive = useLiveData && !loading && hasStore && liveRows.length === 0;
+  const isEmptyLive = useLiveData && !loading && hasStore && !error && liveRows.length === 0;
+  const failedLive = useLiveData && !loading && hasStore && Boolean(error);
 
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -130,7 +136,7 @@ export function RecentActivityTable({
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-display font-semibold text-[14px] tracking-tight">Atividades Recentes</h3>
             {showDemo ? <DemoBadge>Exemplo</DemoBadge> : null}
-            {useLiveData && !loading ? (
+            {isConnected && !loading ? (
               <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">Ao vivo</span>
             ) : null}
           </div>
@@ -158,6 +164,11 @@ export function RecentActivityTable({
       ) : !hasStore && useLiveData ? (
         <div className="px-5 py-10 text-center text-sm text-muted-foreground" role="status">
           Selecione uma unidade para ver as atividades recentes.
+        </div>
+      ) : failedLive ? (
+        <div className="px-5 py-10 text-center text-sm text-muted-foreground" role="alert">
+          <p className="font-medium text-foreground">Atividades indisponíveis</p>
+          <p className="mt-1 text-xs">Use &quot;Atualizar&quot; no topo do painel para tentar novamente.</p>
         </div>
       ) : isEmptyLive ? (
         <div className="px-5 py-10 text-center text-sm text-muted-foreground" role="status">

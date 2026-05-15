@@ -57,6 +57,8 @@ type CriticalStockProps = {
   useLiveData?: boolean;
   showDemoPreview?: boolean;
   hasStore?: boolean;
+  error?: string | null;
+  isConnected?: boolean;
 };
 
 export function CriticalStock({
@@ -65,10 +67,13 @@ export function CriticalStock({
   useLiveData = false,
   showDemoPreview = false,
   hasStore = true,
+  error = null,
+  isConnected = false,
 }: CriticalStockProps) {
   const showDemo = showDemoPreview && !useLiveData && !loading;
   const liveItems = useLiveData ? (estoqueCritico ?? []) : [];
-  const isEmptyLive = useLiveData && !loading && hasStore && liveItems.length === 0;
+  const isEmptyLive = useLiveData && !loading && hasStore && !error && liveItems.length === 0;
+  const failedLive = useLiveData && !loading && hasStore && Boolean(error);
   const rows = showDemo ? DEMO_ITEMS : liveItems;
 
   return (
@@ -80,7 +85,7 @@ export function CriticalStock({
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-display font-semibold text-[14px] tracking-tight">Atenção Necessária</h3>
               {showDemo ? <DemoBadge>Exemplo</DemoBadge> : null}
-              {useLiveData && !loading ? (
+              {isConnected && !loading ? (
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-primary">Ao vivo</span>
               ) : null}
             </div>
@@ -106,6 +111,11 @@ export function CriticalStock({
       ) : !hasStore && useLiveData ? (
         <div className="flex-1 px-5 py-10 text-center text-sm text-muted-foreground" role="status">
           Selecione uma unidade para ver os produtos com menor saldo.
+        </div>
+      ) : failedLive ? (
+        <div className="flex-1 px-5 py-10 text-center text-sm text-muted-foreground" role="alert">
+          <p className="font-medium text-foreground">Estoque indisponível</p>
+          <p className="mt-1 text-xs">Use &quot;Atualizar&quot; no topo do painel para tentar novamente.</p>
         </div>
       ) : isEmptyLive ? (
         <div className="flex-1 px-5 py-10 text-center text-sm text-muted-foreground" role="status">
