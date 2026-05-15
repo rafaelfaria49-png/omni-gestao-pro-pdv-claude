@@ -9,10 +9,16 @@ import { ConfigEmpresaProvider } from "@/lib/config-empresa";
 import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
 import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider";
 import { cn } from "@/components/configuracoes-v3/lib/utils";
+import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
+import type { SectionId } from "../sections";
+
 type UiStatus = "ok" | "neutral" | "warn" | "hub";
 
 type CardAction = {
   label: string;
+  /** Navegação interna V3 (`?sec=`). */
+  section?: SectionId;
+  /** Rotas externas ao shell V3 (HUB, créditos, etc.). */
   href?: string;
   disabled?: boolean;
   variant?: "default" | "outline";
@@ -35,6 +41,7 @@ function truncate(s: string, max: number): string {
 }
 
 function IntegracoesSectionContent() {
+  const { navigateToSection } = useConfiguracoesNav();
   const { lojaAtivaId } = useLojaAtiva();
   const { hydrated, settings, blob } = useStoreSettings();
 
@@ -58,7 +65,7 @@ function IntegracoesSectionContent() {
             ? "Número cadastrado"
             : "Não configurado",
       actions: [
-        { label: "Configurar em Geral", href: "/dashboard/configuracoes", variant: "default" },
+        { label: "Configurar em Geral", section: "geral", variant: "default" },
         { label: "WhatsApp HUB", href: "/dashboard/whatsapp-automation", variant: "outline" },
       ],
     },
@@ -74,7 +81,7 @@ function IntegracoesSectionContent() {
           : em
             ? "E-mail cadastrado"
             : "Não configurado",
-      actions: [{ label: "Configurar em Geral", href: "/dashboard/configuracoes", variant: "default" }],
+      actions: [{ label: "Configurar em Geral", section: "geral", variant: "default" }],
     },
     {
       id: "ia",
@@ -117,7 +124,7 @@ function IntegracoesSectionContent() {
       uiStatus: "neutral",
       statusLabel: "Configure na aba Financeiro (V3)",
       actions: [
-        { label: "Abrir Financeiro", href: "/dashboard/configuracoes", variant: "default" },
+        { label: "Abrir Financeiro", section: "financeiro", variant: "default" },
         { label: "Créditos IA", href: "/dashboard/creditos", variant: "outline" },
       ],
     },
@@ -158,17 +165,40 @@ function IntegracoesSectionContent() {
                 <p className="mt-2 text-xs font-medium text-foreground">{i.statusLabel}</p>
               </div>
               <div className="mt-auto flex flex-col gap-2">
-                {i.actions.map((a, idx) =>
-                  a.disabled || !a.href ? (
+                {i.actions.map((a, idx) => {
+                  if (a.disabled) {
+                    return (
+                      <Button key={idx} variant={a.variant ?? "outline"} className="w-full" type="button" disabled>
+                        {a.label}
+                      </Button>
+                    );
+                  }
+                  if (a.section) {
+                    return (
+                      <Button
+                        key={idx}
+                        variant={a.variant ?? "default"}
+                        className="w-full"
+                        type="button"
+                        onClick={() => navigateToSection(a.section!)}
+                      >
+                        {a.label}
+                      </Button>
+                    );
+                  }
+                  if (a.href) {
+                    return (
+                      <Button key={idx} variant={a.variant ?? "default"} className="w-full" asChild>
+                        <Link href={a.href}>{a.label}</Link>
+                      </Button>
+                    );
+                  }
+                  return (
                     <Button key={idx} variant={a.variant ?? "outline"} className="w-full" type="button" disabled>
                       {a.label}
                     </Button>
-                  ) : (
-                    <Button key={idx} variant={a.variant ?? "default"} className="w-full" asChild>
-                      <Link href={a.href}>{a.label}</Link>
-                    </Button>
-                  ),
-                )}
+                  );
+                })}
               </div>
             </div>
           );

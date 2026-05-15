@@ -19,6 +19,7 @@ import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
 import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
+import { GoLiveChecklistRafaCell } from "../components/GoLiveChecklistRafaCell";
 
 type AddressForm = {
   rua: string;
@@ -285,7 +286,17 @@ function GeralSectionContent() {
       <SectionHeader
         icon={<Settings className="h-5 w-5" />}
         title="Geral"
-        description="Informações da empresa e preferências regionais."
+        description="Esta área centraliza a preparação operacional da loja antes do uso diário: dados da unidade, contatos e checklist Go Live RafaCell. Revise e salve cada bloco — não há sincronização automática com o PDV ou WhatsApp Cloud."
+      />
+
+      <GoLiveChecklistRafaCell
+        empresa={{
+          nomeFantasia,
+          cnpj,
+          telefone,
+          email,
+          whatsapp,
+        }}
       />
 
       {noLoja ? (
