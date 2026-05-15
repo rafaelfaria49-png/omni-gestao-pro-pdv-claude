@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Aviso no painel inicial: separa blocos com dados reais (API elite) dos ainda demonstrativos.
+ * Aviso no painel inicial — painel principal consome API elite com dados reais.
  */
 export function DashboardDemoNotice() {
   return (
@@ -9,14 +9,9 @@ export function DashboardDemoNotice() {
       role="status"
       className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground"
     >
-      <span className="font-medium text-foreground">Painel em evolução.</span>{" "}
-      Com a unidade selecionada,{" "}
-      <span className="text-foreground/90">
-        KPIs, faturamento 7D, mix por categoria, atividades recentes e estoque crítico
-      </span>{" "}
-      usam dados reais da sua operação via API. Apenas os{" "}
-      <span className="text-foreground/90">insights IA</span> abaixo permanecem{" "}
-      <span className="font-medium text-foreground">demonstrativos</span>.
+      <span className="font-medium text-foreground">Painel ao vivo.</span> Com a unidade selecionada, os
+      indicadores, gráficos, atividades, estoque e insights operacionais abaixo usam dados reais da sua operação
+      via API.
     </div>
   );
 }

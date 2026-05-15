@@ -171,7 +171,13 @@ export default function DashboardInicioPage() {
         />
       </div>
 
-      <AiInsights />
+      <AiInsights
+        data={data}
+        loading={loading && hasStore}
+        useLiveData={live}
+        hasStore={hasStore}
+        error={error}
+      />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <CriticalStock
