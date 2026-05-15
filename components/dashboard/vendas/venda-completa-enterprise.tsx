@@ -10,9 +10,7 @@ import {
   HelpCircle,
   Loader2,
   MapPin,
-  Minus,
   PackageSearch,
-  Plus,
   Receipt,
   Search,
   ShieldCheck,
@@ -89,9 +87,12 @@ type LineDetail = {
 type CartLine = {
   lineId: string
   inventoryId: string
+  codigo: string
   name: string
+  unid: string
   price: number
   qty: number
+  discountPct: number
   detail?: LineDetail
 }
 
@@ -107,7 +108,8 @@ type DraftData = {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const DRAFT_KEY = (storeId: string) => `omnigestao:venda-completa-ent:${storeId}`
+// v2 key invalidates pre-ERP-table drafts that lack codigo/unid/discountPct
+const DRAFT_KEY = (storeId: string) => `omnigestao:venda-completa-ent-v2:${storeId}`
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -141,7 +143,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     [lojaAtivaId],
   )
 
-  // ── Cliente ──────────────────────────────────────────────────────────────
+  // ── Cliente ───────────────────────────────────────────────────────────────
   const [clienteQuery, setClienteQuery] = useState("")
   const { clientes: clienteResultados, isLoading: clienteLoading } = useClienteSearch(clienteQuery, storeId)
   const [selectedCliente, setSelectedCliente] = useState<ClienteResult | null>(null)
@@ -152,13 +154,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
 
   // ── Produtos ──────────────────────────────────────────────────────────────
   const [productQuery, setProductQuery] = useState("")
+  const [showProductDropdown, setShowProductDropdown] = useState(false)
   const productInputRef = useRef<HTMLInputElement>(null)
 
   // ── Carrinho ──────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartLine[]>([])
   const [expandedLineId, setExpandedLineId] = useState<string | null>(null)
 
-  // ── Desconto ──────────────────────────────────────────────────────────────
+  // ── Desconto global ───────────────────────────────────────────────────────
   const [discountReais, setDiscountReais] = useState(0)
   const [discountPercent, setDiscountPercent] = useState(0)
 
@@ -198,11 +201,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const filteredProducts = useMemo(() => {
     const q = productQuery.trim()
     if (!q) return []
-    return filterPdvCatalogBySearch(products, q).slice(0, 12)
+    return filterPdvCatalogBySearch(products, q).slice(0, 10)
   }, [products, productQuery])
 
   // ── Totais ────────────────────────────────────────────────────────────────
-  const subtotal = cart.reduce((s, l) => s + l.price * l.qty, 0)
+  const subtotal = cart.reduce((s, l) => s + l.price * l.qty * (1 - l.discountPct / 100), 0)
+  const totalPerLineDiscount = cart.reduce((s, l) => s + l.price * l.qty * (l.discountPct / 100), 0)
   const total = Math.max(0, subtotal - discountReais)
   const customerStoreCredit = useMemo(
     () => (selectedCliente?.document ? getSaldoCreditoCliente(selectedCliente.document) : 0),
@@ -277,9 +281,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       switch (e.key) {
         case "F1":
           e.preventDefault()
-          if (canFinalize && !isPaymentOpen && !cupomOpen && !helpOpen) {
-            setIsPaymentOpen(true)
-          }
+          if (canFinalize && !isPaymentOpen && !cupomOpen && !helpOpen) setIsPaymentOpen(true)
           break
         case "F2":
           e.preventDefault()
@@ -302,10 +304,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           if (!isPaymentOpen && !cupomOpen) setHelpOpen((o) => !o)
           break
         case "Escape":
-          if (helpOpen) {
-            e.preventDefault()
-            setHelpOpen(false)
-          }
+          if (helpOpen) { e.preventDefault(); setHelpOpen(false) }
           break
       }
     },
@@ -336,37 +335,39 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           {
             lineId: newPdvLineId(product.id),
             inventoryId: product.id,
+            codigo: product.codigo ?? product.sku ?? "",
             name: product.name,
+            unid: product.vendaPorPeso ? "KG" : "UN",
             price: product.price,
             qty: 1,
+            discountPct: 0,
             detail: garantiaDias > 0 ? { garantiaDias } : undefined,
           },
         ]
       })
       setProductQuery("")
+      setShowProductDropdown(false)
     },
     [pdvParams.garantiaPadraoDias, toast],
   )
 
-  function updateQty(lineId: string, delta: number) {
-    if (delta > 0) {
-      const line = cart.find((l) => l.lineId === lineId)
-      if (line) {
-        const invItem = inventory.find((i) => i.id === line.inventoryId)
-        const isService = invItem?.category === "Servicos"
-        if (!isService && invItem && line.qty >= invItem.stock) {
-          toast({
-            title: "Estoque máximo atingido",
-            description: `${line.name}: apenas ${invItem.stock} un disponíve${invItem.stock === 1 ? "l" : "is"}.`,
-            variant: "destructive",
-          })
-          return
-        }
+  function updateQtyDirect(lineId: string, rawQty: number) {
+    let qty = rawQty
+    if (qty <= 0) { removeFromCart(lineId); return }
+    const line = cart.find((l) => l.lineId === lineId)
+    if (line) {
+      const invItem = inventory.find((i) => i.id === line.inventoryId)
+      const isService = invItem?.category === "Servicos"
+      if (!isService && invItem && qty > invItem.stock) {
+        toast({
+          title: "Estoque insuficiente",
+          description: `${line.name}: apenas ${invItem.stock} un disponíve${invItem.stock === 1 ? "l" : "is"}.`,
+          variant: "destructive",
+        })
+        qty = invItem.stock
       }
     }
-    setCart((prev) =>
-      prev.map((l) => l.lineId === lineId ? { ...l, qty: l.qty + delta } : l).filter((l) => l.qty > 0),
-    )
+    setCart((prev) => prev.map((l) => l.lineId === lineId ? { ...l, qty } : l))
   }
 
   function removeFromCart(lineId: string) {
@@ -378,6 +379,11 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setCart((prev) =>
       prev.map((l) => l.lineId === lineId ? { ...l, detail: { ...l.detail, ...patch } } : l),
     )
+  }
+
+  function updateLineDiscountPct(lineId: string, pct: number) {
+    const clamped = Math.min(100, Math.max(0, isNaN(pct) ? 0 : pct))
+    setCart((prev) => prev.map((l) => l.lineId === lineId ? { ...l, discountPct: clamped } : l))
   }
 
   // ── Finalization ──────────────────────────────────────────────────────────
@@ -392,7 +398,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   ) {
     const saleLines = cart
       .filter((l) => inventory.some((i) => i.id === l.inventoryId))
-      .map((l) => ({ inventoryId: l.inventoryId, quantity: l.qty, unitPrice: l.price, name: l.name }))
+      .map((l) => ({
+        inventoryId: l.inventoryId,
+        quantity: l.qty,
+        unitPrice: l.price * (1 - l.discountPct / 100),
+        name: l.name,
+      }))
 
     if (saleLines.length === 0) {
       toast({ title: "Carrinho vazio", description: "Adicione itens antes de finalizar.", variant: "destructive" })
@@ -488,7 +499,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         nome: l.name,
         quantidade: l.qty,
         precoUnitario: l.price,
-        lineTotal: Math.round(l.price * l.qty * 100) / 100,
+        lineTotal: Math.round(l.price * l.qty * (1 - l.discountPct / 100) * 100) / 100,
       })),
       pagamentos: payments.map((p) => ({ label: paymentLabel(p.type), valor: p.value })),
       total,
@@ -568,560 +579,628 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {/* ── Body (scrollável) ── */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl space-y-0 divide-y divide-border">
+      {/* ── Body: esquerda scrollável + sidebar direita fixa ── */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
 
-          {/* ── SEÇÃO: CLIENTE ── */}
-          <section className="bg-background px-4 py-4">
-            <div className="mb-2 flex items-center gap-1.5">
-              <User className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Cliente <span className="text-destructive">*</span>
-              </span>
-            </div>
+        {/* ── Coluna esquerda ── */}
+        <div className="min-w-0 flex-1 overflow-y-auto">
+          <div className="divide-y divide-border">
 
-            {selectedCliente ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {selectedCliente.name}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {[selectedCliente.phone?.trim() || null, selectedCliente.email?.trim() || null]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setSelectedCliente(null)
-                      setClienteQuery("")
-                      setEnderecoEntrega(EMPTY_ENDERECO)
-                      setShowEnderecoForm(false)
-                      setTimeout(() => clienteInputRef.current?.focus(), 50)
-                    }}
-                    className="ml-2 h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                {/* Endereço de entrega */}
-                <button
-                  type="button"
-                  onClick={() => setShowEnderecoForm((o) => !o)}
-                  className="flex w-full items-center justify-between rounded-lg border border-border bg-secondary px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/70"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <MapPin className="h-3.5 w-3.5" />
-                    Endereço de entrega
-                    {Object.values(enderecoEntrega).some((v) => v.trim() !== "") && (
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                    )}
-                  </span>
-                  {showEnderecoForm ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                </button>
-
-                {showEnderecoForm && (
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {(
-                      [
-                        { key: "cep",       label: "CEP",        placeholder: "00000-000", maxLength: 9, colSpan: "" },
-                        { key: "numero",    label: "Número",     placeholder: "Nº",        maxLength: undefined, colSpan: "" },
-                        { key: "logradouro",label: "Logradouro", placeholder: "Rua, Av…",  maxLength: undefined, colSpan: "col-span-2 sm:col-span-3" },
-                        { key: "bairro",    label: "Bairro",     placeholder: "Bairro",    maxLength: undefined, colSpan: "" },
-                        { key: "cidade",    label: "Cidade",     placeholder: "Cidade",    maxLength: undefined, colSpan: "" },
-                        { key: "uf",        label: "UF",         placeholder: "SP",        maxLength: 2,         colSpan: "" },
-                      ] as { key: keyof EnderecoEntrega; label: string; placeholder: string; maxLength?: number; colSpan: string }[]
-                    ).map(({ key, label, placeholder, maxLength, colSpan }) => (
-                      <div key={key} className={cn("space-y-1", colSpan)}>
-                        <Label className="text-[11px] text-muted-foreground">{label}</Label>
-                        <Input
-                          placeholder={placeholder}
-                          value={enderecoEntrega[key]}
-                          maxLength={maxLength}
-                          onChange={(e) =>
-                            setEnderecoEntrega((prev) => ({
-                              ...prev,
-                              [key]: key === "uf" ? e.target.value.toUpperCase().slice(0, 2) : e.target.value,
-                            }))
-                          }
-                          className="h-8 border-border bg-background text-xs"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="relative">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  {clienteLoading && (
-                    <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-                  )}
-                  <Input
-                    ref={clienteInputRef}
-                    placeholder="Nome, CPF ou telefone… [F2]"
-                    value={clienteQuery}
-                    onChange={(e) => {
-                      setClienteQuery(e.target.value)
-                      setShowClienteDropdown(true)
-                    }}
-                    onFocus={() => { if (clienteQuery.trim()) setShowClienteDropdown(true) }}
-                    onBlur={() => setTimeout(() => setShowClienteDropdown(false), 200)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") { setShowClienteDropdown(false); setClienteQuery("") }
-                      if (e.key === "Enter" && clienteResultados.length > 0) {
-                        e.preventDefault()
-                        const c = clienteResultados[0]!
-                        setSelectedCliente(c)
-                        setClienteQuery("")
-                        setShowClienteDropdown(false)
-                        setTimeout(() => productInputRef.current?.focus(), 80)
-                      }
-                    }}
-                    className="h-10 border-border bg-secondary pl-9 pr-9 text-sm"
-                  />
-                </div>
-                {showClienteDropdown && (clienteResultados.length > 0 || clienteLoading) && (
-                  <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-lg">
-                    {clienteLoading && clienteResultados.length === 0 ? (
-                      <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Buscando…
-                      </div>
-                    ) : (
-                      clienteResultados.map((c) => (
-                        <button
-                          key={c.id}
-                          type="button"
-                          className="flex w-full items-center gap-3 border-b border-border px-4 py-2.5 text-left last:border-0 hover:bg-secondary"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => {
-                            setSelectedCliente(c)
-                            setClienteQuery("")
-                            setShowClienteDropdown(false)
-                            setTimeout(() => productInputRef.current?.focus(), 80)
-                          }}
-                        >
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                            <User className="h-3.5 w-3.5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-foreground">{c.name}</p>
-                            <p className="truncate text-xs text-muted-foreground">{c.phone ?? ""}</p>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* ── SEÇÃO: PRODUTOS ── */}
-          <section className="bg-background px-4 py-4">
-            <div className="mb-2 flex items-center gap-1.5">
-              <Search className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Produtos
-              </span>
-            </div>
-
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                ref={productInputRef}
-                placeholder="Nome, SKU ou código de barras… [F3]"
-                value={productQuery}
-                onChange={(e) => setProductQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    const exact = findPdvProductByScan(productQuery.trim(), products)
-                    if (exact) {
-                      addToCart(exact)
-                    } else if (filteredProducts.length === 1) {
-                      addToCart(filteredProducts[0]!)
-                    }
-                  }
-                }}
-                className="h-10 border-border bg-secondary pl-9 text-sm"
-              />
-            </div>
-
-            {filteredProducts.length > 0 && (
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {filteredProducts.map((p) => {
-                  const isService = p.category === "Servicos"
-                  const outOfStock = !isService && p.stock <= 0
-                  const lowStock = !isService && !outOfStock && p.stock > 0 && p.stock <= 5
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      disabled={outOfStock}
-                      onClick={() => addToCart(p)}
-                      className={cn(
-                        "flex flex-col items-start gap-1 rounded-xl border bg-card px-3 py-2.5 text-left transition-all active:scale-[0.98]",
-                        outOfStock
-                          ? "cursor-not-allowed border-border opacity-50"
-                          : lowStock
-                            ? "border-amber-500/30 hover:border-amber-500/60 hover:bg-amber-500/5"
-                            : "border-border hover:border-primary/40 hover:bg-accent",
-                      )}
-                    >
-                      <p className="line-clamp-2 text-xs font-semibold leading-snug text-foreground">
-                        {p.name}
-                      </p>
-                      <div className="flex w-full items-center justify-between gap-1">
-                        <span
-                          className={cn(
-                            "text-[10px]",
-                            outOfStock ? "text-destructive/70" : lowStock ? "font-medium text-amber-500" : "text-muted-foreground",
-                          )}
-                        >
-                          {isService ? "Serviço" : outOfStock ? "Sem estoque" : lowStock ? `Baixo: ${p.stock} un` : `${p.stock} un`}
-                        </span>
-                        <span className="text-xs font-bold tabular-nums text-primary">{brl(p.price)}</span>
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-
-            {products.length === 0 && !productQuery && (
-              <div className="mt-3 flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-6 text-center">
-                <PackageSearch className="mb-1.5 h-6 w-6 text-muted-foreground/40" />
-                <p className="text-xs font-medium text-muted-foreground">Nenhum produto cadastrado</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground/60">Cadastre itens no módulo Estoque</p>
-              </div>
-            )}
-
-            {filteredProducts.length === 0 && productQuery.trim() && products.length > 0 && (
-              <div className="mt-3 flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-4 text-center">
-                <Search className="mb-1 h-5 w-5 text-muted-foreground/40" />
-                <p className="text-xs text-muted-foreground">
-                  Nenhum resultado para &ldquo;{productQuery}&rdquo;
-                </p>
-              </div>
-            )}
-          </section>
-
-          {/* ── SEÇÃO: CARRINHO (tabela) ── */}
-          <section className="bg-background px-4 py-4">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+            {/* ── CLIENTE ── */}
+            <section className="bg-background px-4 py-4">
+              <div className="mb-2 flex items-center gap-1.5">
+                <User className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Carrinho
+                  Cliente <span className="text-destructive">*</span>
                 </span>
+              </div>
+
+              {selectedCliente ? (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between rounded-xl border border-primary/30 bg-primary/5 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {selectedCliente.name}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {[selectedCliente.phone?.trim() || null, selectedCliente.email?.trim() || null]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setSelectedCliente(null)
+                        setClienteQuery("")
+                        setEnderecoEntrega(EMPTY_ENDERECO)
+                        setShowEnderecoForm(false)
+                        setTimeout(() => clienteInputRef.current?.focus(), 50)
+                      }}
+                      className="ml-2 h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowEnderecoForm((o) => !o)}
+                    className="flex w-full items-center justify-between rounded-lg border border-border bg-secondary px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/70"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5" />
+                      Endereço de entrega
+                      {Object.values(enderecoEntrega).some((v) => v.trim() !== "") && (
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      )}
+                    </span>
+                    {showEnderecoForm ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+
+                  {showEnderecoForm && (
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {(
+                        [
+                          { key: "cep",        label: "CEP",        placeholder: "00000-000", maxLength: 9,         colSpan: "" },
+                          { key: "numero",     label: "Número",     placeholder: "Nº",        maxLength: undefined, colSpan: "" },
+                          { key: "logradouro", label: "Logradouro", placeholder: "Rua, Av…",  maxLength: undefined, colSpan: "col-span-2 sm:col-span-3" },
+                          { key: "bairro",     label: "Bairro",     placeholder: "Bairro",    maxLength: undefined, colSpan: "" },
+                          { key: "cidade",     label: "Cidade",     placeholder: "Cidade",    maxLength: undefined, colSpan: "" },
+                          { key: "uf",         label: "UF",         placeholder: "SP",        maxLength: 2,         colSpan: "" },
+                        ] as { key: keyof EnderecoEntrega; label: string; placeholder: string; maxLength?: number; colSpan: string }[]
+                      ).map(({ key, label, placeholder, maxLength, colSpan }) => (
+                        <div key={key} className={cn("space-y-1", colSpan)}>
+                          <Label className="text-[11px] text-muted-foreground">{label}</Label>
+                          <Input
+                            placeholder={placeholder}
+                            value={enderecoEntrega[key]}
+                            maxLength={maxLength}
+                            onChange={(e) =>
+                              setEnderecoEntrega((prev) => ({
+                                ...prev,
+                                [key]: key === "uf" ? e.target.value.toUpperCase().slice(0, 2) : e.target.value,
+                              }))
+                            }
+                            className="h-8 border-border bg-background text-xs"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="relative">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    {clienteLoading && (
+                      <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                    )}
+                    <Input
+                      ref={clienteInputRef}
+                      placeholder="Nome, CPF ou telefone… [F2]"
+                      value={clienteQuery}
+                      onChange={(e) => { setClienteQuery(e.target.value); setShowClienteDropdown(true) }}
+                      onFocus={() => { if (clienteQuery.trim()) setShowClienteDropdown(true) }}
+                      onBlur={() => setTimeout(() => setShowClienteDropdown(false), 200)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") { setShowClienteDropdown(false); setClienteQuery("") }
+                        if (e.key === "Enter" && clienteResultados.length > 0) {
+                          e.preventDefault()
+                          const c = clienteResultados[0]!
+                          setSelectedCliente(c)
+                          setClienteQuery("")
+                          setShowClienteDropdown(false)
+                          setTimeout(() => productInputRef.current?.focus(), 80)
+                        }
+                      }}
+                      className="h-10 border-border bg-secondary pl-9 pr-9 text-sm"
+                    />
+                  </div>
+                  {showClienteDropdown && (clienteResultados.length > 0 || clienteLoading) && (
+                    <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-lg">
+                      {clienteLoading && clienteResultados.length === 0 ? (
+                        <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
+                          <Loader2 className="h-4 w-4 animate-spin" /> Buscando…
+                        </div>
+                      ) : (
+                        clienteResultados.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="flex w-full items-center gap-3 border-b border-border px-4 py-2.5 text-left last:border-0 hover:bg-secondary"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              setSelectedCliente(c)
+                              setClienteQuery("")
+                              setShowClienteDropdown(false)
+                              setTimeout(() => productInputRef.current?.focus(), 80)
+                            }}
+                          >
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                              <User className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-foreground">{c.name}</p>
+                              <p className="truncate text-xs text-muted-foreground">{c.phone ?? ""}</p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            {/* ── ITENS: busca + tabela ERP ── */}
+            <section className="bg-background px-4 py-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Itens
+                  </span>
+                  {cart.length > 0 && (
+                    <Badge variant="secondary" className="text-[10px] tabular-nums">
+                      {cart.length} linha{cart.length !== 1 ? "s" : ""}
+                    </Badge>
+                  )}
+                </div>
                 {cart.length > 0 && (
-                  <Badge variant="secondary" className="text-[10px] tabular-nums">
-                    {cart.length} linha{cart.length !== 1 ? "s" : ""}
-                  </Badge>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground transition-colors hover:text-destructive"
+                    onClick={() => { setCart([]); setExpandedLineId(null) }}
+                  >
+                    Limpar tudo
+                  </button>
                 )}
               </div>
-              {cart.length > 0 && (
-                <button
-                  type="button"
-                  className="text-xs text-muted-foreground transition-colors hover:text-destructive"
-                  onClick={() => { setCart([]); setExpandedLineId(null) }}
-                >
-                  Limpar tudo
-                </button>
-              )}
-            </div>
 
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-10 text-center">
-                <Receipt className="mb-2 h-8 w-8 text-muted-foreground/40" />
-                <p className="text-sm font-medium text-muted-foreground">Nenhum item no carrinho</p>
-                <p className="mt-0.5 text-xs text-muted-foreground/60">
-                  Busque um produto acima para adicionar
-                </p>
+              {/* Busca de produto */}
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  ref={productInputRef}
+                  placeholder="Adicionar: nome, SKU ou código de barras… [F3]"
+                  value={productQuery}
+                  onChange={(e) => { setProductQuery(e.target.value); setShowProductDropdown(true) }}
+                  onFocus={() => { if (productQuery.trim()) setShowProductDropdown(true) }}
+                  onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      const exact = findPdvProductByScan(productQuery.trim(), products)
+                      if (exact) {
+                        addToCart(exact)
+                      } else if (filteredProducts.length > 0) {
+                        addToCart(filteredProducts[0]!)
+                      }
+                    }
+                    if (e.key === "Escape") { setShowProductDropdown(false); setProductQuery("") }
+                  }}
+                  className="h-10 border-border bg-secondary pl-9 text-sm"
+                />
+
+                {/* Dropdown de sugestões */}
+                {showProductDropdown && filteredProducts.length > 0 && (
+                  <div className="absolute z-40 mt-1 w-full overflow-hidden rounded-md border border-border bg-card shadow-lg">
+                    <div className="max-h-60 overflow-y-auto">
+                      {filteredProducts.map((p) => {
+                        const isService = p.category === "Servicos"
+                        const outOfStock = !isService && p.stock <= 0
+                        const lowStock = !isService && !outOfStock && p.stock <= 5
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            disabled={outOfStock}
+                            className="flex w-full items-center justify-between border-b border-border px-3 py-2 text-left last:border-0 hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => addToCart(p)}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium text-foreground">{p.name}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {p.codigo ?? p.sku ?? ""}
+                                {outOfStock ? " · Sem estoque" : lowStock ? ` · Baixo: ${p.stock} un` : ""}
+                              </p>
+                            </div>
+                            <div className="ml-3 shrink-0 text-right">
+                              <p className="text-xs font-bold tabular-nums text-primary">{brl(p.price)}</p>
+                              <p className={cn(
+                                "text-[10px]",
+                                outOfStock ? "text-destructive/70" : lowStock ? "text-amber-500" : "text-muted-foreground",
+                              )}>
+                                {isService ? "Serviço" : `${p.stock} un`}
+                              </p>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {showProductDropdown && productQuery.trim() && products.length > 0 && filteredProducts.length === 0 && (
+                  <div className="absolute z-40 mt-1 w-full rounded-md border border-border bg-card px-3 py-3 shadow-lg">
+                    <p className="text-xs text-muted-foreground">
+                      Nenhum resultado para &ldquo;{productQuery}&rdquo;
+                    </p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/40">
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-muted-foreground">
-                        Produto
-                      </th>
-                      <th className="w-28 px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
-                        Qtd
-                      </th>
-                      <th className="px-3 py-2 text-right text-xs font-semibold text-muted-foreground">
-                        Unit
-                      </th>
-                      <th className="px-3 py-2 text-right text-xs font-semibold text-muted-foreground">
-                        Total
-                      </th>
-                      <th className="w-20 px-3 py-2" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {cart.map((line) => {
-                      const isExpanded = expandedLineId === line.lineId
-                      const hasDetail =
-                        line.detail &&
-                        (line.detail.imei || line.detail.serial || line.detail.garantiaDias || line.detail.observacao)
 
-                      return (
-                        <>
-                          <tr key={line.lineId} className="bg-card">
-                            <td className="px-3 py-2.5">
-                              <p className="text-sm font-medium text-foreground">{line.name}</p>
-                              {hasDetail && (
-                                <p className="mt-0.5 text-[10px] text-muted-foreground">
-                                  {[
-                                    line.detail?.imei ? `IMEI: ${line.detail.imei}` : null,
-                                    line.detail?.garantiaDias ? `${line.detail.garantiaDias}d gar.` : null,
-                                  ].filter(Boolean).join(" · ")}
-                                </p>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <div className="flex items-center justify-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => updateQty(line.lineId, -1)}
-                                  className="flex h-6 w-6 items-center justify-center rounded border border-border bg-background text-foreground transition-colors hover:bg-secondary"
-                                >
-                                  <Minus className="h-3 w-3" />
-                                </button>
-                                <span className="w-6 text-center text-sm font-bold tabular-nums text-foreground">
-                                  {line.qty}
+              {/* Sem catálogo */}
+              {products.length === 0 && !productQuery && cart.length === 0 && (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-8 text-center">
+                  <PackageSearch className="mb-1.5 h-6 w-6 text-muted-foreground/40" />
+                  <p className="text-xs font-medium text-muted-foreground">Nenhum produto cadastrado</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground/60">Cadastre itens no módulo Estoque</p>
+                </div>
+              )}
+
+              {/* Tabela ERP */}
+              {cart.length === 0 && products.length > 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-10 text-center">
+                  <PackageSearch className="mb-2 h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-sm font-medium text-muted-foreground">Nenhum item adicionado</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground/60">
+                    Busque um produto acima para incluir no pedido
+                  </p>
+                </div>
+              ) : cart.length > 0 ? (
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full min-w-[680px] text-xs">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/40">
+                        <th className="w-8 px-2 py-2 text-right text-[10px] font-semibold text-muted-foreground">#</th>
+                        <th className="w-24 px-2 py-2 text-left text-[10px] font-semibold text-muted-foreground">CÓDIGO</th>
+                        <th className="px-2 py-2 text-left text-[10px] font-semibold text-muted-foreground">DESCRIÇÃO</th>
+                        <th className="w-12 px-2 py-2 text-center text-[10px] font-semibold text-muted-foreground">UNID</th>
+                        <th className="w-20 px-2 py-2 text-center text-[10px] font-semibold text-muted-foreground">QTD</th>
+                        <th className="w-24 px-2 py-2 text-right text-[10px] font-semibold text-muted-foreground">UNIT</th>
+                        <th className="w-[72px] px-2 py-2 text-center text-[10px] font-semibold text-muted-foreground">DESC%</th>
+                        <th className="w-24 px-2 py-2 text-right text-[10px] font-semibold text-muted-foreground">TOTAL</th>
+                        <th className="w-14 px-2 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {cart.map((line, idx) => {
+                        const isExpanded = expandedLineId === line.lineId
+                        const hasDetail = line.detail && Object.values(line.detail).some(Boolean)
+                        const lineTotal = line.price * line.qty * (1 - line.discountPct / 100)
+
+                        return (
+                          <>
+                            <tr key={line.lineId} className="bg-card">
+                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
+                                {idx + 1}
+                              </td>
+                              <td className="px-2 py-2.5">
+                                <span className="font-mono text-[10px] text-muted-foreground">
+                                  {line.codigo || "—"}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => updateQty(line.lineId, 1)}
-                                  className="flex h-6 w-6 items-center justify-center rounded border border-border bg-background text-foreground transition-colors hover:bg-secondary"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </button>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-sm text-muted-foreground">
-                              {brl(line.price)}
-                            </td>
-                            <td className="px-3 py-2.5 text-right tabular-nums text-sm font-semibold text-foreground">
-                              {brl(line.price * line.qty)}
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setExpandedLineId(isExpanded ? null : line.lineId)}
-                                  className={cn(
-                                    "flex h-6 w-6 items-center justify-center rounded border transition-colors",
-                                    isExpanded
-                                      ? "border-primary bg-primary/10 text-primary"
-                                      : hasDetail
-                                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
-                                        : "border-border bg-background text-muted-foreground hover:bg-secondary",
-                                  )}
-                                  title="Detalhar item (IMEI, serial, garantia)"
-                                >
-                                  {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => removeFromCart(line.lineId)}
-                                  className="flex h-6 w-6 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                          {isExpanded && (
-                            <tr key={`${line.lineId}-detail`} className="bg-muted/30">
-                              <td colSpan={5} className="px-3 py-3">
-                                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                  Dados do produto
-                                </p>
-                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                  <div className="space-y-1">
-                                    <Label className="text-[11px] text-muted-foreground">IMEI</Label>
-                                    <Input
-                                      placeholder="000000000000000"
-                                      value={line.detail?.imei ?? ""}
-                                      onChange={(e) => updateLineDetail(line.lineId, { imei: e.target.value })}
-                                      className="h-8 border-border bg-background text-xs"
-                                      maxLength={15}
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-[11px] text-muted-foreground">Nº de Série</Label>
-                                    <Input
-                                      placeholder="SN-…"
-                                      value={line.detail?.serial ?? ""}
-                                      onChange={(e) => updateLineDetail(line.lineId, { serial: e.target.value })}
-                                      className="h-8 border-border bg-background text-xs"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-[11px] text-muted-foreground">Garantia (dias)</Label>
-                                    <Input
-                                      type="number"
-                                      min={0}
-                                      max={3650}
-                                      placeholder="90"
-                                      value={line.detail?.garantiaDias !== undefined ? String(line.detail.garantiaDias) : ""}
-                                      onChange={(e) =>
-                                        updateLineDetail(line.lineId, {
-                                          garantiaDias: e.target.value ? Math.max(0, parseInt(e.target.value, 10)) : undefined,
-                                        })
-                                      }
-                                      className="h-8 border-border bg-background text-xs"
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label className="text-[11px] text-muted-foreground">Observação</Label>
-                                    <Input
-                                      placeholder="Obs. do item…"
-                                      value={line.detail?.observacao ?? ""}
-                                      onChange={(e) => updateLineDetail(line.lineId, { observacao: e.target.value })}
-                                      className="h-8 border-border bg-background text-xs"
-                                    />
-                                  </div>
-                                </div>
+                              </td>
+                              <td className="px-2 py-2.5">
+                                <p className="font-medium leading-tight text-foreground">{line.name}</p>
                                 {hasDetail && (
-                                  <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-2 py-1.5">
-                                    <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                                    <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                                      Dados registrados — serão salvos no cupom e no sistema
-                                    </p>
-                                  </div>
+                                  <p className="mt-0.5 text-[10px] text-muted-foreground">
+                                    {[
+                                      line.detail?.imei ? `IMEI: ${line.detail.imei}` : null,
+                                      line.detail?.garantiaDias ? `${line.detail.garantiaDias}d gar.` : null,
+                                    ].filter(Boolean).join(" · ")}
+                                  </p>
                                 )}
                               </td>
+                              <td className="px-2 py-2.5 text-center text-muted-foreground">
+                                {line.unid}
+                              </td>
+                              <td className="px-2 py-2.5 text-center">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  value={line.qty}
+                                  onChange={(e) => {
+                                    const v = parseInt(e.target.value, 10)
+                                    if (!isNaN(v)) updateQtyDirect(line.lineId, v)
+                                  }}
+                                  className="w-14 rounded border border-border bg-background px-1.5 py-0.5 text-center text-xs font-bold tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                              </td>
+                              <td className="px-2 py-2.5 text-right tabular-nums text-muted-foreground">
+                                {brl(line.price)}
+                              </td>
+                              <td className="px-2 py-2.5 text-center">
+                                <div className="flex items-center justify-center gap-0.5">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    step={0.5}
+                                    placeholder="0"
+                                    value={line.discountPct === 0 ? "" : line.discountPct}
+                                    onChange={(e) => updateLineDiscountPct(line.lineId, parseFloat(e.target.value))}
+                                    className="w-12 rounded border border-border bg-background px-1 py-0.5 text-center text-xs tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                                  />
+                                  <span className="text-[10px] text-muted-foreground">%</span>
+                                </div>
+                              </td>
+                              <td className={cn(
+                                "px-2 py-2.5 text-right tabular-nums font-semibold",
+                                line.discountPct > 0 ? "text-amber-600 dark:text-amber-400" : "text-foreground",
+                              )}>
+                                {brl(lineTotal)}
+                              </td>
+                              <td className="px-2 py-2.5">
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedLineId(isExpanded ? null : line.lineId)}
+                                    className={cn(
+                                      "flex h-6 w-6 items-center justify-center rounded border transition-colors",
+                                      isExpanded
+                                        ? "border-primary bg-primary/10 text-primary"
+                                        : hasDetail
+                                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+                                          : "border-border bg-background text-muted-foreground hover:bg-secondary",
+                                    )}
+                                    title="Detalhar item"
+                                  >
+                                    {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeFromCart(line.lineId)}
+                                    className="flex h-6 w-6 items-center justify-center rounded border border-border bg-background text-muted-foreground transition-colors hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </div>
+                              </td>
                             </tr>
-                          )}
-                        </>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                            {isExpanded && (
+                              <tr key={`${line.lineId}-detail`} className="bg-muted/30">
+                                <td colSpan={9} className="px-3 py-3">
+                                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Dados do produto
+                                  </p>
+                                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-muted-foreground">IMEI</Label>
+                                      <Input
+                                        placeholder="000000000000000"
+                                        value={line.detail?.imei ?? ""}
+                                        onChange={(e) => updateLineDetail(line.lineId, { imei: e.target.value })}
+                                        className="h-8 border-border bg-background text-xs"
+                                        maxLength={15}
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-muted-foreground">Nº de Série</Label>
+                                      <Input
+                                        placeholder="SN-…"
+                                        value={line.detail?.serial ?? ""}
+                                        onChange={(e) => updateLineDetail(line.lineId, { serial: e.target.value })}
+                                        className="h-8 border-border bg-background text-xs"
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-muted-foreground">Garantia (dias)</Label>
+                                      <Input
+                                        type="number"
+                                        min={0}
+                                        max={3650}
+                                        placeholder="90"
+                                        value={line.detail?.garantiaDias !== undefined ? String(line.detail.garantiaDias) : ""}
+                                        onChange={(e) =>
+                                          updateLineDetail(line.lineId, {
+                                            garantiaDias: e.target.value ? Math.max(0, parseInt(e.target.value, 10)) : undefined,
+                                          })
+                                        }
+                                        className="h-8 border-border bg-background text-xs"
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-muted-foreground">Observação</Label>
+                                      <Input
+                                        placeholder="Obs. do item…"
+                                        value={line.detail?.observacao ?? ""}
+                                        onChange={(e) => updateLineDetail(line.lineId, { observacao: e.target.value })}
+                                        className="h-8 border-border bg-background text-xs"
+                                      />
+                                    </div>
+                                  </div>
+                                  {hasDetail && (
+                                    <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-2 py-1.5">
+                                      <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                                      <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                                        Dados registrados — serão salvos no cupom e no sistema
+                                      </p>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </section>
+
+            {/* ── DADOS DA VENDA ── */}
+            <section className="bg-background px-4 py-4">
+              <div className="mb-2 flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Dados da Venda
+                </span>
               </div>
-            )}
-          </section>
 
-          {/* ── SEÇÃO: DADOS DA VENDA ── */}
-          <section className="bg-background px-4 py-4">
-            <div className="mb-2 flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Dados da Venda
-              </span>
-            </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-medium text-muted-foreground">Tipo</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {TIPOS_VENDA.map((t) => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => setTipoVenda(t.value)}
+                        className={cn(
+                          "rounded-lg border px-2 py-2 text-left text-xs transition-all",
+                          tipoVenda === t.value
+                            ? "border-primary bg-primary/10 font-semibold text-primary"
+                            : "border-border bg-card text-muted-foreground hover:bg-secondary",
+                        )}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-medium text-muted-foreground">Tipo</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {TIPOS_VENDA.map((t) => (
-                    <button
-                      key={t.value}
-                      type="button"
-                      onClick={() => setTipoVenda(t.value)}
-                      className={cn(
-                        "rounded-lg border px-2 py-2 text-left text-xs transition-all",
-                        tipoVenda === t.value
-                          ? "border-primary bg-primary/10 font-semibold text-primary"
-                          : "border-border bg-card text-muted-foreground hover:bg-secondary",
-                      )}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
+                <div className="space-y-1.5">
+                  <div className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">Observação geral</Label>
+                    <Input
+                      placeholder="Observação para esta venda…"
+                      value={observacaoGeral}
+                      onChange={(e) => setObservacaoGeral(e.target.value)}
+                      className="h-8 border-border bg-secondary text-xs"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground">
+                    <span>Operador</span>
+                    <span className="font-mono font-medium text-foreground">{cashierId.slice(-8)}</span>
+                  </div>
                 </div>
               </div>
+            </section>
 
-              <div className="space-y-1.5">
-                <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Observação geral</Label>
+          </div>
+        </div>
+
+        {/* ── Sidebar direita: totais + finalizar ── */}
+        <div className="flex w-72 shrink-0 flex-col overflow-hidden border-l border-border bg-background">
+
+          {/* Scrollável */}
+          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+
+            {/* Resumo de valores */}
+            <div className="rounded-xl border border-border bg-card p-4">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Resumo
+              </p>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="tabular-nums font-medium text-foreground">{brl(subtotal + totalPerLineDiscount)}</span>
+                </div>
+
+                {totalPerLineDiscount > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Desc. por item</span>
+                    <span className="tabular-nums text-amber-500">−{brl(totalPerLineDiscount)}</span>
+                  </div>
+                )}
+
+                {totalPerLineDiscount > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal c/ desc.</span>
+                    <span className="tabular-nums font-medium text-foreground">{brl(subtotal)}</span>
+                  </div>
+                )}
+
+                {/* Desconto global */}
+                <div className="space-y-1 pt-1">
+                  <Label className="text-[11px] text-muted-foreground">Desconto global (R$)</Label>
                   <Input
-                    placeholder="Observação para esta venda…"
-                    value={observacaoGeral}
-                    onChange={(e) => setObservacaoGeral(e.target.value)}
-                    className="h-8 border-border bg-secondary text-xs"
+                    type="number"
+                    min={0}
+                    placeholder="0,00"
+                    value={discountReais || ""}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value)
+                      setDiscountReais(isNaN(v) ? 0 : Math.max(0, v))
+                    }}
+                    className="h-8 border-border bg-background text-xs tabular-nums"
                   />
                 </div>
-                <div className="flex items-center justify-between rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground">
+
+                {discountReais > 0 && (
+                  <div className="flex items-center justify-between text-xs text-amber-500">
+                    <span>Desc. global</span>
+                    <span className="tabular-nums">−{brl(discountReais)}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t border-border pt-3">
+                  <span className="text-base font-bold text-foreground">Total</span>
+                  <span className="text-xl font-bold tabular-nums text-foreground">{brl(total)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Resumo da venda */}
+            <div className="rounded-xl border border-border bg-card p-3 text-xs text-muted-foreground">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span>Tipo</span>
+                  <span className="font-medium text-foreground">
+                    {TIPOS_VENDA.find((t) => t.value === tipoVenda)?.label}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
                   <span>Operador</span>
                   <span className="font-mono font-medium text-foreground">{cashierId.slice(-8)}</span>
                 </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ── SEÇÃO: TOTAL ── */}
-          <section className="bg-background px-4 py-4">
-            <div className="mb-2 flex items-center gap-1.5">
-              <Receipt className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Total
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Subtotal</span>
-                  <span className="tabular-nums">{brl(subtotal)}</span>
-                </div>
-                {discountReais > 0 && (
-                  <div className="flex items-center justify-between text-sm text-amber-500">
-                    <span>Desconto</span>
-                    <span className="tabular-nums">-{brl(discountReais)}</span>
+                {cart.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span>Linhas</span>
+                    <span className="font-medium text-foreground">{cart.length}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-between border-t border-border pt-2 text-lg font-bold text-foreground">
-                  <span>Total</span>
-                  <span className="tabular-nums">{brl(total)}</span>
-                </div>
-              </div>
-
-              <div className="mt-4 space-y-2">
-                {!selectedCliente && (
-                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2">
-                    <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                      [F2] Selecione o cliente para continuar
-                    </p>
-                  </div>
-                )}
-                {cart.length === 0 && (
-                  <div className="rounded-lg border border-border bg-muted/30 px-2.5 py-2">
-                    <p className="text-[11px] text-muted-foreground">
-                      Adicione produtos ao carrinho para finalizar.
-                    </p>
-                  </div>
-                )}
-                <Button
-                  type="button"
-                  className="h-12 w-full rounded-xl bg-emerald-600 text-base font-bold text-zinc-950 shadow-lg hover:bg-emerald-500 disabled:opacity-50"
-                  disabled={!canFinalize}
-                  onClick={() => setIsPaymentOpen(true)}
-                >
-                  <span>Finalizar Venda</span>
-                  <kbd className="ml-2 rounded border border-zinc-950/20 bg-zinc-950/10 px-1.5 py-0.5 font-mono text-[10px] font-medium">
-                    F1
-                  </kbd>
-                </Button>
               </div>
             </div>
-          </section>
 
+            {/* Avisos */}
+            {!selectedCliente && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-2">
+                <p className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                  [F2] Selecione o cliente para continuar
+                </p>
+              </div>
+            )}
+            {cart.length === 0 && (
+              <div className="rounded-lg border border-border bg-muted/30 px-2.5 py-2">
+                <p className="text-[11px] text-muted-foreground">
+                  Adicione produtos para finalizar.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Botão finalizar */}
+          <div className="shrink-0 border-t border-border p-4">
+            <Button
+              type="button"
+              className="h-12 w-full rounded-xl bg-emerald-600 text-sm font-bold text-zinc-950 shadow-lg hover:bg-emerald-500 disabled:opacity-50"
+              disabled={!canFinalize}
+              onClick={() => setIsPaymentOpen(true)}
+            >
+              <span>Finalizar Venda</span>
+              <kbd className="ml-2 rounded border border-zinc-950/20 bg-zinc-950/10 px-1.5 py-0.5 font-mono text-[10px] font-medium">
+                F1
+              </kbd>
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -1145,7 +1224,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     { key: "F1", label: "Finalizar venda" },
                     { key: "F2", label: "Buscar / limpar cliente" },
                     { key: "F3", label: "Foco no produto" },
-                    { key: "↵",  label: "Bipe / único resultado" },
+                    { key: "↵",  label: "Bipe / 1º resultado" },
                   ] as const
                 ).map(({ key, label }) => (
                   <div key={key} className="flex items-center justify-between gap-3">
