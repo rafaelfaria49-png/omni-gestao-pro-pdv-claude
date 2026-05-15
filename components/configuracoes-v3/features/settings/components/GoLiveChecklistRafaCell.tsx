@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import {
   CheckCircle2,
@@ -8,6 +9,8 @@ import {
   ClipboardList,
   HelpCircle,
   ArrowRight,
+  ExternalLink,
+  PlayCircle,
 } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
@@ -153,8 +156,8 @@ export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSna
 
     const wa =
       empresa.whatsapp.trim() ||
-      String(settings?.contactWhatsapp ?? "").trim();
-    const hasWhatsapp = wa.replace(/\D/g, "").length >= 10;
+      (storeId ? String(settings?.contactWhatsapp ?? "").trim() : "");
+    const hasWhatsapp = Boolean(storeId && wa.replace(/\D/g, "").length >= 10);
 
     const hasLoja = !!storeId;
 
@@ -310,6 +313,93 @@ export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSna
           </li>
         ))}
       </ul>
+
+      <div className="border-t border-border/80 px-6 py-5 space-y-5">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <PlayCircle className="h-5 w-5" aria-hidden />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">Testar operação</h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Teste depois de salvar as configurações nesta tela. Os atalhos abaixo abrem outros módulos do painel sem
+              alterar o que você configurou aqui.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium text-foreground">Abrir módulos</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link href="/dashboard/vendas">
+                Abrir PDV
+                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link href="/dashboard/operacoes-v2">
+                Operações HUB
+                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link href="/dashboard">
+                Dashboard
+                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" className="h-8" asChild>
+              <Link href="/dashboard/whatsapp">
+                WhatsApp HUB
+                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium text-foreground">Continuar configuração</p>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: "geral" as const, label: "Geral" },
+                { id: "pdv" as const, label: "PDV" },
+                { id: "vendas" as const, label: "Vendas" },
+                { id: "financeiro" as const, label: "Financeiro" },
+                { id: "usuarios" as const, label: "Usuários" },
+              ] as const
+            ).map(({ id, label }) => (
+              <Button
+                key={id}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 border border-border/80"
+                onClick={() => navigateToSection(id)}
+              >
+                {label}
+                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        <ul className="space-y-1.5 rounded-lg border border-border/60 bg-card-muted/50 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+          <li>
+            <span className="font-medium text-foreground">PDV:</span> após mudar layout ou modo em Configurações,
+            recarregue a tela de vendas para aplicar a preferência.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">WhatsApp HUB:</span> abre o painel de conversas; não confirma
+            webhook Meta nem envio real — isso depende das variáveis no servidor.
+          </li>
+          <li>
+            <span className="font-medium text-foreground">Dashboard:</span> KPIs e gráficos podem misturar dados reais e
+            pré-visualizações; valide o que importa para a operação.
+          </li>
+        </ul>
+      </div>
 
       <p className="border-t border-border/80 px-6 py-3 text-xs text-muted-foreground">
         Este checklist não substitui testes no PDV, WhatsApp ou financeiro real. Não envia dados ao servidor além das
