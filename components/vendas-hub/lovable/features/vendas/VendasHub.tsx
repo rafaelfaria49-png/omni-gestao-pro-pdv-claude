@@ -43,7 +43,7 @@ const cards: VendasCard[] = [
     description: "Venda detalhada com dados do cliente, nota fiscal e registro completo.",
     icon: ShoppingCart,
     status: "ativo",
-    dashboardHref: "/dashboard/vendas",
+    dashboardHref: "/dashboard/vendas/venda-completa",
     meta: "Com NF e cliente",
   },
   {
@@ -59,7 +59,7 @@ const cards: VendasCard[] = [
     description: "Consulte todas as vendas registradas com filtros por data, cliente e produto.",
     icon: Clock,
     status: "ativo",
-    dashboardHref: "/dashboard/historico-vendas",
+    dashboardHref: "/dashboard/vendas-arquivo-geral",
     meta: "Arquivo geral",
   },
   {

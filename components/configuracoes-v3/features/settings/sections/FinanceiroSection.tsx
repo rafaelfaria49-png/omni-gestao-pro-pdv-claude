@@ -9,6 +9,7 @@ import { Input } from "@/components/configuracoes-v3/components/ui/input";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { Switch } from "@/components/configuracoes-v3/components/ui/switch";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
+import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
 import { AppOpsProviders } from "@/components/dashboard/app-ops-providers";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useFinanceiro } from "@/lib/financeiro-store";
@@ -256,17 +257,24 @@ function FinanceiroSectionContent() {
       </div>
 
       <SettingsCard title="Relatórios" description="Exportações periódicas automáticas.">
-        <div className="flex items-center justify-between rounded-lg border border-border bg-card-muted px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+        <div className="flex items-center justify-between rounded-lg border border-dashed border-border bg-card-muted/60 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
               <FileText className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm font-medium text-foreground">Relatório mensal por email</p>
-              <p className="text-xs text-muted-foreground">Não há configuração persistida para esta unidade ainda.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-foreground">Relatório mensal por email</p>
+                <Badge variant="secondary" className="font-normal">
+                  Em breve
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Envio automático por e-mail ainda não está disponível nesta versão.
+              </p>
             </div>
           </div>
-          <Switch checked={false} disabled />
+          <Switch checked={false} disabled aria-readonly />
         </div>
       </SettingsCard>
     </div>

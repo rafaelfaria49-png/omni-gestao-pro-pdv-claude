@@ -195,9 +195,11 @@ function GeralSectionContent() {
           address,
         }),
       });
-      if (!storeRes.ok) {
+      const storeOk = storeRes.ok;
+      let storeErrMsg = "";
+      if (!storeOk) {
         const err = (await storeRes.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error || `Falha ao salvar unidade (HTTP ${storeRes.status})`);
+        storeErrMsg = err.error || `Falha ao salvar unidade (HTTP ${storeRes.status})`;
       }
 
       const settingsRes = await fetch(`/api/stores/${encodeURIComponent(lojaHeader)}/settings`, {
@@ -213,24 +215,57 @@ function GeralSectionContent() {
           contactWhatsappDono: whatsappDono.trim(),
         }),
       });
-      if (!settingsRes.ok) {
+      const settingsOk = settingsRes.ok;
+      let settingsErrMsg = "";
+      if (!settingsOk) {
         const err = (await settingsRes.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error || `Falha ao salvar contatos (HTTP ${settingsRes.status})`);
+        settingsErrMsg = err.error || `Falha ao salvar contatos (HTTP ${settingsRes.status})`;
       }
 
-      const next: FormSnapshot = {
-        nomeFantasia: nomeTrim,
-        cnpj: cnpj.trim(),
-        telefone: telefone.trim(),
-        email: email.trim(),
-        whatsapp: whatsapp.trim(),
-        whatsappDono: whatsappDono.trim(),
-        address: { ...address },
-      };
-      setSnapshot(next);
-      void refreshStoreSettings();
-      void refreshStoresList();
-      toast({ title: "Salvo", description: "Dados da empresa atualizados para a unidade ativa." });
+      if (storeOk || settingsOk) {
+        const prev = snapshot ?? emptyFormSnapshot();
+        const next: FormSnapshot = {
+          nomeFantasia: storeOk ? nomeTrim : prev.nomeFantasia,
+          cnpj: storeOk ? cnpj.trim() : prev.cnpj,
+          telefone: storeOk ? telefone.trim() : prev.telefone,
+          email: settingsOk ? email.trim() : prev.email,
+          whatsapp: settingsOk ? whatsapp.trim() : prev.whatsapp,
+          whatsappDono: settingsOk ? whatsappDono.trim() : prev.whatsappDono,
+          address: storeOk ? { ...address } : prev.address,
+        };
+        setSnapshot(next);
+        if (storeOk) applySnapshot(next);
+        else if (settingsOk) {
+          setEmail(next.email);
+          setWhatsapp(next.whatsapp);
+          setWhatsappDono(next.whatsappDono);
+        }
+        if (settingsOk) void refreshStoreSettings();
+        if (storeOk) void refreshStoresList();
+      }
+
+      if (storeOk && settingsOk) {
+        toast({ title: "Salvo", description: "Dados da empresa atualizados para a unidade ativa." });
+      } else if (!storeOk && settingsOk) {
+        toast({
+          title: "Salvo parcialmente",
+          description:
+            "E-mail e WhatsApp foram gravados. Nome, CNPJ, telefone e endereço podem exigir permissão administrativa — se o erro persistir, contacte um administrador.",
+          variant: "default",
+        });
+      } else if (storeOk && !settingsOk) {
+        toast({
+          title: "Salvo parcialmente",
+          description: `Dados cadastrais gravados, mas os contatos não foram atualizados: ${settingsErrMsg}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Falha ao salvar",
+          description: [storeErrMsg, settingsErrMsg].filter(Boolean).join(" · ") || "Erro inesperado",
+          variant: "destructive",
+        });
+      }
     } catch (e) {
       toast({
         title: "Falha ao salvar",

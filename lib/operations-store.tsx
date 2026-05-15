@@ -12,6 +12,7 @@ import type { DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord 
 import { isOsVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { emitEvent } from "@/lib/events/event-bus"
 import { initAutomationEngineClient } from "@/lib/automation/automation-engine"
+import { toast } from "@/components/ui/use-toast"
 
 export type { DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
@@ -565,6 +566,37 @@ export function OperationsProvider({
     }
   }, [ledgerKey, storageKey])
 
+  useEffect(() => {
+    if (!opsDbReady) return
+    const pending = stateRef.current.sales.filter((s) => s.syncPending === true)
+    if (pending.length === 0) return
+    const lj = opsLojaIdFromStorageKey(storageKey)
+    for (const sale of pending) {
+      void fetch("/api/ops/venda-persist", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          [ASSISTEC_LOJA_HEADER]: lj,
+        },
+        body: JSON.stringify({ sale }),
+      })
+        .then((res) => {
+          if (res.ok) {
+            setState((prev) => ({
+              ...prev,
+              sales: prev.sales.map((s) => (s.id === sale.id ? { ...s, syncPending: false } : s)),
+            }))
+          } else {
+            console.warn("[venda-persist] re-sync HTTP", res.status, sale.id)
+          }
+        })
+        .catch((err: unknown) => {
+          console.warn("[venda-persist] re-sync rede", sale.id, err)
+        })
+    }
+  }, [opsDbReady, storageKey])
+
   const setOrdens: OperationsContextType["setOrdens"] = useCallback((updater) => {
     setState((prev) => ({
       ...prev,
@@ -796,6 +828,7 @@ export function OperationsProvider({
         discountAuthorizedByAdminId: auditMeta?.discountAuthorizedByAdminId,
         discountReais: auditMeta?.discountReais,
         discountPercent: auditMeta?.discountPercent,
+        syncPending: true,
       })
 
       if (linkedOsId) {
@@ -824,7 +857,32 @@ export function OperationsProvider({
             [ASSISTEC_LOJA_HEADER]: lj,
           },
           body: JSON.stringify({ sale: saleRow }),
-        }).catch(() => {})
+        })
+          .then((res) => {
+            if (res.ok) {
+              setState((prev) => ({
+                ...prev,
+                sales: prev.sales.map((s) =>
+                  s.id === saleId ? { ...s, syncPending: false } : s
+                ),
+              }))
+            } else {
+              console.error("[venda-persist] HTTP", res.status, saleRow.id)
+              toast({
+                variant: "destructive",
+                title: "Venda não confirmada no servidor",
+                description: `Venda ${saleRow.id} salva localmente. Verifique a conexão e o status do caixa.`,
+              })
+            }
+          })
+          .catch((err: unknown) => {
+            console.error("[venda-persist] rede", saleRow.id, err)
+            toast({
+              variant: "destructive",
+              title: "Venda não confirmada no servidor",
+              description: `Venda ${saleRow.id} salva localmente. Verifique a conexão e o status do caixa.`,
+            })
+          })
       }
       return { ok: true, saleId }
     },

@@ -2417,13 +2417,13 @@ function FinanceiroHubInner() {
   const tabs = useMemo(
     () =>
       [
-        { v: "visao", label: "Visão geral", icon: LayoutDashboard, comp: <VisaoGeral /> },
-        { v: "receber", label: "A receber", icon: ArrowDownCircle, comp: <ContasReceber /> },
-        { v: "pagar", label: "A pagar", icon: ArrowUpCircle, comp: <ContasPagar /> },
-        { v: "fluxo", label: "Fluxo de caixa", icon: BarChart3, comp: <FluxoCaixa /> },
-        { v: "carteiras", label: "Carteiras", icon: Wallet, comp: <GestaoCarteiras /> },
-        { v: "auditoria", label: "Auditoria", icon: ShieldCheck, comp: <AuditoriaFechamento /> },
-        { v: "relatorios", label: "Relatórios", icon: FileText, comp: <Relatorios /> },
+        { v: "visao", label: "Visão geral", icon: LayoutDashboard, comp: <VisaoGeral />, hubBadge: "Preview" as const },
+        { v: "receber", label: "A receber", icon: ArrowDownCircle, comp: <ContasReceber />, hubBadge: "Preview" as const },
+        { v: "pagar", label: "A pagar", icon: ArrowUpCircle, comp: <ContasPagar />, hubBadge: "Preview" as const },
+        { v: "fluxo", label: "Fluxo de caixa", icon: BarChart3, comp: <FluxoCaixa />, hubBadge: "Preview" as const },
+        { v: "carteiras", label: "Carteiras", icon: Wallet, comp: <GestaoCarteiras />, hubBadge: "Preview" as const },
+        { v: "auditoria", label: "Auditoria", icon: ShieldCheck, comp: <AuditoriaFechamento />, hubBadge: "Preview" as const },
+        { v: "relatorios", label: "Relatórios", icon: FileText, comp: <Relatorios />, hubBadge: "Preview" as const },
         { v: "config", label: "Configurações", icon: Settings, comp: <Configuracoes />, hubBadge: "Em breve" as const },
       ] as const,
     [],

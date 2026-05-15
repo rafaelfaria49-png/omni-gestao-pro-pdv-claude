@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
-import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store } from "lucide-react";
+import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/configuracoes-v3/components/ui/radio-group";
@@ -406,7 +406,14 @@ function PdvSectionContent() {
           </div>
         ) : null}
 
-        <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+        <p className="mt-6 flex gap-2 rounded-lg border border-border bg-card-muted/80 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-foreground" aria-hidden />
+          <span>
+            Após salvar alterações do PDV, recarregue a tela do PDV para garantir que o novo modo/layout seja aplicado.
+          </span>
+        </p>
+
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving || noLoja || !dirty}>
             Cancelar
           </Button>
@@ -414,7 +421,7 @@ function PdvSectionContent() {
             {saving ? "Salvando…" : "Salvar alterações"}
           </Button>
         </div>
-      </div>
+        </div>
 
       {/* Fluxos integrados — informativos */}
       <div>

@@ -348,6 +348,14 @@ export type PdvOmniClassicShellProps = {
 export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
   const isModoRapido = props.isModoRapido === true
   const qtyEditRef = useRef<HTMLInputElement>(null)
+  const clientSearchInputRef = useRef<HTMLInputElement>(null)
+
+  // Explicit focus when F2 dialog opens (autoFocus unreliable inside Radix Dialog)
+  useEffect(() => {
+    if (props.clientSearchOpen) {
+      window.setTimeout(() => clientSearchInputRef.current?.focus(), 60)
+    }
+  }, [props.clientSearchOpen])
   const now = new Date().toLocaleString("pt-BR")
   const { mode: studioMode } = useStudioTheme()
   /** Apenas Black Edition: fundo #000 fixo no shell. */
@@ -803,33 +811,56 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             )}
             <Input
-              autoFocus
+              ref={clientSearchInputRef}
               value={props.clientSearchQuery ?? ""}
               onChange={(e) => props.onClientSearchQueryChange?.(e.target.value)}
               placeholder="Nome, CPF/CNPJ ou telefone…"
               className="h-9 rounded-xl border-border bg-background pl-9 text-sm"
             />
           </div>
-          <div className="max-h-60 space-y-1 overflow-y-auto">
-            {!(props.clientSearchQuery ?? "").trim() && props.clientOptions.length <= 1 ? (
-              <p className="py-3 text-center text-sm text-muted-foreground">
+          {/* Always show CONSUMIDOR as "no client" option */}
+          <button
+            type="button"
+            onClick={() => {
+              props.onPickClient("CONSUMIDOR")
+              props.onClientSearchOpenChange(false)
+            }}
+            className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/40"
+          >
+            <span className="font-medium text-foreground">CONSUMIDOR (sem identificação)</span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+          <div className="max-h-52 space-y-1 overflow-y-auto">
+            {!(props.clientSearchQuery ?? "").trim() ? (
+              <p className="py-2 text-center text-sm text-muted-foreground">
                 Digite para buscar um cliente.
               </p>
+            ) : props.clientSearchLoading ? (
+              <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Buscando…
+              </div>
+            ) : props.clientOptions.filter((c) => c.id !== "0").length === 0 ? (
+              <p className="py-2 text-center text-sm text-muted-foreground">
+                Nenhum resultado para &ldquo;{props.clientSearchQuery}&rdquo;.
+              </p>
             ) : (
-              props.clientOptions.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => {
-                    props.onPickClient(c.label)
-                    props.onClientSearchOpenChange(false)
-                  }}
-                  className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/40"
-                >
-                  <span className="font-medium text-foreground">{c.label}</span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </button>
-              ))
+              props.clientOptions
+                .filter((c) => c.id !== "0")
+                .map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      props.onPickClient(c.label)
+                      props.onClientSearchOpenChange(false)
+                    }}
+                    className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/40"
+                  >
+                    <span className="font-medium text-foreground">{c.label}</span>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                ))
             )}
           </div>
         </DialogContent>

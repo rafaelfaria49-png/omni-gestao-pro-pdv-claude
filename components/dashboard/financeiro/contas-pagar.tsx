@@ -40,6 +40,7 @@ import { useFinanceiro } from "@/lib/financeiro-store"
 import type { ContaPagarItem } from "@/lib/financeiro-types"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useToast } from "@/hooks/use-toast"
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 
 function todayISO(): string {
   return new Date().toISOString().split("T")[0]
@@ -135,6 +136,13 @@ function rowsToPersistPayload(contas: ContaPagarItem[]): Record<string, unknown>
   }))
 }
 
+/** Server wins: preserva títulos locais ainda não persistidos, server sobrescreve os demais. */
+function mergeContasPagarServerWins(local: ContaPagarItem[], server: ContaPagarItem[]): ContaPagarItem[] {
+  const serverIds = new Set(server.map((r) => String(r.id)))
+  const localOnly = local.filter((r) => !serverIds.has(String(r.id)))
+  return [...server, ...localOnly].sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento))
+}
+
 export function ContasPagar() {
   const { contasPagar, setContasPagar } = useFinanceiro()
   const { toast } = useToast()
@@ -170,26 +178,41 @@ export function ContasPagar() {
     setAcaoOpen(true)
   }
 
-  const persistToServer = async (nextRows: ContaPagarItem[]) => {
-    if (!lojaId) return
-    try {
-      const res = await fetch("/api/ops/contas-pagar-persist", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-assistec-loja-id": lojaId,
-        },
-        body: JSON.stringify({ lojaId, rows: rowsToPersistPayload(nextRows) }),
-      })
-      if (!res.ok) throw new Error(`persist_failed_${res.status}`)
-    } catch (e) {
-      if (process.env.NODE_ENV === "development") console.error("[contas-pagar] persist", e)
-      toast({
-        title: "Servidor indisponível",
-        description: "Alteração salva localmente (fallback). Vamos tentar sincronizar novamente ao recarregar.",
-        variant: "destructive",
-      })
+  const persistToServer = (nextRows: ContaPagarItem[], successMsg: string) => {
+    if (!lojaId) {
+      toast({ title: "Não foi possível salvar", description: "Loja não configurada.", variant: "destructive" })
+      return
     }
+    void fetch("/api/ops/contas-pagar-persist", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+        [ASSISTEC_LOJA_HEADER]: lojaId,
+      },
+      body: JSON.stringify({ lojaId, rows: rowsToPersistPayload(nextRows) }),
+    })
+      .then((res) => {
+        if (res.ok) {
+          setContasPagar(nextRows)
+          toast({ title: successMsg })
+        } else {
+          console.error("[contas-pagar] persist HTTP", res.status)
+          toast({
+            title: "Não foi possível salvar",
+            description: "Verifique a conexão e tente novamente.",
+            variant: "destructive",
+          })
+        }
+      })
+      .catch((err: unknown) => {
+        console.error("[contas-pagar] persist rede", err)
+        toast({
+          title: "Não foi possível salvar",
+          description: "Verifique a conexão e tente novamente.",
+          variant: "destructive",
+        })
+      })
   }
 
   const applyServerResultToLocal = (contaId: string, titulo: unknown, audit: unknown) => {
@@ -277,8 +300,9 @@ export function ContasPagar() {
     try {
       const res = await fetch("/api/ops/contas-pagar-list", {
         method: "GET",
+        credentials: "include",
         headers: {
-          "x-assistec-loja-id": lojaId,
+          [ASSISTEC_LOJA_HEADER]: lojaId,
         },
       })
       if (!res.ok) throw new Error(`list_failed_${res.status}`)
@@ -290,7 +314,7 @@ export function ContasPagar() {
         const norm = normalizeContaPagarRowFromServer(item as ContaPagarServerRow)
         if (norm) next.push(norm)
       }
-      if (next.length > 0) setContasPagar(next)
+      setContasPagar((prev) => mergeContasPagarServerWins(prev, next))
       if (json.summary && typeof json.summary === "object") {
         const s = json.summary as Partial<ContaPagarServerSummary>
         if (typeof s.totalAberto === "number") {
@@ -298,8 +322,7 @@ export function ContasPagar() {
         }
       }
     } catch (e) {
-      if (process.env.NODE_ENV === "development") console.error("[contas-pagar] list", e)
-      // fallback: mantém localStorage
+      console.warn("[contas-pagar] fallback para localStorage:", e)
     }
   }
 
@@ -391,22 +414,11 @@ export function ContasPagar() {
       status: form.status,
       categoria: form.categoria,
     }
-    if (editing) {
-      setContasPagar((prev) => {
-        const next = prev.map((x) => (x.id === editing.id ? row : x))
-        void persistToServer(next)
-        return next
-      })
-      toast({ title: "Conta atualizada" })
-    } else {
-      setContasPagar((prev) => {
-        const next = [...prev, row]
-        void persistToServer(next)
-        return next
-      })
-      toast({ title: "Conta adicionada" })
-    }
+    const next = editing
+      ? contasPagar.map((x) => (x.id === editing.id ? row : x))
+      : [...contasPagar, row]
     setDialogOpen(false)
+    persistToServer(next, editing ? "Conta atualizada" : "Conta adicionada")
   }
 
   const getStatusConfig = (status: string) => {

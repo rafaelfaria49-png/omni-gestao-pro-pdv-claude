@@ -36,7 +36,7 @@ const SECTION_COMPONENTS: Record<SectionId, () => JSX.Element> = {
 };
 
 export default function ConfiguracoesV3Page() {
-  const [active, setActive] = useState<SectionId>("aparencia");
+  const [active, setActive] = useState<SectionId>("geral");
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const Active = SECTION_COMPONENTS[active];

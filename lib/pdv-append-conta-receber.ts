@@ -60,7 +60,15 @@ export function appendContaReceberTituloPdvAprazo(params: {
       [ASSISTEC_LOJA_HEADER]: params.lojaId,
     },
     body: JSON.stringify({ rows: [row] }),
-  }).catch(() => {})
+  })
+    .then((res) => {
+      if (!res.ok) {
+        console.error("[contas-receber-persist] HTTP", res.status, params.saleId)
+      }
+    })
+    .catch((err: unknown) => {
+      console.error("[contas-receber-persist] rede", params.saleId, err)
+    })
 
   window.dispatchEvent(new Event("assistec-contas-receber-imported"))
 }

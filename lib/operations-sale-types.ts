@@ -40,6 +40,8 @@ export interface SaleRecord {
   discountReais?: number
   /** Desconto manual no checkout (somente auditoria). */
   discountPercent?: number
+  /** true = venda gravada localmente mas ainda não confirmada no Prisma. */
+  syncPending?: boolean
 }
 
 export interface DevolucaoRecord {

@@ -26,6 +26,12 @@ import { useLojaAtiva } from "@/lib/loja-ativa"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useToast } from "@/hooks/use-toast"
 import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
+import { useOperationsStore, type InventoryItem } from "@/lib/operations-store"
+
+/** Número de itens com divergência de estoque que dispara o toast de aviso. */
+const STOCK_DIFF_THRESHOLD = 3
+/** Diferença em unidades em um único item que dispara o toast, independente do count. */
+const STOCK_BIG_DIFF_UNITS = 10
 
 interface AberturaCaixaModalProps {
   isOpen: boolean
@@ -50,7 +56,9 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
   const { abrirCaixa, setSessaoId } = useCaixa()
   const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
   const { toast } = useToast()
+  const { inventory, setInventory } = useOperationsStore()
 
+  const [abrindo, setAbrindo] = useState(false)
   const [saldoInicial, setSaldoInicial] = useState("")
   const [observacao, setObservacao] = useState("")
   const [operador, setOperador] = useState("")
@@ -69,53 +77,96 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
   }
 
   const handleAbrirCaixa = async () => {
-    const valor = parseFloat(saldoInicial) || 0
-    abrirCaixa(valor)
+    setAbrindo(true)
+    try {
+      const valor = parseFloat(saldoInicial) || 0
+      abrirCaixa(valor)
 
-    const nomeOp = operador.trim()
-    const nomeLoja = (empresaDocumentos.nomeFantasia || "Loja").trim() || "Administrador"
-    const agora = new Date()
-    const obsTrim = observacao.trim()
+      const nomeOp = operador.trim()
+      const nomeLoja = (empresaDocumentos.nomeFantasia || "Loja").trim() || "Administrador"
+      const agora = new Date()
+      const obsTrim = observacao.trim()
 
-    appendAuditLog({
-      action: "caixa_aberto",
-      userLabel: `${nomeLoja} (sessão local)`,
-      detail: `Saldo inicial ${fmt(valor)}${nomeOp ? ` | Operador: ${nomeOp}` : ""}${obsTrim ? ` | Obs: ${obsTrim}` : ""}`,
-    })
+      appendAuditLog({
+        action: "caixa_aberto",
+        userLabel: `${nomeLoja} (sessão local)`,
+        detail: `Saldo inicial ${fmt(valor)}${nomeOp ? ` | Operador: ${nomeOp}` : ""}${obsTrim ? ` | Obs: ${obsTrim}` : ""}`,
+      })
 
-    let sid: string | undefined
-    if (lojaAtivaId) {
-      try {
-        const res = await fetch("/api/ops/caixa/abrir", {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            "x-assistec-loja-id": lojaAtivaId,
-          },
-          body: JSON.stringify({ saldoInicial: valor, operador: nomeOp, observacao: obsTrim }),
-        })
-        if (res.ok) {
-          const data = (await res.json()) as { sessaoId?: string }
-          if (data.sessaoId) {
-            sid = data.sessaoId
-            setSessaoId(data.sessaoId)
+      // ── 1. Registrar sessão no servidor ───────────────────────────────────
+      let sid: string | undefined
+      if (lojaAtivaId) {
+        try {
+          const res = await fetch("/api/ops/caixa/abrir", {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              "x-assistec-loja-id": lojaAtivaId,
+            },
+            body: JSON.stringify({ saldoInicial: valor, operador: nomeOp, observacao: obsTrim }),
+          })
+          if (res.ok) {
+            const data = (await res.json()) as { sessaoId?: string }
+            if (data.sessaoId) {
+              sid = data.sessaoId
+              setSessaoId(data.sessaoId)
+            }
           }
+        } catch (err: unknown) {
+          console.error("[caixa/abrir] server:", err)
         }
-      } catch {
-        /* non-blocking */
       }
-    }
 
-    setComprovante({
-      hora: fmtDateTime(agora),
-      saldo: valor,
-      operador: nomeOp,
-      loja: nomeLoja,
-      sessaoId: sid,
-      observacao: obsTrim || undefined,
-    })
-    setStep("comprovante")
+      // ── 2. Reconciliação de estoque ────────────────────────────────────────
+      if (lojaAtivaId) {
+        try {
+          const invRes = await fetch(
+            `/api/ops/inventory?lojaId=${encodeURIComponent(lojaAtivaId)}`,
+            { credentials: "include", headers: { "x-assistec-loja-id": lojaAtivaId } },
+          )
+          if (invRes.ok) {
+            const invData = (await invRes.json()) as { items?: InventoryItem[] }
+            const freshItems = invData.items ?? []
+            if (freshItems.length > 0) {
+              const localSnapshot = inventory
+              const diffsCount = freshItems.reduce((acc, fresh) => {
+                const local = localSnapshot.find((l) => l.id === fresh.id)
+                return local && Math.abs(local.stock - fresh.stock) > 0 ? acc + 1 : acc
+              }, 0)
+              const hasBigDiff = freshItems.some((fresh) => {
+                const local = localSnapshot.find((l) => l.id === fresh.id)
+                return local !== undefined && Math.abs(local.stock - fresh.stock) >= STOCK_BIG_DIFF_UNITS
+              })
+              setInventory(freshItems)
+              if (diffsCount >= STOCK_DIFF_THRESHOLD || hasBigDiff) {
+                toast({
+                  variant: "destructive",
+                  title: "Estoque com divergências",
+                  description: `${diffsCount} ite${diffsCount === 1 ? "m" : "ns"} com saldo diferente do sistema. Estoque atualizado.`,
+                })
+              }
+            }
+          } else {
+            console.error("[caixa/abrir] estoque sync HTTP:", invRes.status)
+          }
+        } catch (err: unknown) {
+          console.error("[caixa/abrir] estoque sync:", err)
+        }
+      }
+
+      setComprovante({
+        hora: fmtDateTime(agora),
+        saldo: valor,
+        operador: nomeOp,
+        loja: nomeLoja,
+        sessaoId: sid,
+        observacao: obsTrim || undefined,
+      })
+      setStep("comprovante")
+    } finally {
+      setAbrindo(false)
+    }
   }
 
   const handleCopiar = async () => {
@@ -280,10 +331,11 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
                   </Button>
                   <Button
                     onClick={() => void handleAbrirCaixa()}
+                    disabled={abrindo}
                     className="flex-1 h-12 bg-primary hover:bg-primary/90 font-semibold"
                   >
                     <Unlock className="w-4 h-4 mr-2" />
-                    Abrir Caixa
+                    {abrindo ? "Abrindo..." : "Abrir Caixa"}
                   </Button>
                 </div>
               </div>

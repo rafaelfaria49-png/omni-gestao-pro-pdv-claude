@@ -40,8 +40,8 @@ export default function DashboardInicioPage() {
             Vis{"\u00e3"}o geral enterprise
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            KPIs e faturamento dos {"\u00fa"}ltimos 7 dias refletem a unidade ativa. Demais blocos seguem em modo
-            demonstra{"\u00e7"}{"\u00e3"}o at{"\u00e9"} a pr{"\u00f3"}xima fase.
+            KPIs, faturamento 7D, atividades recentes e estoque crítico refletem a unidade ativa. Gráfico de
+            categorias e insights IA seguem demonstrativos.
           </p>
         </div>
         <div className="hidden items-center gap-2 sm:flex">
@@ -66,9 +66,9 @@ export default function DashboardInicioPage() {
       <DashboardDemoNotice />
 
       <p className="-mt-2 text-xs text-muted-foreground">
-        Indicadores superiores e gr{"\u00e1"}fico de faturamento (7D) usam{" "}
-        <span className="font-medium text-foreground">dados reais</span> via API quando a unidade est{"\u00e1"}
-        selecionada. Categoria, insights IA, estoque e atividades recentes continuam ilustrativos.
+        KPIs, gráfico de faturamento (7D), atividades recentes e lista de estoque usam{" "}
+        <span className="font-medium text-foreground">dados reais</span> via API quando a unidade está selecionada.
+        Gráfico por categoria e insights IA continuam ilustrativos.
       </p>
 
       {!hasStore ? (
@@ -175,8 +175,18 @@ export default function DashboardInicioPage() {
       <AiInsights />
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <CriticalStock />
-        <RecentActivityTable />
+        <CriticalStock
+          estoqueCritico={data?.estoqueCritico}
+          loading={loading && hasStore}
+          useLiveData={live}
+          hasStore={hasStore}
+        />
+        <RecentActivityTable
+          movimentos={data?.movimentos}
+          loading={loading && hasStore}
+          useLiveData={live}
+          hasStore={hasStore}
+        />
       </div>
     </div>
   );

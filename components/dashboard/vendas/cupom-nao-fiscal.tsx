@@ -44,6 +44,8 @@ export interface CupomData {
   total: number
   desconto?: number
   status?: string
+  tipoVenda?: string
+  observacaoGeral?: string
 }
 
 interface CupomNaoFiscalProps {
@@ -86,6 +88,8 @@ function buildTexto(d: CupomData): string {
   if (d.operador) lines.push(`Operador: ${d.operador}`)
   if (d.clienteNome) lines.push(`Cliente:  ${d.clienteNome}`)
   if (d.clienteCpf) lines.push(`CPF:      ${d.clienteCpf}`)
+  if (d.tipoVenda) lines.push(`Tipo:     ${d.tipoVenda}`)
+  if (d.observacaoGeral) lines.push(`Obs:      ${d.observacaoGeral}`)
   lines.push("--------------------------------")
   lines.push("ITENS")
   lines.push("--------------------------------")
@@ -148,6 +152,8 @@ function buildHtml(d: CupomData): string {
       ${d.operador ? `<div style="display:flex;justify-content:space-between"><span>Operador:</span><span>${esc(d.operador)}</span></div>` : ""}
       ${d.clienteNome ? `<div style="display:flex;justify-content:space-between"><span>Cliente:</span><span>${esc(d.clienteNome)}</span></div>` : ""}
       ${d.clienteCpf ? `<div style="display:flex;justify-content:space-between"><span>CPF:</span><span>${esc(d.clienteCpf)}</span></div>` : ""}
+      ${d.tipoVenda ? `<div style="display:flex;justify-content:space-between"><span>Tipo:</span><span>${esc(d.tipoVenda)}</span></div>` : ""}
+      ${d.observacaoGeral ? `<div style="display:flex;justify-content:space-between"><span>Obs:</span><span>${esc(d.observacaoGeral)}</span></div>` : ""}
     </div>
     <div style="border-top:1px dashed #000;margin:6px 0"></div>
     <div style="font-size:10px;font-weight:600;margin-bottom:3px">ITENS</div>
@@ -254,6 +260,18 @@ export function CupomNaoFiscal({ isOpen, onClose, data }: CupomNaoFiscalProps) {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">CPF:</span>
                     <span>{data.clienteCpf}</span>
+                  </div>
+                )}
+                {data.tipoVenda && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tipo:</span>
+                    <span className="font-medium">{data.tipoVenda}</span>
+                  </div>
+                )}
+                {data.observacaoGeral && (
+                  <div className="flex justify-between gap-2">
+                    <span className="shrink-0 text-muted-foreground">Obs:</span>
+                    <span className="text-right">{data.observacaoGeral}</span>
                   </div>
                 )}
               </div>

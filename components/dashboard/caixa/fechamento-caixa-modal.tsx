@@ -101,7 +101,9 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   }
 
   const handleFecharCaixa = async () => {
-    const sid = sessaoId
+    // sid é mutável: pode ser atualizado pela criação retroativa abaixo
+    let sid = sessaoId
+
     if (valorContado !== "" && temDiferenca) {
       appendAuditLog({
         action: "quebra_caixa",
@@ -117,17 +119,37 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       })
     }
 
-    // Persistir fechamento no servidor se houver sessão ativa
-    if (sid && lojaAtivaId) {
-      setSalvando(true)
-      try {
-        await fetch("/api/ops/caixa/fechar", {
+    setSalvando(true)
+    let serverPersisted = false
+
+    try {
+      // Se a abertura não criou sessão no servidor (ex.: estava offline),
+      // tenta criar retroativamente para que o fechamento tenha um registro recuperável.
+      if (!sid && lojaAtivaId) {
+        try {
+          const abrirRes = await fetch("/api/ops/caixa/abrir", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
+            body: JSON.stringify({
+              saldoInicial: caixa.saldoInicial,
+              observacao: "Sessão retroativa — abertura não foi registrada no servidor",
+            }),
+          })
+          if (abrirRes.ok) {
+            const abrirData = (await abrirRes.json()) as { sessaoId?: string }
+            if (abrirData.sessaoId) sid = abrirData.sessaoId
+          }
+        } catch (err: unknown) {
+          console.error("[caixa/fechar] criação retroativa falhou:", err)
+        }
+      }
+
+      if (sid && lojaAtivaId) {
+        const res = await fetch("/api/ops/caixa/fechar", {
           method: "POST",
           credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            "x-assistec-loja-id": lojaAtivaId,
-          },
+          headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
           body: JSON.stringify({
             sessaoId: sid,
             saldoFinal: saldoEsperado,
@@ -138,21 +160,37 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
               saldoInicial: caixa.saldoInicial,
               totalEntradas: caixa.totalEntradas,
               totalSaidas: caixa.totalSaidas,
+              dataAberturaReal: caixa.dataAbertura?.toISOString() ?? null,
             },
           }),
         })
-      } catch {
-        /* non-blocking */
-      } finally {
-        setSalvando(false)
+        if (res.ok) {
+          serverPersisted = true
+        } else {
+          const errData = await res.json().catch(() => null) as { error?: string } | null
+          console.error("[caixa/fechar] HTTP", res.status, errData?.error)
+        }
       }
+    } catch (err: unknown) {
+      console.error("[caixa/fechar] rede:", err)
+    } finally {
+      setSalvando(false)
     }
 
     fecharCaixa()
     setValorContado("")
     setObservacao("")
     onClose()
-    toast({ title: "Caixa fechado", description: "Sessão encerrada com sucesso." })
+
+    if (serverPersisted || !lojaAtivaId) {
+      toast({ title: "Caixa fechado", description: "Sessão encerrada e registrada com sucesso." })
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Caixa fechado localmente",
+        description: "Sessão encerrada, mas não confirmada no servidor. Verifique a conexão.",
+      })
+    }
   }
 
   return (

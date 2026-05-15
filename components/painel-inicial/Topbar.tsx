@@ -108,8 +108,10 @@ export function Topbar() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <input
               type="text"
-              placeholder="Buscar clientes, produtos, OS..."
-              className="w-full h-8 pl-8 pr-12 rounded-md bg-muted/60 border border-transparent focus:border-ring focus:bg-panel outline-none text-[12.5px] transition-colors placeholder:text-muted-foreground"
+              readOnly
+              placeholder="Busca global — em breve"
+              title="Busca global ainda não disponível"
+              className="w-full h-8 pl-8 pr-12 rounded-md bg-muted/60 border border-transparent text-[12.5px] cursor-default opacity-60 placeholder:text-muted-foreground outline-none"
             />
             <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] px-1.5 py-0.5 rounded border border-border bg-background/60 text-muted-foreground">
               ⌘K

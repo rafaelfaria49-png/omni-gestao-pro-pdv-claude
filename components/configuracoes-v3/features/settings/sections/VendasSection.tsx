@@ -16,6 +16,7 @@ import { Switch } from "@/components/configuracoes-v3/components/ui/switch";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { Input } from "@/components/configuracoes-v3/components/ui/input";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
+import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
 import { ConfigEmpresaProvider, configPadrao } from "@/lib/config-empresa";
 import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
 import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider";
@@ -91,8 +92,6 @@ function VendasSectionContent() {
   const [form, setForm] = useState<VendasForm>(() => formFromPdvParams(pdvParams));
   const [snapshot, setSnapshot] = useState<VendasForm>(() => formFromPdvParams(pdvParams));
   const [saving, setSaving] = useState(false);
-  const [formasPagamentoVisual, setFormasPagamentoVisual] = useState<FormasPagamentoVisual>(FORMAS_PAGAMENTO_PADRAO);
-
   const syncFromSettings = useCallback(() => {
     const next = formFromPdvParams(pdvParams);
     setForm(next);
@@ -223,30 +222,31 @@ function VendasSectionContent() {
 
       <SettingsCard
         title="Formas de pagamento"
-        description="Ative ou desative as opções exibidas no fluxo de venda. Configuração visual (ainda não integrada ao backend)."
+        description="Pré-visualização das opções no PDV. A ativação por forma de pagamento será conectada ao backend numa fase posterior."
       >
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Badge variant="secondary" className="font-normal">
+            Em breve
+          </Badge>
+          <span className="text-xs text-muted-foreground">Não persiste ainda</span>
+        </div>
+        <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+          Os interruptores abaixo são apenas ilustrativos. Dinheiro, cartões, PIX e fiado continuam disponíveis conforme
+          o fluxo atual do PDV até esta configuração ser integrada.
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           {FORMAS_PAGAMENTO_ITENS.map(({ key, label, icon: Icon }) => (
             <div
               key={key}
-              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card-muted/60 px-4 py-3.5 shadow-sm transition-shadow hover:shadow-md"
+              className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-card-muted/40 px-4 py-3.5 opacity-90"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/12 text-primary ring-1 ring-primary/15">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                   <Icon className="h-5 w-5" aria-hidden />
                 </div>
-                <Label className="cursor-pointer text-base font-medium leading-snug text-foreground">{label}</Label>
+                <Label className="text-base font-medium leading-snug text-muted-foreground">{label}</Label>
               </div>
-              <Switch
-                checked={formasPagamentoVisual[key]}
-                onCheckedChange={(v) =>
-                  setFormasPagamentoVisual((prev) => ({
-                    ...prev,
-                    [key]: v === true,
-                  }))
-                }
-                disabled={controlsDisabled}
-              />
+              <Switch checked={FORMAS_PAGAMENTO_PADRAO[key]} disabled aria-readonly />
             </div>
           ))}
         </div>

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { PdvClassic, type VendasPDVProps } from "./pdv-classic"
 import { PdvSupermercado } from "./pdv-supermercado"
-import { PdvVendaCompletaEnterprise } from "./pdv-venda-completa-enterprise"
 import { usePerfilLoja } from "@/lib/perfil-loja-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
@@ -14,7 +13,6 @@ import {
   PDV_CLASSIC_LAYOUT_STORAGE_KEY,
   PDV_MAIN_LAYOUT_CHANGED_EVENT,
   readPdvClassicLayout,
-  writePdvClassicLayout,
 } from "@/lib/pdv-classic-layout"
 
 type PdvLayout = "classic" | "supermercado"
@@ -92,16 +90,10 @@ export function VendasPDV(props: VendasPDVProps) {
   useEffect(() => {
     if (!hydrated) return
     const fromDb = pdvParams.pdvClassicLayout
-    // "venda-completa" is a runtime-only selection stored in localStorage only —
-    // never persist it to DB, so DB can only hold "lovable" or "services".
-    // If the user has already selected "venda-completa" locally, don't override it.
     if (fromDb === "services" || fromDb === "lovable") {
-      setClassicLayout((prev) => (prev === "venda-completa" ? prev : fromDb))
+      setClassicLayout(fromDb)
       try {
-        const current = localStorage.getItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY)
-        if (current !== "venda-completa") {
-          localStorage.setItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY, fromDb)
-        }
+        localStorage.setItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY, fromDb)
       } catch {
         /* ignore */
       }
@@ -109,17 +101,6 @@ export function VendasPDV(props: VendasPDVProps) {
   }, [hydrated, pdvParams.pdvClassicLayout])
 
   if (layout === "supermercado") return <PdvSupermercado {...props} />
-
-  if (classicLayout === "venda-completa") {
-    return (
-      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
-        <PdvVendaCompletaEnterprise
-          onBack={() => writePdvClassicLayout("lovable")}
-          isModoRapido={props.isModoRapido}
-        />
-      </div>
-    )
-  }
 
   return <PdvClassic {...props} uiShell="omni-smart" classicLayoutKind={classicLayout} />
 }

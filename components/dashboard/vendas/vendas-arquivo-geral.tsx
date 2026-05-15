@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Search, RefreshCw, ReceiptText, User, Calendar,
   ShoppingBag, TrendingUp, BarChart3, AlertTriangle,
@@ -41,6 +41,7 @@ import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { useToast } from "@/hooks/use-toast"
+import type { SaleRecord } from "@/lib/operations-sale-types"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -141,6 +142,32 @@ function statusBadgeClass(s: string): string {
 
 const PAGE_SIZE = 20
 
+function saleRecordToVendaItem(s: SaleRecord): VendaItem {
+  const pb = s.paymentBreakdown
+  const formas: string[] = []
+  if (pb.dinheiro > 0) formas.push("Dinheiro")
+  if (pb.pix > 0) formas.push("Pix")
+  if (pb.cartaoDebito > 0) formas.push("Débito")
+  if (pb.cartaoCredito > 0) formas.push("Crédito")
+  if (pb.carne > 0) formas.push("Carnê")
+  if (pb.aPrazo > 0) formas.push("À Prazo")
+  if (pb.creditoVale > 0) formas.push("Vale")
+  return {
+    id: s.id,
+    dbId: s.id,
+    at: s.at,
+    cliente: s.customerName?.trim() || "—",
+    total: s.total,
+    status: "concluida",
+    operador: s.cashierId ?? null,
+    formaPagamento: formas.length > 0 ? formas.join(" + ") : "—",
+    quantidadeItens: s.lines.reduce((sum, l) => sum + l.quantity, 0),
+    cancelada: false,
+    canceladaEm: null,
+    motivoCancelamento: null,
+  }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function VendasArquivoGeral() {
@@ -166,6 +193,8 @@ export function VendasArquivoGeral() {
   const [vendas, setVendas] = useState<VendaItem[]>([])
   const [total, setTotal] = useState(0)
   const [kpis, setKpis] = useState<Kpis>({ totalVendas: 0, faturamento: 0, cancelamentos: 0, devolvidas: 0, concluidas: 0, ticketMedio: 0 })
+  const [remoteSales, setRemoteSales] = useState<SaleRecord[]>([])
+  const [remoteLoading, setRemoteLoading] = useState(false)
 
   // Detalhe drawer
   const [detalheOpen, setDetalheOpen] = useState(false)
@@ -229,7 +258,42 @@ export function VendasArquivoGeral() {
   // Reset page on filter change
   useEffect(() => { setPage(0) }, [statusFiltro, pagamentoFiltro, fromDate, toDate])
 
+  useEffect(() => {
+    let cancelled = false
+    setRemoteLoading(true)
+    async function fetchRemote() {
+      try {
+        const res = await fetch(
+          `/api/ops/vendas-list?lojaId=${encodeURIComponent(storeId)}`,
+          { credentials: "include", headers: { "x-assistec-loja-id": storeId } },
+        )
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { sales?: SaleRecord[] }
+          if (!cancelled) setRemoteSales(data.sales ?? [])
+        }
+      } catch (err: unknown) {
+        if (!cancelled) console.warn("[vendas-arquivo] falha ao carregar do servidor:", err)
+      } finally {
+        if (!cancelled) setRemoteLoading(false)
+      }
+    }
+    void fetchRemote()
+    return () => { cancelled = true }
+  }, [storeId])
+
   const totalPages = Math.ceil(total / PAGE_SIZE)
+
+  const { mergedVendas, remoteOnlyIds } = useMemo(() => {
+    const localIds = new Set(vendas.map((v) => v.id))
+    const onlyIds = new Set<string>()
+    const extra = remoteSales
+      .filter((s) => s.id && !localIds.has(s.id))
+      .map((s) => { onlyIds.add(s.id); return saleRecordToVendaItem(s) })
+    const merged = [...vendas, ...extra].sort(
+      (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
+    )
+    return { mergedVendas: merged, remoteOnlyIds: onlyIds }
+  }, [vendas, remoteSales])
 
   // ── Detalhe ──────────────────────────────────────────────────────────────────
   const openDetalhe = useCallback(async (vendaId: string) => {
@@ -374,6 +438,9 @@ export function VendasArquivoGeral() {
         <p className="text-sm text-muted-foreground mt-1">
           Vendas reais registradas no banco de dados · unidade{" "}
           <span className="font-mono text-xs">{storeId}</span>
+          {remoteLoading && (
+            <span className="text-muted-foreground text-xs ml-2">· sincronizando…</span>
+          )}
         </p>
       </div>
 
@@ -566,7 +633,7 @@ export function VendasArquivoGeral() {
             </div>
           ))}
         </div>
-      ) : vendas.length === 0 ? (
+      ) : mergedVendas.length === 0 ? (
         <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border bg-card px-8 py-16 text-center shadow-card">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
             <BarChart3 className="h-7 w-7 text-primary/70" />
@@ -598,7 +665,7 @@ export function VendasArquivoGeral() {
         </div>
       ) : (
         <div className="space-y-2">
-          {vendas.map((v) => (
+          {mergedVendas.map((v) => (
             <div
               key={v.id}
               className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border bg-card p-4 transition-colors ${
@@ -620,6 +687,11 @@ export function VendasArquivoGeral() {
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
                       {v.formaPagamento}
                     </Badge>
+                  )}
+                  {remoteOnlyIds.has(v.id) && (
+                    <span className="bg-secondary text-muted-foreground text-[10px] px-1.5 py-0.5 rounded">
+                      Servidor
+                    </span>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
