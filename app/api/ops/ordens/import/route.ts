@@ -10,13 +10,11 @@ import { auth } from "@/auth"
 
 export const runtime = "nodejs"
 
-function extractFromPayload(raw: Record<string, unknown>): {
-  numero: string
-  doc: string | null
-  nomeNorm: string
-} {
-  const numero = typeof raw.numero === "string" ? raw.numero.trim() : ""
-  const c = raw.cliente as Record<string, unknown> | undefined
+function extractFromPayload(raw: unknown): { numero: string; doc: string | null; nomeNorm: string } {
+  if (!raw || typeof raw !== "object") return { numero: "", doc: null, nomeNorm: "" }
+  const r = raw as Record<string, unknown>
+  const numero = typeof r.numero === "string" ? r.numero.trim() : ""
+  const c = r.cliente as Record<string, unknown> | undefined
   const nome = typeof c?.nome === "string" ? c.nome : ""
   const cpf = typeof c?.cpf === "string" ? c.cpf : ""
   return {
