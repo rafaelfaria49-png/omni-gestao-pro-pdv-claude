@@ -142,11 +142,8 @@ export async function PUT(req: Request) {
     return NextResponse.json({ ok: true, count: list.length, created, updated })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    console.error("[ops/ordens/import PUT]", msg)
-    const dev = process.env.NODE_ENV === "development"
-    return NextResponse.json(
-      { error: "Falha ao importar ordens", ...(dev ? { detail: msg } : {}) },
-      { status: 503 }
-    )
+    const stack = e instanceof Error ? e.stack?.slice(0, 500) : ""
+    console.error("[ops/ordens/import PUT]", msg, stack)
+    return NextResponse.json({ error: "Falha ao importar ordens", detail: msg, stack }, { status: 503 })
   }
 }
