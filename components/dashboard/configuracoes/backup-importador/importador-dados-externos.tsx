@@ -95,8 +95,12 @@ type MapTarget =
   | "ordens.telefone"
   | "ordens.equipamento"
   | "ordens.defeito"
+  | "ordens.observacoes"
   | "ordens.situacao"
   | "ordens.valor_total"
+  | "ordens.data_abertura"
+  | "ordens.data_entrega"
+  | "ordens.vendedor"
   | "fluxo.data_vencimento"
   | "fluxo.data_pagamento"
   | "fluxo.descricao"
@@ -1012,26 +1016,18 @@ function defaultMappingFor(kind: ImportKind, headers: string[], sheet?: ParsedSh
     map["clientes.tipo_pessoa"] = bestMatch(headers, ["tipo de pessoa", "tipo pessoa", "pessoa"]) ?? ""
     map["clientes.nome"] =
       bestMatch(headers, [
-        "nome",
-        "nome completo",
-        "nome do cliente",
-        "cliente",
-        "razao social",
-        "razão social",
-        "nome cliente",
-        "nome/razao",
-        "nome fantasia",
-        "fantasia",
+        "nome", "nome completo", "nome do cliente",
+        "cliente", "nome cliente",
+        "name", "full name", "customer name", "customer",
+        "razao social", "razão social", "nome/razao",
+        "nome fantasia", "fantasia",
       ]) ?? ""
     map["clientes.doc"] =
       bestMatch(headers, [
-        "cpf",
-        "cnpj",
-        "cpf/cnpj",
-        "documento",
-        "doc",
-        "cpf ou cnpj",
-        "documento fiscal",
+        "cpf", "cnpj", "cpf/cnpj",
+        "documento", "doc",
+        "cpf ou cnpj", "documento fiscal",
+        "tax id", "vat", "document",
       ]) ?? ""
     map["clientes.rg"] = bestMatch(headers, ["rg", "ie", "rg/ie"]) ?? ""
     map["clientes.data_nascimento"] = bestMatch(headers, ["data de nascimento", "nascimento", "dt nascimento"]) ?? ""
@@ -1044,14 +1040,12 @@ function defaultMappingFor(kind: ImportKind, headers: string[], sheet?: ParsedSh
     map["clientes.telefone_fixo"] = bestMatch(headers, ["telefone fixo", "telefone", "fone", "tel"]) ?? ""
     map["clientes.telefone"] =
       bestMatch(headers, [
-        "celular",
-        "telefone celular",
-        "fone",
-        "whatsapp",
-        "contato",
-        "tel",
+        "celular", "telefone celular",
+        "fone", "whatsapp",
+        "contato", "tel",
+        "phone", "mobile",
       ]) ?? ""
-    map["clientes.email"] = bestMatch(headers, ["email", "e-mail", "e mail", "mail"]) ?? ""
+    map["clientes.email"] = bestMatch(headers, ["email", "e-mail", "e mail", "mail", "e mail"]) ?? ""
     map["clientes.endereco"] =
       bestMatch(headers, [
         "endereco",
@@ -1068,9 +1062,19 @@ function defaultMappingFor(kind: ImportKind, headers: string[], sheet?: ParsedSh
   }
 
   if (kind === "produtos") {
-    map["produtos.nome"] = bestMatch(headers, ["nome", "produto", "descricao", "descrição"]) ?? ""
-    map["produtos.sku"] = bestMatch(headers, ["sku", "codigo", "código", "cod", "referencia", "referência", "ean", "gtin"]) ?? ""
-    map["produtos.categoria"] = bestMatch(headers, ["categoria", "grupo", "tipo"]) ?? ""
+    map["produtos.nome"] = bestMatch(headers, [
+      "nome", "produto", "descricao", "descrição",
+      "name", "product name", "item", "description",
+    ]) ?? ""
+    map["produtos.sku"] = bestMatch(headers, [
+      "sku", "codigo", "código", "cod",
+      "referencia", "referência", "ean", "gtin",
+      "barcode", "code", "id produto",
+    ]) ?? ""
+    map["produtos.categoria"] = bestMatch(headers, [
+      "categoria", "grupo", "tipo",
+      "category", "group", "type",
+    ]) ?? ""
     map["produtos.preco_custo"] =
       bestMatch(headers, [
         "preco de custo",
@@ -1105,17 +1109,83 @@ function defaultMappingFor(kind: ImportKind, headers: string[], sheet?: ParsedSh
   }
 
   if (kind === "ordens_servico") {
-    map["ordens.numero"] =
-      bestMatch(headers, ["numero", "número", "os", "ordem", "ordem servico", "ordem de servico", "n os"]) ?? ""
-    map["ordens.cliente_nome"] = bestMatch(headers, ["nome cliente", "cliente", "nome", "razao social"]) ?? ""
-    map["ordens.doc_cliente"] = bestMatch(headers, ["cpf", "cnpj", "cpf/cnpj", "documento cliente", "cliente cpf"]) ?? ""
-    map["ordens.telefone"] = bestMatch(headers, ["telefone", "celular", "whatsapp", "fone"]) ?? ""
-    map["ordens.equipamento"] =
-      bestMatch(headers, ["equipamento", "aparelho", "produto", "marca modelo", "modelo", "descricao equipamento"]) ?? ""
-    map["ordens.defeito"] = bestMatch(headers, ["defeito", "problema", "relato", "observacao defeito"]) ?? ""
-    map["ordens.situacao"] = bestMatch(headers, ["situacao", "situação", "status", "estado"]) ?? ""
-    map["ordens.valor_total"] =
-      bestMatch(headers, ["valor total", "total", "valor os", "valor da os", "total geral"]) ?? ""
+    map["ordens.numero"] = bestMatch(headers, [
+      "nº da os", "n da os", "numero da os", "n. da os",
+      "nº os", "n os", "num os", "numero os", "número os",
+      "id os", "codigo os", "código os", "cod os",
+      "ordem", "ordem servico", "ordem de servico",
+      "number", "os number", "os id",
+      "os", "numero", "número",
+    ]) ?? ""
+    map["ordens.cliente_nome"] = bestMatch(headers, [
+      "nome do cliente", "nome cliente", "cliente nome",
+      "cliente", "nome", "name", "customer", "customer name",
+      "razao social", "razão social", "titular",
+      "nome completo",
+    ]) ?? ""
+    map["ordens.doc_cliente"] = bestMatch(headers, [
+      "cpf", "cnpj", "cpf/cnpj", "cpf cnpj",
+      "documento", "documento cliente", "cliente cpf",
+      "doc", "document",
+    ]) ?? ""
+    map["ordens.telefone"] = bestMatch(headers, [
+      "telefone do cliente", "celular do cliente",
+      "telefone", "celular", "whatsapp", "fone",
+      "phone", "tel", "contato",
+    ]) ?? ""
+    map["ordens.equipamento"] = bestMatch(headers, [
+      "equipamento", "aparelho", "dispositivo",
+      "equipment", "device",
+      "marca modelo", "modelo", "item",
+      "descricao equipamento", "produto",
+    ]) ?? ""
+    map["ordens.defeito"] = bestMatch(headers, [
+      "defeito relatado", "defeito",
+      "problema", "descricao do defeito",
+      "fault", "issue", "defect",
+      "reclamacao", "relato", "observacao defeito",
+    ]) ?? ""
+    map["ordens.observacoes"] = bestMatch(headers, [
+      "observacoes internas", "observacoes interna",
+      "observacoes", "observações", "obs",
+      "notas", "notes", "comentario", "remarks",
+      "descricao interna",
+    ]) ?? ""
+    map["ordens.situacao"] = bestMatch(headers, [
+      "situacao", "situação", "status",
+      "estado", "state", "condicao",
+      "fase", "etapa",
+    ]) ?? ""
+    // Prioridade: "Total do pedido" (GestãoClick) > "Valor total" genérico
+    map["ordens.valor_total"] = bestMatch(headers, [
+      "total do pedido", "total pedido",
+      "vlr total", "valor total",
+      "total geral", "total servicos", "total serviços",
+      "valor servico", "valor serviço",
+      "valor os", "valor da os",
+      "price", "amount",
+      "total", "valor",
+    ]) ?? ""
+    map["ordens.data_abertura"] = bestMatch(headers, [
+      "data abertura", "data de abertura", "data entrada",
+      "data da os", "data os", "data emissao", "data emissão",
+      "cadastrado em", "data criacao", "data criação",
+      "created", "created at", "date",
+      "data",
+    ]) ?? ""
+    map["ordens.data_entrega"] = bestMatch(headers, [
+      "prazo de entrega", "prazo entrega",
+      "data de entrega", "data entrega", "data saida", "data saída",
+      "data prevista", "previsao", "previsão",
+      "vencimento os", "deadline",
+      "prazo", "entrega",
+    ]) ?? ""
+    map["ordens.vendedor"] = bestMatch(headers, [
+      "vendedor", "operador", "tecnico", "técnico",
+      "responsavel", "responsável",
+      "funcionario", "funcionário", "atendente",
+      "seller", "operator", "assigned to",
+    ]) ?? ""
   }
 
   if (kind === "fluxo_caixa") {
@@ -1305,8 +1375,12 @@ function buildOrdemPayloadFromRow(
   const colTel = mapping["ordens.telefone"]
   const colEquip = mapping["ordens.equipamento"]
   const colDefeito = mapping["ordens.defeito"]
+  const colObs = mapping["ordens.observacoes"]
   const colSit = mapping["ordens.situacao"]
   const colVal = mapping["ordens.valor_total"]
+  const colDataAbertura = mapping["ordens.data_abertura"]
+  const colDataEntrega = mapping["ordens.data_entrega"]
+  const colVendedor = mapping["ordens.vendedor"]
 
   const numRaw = colNum ? String(row[colNum] ?? "").trim() : ""
   const numero = numRaw
@@ -1320,10 +1394,15 @@ function buildOrdemPayloadFromRow(
   const tel = colTel ? String(row[colTel] ?? "").trim() : ""
   const equipamento = colEquip ? String(row[colEquip] ?? "").trim() : ""
   const defeito = colDefeito ? String(row[colDefeito] ?? "").trim() : ""
+  const observacoes = colObs ? String(row[colObs] ?? "").trim() : ""
   const situacaoRaw = colSit ? String(row[colSit] ?? "").trim() : ""
   const valorTotal = colVal ? toNumberPtBr(row[colVal]) : 0
+  const vendedor = colVendedor ? String(row[colVendedor] ?? "").trim() : ""
 
   const today = new Date().toISOString().slice(0, 10)
+  const dataEntrada = colDataAbertura ? parseDataBrFlex(row[colDataAbertura]) : today
+  const dataPrevisao = colDataEntrega ? parseDataBrFlex(row[colDataEntrega]) : today
+
   return {
     id: `imp-${sanitizeId(numero)}-${index}`,
     numero,
@@ -1337,15 +1416,16 @@ function buildOrdemPayloadFromRow(
     defeito,
     solucao: "",
     status: mapGestaoClickSituacaoOs(situacaoRaw),
-    dataEntrada: today,
+    dataEntrada,
     horaEntrada: horaAtualHHMM(),
-    dataPrevisao: today,
+    dataPrevisao,
     dataSaida: null,
     horaSaida: null,
     valorServico: valorTotal > 0 ? valorTotal : 0,
     valorPecas: 0,
     fotos: [],
-    observacoes: "",
+    observacoes,
+    ...(vendedor ? { vendedor } : {}),
     termoGarantia: "",
     textoGarantiaEditado: "",
   }
@@ -1580,8 +1660,12 @@ export function ImportadorDadosExternos() {
         { key: "ordens.telefone" as const, label: "Telefone do cliente" },
         { key: "ordens.equipamento" as const, label: "Equipamento / aparelho" },
         { key: "ordens.defeito" as const, label: "Defeito" },
+        { key: "ordens.observacoes" as const, label: "Observações internas" },
         { key: "ordens.situacao" as const, label: "Situação" },
         { key: "ordens.valor_total" as const, label: "Valor total" },
+        { key: "ordens.data_abertura" as const, label: "Data de abertura" },
+        { key: "ordens.data_entrega" as const, label: "Prazo / Data de entrega" },
+        { key: "ordens.vendedor" as const, label: "Vendedor / Técnico" },
       ]
     }
     if (kind === "fluxo_caixa") {
