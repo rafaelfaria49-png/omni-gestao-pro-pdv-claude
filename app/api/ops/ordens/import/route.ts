@@ -126,8 +126,14 @@ export async function PUT(req: Request) {
           ? o.id.trim()
           : `os-import-${incoming.numero.replace(/[^a-zA-Z0-9_-]+/g, "-")}-${Date.now()}`
       payloadMerged.id = id
-      const row = await prisma.ordemServico.create({
-        data: {
+      const row = await prisma.ordemServico.upsert({
+        where: { id },
+        update: {
+          numero: incoming.numero,
+          payload: payloadMerged as Prisma.InputJsonValue,
+          clienteId,
+        },
+        create: {
           id,
           storeId,
           numero: incoming.numero,
@@ -142,8 +148,11 @@ export async function PUT(req: Request) {
     return NextResponse.json({ ok: true, count: list.length, created, updated })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
-    const stack = e instanceof Error ? e.stack?.slice(0, 500) : ""
-    console.error("[ops/ordens/import PUT]", msg, stack)
-    return NextResponse.json({ error: "Falha ao importar ordens", detail: msg, stack }, { status: 503 })
+    console.error("[ops/ordens/import PUT]", msg)
+    const dev = process.env.NODE_ENV === "development"
+    return NextResponse.json(
+      { error: "Falha ao importar ordens", ...(dev ? { detail: msg } : {}) },
+      { status: 503 }
+    )
   }
 }
