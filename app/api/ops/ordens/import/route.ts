@@ -10,6 +10,7 @@ import { auth } from "@/auth"
 
 export const runtime = "nodejs"
 
+// Aceita `unknown` para tolerar payload null (OS criadas via UI têm payload: null).
 function extractFromPayload(raw: unknown): { numero: string; doc: string | null; nomeNorm: string } {
   if (!raw || typeof raw !== "object") return { numero: "", doc: null, nomeNorm: "" }
   const r = raw as Record<string, unknown>
@@ -24,7 +25,41 @@ function extractFromPayload(raw: unknown): { numero: string; doc: string | null;
   }
 }
 
+// Lê valorServico → valorTotal → financeiro.valorTotal com fallback em cascata.
+// buildOrdemPayloadFromRow grava em `valorServico`; outros formatos legados
+// podem usar `valorTotal` ou `payload.financeiro.valorTotal`.
+function extractValorFromPayload(o: Record<string, unknown>): number {
+  if (typeof o.valorServico === "number" && Number.isFinite(o.valorServico) && o.valorServico > 0) {
+    return o.valorServico
+  }
+  if (typeof o.valorTotal === "number" && Number.isFinite(o.valorTotal) && o.valorTotal > 0) {
+    return o.valorTotal
+  }
+  const fin = o.financeiro as Record<string, unknown> | undefined
+  if (fin && typeof fin.valorTotal === "number" && Number.isFinite(fin.valorTotal) && fin.valorTotal > 0) {
+    return fin.valorTotal
+  }
+  return 0
+}
+
+// Extrai nome do cliente com fallbacks para tolerar variações de estrutura.
+// Ignora o valor padrão "Cliente" que o importador coloca quando a coluna não foi mapeada.
+function extractNomeClienteFromPayload(o: Record<string, unknown>): string {
+  const cli = o.cliente as Record<string, unknown> | undefined
+  if (typeof cli?.nome === "string" && cli.nome.trim() && cli.nome.trim() !== "Cliente") {
+    return cli.nome.trim()
+  }
+  if (typeof o.nomeCliente === "string" && o.nomeCliente.trim()) {
+    return o.nomeCliente.trim()
+  }
+  if (typeof o.clienteNome === "string" && o.clienteNome.trim()) {
+    return o.clienteNome.trim()
+  }
+  return ""
+}
+
 async function requireSubscription() {
+  // NextAuth v5: aceitar sessão JWT ativa
   try {
     const session = await auth()
     if (session?.user) return { ok: true as const }
@@ -85,24 +120,39 @@ export async function PUT(req: Request) {
       const incoming = extractFromPayload(o)
       if (!incoming.numero) continue
 
-      let match =
+      const match =
         working.find((r) => r.numero === incoming.numero) ??
         (incoming.doc
-          ? working.find((r) => extractFromPayload(r.payload as Record<string, unknown>).doc === incoming.doc)
+          ? working.find((r) => extractFromPayload(r.payload).doc === incoming.doc)
           : undefined) ??
         (incoming.nomeNorm
-          ? working.find(
-              (r) => extractFromPayload(r.payload as Record<string, unknown>).nomeNorm === incoming.nomeNorm
-            )
+          ? working.find((r) => extractFromPayload(r.payload).nomeNorm === incoming.nomeNorm)
           : undefined)
 
       const payloadMerged = { ...o } as Record<string, unknown>
 
-      const cli = payloadMerged.cliente as Record<string, unknown> | undefined
-      const nomeCli = typeof cli?.nome === "string" ? cli.nome : ""
+      const nomeCli = extractNomeClienteFromPayload(payloadMerged)
       const nomeCliNorm = normalizeNameForMatch(nomeCli)
       const clienteId =
         nomeCliNorm && clienteByNomeNorm.has(nomeCliNorm) ? (clienteByNomeNorm.get(nomeCliNorm) as string) : null
+
+      const valorTotal = extractValorFromPayload(payloadMerged)
+      const valorBase = valorTotal
+
+      const equipamentoStr = (() => {
+        const eq = payloadMerged.equipamento
+        if (typeof eq === "string" && eq.trim()) return eq.trim()
+        const ap = payloadMerged.aparelho as Record<string, unknown> | undefined
+        if (ap) {
+          const marca = typeof ap.marca === "string" ? ap.marca.trim() : ""
+          const modelo = typeof ap.modelo === "string" ? ap.modelo.trim() : ""
+          const combined = `${marca} ${modelo}`.trim()
+          if (combined) return combined
+        }
+        return ""
+      })()
+
+      const defeitoStr = typeof payloadMerged.defeito === "string" ? payloadMerged.defeito.trim() : ""
 
       if (match) {
         payloadMerged.id = match.id
@@ -113,6 +163,10 @@ export async function PUT(req: Request) {
             numero: incoming.numero,
             payload: payloadMerged as Prisma.InputJsonValue,
             clienteId,
+            valorTotal,
+            valorBase,
+            equipamento: equipamentoStr,
+            defeito: defeitoStr,
           },
         })
         const ix = working.findIndex((r) => r.id === match.id)
@@ -132,6 +186,10 @@ export async function PUT(req: Request) {
           numero: incoming.numero,
           payload: payloadMerged as Prisma.InputJsonValue,
           clienteId,
+          valorTotal,
+          valorBase,
+          equipamento: equipamentoStr,
+          defeito: defeitoStr,
         },
         create: {
           id,
@@ -139,6 +197,10 @@ export async function PUT(req: Request) {
           numero: incoming.numero,
           payload: payloadMerged as Prisma.InputJsonValue,
           clienteId,
+          valorTotal,
+          valorBase,
+          equipamento: equipamentoStr,
+          defeito: defeitoStr,
         },
       })
       working.push(row)

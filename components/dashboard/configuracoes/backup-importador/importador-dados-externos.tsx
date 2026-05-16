@@ -1113,28 +1113,35 @@ function defaultMappingFor(kind: ImportKind, headers: string[], sheet?: ParsedSh
       "nº da os", "n da os", "numero da os", "n. da os",
       "nº os", "n os", "num os", "numero os", "número os",
       "id os", "codigo os", "código os", "cod os",
+      "número da o.s.", "numero da o.s.",
       "ordem", "ordem servico", "ordem de servico",
       "number", "os number", "os id",
       "os", "numero", "número",
     ]) ?? ""
     map["ordens.cliente_nome"] = bestMatch(headers, [
       "nome do cliente", "nome cliente", "cliente nome",
+      "responsável", "responsavel",
+      "nome do responsavel", "nome do responsável",
       "cliente", "nome", "name", "customer", "customer name",
       "razao social", "razão social", "titular",
       "nome completo",
     ]) ?? ""
     map["ordens.doc_cliente"] = bestMatch(headers, [
       "cpf", "cnpj", "cpf/cnpj", "cpf cnpj",
+      "cpf/cnpj do cliente",
       "documento", "documento cliente", "cliente cpf",
       "doc", "document",
     ]) ?? ""
     map["ordens.telefone"] = bestMatch(headers, [
       "telefone do cliente", "celular do cliente",
+      "telefone cliente",
       "telefone", "celular", "whatsapp", "fone",
       "phone", "tel", "contato",
     ]) ?? ""
     map["ordens.equipamento"] = bestMatch(headers, [
       "equipamento", "aparelho", "dispositivo",
+      "equipamento / aparelho",
+      "descricao", "descrição",
       "equipment", "device",
       "marca modelo", "modelo", "item",
       "descricao equipamento", "produto",
@@ -1142,6 +1149,7 @@ function defaultMappingFor(kind: ImportKind, headers: string[], sheet?: ParsedSh
     map["ordens.defeito"] = bestMatch(headers, [
       "defeito relatado", "defeito",
       "problema", "descricao do defeito",
+      "observações", "observacoes",
       "fault", "issue", "defect",
       "reclamacao", "relato", "observacao defeito",
     ]) ?? ""
@@ -1158,8 +1166,9 @@ function defaultMappingFor(kind: ImportKind, headers: string[], sheet?: ParsedSh
     ]) ?? ""
     // Prioridade: "Total do pedido" (GestãoClick) > "Valor total" genérico
     map["ordens.valor_total"] = bestMatch(headers, [
-      "total do pedido", "total pedido",
-      "vlr total", "valor total",
+      "Total do pedido", "total do pedido", "total pedido",
+      "valor do pedido", "valor pedido",
+      "vlr total", "Valor total", "valor total",
       "total geral", "total servicos", "total serviços",
       "valor servico", "valor serviço",
       "valor os", "valor da os",
@@ -1396,7 +1405,12 @@ function buildOrdemPayloadFromRow(
   const defeito = colDefeito ? String(row[colDefeito] ?? "").trim() : ""
   const observacoes = colObs ? String(row[colObs] ?? "").trim() : ""
   const situacaoRaw = colSit ? String(row[colSit] ?? "").trim() : ""
-  const valorTotal = colVal ? toNumberPtBr(row[colVal]) : 0
+  const valRaw = colVal ? row[colVal] : undefined
+  const valFallback =
+    valRaw == null || String(valRaw).trim() === "" || String(valRaw).trim() === "0"
+      ? (row["Total do pedido"] ?? row["total do pedido"] ?? row["Valor total"] ?? row["valor total"] ?? undefined)
+      : undefined
+  const valorTotal = toNumberPtBr(valFallback ?? valRaw)
   const vendedor = colVendedor ? String(row[colVendedor] ?? "").trim() : ""
 
   const today = new Date().toISOString().slice(0, 10)
