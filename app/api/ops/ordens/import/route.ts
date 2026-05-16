@@ -6,6 +6,7 @@ import { getTrustedTimeMs } from "@/lib/trusted-time"
 import type { Prisma, Cliente } from "@/generated/prisma"
 import { docDigitsForDedupe, normalizeNameForMatch } from "@/lib/import-normalize"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { auth } from "@/auth"
 
 export const runtime = "nodejs"
 
@@ -26,6 +27,12 @@ function extractFromPayload(raw: Record<string, unknown>): {
 }
 
 async function requireSubscription() {
+  try {
+    const session = await auth()
+    if (session?.user) return { ok: true as const }
+  } catch {
+    // fora de contexto de request; tenta fallback legacy
+  }
   const sub = await getVerifiedSubscriptionFromCookies()
   if (!sub.ok) {
     return { ok: false as const, res: NextResponse.json({ error: "Não autorizado" }, { status: 401 }) }
@@ -34,7 +41,7 @@ async function requireSubscription() {
   if (isVencimentoExpired(now, sub.vencimento) || sub.status !== "ativa") {
     return { ok: false as const, res: NextResponse.json({ error: "Assinatura inválida" }, { status: 403 }) }
   }
-  return { ok: true as const, sub }
+  return { ok: true as const }
 }
 
 export async function PUT(req: Request) {
