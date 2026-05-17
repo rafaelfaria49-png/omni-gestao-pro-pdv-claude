@@ -20,8 +20,19 @@ export async function GET(req: Request) {
     const rows = await prisma.ordemServico.findMany({
       where: { storeId },
       orderBy: { updatedAt: "desc" },
+      include: { cliente: true, garantiasOperacionais: true },
     })
-    const ordens = rows.map((r) => (r.payload ?? {}) as Record<string, unknown>)
+    const { hydrateOSRows } = await import("@/lib/operacoes/services/hydration-service")
+    const ordens = hydrateOSRows(
+      rows.map((r) => ({
+        ...r,
+        clienteId: r.clienteId ?? null,
+        numero: r.numero ?? "",
+        payload: r.payload ?? {},
+        itensPersistidos: [],
+        garantiasOperacionais: r.garantiasOperacionais ?? [],
+      }))
+    )
     return NextResponse.json({ ordens })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

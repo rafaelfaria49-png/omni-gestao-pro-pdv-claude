@@ -33,6 +33,7 @@ type DbOrdemRow = {
   updatedAt: Date
   valorTotal: unknown
   valorBase: unknown
+  cliente?: { id: string; name: string; phone: string | null; email: string | null } | null
   itens?: {
     id: string
     tipo: string
@@ -61,6 +62,9 @@ function mapRows(rows: DbOrdemRow[]): PrismaOSRow[] {
     storeId: r.storeId,
     numero: r.numero ?? null,
     clienteId: r.clienteId ?? null,
+    cliente: r.cliente
+      ? { id: r.cliente.id, nome: r.cliente.name }
+      : undefined,
     defeito: r.defeito ?? "",
     status: r.status,
     payload: r.payload as unknown,
@@ -109,6 +113,7 @@ export async function listOrdens(lojaId: string, filters?: ListOrdensFilters): P
         where,
         orderBy: { updatedAt: "desc" },
         take: 500,
+        include: { cliente: true },
       }) as Promise<DbOrdemRow[]>
     },
     [] as DbOrdemRow[]

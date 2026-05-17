@@ -15,6 +15,9 @@ export type PrismaOSRow = {
   /** Colunas Prisma — usadas quando o JSONB não traz clienteId/orçamento fiéis. */
   valorTotal: number;
   valorBase: number;
+  /** `nome` opcional: chamadores podem passar o snapshot `{id,nome}` (ordens.ts)
+   *  ou o registro Prisma cru via spread (route.ts) — só `nome` é consumido aqui. */
+  cliente?: { id: string; nome?: string } | null;
   /** Itens Prisma (quando a leitura inclui `itens`). */
   itensPersistidos?: {
     id: string;
@@ -145,6 +148,16 @@ function applyPrismaEnrichment<T extends OrdemServico & { operacaoStatus?: OSSta
     prismaValorBase: r.valorBase,
     prismaValorTotal: r.valorTotal,
   } as T;
+  // Propaga nome real do cliente (join FK) se disponível
+  if (r.cliente?.id && r.cliente?.nome) {
+    const clienteAtual = (next as unknown as OrdemServico).cliente
+    if (!clienteAtual?.nome || clienteAtual.nome === "—") {
+      next = {
+        ...next,
+        cliente: { ...((next as unknown as OrdemServico).cliente ?? {}), id: r.cliente.id, nome: r.cliente.nome },
+      } as T
+    }
+  }
   const orc = mergeOrcamentoFromPrismaRow(r, next as unknown as OrdemServico);
   if (orc) {
     next = { ...next, orcamento: orc } as T;
@@ -185,7 +198,7 @@ export function hydrateOSRows<T extends OrdemServico & { operacaoStatus?: OSStat
       codigo: r.numero ?? `OS-${new Date(r.createdAt).getFullYear()}-${r.id.slice(-5)}`,
       storeId: r.storeId,
       clienteId: r.clienteId ?? "",
-      cliente: { id: r.clienteId ?? "", nome: "—" },
+      cliente: { id: r.clienteId ?? "", nome: r.cliente?.nome ?? "—" },
       equipamento: { id: `eq_${r.id}`, tipo: "—", marca: "", modelo: "", defeitoRelatado: r.defeito ?? "" },
       status: fallbackOperacao as unknown as T["status"],
       operacaoStatus: fallbackOperacao,
