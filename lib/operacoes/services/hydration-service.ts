@@ -18,6 +18,8 @@ export type PrismaOSRow = {
   /** `nome` opcional: chamadores podem passar o snapshot `{id,nome}` (ordens.ts)
    *  ou o registro Prisma cru via spread (route.ts) — só `nome` é consumido aqui. */
   cliente?: { id: string; nome?: string } | null;
+  /** Coluna `equipamento` (string plana) — usada como fallback quando payload.aparelho está vazio. */
+  equipamento?: string;
   /** Itens Prisma (quando a leitura inclui `itens`). */
   itensPersistidos?: {
     id: string;
@@ -158,6 +160,15 @@ function applyPrismaEnrichment<T extends OrdemServico & { operacaoStatus?: OSSta
       } as T
     }
   }
+  // Enrich equipamento when payload.aparelho has no marca/modelo
+  const eq = (next as unknown as OrdemServico).equipamento
+  if (!eq?.marca && !eq?.modelo) {
+    const resolved = resolveEquipamento(r.payload, r.equipamento ?? "", r.id)
+    next = {
+      ...next,
+      equipamento: { ...(eq ?? {}), ...resolved, defeitoRelatado: eq?.defeitoRelatado || r.defeito || "" },
+    } as T
+  }
   const orc = mergeOrcamentoFromPrismaRow(r, next as unknown as OrdemServico);
   if (orc) {
     next = { ...next, orcamento: orc } as T;
@@ -169,6 +180,30 @@ function applyPrismaEnrichment<T extends OrdemServico & { operacaoStatus?: OSSta
     next = { ...next, garantiasOperacionais: mapGarantiasOperacionais(r.garantiasOperacionais) } as T;
   }
   return next;
+}
+
+function resolveEquipamento(
+  payload: unknown,
+  prismaEquipamento: string,
+  osId: string,
+): { id: string; tipo: string; marca: string; modelo: string; defeitoRelatado: string } {
+  const baseId = `eq_${osId}`
+  const ap = (payload as Record<string, unknown> | null)?.aparelho as Record<string, unknown> | undefined
+  if (ap && typeof ap === "object") {
+    const tipo = String(ap.tipo ?? "").trim() || "CELULAR"
+    const marca = String(ap.marca ?? "").trim()
+    const modelo = String(ap.modelo ?? "").trim()
+    if (marca || modelo) {
+      return { id: baseId, tipo, marca, modelo, defeitoRelatado: "" }
+    }
+  }
+  const parts = prismaEquipamento.trim().split(/\s+/)
+  if (parts.length >= 2) {
+    const marca = parts[0] ?? ""
+    const modelo = parts.slice(1).join(" ")
+    return { id: baseId, tipo: "CELULAR", marca, modelo, defeitoRelatado: "" }
+  }
+  return { id: baseId, tipo: "—", marca: "", modelo: "", defeitoRelatado: prismaEquipamento }
 }
 
 /**
@@ -199,7 +234,10 @@ export function hydrateOSRows<T extends OrdemServico & { operacaoStatus?: OSStat
       storeId: r.storeId,
       clienteId: r.clienteId ?? "",
       cliente: { id: r.clienteId ?? "", nome: r.cliente?.nome ?? "—" },
-      equipamento: { id: `eq_${r.id}`, tipo: "—", marca: "", modelo: "", defeitoRelatado: r.defeito ?? "" },
+      equipamento: {
+        ...resolveEquipamento(r.payload, r.equipamento ?? "", r.id),
+        defeitoRelatado: r.defeito ?? "",
+      },
       status: fallbackOperacao as unknown as T["status"],
       operacaoStatus: fallbackOperacao,
       prioridade: "media",
