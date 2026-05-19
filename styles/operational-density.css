@@ -1,0 +1,383 @@
+/**
+ * OmniGestão Pro — Densidade operacional enterprise (global)
+ *
+ * Ativado por `data-density="operational"` no <html> (app/layout.tsx).
+ * Compacta controles shadcn (data-slot), ui-kit Lovable (data-omni-ui-kit)
+ * e inputs legados Lovable (border-input) sem alterar lógica dos módulos.
+ *
+ * Tokens --density-* podem ser reutilizados em CSS custom de módulos.
+ */
+
+/* ── 1. Tokens de densidade ─────────────────────────────────────────────── */
+
+[data-density="operational"] {
+  --density-root: 15px;
+  --radius: 0.375rem;
+
+  --density-line: 1.4;
+  --density-line-tight: 1.25;
+  --density-line-snug: 1.15;
+
+  --density-control-h: 2rem;
+  --density-control-h-sm: 1.75rem;
+  --density-control-px: 0.625rem;
+  --density-control-py: 0.25rem;
+  --density-control-text: 0.8125rem;
+
+  --density-textarea-min-h: 4.5rem;
+
+  --density-card-pad: 0.875rem;
+  --density-card-gap: 0.75rem;
+  --density-dialog-pad: 0.875rem;
+  --density-dialog-gap: 0.625rem;
+  --density-table-cell-py: 0.375rem;
+  --density-table-head-h: 2rem;
+
+  --density-modal-radius: var(--radius-lg);
+  --density-focus-ring: 2px;
+
+  --shadow-card: 0 1px 2px oklch(0.145 0 0 / 0.05), 0 4px 12px -4px oklch(0.145 0 0 / 0.08);
+}
+
+@media (max-width: 640px) {
+  [data-density="operational"] {
+    --density-control-h: 2.25rem;
+    --density-control-h-sm: 2rem;
+  }
+}
+
+/* ── 2. Tipografia e ritmo vertical global ───────────────────────────────── */
+
+[data-density="operational"] body {
+  line-height: var(--density-line);
+  letter-spacing: -0.01em;
+}
+
+[data-density="operational"] :where(h1, h2, h3, h4) {
+  line-height: var(--density-line-tight);
+}
+
+[data-density="operational"] :where(p, li, dd) {
+  line-height: var(--density-line);
+}
+
+/* ── 3. Controles shadcn (data-slot) ─────────────────────────────────────── */
+
+[data-density="operational"] :where([data-slot="input"], [data-slot="textarea"]) {
+  height: auto;
+  min-height: var(--density-control-h);
+  padding-inline: var(--density-control-px) !important;
+  padding-block: var(--density-control-py) !important;
+  font-size: var(--density-control-text) !important;
+  line-height: var(--density-line-snug) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+[data-density="operational"] [data-slot="textarea"] {
+  min-height: var(--density-textarea-min-h) !important;
+  field-sizing: content;
+}
+
+[data-density="operational"] [data-slot="select-trigger"] {
+  height: var(--density-control-h) !important;
+  min-height: var(--density-control-h) !important;
+  padding-inline: var(--density-control-px) !important;
+  padding-block: var(--density-control-py) !important;
+  font-size: var(--density-control-text) !important;
+  gap: 0.375rem !important;
+  border-radius: var(--radius-md) !important;
+}
+
+[data-density="operational"] [data-slot="select-trigger"][data-size="sm"] {
+  height: var(--density-control-h-sm) !important;
+  min-height: var(--density-control-h-sm) !important;
+}
+
+[data-density="operational"] :where([data-slot="button"]) {
+  font-size: var(--density-control-text) !important;
+  gap: 0.375rem !important;
+  border-radius: var(--radius-md) !important;
+}
+
+[data-density="operational"] [data-slot="button"]:not([class*="icon"]) {
+  height: var(--density-control-h) !important;
+  min-height: var(--density-control-h) !important;
+  padding-inline: 0.75rem !important;
+}
+
+[data-density="operational"] [data-slot="label"] {
+  font-size: var(--density-control-text) !important;
+  line-height: var(--density-line-snug) !important;
+  gap: 0.375rem !important;
+}
+
+/* ── 4. ui-kit Lovable (Cadastros e derivados) ───────────────────────────── */
+
+[data-density="operational"] [data-omni-ui-kit="control"] {
+  min-height: var(--density-control-h);
+  padding: var(--density-control-py) var(--density-control-px);
+  font-size: var(--density-control-text);
+  line-height: var(--density-line-snug);
+  border-radius: var(--radius-md);
+}
+
+[data-density="operational"] [data-omni-ui-kit="modal-header"] {
+  padding: 0.625rem var(--density-card-pad) !important;
+  gap: 0.5rem !important;
+}
+
+[data-density="operational"] [data-omni-ui-kit="modal-header"] h2 {
+  font-size: 0.9375rem !important;
+  line-height: var(--density-line-tight) !important;
+}
+
+[data-density="operational"] [data-omni-ui-kit="modal-body"] {
+  padding: var(--density-card-pad) !important;
+}
+
+/* Modal custom (ui-kit): rounded-2xl → raio operacional */
+[data-density="operational"]
+  div.rounded-2xl.border.border-border.bg-card.shadow-2xl:has([data-omni-ui-kit="modal-header"]) {
+  border-radius: var(--density-modal-radius) !important;
+}
+
+[data-density="operational"]
+  .fixed.inset-0.z-50.flex.items-center.justify-center:has([data-omni-ui-kit="modal-header"]) {
+  padding: 0.75rem !important;
+}
+
+/* ── 5. Inputs Lovable legados (h-9 / h-10 / text-base) ─────────────────── */
+
+[data-density="operational"]
+  :where(input, textarea, select).border-input.rounded-md:not([type="checkbox"]):not([type="radio"]):not(
+    [type="range"]
+  ):not([type="file"]):not([type="hidden"]) {
+  min-height: var(--density-control-h);
+  height: var(--density-control-h);
+  padding-inline: var(--density-control-px) !important;
+  padding-block: var(--density-control-py) !important;
+  font-size: var(--density-control-text) !important;
+  line-height: var(--density-line-snug) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+[data-density="operational"] textarea.border-input.rounded-md {
+  height: auto;
+  min-height: var(--density-textarea-min-h);
+}
+
+/* Alturas showcase comuns em exports Lovable */
+[data-density="operational"] :where(.h-9, .h-10, .h-11).border-input.rounded-md {
+  height: var(--density-control-h) !important;
+  min-height: var(--density-control-h) !important;
+}
+
+/* ── 6. Cards ─────────────────────────────────────────────────────────────── */
+
+[data-density="operational"] [data-slot="card"] {
+  gap: var(--density-card-gap) !important;
+  padding-block: var(--density-card-pad) !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+[data-density="operational"] :where([data-slot="card-header"], [data-slot="card-footer"]) {
+  padding-inline: var(--density-card-pad) !important;
+  gap: 0.375rem !important;
+}
+
+[data-density="operational"] [data-slot="card-content"] {
+  padding-inline: var(--density-card-pad) !important;
+}
+
+[data-density="operational"] [data-slot="card-title"] {
+  font-size: 0.9375rem !important;
+  line-height: var(--density-line-tight) !important;
+}
+
+[data-density="operational"] [data-slot="card-description"] {
+  font-size: var(--density-control-text) !important;
+}
+
+/* Cards Lovable (rounded-2xl + border-border + bg-card) */
+[data-density="operational"] :where(.rounded-2xl.border-border.bg-card, .rounded-2xl.border.border-border.bg-card) {
+  border-radius: var(--radius-lg) !important;
+}
+
+/* ── 7. Dialogs, alertas, sheets ───────────────────────────────────────── */
+
+[data-density="operational"] :where(
+    [data-slot="dialog-content"],
+    [data-slot="alert-dialog-content"]
+  ) {
+  gap: var(--density-dialog-gap) !important;
+  padding: var(--density-dialog-pad) !important;
+  border-radius: var(--radius-lg) !important;
+}
+
+[data-density="operational"] :where([data-slot="dialog-header"], [data-slot="alert-dialog-header"]) {
+  gap: 0.25rem !important;
+}
+
+[data-density="operational"] :where([data-slot="dialog-footer"], [data-slot="alert-dialog-footer"]) {
+  gap: 0.5rem !important;
+}
+
+[data-density="operational"] :where([data-slot="dialog-title"], [data-slot="alert-dialog-title"]) {
+  font-size: 0.9375rem !important;
+  line-height: var(--density-line-tight) !important;
+}
+
+[data-density="operational"] :where([data-slot="dialog-description"], [data-slot="alert-dialog-description"]) {
+  font-size: var(--density-control-text) !important;
+}
+
+[data-density="operational"] [data-slot="dialog-content"] > [data-slot="dialog-close"] {
+  top: 0.625rem !important;
+  right: 0.625rem !important;
+}
+
+[data-density="operational"] [data-slot="sheet-content"] {
+  gap: var(--density-card-gap) !important;
+}
+
+[data-density="operational"] [data-slot="sheet-content"] > [data-slot="sheet-close"] {
+  top: 0.75rem !important;
+  right: 0.75rem !important;
+}
+
+/* ── 8. Tabelas ─────────────────────────────────────────────────────────── */
+
+[data-density="operational"] [data-slot="table"] {
+  font-size: var(--density-control-text) !important;
+}
+
+[data-density="operational"] [data-slot="table-head"] {
+  height: var(--density-table-head-h) !important;
+  padding-inline: 0.5rem !important;
+  font-size: 0.75rem !important;
+}
+
+[data-density="operational"] [data-slot="table-cell"] {
+  padding-block: var(--density-table-cell-py) !important;
+  padding-inline: 0.5rem !important;
+  font-size: var(--density-control-text) !important;
+  line-height: var(--density-line-snug) !important;
+}
+
+[data-density="operational"] [data-slot="table-caption"] {
+  margin-top: 0.5rem !important;
+  font-size: var(--density-control-text) !important;
+}
+
+/* Tabelas HTML em HUBs sem data-slot */
+[data-density="operational"] table :where(th, td) {
+  padding-block: var(--density-table-cell-py);
+  padding-inline: 0.5rem;
+  font-size: var(--density-control-text);
+  line-height: var(--density-line-snug);
+}
+
+[data-density="operational"] table th {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* ── 9. Espaçamentos showcase (Lovable / marketing) ──────────────────────── */
+
+[data-density="operational"] :where(.gap-6) {
+  gap: 1rem !important;
+}
+
+[data-density="operational"] :where(.gap-8) {
+  gap: 1.25rem !important;
+}
+
+[data-density="operational"] :where(.gap-10) {
+  gap: 1.5rem !important;
+}
+
+[data-density="operational"] .p-6 {
+  padding: 1rem !important;
+}
+
+[data-density="operational"] .px-6 {
+  padding-inline: 1rem !important;
+}
+
+[data-density="operational"] .py-6 {
+  padding-block: 1rem !important;
+}
+
+[data-density="operational"] .p-8 {
+  padding: 1.25rem !important;
+}
+
+[data-density="operational"] .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+  margin-block-start: 1rem !important;
+}
+
+[data-density="operational"] .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+  margin-block-start: 1.25rem !important;
+}
+
+/* ── 10. Form fields (shadcn Field / FormItem) ───────────────────────────── */
+
+[data-density="operational"] :where([data-slot="field"], [data-slot="field-group"]) {
+  gap: 0.375rem !important;
+}
+
+[data-density="operational"] [data-slot="field-group"] {
+  gap: 0.75rem !important;
+}
+
+/* ── 11. Tabs, badges, alerts (densidade leve) ───────────────────────────── */
+
+[data-density="operational"] [data-slot="tabs-list"] {
+  height: auto !important;
+  min-height: var(--density-control-h-sm);
+  padding: 0.125rem !important;
+  gap: 0.125rem !important;
+}
+
+[data-density="operational"] [data-slot="tabs-trigger"] {
+  min-height: calc(var(--density-control-h-sm) - 0.25rem);
+  padding-inline: 0.625rem !important;
+  padding-block: 0.25rem !important;
+  font-size: var(--density-control-text) !important;
+}
+
+[data-density="operational"] [data-slot="badge"] {
+  padding-inline: 0.375rem !important;
+  padding-block: 0.0625rem !important;
+  font-size: 0.6875rem !important;
+}
+
+[data-density="operational"] [data-slot="alert"] {
+  gap: 0.5rem !important;
+  padding: 0.625rem 0.75rem !important;
+  font-size: var(--density-control-text) !important;
+}
+
+/* ── 12. Exceções — não compactar áreas críticas de toque / marketing ───── */
+
+[data-density="operational"] :where(
+    [data-density-ignore],
+    [data-density-ignore] *,
+    .recibo-print-root,
+    .recibo-print-root *
+  ) {
+  font-size: revert;
+  line-height: revert;
+  min-height: revert;
+  height: revert;
+  padding: revert;
+  gap: revert;
+  margin: revert;
+  border-radius: revert;
+}
+
+/* PDV: preservar legibilidade de totais (classes utilitárias grandes) */
+[data-density="operational"] :where([class*="text-pos-total"], [class*="tabular-pdv"]) {
+  font-size: revert;
+  line-height: revert;
+}
