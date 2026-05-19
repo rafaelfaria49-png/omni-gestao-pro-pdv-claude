@@ -28,7 +28,9 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
     }
   }, [pathname])
 
-  const isVendas = pathname?.startsWith("/dashboard/vendas")
+  const isVendas =
+    pathname?.startsWith("/dashboard/vendas") ||
+    pathname?.startsWith("/dashboard/pdv-next")
 
   const shell = (
     <AppShell noPadding={isVendas}>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
-import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info } from "lucide-react";
+import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info, Cpu } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/configuracoes-v3/components/ui/radio-group";
@@ -297,8 +297,8 @@ function PdvSectionContent() {
         </div>
 
         <div
-          className="grid w-full min-w-0 auto-rows-fr gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-          data-pdv-layout-cards={String(FLOWS.length)}
+          className="grid w-full min-w-0 auto-rows-fr gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+          data-pdv-layout-cards={String(FLOWS.length + 1)}
         >
           {FLOWS.map((opt) => {
             const active = draftFlow === opt.id;
@@ -361,6 +361,60 @@ function PdvSectionContent() {
               </div>
             );
           })}
+
+          {/* 4º PDV: Black Edition — rota própria /dashboard/pdv-next */}
+          <div
+            data-testid="pdv-black-edition"
+            className="relative flex min-h-[17rem] w-full min-w-0 max-w-none flex-col gap-6 rounded-xl border bg-card p-6 shadow-soft transition-all border-border hover:border-primary/40 hover:shadow-card"
+          >
+            {/* Preview: miniatura black */}
+            <div className="overflow-hidden rounded-lg border border-white/10 bg-[#000000]">
+              <div className="flex min-h-32 h-auto">
+                <div className="flex-1 p-2 space-y-1.5">
+                  <div className="h-2 w-full rounded bg-white/10" />
+                  <div className="h-1.5 w-3/4 rounded bg-white/8" />
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="h-1.5 w-full rounded bg-white/5" />
+                  ))}
+                </div>
+                <div className="w-1/3 border-l border-white/10 bg-black p-2 space-y-1.5">
+                  <div className="h-1.5 w-full rounded bg-emerald-500/30" />
+                  <div className="h-1.5 w-3/4 rounded bg-emerald-500/20" />
+                  <div className="h-1.5 w-2/3 rounded bg-white/10" />
+                  <div className="mt-3 h-5 w-full rounded bg-emerald-600/60" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#000000] text-emerald-400">
+                <Cpu className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-lg font-semibold leading-snug text-foreground">PDV Next / Black Edition</h4>
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400">
+                    Beta
+                  </Badge>
+                </div>
+                <p className="text-sm font-normal leading-relaxed text-muted-foreground">
+                  Caixa premium com design monocromático, barra operacional completa e atalhos F1–F9. Rota exclusiva em /dashboard/pdv-next.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex w-full">
+              <a
+                href="/dashboard/pdv-next"
+                className={cn(
+                  "inline-flex h-9 w-full items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-colors",
+                  "bg-[#000000] text-emerald-400 hover:bg-[#111111] border border-white/10 hover:border-emerald-500/40"
+                )}
+              >
+                Acessar PDV Black Edition
+              </a>
+            </div>
+          </div>
         </div>
 
         {draftFlow === "classico" ? (
