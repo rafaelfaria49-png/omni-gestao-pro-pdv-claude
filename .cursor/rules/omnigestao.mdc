@@ -1,0 +1,108 @@
+---
+description: OmniGestão Pro — governança obrigatória para qualquer tarefa de código neste repositório. Carregado automaticamente pelo Cursor em toda sessão.
+alwaysApply: true
+---
+
+# OmniGestão Pro — Regras de Governança
+
+**Documentação completa:** `CLAUDE.md` (raiz) → `docs/skills/INDEX.md` → `docs/skills/rules/`
+**Estado atual do projeto:** `docs/ai/CURRENT_STATUS.md`
+
+---
+
+## 1. Pensar antes de codar
+
+- Entenda o pedido antes de abrir o editor. Localize os arquivos reais — não suponha caminhos.
+- Se o escopo estiver ambíguo, pergunte; não preencha lacunas com suposição.
+- Formule o "critério de pronto" antes de começar.
+
+## 2. Escopo fechado e mudanças cirúrgicas
+
+- Faça **apenas o que foi pedido**. Nada além.
+- Altere o mínimo de linhas necessário. Sem refactor "de brinde".
+- Um commit = uma intenção. Não melhore código vizinho não solicitado.
+- Se encontrar problema fora do escopo, **relate** — não corrija sem autorização.
+
+## 3. Sem overengineering
+
+- A solução mais simples que satisfaz o critério vence.
+- Não adicione abstrações, camadas ou configurações que ninguém pediu.
+- Não antecipe requisitos futuros.
+
+## 4. Áreas protegidas — NÃO tocar sem autorização explícita
+
+Nunca altere os arquivos abaixo sem o usuário pedir explicitamente:
+
+| Arquivo / Área | Risco |
+|----------------|-------|
+| `auth.ts`, `auth.config.ts`, `app/actions/auth.ts` | Exposição de rotas |
+| `proxy.ts` | Bypass de autenticação |
+| `prisma/schema.prisma` e migrations | Perda de dados em produção |
+| PDV, Financeiro, Operações (código funcional) | Regressão em produção |
+| `lib/prisma.ts`, `next.config.mjs`, `tsconfig.json` | Infra core |
+| `lib/financeiro/contracts/local-key.ts` | Quebra de idempotência financeira |
+| `lib/financeiro/adapters/os-faturamento.ts` | Duplicação de lançamentos |
+| `components/painel-inicial/AppShell.tsx` | Regressão de layout global |
+
+Se a tarefa exigir tocar em qualquer ponto acima, **pare e confirme** antes de prosseguir.
+
+## 5. Sem mocks enganosos
+
+- Não crie dado falso que pareça persistência real.
+- HUBs Lovable usam mock para UI — isso é esperado e documentado. Não é aceitável em Server Actions ou API routes.
+- Se entregar algo mockado, deixe **explícito** no relatório final.
+- Sinais de alerta: `Math.random()`, `faker`, seeds fora de `*.test.ts`, `TODO: substituir por dados reais` em código mergeado.
+
+## 6. Tokens visuais do OmniGestão
+
+- Use apenas tokens semânticos Tailwind: `bg-background`, `text-foreground`, `border-border`, `text-primary`, `bg-card`, `text-muted-foreground`, etc.
+- **Nenhuma cor decorativa hardcoded** (`#fff`, `bg-blue-500` arbitrário).
+- Exceção documentada: cores semânticas de domínio (ex.: `text-emerald-500` para evento de sucesso em timeline).
+- `min-w-0` é obrigatório em todo item flex/grid.
+- `AppShell` (`components/painel-inicial/AppShell.tsx`) é o único dono de scroll — não adicione `h-screen`/`overflow-auto` em wrappers de HUB.
+
+## 7. Critérios verificáveis
+
+- Toda mudança em `.ts`/`.tsx` → rodar `npx tsc --noEmit`. Zero erros = obrigatório.
+- Mudança que afeta config, rotas, layouts, Server Actions ou Prisma → `npm run build`.
+- Não declare "pronto" sem o critério ter sido verificado de fato.
+
+## 8. Multi-loja (storeId)
+
+- Todo query Prisma deve ter `where: { storeId }`. Nunca cruzar dados entre lojas.
+- `storeId` vem do header `x-assistec-loja-id` ou do contexto de loja — nunca confiar no body direto.
+- Server Actions recebem e validam `storeId` antes de qualquer operação.
+
+## 9. Importação de UI externa (Lovable / Antigravity / Gemini)
+
+Ao trazer componentes de ferramentas externas, seguir `docs/skills/rules/FRONTEND_IMPORT_RULES.md`:
+
+- Despejar em `_imports/` (quarentena) antes de integrar.
+- Nunca copiar: roteamento próprio, `package.json`, `globals.css` do protótipo, shadcn duplicado.
+- Converter cores hardcoded para tokens semânticos.
+- Integrar uma tela por vez; validar com `npx tsc --noEmit` a cada peça.
+
+## 10. Relatório final obrigatório
+
+Toda tarefa termina com relatório contendo:
+1. Arquivos criados / alterados / removidos.
+2. Resultado de `npx tsc --noEmit` (ou justificativa de isenção).
+3. Escopo: confirmação de que nada fora do pedido foi tocado.
+4. Pendências (ou "nenhuma").
+5. Se `docs/ai/CURRENT_STATUS.md` foi atualizado — e por quê (ou por que não).
+
+Ver checklist completo: `docs/skills/rules/DELIVERY_CHECKLIST.md`
+
+---
+
+## Referências rápidas
+
+| Doc | Conteúdo |
+|-----|----------|
+| `CLAUDE.md` | Entrada principal — visão geral do projeto + resumo das regras |
+| `docs/skills/INDEX.md` | Mapa de toda a governança |
+| `docs/skills/rules/CORE_RULES.md` | Regras detalhadas (10 princípios) |
+| `docs/skills/rules/DELIVERY_CHECKLIST.md` | Checklist de encerramento de tarefa |
+| `docs/skills/rules/AI_WORKFLOW.md` | Papéis das IAs, Sonnet vs Opus, GitHub |
+| `docs/skills/rules/FRONTEND_IMPORT_RULES.md` | Como importar UI externa |
+| `docs/ai/CURRENT_STATUS.md` | Estado real de cada módulo (real vs mock) |

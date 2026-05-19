@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 17 Mai 2026 — Sessão: Importador Avançado + Fixes Operações HUB
+> Última atualização: 19 Mai 2026 — Sessão: Cadastros HUB + PDV Next / Black Edition + Governança IA
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,74 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Governança IA — sincronização canonical (concluído 19/05/2026)
+
+- **`CLAUDE.md`** atualizado com bloco de governança obrigatória no topo (ler antes de qualquer tarefa)
+- **`.cursor/rules/omnigestao.mdc`** criado — regras carregadas automaticamente pelo Cursor em toda sessão (`alwaysApply: true`)
+- **`docs/skills/`** criado com estrutura canônica:
+  - `INDEX.md` — índice de governança
+  - `rules/CORE_RULES.md` — regras globais
+  - `rules/DELIVERY_CHECKLIST.md` — checklist de encerramento
+  - `rules/AI_WORKFLOW.md` — papéis Sonnet vs Opus, contexto, GitHub
+  - `rules/FRONTEND_IMPORT_RULES.md` — regras de importação de UI externa
+
+---
+
+### Cadastros HUB — Fase 1+2+3 (concluído 19/05/2026)
+
+**Arquivo:** `components/cadastros/lovable/components/cadastros/CadastrosHub.tsx`
+
+- **Fase 1 (busca clientes):** state `filterQuery` controlado, `visibleRows` com filtro nome/telefone/documento/cidade, contador atualizado, busca funciona desde o 1º caractere
+- **Fase 2 (visual inputs):** campo de pesquisa da Toolbar trocado de `bg-card` para `bg-background` — texto visível em todos os temas
+- **Fase 3 (performance):** separados `refreshRows` (rápido, bloqueia só tabela) e `refreshAlerts` (lento, silencioso) — busca responsiva imediatamente, alertas carregam em paralelo sem travar a lista
+
+---
+
+### PDV Next / Black Edition — 4º PDV (concluído 19/05/2026)
+
+**Rota:** `/dashboard/pdv-next`
+**Galeria:** `Configurações > PDV` → 4 cards na grade "Fluxos principais"
+
+#### Arquivos criados
+
+| Arquivo | Descrição |
+|---------|-----------|
+| `components/pdv-next/PdvBlackShell.tsx` | Shell visual Black Edition isolado — sempre preto, sem dependência de `useStudioTheme`. Header operacional: loja, caixa aberto/fechado, operador, cupom, relógio, status online. Tabela de itens, sidebar (total emerald, cliente, NF-e), barra F1–F9 |
+| `components/pdv-next/PdvBlackEdition.tsx` | Controller: carrinho, catálogo real (`mergePdvCatalogWithInventory`), busca de clientes real (`useClienteSearch`), caixa (`useCaixa`), atalhos globais F1–F9, `PaymentModal` |
+| `app/dashboard/pdv-next/page.tsx` | Rota Next.js com Suspense |
+
+#### Arquivos modificados
+
+| Arquivo | Mudança |
+|---------|---------|
+| `app/dashboard/layout.tsx` | `isVendas` inclui `/dashboard/pdv-next` (noPadding + flex-1) |
+| `components/configuracoes-v3/features/settings/sections/PdvSection.tsx` | 4º card com preview black/emerald, badge Beta, link direto para `/dashboard/pdv-next` |
+
+#### Status real vs mock
+
+| Funcionalidade | Status |
+|----------------|--------|
+| Produtos do inventário (ao vivo) | ✅ Real |
+| Busca de clientes (F2) via API | ✅ Real |
+| Status caixa aberto/fechado | ✅ Real |
+| Nome da loja e operador | ✅ Real |
+| Atalhos F1–F9 (teclado global) | ✅ Real |
+| Bipe/scan de produto (Enter) | ✅ Real |
+| CaixaStatusBar (abertura/fechamento) | ✅ Real |
+| Pagamento (PaymentModal) | ⚠️ Mock — abre o modal, limpa carrinho, **não persiste venda no banco** |
+| Documento fiscal (NF-e) | ⚠️ Mock — placeholder "NF-e — mock" |
+
+#### PDVs preservados (sem alteração)
+
+| PDV | Rota | Status |
+|-----|------|--------|
+| PDV Clássico/Omni | `/dashboard/vendas` | ✅ Intocado |
+| PDV Assistência | `/dashboard/vendas` (services layout) | ✅ Intocado |
+| PDV Supermercado | `/dashboard/vendas` (supermercado layout) | ✅ Intocado |
+| **PDV Next / Black Edition** | `/dashboard/pdv-next` | ✅ **Novo — isolado** |
+
+---
 
 ### Importador Avançado — GestaoClick (concluído 17/05/2026)
 
@@ -108,6 +176,7 @@ components/operacoes/lovable/components/operacoes/OSCard.tsx
 
 | Item | Situação |
 |---|---|
+| **PDV Black Edition — persistência de vendas** | `PdvBlackEdition.tsx`: `handlePaymentConfirm` limpa carrinho localmente. Próximo passo: plugar `adicionarEntrada(useCaixa)` + criar venda no banco (Server Action `registrarVendaPDV`) |
 | Equipamento no card Kanban | `os.equipamento` chega como string `"MOTOROLA MOTO EDGE 30"` — card exibe `—` na linha de marca/modelo. Fix pendente: `hydration-service` ler `payload.aparelho.{tipo,marca,modelo}` |
 | servicos_catalogo (12 serviços) | Detectados mas ignorados — aguarda model `Servico` próprio no Prisma |
 | contas_pagar (38) / contas_receber (307) | Detectados pelo importador mas não persistidos — service Prisma existe (`lib/financeiro/services/`) mas sem plug no importador |
@@ -127,6 +196,7 @@ components/operacoes/lovable/components/operacoes/OSCard.tsx
 
 ### P1 — Importante
 
+- [ ] **PDV Black Edition — persistir vendas** — `PdvBlackEdition.tsx`: plugar `adicionarEntrada` + Server Action `registrarVendaPDV`; rota `/dashboard/pdv-next` já existe, motor de carrinho já funciona
 - [ ] **Persistir contas_pagar/contas_receber no importador** — plugar `lib/financeiro/services/` no `persistidor.ts` (Fix futuro)
 - [ ] **Persistir servicos_catalogo** — criar model `Servico` ou reutilizar `Produto` com `type="servico"`
 - [ ] **Relatórios de vendas** — exibir vendas importadas (245 no banco) no Relatórios HUB
@@ -151,12 +221,15 @@ components/operacoes/lovable/components/operacoes/OSCard.tsx
 ## ⚠️ Atenção ao Retomar
 
 1. **Sempre rodar `npx tsc --noEmit`** antes de commitar — zero tolerância
-2. **Operações HUB usa dados REAIS via Prisma** (não mais mock) desde 17/05/2026
-3. **Importador Avançado** — endpoint `POST /api/import/advanced` lê `modo` do **query string** (`?modo=preview` / `?modo=importar`), não do FormData
-4. **GestaoClick ZIP** — todos os 17 arquivos detectam corretamente (Fix 6: `norm()` aplicado também nos `nomesArquivo`)
-5. **Não tocar**: `auth.ts`, `proxy.ts`, `schema.prisma`
-6. WhatsApp envio usa Meta Cloud API real (requer ENVs configuradas)
-7. A rota `/dashboard/os` (legado) continua em paralelo ao `/dashboard/operacoes-v2`
+2. **Sempre ler `docs/skills/rules/CORE_RULES.md`** antes de qualquer tarefa (governança obrigatória)
+3. **PDV Black Edition** — pagamento **não persiste** no banco ainda. `handlePaymentConfirm` em `PdvBlackEdition.tsx` apenas limpa o carrinho localmente. NÃO apresente como real ao usuário final.
+4. **Galeria PDV** — agora com 4 cards em `PdvSection.tsx` (grid `lg:grid-cols-4`). O 4º card usa `href` direto para `/dashboard/pdv-next`, não usa o mecanismo de `draftFlow`.
+5. **Operações HUB usa dados REAIS via Prisma** (não mais mock) desde 17/05/2026
+6. **Importador Avançado** — endpoint `POST /api/import/advanced` lê `modo` do **query string** (`?modo=preview` / `?modo=importar`), não do FormData
+7. **GestaoClick ZIP** — todos os 17 arquivos detectam corretamente (Fix 6: `norm()` aplicado também nos `nomesArquivo`)
+8. **Não tocar**: `auth.ts`, `proxy.ts`, `schema.prisma`
+9. WhatsApp envio usa Meta Cloud API real (requer ENVs configuradas)
+10. A rota `/dashboard/os` (legado) continua em paralelo ao `/dashboard/operacoes-v2`
 
 ---
 

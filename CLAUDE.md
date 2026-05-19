@@ -2,6 +2,35 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ Governança obrigatória — ler ANTES de qualquer tarefa
+
+Toda sessão de IA (Claude Code / Cursor / Antigravity) **deve**, antes de iniciar
+qualquer tarefa:
+
+1. Ler **`docs/skills/INDEX.md`** — índice das regras de governança.
+2. Ler **`docs/ai/CURRENT_STATUS.md`** — estado real atual de cada módulo.
+3. Seguir, conforme o caso:
+   - **`docs/skills/rules/CORE_RULES.md`** — sempre.
+   - **`docs/skills/rules/DELIVERY_CHECKLIST.md`** — ao encerrar qualquer tarefa.
+   - **`docs/skills/rules/AI_WORKFLOW.md`** — papéis das IAs, Sonnet vs Opus, contexto, GitHub.
+   - **`docs/skills/rules/FRONTEND_IMPORT_RULES.md`** — somente ao importar UI externa
+     (Lovable / Cloud Design / Gemini / Antigravity).
+
+### Regras inegociáveis (resumo — detalhe em CORE_RULES.md)
+
+- **Pensar antes de codar.** Entender o pedido e localizar os arquivos reais antes de editar.
+- **Mudanças cirúrgicas.** Alterar o mínimo necessário; sem refactor "de brinde".
+- **Escopo fechado.** Fazer apenas o que foi pedido; problema fora do escopo é relatado, não corrigido.
+- **Sem overengineering.** A solução mais simples que satisfaz o critério vence.
+- **Nunca alterar auth / proxy / `prisma/schema.prisma` / core** (PDV, Financeiro, Operações
+  funcionais) sem **autorização explícita** do usuário.
+- **Nunca criar mocks enganosos** que pareçam persistência real.
+- **Sempre respeitar os tokens visuais** do OmniGestão (tokens semânticos, sem cor hardcoded).
+- **Sempre validar com `npx tsc --noEmit`** quando houver mudança em `.ts`/`.tsx`.
+- **Rodar `npm run build`** quando a mudança afetar config, rotas, layouts, Server Actions ou Prisma.
+- **Atualizar `docs/ai/CURRENT_STATUS.md` apenas quando houver mudança relevante** de estado.
+- Encerrar toda tarefa com o **relatório final** definido em `DELIVERY_CHECKLIST.md`.
+
 ## Project Overview
 
 **OmniGestão Pro** is a premium ERP/SaaS platform for small and medium enterprises (SMBs) with omnichannel support. Core modules: Orders of Service (OS/Operações), Finance (Financeiro), PDV, Inventory (Estoque), WhatsApp HUB, Marketing IA, and Marketplace.
