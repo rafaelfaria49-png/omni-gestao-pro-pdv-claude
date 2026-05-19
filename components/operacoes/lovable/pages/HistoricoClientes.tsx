@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { OperacoesLayout } from "@/components/operacoes/OperacoesLayout";
 import { useOS } from "@/store/osStore";
 import { Input } from "@/components/ui/input";
-import { Search, Phone } from "lucide-react";
+import { Search, Phone, FileText } from "lucide-react";
 import { Link } from "react-router-dom";
 import { brl, dt, totalOrcamento } from "@/lib/os/format";
 
@@ -81,8 +81,12 @@ export default function HistoricoClientes() {
 
         <div className="rounded-xl border border-border bg-card p-5">
           {!cliente ? (
-            <div className="flex h-full min-h-[300px] items-center justify-center text-sm text-muted-foreground">
-              Selecione um cliente para ver o histórico.
+            <div className="flex h-full min-h-[300px] flex-col items-center justify-center text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted/50">
+                <Search className="h-6 w-6 text-muted-foreground/50" />
+              </div>
+              <h3 className="mt-4 text-sm font-semibold tracking-tight text-foreground">Nenhum cliente selecionado</h3>
+              <p className="mt-1 text-xs text-muted-foreground">Busque e selecione um cliente ao lado para ver o histórico de OS.</p>
             </div>
           ) : (
             <>
@@ -103,8 +107,12 @@ export default function HistoricoClientes() {
 
               <div className="mt-5 space-y-3">
                 {osCliente.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    Cliente sem ordens registradas.
+                  <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-10 text-center">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50">
+                      <FileText className="h-5 w-5 text-muted-foreground/50" />
+                    </div>
+                    <h4 className="mt-3 text-sm font-semibold tracking-tight text-foreground">Sem ordens de serviço</h4>
+                    <p className="mt-1 text-xs text-muted-foreground">Este cliente ainda não possui OS registradas no histórico.</p>
                   </div>
                 )}
                 {osCliente.map((o) => (
