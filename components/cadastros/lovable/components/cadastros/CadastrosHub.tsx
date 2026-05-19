@@ -613,7 +613,9 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
   const [editing, setEditing] = useState<ProdutoDTO | null>(null);
   const [rows, setRows] = useState<ProdutoDTO[]>([]);
   const [filterQuery, setFilterQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  // loadingRows: bloqueia apenas a tabela; loadingAlerts: atualiza os cards silenciosamente
+  const [loadingRows, setLoadingRows] = useState(true);
+  const [loadingAlerts, setLoadingAlerts] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
   const [alerts, setAlerts] = useState<Array<{ l: string; n: number; t: "warning" | "danger" | "success" }>>([
@@ -623,10 +625,28 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
     { l: "Margem baixa", n: 0, t: "warning" },
     { l: "Prontos p/ Marketplace", n: 0, t: "success" },
   ]);
-  const refresh = useMemo(
+
+  // Carrega só a lista — rápido, desbloqueia tabela e busca imediatamente
+  const refreshRows = useMemo(
     () => async () => {
-      setLoading(true);
+      setLoadingRows(true);
       setErr(null);
+      try {
+        const data = await listProdutos(storeId);
+        setRows(data);
+      } catch (e) {
+        setErr(e instanceof Error ? e.message : "Falha ao carregar produtos");
+      } finally {
+        setLoadingRows(false);
+      }
+    },
+    [storeId]
+  );
+
+  // Carrega stats/alertas — pesado (>15 queries), não bloqueia tabela nem busca
+  const refreshAlerts = useMemo(
+    () => async () => {
+      setLoadingAlerts(true);
       try {
         const dash = await getCadastrosDashboardStats(storeId);
         setAlerts([
@@ -636,20 +656,29 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
           { l: "Margem baixa", n: dash.produtoAlerts.margemBaixa, t: "warning" },
           { l: "Prontos p/ Marketplace", n: dash.produtoAlerts.prontosMarketplace, t: "success" },
         ]);
-        const data = await listProdutos(storeId);
-        setRows(data);
-      } catch (e) {
-        setErr(e instanceof Error ? e.message : "Falha ao carregar produtos");
+      } catch {
+        // alertas são não-críticos: mantém valores anteriores sem propagar erro
       } finally {
-        setLoading(false);
+        setLoadingAlerts(false);
       }
     },
     [storeId]
   );
 
+  // refresh completo: usado pelo ProductAIModal após salvar um produto
+  const refresh = useMemo(
+    () => async () => {
+      void refreshAlerts();
+      await refreshRows();
+    },
+    [refreshRows, refreshAlerts]
+  );
+
+  // Dispara os dois carregamentos em paralelo na montagem do painel
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    void refreshRows();
+    void refreshAlerts();
+  }, [refreshRows, refreshAlerts]);
 
   const visibleRows = useMemo(() => {
     const q = filterQuery.trim().toLowerCase();
@@ -667,7 +696,9 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
           <Card key={a.l} className="p-4">
             <div className="text-xs text-muted-foreground">{a.l}</div>
             <div className="mt-1 flex items-end justify-between">
-              <div className="text-2xl font-bold text-foreground">{a.n}</div>
+              <div className="text-2xl font-bold text-foreground">
+                {loadingAlerts ? <span className="text-muted-foreground text-base">—</span> : a.n}
+              </div>
               <Badge tone={a.t}>{a.t === "success" ? "OK" : "Revisar"}</Badge>
             </div>
           </Card>
@@ -681,9 +712,9 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
         filterQuery={filterQuery}
         onFilterQueryChange={setFilterQuery}
       />
-      {loading && <div className="mb-3 text-sm text-muted-foreground">Carregando produtos…</div>}
+      {loadingRows && <div className="mb-3 text-sm text-muted-foreground">Carregando produtos…</div>}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
-      {!loading && !err && rows.length === 0 && (
+      {!loadingRows && !err && rows.length === 0 && (
         <Card className="mb-4 border-dashed border-2 border-border/80 bg-gradient-to-br from-card to-muted/20 p-10 text-center">
           <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
             <Package className="h-7 w-7" />
@@ -701,7 +732,7 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
           </button>
         </Card>
       )}
-      {!loading && !err && rows.length > 0 && visibleRows.length === 0 && (
+      {!loadingRows && !err && rows.length > 0 && visibleRows.length === 0 && (
         <Card className="mb-4 border border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
           Nenhum produto corresponde à busca. Limpe o filtro ou ajuste os termos.
         </Card>
