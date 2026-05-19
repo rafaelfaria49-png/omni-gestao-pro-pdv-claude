@@ -63,8 +63,8 @@ export const HubCard = ({
     <button
       onClick={onClick}
       className={cn(
-        "group relative w-full text-left rounded-2xl border border-border bg-card p-5",
-        "transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30",
+        "group relative w-full text-left rounded-2xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-5",
+        "transition-all duration-300 hover:-translate-y-0.5 hover:ring-primary/30",
         "hover:shadow-[0_8px_30px_-12px_hsl(var(--primary)/0.25)]",
         "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background"
       )}

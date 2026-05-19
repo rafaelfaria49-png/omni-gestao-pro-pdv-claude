@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  ArrowLeft, Bot, ExternalLink, MessageCircle, Phone, Printer,
-  ShieldCheck, Tag, User, Wrench,
+  ArrowLeft, Bot, ExternalLink, MessageCircle, Pencil, Phone, Printer,
+  ShieldCheck, Tag, User, UserPlus, Wrench,
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { OperacoesLayout } from "@/components/operacoes/OperacoesLayout";
 import { OperacaoOsAcaoBar } from "@/components/operacoes/OperacaoOsAcaoBar";
 import { useOS } from "@/store/osStore";
@@ -40,12 +42,14 @@ const ESTADO_BADGE: Record<string, string> = {
 
 export default function OSDetalhe() {
   const { id = "" } = useParams();
-  const { getOS, updateChecklist, storeId, loading: hubLoading, refresh, produtosCatalogo } = useOS();
+  const { getOS, updateChecklist, storeId, loading: hubLoading, refresh, produtosCatalogo, clientes, tecnicos, vincularCliente, assignTecnico } = useOS();
   const fromList = getOS(id);
   /** idle = ainda não resolveu leitura avulsa; loading; done + os */
   const [detailRead, setDetailRead] = useState<
     { phase: "idle" } | { phase: "loading" } | { phase: "done"; os: OrdemServico | null }
   >({ phase: "idle" });
+  const [openCliente, setOpenCliente] = useState(false);
+  const [openTecnico, setOpenTecnico] = useState(false);
 
   useEffect(() => {
     if (!id.trim() || !storeId) {
@@ -95,7 +99,7 @@ export default function OSDetalhe() {
   if (hubLoading || detailRead.phase === "loading" || awaitingDetail) {
     return (
       <OperacoesLayout>
-        <div className="rounded-xl border border-border bg-card p-8 text-center">
+        <div className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-8 text-center">
           <div className="text-sm font-medium text-muted-foreground">Carregando OS…</div>
         </div>
       </OperacoesLayout>
@@ -105,7 +109,7 @@ export default function OSDetalhe() {
   if (!os) {
     return (
       <OperacoesLayout>
-        <div className="rounded-xl border border-border bg-card p-8 text-center">
+        <div className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-8 text-center">
           <div className="text-sm font-medium">OS não encontrada</div>
           <Button asChild variant="outline" className="mt-4">
             <Link to="/operacoes/os">Voltar ao Kanban</Link>
@@ -197,8 +201,8 @@ export default function OSDetalhe() {
       {/* Conteúdo */}
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
-          <section className="rounded-xl border border-border bg-card p-5">
-            <div className="text-sm font-semibold">Resumo financeiro</div>
+          <section className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-5">
+            <div className="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">Resumo financeiro</div>
             <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
               <div>
                 <dt className="text-xs text-muted-foreground">Valor orçamento</dt>
@@ -249,8 +253,8 @@ export default function OSDetalhe() {
               )}
           </section>
 
-          <section className="rounded-xl border border-border bg-card p-5">
-            <div className="text-sm font-semibold">Defeito relatado</div>
+          <section className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-5">
+            <div className="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">Defeito relatado</div>
             <p className="mt-2 text-sm text-foreground/90">{os.equipamento.defeitoRelatado}</p>
             {os.equipamento.acessorios && os.equipamento.acessorios.length > 0 && (
               <div className="mt-3 text-xs text-muted-foreground">
@@ -263,8 +267,8 @@ export default function OSDetalhe() {
           </section>
 
           {os.checklist && os.checklist.length > 0 && (
-            <section className="rounded-xl border border-border bg-card p-5">
-              <div className="mb-3 text-sm font-semibold">Checklist de entrada</div>
+            <section className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-5">
+              <div className="mb-3 text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">Checklist de entrada</div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {os.checklist.map((c) => (
                   <div key={c.id} className="flex items-center justify-between rounded-md border border-border bg-background/40 p-2 text-xs">
@@ -290,8 +294,8 @@ export default function OSDetalhe() {
           <ChecklistTecnicoPanel os={os} />
 
           {os.servicosCatalogo && os.servicosCatalogo.length > 0 && (
-            <section className="rounded-xl border border-border bg-card p-5">
-              <div className="mb-3 text-sm font-semibold">Serviços contratados</div>
+            <section className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-5">
+              <div className="mb-3 text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">Serviços contratados</div>
               <ul className="space-y-2">
                 {os.servicosCatalogo.map((s) => (
                   <li key={s.servicoId} className="flex items-center justify-between rounded-md border border-border bg-background/40 p-3">
@@ -299,7 +303,7 @@ export default function OSDetalhe() {
                       <div className="text-sm font-medium">{s.descricao}</div>
                       <div className="text-[11px] text-muted-foreground">Garantia: {s.prazoGarantiaDias} dias</div>
                     </div>
-                    <div className="text-sm font-semibold">{brl(s.valorVenda)}</div>
+                    <div className="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">{brl(s.valorVenda)}</div>
                   </li>
                 ))}
               </ul>
@@ -308,9 +312,9 @@ export default function OSDetalhe() {
 
           <ObservacoesPanel os={os} />
 
-          <section className="rounded-xl border border-border bg-card">
+          <section className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card">
             <details className="group">
-              <summary className="cursor-pointer border-b border-border p-4 text-sm font-semibold">
+              <summary className="cursor-pointer border-b border-border/50 p-4 text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">
                 Dados do payload (JSON)
               </summary>
               <div className="max-h-72 overflow-auto p-4">
@@ -321,9 +325,9 @@ export default function OSDetalhe() {
             </details>
           </section>
 
-          <section className="rounded-xl border border-border bg-card">
+          <section className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card">
             <div className="flex items-center justify-between border-b border-border p-4">
-              <div className="text-sm font-semibold">Histórico auditável</div>
+              <div className="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">Histórico auditável</div>
             </div>
             <div className="p-5">
               <Timeline eventos={os.timeline} />
@@ -332,9 +336,51 @@ export default function OSDetalhe() {
         </div>
 
         <aside className="space-y-5">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Cliente</div>
-            <div className="mt-1 text-sm font-semibold">{os.cliente.nome}</div>
+          <div className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Cliente</div>
+              <Popover open={openCliente} onOpenChange={setOpenCliente}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs">
+                    <Pencil className="h-3 w-3" />
+                    {os.cliente.id ? "Trocar" : "Vincular"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="end">
+                  <Command>
+                    <CommandInput placeholder="Buscar cliente..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {clientes.map((c) => (
+                          <CommandItem
+                            key={c.id}
+                            value={c.nome}
+                            onSelect={async () => {
+                              vincularCliente(os.id, {
+                                id: c.id,
+                                nome: c.nome,
+                                documento: c.documento ?? undefined,
+                                telefone: c.telefone ?? undefined,
+                                whatsapp: c.whatsapp ?? undefined,
+                              });
+                              setOpenCliente(false);
+                              toast.success(`Cliente vinculado: ${c.nome}`);
+                            }}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-sm">{c.nome}</span>
+                              {c.telefone && <span className="text-[11px] text-muted-foreground">{c.telefone}</span>}
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="mt-1 text-sm font-semibold">{os.cliente.nome || "—"}</div>
             {os.cliente.documento && (
               <div className="text-xs text-muted-foreground">{os.cliente.documento}</div>
             )}
@@ -355,15 +401,59 @@ export default function OSDetalhe() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Técnico responsável</div>
+          <div className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Técnico responsável</div>
+              <Popover open={openTecnico} onOpenChange={setOpenTecnico}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-xs">
+                    <UserPlus className="h-3 w-3" />
+                    {os.tecnico ? "Trocar" : "Atribuir"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-0" align="end">
+                  <Command>
+                    <CommandInput placeholder="Buscar técnico..." />
+                    <CommandList>
+                      <CommandEmpty>
+                        {tecnicos.length === 0
+                          ? "Nenhum técnico cadastrado. Cadastre em Cadastros HUB."
+                          : "Nenhum técnico encontrado."}
+                      </CommandEmpty>
+                      <CommandGroup>
+                        {tecnicos.map((t) => (
+                          <CommandItem
+                            key={t.id}
+                            value={t.nome}
+                            onSelect={() => {
+                              assignTecnico(os.id, t);
+                              setOpenTecnico(false);
+                              toast.success(`Técnico atribuído: ${t.nome}`);
+                            }}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-sm">{t.nome}</span>
+                              {t.especialidades?.length > 0 && (
+                                <span className="text-[11px] text-muted-foreground">
+                                  {t.especialidades.join(" · ")}
+                                </span>
+                              )}
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
             <div className="mt-2 flex items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
                 <User className="h-4 w-4" />
               </div>
               <div>
                 <div className="text-sm font-medium">{os.tecnico?.nome ?? "Não atribuído"}</div>
-                {os.tecnico && (
+                {os.tecnico && os.tecnico.especialidades?.length > 0 && (
                   <div className="text-[11px] text-muted-foreground">
                     {os.tecnico.especialidades.join(" · ")}
                   </div>
