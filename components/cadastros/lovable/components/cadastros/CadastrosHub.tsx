@@ -362,7 +362,7 @@ function Toolbar({
           placeholder={`Buscar em ${label.toLowerCase()}…`}
           value={filterQuery ?? ""}
           onChange={(e) => onFilterQueryChange?.(e.target.value)}
-          className="w-64 max-w-full rounded-lg border border-input bg-card py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+          className="w-64 max-w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
       <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-accent">
@@ -386,6 +386,7 @@ function ClientesPanel({ storeId }: { storeId: string }) {
   const m = useToggle();
   const [editing, setEditing] = useState<ClienteDTO | null>(null);
   const [rows, setRows] = useState<ClienteDTO[]>([]);
+  const [filterQuery, setFilterQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
@@ -418,9 +419,24 @@ function ClientesPanel({ storeId }: { storeId: string }) {
     void refresh();
   }, [refresh]);
 
+  const visibleRows = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((c) => {
+      const blob = [c.nome, c.telefone, c.documento, c.cidade].join(" ").toLowerCase();
+      return blob.includes(q);
+    });
+  }, [rows, filterQuery]);
+
   return (
     <div className="w-full min-w-0">
-      <Toolbar count={rows.length} label="clientes" onNew={m.openIt} />
+      <Toolbar
+        count={visibleRows.length}
+        label="clientes"
+        onNew={m.openIt}
+        filterQuery={filterQuery}
+        onFilterQueryChange={setFilterQuery}
+      />
       {loading && <div className="mb-3 text-sm text-muted-foreground">Carregando clientes…</div>}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
       <Card className="overflow-hidden">
@@ -434,7 +450,7 @@ function ClientesPanel({ storeId }: { storeId: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map((c) => (
+              {visibleRows.map((c) => (
                 <tr key={c.id} className="hover:bg-accent/40">
                   <td className="px-4 py-3">
                     <div className="font-medium text-foreground">{c.nome}</div>
