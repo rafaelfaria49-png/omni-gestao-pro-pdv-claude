@@ -11,9 +11,13 @@ import {
   extrairCamposOS,
   extrairCamposCliente,
   extrairCamposProduto,
+  extrairCamposContaReceber,
+  extrairCamposContaPagar,
 } from "./merger"
 import type { Prisma } from "@/generated/prisma"
 import { StatusOrdemServico } from "@/generated/prisma"
+import { upsertContaReceber } from "@/lib/financeiro/services/contas-receber-service"
+import { upsertContaPagar } from "@/lib/financeiro/services/contas-pagar-service"
 
 // ── Utilitários ───────────────────────────────────────────────
 
@@ -25,6 +29,24 @@ function norm(s: unknown): string {
     .replace(/[̀-ͯ]/g, "")
     .replace(/\s+/g, " ")
     .trim()
+}
+
+function parseDataBR(raw: string): string {
+  const s = String(raw ?? "").trim()
+  if (!s) return ""
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+  return ""
+}
+
+function parseValorBR(raw: unknown): number {
+  if (typeof raw === "number") return raw
+  const s = String(raw ?? "").trim()
+  if (!s) return 0
+  const clean = s.replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3})/g, "").replace(",", ".")
+  const n = Number(clean)
+  return isNaN(n) ? 0 : n
 }
 
 function toStatusPrisma(s: string): StatusOrdemServico {
@@ -452,6 +474,79 @@ async function persistirVendas(
   }
 }
 
+async function persistirContasReceber(
+  storeId: string,
+  registros: RegistroMergeado[],
+  log: LogLinhaImport[]
+): Promise<void> {
+  for (const reg of registros) {
+    try {
+      const campos = extrairCamposContaReceber(reg)
+      if (!campos.descricao && !campos.cliente && campos.valor === 0) {
+        log.push({ dominio: "contas_receber", chave: reg.chave, acao: "ignorado", detalhe: "Linha vazia" })
+        continue
+      }
+
+      const valor = campos.valor || parseValorBR(campos.payload.valor)
+      const vencimento = parseDataBR(campos.vencimento)
+      const localKey = `imp-${storeId}-${reg.chave}`
+
+      await upsertContaReceber({
+        storeId,
+        localKey,
+        descricao: campos.descricao || `Recebimento ${reg.chave}`,
+        cliente: campos.cliente || undefined,
+        valor,
+        vencimento: vencimento || undefined,
+        status: campos.status || undefined,
+        payloadPatch: campos.payload,
+      })
+
+      log.push({ dominio: "contas_receber", chave: reg.chave, acao: "criado" })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      log.push({ dominio: "contas_receber", chave: reg.chave, acao: "erro", detalhe: msg })
+    }
+  }
+}
+
+async function persistirContasPagar(
+  storeId: string,
+  registros: RegistroMergeado[],
+  log: LogLinhaImport[]
+): Promise<void> {
+  for (const reg of registros) {
+    try {
+      const campos = extrairCamposContaPagar(reg)
+      if (!campos.descricao && !campos.fornecedorNome && campos.valor === 0) {
+        log.push({ dominio: "contas_pagar", chave: reg.chave, acao: "ignorado", detalhe: "Linha vazia" })
+        continue
+      }
+
+      const valor = campos.valor || parseValorBR(campos.payload.valor)
+      const vencimento = parseDataBR(campos.vencimento)
+      const localKey = `imp-${storeId}-${reg.chave}`
+
+      await upsertContaPagar({
+        storeId,
+        localKey,
+        descricao: campos.descricao || `Pagamento ${reg.chave}`,
+        fornecedorNome: campos.fornecedorNome || undefined,
+        valor,
+        vencimento: vencimento || undefined,
+        status: campos.status || undefined,
+        numeroDocumento: campos.numeroDocumento || undefined,
+        payloadPatch: campos.payload,
+      })
+
+      log.push({ dominio: "contas_pagar", chave: reg.chave, acao: "criado" })
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      log.push({ dominio: "contas_pagar", chave: reg.chave, acao: "erro", detalhe: msg })
+    }
+  }
+}
+
 // ── Orquestrador principal ────────────────────────────────────
 
 export async function persistirImportacao(
@@ -507,8 +602,17 @@ export async function persistirImportacao(
     await persistirVendas(storeId, regVendas, log)
   }
 
-  // 7. Financeiro (contas a pagar/receber) — persistência via localStorage no cliente
-  // Quando migrar para Prisma, adicionar aqui.
+  // 7. Contas a receber (importador → Prisma via service idempotente)
+  const regContasReceber = grupos.get("contas_receber") ?? []
+  if (regContasReceber.length > 0) {
+    await persistirContasReceber(storeId, regContasReceber, log)
+  }
+
+  // 8. Contas a pagar (importador → Prisma via service idempotente)
+  const regContasPagar = grupos.get("contas_pagar") ?? []
+  if (regContasPagar.length > 0) {
+    await persistirContasPagar(storeId, regContasPagar, log)
+  }
 
   const criados = log.filter((l) => l.acao === "criado").length
   const atualizados = log.filter((l) => l.acao === "atualizado").length

@@ -536,5 +536,77 @@ export function extrairCamposProduto(reg: RegistroMergeado): {
   }
 }
 
+export function extrairCamposContaReceber(reg: RegistroMergeado): {
+  descricao: string
+  cliente: string
+  valor: number
+  vencimento: string
+  status: string
+  numeroDocumento: string
+  payload: Record<string, unknown>
+} {
+  const c = reg.campos
+  return {
+    descricao: String(c["financeiro.descricao"] ?? c["_raw.Descrição do recebimento"] ?? c["_raw.Histórico"] ?? "").trim(),
+    cliente: String(c["financeiro.entidadeNome"] ?? c["_raw.Entidade Nome"] ?? "").trim(),
+    valor: Number(c["financeiro.valorTotal"] ?? c["financeiro.valor"] ?? 0) || 0,
+    vencimento: String(c["pagamento.vencimento"] ?? c["_raw.Data do vencimento"] ?? "").trim(),
+    status: String(c["status.situacao"] ?? c["_raw.Situação"] ?? "").trim(),
+    numeroDocumento: String(c["_raw.Número do documento"] ?? "").trim(),
+    payload: {
+      planoContas: c["financeiro.categoria"] ?? c["_raw.Plano de contas"] ?? null,
+      formaPagamento: c["pagamento.forma"] ?? c["_raw.Forma de pagamento"] ?? null,
+      observacoes: c["financeiro.observacao"] ?? c["_raw.Observações"] ?? null,
+      centroCusto: c["financeiro.centroCusto"] ?? c["_raw.Centro de custo"] ?? null,
+      dataConfirmacao: c["pagamento.dataConfirmacao"] ?? c["_raw.Data de confirmação"] ?? null,
+      contaBancaria: c["_raw.Conta bancária"] ?? null,
+      desconto: c["_raw.Desconto"] ?? null,
+      juros: c["_raw.Juros"] ?? null,
+      taxaBanco: c["_raw.Taxa do banco"] ?? null,
+      taxaOperadora: c["_raw.Taxa da operadora"] ?? null,
+      cadastradoPor: c["_raw.Cadastrado por"] ?? null,
+      cadastradoEm: c["_raw.Cadastrado em"] ?? null,
+      fontes: reg.fontes,
+      importadoEm: new Date().toISOString(),
+    },
+  }
+}
+
+export function extrairCamposContaPagar(reg: RegistroMergeado): {
+  descricao: string
+  fornecedorNome: string
+  valor: number
+  vencimento: string
+  status: string
+  numeroDocumento: string
+  payload: Record<string, unknown>
+} {
+  const c = reg.campos
+  return {
+    descricao: String(c["financeiro.descricao"] ?? c["_raw.Descrição do pagamento"] ?? c["_raw.Descrição do recebimento"] ?? c["_raw.Histórico"] ?? "").trim(),
+    fornecedorNome: String(c["financeiro.entidadeNome"] ?? c["_raw.Entidade Nome"] ?? "").trim(),
+    valor: Number(c["financeiro.valorTotal"] ?? c["financeiro.valor"] ?? 0) || 0,
+    vencimento: String(c["pagamento.vencimento"] ?? c["_raw.Data do vencimento"] ?? "").trim(),
+    status: String(c["status.situacao"] ?? c["_raw.Situação"] ?? "").trim(),
+    numeroDocumento: String(c["_raw.Número do documento"] ?? "").trim(),
+    payload: {
+      planoContas: c["financeiro.categoria"] ?? c["_raw.Plano de contas"] ?? null,
+      formaPagamento: c["pagamento.forma"] ?? c["_raw.Forma de pagamento"] ?? null,
+      observacoes: c["financeiro.observacao"] ?? c["_raw.Observações"] ?? null,
+      centroCusto: c["financeiro.centroCusto"] ?? c["_raw.Centro de custo"] ?? null,
+      dataConfirmacao: c["pagamento.dataConfirmacao"] ?? c["_raw.Data de confirmação"] ?? null,
+      contaBancaria: c["_raw.Conta bancária"] ?? null,
+      desconto: c["_raw.Desconto"] ?? null,
+      juros: c["_raw.Juros"] ?? null,
+      taxaBanco: c["_raw.Taxa do banco"] ?? null,
+      taxaOperadora: c["_raw.Taxa da operadora"] ?? null,
+      cadastradoPor: c["_raw.Cadastrado por"] ?? null,
+      cadastradoEm: c["_raw.Cadastrado em"] ?? null,
+      fontes: reg.fontes,
+      importadoEm: new Date().toISOString(),
+    },
+  }
+}
+
 // Suprime warning de unused — extrairValorPorSemantica é utilitário interno disponível
 void extrairValorPorSemantica

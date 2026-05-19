@@ -4,6 +4,7 @@ import { nowIso, uid } from "./_helpers";
 import type {
   Anexo,
   ChecklistTecnicoItem,
+  Cliente,
   EventoTimeline,
   EventoTipo,
   GarantiaOperacionalModo,
@@ -470,5 +471,19 @@ export async function updateChecklist(osId: string, checklist: OrdemServico["che
     newEvent("mensagem_interna", autor, "usuario", "Checklist atualizado."),
   ];
   const patched = await updateOSPayload(CURRENT_STORE_ID, osId, { checklist, timeline } as Partial<OrdemServico>);
+  return patched as unknown as OrdemServico;
+}
+
+export async function vincularCliente(
+  osId: string,
+  cliente: Cliente,
+  autor: string = "Você"
+): Promise<OrdemServico> {
+  const existing = await updateOSPayload(CURRENT_STORE_ID, osId, { cliente } as Partial<OrdemServico>);
+  const nextTimeline = [
+    ...readTimeline((existing as unknown as { timeline?: unknown }).timeline),
+    newEvent("mudanca_status", autor, "usuario", `Cliente vinculado: ${cliente.nome}.`),
+  ];
+  const patched = await updateOSPayload(CURRENT_STORE_ID, osId, { timeline: nextTimeline } as Partial<OrdemServico>);
   return patched as unknown as OrdemServico;
 }

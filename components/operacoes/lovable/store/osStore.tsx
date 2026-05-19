@@ -7,6 +7,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   Anexo,
+  Cliente,
   EventoTipo,
   Orcamento,
   OrdemServico,
@@ -68,6 +69,7 @@ interface OSContextValue {
   criarOS: (input: Parameters<typeof osApi.criarOS>[0]) => Promise<OrdemServico>;
   moveStatus: (osId: string, status: OSStatus, autor?: string) => void;
   assignTecnico: (osId: string, tecnico: Tecnico, autor?: string) => void;
+  vincularCliente: (osId: string, cliente: Cliente, autor?: string) => void;
   addObservacao: (osId: string, conteudo: string, interna: boolean, autor?: string) => void;
   addAnexo: (osId: string, anexo: Omit<Anexo, "id" | "enviadoEm">) => void;
   removeAnexo: (osId: string, anexoId: string, autor?: string) => void;
@@ -175,6 +177,9 @@ export function OSProvider({ children, initialStoreId }: { children: ReactNode; 
       },
       assignTecnico: (osId, tecnico, autor = DEFAULT_AUTOR) => {
         void osApi.assignTecnico(osId, tecnico, autor).then(replaceOS);
+      },
+      vincularCliente: (osId, cliente, autor = DEFAULT_AUTOR) => {
+        void osApi.vincularCliente(osId, cliente, autor).then(replaceOS);
       },
       addObservacao: (osId, conteudo, interna, autor = DEFAULT_AUTOR) => {
         void osApi

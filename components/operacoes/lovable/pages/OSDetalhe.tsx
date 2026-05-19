@@ -326,8 +326,15 @@ export default function OSDetalhe() {
           </section>
 
           <section className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card">
-            <div className="flex items-center justify-between border-b border-border p-4">
-              <div className="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">Histórico auditável</div>
+            <div className="flex items-center gap-2.5 border-b border-border p-4">
+              <div className="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">
+                Histórico auditável
+              </div>
+              {os.timeline.length > 0 && (
+                <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border">
+                  {os.timeline.length}
+                </span>
+              )}
             </div>
             <div className="p-5">
               <Timeline eventos={os.timeline} />

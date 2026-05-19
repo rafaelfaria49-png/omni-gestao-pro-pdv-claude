@@ -252,6 +252,72 @@ export const DICIONARIO_SEMANTICO: Record<string, string> = {
   "validade da proposta": "data.validadeProposta",
   "introducao": "meta.introducao",
   "introdução": "meta.introducao",
+
+  // ── GestaoClick — Vencimento/Confirmação variações ──
+  "data do vencimento": "pagamento.vencimento",
+  "data da confirmacao": "pagamento.dataConfirmacao",
+  "valor pago": "financeiro.valorPago",
+  "valor recebido": "financeiro.valorPago",
+  "numero do documento": "financeiro.numeroDocumento",
+  "n do documento": "financeiro.numeroDocumento",
+  "entidade tipo": "financeiro.entidadeTipo",
+}
+
+// ── GestaoClick — Mapa explícito filename → domínio ───────────
+// Aplicado ANTES do scoring semântico. Resolve o caso em que
+// a planilha tem "Código" (não "Nº da OS") como coluna chave, fazendo
+// o scoring semântico falhar mesmo com nome de arquivo óbvio.
+//
+// Chave: substring normalizada do basename (case/diacritic-insensitive)
+// Ordem importa: mais específicos PRIMEIRO. O primeiro match vence.
+const MAPA_NOME_ARQUIVO_DOMINIO: Array<{ pattern: string; dominio: DominioImport }> = [
+  // OS — sub-planilhas (devem vir ANTES de "ordens_servicos" genérico)
+  { pattern: "ordens_servicos_equipamentos", dominio: "os_equipamentos" },
+  { pattern: "ordens_servico_equipamentos", dominio: "os_equipamentos" },
+  { pattern: "ordens_servicos_pagamentos", dominio: "os_pagamentos" },
+  { pattern: "ordens_servico_pagamentos", dominio: "os_pagamentos" },
+  { pattern: "ordens_servicos_servicos", dominio: "os_servicos" },
+  { pattern: "ordens_servico_servicos", dominio: "os_servicos" },
+  { pattern: "ordens_servicos_historicos", dominio: "os_situacoes" },
+  { pattern: "ordens_servicos_situacoes", dominio: "os_situacoes" },
+  // OS — principal
+  { pattern: "ordens_servicos", dominio: "ordens_servicos" },
+  { pattern: "ordens_servico", dominio: "ordens_servicos" },
+  // Vendas — sub-planilhas
+  { pattern: "vendas_pagamentos", dominio: "vendas_pagamentos" },
+  { pattern: "venda_pagamento", dominio: "vendas_pagamentos" },
+  { pattern: "vendas_produtos", dominio: "vendas_produtos" },
+  { pattern: "venda_produto", dominio: "vendas_produtos" },
+  { pattern: "vendas_historicos", dominio: "vendas_historicos" },
+  { pattern: "venda_historico", dominio: "vendas_historicos" },
+  // Vendas — principal
+  { pattern: "vendas", dominio: "vendas" },
+  // Clientes / Fornecedores
+  { pattern: "clientes_enderecos", dominio: "clientes_enderecos" },
+  { pattern: "cliente_endereco", dominio: "clientes_enderecos" },
+  { pattern: "clientes", dominio: "clientes" },
+  { pattern: "fornecedores_enderecos", dominio: "fornecedores_enderecos" },
+  { pattern: "fornecedor_endereco", dominio: "fornecedores_enderecos" },
+  { pattern: "fornecedores", dominio: "fornecedores" },
+  // Produtos / Serviços
+  { pattern: "produtos", dominio: "produtos" },
+  { pattern: "servicos_catalogo", dominio: "servicos_catalogo" },
+  { pattern: "servicos", dominio: "servicos_catalogo" },
+  // Financeiro
+  { pattern: "contas_receber", dominio: "contas_receber" },
+  { pattern: "conta_receber", dominio: "contas_receber" },
+  { pattern: "contas_pagar", dominio: "contas_pagar" },
+  { pattern: "conta_pagar", dominio: "contas_pagar" },
+]
+
+/** Casa nome de arquivo (basename) contra o mapa GestaoClick. Retorna null se nenhum casar. */
+function dominioPorNomeArquivo(nomeArquivo: string): DominioImport | null {
+  const baseRaw = nomeArquivo.split(/[\\/]/).pop() ?? nomeArquivo
+  const base = norm(baseRaw.replace(/\.[a-z0-9]+$/i, "")) // remove extensão
+  for (const { pattern, dominio } of MAPA_NOME_ARQUIVO_DOMINIO) {
+    if (base.includes(norm(pattern))) return dominio
+  }
+  return null
 }
 
 // ── Assinaturas de domínio ───────────────────────────────────
@@ -418,6 +484,20 @@ export function detectarDominio(
   nomeArquivo: string
 ): { dominio: DominioImport; confianca: number; chaveJoin: string | null } {
   const nomeNorm = norm(nomeArquivo)
+
+  // ── Curto-circuito GestaoClick: match exato por basename ──
+  // Backups GestaoClick usam nomes canônicos (ordens_servicos.xlsx, contas_receber.xlsx, …)
+  // e nem sempre conseguem fechar score semântico (ex.: coluna "Código" não vira "os.numero").
+  // Quando o filename casa, confiamos 100% e deixamos o merger usar a chaveJoin contextual.
+  const dominioPorNome = dominioPorNomeArquivo(nomeArquivo)
+  if (dominioPorNome) {
+    return {
+      dominio: dominioPorNome,
+      confianca: 1,
+      chaveJoin: determinarChaveJoin(dominioPorNome, headers),
+    }
+  }
+
   const camposSemanticos = new Set(headers.map((h) => resolverCampoSemantico(h)).filter(Boolean) as string[])
 
   let melhorScore = 0
@@ -484,6 +564,24 @@ function determinarChaveJoin(dominio: DominioImport, headers: string[]): string 
       if (resolverCampoSemantico(h) === campoChave) return h
     }
   }
+
+  // ── Fallback GestaoClick: backups usam "Código" como ID em quase tudo ──
+  // (OS, Vendas, Produtos, Clientes…). Quando o resolver semântico não encontra
+  // a chave canônica, procuramos por nomes brutos comuns ANTES de cair em headers[0].
+  const dominiosBuscamCodigo: DominioImport[] = [
+    "ordens_servicos", "os_equipamentos", "os_pagamentos", "os_servicos", "os_situacoes",
+    "vendas", "vendas_historicos", "vendas_pagamentos", "vendas_produtos",
+    "clientes", "clientes_enderecos", "fornecedores", "fornecedores_enderecos",
+    "produtos", "servicos_catalogo",
+  ]
+  if (dominiosBuscamCodigo.includes(dominio)) {
+    const candidatos = ["codigo", "código", "numero", "número", "n da os", "nº da os", "n da venda", "nº da venda", "id"]
+    for (const h of headers) {
+      const n = norm(h)
+      if (candidatos.some((c) => n === norm(c) || n.startsWith(norm(c) + " "))) return h
+    }
+  }
+
   return headers[0] ?? null
 }
 

@@ -107,9 +107,10 @@ export async function parsearZip(
   nomeArquivo: string
 ): Promise<PlanilhaParseada[]> {
   const resultados: PlanilhaParseada[] = []
+  const diag = { entriesTotais: 0, ignoradosFiltro: 0, falhasParse: 0, planilhasOk: 0, lib: "" }
 
   try {
-    let entries: Array<{ name: string; getData: () => Buffer }> = []
+    let entries: Array<{ name: string; getData: () => Buffer | Promise<Buffer> }> = []
 
     try {
       // @ts-ignore — adm-zip é dependência opcional; se não instalada cai no fallback JSZip
@@ -120,7 +121,9 @@ export async function parsearZip(
         name: e.entryName as string,
         getData: () => e.getData() as Buffer,
       }))
-    } catch {
+      diag.lib = "adm-zip"
+    } catch (eAdm) {
+      console.warn(`[importador-avancado/parser] adm-zip falhou em ${nomeArquivo}, fallback JSZip:`, eAdm instanceof Error ? eAdm.message : eAdm)
       // Fallback: JSZip
       // @ts-ignore — jszip é dependência opcional; se não instalada o ZIP não é suportado
       const JSZip = ((await import("jszip")) as any).default
@@ -129,27 +132,48 @@ export async function parsearZip(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const f = file as any
         if (f.dir) continue
-        const data = await f.async("nodebuffer")
-        entries.push({ name, getData: () => data as Buffer })
+        entries.push({ name, getData: () => f.async("nodebuffer") as Promise<Buffer> })
       }
+      diag.lib = "jszip"
     }
+
+    diag.entriesTotais = entries.length
 
     for (const entry of entries) {
       const nome = entry.name
-      const ext = nome.toLowerCase().split(".").pop() ?? ""
-      if (!["xlsx", "xls", "csv", "tsv", "ods"].includes(ext)) continue
-      // Ignora arquivos ocultos e __MACOSX
-      if (nome.startsWith("__") || nome.startsWith(".")) continue
+      const nomeBase = nome.split(/[\\/]/).pop() ?? nome
+      const ext = nomeBase.toLowerCase().split(".").pop() ?? ""
 
-      const nomeBase = nome.split("/").pop() ?? nome
-      const data = entry.getData()
-      const planilha = await parsearArquivo(data, nomeBase)
-      if (planilha) resultados.push(planilha)
+      // Filtro 1: extensão suportada
+      if (!["xlsx", "xls", "csv", "tsv", "ods"].includes(ext)) {
+        diag.ignoradosFiltro++
+        continue
+      }
+      // Filtro 2: lixo de SO (__MACOSX em qualquer posição do path, arquivos ocultos)
+      if (nome.includes("__MACOSX") || nomeBase.startsWith(".") || nomeBase.startsWith("~$")) {
+        diag.ignoradosFiltro++
+        continue
+      }
+
+      try {
+        const data = await Promise.resolve(entry.getData())
+        const planilha = await parsearArquivo(data, nomeBase)
+        if (planilha) {
+          resultados.push(planilha)
+          diag.planilhasOk++
+        } else {
+          diag.falhasParse++
+        }
+      } catch (eEntry) {
+        diag.falhasParse++
+        console.error(`[importador-avancado/parser] Erro ao parsear entry ${nome} de ${nomeArquivo}:`, eEntry instanceof Error ? eEntry.message : eEntry)
+      }
     }
   } catch (e) {
     console.error(`[importador-avancado/parser] Falha ao descomprimir ZIP ${nomeArquivo}:`, e)
   }
 
+  console.info(`[importador-avancado/parser] ZIP ${nomeArquivo} (${diag.lib}): ${diag.entriesTotais} entries, ${diag.planilhasOk} planilhas OK, ${diag.ignoradosFiltro} ignoradas (filtro), ${diag.falhasParse} falhas`)
   return resultados
 }
 
