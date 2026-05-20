@@ -381,6 +381,26 @@ function Toolbar({
   );
 }
 
+/* ───── helpers de máscara de documento ───── */
+function maskCPF(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  return d
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+}
+function maskCNPJ(v: string): string {
+  const d = v.replace(/\D/g, "").slice(0, 14);
+  return d
+    .replace(/(\d{2})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1/$2")
+    .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+}
+function applyDocMask(v: string, tipo: "PF" | "PJ"): string {
+  return tipo === "PF" ? maskCPF(v) : maskCNPJ(v);
+}
+
 /* ───── CLIENTES ───── */
 function ClientesPanel({ storeId }: { storeId: string }) {
   const m = useToggle();
@@ -390,9 +410,9 @@ function ClientesPanel({ storeId }: { storeId: string }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
+  const [tipoSelecionado, setTipoSelecionado] = useState<"PF" | "PJ">("PF");
+  const [docValue, setDocValue] = useState("");
   const nomeRef = useRef<HTMLInputElement | null>(null);
-  const tipoRef = useRef<HTMLSelectElement | null>(null);
-  const docRef = useRef<HTMLInputElement | null>(null);
   const telRef = useRef<HTMLInputElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
   const cidadeRef = useRef<HTMLInputElement | null>(null);
@@ -418,6 +438,19 @@ function ClientesPanel({ storeId }: { storeId: string }) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // Sincroniza tipo e documento com o cliente editado ao abrir/fechar o modal
+  useEffect(() => {
+    if (m.open) {
+      const tipo = editing?.tipo ?? "PF";
+      setTipoSelecionado(tipo);
+      const rawDoc = editing?.documento === "—" ? "" : (editing?.documento ?? "");
+      setDocValue(applyDocMask(rawDoc, tipo));
+    } else {
+      setTipoSelecionado("PF");
+      setDocValue("");
+    }
+  }, [m.open, editing]);
 
   const visibleRows = useMemo(() => {
     const q = filterQuery.trim().toLowerCase();
@@ -483,10 +516,10 @@ function ClientesPanel({ storeId }: { storeId: string }) {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 text-muted-foreground">
-                      <button className="rounded p-1.5 hover:bg-accent hover:text-foreground" title="Ver"><Eye className="h-4 w-4" /></button>
+                      <button disabled className="rounded p-1.5 opacity-40 cursor-not-allowed" title="Visualizar (em breve)"><Eye className="h-4 w-4" /></button>
                       <button
                         className="rounded p-1.5 hover:bg-accent hover:text-foreground"
-                        title="Editar"
+                        title="Editar cliente"
                         onClick={() => {
                           setEditing(c);
                           m.openIt();
@@ -494,9 +527,23 @@ function ClientesPanel({ storeId }: { storeId: string }) {
                       >
                         <Edit3 className="h-4 w-4" />
                       </button>
-                      <button className="rounded p-1.5 hover:bg-accent hover:text-foreground" title="OS"><Wrench className="h-4 w-4" /></button>
-                      <button className="rounded p-1.5 hover:bg-accent hover:text-foreground" title="Vender"><ShoppingCart className="h-4 w-4" /></button>
-                      <button className="rounded p-1.5 hover:bg-accent hover:text-foreground" title="WhatsApp"><MessageCircle className="h-4 w-4" /></button>
+                      <button disabled className="rounded p-1.5 opacity-40 cursor-not-allowed" title="Nova OS (em breve)"><Wrench className="h-4 w-4" /></button>
+                      <button disabled className="rounded p-1.5 opacity-40 cursor-not-allowed" title="Nova venda (em breve)"><ShoppingCart className="h-4 w-4" /></button>
+                      {c.telefone && c.telefone !== "—" ? (
+                        <button
+                          className="rounded p-1.5 hover:bg-accent hover:text-foreground"
+                          title="Abrir WhatsApp"
+                          onClick={() => {
+                            const digits = c.telefone.replace(/\D/g, "");
+                            const phone = digits.startsWith("55") ? digits : `55${digits}`;
+                            window.open(`https://wa.me/${phone}`, "_blank");
+                          }}
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <button disabled className="rounded p-1.5 opacity-40 cursor-not-allowed" title="WhatsApp (sem telefone)"><MessageCircle className="h-4 w-4" /></button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -521,12 +568,26 @@ function ClientesPanel({ storeId }: { storeId: string }) {
             <Input ref={nomeRef} defaultValue={editing?.nome ?? ""} placeholder="Nome completo ou razão social" />
           </Field>
           <Field label="Tipo">
-            <Select ref={tipoRef} defaultValue={editing?.tipo ?? "PF"}>
-              <option value="PF">PF</option>
-              <option value="PJ">PJ</option>
+            <Select
+              value={tipoSelecionado}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                setTipoSelecionado(e.target.value as "PF" | "PJ");
+                setDocValue("");
+              }}
+            >
+              <option value="PF">PF — Pessoa Física</option>
+              <option value="PJ">PJ — Pessoa Jurídica</option>
             </Select>
           </Field>
-          <Field label="CPF/CNPJ"><Input ref={docRef} defaultValue={editing?.documento === "—" ? "" : editing?.documento ?? ""} placeholder="000.000.000-00" /></Field>
+          <Field label={tipoSelecionado === "PF" ? "CPF" : "CNPJ"}>
+            <Input
+              value={docValue}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setDocValue(applyDocMask(e.target.value, tipoSelecionado))
+              }
+              placeholder={tipoSelecionado === "PF" ? "000.000.000-00" : "00.000.000/0000-00"}
+            />
+          </Field>
           <Field label="Telefone / WhatsApp"><Input ref={telRef} defaultValue={editing?.telefone === "—" ? "" : editing?.telefone ?? ""} placeholder="(11) 9 0000-0000" /></Field>
           <Field label="Email"><Input ref={emailRef} defaultValue="" placeholder="email@exemplo.com" /></Field>
           <Field label="Endereço" span={2}><Input placeholder="Rua, número, bairro" /></Field>
@@ -565,8 +626,8 @@ function ClientesPanel({ storeId }: { storeId: string }) {
                   const tags = tagsRaw ? tagsRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
                   const payload = {
                     nome: (nomeRef.current?.value ?? "").trim(),
-                    tipo: (tipoRef.current?.value === "PJ" ? "PJ" : "PF"),
-                    documento: (docRef.current?.value ?? "").trim(),
+                    tipo: tipoSelecionado,
+                    documento: docValue.trim(),
                     telefone: (telRef.current?.value ?? "").trim(),
                     email: (emailRef.current?.value ?? "").trim(),
                     cidade: (cidadeRef.current?.value ?? "").trim(),

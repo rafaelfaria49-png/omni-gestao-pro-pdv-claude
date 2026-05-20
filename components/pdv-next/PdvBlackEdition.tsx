@@ -12,7 +12,9 @@ import { useRouter } from "next/navigation"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useConfigEmpresa } from "@/lib/config-empresa"
 import { useOperationsStore } from "@/lib/operations-store"
-import { CaixaStatusBar } from "@/components/dashboard/caixa/caixa-status-bar"
+import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
+import { AberturaCaixaModal } from "@/components/dashboard/caixa/abertura-caixa-modal"
+import { FechamentoCaixaModal } from "@/components/dashboard/caixa/fechamento-caixa-modal"
 import {
   PDV_PRODUCTS_BASE,
   mergePdvCatalogWithInventory,
@@ -24,57 +26,136 @@ import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PaymentModal } from "@/components/dashboard/vendas/payment-modal"
 import { PdvBlackShell, type PdvBlackCartRow } from "./PdvBlackShell"
 
+const TURNO_STORAGE_KEY = "@omnigestao:pdv-black-turno"
+const CUPOM_STORAGE_KEY = "@omnigestao:pdv-black-cupom"
+
+function readTurno(): number {
+  try { return parseInt(localStorage.getItem(TURNO_STORAGE_KEY) ?? "1", 10) || 1 } catch { return 1 }
+}
+function writeTurno(n: number) {
+  try { localStorage.setItem(TURNO_STORAGE_KEY, String(n)) } catch { /* ignore */ }
+}
+function readCupom(): number {
+  try { return parseInt(localStorage.getItem(CUPOM_STORAGE_KEY) ?? "1000", 10) || 1000 } catch { return 1000 }
+}
+function writeCupom(n: number) {
+  try { localStorage.setItem(CUPOM_STORAGE_KEY, String(n)) } catch { /* ignore */ }
+}
+
 export function PdvBlackEdition() {
   const router = useRouter()
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva()
   const { config } = useConfigEmpresa()
   const { inventory } = useOperationsStore()
-  // ── Estado do carrinho ─────────────────────────────────────────
-  const [cartRows, setCartRows] = useState<PdvBlackCartRow[]>([])
-  const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
-  const [highlightLineId, setHighlightLineId] = useState<string | null>(null)
-  const [previousSaleTotal, setPreviousSaleTotal] = useState<number | null>(null)
+  const { caixa, abrirCaixa, fecharCaixa } = useCaixa()
 
-  // ── Campos de entrada ──────────────────────────────────────────
-  const [bipeCode, setBipeCode] = useState("")
-  const [nextQtyStr, setNextQtyStr] = useState("1")
-  const [customerDisplay, setCustomerDisplay] = useState("CONSUMIDOR")
-  const [seller, setSeller] = useState("01 — Caixa 1")
+  // ── Caixa ──────────────────────────────────────────────────────────────────
+  const [turno, setTurno] = useState<number>(1)
+  const [cupomNum, setCupomNum] = useState<number>(1000)
+  const [showAbertura, setShowAbertura] = useState(false)
+  const [showFechamento, setShowFechamento] = useState(false)
 
-  // ── Ref para o campo de bipe ───────────────────────────────────
-  const bipeRef = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
-    bipeRef.current?.focus()
+    setTurno(readTurno())
+    setCupomNum(readCupom())
   }, [])
 
-  // ── Catálogo de produtos ───────────────────────────────────────
-  const products = useMemo(
-    () => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory),
-    [inventory]
-  )
+  const handleAbrirCaixa = useCallback(() => {
+    setShowAbertura(true)
+  }, [])
 
-  // ── Nome da loja ──────────────────────────────────────────────
+  const handleFecharCaixa = useCallback(() => {
+    setShowFechamento(true)
+  }, [])
+
+  // Incrementa turno quando o caixa é aberto
+  const prevCaixaOpen = useRef(caixa.isOpen)
+  useEffect(() => {
+    if (!prevCaixaOpen.current && caixa.isOpen) {
+      const next = turno + 1
+      setTurno(next)
+      writeTurno(next)
+    }
+    prevCaixaOpen.current = caixa.isOpen
+  }, [caixa.isOpen, turno])
+
+  // ── Nome da loja e operador ────────────────────────────────────────────────
   const storeName = useMemo(() => {
     const nome = (lojaAtivaRaw?.nomeFantasia || "").trim()
     if (nome) return nome
     return config?.empresa.nomeFantasia || config?.empresa.razaoSocial || "OmniGestão PDV"
   }, [lojaAtivaRaw, config])
 
-  // ── Info do informativo ───────────────────────────────────────
-  const [info] = useState("Sistema pronto. Bipe um produto ou pressione F3 para pesquisar.")
+  const operadorNome = useMemo(() => {
+    const razao = (lojaAtivaRaw?.razaoSocial || config?.empresa.razaoSocial || "").trim()
+    return razao ? razao.split(" ")[0] : "Operador"
+  }, [lojaAtivaRaw, config])
 
-  // ── Total do carrinho ──────────────────────────────────────────
+  // ── Carrinho ───────────────────────────────────────────────────────────────
+  const [cartRows, setCartRows] = useState<PdvBlackCartRow[]>([])
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
+  const [highlightLineId, setHighlightLineId] = useState<string | null>(null)
+  const [lastAddedItem, setLastAddedItem] = useState<string | null>(null)
+
+  // ── Barcode ────────────────────────────────────────────────────────────────
+  const [bipeCode, setBipeCode] = useState("")
+  const bipeRef = useRef<HTMLInputElement | null>(null)
+  useEffect(() => { bipeRef.current?.focus() }, [])
+
+  // ── Cliente ────────────────────────────────────────────────────────────────
+  const [customerDisplay, setCustomerDisplay] = useState("Consumidor final")
+  const [clientSearchOpen, setClientSearchOpen] = useState(false)
+  const { clientes: clientResults } = useClienteSearch(
+    clientSearchOpen ? customerDisplay.replace("Consumidor final", "") : "",
+    lojaAtivaId
+  )
+  const clientOptions = useMemo(
+    () =>
+      clientResults.map((c) => ({
+        id: c.id,
+        label: [c.name, c.phone].filter(Boolean).join(" — "),
+      })),
+    [clientResults]
+  )
+
+  // ── Documento fiscal ───────────────────────────────────────────────────────
+  const [emitirNota, setEmitirNota] = useState(true)
+
+  // ── Valor recebido ────────────────────────────────────────────────────────
+  const [valorRecebido, setValorRecebido] = useState("")
+
+  // ── Catálogo ───────────────────────────────────────────────────────────────
+  const products = useMemo(
+    () => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory),
+    [inventory]
+  )
+
+  // ── Total ──────────────────────────────────────────────────────────────────
   const total = useMemo(
     () => cartRows.reduce((acc, r) => acc + r.qty * r.unitPrice, 0),
     [cartRows]
   )
   const itemCount = cartRows.length
 
-  // ── Adicionar produto ──────────────────────────────────────────
+  // ── Diálogos ──────────────────────────────────────────────────────────────
+  const [productSearchOpen, setProductSearchOpen] = useState(false)
+  const [qtyEditOpen, setQtyEditOpen] = useState(false)
+  const [cancelSaleOpen, setCancelSaleOpen] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
+
+  const selectedLineQty = useMemo(
+    () => cartRows.find((r) => r.lineId === selectedLineId)?.qty ?? 1,
+    [cartRows, selectedLineId]
+  )
+
+  const focusBipe = useCallback(() => {
+    queueMicrotask(() => bipeRef.current?.focus())
+  }, [])
+
+  // ── Adicionar produto ──────────────────────────────────────────────────────
   const addProduct = useCallback(
     (product: PdvCatalogProduct, qty?: number) => {
-      const parsedQty = Math.max(0.001, parseFloat(nextQtyStr) || 1)
-      const effectiveQty = qty ?? parsedQty
+      const effectiveQty = qty ?? 1
       const code = String(product.barcode || product.codigo || product.sku || product.id)
       const unit = product.vendaPorPeso ? "KG" : "UN"
       const price = product.vendaPorPeso
@@ -93,21 +174,31 @@ export function PdvBlackEdition() {
       setCartRows((prev) => [...prev, newRow])
       setHighlightLineId(newRow.lineId)
       setSelectedLineId(newRow.lineId)
+      setLastAddedItem(product.name)
       setTimeout(() => setHighlightLineId(null), 1200)
       setBipeCode("")
-      setNextQtyStr("1")
       bipeRef.current?.focus()
     },
-    [nextQtyStr]
+    []
   )
 
-  // ── Bipe: tecla Enter ──────────────────────────────────────────
+  // ── Bipe: Enter ────────────────────────────────────────────────────────────
   const handleBipeKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key !== "Enter") return
       e.preventDefault()
       const raw = bipeCode.trim()
       if (!raw) return
+
+      // Suporte ao prefixo "3x" ou "3*" para múltiplas unidades
+      const prefixMatch = raw.match(/^(\d+)[x*×](.+)/i)
+      if (prefixMatch) {
+        const qty = Math.max(1, parseInt(prefixMatch[1], 10))
+        const code = prefixMatch[2].trim()
+        const found = findPdvProductByScan(code, products)
+        if (found) { addProduct(found, qty); return }
+      }
+
       const found = findPdvProductByScan(raw, products)
       if (found) {
         addProduct(found)
@@ -118,7 +209,7 @@ export function PdvBlackEdition() {
     [bipeCode, products, addProduct]
   )
 
-  // ── Remover linha selecionada ──────────────────────────────────
+  // ── Remover linha selecionada ──────────────────────────────────────────────
   const removeSelectedLine = useCallback(() => {
     if (!selectedLineId) return
     setCartRows((prev) => {
@@ -129,96 +220,12 @@ export function PdvBlackEdition() {
     })
   }, [selectedLineId])
 
-  // ── Busca de clientes ─────────────────────────────────────────
-  const [clientSearchOpen, setClientSearchOpen] = useState(false)
-  const { clientes: clientResults } = useClienteSearch(
-    clientSearchOpen ? customerDisplay : "",
-    lojaAtivaId
-  )
-  const clientOptions = useMemo(
-    () =>
-      clientResults.map((c) => ({
-        id: c.id,
-        label: [c.name, c.phone].filter(Boolean).join(" — "),
-      })),
-    [clientResults]
-  )
-
-  // ── Modais ────────────────────────────────────────────────────
-  const [productSearchOpen, setProductSearchOpen] = useState(false)
-  const [qtyEditOpen, setQtyEditOpen] = useState(false)
-  const [cancelSaleOpen, setCancelSaleOpen] = useState(false)
-  const [paymentOpen, setPaymentOpen] = useState(false)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [receivablesOpen, setReceivablesOpen] = useState(false)
-
-  const selectedLineQty = useMemo(
-    () => cartRows.find((r) => r.lineId === selectedLineId)?.qty ?? 1,
-    [cartRows, selectedLineId]
-  )
-
-  const focusBipe = useCallback(() => {
-    queueMicrotask(() => bipeRef.current?.focus())
-  }, [])
-
-  // ── Atalhos de teclado F1–F9 + CTRL (global) ──────────────────
-  useEffect(() => {
-    const handler = (e: globalThis.KeyboardEvent) => {
-      const tag = (e.target as HTMLElement).tagName
-      if (tag === "INPUT" || tag === "TEXTAREA") return
-
-      switch (e.key) {
-        case "F1":
-          e.preventDefault()
-          if (cartRows.length > 0) setPaymentOpen(true)
-          break
-        case "F2":
-          e.preventDefault()
-          setClientSearchOpen(true)
-          break
-        case "F3":
-          e.preventDefault()
-          setProductSearchOpen(true)
-          break
-        case "F4":
-          e.preventDefault()
-          if (selectedLineId) setQtyEditOpen(true)
-          break
-        case "F5":
-          e.preventDefault()
-          removeSelectedLine()
-          break
-        case "F6":
-          e.preventDefault()
-          if (cartRows.length > 0) setCancelSaleOpen(true)
-          break
-        case "F7":
-        case "F8":
-          e.preventDefault()
-          bipeRef.current?.focus()
-          break
-        case "F9":
-          e.preventDefault()
-          setReceivablesOpen(true)
-          break
-        case "Control":
-          e.preventDefault()
-          setAdvancedOpen(true)
-          break
-      }
-    }
-    window.addEventListener("keydown", handler)
-    return () => window.removeEventListener("keydown", handler)
-  }, [cartRows, selectedLineId, removeSelectedLine])
-
+  // ── Atalhos de teclado (F2–F12) ───────────────────────────────────────────
   const handleShortcutAction = useCallback(
     (key: string) => {
       switch (key) {
-        case "F1":
-          if (cartRows.length > 0) setPaymentOpen(true)
-          break
         case "F2":
-          setClientSearchOpen(true)
+          focusBipe()
           break
         case "F3":
           setProductSearchOpen(true)
@@ -227,65 +234,113 @@ export function PdvBlackEdition() {
           if (selectedLineId) setQtyEditOpen(true)
           break
         case "F5":
-          removeSelectedLine()
+          setClientSearchOpen(true)
           break
         case "F6":
-          if (cartRows.length > 0) setCancelSaleOpen(true)
+          // Troca/Devolução — placeholder
           break
         case "F7":
+          setEmitirNota((v) => !v)
+          break
         case "F8":
-          bipeRef.current?.focus()
+          // Desconto/Acréscimo — placeholder
           break
         case "F9":
-          setReceivablesOpen(true)
+          // CPF/CNPJ — abre busca de cliente
+          setClientSearchOpen(true)
           break
-        case "CTRL":
-          setAdvancedOpen(true)
+        case "F10":
+          if (cartRows.length > 0) setCancelSaleOpen(true)
+          break
+        case "F11":
+          // Suspender — placeholder
+          break
+        case "F12":
+          if (cartRows.length > 0) setPaymentOpen(true)
           break
       }
     },
-    [cartRows, selectedLineId, removeSelectedLine]
+    [cartRows, selectedLineId, focusBipe]
   )
 
-  // ── Confirmar pagamento (mock — não persiste) ──────────────────
+  useEffect(() => {
+    const handler = (e: globalThis.KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      const isTyping = tag === "INPUT" || tag === "TEXTAREA"
+
+      // F2–F12 sempre interceptados
+      const fKeys = new Set(["F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"])
+      if (fKeys.has(e.key)) {
+        e.preventDefault()
+        handleShortcutAction(e.key)
+        return
+      }
+      if (isTyping) return
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [handleShortcutAction])
+
+  // ── Confirmar pagamento ────────────────────────────────────────────────────
   const handlePaymentConfirm = useCallback(() => {
-    setPreviousSaleTotal(total)
+    const nextCupom = cupomNum + 1
+    setCupomNum(nextCupom)
+    writeCupom(nextCupom)
     setCartRows([])
     setSelectedLineId(null)
     setHighlightLineId(null)
-    setCustomerDisplay("CONSUMIDOR")
+    setCustomerDisplay("Consumidor final")
     setBipeCode("")
-    setNextQtyStr("1")
+    setValorRecebido("")
+    setLastAddedItem(null)
     setPaymentOpen(false)
     focusBipe()
-  }, [total, focusBipe])
+  }, [cupomNum, focusBipe])
+
+  // ── Troco (depende de total) ───────────────────────────────────────────────
+  const trocoFinal = useMemo(() => {
+    const recebido = parseFloat(valorRecebido.replace(",", ".")) || 0
+    return Math.max(0, recebido - total)
+  }, [valorRecebido, total])
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-t border-white/10 bg-[#000000]">
-      <CaixaStatusBar variant="pdv" />
-
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#000000]">
       <PdvBlackShell
+        // Caixa
+        caixaAberto={caixa.isOpen}
+        turno={turno}
+        cupomNum={cupomNum}
+        operadorNome={operadorNome}
         storeName={storeName}
+        onAbrirCaixa={handleAbrirCaixa}
+        onFecharCaixa={handleFecharCaixa}
+        // Carrinho
         cartRows={cartRows}
         highlightLineId={highlightLineId}
         selectedLineId={selectedLineId}
         onSelectLine={setSelectedLineId}
         total={total}
         itemCount={itemCount}
-        previousSaleTotal={previousSaleTotal}
+        lastAddedItem={lastAddedItem}
+        // Barcode
         bipeCode={bipeCode}
         onBipeChange={setBipeCode}
         bipeRef={bipeRef}
         onBipeKeyDown={handleBipeKeyDown}
+        // Cliente
         customerDisplay={customerDisplay}
-        onCustomerDisplayChange={setCustomerDisplay}
-        nextQtyStr={nextQtyStr}
-        onNextQtyStrChange={setNextQtyStr}
-        seller={seller}
-        onSellerChange={setSeller}
-        info={info}
+        onClientSearchOpen={() => setClientSearchOpen(true)}
+        // Documento fiscal
+        emitirNota={emitirNota}
+        onEmitirNotaChange={setEmitirNota}
+        // Valor recebido / troco
+        valorRecebido={valorRecebido}
+        onValorRecebidoChange={setValorRecebido}
+        troco={trocoFinal}
+        // Ações
         onShortcutAction={handleShortcutAction}
         onFinalizeClick={() => { if (cartRows.length > 0) setPaymentOpen(true) }}
+        // Diálogos
         products={products}
         productSearchOpen={productSearchOpen}
         onProductSearchOpenChange={(open) => {
@@ -294,6 +349,7 @@ export function PdvBlackEdition() {
         }}
         onAddProductFromSearch={(product) => {
           addProduct(product)
+          setProductSearchOpen(false)
         }}
         clientSearchOpen={clientSearchOpen}
         onClientSearchOpenChange={(open) => {
@@ -302,7 +358,7 @@ export function PdvBlackEdition() {
         }}
         clientOptions={clientOptions}
         onPickClient={(label) => {
-          setCustomerDisplay(label)
+          setCustomerDisplay(label.split(" — ")[0] || label)
           setClientSearchOpen(false)
           focusBipe()
         }}
@@ -313,7 +369,7 @@ export function PdvBlackEdition() {
         }}
         qtyEditDefault={String(selectedLineQty)}
         onQtyEditConfirm={(raw) => {
-          const qty = Math.max(0.001, parseFloat(raw) || 1)
+          const qty = Math.max(0.001, parseFloat(raw.replace(",", ".")) || 1)
           setCartRows((prev) =>
             prev.map((r) => r.lineId === selectedLineId ? { ...r, qty } : r)
           )
@@ -325,19 +381,17 @@ export function PdvBlackEdition() {
         onConfirmCancelSale={() => {
           setCartRows([])
           setSelectedLineId(null)
+          setLastAddedItem(null)
           setCancelSaleOpen(false)
           focusBipe()
         }}
-        advancedOpen={advancedOpen}
-        onAdvancedOpenChange={setAdvancedOpen}
-        receivablesOpen={receivablesOpen}
-        onReceivablesOpenChange={setReceivablesOpen}
-        onOpenReceivablesModule={() => {
-          setReceivablesOpen(false)
-          router.push("/dashboard/financeiro-v2")
-        }}
       />
 
+      {/* Modais do caixa */}
+      <AberturaCaixaModal isOpen={showAbertura} onClose={() => setShowAbertura(false)} />
+      <FechamentoCaixaModal isOpen={showFechamento} onClose={() => setShowFechamento(false)} />
+
+      {/* Modal de pagamento */}
       <PaymentModal
         isOpen={paymentOpen}
         onClose={() => setPaymentOpen(false)}
@@ -347,7 +401,7 @@ export function PdvBlackEdition() {
         discountPercent={0}
         onDiscountReaisChange={() => {}}
         onDiscountPercentChange={() => {}}
-        cashierId={seller}
+        cashierId={operadorNome}
         onConfirm={handlePaymentConfirm}
       />
     </div>

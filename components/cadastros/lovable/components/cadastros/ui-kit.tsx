@@ -11,16 +11,21 @@ export function Modal({ open, onClose, title, subtitle, children, size = "lg" }:
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative w-full ${w} max-h-[90vh] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl flex flex-col`}>
-        <div className="flex items-start justify-between gap-4 border-b border-border p-6">
+        <div
+          data-omni-ui-kit="modal-header"
+          className="flex items-start justify-between gap-3 border-b border-border px-4 py-3"
+        >
           <div>
-            <h2 className="text-xl font-semibold text-foreground">{title}</h2>
-            {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+            <h2 className="text-base font-semibold leading-tight text-foreground">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 hover:bg-accent text-muted-foreground">
-            <X className="h-5 w-5" />
+          <button onClick={onClose} className="rounded-md p-1.5 hover:bg-accent text-muted-foreground">
+            <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="overflow-y-auto p-6">{children}</div>
+        <div data-omni-ui-kit="modal-body" className="overflow-y-auto p-4">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -43,7 +48,8 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
     <input
       {...props}
       ref={ref}
-      className={`w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
+      data-omni-ui-kit="control"
+      className={`w-full rounded-md border border-input bg-background text-foreground outline-none focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
     />
   );
 });
@@ -56,7 +62,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
     <textarea
       {...props}
       ref={ref}
-      className={`w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
+      data-omni-ui-kit="control"
+      className={`w-full rounded-md border border-input bg-background text-foreground outline-none focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
     />
   );
 });
@@ -69,7 +76,8 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
     <select
       {...props}
       ref={ref}
-      className={`w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
+      data-omni-ui-kit="control"
+      className={`w-full rounded-md border border-input bg-background text-foreground outline-none focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
     >
       {children}
     </select>
@@ -105,10 +113,10 @@ export function Card({
 
 export function SectionTitle({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
   return (
-    <div className="mb-4 flex min-w-0 items-end justify-between gap-4">
+    <div className="mb-3 flex min-w-0 items-end justify-between gap-3">
       <div className="min-w-0">
-        <h3 className="truncate text-lg font-semibold text-foreground">{title}</h3>
-        {subtitle && <p className="truncate text-sm text-muted-foreground">{subtitle}</p>}
+        <h3 className="truncate text-base font-semibold text-foreground">{title}</h3>
+        {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
     </div>

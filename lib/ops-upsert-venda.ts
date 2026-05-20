@@ -5,6 +5,8 @@ export type SalePayload = {
   at?: string
   total?: number
   customerName?: string
+  /** FK real para Cliente (cuid). Nulo em consumidor final. */
+  clienteId?: string
   /** Operador/caixa que realizou a venda (extraído de SaleRecord.cashierId). */
   cashierId?: string
   lines?: Array<{
@@ -42,6 +44,9 @@ export async function upsertVendaInTransaction(
   const clienteNome =
     typeof sale.customerName === "string" && sale.customerName.trim() ? sale.customerName.trim() : null
 
+  const clienteId =
+    typeof sale.clienteId === "string" && sale.clienteId.trim() ? sale.clienteId.trim() : null
+
   const operador =
     typeof sale.cashierId === "string" && sale.cashierId.trim() ? sale.cashierId.trim() : null
 
@@ -56,6 +61,7 @@ export async function upsertVendaInTransaction(
       total,
       at,
       clienteNome,
+      clienteId,
       operador,
     },
     update: {
@@ -64,6 +70,8 @@ export async function upsertVendaInTransaction(
       total,
       at,
       clienteNome,
+      // Só sobrescreve clienteId se vier preenchido (evita apagar vínculo em re-sync)
+      ...(clienteId ? { clienteId } : {}),
       ...(operador ? { operador } : {}),
     },
   })

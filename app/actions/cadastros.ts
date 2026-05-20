@@ -1,6 +1,6 @@
 "use server";
 
-import { Prisma } from "@/generated/prisma";
+import { Prisma, StatusOrdemServico } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { withPrismaSafe } from "@/lib/prisma";
@@ -697,6 +697,53 @@ export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
       orderBy: { updatedAt: "desc" },
       take: 500,
     });
+
+    // Agrega totalGasto em paralelo: OS concluídas + Vendas concluídas vinculadas por clienteId.
+    // Vendas sem clienteId (GestaoClick importadas ou consumidor final) não entram na soma.
+    // Não há dupla contagem: OS e Venda são entidades distintas sem FK cruzada entre si.
+    let totalPorCliente = new Map<string, number>();
+    try {
+      const [osTotals, vendaTotals] = await Promise.all([
+        // OS Pronto ou Entregue por cliente
+        prisma.ordemServico.groupBy({
+          by: ["clienteId"],
+          where: {
+            storeId,
+            clienteId: { not: null },
+            status: { in: [StatusOrdemServico.Pronto, StatusOrdemServico.Entregue] },
+          },
+          _sum: { valorTotal: true },
+        }),
+        // Vendas concluídas com clienteId preenchido
+        prisma.venda.groupBy({
+          by: ["clienteId"],
+          where: {
+            storeId,
+            clienteId: { not: null },
+            status: "concluida",
+          },
+          _sum: { total: true },
+        }),
+      ]);
+
+      const totais = new Map<string, number>();
+
+      for (const r of osTotals) {
+        if (r.clienteId) {
+          totais.set(r.clienteId, (totais.get(r.clienteId) ?? 0) + Number(r._sum.valorTotal ?? 0));
+        }
+      }
+      for (const r of vendaTotals) {
+        if (r.clienteId) {
+          totais.set(r.clienteId, (totais.get(r.clienteId) ?? 0) + Number(r._sum.total ?? 0));
+        }
+      }
+
+      totalPorCliente = totais;
+    } catch {
+      // fallback silencioso: usa totalSpent estático do banco
+    }
+
     return rows.map((c) => ({
       id: c.id,
       nome: c.name,
@@ -704,7 +751,7 @@ export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
       telefone: c.phone ?? "—",
       documento: c.document || "—",
       cidade: c.city || "—",
-      totalGasto: Number(c.totalSpent ?? 0),
+      totalGasto: totalPorCliente.get(c.id) ?? Number(c.totalSpent ?? 0),
       ultimaCompra: fmtDateISO(c.lastPurchaseAt),
       tags: safeStringArray(c.tags),
       status: c.active ? "Ativo" : "Inativo",

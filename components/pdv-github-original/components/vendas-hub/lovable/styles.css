@@ -1,0 +1,8 @@
+/**
+ * Stub intencional: o export Lovable original usava Tailwind v4
+ * (@import "tailwindcss" source(none), @source, @theme inline, etc.),
+ * que quebra o pipeline CSS do Next/Vercel.
+ *
+ * Não importe este arquivo. O Vendas Hub usa apenas `../vendas-hub-theme.css`
+ * (veja VendasHubPage.tsx).
+ */

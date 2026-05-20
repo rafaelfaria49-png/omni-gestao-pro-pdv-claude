@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 19 Mai 2026 — Sessão: Cadastros HUB + PDV Next / Black Edition + Governança IA
+> Última atualização: 19 Mai 2026 — Sessão: Cadastros HUB UX + Vínculo Venda→Cliente
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,51 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Cadastros HUB — UX Clientes + Vínculo Venda→Cliente (concluído 19/05/2026)
+
+#### UX Clientes (Fase 4)
+
+**Arquivo principal:** `components/cadastros/lovable/components/cadastros/CadastrosHub.tsx`
+
+- **Modal PF/PJ:** Select de tipo controlado; ao mudar PF↔PJ o campo de documento é limpo e a label/placeholder mudam dinamicamente (`CPF 000.000.000-00` / `CNPJ 00.000.000/0000-00`); máscara aplicada em tempo real
+- **Botões da tabela:** Eye/Wrench/ShoppingCart desabilitados com `opacity-40 cursor-not-allowed` e tooltip "em breve"; Editar funciona; WhatsApp abre `wa.me` se cliente tiver telefone, desabilitado se não tiver
+- **Total gasto real:** calcula em tempo real via aggregate Prisma (OS + Venda por clienteId); fallback para `Cliente.totalSpent` se DB falhar
+
+#### Vínculo Venda → Cliente (FK real no banco)
+
+**Schema alterado:**
+
+| Model | Mudança |
+|---|---|
+| `Venda` | + `clienteId String?` + `cliente Cliente? @relation(onDelete: SetNull)` + `@@index([clienteId])` |
+| `Cliente` | + `vendas Venda[]` |
+
+**Arquivos alterados:**
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/operations-sale-types.ts` | `SaleRecord` + `clienteId?: string` |
+| `lib/ops-upsert-venda.ts` | `SalePayload` + `clienteId`; upsert persiste no banco |
+| `lib/operations-store.tsx` | `finalizeSaleTransaction` aceita + propaga `clienteId` |
+| `venda-completa-enterprise.tsx` | passa `clienteId: selectedCliente.id` |
+| `pdv-venda-completa-enterprise.tsx` | passa `clienteId: selectedCliente?.id` |
+| `pdv-assistencia-enterprise.tsx` | passa `clienteId: selectedClienteId ?? undefined` |
+| `pdv-classic.tsx` | passa `clienteId: selectedCustomer?.id` |
+
+**Regra de totalGasto:**
+```
+totalGasto = SUM(OS.valorTotal WHERE status IN [Pronto, Entregue] AND clienteId = c.id)
+           + SUM(Venda.total WHERE status = "concluida" AND clienteId = c.id)
+```
+
+**Backfill:** `run-backfill-venda-cliente.mjs` (match por doc/telefone normalizado, nunca por nome).
+- 245 vendas GestaoClick não têm `payload.enterprise` → ficam `clienteId = null`
+- Futuras vendas PDV Enterprise são vinculadas em tempo real
+
+**`pdv-supermercado.tsx`** e consumidor final: `clienteId = null`, comportamento inalterado.
+
+---
 
 ### Governança IA — sincronização canonical (concluído 19/05/2026)
 
@@ -162,7 +207,7 @@ components/operacoes/lovable/components/operacoes/OSCard.tsx
 
 - **WhatsApp HUB** — dados reais via Prisma, Meta Cloud API real, webhook HMAC, automações
 - **PDV** — Assistência, Rápido, Completo; busca por SKU/EAN/nome; layout fixo sem scroll global
-- **Cadastros HUB** — Clientes, Produtos, Fornecedores com dados reais
+- **Cadastros HUB** — Clientes (UX completa: modal PF/PJ com máscara, botões corrigidos, totalGasto real OS+Venda), Produtos, Fornecedores com dados reais
 - **Financeiro** — contas a pagar/receber com service Prisma (sem plug na UI visual ainda)
 
 ### Sistema de Temas

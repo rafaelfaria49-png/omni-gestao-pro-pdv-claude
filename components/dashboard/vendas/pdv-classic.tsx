@@ -2150,6 +2150,7 @@ export function PdvClassic({
             },
             customerCpf: selectedCustomer?.cpf,
             customerName: selectedCustomer?.name,
+            clienteId: selectedCustomer?.id || undefined,
           })
           if (!result.ok) {
             toast({ title: "Falha transacional", description: result.reason })

@@ -22,7 +22,7 @@ type StudioThemeContextValue = {
   toggle: () => void
 }
 
-const StudioThemeContext = createContext<StudioThemeContextValue | null>(null)
+export const StudioThemeContext = createContext<StudioThemeContextValue | null>(null)
 function readInitialMode(): StudioThemeMode {
   if (typeof window === "undefined") return "black"
   try {

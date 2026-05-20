@@ -46,6 +46,7 @@ interface PdvFlowOption {
   name: string;
   description: string;
   icon: React.ElementType;
+  image: string;
 }
 
 /** Três fluxos oficiais na UI (Classic/Omni, Assistência, Supermercado). Modo rápido e venda completa são internos ao Classic. */
@@ -58,18 +59,21 @@ const FLOWS: PdvFlowOption[] = [
     description:
       "Shell principal de vendas (grade, bipe, atalhos). Inclui modo balcão, modo rápido e venda completa no mesmo fluxo — não são PDVs separados.",
     icon: LayoutGrid,
+    image: "/images/pdv-classic-thumb.png",
   },
   {
     id: "assistencia",
     name: "PDV Assistência",
     description: "Fluxo especializado para assistência técnica, peças e atendimento.",
     icon: Wrench,
+    image: "/images/pdv-assistencia-thumb.png",
   },
   {
     id: "supermercado",
     name: "PDV Supermercado",
     description: "Fluxo de alto giro com visão em tabela e painel lateral.",
     icon: Store,
+    image: "/images/pdv-supermercado-thumb.png",
   },
 ];
 
@@ -308,54 +312,50 @@ function PdvSectionContent() {
                 key={opt.id}
                 data-testid={PDV_CARD_TEST_ID[opt.id]}
                 className={cn(
-                  "relative flex min-h-[17rem] w-full min-w-0 max-w-none flex-col gap-6 rounded-xl border bg-card p-6 shadow-soft transition-all",
-                  active ? "border-primary ring-2 ring-primary/30" : "border-border hover:border-primary/40 hover:shadow-card",
+                  "group relative flex h-full w-full min-w-0 max-w-none flex-col rounded-xl p-4 transition-all duration-200",
+                  active
+                    ? "bg-primary/5 ring-1 ring-primary/30 shadow-md dark:bg-primary/10"
+                    : "bg-card ring-1 ring-slate-900/5 shadow-sm hover:ring-primary/40 hover:shadow-card dark:ring-white/10"
                 )}
               >
-                {active && (
-                  <div className="absolute -right-2 -top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-glow">
-                    <Check className="h-4 w-4" />
-                  </div>
-                )}
-
-                <div className="rounded-lg border border-border bg-surface">
-                  <div className="flex min-h-32 h-auto">
-                    <div className="flex-1 grid grid-cols-3 gap-1.5 p-2">
-                      {Array.from({ length: 6 }).map((_, i) => (
-                        <div key={i} className="rounded bg-card border border-border" />
-                      ))}
-                    </div>
-                    <div className="w-1/3 border-l border-border bg-card-muted p-2 space-y-1.5">
-                      <div className="h-1.5 w-full rounded bg-muted" />
-                      <div className="h-1.5 w-3/4 rounded bg-muted" />
-                      <div className="h-1.5 w-2/3 rounded bg-muted" />
-                      <div className="mt-3 h-5 w-full rounded bg-gradient-primary" />
-                    </div>
-                  </div>
+                <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl border border-border/40 bg-muted">
+                  <img
+                    src={opt.image}
+                    alt={opt.name}
+                    className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/10" />
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                <div className="relative mb-4 flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
                     <Icon className="h-5 w-5" />
                   </div>
-                  <div>
-                    <h4 className="text-lg font-semibold leading-snug text-foreground">{opt.name}</h4>
-                    <p className="text-sm font-normal leading-relaxed text-muted-foreground">{opt.description}</p>
+                  <div className="flex-1 min-w-0 pr-12">
+                    <h4 className="truncate text-[15px] font-semibold tracking-tight text-foreground">{opt.name}</h4>
+                    <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">{opt.description}</p>
                   </div>
+                  {active && (
+                    <div className="absolute right-0 top-0">
+                      <Badge variant="outline" className="border-primary/30 bg-primary/10 px-1.5 py-0 text-[10px] uppercase tracking-wide text-primary">
+                        Ativo
+                      </Badge>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex w-full">
+                <div className="mt-auto flex w-full">
                   <Button
                     type="button"
                     size="sm"
-                    className="w-full"
-                    variant={active ? "secondary" : "default"}
+                    className="w-full transition-all duration-200 hover:scale-[1.01]"
+                    variant={active ? "secondary" : "outline"}
                     disabled={active || controlsDisabled}
                     onClick={() => {
                       setDraftFlow(opt.id);
                     }}
                   >
-                    {active ? "Selecionado" : "Selecionar"}
+                    {active ? "Layout ativo" : "Usar layout"}
                   </Button>
                 </div>
               </div>
@@ -365,53 +365,44 @@ function PdvSectionContent() {
           {/* 4º PDV: Black Edition — rota própria /dashboard/pdv-next */}
           <div
             data-testid="pdv-black-edition"
-            className="relative flex min-h-[17rem] w-full min-w-0 max-w-none flex-col gap-6 rounded-xl border bg-card p-6 shadow-soft transition-all border-border hover:border-primary/40 hover:shadow-card"
+            className="group relative flex h-full w-full min-w-0 max-w-none flex-col rounded-xl p-4 ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card hover:ring-emerald-500/40 hover:shadow-card transition-all duration-200"
           >
             {/* Preview: miniatura black */}
-            <div className="overflow-hidden rounded-lg border border-white/10 bg-[#000000]">
-              <div className="flex min-h-32 h-auto">
-                <div className="flex-1 p-2 space-y-1.5">
-                  <div className="h-2 w-full rounded bg-white/10" />
-                  <div className="h-1.5 w-3/4 rounded bg-white/8" />
-                  {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="h-1.5 w-full rounded bg-white/5" />
-                  ))}
-                </div>
-                <div className="w-1/3 border-l border-white/10 bg-black p-2 space-y-1.5">
-                  <div className="h-1.5 w-full rounded bg-emerald-500/30" />
-                  <div className="h-1.5 w-3/4 rounded bg-emerald-500/20" />
-                  <div className="h-1.5 w-2/3 rounded bg-white/10" />
-                  <div className="mt-3 h-5 w-full rounded bg-emerald-600/60" />
-                </div>
-              </div>
+            <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl border border-border/40 bg-[#000000]">
+              <img
+                src="/images/pdv-next-thumb.png"
+                alt="PDV Black Edition"
+                className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+              />
+              <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
             </div>
 
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#000000] text-emerald-400">
+            <div className="relative mb-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#000000] text-emerald-400">
                 <Cpu className="h-5 w-5" />
               </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-lg font-semibold leading-snug text-foreground">PDV Next / Black Edition</h4>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400">
-                    Beta
-                  </Badge>
-                </div>
-                <p className="text-sm font-normal leading-relaxed text-muted-foreground">
+              <div className="flex-1 min-w-0 pr-12">
+                <h4 className="truncate text-[15px] font-semibold tracking-tight text-foreground">PDV Next / Black Edition</h4>
+                <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
                   Caixa premium com design monocromático, barra operacional completa e atalhos F1–F9. Rota exclusiva em /dashboard/pdv-next.
                 </p>
               </div>
+              <div className="absolute right-0 top-0">
+                <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/5 px-1.5 py-0 text-[10px] uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                  Beta
+                </Badge>
+              </div>
             </div>
 
-            <div className="flex w-full">
+            <div className="mt-auto flex w-full">
               <a
                 href="/dashboard/pdv-next"
                 className={cn(
-                  "inline-flex h-9 w-full items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-colors",
-                  "bg-[#000000] text-emerald-400 hover:bg-[#111111] border border-white/10 hover:border-emerald-500/40"
+                  "inline-flex h-9 w-full items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-all duration-200 hover:scale-[1.01]",
+                  "bg-[#000000] text-emerald-400 hover:bg-[#111111] border border-emerald-500/20 hover:border-emerald-500/50"
                 )}
               >
-                Acessar PDV Black Edition
+                Acessar PDV Next
               </a>
             </div>
           </div>

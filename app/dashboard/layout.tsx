@@ -28,6 +28,14 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
     }
   }, [pathname])
 
+  // Rota isolada: PDV GitHub Original renderiza como mini-app standalone,
+  // SEM AppShell (sidebar/topbar), SEM AccessGate, SEM AppOpsProviders.
+  // O isolamento visual (CSS / theme / density) é feito no layout próprio
+  // dessa rota (`app/dashboard/pdv-github-original/layout.tsx`).
+  if (pathname?.startsWith("/dashboard/pdv-github-original")) {
+    return <>{children}</>
+  }
+
   const isVendas =
     pathname?.startsWith("/dashboard/vendas") ||
     pathname?.startsWith("/dashboard/pdv-next")

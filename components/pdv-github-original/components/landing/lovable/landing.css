@@ -1,0 +1,227 @@
+.landing-page {
+  /* Tema isolado (não usar :root): herdam em toda a árvore da landing */
+  --background: oklch(0.14 0.025 260);
+  --foreground: oklch(0.985 0.012 260);
+  --card: oklch(0.17 0.028 260);
+  --card-foreground: oklch(0.985 0.012 260);
+  --popover: oklch(0.16 0.03 260);
+  --popover-foreground: oklch(0.985 0.012 260);
+  --muted: oklch(0.22 0.035 265);
+  --muted-foreground: oklch(0.72 0.045 250);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.75 0.22 230);
+  --primary: oklch(0.85 0.25 145);
+  --primary-foreground: oklch(0.16 0.03 260);
+  --secondary: oklch(0.24 0.04 265);
+  --secondary-foreground: oklch(0.96 0.01 260);
+  --accent: oklch(0.26 0.045 270);
+  --accent-foreground: oklch(0.985 0.012 260);
+  --destructive: oklch(0.65 0.24 25);
+  --destructive-foreground: oklch(0.985 0 0);
+  --surface: oklch(0.18 0.03 262);
+  --surface-foreground: oklch(0.985 0.012 260);
+  --panel: oklch(0.18 0.03 262);
+  --panel-foreground: oklch(0.985 0.012 260);
+
+  --neon-blue: oklch(0.75 0.22 230);
+  --neon-cyan: oklch(0.85 0.18 210);
+  --neon-green: oklch(0.85 0.25 145);
+  --neon-violet: oklch(0.65 0.25 295);
+  --danger-glow: oklch(0.65 0.24 25);
+
+  --gradient-hero:
+    radial-gradient(ellipse at top, color-mix(in oklab, var(--neon-blue) 22%, transparent), transparent 60%),
+    radial-gradient(ellipse at bottom right, color-mix(in oklab, var(--neon-violet) 18%, transparent), transparent 55%),
+    radial-gradient(ellipse at bottom left, color-mix(in oklab, var(--neon-green) 12%, transparent), transparent 55%);
+
+  --gradient-neon: linear-gradient(135deg, var(--neon-blue), var(--neon-green));
+  --gradient-ai: linear-gradient(135deg, var(--neon-violet), var(--neon-cyan));
+  --gradient-premium: linear-gradient(135deg, var(--neon-violet) 0%, var(--neon-blue) 50%, var(--neon-cyan) 100%);
+  --gradient-card: linear-gradient(145deg, oklch(1 0 0 / 4%), oklch(1 0 0 / 1%));
+
+  --glow-blue:
+    0 0 40px -5px color-mix(in oklab, var(--neon-blue) 60%, transparent),
+    0 0 80px -20px color-mix(in oklab, var(--neon-blue) 40%, transparent);
+
+  --glow-green:
+    0 0 40px -5px color-mix(in oklab, var(--neon-green) 60%, transparent),
+    0 0 80px -20px color-mix(in oklab, var(--neon-green) 40%, transparent);
+
+  --glow-violet:
+    0 0 40px -5px color-mix(in oklab, var(--neon-violet) 55%, transparent),
+    0 0 80px -20px color-mix(in oklab, var(--neon-violet) 38%, transparent);
+
+  --glow-danger:
+    0 0 36px -6px color-mix(in oklab, var(--danger-glow) 55%, transparent),
+    0 0 72px -18px color-mix(in oklab, var(--danger-glow) 35%, transparent);
+
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in oklab, var(--neon-blue) 15%, transparent), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 20%, color-mix(in oklab, var(--neon-green) 8%, transparent), transparent);
+  background-attachment: fixed;
+}
+
+.landing-page .glass {
+  background: var(--gradient-card);
+  backdrop-filter: blur(20px);
+  border: 1px solid oklch(1 0 0 / 10%);
+}
+
+.landing-page .glass-strong {
+  background: color-mix(in oklch, white 8%, transparent);
+  border: 1px solid color-mix(in oklch, white 14%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.landing-page .grid-bg {
+  background-image:
+    linear-gradient(to right, color-mix(in oklch, white 10%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklch, white 10%, transparent) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.landing-page .text-gradient-neon {
+  background: var(--gradient-neon);
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.landing-page .glow-blue {
+  box-shadow: var(--glow-blue);
+}
+.landing-page .glow-green {
+  box-shadow: var(--glow-green);
+}
+.landing-page .glow-violet {
+  box-shadow: var(--glow-violet);
+}
+.landing-page .glow-danger {
+  box-shadow: var(--glow-danger);
+}
+
+.landing-page .animated-border {
+  position: relative;
+  isolation: isolate;
+}
+
+.landing-page .animated-border::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from 0deg,
+    var(--neon-blue),
+    var(--neon-green),
+    var(--neon-cyan),
+    var(--neon-blue)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: border-spin 6s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.landing-page .animated-border > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Selo “Mais escolhido” e outros filhos com position absolute do Tailwind */
+.landing-page .animated-border > .absolute {
+  position: absolute;
+  z-index: 2;
+}
+
+@keyframes border-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Animations */
+@keyframes landing-float {
+  0% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -10px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+.landing-page .animate-float {
+  animation: landing-float 5.5s ease-in-out infinite;
+}
+
+@keyframes landing-pulse-glow {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(0,0,0,0)); }
+  50% { filter: drop-shadow(0 0 18px color-mix(in oklch, var(--neon-green) 55%, transparent)); }
+}
+.landing-page .animate-pulse-glow {
+  animation: landing-pulse-glow 2.6s ease-in-out infinite;
+}
+
+@keyframes landing-marquee {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
+}
+.landing-page .animate-marquee {
+  animation: landing-marquee 28s linear infinite;
+}
+.landing-page .marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+
+/* Neon text helpers (Lovable classnames) */
+.landing-page .text-neon-blue { color: var(--neon-blue); }
+.landing-page .text-neon-cyan { color: var(--neon-cyan); }
+.landing-page .text-neon-green { color: var(--neon-green); }
+.landing-page .text-neon-violet { color: var(--neon-violet); }
+
+.landing-page .fill-neon-green { fill: var(--neon-green); }
+
+/* Border & background helpers for classnames with opacity suffixes (escaped) */
+/* Mesmo elemento: modais portaled com landing-page + border-neon-* no DialogContent */
+.landing-page.border-neon-blue\/60,
+.landing-page .border-neon-blue\/60 { border-color: color-mix(in oklch, var(--neon-blue) 60%, transparent); }
+.landing-page.border-neon-blue\/40,
+.landing-page .border-neon-blue\/40 { border-color: color-mix(in oklch, var(--neon-blue) 40%, transparent); }
+.landing-page.border-neon-blue\/30,
+.landing-page .border-neon-blue\/30 { border-color: color-mix(in oklch, var(--neon-blue) 30%, transparent); }
+.landing-page .border-neon-green\/40 { border-color: color-mix(in oklch, var(--neon-green) 40%, transparent); }
+.landing-page .border-neon-green\/30 { border-color: color-mix(in oklch, var(--neon-green) 30%, transparent); }
+.landing-page .border-neon-cyan\/30 { border-color: color-mix(in oklch, var(--neon-cyan) 30%, transparent); }
+.landing-page .border-neon-violet\/30 { border-color: color-mix(in oklch, var(--neon-violet) 30%, transparent); }
+
+.landing-page .bg-neon-blue\/10 { background-color: color-mix(in oklch, var(--neon-blue) 10%, transparent); }
+.landing-page .bg-neon-blue\/15 { background-color: color-mix(in oklch, var(--neon-blue) 15%, transparent); }
+.landing-page .bg-neon-green\/5 { background-color: color-mix(in oklch, var(--neon-green) 5%, transparent); }
+.landing-page .bg-neon-green\/10 { background-color: color-mix(in oklch, var(--neon-green) 10%, transparent); }
+.landing-page .bg-neon-green\/15 { background-color: color-mix(in oklch, var(--neon-green) 15%, transparent); }
+.landing-page .bg-neon-green\/20 { background-color: color-mix(in oklch, var(--neon-green) 20%, transparent); }
+.landing-page .bg-neon-green\/70 { background-color: color-mix(in oklch, var(--neon-green) 70%, transparent); }
+.landing-page .bg-neon-cyan\/5 { background-color: color-mix(in oklch, var(--neon-cyan) 5%, transparent); }
+.landing-page .bg-neon-cyan\/10 { background-color: color-mix(in oklch, var(--neon-cyan) 10%, transparent); }
+.landing-page .bg-neon-cyan\/15 { background-color: color-mix(in oklch, var(--neon-cyan) 15%, transparent); }
+.landing-page .bg-neon-violet\/30 { background-color: color-mix(in oklch, var(--neon-violet) 30%, transparent); }
+
+/* Hover helpers used by Lovable */
+.landing-page .hover\:border-neon-blue\/40:hover { border-color: color-mix(in oklch, var(--neon-blue) 40%, transparent); }
+.landing-page .hover\:bg-neon-cyan\/10:hover { background-color: color-mix(in oklch, var(--neon-cyan) 10%, transparent); }
+.landing-page .hover\:bg-neon-cyan\/15:hover { background-color: color-mix(in oklch, var(--neon-cyan) 15%, transparent); }
+.landing-page .hover\:text-neon-cyan:hover { color: var(--neon-cyan); }
+
+/* Focus-visible ring helpers used by Lovable inputs */
+.landing-page .focus-visible\:ring-neon-blue:focus-visible {
+  --tw-ring-color: color-mix(in oklch, var(--neon-blue) 55%, transparent);
+  box-shadow: 0 0 0 3px var(--tw-ring-color);
+}
+.landing-page .focus-visible\:border-neon-blue\/60:focus-visible {
+  border-color: color-mix(in oklch, var(--neon-blue) 60%, transparent);
+}
+

@@ -1563,6 +1563,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       },
       customerName: customerName.trim() || undefined,
       customerCpf: selectedClienteDoc ?? undefined,
+      clienteId: selectedClienteId ?? undefined,
       openCaixaIfClosed: false,
       auditMeta: { cashierId },
     })

@@ -1,0 +1,76 @@
+/**
+ * Tokens HSL para o Vendas HUB (escopo local).
+ * Aplicados apenas em [data-vendas-hub-theme-root] para não sobrescrever :root global.
+ */
+[data-vendas-hub-theme-root] {
+  --radius: 0.625rem;
+}
+
+[data-vendas-hub-theme-root],
+[data-vendas-hub-theme-root][data-theme="light"] {
+  --background: 0 0% 100%;
+  --foreground: 222 47% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 47% 11%;
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
+  --primary: 0 84% 50%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+[data-vendas-hub-theme-root][data-theme="soft-ice"] {
+  --background: 210 40% 98%;
+  --foreground: 222 47% 11%;
+  --card: 210 40% 100%;
+  --card-foreground: 222 47% 11%;
+  --border: 210 30% 88%;
+  --input: 210 30% 88%;
+  --primary: 200 90% 50%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 210 40% 94%;
+  --muted-foreground: 215 20% 40%;
+  --success: 160 84% 39%;
+  --success-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+[data-vendas-hub-theme-root][data-theme="midnight"] {
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 14%;
+  --card-foreground: 210 40% 98%;
+  --border: 217 33% 25%;
+  --input: 217 33% 25%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 217 33% 20%;
+  --muted-foreground: 215 20% 65%;
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+[data-vendas-hub-theme-root][data-theme="black"] {
+  --background: 0 0% 4%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 8%;
+  --card-foreground: 0 0% 98%;
+  --border: 0 0% 14%;
+  --input: 0 0% 14%;
+  --primary: 142 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 0 0% 12%;
+  --muted-foreground: 0 0% 65%;
+  --success: 142 100% 50%;
+  --success-foreground: 0 0% 4%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+}

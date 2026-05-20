@@ -141,6 +141,10 @@
     "components/cadastros/lovable/components/ui",
     "components/cadastros/lovable/routes",
     "components/cadastros/lovable/hooks",
-    "components/cadastros/lovable/lib/utils.ts"
+    "components/cadastros/lovable/lib/utils.ts",
+    "components/pdv-github-original/app",
+    "components/pdv-github-original/components",
+    "components/pdv-github-original/lib",
+    "components/pdv-github-original/scripts"
   ]
 }

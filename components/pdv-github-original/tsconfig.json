@@ -1,0 +1,84 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "target": "ES6",
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/store/osStore": ["./components/operacoes/lovable/store/osStore.tsx"],
+      "@/types/os": ["./components/operacoes/lovable/types/os.ts"],
+      "@/types/estoque": ["./components/operacoes/lovable/types/estoque.ts"],
+      "@/types/loja": ["./components/operacoes/lovable/types/loja.ts"],
+      "@/types/venda": ["./components/operacoes/lovable/types/venda.ts"],
+      "@/types/servico": ["./components/operacoes/lovable/types/servico.ts"],
+      "@/types/atendimento": ["./components/operacoes/lovable/types/atendimento.ts"],
+      "@/api/os": ["./components/operacoes/lovable/api/os.ts"],
+      "@/api/clientes": ["./components/operacoes/lovable/api/clientes.ts"],
+      "@/api/estoque": ["./components/operacoes/lovable/api/estoque.ts"],
+      "@/api/lojas": ["./components/operacoes/lovable/api/lojas.ts"],
+      "@/api/vendas": ["./components/operacoes/lovable/api/vendas.ts"],
+      "@/api/servicos": ["./components/operacoes/lovable/api/servicos.ts"],
+      "@/api/atendimentos": ["./components/operacoes/lovable/api/atendimentos.ts"],
+      "@/api/_helpers": ["./components/operacoes/lovable/api/_helpers.ts"],
+      "@/data/clientesSeed": ["./components/operacoes/lovable/data/clientesSeed.ts"],
+      "@/data/lojasSeed": ["./components/operacoes/lovable/data/lojasSeed.ts"],
+      "@/data/estoqueSeed": ["./components/operacoes/lovable/data/estoqueSeed.ts"],
+      "@/data/vendasSeed": ["./components/operacoes/lovable/data/vendasSeed.ts"],
+      "@/data/osSeed": ["./components/operacoes/lovable/data/osSeed.ts"],
+      "@/data/servicosSeed": ["./components/operacoes/lovable/data/servicosSeed.ts"],
+      "@/data/atendimentosSeed": ["./components/operacoes/lovable/data/atendimentosSeed.ts"],
+      "@/lib/os/format": ["./components/operacoes/lovable/lib/os/format.ts"],
+      "@/components/operacoes/lovable/*": ["./components/operacoes/lovable/*"],
+      "@/components/operacoes/*": ["./components/operacoes/lovable/components/operacoes/*"],
+      "@/data/cadastros-mock": ["./components/cadastros/lovable/data/cadastros-mock.ts"],
+      "@/components/theme-switcher": ["./components/cadastros/lovable/components/theme-switcher.tsx"],
+      "@/components/cadastros/lovable/*": ["./components/cadastros/lovable/*"],
+      "@/components/cadastros/*": ["./components/cadastros/lovable/components/cadastros/*"],
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "components/configuracoes/lovable_backup_antes_reset",
+    "components/configuracoes-v3/pages",
+    "components/configuracoes-v3/components/NavLink.tsx",
+    "components/configuracoes-v3/test",
+    "components/whatsapp/lovable/components/ui",
+    "components/whatsapp/lovable/routes",
+    "components/whatsapp/lovable/hooks",
+    "components/whatsapp/lovable/components/AppSidebar.tsx",
+    "components/operacoes/lovable/components/ui",
+    "components/operacoes/lovable/hooks",
+    "components/operacoes/lovable/lib/utils.ts",
+    "components/operacoes/lovable/test",
+    "components/cadastros/lovable/components/ui",
+    "components/cadastros/lovable/routes",
+    "components/cadastros/lovable/hooks",
+    "components/cadastros/lovable/lib/utils.ts"
+  ]
+}

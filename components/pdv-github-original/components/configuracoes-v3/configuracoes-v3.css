@@ -1,0 +1,408 @@
+/**
+ * Configurações v3 — paleta oficial OmniGestão Pro (OKLCH/HSL declarados pelo produto).
+ * Cada token de cor é um valor CSS completo (hsl(...) ou oklch(...)); a ponte --color-* usa var(--token).
+ * Importar apenas em ConfiguracoesV3Page.tsx.
+ */
+
+.configuracoes-v3-root,
+.configuracoes-v3-root.configuracoes-v3-app {
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+
+.configuracoes-v3-root {
+  /* —— Light (oficial) —— */
+  --background: hsl(0 0% 100%);
+  --foreground: oklch(0.145 0 0);
+  --primary: hsl(0 84% 50%);
+  --surface: oklch(0.97 0 0);
+  --card: oklch(0.97 0 0);
+  --border: oklch(0.9 0 0);
+  --destructive: oklch(0.62 0.22 25);
+  --success: oklch(0.62 0.17 150);
+
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: color-mix(in oklch, var(--surface) 92%, var(--border) 8%);
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklch, var(--surface) 88%, var(--border) 12%);
+  --muted-foreground: color-mix(in oklch, var(--foreground) 68%, var(--background) 32%);
+  --accent: color-mix(in oklch, var(--primary) 14%, var(--background) 86%);
+  --accent-foreground: var(--foreground);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: color-mix(in oklch, var(--success) 52%, var(--destructive) 48%);
+  --warning-foreground: var(--foreground);
+  --input: color-mix(in oklch, var(--card) 90%, var(--border) 10%);
+  --ring: var(--primary);
+  --radius: 0.75rem;
+  --surface-elevated: color-mix(in oklch, var(--surface) 96%, var(--foreground) 4%);
+  --card-muted: color-mix(in oklch, var(--card) 92%, var(--border) 8%);
+  --sidebar-bg: var(--surface);
+  --sidebar-active: color-mix(in oklch, var(--primary) 22%, transparent);
+  --sidebar-active-foreground: var(--foreground);
+  --primary-glow: color-mix(in oklch, var(--primary) 58%, oklch(1 0 0) 42%);
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in oklch, var(--primary) 78%, var(--foreground) 22%)
+  );
+  --gradient-surface: linear-gradient(
+    180deg,
+    var(--background),
+    color-mix(in oklch, var(--surface) 96%, var(--border) 4%)
+  );
+  --shadow-soft:
+    0 1px 2px color-mix(in oklch, var(--foreground) 6%, transparent),
+    0 2px 8px color-mix(in oklch, var(--foreground) 4%, transparent);
+  --shadow-card:
+    0 1px 3px color-mix(in oklch, var(--foreground) 8%, transparent),
+    0 4px 16px color-mix(in oklch, var(--foreground) 5%, transparent);
+  --shadow-glow: 0 8px 32px color-mix(in oklch, var(--primary) 20%, transparent);
+  --shadow-elegant: 0 14px 44px -14px color-mix(in oklch, var(--primary) 22%, transparent);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-glow: var(--primary-glow);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-surface: var(--surface);
+}
+
+/* Apenas data-theme (ThemeContext V3). Não usar data-studio-theme — conflita com o tema global do app. */
+html[data-theme="soft-ice"] .configuracoes-v3-root {
+  --background: oklch(0.984 0.003 240);
+  --foreground: oklch(0.21 0.04 265);
+  --primary: oklch(0.55 0.18 240);
+  --surface: oklch(0.968 0.006 240);
+  --card: oklch(0.968 0.006 240);
+  --border: oklch(0.9 0.01 240);
+  --destructive: oklch(0.6 0.24 25);
+  --success: oklch(0.58 0.15 150);
+
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: color-mix(in oklch, var(--surface) 90%, var(--border) 10%);
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklch, var(--surface) 86%, var(--border) 14%);
+  --muted-foreground: color-mix(in oklch, var(--foreground) 62%, var(--background) 38%);
+  --accent: color-mix(in oklch, var(--primary) 16%, var(--background) 84%);
+  --accent-foreground: var(--foreground);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.985 0 0);
+  --warning: color-mix(in oklch, var(--success) 52%, var(--destructive) 48%);
+  --warning-foreground: var(--foreground);
+  --input: color-mix(in oklch, var(--card) 88%, var(--border) 12%);
+  --ring: var(--primary);
+  --surface-elevated: color-mix(in oklch, var(--surface) 94%, var(--foreground) 6%);
+  --card-muted: color-mix(in oklch, var(--card) 90%, var(--border) 10%);
+  --sidebar-bg: var(--surface);
+  --sidebar-active: color-mix(in oklch, var(--primary) 24%, transparent);
+  --sidebar-active-foreground: var(--foreground);
+  --primary-glow: color-mix(in oklch, var(--primary) 62%, oklch(1 0 0) 38%);
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in oklch, var(--primary) 72%, var(--foreground) 28%)
+  );
+  --gradient-surface: linear-gradient(
+    180deg,
+    var(--background),
+    color-mix(in oklch, var(--surface) 94%, var(--border) 6%)
+  );
+  --shadow-soft:
+    0 1px 2px color-mix(in oklch, var(--foreground) 10%, transparent),
+    0 2px 8px color-mix(in oklch, var(--primary) 8%, transparent);
+  --shadow-card:
+    0 1px 3px color-mix(in oklch, var(--foreground) 12%, transparent),
+    0 4px 16px color-mix(in oklch, var(--primary) 10%, transparent);
+  --shadow-glow: 0 8px 32px color-mix(in oklch, var(--primary) 24%, transparent);
+  --shadow-elegant: 0 14px 40px -12px color-mix(in oklch, var(--primary) 20%, transparent);
+}
+
+html[data-theme="midnight"] .configuracoes-v3-root {
+  --background: oklch(0.21 0.04 265);
+  --foreground: oklch(0.984 0.003 240);
+  --primary: oklch(0.76 0.22 235);
+  --surface: oklch(0.27 0.04 265);
+  --card: oklch(0.27 0.04 265);
+  --border: oklch(0.35 0.04 265);
+  --destructive: oklch(0.65 0.24 25);
+  --success: oklch(0.72 0.16 150);
+
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: color-mix(in oklch, var(--surface) 82%, var(--border) 18%);
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklch, var(--surface) 78%, var(--border) 22%);
+  --muted-foreground: color-mix(in oklch, var(--foreground) 72%, var(--background) 28%);
+  --accent: color-mix(in oklch, var(--primary) 22%, var(--surface) 78%);
+  --accent-foreground: var(--foreground);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.145 0 0);
+  --warning: color-mix(in oklch, var(--success) 52%, var(--destructive) 48%);
+  --warning-foreground: oklch(0.145 0 0);
+  --input: color-mix(in oklch, var(--card) 72%, var(--foreground) 28%);
+  --ring: var(--primary);
+  --surface-elevated: color-mix(in oklch, var(--surface) 88%, var(--foreground) 12%);
+  --card-muted: color-mix(in oklch, var(--card) 85%, var(--border) 15%);
+  --sidebar-bg: var(--background);
+  --sidebar-active: color-mix(in oklch, var(--primary) 32%, transparent);
+  --sidebar-active-foreground: var(--foreground);
+  --primary-glow: color-mix(in oklch, var(--primary) 70%, var(--foreground) 30%);
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in oklch, var(--primary) 65%, var(--foreground) 35%)
+  );
+  --gradient-surface: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--background) 92%, var(--foreground) 8%),
+    var(--background)
+  );
+  --shadow-soft:
+    0 1px 2px color-mix(in oklch, oklch(0 0 0) 35%, transparent),
+    0 2px 8px color-mix(in oklch, oklch(0 0 0) 25%, transparent);
+  --shadow-card:
+    0 1px 3px color-mix(in oklch, oklch(0 0 0) 40%, transparent),
+    0 8px 24px color-mix(in oklch, oklch(0 0 0) 32%, transparent);
+  --shadow-glow: 0 8px 32px color-mix(in oklch, var(--primary) 38%, transparent);
+  --shadow-elegant: 0 16px 48px -12px color-mix(in oklch, var(--primary) 38%, transparent);
+}
+
+html[data-theme="black"] .configuracoes-v3-root {
+  /* Black Edition — verde 145 (neon/limão), sem mistura com branco no gradiente (evita amarelado) */
+  --background: oklch(0 0 0);
+  --foreground: oklch(0.985 0 0);
+  --primary: oklch(0.82 0.22 145);
+  --surface: oklch(0 0 0);
+  --card: oklch(0.08 0 0);
+  --border: oklch(0.25 0 0);
+  --destructive: oklch(0.55 0.22 25);
+  --success: oklch(0.82 0.22 145);
+
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary-foreground: oklch(0.05 0 0);
+  --secondary: color-mix(in oklch, var(--card) 78%, var(--border) 22%);
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklch, var(--card) 72%, var(--border) 28%);
+  --muted-foreground: color-mix(in oklch, var(--foreground) 58%, var(--border) 42%);
+  --accent: oklch(0.22 0.09 145);
+  --accent-foreground: oklch(0.86 0.22 145);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.05 0 0);
+  --warning: color-mix(in oklch, var(--success) 52%, var(--destructive) 48%);
+  --warning-foreground: oklch(0.05 0 0);
+  --input: color-mix(in oklch, var(--card) 70%, var(--foreground) 30%);
+  --ring: oklch(0.82 0.22 145);
+  --surface-elevated: color-mix(in oklch, var(--card) 88%, var(--foreground) 12%);
+  --card-muted: color-mix(in oklch, var(--card) 82%, var(--border) 18%);
+  --sidebar-bg: var(--background);
+  --sidebar-active: oklch(0.22 0.09 145);
+  --sidebar-active-foreground: oklch(0.86 0.22 145);
+  --primary-glow: color-mix(in oklch, var(--primary) 55%, oklch(0.45 0.16 145) 45%);
+  /* Gradiente só no eixo L do verde 145 (sem foreground branco → sem puxar para amarelo) */
+  --gradient-primary: linear-gradient(
+    165deg,
+    oklch(0.86 0.21 145) 0%,
+    oklch(0.82 0.22 145) 42%,
+    oklch(0.74 0.21 145) 100%
+  );
+  --gradient-surface: linear-gradient(180deg, var(--surface) 0%, var(--background) 100%);
+  --shadow-soft:
+    0 1px 2px color-mix(in oklch, oklch(0 0 0) 55%, transparent),
+    0 2px 8px color-mix(in oklch, oklch(0 0 0) 45%, transparent);
+  --shadow-card:
+    0 1px 3px color-mix(in oklch, oklch(0 0 0) 60%, transparent),
+    0 8px 24px color-mix(in oklch, oklch(0 0 0) 50%, transparent);
+  --shadow-glow: 0 0 24px color-mix(in oklch, var(--primary) 42%, transparent);
+  --shadow-elegant: 0 12px 40px -8px color-mix(in oklch, var(--primary) 35%, transparent);
+}
+
+/* Black Edition — botões “Aplicar tema” (bg-gradient-primary + !text-white no TSX): verde sólido + texto escuro */
+html[data-theme="black"] .configuracoes-v3-root button[data-slot="button"].bg-gradient-primary {
+  background-color: var(--primary);
+  background-image: var(--gradient-primary);
+  color: var(--primary-foreground) !important;
+  border-color: color-mix(in oklch, oklch(0.42 0.14 145) 55%, transparent);
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 color-mix(in oklch, oklch(0.92 0.12 145) 22%, transparent),
+    inset 0 -1px 0 color-mix(in oklch, oklch(0.38 0.12 145) 35%, transparent);
+}
+
+html[data-theme="black"] .configuracoes-v3-root button[data-slot="button"].bg-gradient-primary:hover {
+  filter: brightness(1.05);
+}
+
+/* Header / cards Lovable: inset no primary sem branco puro (evita halo amarelado) */
+html[data-theme="black"] .configuracoes-v3-root .lovable-settings-section-header-actions [data-slot="button"].bg-primary,
+html[data-theme="black"] .configuracoes-v3-root .lovable-settings-card button[data-slot="button"].bg-primary,
+html[data-theme="black"] .configuracoes-v3-root .lovable-settings-theme-tile button[data-slot="button"].bg-primary {
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 color-mix(in oklch, oklch(0.92 0.12 145) 18%, transparent),
+    inset 0 -1px 0 color-mix(in oklch, oklch(0.35 0.12 145) 30%, transparent);
+  border-color: color-mix(in oklch, oklch(0.45 0.16 145) 40%, transparent);
+}
+
+.configuracoes-v3-root .bg-gradient-primary {
+  background: var(--gradient-primary);
+}
+
+.configuracoes-v3-root .bg-gradient-surface {
+  background: var(--gradient-surface);
+}
+
+.configuracoes-v3-root .shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.configuracoes-v3-root .shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+.configuracoes-v3-root .shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+.configuracoes-v3-root .shadow-elegant {
+  box-shadow: var(--shadow-elegant);
+}
+
+.configuracoes-v3-root .transition-smooth {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, box-shadow, filter,
+    opacity;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+.configuracoes-v3-root .bg-sidebar-bg {
+  background-color: var(--sidebar-bg);
+}
+
+.configuracoes-v3-root .bg-sidebar-active {
+  background-color: var(--sidebar-active);
+}
+
+.configuracoes-v3-root .text-sidebar-active-foreground {
+  color: var(--sidebar-active-foreground);
+}
+
+.configuracoes-v3-root .bg-sidebarBg {
+  background-color: var(--sidebar-bg);
+}
+
+.configuracoes-v3-root .bg-sidebarActive {
+  background-color: var(--sidebar-active);
+}
+
+.configuracoes-v3-root .text-sidebarActive-foreground {
+  color: var(--sidebar-active-foreground);
+}
+
+.configuracoes-v3-root .bg-card-muted {
+  background-color: var(--card-muted);
+}
+
+.configuracoes-v3-root .text-balance {
+  text-wrap: balance;
+}
+
+.configuracoes-v3-root .bg-surface {
+  background-color: var(--surface);
+}
+
+.configuracoes-v3-root .text-foreground {
+  color: var(--foreground);
+}
+
+.configuracoes-v3-root .bg-background {
+  background-color: var(--background);
+}
+
+.configuracoes-v3-root .bg-card {
+  background-color: var(--card);
+}
+
+.configuracoes-v3-root .text-card-foreground {
+  color: var(--card-foreground);
+}
+
+.configuracoes-v3-root .border-border {
+  border-color: var(--border);
+}
+
+.configuracoes-v3-root .text-muted-foreground {
+  color: var(--muted-foreground);
+}
+
+.configuracoes-v3-root .bg-muted {
+  background-color: var(--muted);
+}
+
+.configuracoes-v3-root .lovable-settings-shell {
+  background-image: linear-gradient(
+    180deg,
+    var(--surface) 0%,
+    color-mix(in oklch, var(--surface) 92%, var(--background) 8%) 100%
+  );
+}
+
+.configuracoes-v3-root .lovable-settings-sidebar-nav button:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 0 0 4px color-mix(in oklch, var(--ring) 35%, transparent);
+}
+
+.configuracoes-v3-root .border-input.bg-background {
+  background-color: var(--input);
+  color: var(--foreground);
+}
+
+.configuracoes-v3-root section.lovable-settings-card {
+  box-shadow: var(--shadow-card), 0 0 0 1px color-mix(in oklch, var(--border) 35%, transparent);
+}
+
+.configuracoes-v3-root .lovable-settings-theme-tile {
+  box-shadow: var(--shadow-soft);
+}
+
+.configuracoes-v3-root.configuracoes-v3-app {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}

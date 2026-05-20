@@ -212,6 +212,8 @@ interface OperationsContextType {
     paymentBreakdown?: Partial<PaymentBreakdownFull> & { cartao?: number }
     customerCpf?: string
     customerName?: string
+    /** FK real para o cliente cadastrado (cuid de Cliente). Nulo em consumidor final. */
+    clienteId?: string
     openCaixaIfClosed?: boolean
     saldoInicialAoAbrir?: number
     auditMeta?: {
@@ -696,6 +698,7 @@ export function OperationsProvider({
       paymentBreakdown,
       customerCpf,
       customerName,
+      clienteId,
       openCaixaIfClosed,
       saldoInicialAoAbrir,
       auditMeta,
@@ -822,6 +825,7 @@ export function OperationsProvider({
         total,
         customerCpf: cpfNorm || undefined,
         customerName: customerName?.trim() || undefined,
+        clienteId: clienteId?.trim() || undefined,
         paymentBreakdown: pb,
         cashierId: auditMeta?.cashierId,
         sessaoId: current.caixaSessaoId ?? undefined,

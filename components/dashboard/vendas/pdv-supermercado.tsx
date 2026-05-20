@@ -10,6 +10,7 @@ import {
   Plus,
   QrCode,
   Search,
+  ShoppingCart,
   Trash2,
   X,
   Zap,
@@ -554,11 +555,11 @@ export function PdvSupermercado({
       >
         {/* ESQUERDA: Catálogo + Busca gigante */}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-border lg:border-b-0 lg:border-r">
-          <div className={cn("shrink-0 bg-background px-3", isModoRapido ? "py-2" : "py-3")}>
-            <div className="flex flex-col gap-2">
+          <div className={cn("shrink-0 bg-background/50 backdrop-blur-xl border-b border-border/50 px-4", isModoRapido ? "py-4" : "py-5")}>
+            <div className="flex flex-col gap-3">
               {!isModoRapido ? (
                 <div className="flex items-center gap-2">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-card text-blue-400 shadow-sm">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-card text-primary shadow-sm">
                     <Barcode className="h-6 w-6" />
                   </div>
                   <div className="min-w-0">
@@ -569,8 +570,9 @@ export function PdvSupermercado({
                   </div>
                 </div>
               ) : null}
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-foreground/50 dark:text-white/45" />
+              <div className="relative group">
+                <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-r from-primary/20 to-transparent opacity-0 blur-xl transition-opacity duration-500 group-focus-within:opacity-100" />
+                <Search className="pointer-events-none absolute left-5 top-1/2 h-7 w-7 -translate-y-1/2 text-foreground/40 transition-colors duration-300 group-focus-within:text-primary" />
                 <Input
                   ref={productInputRef}
                   autoFocus
@@ -607,7 +609,7 @@ export function PdvSupermercado({
                     }
                   }}
                   placeholder="Digite produto, categoria ou escaneie o código…"
-                  className="h-16 rounded-2xl border border-border bg-card/60 pl-14 text-xl font-black tracking-tight shadow-sm backdrop-blur-sm"
+                  className="relative h-20 rounded-[2rem] border-2 border-border/50 bg-card/80 pl-16 pr-6 text-2xl font-black tracking-tight shadow-sm backdrop-blur-md transition-all duration-300 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:shadow-lg focus-visible:shadow-primary/10 placeholder:text-foreground/30"
                 />
               </div>
             </div>
@@ -632,19 +634,29 @@ export function PdvSupermercado({
                     type="button"
                     data-pdv-suggestion-index={idx}
                     className={cn(
-                      "group rounded-2xl border border-border bg-card/80 p-3 text-left shadow-sm backdrop-blur-sm transition hover:border-blue-500/35 hover:shadow-md",
-                      selectedProduct?.id === p.id ? "ring-2 ring-blue-500/35" : "",
-                      activeSuggestionIndex === idx ? "ring-2 ring-emerald-400/70 ring-offset-2 ring-offset-background" : ""
+                      "group relative flex flex-col rounded-[2rem] border border-border/60 bg-card/60 p-5 text-left backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 active:scale-[0.98]",
+                      selectedProduct?.id === p.id ? "ring-2 ring-primary/50" : "",
+                      activeSuggestionIndex === idx ? "ring-4 ring-primary/40 ring-offset-2 ring-offset-background" : "shadow-sm"
                     )}
                     onClick={() => addToCart(p as Product)}
                   >
-                    <div className="line-clamp-2 min-h-[2.5rem] text-sm font-extrabold leading-snug">
-                      {p.name}
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/60 pt-2">
-                      <div className="text-xs font-semibold text-foreground/60 dark:text-white/50">{p.category}</div>
-                      <div className="text-sm font-black tabular-nums text-emerald-400">
-                        R$ {Number(p.price || 0).toFixed(2)}
+                    {/* Fundo sutil com a cor do tema */}
+                    <div className="pointer-events-none absolute inset-0 rounded-[2rem] opacity-0 transition-opacity duration-300 group-hover:opacity-20 z-0" style={{ background: "linear-gradient(135deg, hsl(var(--primary)/0.5) 0%, transparent 100%)" }} />
+                    
+                    {/* Glow externo no hover */}
+                    <div className="pointer-events-none absolute inset-0 rounded-[2rem] opacity-0 transition-opacity duration-300 group-hover:opacity-100 z-0" style={{ boxShadow: "0 0 30px 2px hsl(var(--primary) / 0.25)" }} />
+
+                    <div className="relative z-10 flex flex-1 flex-col justify-between w-full h-full">
+                      <div className="line-clamp-2 min-h-[3rem] text-[15px] font-extrabold leading-tight text-foreground">
+                        {p.name}
+                      </div>
+                      <div className="mt-3 flex items-end justify-between gap-2 border-t border-border/40 pt-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70 line-clamp-1 flex-1">
+                          {p.category}
+                        </div>
+                        <div className="text-lg font-black tabular-nums tracking-tight text-primary">
+                          R$ {Number(p.price || 0).toFixed(2)}
+                        </div>
                       </div>
                     </div>
                   </button>
@@ -658,16 +670,21 @@ export function PdvSupermercado({
         {/* DIREITA: Carrinho mais largo + pagamentos gigantes */}
         <PdvPainelLateralTerminal
           className={cn(
-            "lg:w-[560px] lg:min-w-[560px]",
-            isModoRapido && "lg:w-[min(100%,440px)] lg:min-w-[280px] lg:max-w-[440px]"
+            "lg:w-[560px] lg:min-w-[560px] border-l border-border/50 bg-card/30 backdrop-blur-2xl shadow-2xl",
+            isModoRapido && "lg:w-[min(100%,440px)] lg:min-w-[320px] lg:max-w-[440px]"
           )}
         >
-          <div className="shrink-0 border-b border-white/10 bg-black/20 px-3 py-3 backdrop-blur-md dark:bg-black/30">
+          <div className="shrink-0 border-b border-border/50 bg-background/40 px-5 py-4 backdrop-blur-md">
             <div className="flex items-center justify-between">
-              <div className="text-lg font-black tracking-tight">Carrinho</div>
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <ShoppingCart className="h-4 w-4" />
+                </div>
+                <div className="text-xl font-black tracking-tight">Carrinho</div>
+              </div>
               <Button
                 variant="outline"
-                className="h-10 rounded-2xl border-border bg-background/80 font-bold backdrop-blur-sm"
+                className="h-9 rounded-xl border-border/50 bg-card/50 font-bold backdrop-blur-sm hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
                 onClick={() => {
                   if (cart.length === 0) return
                   if (isModoRapido) {
@@ -786,52 +803,70 @@ export function PdvSupermercado({
             )}
           </div>
 
-          <div className="shrink-0 border-t border-white/10 bg-black/25 p-3 backdrop-blur-md dark:bg-black/35">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm font-semibold">
-                <span className="text-foreground/70 dark:text-white/55">Subtotal</span>
-                <span className="font-black tabular-nums">R$ {subtotal.toFixed(2)}</span>
+          <div className="shrink-0 border-t border-border/50 bg-background/60 p-5 backdrop-blur-xl">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm font-bold text-muted-foreground">
+                <span>Subtotal</span>
+                <span className="tabular-nums">R$ {subtotal.toFixed(2)}</span>
               </div>
               {discountTotal > 0 ? (
-                <div className="flex items-center justify-between text-sm font-semibold">
-                  <span className="text-foreground/70 dark:text-white/55">Desconto</span>
-                  <span className="font-black tabular-nums">− R$ {discountTotal.toFixed(2)}</span>
+                <div className="flex items-center justify-between text-sm font-bold text-destructive">
+                  <span>Desconto</span>
+                  <span className="tabular-nums">− R$ {discountTotal.toFixed(2)}</span>
                 </div>
               ) : null}
-              <div className="border-t border-white/5 pt-2">
-                <PdvVisorTotal label="Total a pagar" valorFormatado={`R$ ${total.toFixed(2)}`} glow="none" />
+              
+              {/* Premium Visor */}
+              <div className="relative overflow-hidden rounded-[2rem] border border-border/50 bg-gradient-to-b from-black/80 to-black/95 p-6 shadow-inner dark:from-black/60 dark:to-black/80">
+                <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-primary/20 blur-[50px] pointer-events-none" />
+                <div className="relative z-10 flex flex-col">
+                  <span className="text-xs font-black uppercase tracking-widest text-white/50 mb-1">Total a pagar</span>
+                  <span className="text-4xl sm:text-5xl font-black tabular-nums tracking-tighter text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                    R$ {total.toFixed(2)}
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            {/* Botoes SaaS Premium */}
+            <div className="mt-5 grid grid-cols-3 gap-3">
               <Button
                 type="button"
-                className="h-14 rounded-2xl bg-emerald-600 text-base font-black text-zinc-950 shadow-lg shadow-emerald-950/30 hover:bg-emerald-500"
+                className="group relative h-16 rounded-[1.5rem] border border-border/30 bg-card/80 text-foreground shadow-sm backdrop-blur-md transition-all hover:-translate-y-1 hover:border-foreground/20 hover:shadow-md hover:bg-foreground/5"
                 onClick={() => openPaymentModal("dinheiro")}
               >
-                <Banknote className="mr-2 h-5 w-5" /> Dinheiro <span className="ml-2 text-sm font-black opacity-90">[F2]</span>
+                <div className="flex flex-col items-center gap-1">
+                  <Banknote className="h-5 w-5 text-emerald-500 transition-transform group-hover:scale-110" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Dinheiro <span className="opacity-50 ml-0.5">[F2]</span></span>
+                </div>
               </Button>
               <Button
                 type="button"
-                className="h-14 rounded-2xl bg-emerald-600 text-base font-black text-zinc-950 shadow-lg shadow-emerald-950/30 hover:bg-emerald-500"
+                className="group relative h-16 rounded-[1.5rem] border border-teal-500/30 bg-teal-500/10 text-teal-600 dark:text-teal-400 shadow-sm backdrop-blur-md transition-all hover:-translate-y-1 hover:border-teal-500/50 hover:bg-teal-500/20 hover:shadow-[0_0_20px_rgba(20,184,166,0.3)]"
                 onClick={() => openPaymentModal("pix")}
               >
-                <QrCode className="mr-2 h-5 w-5" /> PIX <span className="ml-2 text-sm font-black opacity-90">[F3]</span>
+                <div className="flex flex-col items-center gap-1">
+                  <QrCode className="h-5 w-5 transition-transform group-hover:scale-110" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">PIX <span className="opacity-50 ml-0.5">[F3]</span></span>
+                </div>
               </Button>
               <Button
                 type="button"
-                className="h-14 rounded-2xl bg-emerald-600 text-base font-black text-zinc-950 shadow-lg shadow-emerald-950/30 hover:bg-emerald-500"
+                className="group relative h-16 rounded-[1.5rem] border border-primary/30 bg-primary/10 text-primary shadow-sm backdrop-blur-md transition-all hover:-translate-y-1 hover:border-primary/50 hover:bg-primary/20 hover:shadow-[0_0_20px_hsl(var(--primary)/0.3)]"
                 onClick={() => openPaymentModal("cartao_debito")}
                 title="Cartão (débito)"
               >
-                <CreditCard className="mr-2 h-5 w-5" /> Cartão <span className="ml-2 text-sm font-black opacity-90">[F4]</span>
+                <div className="flex flex-col items-center gap-1">
+                  <CreditCard className="h-5 w-5 transition-transform group-hover:scale-110" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Cartão <span className="opacity-50 ml-0.5">[F4]</span></span>
+                </div>
               </Button>
             </div>
 
             <Button
               type="button"
               variant="outline"
-              className="mt-2 h-12 w-full rounded-2xl border-2 border-border bg-background/80 text-base font-black backdrop-blur-sm hover:bg-foreground/5 dark:border-white/10 dark:bg-black/50 dark:hover:bg-black/70"
+              className="mt-3 h-14 w-full rounded-[1.5rem] border border-border/50 bg-background/50 text-sm font-bold uppercase tracking-widest text-foreground/70 backdrop-blur-sm transition-colors hover:bg-foreground/5 hover:text-foreground"
               onClick={() => openPaymentModal(null)}
               disabled={cart.length === 0}
             >

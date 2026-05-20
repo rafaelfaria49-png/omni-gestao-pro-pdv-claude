@@ -1,0 +1,10 @@
+/**
+ * Paridade com Lovable `App.css`: camada de layout da shell da página.
+ * Tudo escopado implicitamente ao importar apenas dentro de `.lovable-settings`.
+ */
+
+.lovable-settings .lovable-settings-app {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}

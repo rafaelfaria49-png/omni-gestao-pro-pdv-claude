@@ -480,6 +480,7 @@ export function PdvVendaCompletaEnterprise({
       },
       customerCpf: selectedCliente?.document ?? undefined,
       customerName: selectedCliente?.name,
+      clienteId: selectedCliente?.id || undefined,
     })
 
     if (!result.ok) {

@@ -29,6 +29,8 @@ export interface SaleRecord {
   discountTotal?: number
   customerCpf?: string
   customerName?: string
+  /** FK real para Cliente (cuid). Nulo em consumidor final ou vendas antigas. */
+  clienteId?: string
   paymentBreakdown: PaymentBreakdownFull
   /** Auditoria: operador do caixa (id local do dispositivo). */
   cashierId?: string

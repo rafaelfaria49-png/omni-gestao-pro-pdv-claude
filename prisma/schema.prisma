@@ -596,6 +596,7 @@ model Cliente {
   updatedAt      DateTime  @default(now()) @updatedAt @map("updatedAt")
 
   ordensServico         OrdemServico[]
+  vendas                Venda[]
   whatsappConversations WhatsAppConversation[]
 
   @@index([storeId])
@@ -1166,6 +1167,13 @@ model Venda {
   at                   DateTime            @default(now()) @map("at")
   clienteNome          String?             @map("clienteNome")
   /**
+   * FK opcional para o cliente cadastrado.
+   * Nulo em vendas de consumidor final ou vendas antigas sem vínculo.
+   * Preservado via SetNull se o cliente for excluído.
+   */
+  clienteId            String?             @map("clienteId")
+  cliente              Cliente?            @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  /**
    * Status do ciclo de vida da venda.
    * concluida | cancelada | parcialmente_devolvida | devolvida
    */
@@ -1181,6 +1189,7 @@ model Venda {
 
   @@index([storeId])
   @@index([storeId, status])
+  @@index([clienteId])
   @@index([contaReceberTituloId])
   @@map("vendas")
 }
