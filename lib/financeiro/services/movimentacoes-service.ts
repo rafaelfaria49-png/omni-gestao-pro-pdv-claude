@@ -229,11 +229,16 @@ export async function getResumoMovimentacoes(
  * Cria movimentação de ENTRADA a partir de um ContaReceberTitulo liquidado/parcial.
  * Idempotente: (storeId, referenciaId=titulo.id, tipo="entrada", origem="receber").
  * Para parciais sucessivos, usa origem="receber_parcial_<suffix>" para não colidir.
+ *
+ * `carteiraId` (opcional): quando o título traz `payload.carteiraId`, a baixa é
+ * registrada na carteira indicada e o saldo é recalculado. Sem `carteiraId`, a
+ * movimentação fica sem carteira (entra no saldo agregado de caixa, não em uma
+ * carteira específica).
  */
 export async function createMovimentacaoEntradaFromReceber(
   titulo: { id: string; storeId: string; descricao: string; cliente: string },
   valor: number,
-  opts: { parcial?: boolean; meta?: CreateFromTituloMeta } = {},
+  opts: { parcial?: boolean; meta?: CreateFromTituloMeta; carteiraId?: string | null } = {},
 ): Promise<MovimentacaoResult> {
   const storeId = assertStoreId(titulo.storeId)
   const referenciaId = safeStr(opts.meta?.referenciaId) || titulo.id
@@ -241,6 +246,7 @@ export async function createMovimentacaoEntradaFromReceber(
   if (!(valorMoney > 0)) return { ok: false, reason: "valor_invalido" }
 
   const origem = opts.parcial ? "receber_parcial" : "receber"
+  const carteiraId = safeStr(opts.carteiraId) || null
 
   // Para liquidação total: idempotência estrita (skipa se já existe)
   // Para parcial: permite múltiplos APENAS se valor diferente já gravado (melhor esforço)
@@ -263,19 +269,26 @@ export async function createMovimentacaoEntradaFromReceber(
 
   const descricao = `Recebimento — ${titulo.cliente || titulo.descricao}`
   const movimentacao = await prisma.movimentacaoFinanceira.create({
-    data: { storeId, tipo: "entrada", valor: valorMoney, descricao, origem, referenciaId },
+    data: { storeId, tipo: "entrada", valor: valorMoney, descricao, origem, referenciaId, carteiraId },
   })
+  if (carteiraId) {
+    await recalcularSaldoCarteira(carteiraId, storeId).catch((e) =>
+      console.error("[movimentacoes-service] recalcularSaldoCarteira receber falhou:", e),
+    )
+  }
   return { ok: true, action: "created", movimentacao }
 }
 
 /**
  * Cria movimentação de SAÍDA a partir de um ContaPagarTitulo liquidado/parcial.
  * Idempotente: (storeId, referenciaId=titulo.id, tipo="saida", origem="pagar").
+ *
+ * `carteiraId` (opcional): mesmo contrato de `createMovimentacaoEntradaFromReceber`.
  */
 export async function createMovimentacaoSaidaFromPagar(
   titulo: { id: string; storeId: string; descricao: string },
   valor: number,
-  opts: { parcial?: boolean; meta?: CreateFromTituloMeta } = {},
+  opts: { parcial?: boolean; meta?: CreateFromTituloMeta; carteiraId?: string | null } = {},
 ): Promise<MovimentacaoResult> {
   const storeId = assertStoreId(titulo.storeId)
   const referenciaId = safeStr(opts.meta?.referenciaId) || titulo.id
@@ -283,6 +296,7 @@ export async function createMovimentacaoSaidaFromPagar(
   if (!(valorMoney > 0)) return { ok: false, reason: "valor_invalido" }
 
   const origem = opts.parcial ? "pagar_parcial" : "pagar"
+  const carteiraId = safeStr(opts.carteiraId) || null
 
   if (!opts.parcial) {
     if (await existeMovimentacao(storeId, referenciaId, "saida", origem)) {
@@ -301,14 +315,22 @@ export async function createMovimentacaoSaidaFromPagar(
 
   const descricao = `Pagamento — ${titulo.descricao}`
   const movimentacao = await prisma.movimentacaoFinanceira.create({
-    data: { storeId, tipo: "saida", valor: valorMoney, descricao, origem, referenciaId },
+    data: { storeId, tipo: "saida", valor: valorMoney, descricao, origem, referenciaId, carteiraId },
   })
+  if (carteiraId) {
+    await recalcularSaldoCarteira(carteiraId, storeId).catch((e) =>
+      console.error("[movimentacoes-service] recalcularSaldoCarteira pagar falhou:", e),
+    )
+  }
   return { ok: true, action: "created", movimentacao }
 }
 
 /**
  * Cria movimentação de estorno: lança entrada reversa (para saída) ou saída reversa (para entrada).
  * Idempotente via origem="estorno_receber" / "estorno_pagar".
+ *
+ * Reaproveita a `carteiraId` da movimentação original — para que o saldo da
+ * carteira que recebeu o pagamento volte ao estado anterior à baixa.
  */
 export async function estornarMovimentacaoPorReferencia(
   storeId: string,
@@ -321,25 +343,36 @@ export async function estornarMovimentacaoPorReferencia(
 
   const origemEstorno = origemOriginal === "receber" ? "estorno_receber" : "estorno_pagar"
   const tipoEstorno: MovTipo = origemOriginal === "receber" ? "saida" : "entrada"
+  const tipoOriginal: MovTipo = origemOriginal === "receber" ? "entrada" : "saida"
 
   if (await existeMovimentacao(sid, rid, tipoEstorno, origemEstorno)) {
     return { ok: true, action: "skipped_idempotent" }
   }
 
-  // Busca o total original para saber o valor a estornar
-  const agg = await prisma.movimentacaoFinanceira.aggregate({
-    where: { storeId: sid, referenciaId: rid, tipo: origemOriginal === "receber" ? "entrada" : "saida" },
-    _sum: { valor: true },
+  // Busca movimentações originais para somar valor e descobrir a carteira usada.
+  // Quando há múltiplas (parciais em datas diferentes), todas devem ter sido
+  // gravadas na mesma carteira; pegamos a mais recente como referência.
+  const originais = await prisma.movimentacaoFinanceira.findMany({
+    where: { storeId: sid, referenciaId: rid, tipo: tipoOriginal },
+    orderBy: { createdAt: "desc" },
+    select: { valor: true, carteiraId: true },
   })
-  const valorOriginal = safeMoney(agg._sum.valor ?? 0)
-  if (!(valorOriginal > 0)) {
+  if (originais.length === 0) {
     // Nenhuma movimentação original — nada a estornar
     return { ok: true, action: "skipped_idempotent" }
   }
+  const valorOriginal = safeMoney(originais.reduce((s, m) => s + (m.valor ?? 0), 0))
+  if (!(valorOriginal > 0)) return { ok: true, action: "skipped_idempotent" }
+  const carteiraId = originais.find((m) => m.carteiraId)?.carteiraId ?? null
 
   const descricao = `Estorno de ${origemOriginal === "receber" ? "recebimento" : "pagamento"}`
   const movimentacao = await prisma.movimentacaoFinanceira.create({
-    data: { storeId: sid, tipo: tipoEstorno, valor: valorOriginal, descricao, origem: origemEstorno, referenciaId: rid },
+    data: { storeId: sid, tipo: tipoEstorno, valor: valorOriginal, descricao, origem: origemEstorno, referenciaId: rid, carteiraId },
   })
+  if (carteiraId) {
+    await recalcularSaldoCarteira(carteiraId, sid).catch((e) =>
+      console.error("[movimentacoes-service] recalcularSaldoCarteira estorno falhou:", e),
+    )
+  }
   return { ok: true, action: "created", movimentacao }
 }

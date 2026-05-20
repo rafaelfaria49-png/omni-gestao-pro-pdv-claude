@@ -56,6 +56,24 @@ function parseHistorico(payload: unknown): HistEntry[] {
   return hist.filter((e) => e && typeof e === "object") as HistEntry[]
 }
 
+/**
+ * Resolve `carteiraId` do payload do título, validando que existe na loja e
+ * está ativa. Retorna `null` quando o título não tem carteira definida ou
+ * quando a carteira foi removida/desativada (a movimentação não é vinculada).
+ */
+async function resolveCarteiraIdFromPayload(payload: unknown, storeId: string): Promise<string | null> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null
+  const raw = (payload as Record<string, unknown>).carteiraId
+  if (typeof raw !== "string") return null
+  const id = raw.trim()
+  if (!id) return null
+  const c = await prisma.carteiraFinanceira.findFirst({
+    where: { id, storeId, ativo: true },
+    select: { id: true },
+  })
+  return c?.id ?? null
+}
+
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const postSchema = z.object({
@@ -280,10 +298,12 @@ export async function PATCH(req: Request) {
     if (parsed.data.op === "liquidar") {
       const res = await liquidarContaReceber({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel })
       if (!res.ok) return err(res.reason, `liquidar_${res.reason}`, 422)
-      // Gerar movimentação de entrada (idempotente)
+      const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
+      // Gerar movimentação de entrada (idempotente) — vincula à carteira do título se houver
       await createMovimentacaoEntradaFromReceber(
         { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
         res.data.valor,
+        { carteiraId },
       ).catch((e) => console.error("[receber/liquidar mov]", e))
       return NextResponse.json({ ok: true, op: "liquidar" })
     }
@@ -291,11 +311,12 @@ export async function PATCH(req: Request) {
     if (parsed.data.op === "parcial") {
       const res = await registrarPagamentoParcial({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, userLabel })
       if (!res.ok) return err(res.reason, `parcial_${res.reason}`, 422)
+      const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
       // Gerar movimentação de entrada parcial (idempotente por soma total)
       await createMovimentacaoEntradaFromReceber(
         { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao, cliente: res.data.cliente },
         parsed.data.valor,
-        { parcial: true },
+        { parcial: true, carteiraId },
       ).catch((e) => console.error("[receber/parcial mov]", e))
       return NextResponse.json({ ok: true, op: "parcial" })
     }

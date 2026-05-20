@@ -82,6 +82,23 @@ function parcelaLabelFromPayload(payload: unknown): string | null {
   return `${numero}/${total}`
 }
 
+/**
+ * Resolve `carteiraId` do payload do título, validando que existe na loja e
+ * está ativa. Retorna `null` quando ausente, inválido ou desativado.
+ */
+async function resolveCarteiraIdFromPayload(payload: unknown, storeId: string): Promise<string | null> {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null
+  const raw = (payload as Record<string, unknown>).carteiraId
+  if (typeof raw !== "string") return null
+  const id = raw.trim()
+  if (!id) return null
+  const c = await prisma.carteiraFinanceira.findFirst({
+    where: { id, storeId, ativo: true },
+    select: { id: true },
+  })
+  return c?.id ?? null
+}
+
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const postSchema = z.object({
@@ -313,10 +330,12 @@ export async function PATCH(req: Request) {
     if (parsed.data.op === "liquidar") {
       const res = await liquidarContaPagar({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel })
       if (!res.ok) return err(res.reason, `liquidar_${res.reason}`, 422)
-      // Gerar movimentação de saída (idempotente)
+      const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
+      // Gerar movimentação de saída (idempotente) — vincula à carteira do título se houver
       await createMovimentacaoSaidaFromPagar(
         { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao },
         res.data.valor,
+        { carteiraId },
       ).catch((e) => console.error("[pagar/liquidar mov]", e))
       return NextResponse.json({ ok: true, op: "liquidar" })
     }
@@ -324,11 +343,12 @@ export async function PATCH(req: Request) {
     if (parsed.data.op === "parcial") {
       const res = await registrarPagamentoParcialContaPagar({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, userLabel })
       if (!res.ok) return err(res.reason, `parcial_${res.reason}`, 422)
+      const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
       // Gerar movimentação de saída parcial (idempotente por soma total)
       await createMovimentacaoSaidaFromPagar(
         { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao },
         parsed.data.valor,
-        { parcial: true },
+        { parcial: true, carteiraId },
       ).catch((e) => console.error("[pagar/parcial mov]", e))
       return NextResponse.json({ ok: true, op: "parcial" })
     }
