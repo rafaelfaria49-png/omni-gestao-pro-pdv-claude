@@ -89,11 +89,20 @@ export type FluxoCaixa = {
   alertas: FluxoCaixaAlerta[]
 }
 
+export type NovoReceberOrigem = "manual" | "venda" | "os" | "crediario" | "ajuste"
+
 export type NovoReceberInput = {
   cliente: string
   descricao: string
   valor: number
   vencimento: string
+  /** Campos opcionais — gravados em `payload` no servidor. */
+  origem?: NovoReceberOrigem
+  numeroDocumento?: string
+  competencia?: string
+  formaPagamento?: string
+  carteiraId?: string
+  observacao?: string
 }
 
 export type NovoPagarInput = {
@@ -102,6 +111,13 @@ export type NovoPagarInput = {
   valor: number
   vencimento: string
   categoria?: string
+  /** Campos opcionais — gravados em `payload` no servidor. */
+  numeroDocumento?: string
+  competencia?: string
+  centroCusto?: string
+  formaPagamento?: string
+  carteiraId?: string
+  observacao?: string
 }
 
 export type TipoCarteira =
@@ -964,12 +980,19 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [callApi, fetchData])
 
   const criarReceber = useCallback(async (data: NovoReceberInput) => {
-    const res = await callApi("/api/financeiro/receber", {
+    const body: Record<string, unknown> = {
       descricao: data.descricao,
       cliente: data.cliente,
       valor: data.valor,
       vencimento: data.vencimento,
-    }, "POST")
+    }
+    if (data.origem) body.origem = data.origem
+    if (data.numeroDocumento?.trim()) body.numeroDocumento = data.numeroDocumento.trim()
+    if (data.competencia?.trim()) body.competencia = data.competencia.trim()
+    if (data.formaPagamento?.trim()) body.formaPagamento = data.formaPagamento.trim()
+    if (data.carteiraId?.trim()) body.carteiraId = data.carteiraId.trim()
+    if (data.observacao?.trim()) body.observacao = data.observacao.trim()
+    const res = await callApi("/api/financeiro/receber", body, "POST")
     if (res.ok === false) throw new Error(safeStr(res.error) || "Falha ao criar recebimento")
     await fetchData()
   }, [callApi, fetchData])
@@ -990,13 +1013,20 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
   }, [callApi, fetchData])
 
   const criarPagar = useCallback(async (data: NovoPagarInput) => {
-    const res = await callApi("/api/financeiro/pagar", {
+    const body: Record<string, unknown> = {
       fornecedor: data.fornecedor,
       descricao: data.descricao,
       valor: data.valor,
       vencimento: data.vencimento,
       categoria: data.categoria || "Outros",
-    }, "POST")
+    }
+    if (data.numeroDocumento?.trim()) body.numeroDocumento = data.numeroDocumento.trim()
+    if (data.competencia?.trim()) body.competencia = data.competencia.trim()
+    if (data.centroCusto?.trim()) body.centroCusto = data.centroCusto.trim()
+    if (data.formaPagamento?.trim()) body.formaPagamento = data.formaPagamento.trim()
+    if (data.carteiraId?.trim()) body.carteiraId = data.carteiraId.trim()
+    if (data.observacao?.trim()) body.observacao = data.observacao.trim()
+    const res = await callApi("/api/financeiro/pagar", body, "POST")
     if (res.ok === false) throw new Error(safeStr(res.error) || "Falha ao criar conta a pagar")
     await fetchData()
   }, [callApi, fetchData])

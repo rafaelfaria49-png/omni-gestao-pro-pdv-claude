@@ -2547,31 +2547,61 @@ function NovoRecebimentoModal({
   onOpenChange: (v: boolean) => void;
   onSave: (data: NovoReceberInput) => Promise<void>;
 }) {
-  const { receber } = useFinanceiroReal();
+  const { receber, carteiras: listaCarteiras } = useFinanceiroReal();
   const clientesUnicos = useMemo(
     () => Array.from(new Set(receber.map((r) => r.cliente).filter(Boolean))).sort(),
     [receber],
   );
   const [saving, setSaving] = useState(false);
-  const clienteRef = useRef<HTMLInputElement>(null);
-  const descricaoRef = useRef<HTMLInputElement>(null);
-  const valorRef = useRef<HTMLInputElement>(null);
-  const vencimentoRef = useRef<HTMLInputElement>(null);
+  const [maisOpcoes, setMaisOpcoes] = useState(false);
+  const [cliente, setCliente] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [valor, setValor] = useState("");
+  const [vencimento, setVencimento] = useState("");
+  const [origem, setOrigem] = useState<"manual" | "venda" | "os" | "crediario" | "ajuste">("manual");
+  const [numeroDocumento, setNumeroDocumento] = useState("");
+  const [competencia, setCompetencia] = useState("");
+  const [formaPagamento, setFormaPagamento] = useState("");
+  const [carteiraId, setCarteiraId] = useState("");
+  const [observacao, setObservacao] = useState("");
+
+  const reset = () => {
+    setCliente(""); setDescricao(""); setValor(""); setVencimento("");
+    setOrigem("manual"); setNumeroDocumento(""); setCompetencia("");
+    setFormaPagamento(""); setCarteiraId(""); setObservacao("");
+    setMaisOpcoes(false);
+  };
+
+  const handleClose = (v: boolean) => {
+    if (saving) return;
+    onOpenChange(v);
+    if (!v) reset();
+  };
 
   const handleSave = async () => {
-    const cliente = clienteRef.current?.value.trim() ?? "";
-    const descricao = descricaoRef.current?.value.trim() ?? "";
-    const valor = parseFloat((valorRef.current?.value ?? "0").replace(",", "."));
-    const vencimento = vencimentoRef.current?.value ?? "";
-    if (!cliente || !valor || !vencimento) {
+    const cli = cliente.trim();
+    const desc = descricao.trim();
+    const val = parseFloat(valor.replace(",", "."));
+    if (!cli || !val || !vencimento) {
       toast.error("Preencha cliente, valor e vencimento");
       return;
     }
     setSaving(true);
     try {
-      await onSave({ cliente, descricao: descricao || cliente, valor, vencimento });
+      await onSave({
+        cliente: cli,
+        descricao: desc || cli,
+        valor: val,
+        vencimento,
+        origem,
+        numeroDocumento: numeroDocumento.trim() || undefined,
+        competencia: competencia.trim() || undefined,
+        formaPagamento: formaPagamento || undefined,
+        carteiraId: carteiraId || undefined,
+        observacao: observacao.trim() || undefined,
+      });
       toast.success("Recebimento criado");
-      onOpenChange(false);
+      handleClose(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar");
     } finally {
@@ -2579,42 +2609,164 @@ function NovoRecebimentoModal({
     }
   };
 
+  const carteirasAtivas = listaCarteiras.filter((c) => c.ativo);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Novo recebimento</DialogTitle>
-          <DialogDescription>
-            Campos com * são gravados na API. Categoria, forma de pagamento, carteira e parcelamento múltiplo: em breve.
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <ArrowDownCircle className="h-4 w-4 text-primary" />
+            Novo recebimento
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Cliente, valor e vencimento são obrigatórios. Demais campos são opcionais e persistidos em payload.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Cliente *</Label>
-            <Input ref={clienteRef} list="clientes-list" placeholder="Buscar cliente..." />
-            <datalist id="clientes-list">
-              {clientesUnicos.map((c) => <option key={c} value={c} />)}
-            </datalist>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Título / descrição</Label>
-            <Input ref={descricaoRef} placeholder="Ex.: OS #882 — troca de óleo" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Valor (R$) *</Label>
-            <Input ref={valorRef} type="number" step="0.01" placeholder="0,00" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Vencimento *</Label>
-            <Input ref={vencimentoRef} type="date" />
-          </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          {/* Bloco 1 — Dados principais */}
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-1 rounded-full bg-primary" />
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dados principais</h3>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="rec-cliente">Cliente *</Label>
+                <Input
+                  id="rec-cliente"
+                  list="clientes-list-novo"
+                  placeholder="Buscar cliente..."
+                  value={cliente}
+                  onChange={(e) => setCliente(e.target.value)}
+                  autoFocus
+                />
+                <datalist id="clientes-list-novo">
+                  {clientesUnicos.map((c) => <option key={c} value={c} />)}
+                </datalist>
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="rec-descricao">Título / descrição</Label>
+                <Input
+                  id="rec-descricao"
+                  placeholder="Ex.: OS #882 — troca de óleo"
+                  value={descricao}
+                  onChange={(e) => setDescricao(e.target.value)}
+                />
+                <p className="text-[10px] text-muted-foreground">Em branco usa o nome do cliente.</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rec-valor">Valor (R$) *</Label>
+                <Input
+                  id="rec-valor"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={valor}
+                  onChange={(e) => setValor(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rec-venc">Vencimento *</Label>
+                <Input
+                  id="rec-venc"
+                  type="date"
+                  value={vencimento}
+                  onChange={(e) => setVencimento(e.target.value)}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Bloco 2 — Mais opções (recolhível) */}
+          <section className="mt-5">
+            <button
+              type="button"
+              onClick={() => setMaisOpcoes((v) => !v)}
+              className="flex w-full items-center justify-between rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50"
+              aria-expanded={maisOpcoes}
+            >
+              <span className="flex items-center gap-2">
+                <Settings className="h-3.5 w-3.5" />
+                Mais opções
+              </span>
+              <span className="text-[10px]">{maisOpcoes ? "Recolher" : "Expandir"}</span>
+            </button>
+            {maisOpcoes && (
+              <div className="mt-3 space-y-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Origem</Label>
+                    <Select value={origem} onValueChange={(v) => setOrigem(v as typeof origem)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manual">Manual</SelectItem>
+                        <SelectItem value="venda">Venda</SelectItem>
+                        <SelectItem value="os">OS</SelectItem>
+                        <SelectItem value="crediario">Crediário</SelectItem>
+                        <SelectItem value="ajuste">Ajuste</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Forma de recebimento</Label>
+                    <Select value={formaPagamento} onValueChange={setFormaPagamento}>
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="PIX">PIX</SelectItem>
+                        <SelectItem value="Cartão de crédito">Cartão de crédito</SelectItem>
+                        <SelectItem value="Cartão de débito">Cartão de débito</SelectItem>
+                        <SelectItem value="Boleto">Boleto</SelectItem>
+                        <SelectItem value="Transferência">Transferência</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Carteira destino</Label>
+                    <Select value={carteiraId} onValueChange={setCarteiraId}>
+                      <SelectTrigger><SelectValue placeholder={carteirasAtivas.length === 0 ? "Nenhuma carteira ativa" : "Selecione"} /></SelectTrigger>
+                      <SelectContent>
+                        {carteirasAtivas.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Competência</Label>
+                    <Input type="date" value={competencia} onChange={(e) => setCompetencia(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>Número do documento / NF</Label>
+                    <Input
+                      placeholder="Ex.: NF 1234, Pedido #882"
+                      value={numeroDocumento}
+                      onChange={(e) => setNumeroDocumento(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label>Observações</Label>
+                    <Textarea
+                      rows={3}
+                      placeholder="Notas internas..."
+                      value={observacao}
+                      onChange={(e) => setObservacao(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+
+        <DialogFooter className="border-t border-border bg-muted/20 px-6 py-3">
+          <Button variant="outline" onClick={() => handleClose(false)} disabled={saving}>
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Salvando..." : "Salvar"}
+            {saving ? "Salvando..." : "Salvar recebimento"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2636,28 +2788,66 @@ function NovaContaModal({
     () => Array.from(new Set(pagar.map((p) => p.fornecedor).filter(Boolean))).sort(),
     [pagar],
   );
+  const categoriasUnicas = useMemo(
+    () => Array.from(new Set(pagar.map((p) => p.categoria).filter(Boolean))).sort(),
+    [pagar],
+  );
+  const [saving, setSaving] = useState(false);
+  const [maisOpcoes, setMaisOpcoes] = useState(false);
+
+  const [fornecedor, setFornecedor] = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [valor, setValor] = useState("");
+  const [vencimento, setVencimento] = useState("");
+  const [numeroDocumento, setNumeroDocumento] = useState("");
+  const [competencia, setCompetencia] = useState("");
+  const [centroCusto, setCentroCusto] = useState("");
+  const [formaPagamento, setFormaPagamento] = useState("");
+  const [carteiraId, setCarteiraId] = useState("");
+  const [observacao, setObservacao] = useState("");
+  // Controles visuais — não persistidos hoje (marcados como "Em breve")
   const [parcelar, setParcelar] = useState(false);
   const [fixa, setFixa] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const fornecedorRef = useRef<HTMLInputElement>(null);
-  const descricaoRef = useRef<HTMLInputElement>(null);
-  const valorRef2 = useRef<HTMLInputElement>(null);
-  const vencimentoRef2 = useRef<HTMLInputElement>(null);
+
+  const reset = () => {
+    setFornecedor(""); setDescricao(""); setCategoria(""); setValor(""); setVencimento("");
+    setNumeroDocumento(""); setCompetencia(""); setCentroCusto("");
+    setFormaPagamento(""); setCarteiraId(""); setObservacao("");
+    setParcelar(false); setFixa(false); setMaisOpcoes(false);
+  };
+
+  const handleClose = (v: boolean) => {
+    if (saving) return;
+    onOpenChange(v);
+    if (!v) reset();
+  };
 
   const handleSave = async () => {
-    const fornecedor = fornecedorRef.current?.value.trim() ?? "";
-    const descricao = descricaoRef.current?.value.trim() ?? "";
-    const valor = parseFloat((valorRef2.current?.value ?? "0").replace(",", "."));
-    const vencimento = vencimentoRef2.current?.value ?? "";
-    if (!fornecedor || !valor || !vencimento) {
+    const forn = fornecedor.trim();
+    const desc = descricao.trim();
+    const val = parseFloat(valor.replace(",", "."));
+    if (!forn || !val || !vencimento) {
       toast.error("Preencha fornecedor, valor e vencimento");
       return;
     }
     setSaving(true);
     try {
-      await onSave({ fornecedor, descricao: descricao || fornecedor, valor, vencimento });
+      await onSave({
+        fornecedor: forn,
+        descricao: desc || forn,
+        valor: val,
+        vencimento,
+        categoria: categoria.trim() || undefined,
+        numeroDocumento: numeroDocumento.trim() || undefined,
+        competencia: competencia.trim() || undefined,
+        centroCusto: centroCusto.trim() || undefined,
+        formaPagamento: formaPagamento || undefined,
+        carteiraId: carteiraId || undefined,
+        observacao: observacao.trim() || undefined,
+      });
       toast.success("Conta a pagar criada");
-      onOpenChange(false);
+      handleClose(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar");
     } finally {
@@ -2665,154 +2855,242 @@ function NovaContaModal({
     }
   };
 
+  const carteirasAtivas = listaCarteiras.filter((c) => c.ativo);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Nova conta a pagar</DialogTitle>
-          <DialogDescription>
-            Cadastre uma despesa com fornecedor, vencimento e recorrência.
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="flex max-h-[92vh] max-w-4xl flex-col gap-0 p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <ArrowUpCircle className="h-4 w-4 text-destructive" />
+            Nova conta a pagar
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Fornecedor, valor e vencimento são obrigatórios. Os demais campos são opcionais e gravados no payload (sem alteração de schema).
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Fornecedor *</Label>
-            <Input ref={fornecedorRef} list="fornecedores-list" placeholder="Buscar fornecedor..." />
-            <datalist id="fornecedores-list">
-              {fornecedoresUnicos.map((f) => <option key={f} value={f} />)}
-            </datalist>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Descrição</Label>
-            <Input ref={descricaoRef} placeholder="Ex.: Compra de peças NF 1234" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Categoria</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="fornecedores">Fornecedores</SelectItem>
-                <SelectItem value="folha">Folha</SelectItem>
-                <SelectItem value="aluguel">Aluguel</SelectItem>
-                <SelectItem value="utilidades">Utilidades</SelectItem>
-                <SelectItem value="marketing">Marketing</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Valor (R$) *</Label>
-            <Input ref={valorRef2} type="number" step="0.01" placeholder="0,00" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Vencimento *</Label>
-            <Input ref={vencimentoRef2} type="date" />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Forma de pagamento</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="credito">Cartão de crédito</SelectItem>
-                <SelectItem value="debito">Cartão de débito</SelectItem>
-                <SelectItem value="boleto">Boleto</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Carteira</Label>
-            <Select>
-              <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-              <SelectContent>
-                {listaCarteiras.filter((c) => c.ativo).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Status</Label>
-            <Select defaultValue="pendente">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
-                <SelectItem value="atrasado">Atrasado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Recorrência</Label>
-            <Select defaultValue="nenhuma">
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="nenhuma">Nenhuma</SelectItem>
-                <SelectItem value="semanal">Semanal</SelectItem>
-                <SelectItem value="mensal">Mensal</SelectItem>
-                <SelectItem value="anual">Anual</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
-            <div>
-              <p className="text-sm font-medium">Despesa fixa</p>
-              <p className="text-xs text-muted-foreground">Repete todo período</p>
-            </div>
-            <Switch checked={fixa} onCheckedChange={setFixa} />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
-            <div>
-              <p className="text-sm font-medium">Parcelar</p>
-              <p className="text-xs text-muted-foreground">Gera múltiplas parcelas</p>
-            </div>
-            <Switch checked={parcelar} onCheckedChange={setParcelar} />
-          </div>
-          {parcelar && (
-            <>
-              <div className="space-y-1.5">
-                <Label>Quantidade de parcelas</Label>
-                <Input type="number" min={2} max={36} defaultValue={2} />
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            {/* Bloco 1 — Dados principais */}
+            <section className="space-y-3 lg:col-span-2">
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-1 rounded-full bg-primary" />
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Dados principais</h3>
               </div>
-              <div className="space-y-1.5">
-                <Label>Intervalo (dias)</Label>
-                <Input type="number" min={1} defaultValue={30} />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp-forn">Fornecedor *</Label>
+                  <Input
+                    id="cp-forn"
+                    list="fornecedores-list-novo"
+                    placeholder="Buscar fornecedor..."
+                    value={fornecedor}
+                    onChange={(e) => setFornecedor(e.target.value)}
+                    autoFocus
+                  />
+                  <datalist id="fornecedores-list-novo">
+                    {fornecedoresUnicos.map((f) => <option key={f} value={f} />)}
+                  </datalist>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp-desc">Descrição</Label>
+                  <Input
+                    id="cp-desc"
+                    placeholder="Ex.: Compra de peças NF 1234"
+                    value={descricao}
+                    onChange={(e) => setDescricao(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp-valor">Valor (R$) *</Label>
+                  <Input
+                    id="cp-valor"
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={valor}
+                    onChange={(e) => setValor(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp-venc">Vencimento *</Label>
+                  <Input
+                    id="cp-venc"
+                    type="date"
+                    value={vencimento}
+                    onChange={(e) => setVencimento(e.target.value)}
+                  />
+                </div>
               </div>
-            </>
-          )}
-          <div className="rounded-lg border border-border bg-muted/30 p-3 sm:col-span-2">
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-sm font-medium">Baixa parcial / histórico</p>
-              <Badge variant="outline" className="gap-1">
-                <History className="h-3 w-3" /> 0 pagamentos
-              </Badge>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs">Valor pago</Label>
-                <Input type="number" step="0.01" placeholder="0,00" />
+            </section>
+
+            {/* Bloco 2 — Classificação financeira */}
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-1 rounded-full bg-primary" />
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Classificação</h3>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Valor restante</Label>
-                <Input type="number" step="0.01" placeholder="0,00" disabled />
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp-cat">Categoria / Plano de contas</Label>
+                  <Input
+                    id="cp-cat"
+                    list="categorias-list-novo"
+                    placeholder="Ex.: Aluguel, Compras, Folha..."
+                    value={categoria}
+                    onChange={(e) => setCategoria(e.target.value)}
+                  />
+                  <datalist id="categorias-list-novo">
+                    {categoriasUnicas.map((c) => <option key={c} value={c} />)}
+                  </datalist>
+                  <p className="text-[10px] text-muted-foreground">Sugestões vindas das contas já cadastradas.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp-cc">Centro de custo</Label>
+                  <Input
+                    id="cp-cc"
+                    placeholder="Ex.: Loja Centro, Frota..."
+                    value={centroCusto}
+                    onChange={(e) => setCentroCusto(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Observações</Label>
-            <Textarea rows={3} placeholder="Notas internas..." />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Anexo (opcional)</Label>
-            <Input type="file" />
+            </section>
+
+            {/* Bloco 3 — Pagamento e controle */}
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="h-4 w-1 rounded-full bg-primary" />
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pagamento</h3>
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Forma de pagamento</Label>
+                  <Select value={formaPagamento} onValueChange={setFormaPagamento}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Dinheiro à Vista">Dinheiro à Vista</SelectItem>
+                      <SelectItem value="Dinheiro Parcelado">Dinheiro Parcelado</SelectItem>
+                      <SelectItem value="PIX">PIX</SelectItem>
+                      <SelectItem value="Cartão de Crédito">Cartão de Crédito</SelectItem>
+                      <SelectItem value="Cartão de Débito">Cartão de Débito</SelectItem>
+                      <SelectItem value="Boleto">Boleto</SelectItem>
+                      <SelectItem value="A Combinar">A Combinar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Carteira de origem</Label>
+                  <Select value={carteiraId} onValueChange={setCarteiraId}>
+                    <SelectTrigger><SelectValue placeholder={carteirasAtivas.length === 0 ? "Nenhuma carteira ativa" : "Selecione"} /></SelectTrigger>
+                    <SelectContent>
+                      {carteirasAtivas.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </section>
+
+            {/* Bloco 4 — Mais opções (recolhível) */}
+            <section className="lg:col-span-2">
+              <button
+                type="button"
+                onClick={() => setMaisOpcoes((v) => !v)}
+                className="flex w-full items-center justify-between rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50"
+                aria-expanded={maisOpcoes}
+              >
+                <span className="flex items-center gap-2">
+                  <Settings className="h-3.5 w-3.5" />
+                  Mais opções (documento, competência, recorrência, observações)
+                </span>
+                <span className="text-[10px]">{maisOpcoes ? "Recolher" : "Expandir"}</span>
+              </button>
+              {maisOpcoes && (
+                <div className="mt-3 space-y-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cp-numdoc">Número do documento / NF</Label>
+                      <Input
+                        id="cp-numdoc"
+                        placeholder="Ex.: NF 1234, Boleto 998..."
+                        value={numeroDocumento}
+                        onChange={(e) => setNumeroDocumento(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="cp-comp">Competência</Label>
+                      <Input
+                        id="cp-comp"
+                        type="date"
+                        value={competencia}
+                        onChange={(e) => setCompetencia(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-2 text-sm font-medium">
+                          Despesa fixa
+                          <Badge variant="outline" className="px-1.5 py-0 text-[9px] uppercase">Em breve</Badge>
+                        </p>
+                        <p className="text-xs text-muted-foreground">Repete todo período</p>
+                      </div>
+                      <Switch checked={fixa} onCheckedChange={setFixa} disabled />
+                    </div>
+                    <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-2 text-sm font-medium">
+                          Parcelar
+                          <Badge variant="outline" className="px-1.5 py-0 text-[9px] uppercase">Em breve</Badge>
+                        </p>
+                        <p className="text-xs text-muted-foreground">Gera múltiplas parcelas</p>
+                      </div>
+                      <Switch checked={parcelar} onCheckedChange={setParcelar} disabled />
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-dashed border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+                    <p className="font-medium text-foreground">Baixa parcial / histórico</p>
+                    <p className="mt-1">
+                      A baixa é registrada após a conta ser criada — clique no ícone de pagamento na linha da conta. Mostra valor pago, saldo restante e histórico de pagamentos.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cp-obs">Observações</Label>
+                    <Textarea
+                      id="cp-obs"
+                      rows={3}
+                      placeholder="Notas internas..."
+                      value={observacao}
+                      onChange={(e) => setObservacao(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-xs">
+                    <span className="flex items-center gap-2 text-muted-foreground">
+                      <FileText className="h-3.5 w-3.5" />
+                      Anexar comprovante / boleto
+                    </span>
+                    <Badge variant="outline" className="px-1.5 py-0 text-[9px] uppercase">Em breve</Badge>
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+
+        <DialogFooter className="border-t border-border bg-muted/20 px-6 py-3">
+          <Button variant="outline" onClick={() => handleClose(false)} disabled={saving}>
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Salvando..." : "Salvar"}
+            {saving ? "Salvando..." : "Salvar conta a pagar"}
           </Button>
         </DialogFooter>
       </DialogContent>

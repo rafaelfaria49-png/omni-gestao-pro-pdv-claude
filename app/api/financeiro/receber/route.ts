@@ -65,6 +65,12 @@ const postSchema = z.object({
   valor: z.number({ required_error: "Valor obrigatório" }).finite().nonnegative("Valor deve ser ≥ 0"),
   vencimento: z.string().min(1, "Vencimento obrigatório").max(32),
   observacao: z.string().max(2000).optional(),
+  /** Metadados opcionais — gravados no `payload` (não há colunas dedicadas no Prisma). */
+  origem: z.enum(["manual", "venda", "os", "crediario", "ajuste"]).optional(),
+  numeroDocumento: z.string().max(120).optional(),
+  competencia: z.string().max(32).optional(),
+  formaPagamento: z.string().max(80).optional(),
+  carteiraId: z.string().max(120).optional(),
 })
 
 const patchSchema = z.discriminatedUnion("op", [
@@ -211,10 +217,14 @@ export async function POST(req: Request) {
       vencimento: parsed.data.vencimento,
       status: "pendente",
       payloadPatch: {
-        origem: "manual",
+        origem: parsed.data.origem ?? "manual",
         referencia: `CR manual ${uuid}`,
         createdFrom: "financeiro_hub",
-        ...(parsed.data.observacao ? { observacao: parsed.data.observacao } : {}),
+        ...(parsed.data.observacao ? { observacoes: parsed.data.observacao } : {}),
+        ...(parsed.data.numeroDocumento ? { numeroDocumento: parsed.data.numeroDocumento } : {}),
+        ...(parsed.data.competencia ? { competencia: parsed.data.competencia } : {}),
+        ...(parsed.data.formaPagamento ? { formaPagamento: parsed.data.formaPagamento } : {}),
+        ...(parsed.data.carteiraId ? { carteiraId: parsed.data.carteiraId } : {}),
       },
     })
     return NextResponse.json({ ok: true, id: titulo.id, localKey }, { status: 201 })
