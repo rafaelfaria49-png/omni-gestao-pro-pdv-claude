@@ -31,24 +31,6 @@ function norm(s: unknown): string {
     .trim()
 }
 
-function parseDataBR(raw: string): string {
-  const s = String(raw ?? "").trim()
-  if (!s) return ""
-  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/)
-  if (m) return `${m[3]}-${m[2]}-${m[1]}`
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
-  return ""
-}
-
-function parseValorBR(raw: unknown): number {
-  if (typeof raw === "number") return raw
-  const s = String(raw ?? "").trim()
-  if (!s) return 0
-  const clean = s.replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3})/g, "").replace(",", ".")
-  const n = Number(clean)
-  return isNaN(n) ? 0 : n
-}
-
 function toStatusPrisma(s: string): StatusOrdemServico {
   switch (s) {
     case "EmAnalise": return StatusOrdemServico.EmAnalise
@@ -474,35 +456,124 @@ async function persistirVendas(
   }
 }
 
+// ── Helpers de persistência financeira ───────────────────────
+
+/** Slug compatível com `localKey` (sem `:` para não quebrar parse). */
+function slugForLocalKey(raw: string): string {
+  return String(raw ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 48) || "sem-descricao"
+}
+
+/**
+ * Enumera parcelas por (descricao+entidade): ordena por vencimento ASC e
+ * atribui {numero, total}. Quando há colisão de vencimento, usa o índice
+ * original do array como desempate estável.
+ */
+function indexarParcelas<T extends { descricao: string; vencimento: string }>(
+  itens: ReadonlyArray<T>,
+  entidadeDeIndex: (i: number) => string,
+): Map<number, { numero: number; total: number }> {
+  const grupos = new Map<string, number[]>()
+  for (let i = 0; i < itens.length; i++) {
+    const chave = `${itens[i]!.descricao}|${entidadeDeIndex(i)}`
+    const lista = grupos.get(chave)
+    if (lista) lista.push(i)
+    else grupos.set(chave, [i])
+  }
+  const resultado = new Map<number, { numero: number; total: number }>()
+  for (const indices of grupos.values()) {
+    indices.sort((a, b) => {
+      const va = itens[a]!.vencimento || ""
+      const vb = itens[b]!.vencimento || ""
+      if (va === vb) return a - b
+      return va.localeCompare(vb)
+    })
+    const total = indices.length
+    indices.forEach((idx, pos) => {
+      resultado.set(idx, { numero: pos + 1, total })
+    })
+  }
+  return resultado
+}
+
 async function persistirContasReceber(
   storeId: string,
   registros: RegistroMergeado[],
   log: LogLinhaImport[]
 ): Promise<void> {
-  for (const reg of registros) {
+  // Pré-extrai todos os registros (extrator é puro/barato) para podermos
+  // numerar parcelas antes de persistir.
+  const extraidos = registros.map((reg) => ({ reg, campos: extrairCamposContaReceber(reg) }))
+  const ordemParcelas = indexarParcelas(
+    extraidos.map((e) => e.campos),
+    (i) => extraidos[i]!.campos.cliente,
+  )
+
+  for (let i = 0; i < extraidos.length; i++) {
+    const { reg, campos } = extraidos[i]!
     try {
-      const campos = extrairCamposContaReceber(reg)
       if (!campos.descricao && !campos.cliente && campos.valor === 0) {
         log.push({ dominio: "contas_receber", chave: reg.chave, acao: "ignorado", detalhe: "Linha vazia" })
         continue
       }
 
-      const valor = campos.valor || parseValorBR(campos.payload.valor)
-      const vencimento = parseDataBR(campos.vencimento)
-      const localKey = `imp-${storeId}-${reg.chave}`
+      const parc = ordemParcelas.get(i) ?? { numero: 1, total: 1 }
+      const sufixo = parc.total > 1 ? ` (${parc.numero}/${parc.total})` : ""
+      const descricaoFinal = `${campos.descricao || `Recebimento ${reg.chave}`}${sufixo}`
 
+      const slugDesc = slugForLocalKey(campos.descricao || reg.chave)
+      const slugCli = slugForLocalKey(campos.cliente)
+      const venc = campos.vencimento || "sem-venc"
+      const valorCents = Math.round((campos.valor ?? 0) * 100)
+      // localKey única por parcela. Re-importar a mesma planilha cai no mesmo
+      // upsert (idempotente). Parcelas diferentes (vencimento ou ordem) não
+      // colidem porque o índice está embutido na chave.
+      const localKey = `imp-gc:${storeId}:cr:${slugDesc}:${slugCli}:${venc}:${valorCents}:${parc.numero}`
+
+      const statusCanon = campos.status ?? "pendente"
+      const historico: Array<Record<string, unknown>> = []
+      if (statusCanon === "pago" && campos.valorPago > 0) {
+        historico.push({
+          tipo: "pagamento",
+          valor: campos.valorPago,
+          data: campos.dataConfirmacao ?? null,
+          observacao: "Importado GestaoClick (Confirmado)",
+          importadoEm: new Date().toISOString(),
+        })
+      }
+
+      const payloadPatch = {
+        ...campos.payload,
+        parcela: { numero: parc.numero, total: parc.total },
+        valorPago: campos.valorPago,
+        valorOriginal: campos.valor,
+        historico,
+      }
+
+      // replacePayload: true → re-importações reescrevem o payload (inclui
+      // histórico) em vez de acumular pagamentos duplicados.
       await upsertContaReceber({
         storeId,
         localKey,
-        descricao: campos.descricao || `Recebimento ${reg.chave}`,
+        descricao: descricaoFinal,
         cliente: campos.cliente || undefined,
-        valor,
-        vencimento: vencimento || undefined,
-        status: campos.status || undefined,
-        payloadPatch: campos.payload,
+        valor: campos.valor,
+        vencimento: campos.vencimento || undefined,
+        status: statusCanon,
+        payloadPatch,
+        replacePayload: true,
       })
 
-      log.push({ dominio: "contas_receber", chave: reg.chave, acao: "criado" })
+      log.push({
+        dominio: "contas_receber",
+        chave: `${reg.chave}#${parc.numero}/${parc.total}`,
+        acao: "criado",
+      })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       log.push({ dominio: "contas_receber", chave: reg.chave, acao: "erro", detalhe: msg })
@@ -515,31 +586,68 @@ async function persistirContasPagar(
   registros: RegistroMergeado[],
   log: LogLinhaImport[]
 ): Promise<void> {
-  for (const reg of registros) {
+  const extraidos = registros.map((reg) => ({ reg, campos: extrairCamposContaPagar(reg) }))
+  const ordemParcelas = indexarParcelas(
+    extraidos.map((e) => e.campos),
+    (i) => extraidos[i]!.campos.fornecedorNome,
+  )
+
+  for (let i = 0; i < extraidos.length; i++) {
+    const { reg, campos } = extraidos[i]!
     try {
-      const campos = extrairCamposContaPagar(reg)
       if (!campos.descricao && !campos.fornecedorNome && campos.valor === 0) {
         log.push({ dominio: "contas_pagar", chave: reg.chave, acao: "ignorado", detalhe: "Linha vazia" })
         continue
       }
 
-      const valor = campos.valor || parseValorBR(campos.payload.valor)
-      const vencimento = parseDataBR(campos.vencimento)
-      const localKey = `imp-${storeId}-${reg.chave}`
+      const parc = ordemParcelas.get(i) ?? { numero: 1, total: 1 }
+      const sufixo = parc.total > 1 ? ` (${parc.numero}/${parc.total})` : ""
+      const descricaoFinal = `${campos.descricao || `Pagamento ${reg.chave}`}${sufixo}`
+
+      const slugDesc = slugForLocalKey(campos.descricao || reg.chave)
+      const slugFor = slugForLocalKey(campos.fornecedorNome)
+      const venc = campos.vencimento || "sem-venc"
+      const valorCents = Math.round((campos.valor ?? 0) * 100)
+      const localKey = `imp-gc:${storeId}:cp:${slugDesc}:${slugFor}:${venc}:${valorCents}:${parc.numero}`
+
+      const statusCanon = campos.status ?? "pendente"
+      const historico: Array<Record<string, unknown>> = []
+      if (statusCanon === "pago" && campos.valorPago > 0) {
+        historico.push({
+          tipo: "pagamento",
+          valor: campos.valorPago,
+          data: campos.dataConfirmacao ?? null,
+          observacao: "Importado GestaoClick (Confirmado)",
+          importadoEm: new Date().toISOString(),
+        })
+      }
+
+      const payloadPatch = {
+        ...campos.payload,
+        parcela: { numero: parc.numero, total: parc.total },
+        valorPago: campos.valorPago,
+        valorOriginal: campos.valor,
+        historico,
+      }
 
       await upsertContaPagar({
         storeId,
         localKey,
-        descricao: campos.descricao || `Pagamento ${reg.chave}`,
+        descricao: descricaoFinal,
         fornecedorNome: campos.fornecedorNome || undefined,
-        valor,
-        vencimento: vencimento || undefined,
-        status: campos.status || undefined,
+        valor: campos.valor,
+        vencimento: campos.vencimento || undefined,
+        status: statusCanon,
         numeroDocumento: campos.numeroDocumento || undefined,
-        payloadPatch: campos.payload,
+        payloadPatch,
+        replacePayload: true,
       })
 
-      log.push({ dominio: "contas_pagar", chave: reg.chave, acao: "criado" })
+      log.push({
+        dominio: "contas_pagar",
+        chave: `${reg.chave}#${parc.numero}/${parc.total}`,
+        acao: "criado",
+      })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       log.push({ dominio: "contas_pagar", chave: reg.chave, acao: "erro", detalhe: msg })

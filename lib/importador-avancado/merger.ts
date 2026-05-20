@@ -536,72 +536,208 @@ export function extrairCamposProduto(reg: RegistroMergeado): {
   }
 }
 
-export function extrairCamposContaReceber(reg: RegistroMergeado): {
+// ── Status canônicos do financeiro importado ─────────────────
+// Mapeia rótulos brutos do GestaoClick (e variações) para os status
+// canônicos do contrato (lib/financeiro/contracts/status.ts).
+// "Confirmado" → "pago" é o ponto crítico do fix Venda 131.
+
+type ReceberStatusCanon = "pago" | "pendente" | "vencido" | "parcial" | "cancelado" | "estornado"
+
+function mapearStatusReceberCanon(raw: unknown): ReceberStatusCanon | null {
+  const n = norm(raw)
+  if (!n) return null
+  if (n === "confirmado" || n === "confirmada" || n === "pago" || n === "paga" || n === "quitado" || n === "liquidado") return "pago"
+  if (n === "nao pago" || n === "pendente" || n === "em aberto" || n === "aberto") return "pendente"
+  if (n === "atrasado" || n === "atrasada" || n === "vencido" || n === "vencida") return "vencido"
+  if (n === "parcial" || n === "parcialmente pago" || n === "parcialmente paga") return "parcial"
+  if (n === "cancelado" || n === "cancelada") return "cancelado"
+  if (n === "estornado" || n === "estornada") return "estornado"
+  return null
+}
+
+/**
+ * Perfil GestaoClick: detecta o layout "Plano de contas_1..9" pivotado.
+ * Quando casa, os campos canônicos vêm dessas colunas (cliente em _2,
+ * valor em _3/_8, vencimento em _9). Senão, usa o mapeamento semântico padrão.
+ */
+function extrairPerfilGestaoClick(c: Record<string, unknown>): {
+  isPerfil: boolean
+  entidadeTipo: string
+  entidadeNome: string
+  valorRaw: unknown
+  valorBrFormatado: unknown
+  vencimentoRaw: unknown
+  categoria: unknown
+} {
+  const pc1 = String(c["_raw.Plano de contas_1"] ?? "").trim()
+  const pc2 = String(c["_raw.Plano de contas_2"] ?? "").trim()
+  const pc3 = c["_raw.Plano de contas_3"]
+  const pc8 = c["_raw.Plano de contas_8"]
+  const pc9 = c["_raw.Plano de contas_9"]
+  const pcRoot = c["_raw.Plano de contas"]
+  const tipoNorm = pc1.toLowerCase()
+  const isPerfil = tipoNorm === "cliente" || tipoNorm === "fornecedor"
+  return {
+    isPerfil,
+    entidadeTipo: pc1,
+    entidadeNome: pc2,
+    valorRaw: pc3,
+    valorBrFormatado: pc8,
+    vencimentoRaw: pc9,
+    categoria: pcRoot,
+  }
+}
+
+export type ContaReceberExtraida = {
   descricao: string
   cliente: string
   valor: number
+  valorPago: number
   vencimento: string
-  status: string
+  dataConfirmacao: string | null
+  status: ReceberStatusCanon | null
+  statusOriginal: string
   numeroDocumento: string
   payload: Record<string, unknown>
-} {
+}
+
+export function extrairCamposContaReceber(reg: RegistroMergeado): ContaReceberExtraida {
   const c = reg.campos
+  const perfil = extrairPerfilGestaoClick(c)
+
+  // Preferimos `_raw` para descrições — `normalizarLinha` força conversão
+  // numérica em qualquer campo `financeiro.*` (transformaria "Venda de nº 131"
+  // em 131). Mantemos o semântico como último fallback.
+  const descricao = String(
+    c["_raw.Descrição do recebimento"] ??
+    c["_raw.Histórico"] ??
+    c["financeiro.descricao"] ??
+    ""
+  ).trim()
+
+  const cliente =
+    (perfil.isPerfil ? perfil.entidadeNome : "") ||
+    String(c["_raw.Entidade Nome"] ?? c["financeiro.entidadeNome"] ?? "").trim()
+
+  // Valor: GestaoClick (Plano de contas_3 ou _8) → genérico
+  const valorBruto = perfil.isPerfil
+    ? (perfil.valorRaw ?? perfil.valorBrFormatado)
+    : (c["financeiro.valorTotal"] ?? c["financeiro.valor"])
+  const valor = toNumberBr(valorBruto) ?? 0
+
+  // Vencimento: GestaoClick (Plano de contas_9) → genérico
+  const vencimentoBruto = perfil.isPerfil
+    ? perfil.vencimentoRaw
+    : (c["pagamento.vencimento"] ?? c["_raw.Data do vencimento"])
+  const vencimento = parseDataBr(vencimentoBruto) ?? ""
+
+  const dataConfirmacaoBruto =
+    c["pagamento.dataConfirmacao"] ??
+    c["_raw.Data de confirmação"] ??
+    c["_raw.Data da confirmacao"]
+  const dataConfirmacao = parseDataBr(dataConfirmacaoBruto)
+
+  const statusOriginal = String(c["status.situacao"] ?? c["_raw.Situação"] ?? "").trim()
+  const status = mapearStatusReceberCanon(statusOriginal)
+  const valorPago = status === "pago" ? valor : 0
+
   return {
-    descricao: String(c["financeiro.descricao"] ?? c["_raw.Descrição do recebimento"] ?? c["_raw.Histórico"] ?? "").trim(),
-    cliente: String(c["financeiro.entidadeNome"] ?? c["_raw.Entidade Nome"] ?? "").trim(),
-    valor: Number(c["financeiro.valorTotal"] ?? c["financeiro.valor"] ?? 0) || 0,
-    vencimento: String(c["pagamento.vencimento"] ?? c["_raw.Data do vencimento"] ?? "").trim(),
-    status: String(c["status.situacao"] ?? c["_raw.Situação"] ?? "").trim(),
+    descricao,
+    cliente,
+    valor,
+    valorPago,
+    vencimento,
+    dataConfirmacao,
+    status,
+    statusOriginal,
     numeroDocumento: String(c["_raw.Número do documento"] ?? "").trim(),
     payload: {
-      planoContas: c["financeiro.categoria"] ?? c["_raw.Plano de contas"] ?? null,
+      planoContas: perfil.categoria ?? c["financeiro.categoria"] ?? null,
       formaPagamento: c["pagamento.forma"] ?? c["_raw.Forma de pagamento"] ?? null,
       observacoes: c["financeiro.observacao"] ?? c["_raw.Observações"] ?? null,
       centroCusto: c["financeiro.centroCusto"] ?? c["_raw.Centro de custo"] ?? null,
-      dataConfirmacao: c["pagamento.dataConfirmacao"] ?? c["_raw.Data de confirmação"] ?? null,
+      dataConfirmacao,
+      situacaoOriginal: statusOriginal,
       contaBancaria: c["_raw.Conta bancária"] ?? null,
-      desconto: c["_raw.Desconto"] ?? null,
-      juros: c["_raw.Juros"] ?? null,
-      taxaBanco: c["_raw.Taxa do banco"] ?? null,
-      taxaOperadora: c["_raw.Taxa da operadora"] ?? null,
       cadastradoPor: c["_raw.Cadastrado por"] ?? null,
       cadastradoEm: c["_raw.Cadastrado em"] ?? null,
+      modificadoEm: c["_raw.Modificado em"] ?? null,
       fontes: reg.fontes,
       importadoEm: new Date().toISOString(),
     },
   }
 }
 
-export function extrairCamposContaPagar(reg: RegistroMergeado): {
+export type ContaPagarExtraida = {
   descricao: string
   fornecedorNome: string
   valor: number
+  valorPago: number
   vencimento: string
-  status: string
+  dataConfirmacao: string | null
+  status: ReceberStatusCanon | null
+  statusOriginal: string
   numeroDocumento: string
   payload: Record<string, unknown>
-} {
+}
+
+export function extrairCamposContaPagar(reg: RegistroMergeado): ContaPagarExtraida {
   const c = reg.campos
+  const perfil = extrairPerfilGestaoClick(c)
+
+  const descricao = String(
+    c["_raw.Descrição do pagamento"] ??
+    c["_raw.Descrição do recebimento"] ??
+    c["_raw.Histórico"] ??
+    c["financeiro.descricao"] ??
+    ""
+  ).trim()
+
+  const fornecedorNome =
+    (perfil.isPerfil ? perfil.entidadeNome : "") ||
+    String(c["_raw.Entidade Nome"] ?? c["financeiro.entidadeNome"] ?? "").trim()
+
+  const valorBruto = perfil.isPerfil
+    ? (perfil.valorRaw ?? perfil.valorBrFormatado)
+    : (c["financeiro.valorTotal"] ?? c["financeiro.valor"])
+  const valor = toNumberBr(valorBruto) ?? 0
+
+  const vencimentoBruto = perfil.isPerfil
+    ? perfil.vencimentoRaw
+    : (c["pagamento.vencimento"] ?? c["_raw.Data do vencimento"])
+  const vencimento = parseDataBr(vencimentoBruto) ?? ""
+
+  const dataConfirmacaoBruto =
+    c["pagamento.dataConfirmacao"] ??
+    c["_raw.Data de confirmação"] ??
+    c["_raw.Data da confirmacao"]
+  const dataConfirmacao = parseDataBr(dataConfirmacaoBruto)
+
+  const statusOriginal = String(c["status.situacao"] ?? c["_raw.Situação"] ?? "").trim()
+  const status = mapearStatusReceberCanon(statusOriginal)
+  const valorPago = status === "pago" ? valor : 0
+
   return {
-    descricao: String(c["financeiro.descricao"] ?? c["_raw.Descrição do pagamento"] ?? c["_raw.Descrição do recebimento"] ?? c["_raw.Histórico"] ?? "").trim(),
-    fornecedorNome: String(c["financeiro.entidadeNome"] ?? c["_raw.Entidade Nome"] ?? "").trim(),
-    valor: Number(c["financeiro.valorTotal"] ?? c["financeiro.valor"] ?? 0) || 0,
-    vencimento: String(c["pagamento.vencimento"] ?? c["_raw.Data do vencimento"] ?? "").trim(),
-    status: String(c["status.situacao"] ?? c["_raw.Situação"] ?? "").trim(),
+    descricao,
+    fornecedorNome,
+    valor,
+    valorPago,
+    vencimento,
+    dataConfirmacao,
+    status,
+    statusOriginal,
     numeroDocumento: String(c["_raw.Número do documento"] ?? "").trim(),
     payload: {
-      planoContas: c["financeiro.categoria"] ?? c["_raw.Plano de contas"] ?? null,
+      planoContas: perfil.categoria ?? c["financeiro.categoria"] ?? null,
       formaPagamento: c["pagamento.forma"] ?? c["_raw.Forma de pagamento"] ?? null,
       observacoes: c["financeiro.observacao"] ?? c["_raw.Observações"] ?? null,
       centroCusto: c["financeiro.centroCusto"] ?? c["_raw.Centro de custo"] ?? null,
-      dataConfirmacao: c["pagamento.dataConfirmacao"] ?? c["_raw.Data de confirmação"] ?? null,
+      dataConfirmacao,
+      situacaoOriginal: statusOriginal,
       contaBancaria: c["_raw.Conta bancária"] ?? null,
-      desconto: c["_raw.Desconto"] ?? null,
-      juros: c["_raw.Juros"] ?? null,
-      taxaBanco: c["_raw.Taxa do banco"] ?? null,
-      taxaOperadora: c["_raw.Taxa da operadora"] ?? null,
       cadastradoPor: c["_raw.Cadastrado por"] ?? null,
       cadastradoEm: c["_raw.Cadastrado em"] ?? null,
+      modificadoEm: c["_raw.Modificado em"] ?? null,
       fontes: reg.fontes,
       importadoEm: new Date().toISOString(),
     },
