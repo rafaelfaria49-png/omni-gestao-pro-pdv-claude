@@ -18,6 +18,8 @@ import {
 } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { recalcularSaldoCarteira } from "@/lib/financeiro/services/carteiras-service"
+import { auth } from "@/auth"
+import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -146,6 +148,11 @@ export async function POST(req: Request) {
       carteiraId: parsed.data.carteiraId,
       createdAt: parsed.data.data ? dataRef : undefined,
     })
+    void logAuditoriaFinanceira({
+      storeId: sid, entidade: "movimentacao", entidadeId: mov.id, acao: "criar",
+      actor: extractAuditoriaActor(await auth(), req),
+      depois: { tipo: mov.tipo, valor: mov.valor, descricao: mov.descricao, origem: mov.origem, carteiraId: mov.carteiraId },
+    })
     return NextResponse.json({ ok: true, movimentacao: mov }, { status: 201 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -208,6 +215,11 @@ export async function DELETE(req: Request) {
     if (carteiraId) {
       await recalcularSaldoCarteira(carteiraId, sid)
     }
+    void logAuditoriaFinanceira({
+      storeId: sid, entidade: "movimentacao", entidadeId: id, acao: "excluir",
+      actor: extractAuditoriaActor(await auth(), req),
+      antes: { carteiraId, createdAt: existing.createdAt },
+    })
     return NextResponse.json({ ok: true })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

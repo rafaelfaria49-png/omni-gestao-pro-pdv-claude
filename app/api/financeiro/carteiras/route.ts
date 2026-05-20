@@ -7,6 +7,8 @@ import {
   TIPOS_CARTEIRA,
 } from "@/lib/financeiro/services/carteiras-service"
 import { apiGuardEnterpriseOrOps, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
+import { auth } from "@/auth"
+import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
 
 function getStoreId(req: NextRequest): string {
   return (
@@ -82,6 +84,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const carteira = await criarCarteira({ storeId, ...parsed.data })
+    void logAuditoriaFinanceira({
+      storeId, entidade: "carteira", entidadeId: carteira.id, acao: "criar",
+      actor: extractAuditoriaActor(await auth(), req),
+      depois: { nome: carteira.nome, tipo: carteira.tipo, saldoInicial: carteira.saldoInicial },
+    })
     return NextResponse.json({ ok: true, carteira }, { status: 201 })
   } catch (e) {
     console.error("[POST /api/financeiro/carteiras]", e)

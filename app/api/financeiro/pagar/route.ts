@@ -14,6 +14,7 @@ import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
+import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
 import { apiGuardFinanceiroEditEnterpriseOrLegacy, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
 import {
   buildContaPagarAuditTrail,
@@ -277,6 +278,11 @@ export async function POST(req: Request) {
         ...(parsed.data.carteiraId ? { carteiraId: parsed.data.carteiraId } : {}),
       },
     })
+    void logAuditoriaFinanceira({
+      storeId, entidade: "pagar", entidadeId: titulo.id, acao: "criar",
+      actor: extractAuditoriaActor(await auth(), req),
+      depois: { localKey, descricao: titulo.descricao, fornecedor: parsed.data.fornecedor, valor: titulo.valor, vencimento: titulo.vencimento, categoria: parsed.data.categoria },
+    })
     return NextResponse.json({ ok: true, id: titulo.id, localKey }, { status: 201 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha interna"
@@ -310,7 +316,9 @@ export async function PATCH(req: Request) {
   const deniedPatch = await apiGuardFinanceiroEditEnterpriseOrLegacy(storeId)
   if (deniedPatch) return deniedPatch
 
-  const userLabel = getOperatorLabelFromSession(await auth())
+  const session = await auth()
+  const userLabel = getOperatorLabelFromSession(session)
+  const actor = extractAuditoriaActor(session, req)
 
   try {
     await prismaEnsureConnected()
@@ -337,6 +345,10 @@ export async function PATCH(req: Request) {
         res.data.valor,
         { carteiraId },
       ).catch((e) => console.error("[pagar/liquidar mov]", e))
+      void logAuditoriaFinanceira({
+        storeId, entidade: "pagar", entidadeId: res.data.id, acao: "liquidar", actor,
+        depois: { localKey: parsed.data.localKey, valor: res.data.valor, carteiraId },
+      })
       return NextResponse.json({ ok: true, op: "liquidar" })
     }
 
@@ -350,6 +362,10 @@ export async function PATCH(req: Request) {
         parsed.data.valor,
         { parcial: true, carteiraId },
       ).catch((e) => console.error("[pagar/parcial mov]", e))
+      void logAuditoriaFinanceira({
+        storeId, entidade: "pagar", entidadeId: res.data.id, acao: "liquidar", actor,
+        depois: { localKey: parsed.data.localKey, valorPago: parsed.data.valor, parcial: true, carteiraId },
+      })
       return NextResponse.json({ ok: true, op: "parcial" })
     }
 
@@ -359,12 +375,20 @@ export async function PATCH(req: Request) {
       // Estornar movimentação correspondente (idempotente)
       await estornarMovimentacaoPorReferencia(storeId, res.data.id, "pagar")
         .catch((e) => console.error("[pagar/estornar mov]", e))
+      void logAuditoriaFinanceira({
+        storeId, entidade: "pagar", entidadeId: res.data.id, acao: "estornar", actor,
+        depois: { localKey: parsed.data.localKey, motivo: parsed.data.motivo },
+      })
       return NextResponse.json({ ok: true, op: "estornar" })
     }
 
     // cancelar — não gera movimentação nova
     const res = await cancelContaPagar({ storeId, localKey: parsed.data.localKey, motivo: parsed.data.motivo, userLabel })
     if (!res.ok) return err(res.reason, `cancelar_${res.reason}`, 422)
+    void logAuditoriaFinanceira({
+      storeId, entidade: "pagar", entidadeId: res.data.id, acao: "cancelar", actor,
+      depois: { localKey: parsed.data.localKey, motivo: parsed.data.motivo },
+    })
     return NextResponse.json({ ok: true, op: "cancelar" })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha interna"
@@ -393,12 +417,18 @@ export async function DELETE(req: Request) {
   const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(storeId)
   if (denied) return denied
 
-  const userLabel = getOperatorLabelFromSession(await auth())
+  const sessionDel = await auth()
+  const userLabel = getOperatorLabelFromSession(sessionDel)
+  const actorDel = extractAuditoriaActor(sessionDel, req)
 
   try {
     await prismaEnsureConnected()
     const res = await cancelContaPagar({ storeId, localKey: body.data.localKey, motivo: body.data.motivo, userLabel })
     if (!res.ok) return err(res.reason, `cancel_${res.reason}`, 422)
+    void logAuditoriaFinanceira({
+      storeId, entidade: "pagar", entidadeId: res.data.id, acao: "cancelar", actor: actorDel,
+      depois: { localKey: body.data.localKey, motivo: body.data.motivo, via: "DELETE" },
+    })
     return NextResponse.json({ ok: true, action: "cancelled" })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha interna"

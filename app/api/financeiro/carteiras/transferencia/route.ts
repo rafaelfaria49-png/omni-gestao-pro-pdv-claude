@@ -3,6 +3,8 @@ import { z } from "zod"
 import { transferirEntreCarteiras } from "@/lib/financeiro/services/carteiras-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { auth } from "@/auth"
+import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
 
 function getStoreId(req: NextRequest): string {
   return (
@@ -57,6 +59,16 @@ export async function POST(req: NextRequest) {
   if (!result.ok) {
     return err(result.error ?? "Erro na transferência.", "TRANSFER_ERROR", 422)
   }
+
+  void logAuditoriaFinanceira({
+    storeId, entidade: "carteira", entidadeId: parsed.data.origemId, acao: "transferir",
+    actor: extractAuditoriaActor(await auth(), req),
+    depois: {
+      origemId: parsed.data.origemId, destinoId: parsed.data.destinoId,
+      valor: parsed.data.valor, descricao: parsed.data.descricao,
+      origemSaldo: result.origemSaldo, destinoSaldo: result.destinoSaldo,
+    },
+  })
 
   const { ok: _ok, ...rest } = result
   return NextResponse.json({ ok: true, ...rest }, { status: 201 })

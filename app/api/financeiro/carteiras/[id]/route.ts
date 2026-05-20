@@ -6,6 +6,8 @@ import {
   TIPOS_CARTEIRA,
 } from "@/lib/financeiro/services/carteiras-service"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { auth } from "@/auth"
+import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
 
 function getStoreId(req: NextRequest): string {
   return (
@@ -65,6 +67,13 @@ export async function PATCH(
     if (recalcular) {
       carteira = await recalcularSaldoCarteira(id, storeId)
     }
+
+    void logAuditoriaFinanceira({
+      storeId, entidade: "carteira", entidadeId: id,
+      acao: fields.ativo === false ? "excluir" : "editar",
+      actor: extractAuditoriaActor(await auth(), req),
+      depois: { ...fields, recalcular: !!recalcular, saldoAtual: carteira.saldoAtual },
+    })
 
     return NextResponse.json({ ok: true, carteira })
   } catch (e: unknown) {
