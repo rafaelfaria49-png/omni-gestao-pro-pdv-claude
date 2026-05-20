@@ -801,17 +801,26 @@ function ContasReceber() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {list.map((r) => (
+                {list.map((r) => {
+                  const saldoAberto = Math.max(0, r.valor - r.recebido)
+                  return (
                   <TableRow key={r.id}>
-                    <TableCell className="font-mono text-xs">{r.id}</TableCell>
+                    <TableCell className="max-w-[260px] truncate text-sm" title={r.descricao || r.id}>
+                      {r.descricao || <span className="font-mono text-xs text-muted-foreground">{r.id}</span>}
+                    </TableCell>
                     <TableCell>{r.cliente}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{r.parcela}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.parcela ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(r.venc).toLocaleDateString("pt-BR")}
+                      {r.venc ? new Date(r.venc).toLocaleDateString("pt-BR") : "—"}
                     </TableCell>
                     <TableCell>{statusBadge(r.status)}</TableCell>
                     <TableCell className="text-right font-medium">{fmt(r.valor)}</TableCell>
-                    <TableCell className="text-right text-primary">{fmt(r.recebido)}</TableCell>
+                    <TableCell className="text-right text-primary">
+                      {fmt(r.recebido)}
+                      {saldoAberto > 0 && r.recebido > 0 ? (
+                        <div className="text-[10px] text-muted-foreground">saldo {fmt(saldoAberto)}</div>
+                      ) : null}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button size="icon" variant="ghost" title="Receber" onClick={() => open("receber", r)}>
@@ -832,7 +841,8 @@ function ContasReceber() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  )
+                })}
               </TableBody>
             </Table>
           </div>

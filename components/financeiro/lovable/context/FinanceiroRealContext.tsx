@@ -19,6 +19,7 @@ export type StatusPagar = "pendente" | "atrasado" | "pago"
 export type ContaReceber = {
   id: string
   cliente: string
+  descricao: string
   valor: number
   recebido: number
   venc: string
@@ -497,14 +498,17 @@ function normalizeReceberRows(rows: unknown[], audit: unknown[]): ContaReceber[]
     const status = normalizeReceberStatus(safeStr(row.status))
     const saldoAberto = auditItem ? safeNum(auditItem.saldoAberto) : status === "pago" ? 0 : valor
     const recebido = Math.max(0, valor - saldoAberto)
+    const descricao = safeStr(row.descricao)
+    const parcelaRaw = typeof row.parcela === "string" ? row.parcela.trim() : ""
     result.push({
       id,
-      cliente: safeStr(row.cliente) || safeStr(row.descricao) || "—",
+      cliente: safeStr(row.cliente) || descricao || "—",
+      descricao,
       valor,
       recebido,
       venc: safeStr(row.vencimento),
       status,
-      parcela: "1/1",
+      parcela: parcelaRaw || undefined,
     })
   }
   return result

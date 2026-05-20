@@ -142,14 +142,22 @@ export async function GET(req: Request) {
       orderBy: { updatedAt: "desc" },
     })
 
-    const rows = titulos.map((t) => ({
-      id: (t.localKey?.trim() || t.id) as string,
-      descricao: t.descricao,
-      cliente: t.cliente,
-      valor: t.valor,
-      vencimento: t.vencimento,
-      status: t.status,
-    }))
+    const rows = titulos.map((t) => {
+      const pl = (t.payload as Record<string, unknown> | null) ?? null
+      const parcelaObj = pl && typeof pl === "object" ? (pl.parcela as Record<string, unknown> | undefined) : undefined
+      const numero = typeof parcelaObj?.numero === "number" ? parcelaObj.numero : null
+      const total = typeof parcelaObj?.total === "number" ? parcelaObj.total : null
+      const parcelaLabel = numero && total ? `${numero}/${total}` : null
+      return {
+        id: (t.localKey?.trim() || t.id) as string,
+        descricao: t.descricao,
+        cliente: t.cliente,
+        valor: t.valor,
+        vencimento: t.vencimento,
+        status: t.status,
+        parcela: parcelaLabel,
+      }
+    })
 
     return NextResponse.json({
       ok: true,
