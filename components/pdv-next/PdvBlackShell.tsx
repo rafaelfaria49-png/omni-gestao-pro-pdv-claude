@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useRef, useState, type KeyboardEvent as RKE } from "react"
+import * as React from "react"
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as RKE } from "react"
 import {
   Barcode,
   ChevronRight,
@@ -12,6 +13,7 @@ import {
   ShoppingCart,
   User,
   Wifi,
+  X,
   Zap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -24,6 +26,7 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import type { PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 
 export type PdvBlackCartRow = {
   lineId: string
@@ -93,15 +96,18 @@ function ItemsTable({
   highlightLineId,
   selectedLineId,
   onSelect,
+  onRemove,
 }: {
   rows: PdvBlackCartRow[]
   highlightLineId: string | null
   selectedLineId: string | null
   onSelect: (id: string) => void
+  onRemove: (id: string) => void
 }) {
+  const gridCols = "grid-cols-[48px_96px_1fr_60px_108px_76px_120px_36px]"
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="grid grid-cols-[48px_96px_1fr_60px_108px_76px_120px] gap-3 border-b border-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/35">
+      <div className={cn("grid gap-3 border-b border-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/35", gridCols)}>
         <div>Item</div>
         <div>Código</div>
         <div>Descrição</div>
@@ -109,6 +115,7 @@ function ItemsTable({
         <div className="text-right">Unitário</div>
         <div className="text-right">Qtd</div>
         <div className="text-right">Total</div>
+        <div />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {rows.map((item, idx) => {
@@ -116,12 +123,20 @@ function ItemsTable({
           const isHighlight = item.lineId === highlightLineId
           const isSelected = item.lineId === selectedLineId
           return (
-            <button
-              type="button"
+            <div
               key={item.lineId}
+              role="button"
+              tabIndex={0}
               onClick={() => onSelect(item.lineId)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  onSelect(item.lineId)
+                }
+              }}
               className={cn(
-                "grid w-full grid-cols-[48px_96px_1fr_60px_108px_76px_120px] gap-3 border-b border-white/8 px-4 py-2.5 text-left text-sm tabular-nums text-white transition-colors",
+                "group grid w-full gap-3 border-b border-white/8 px-4 py-2.5 text-left text-sm tabular-nums text-white transition-colors cursor-pointer",
+                gridCols,
                 isHighlight && "animate-in fade-in bg-emerald-500/15 duration-300",
                 isSelected && "ring-1 ring-inset ring-emerald-400/60",
                 !isHighlight && !isSelected && "hover:bg-white/4"
@@ -141,7 +156,21 @@ function ItemsTable({
               <div className="text-right text-white/80">R$ {fmt(item.unitPrice)}</div>
               <div className="text-right font-medium">{fmt(item.qty)}</div>
               <div className="text-right font-semibold text-emerald-300">R$ {fmt(lineTotal)}</div>
-            </button>
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  aria-label={`Remover ${item.description}`}
+                  title="Remover item"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onRemove(item.lineId)
+                  }}
+                  className="grid h-6 w-6 place-items-center rounded text-white/30 opacity-60 hover:bg-red-500/20 hover:text-red-300 hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-red-400/40 group-hover:opacity-100 transition"
+                >
+                  <X className="h-3.5 w-3.5" strokeWidth={2.2} />
+                </button>
+              </div>
+            </div>
           )
         })}
       </div>
@@ -195,6 +224,7 @@ export type PdvBlackShellProps = {
   highlightLineId: string | null
   selectedLineId: string | null
   onSelectLine: (lineId: string) => void
+  onRemoveLine: (lineId: string) => void
   total: number
   itemCount: number
   lastAddedItem: string | null
@@ -219,6 +249,7 @@ export type PdvBlackShellProps = {
   // Diálogos
   products: PdvCatalogProduct[]
   productSearchOpen: boolean
+  productSearchInitial?: string
   onProductSearchOpenChange: (open: boolean) => void
   onAddProductFromSearch: (product: PdvCatalogProduct) => void
   clientSearchOpen: boolean
@@ -232,6 +263,143 @@ export type PdvBlackShellProps = {
   cancelSaleOpen: boolean
   onCancelSaleOpenChange: (open: boolean) => void
   onConfirmCancelSale: () => void
+}
+
+// ── Painel de busca de produto (F3) ───────────────────────────────────────────
+function ProductSearchPanel({
+  open,
+  products,
+  initialQuery,
+  onPick,
+  onClose,
+}: {
+  open: boolean
+  products: PdvCatalogProduct[]
+  initialQuery: string
+  onPick: (p: PdvCatalogProduct) => void
+  onClose: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const [query, setQuery] = useState(initialQuery)
+  const [activeIdx, setActiveIdx] = useState(0)
+
+  useEffect(() => {
+    if (!open) return
+    setQuery(initialQuery)
+    setActiveIdx(0)
+    const id = window.requestAnimationFrame(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select?.()
+    })
+    return () => window.cancelAnimationFrame(id)
+  }, [open, initialQuery])
+
+  const results = useMemo(() => {
+    const list = filterPdvCatalogBySearch(products, query)
+    return list.slice(0, 50)
+  }, [products, query])
+
+  useEffect(() => {
+    setActiveIdx((i) => Math.min(Math.max(0, i), Math.max(0, results.length - 1)))
+  }, [results.length])
+
+  useEffect(() => {
+    if (!open) return
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-idx="${activeIdx}"]`)
+    el?.scrollIntoView({ block: "nearest" })
+  }, [activeIdx, open])
+
+  const handleKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setActiveIdx((i) => Math.min(results.length - 1, i + 1))
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setActiveIdx((i) => Math.max(0, i - 1))
+    } else if (e.key === "Enter") {
+      e.preventDefault()
+      const picked = results[activeIdx]
+      if (picked) onPick(picked)
+    } else if (e.key === "Escape") {
+      e.preventDefault()
+      onClose()
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={handleKey}
+          placeholder="Buscar por nome, código, EAN ou SKU"
+          autoComplete="off"
+          spellCheck={false}
+          className="h-10 w-full rounded-md border border-white/15 bg-black pl-10 pr-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-500/55 focus:ring-1 focus:ring-emerald-500/25"
+        />
+      </div>
+
+      <div
+        ref={listRef}
+        className="max-h-80 overflow-y-auto rounded-md border border-white/10"
+        role="listbox"
+        aria-label="Resultados da busca"
+      >
+        {results.map((p, idx) => {
+          const isActive = idx === activeIdx
+          return (
+            <button
+              key={p.id}
+              type="button"
+              data-idx={idx}
+              role="option"
+              aria-selected={isActive}
+              onMouseEnter={() => setActiveIdx(idx)}
+              onClick={() => onPick(p)}
+              className={cn(
+                "grid w-full grid-cols-[112px_1fr_52px_110px] gap-2 border-b border-white/8 px-3 py-2 text-left text-sm transition-colors",
+                isActive ? "bg-emerald-500/15 text-white" : "text-white/85 hover:bg-white/5"
+              )}
+            >
+              <span className="truncate font-mono text-[11px] text-white/45">
+                {p.barcode || p.sku || p.codigo || p.id}
+              </span>
+              <span className="truncate">{p.name}</span>
+              <span className="text-white/35">{p.vendaPorPeso ? "KG" : "UN"}</span>
+              <span className="text-right font-semibold tabular-nums text-emerald-300">
+                {p.vendaPorPeso
+                  ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg`
+                  : `R$ ${fmt(p.price)}`}
+              </span>
+            </button>
+          )
+        })}
+        {results.length === 0 && (
+          <p className="py-6 text-center text-sm text-white/35">
+            {query.trim()
+              ? `Nenhum produto encontrado para "${query.trim()}".`
+              : "Nenhum produto cadastrado."}
+          </p>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between text-[11px] text-white/35">
+        <span>
+          {results.length} resultado{results.length === 1 ? "" : "s"}
+          {products.length > results.length && results.length === 50 ? " (mostrando 50)" : ""}
+        </span>
+        <span className="space-x-2">
+          <kbd className="rounded border border-white/15 px-1.5 py-0.5 font-mono">↑↓</kbd>
+          <kbd className="rounded border border-white/15 px-1.5 py-0.5 font-mono">Enter</kbd>
+          <kbd className="rounded border border-white/15 px-1.5 py-0.5 font-mono">Esc</kbd>
+        </span>
+      </div>
+    </div>
+  )
 }
 
 // ── Shell principal ───────────────────────────────────────────────────────────
@@ -406,6 +574,7 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
                 highlightLineId={props.highlightLineId}
                 selectedLineId={props.selectedLineId}
                 onSelect={props.onSelectLine}
+                onRemove={props.onRemoveLine}
               />
             ) : (
               <EmptyState />
@@ -584,38 +753,20 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
 
       {/* Pesquisa de produto (F3) */}
       <Dialog open={props.productSearchOpen} onOpenChange={props.onProductSearchOpenChange}>
-        <DialogContent className="max-w-lg border-white/10 bg-[#111111] text-white">
+        <DialogContent className="max-w-2xl border-white/10 bg-[#111111] text-white">
           <DialogHeader>
-            <DialogTitle className="text-white">Pesquisar Produto (F3)</DialogTitle>
+            <DialogTitle className="text-white">Busca avançada (F3)</DialogTitle>
             <DialogDescription className="text-white/50">
-              Selecione um produto para adicionar à venda.
+              Digite nome, código, EAN ou SKU. Use ↑/↓ para navegar, Enter para adicionar.
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-72 overflow-y-auto rounded-md border border-white/10">
-            {props.products.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => {
-                  props.onProductSearchOpenChange(false)
-                  props.onAddProductFromSearch(p)
-                }}
-                className="grid w-full grid-cols-[96px_1fr_52px_96px] gap-2 border-b border-white/8 px-3 py-2 text-left text-sm hover:bg-white/5"
-              >
-                <span className="font-mono text-white/45">{p.barcode || p.id}</span>
-                <span className="truncate text-white">{p.name}</span>
-                <span className="text-white/35">{p.vendaPorPeso ? "KG" : "UN"}</span>
-                <span className="text-right font-semibold tabular-nums text-emerald-300">
-                  {p.vendaPorPeso
-                    ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg`
-                    : `R$ ${fmt(p.price)}`}
-                </span>
-              </button>
-            ))}
-            {props.products.length === 0 && (
-              <p className="py-6 text-center text-sm text-white/35">Nenhum produto cadastrado.</p>
-            )}
-          </div>
+          <ProductSearchPanel
+            open={props.productSearchOpen}
+            products={props.products}
+            initialQuery={props.productSearchInitial ?? ""}
+            onPick={(p) => props.onAddProductFromSearch(p)}
+            onClose={() => props.onProductSearchOpenChange(false)}
+          />
         </DialogContent>
       </Dialog>
 

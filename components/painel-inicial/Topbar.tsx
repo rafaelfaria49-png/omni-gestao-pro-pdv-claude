@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useSession } from "next-auth/react";
-import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package } from "lucide-react";
+import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package, PanelLeftOpen } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
 import { useUserCredits } from "@/hooks/useUserCredits";
+import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions";
 import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions";
 import {
@@ -60,6 +61,7 @@ const novoItems: NovoItem[] = [
 export function Topbar() {
   const { credits, loading, error } = useUserCredits();
   const { data: session, status } = useSession();
+  const { collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed } = useSidebarCollapsed();
 
   const perms = useMemo(() => {
     if (status !== "authenticated" || !session?.user?.role) return null;
@@ -95,6 +97,17 @@ export function Topbar() {
   return (
     <header className="h-14 shrink-0 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-30">
       <div className="h-full flex items-center gap-2 px-4 sm:px-6">
+        {sidebarCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed(false)}
+            aria-label="Mostrar menu lateral"
+            title="Mostrar menu"
+            className="hidden lg:inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-panel hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <PanelLeftOpen className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        ) : null}
         <nav className="hidden md:flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
           <span className="hover:text-foreground cursor-pointer">Matriz</span>
           <span className="text-border">/</span>

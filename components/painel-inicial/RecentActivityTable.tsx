@@ -185,7 +185,8 @@ export function RecentActivityTable({
               return (
                 <div
                   key={r.id}
-                  className="px-5 py-3 flex items-center gap-3 hover:bg-muted/40 transition-colors"
+                  className="px-5 py-3 flex items-center gap-3 transition-colors"
+                  aria-disabled
                 >
                   <div
                     className={[
@@ -200,7 +201,9 @@ export function RecentActivityTable({
                       <span className="font-medium text-[13px] truncate">{r.client}</span>
                       <span className="text-[10px] font-mono text-muted-foreground">{r.id}</span>
                     </div>
-                    <div className="text-[11.5px] text-muted-foreground truncate mt-0.5">{r.desc}</div>
+                    <div className="text-[11.5px] text-muted-foreground truncate mt-0.5">
+                      {r.desc} <span className="text-muted-foreground/70">· exemplo</span>
+                    </div>
                   </div>
                   <span
                     className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${meta.badgeClass}`}
@@ -224,11 +227,14 @@ export function RecentActivityTable({
                 : m.kind === "os"
                   ? "Ordem de serviço"
                   : "Movimentação";
-            return (
-              <div
-                key={`${m.kind}-${m.id}`}
-                className="px-5 py-3 flex items-center gap-3 hover:bg-muted/40 transition-colors"
-              >
+            const href =
+              m.kind === "venda"
+                ? "/dashboard/vendas-arquivo-geral"
+                : m.kind === "os"
+                  ? "/dashboard/operacoes-v2"
+                  : null;
+            const content = (
+              <>
                 <div
                   className={[
                     "h-7 w-7 rounded-md grid place-items-center shrink-0 border",
@@ -257,6 +263,27 @@ export function RecentActivityTable({
                   </div>
                   <div className="text-[10.5px] text-muted-foreground">{formatRelativePtBr(m.at)}</div>
                 </div>
+              </>
+            );
+
+            if (href) {
+              return (
+                <Link
+                  key={`${m.kind}-${m.id}`}
+                  href={href}
+                  className="px-5 py-3 flex items-center gap-3 hover:bg-muted/40 transition-colors"
+                  title={`Abrir ${m.kind === "venda" ? "histórico de vendas" : "Operações"}`}
+                >
+                  {content}
+                </Link>
+              );
+            }
+            return (
+              <div
+                key={`${m.kind}-${m.id}`}
+                className="px-5 py-3 flex items-center gap-3 transition-colors"
+              >
+                {content}
               </div>
             );
           })}

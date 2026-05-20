@@ -22,6 +22,7 @@ import {
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PaymentModal } from "@/components/dashboard/vendas/payment-modal"
 import { PdvBlackShell, type PdvBlackCartRow } from "./PdvBlackShell"
@@ -139,6 +140,7 @@ export function PdvBlackEdition() {
 
   // ── Diálogos ──────────────────────────────────────────────────────────────
   const [productSearchOpen, setProductSearchOpen] = useState(false)
+  const [productSearchInitial, setProductSearchInitial] = useState("")
   const [qtyEditOpen, setQtyEditOpen] = useState(false)
   const [cancelSaleOpen, setCancelSaleOpen] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
@@ -192,33 +194,53 @@ export function PdvBlackEdition() {
 
       // Suporte ao prefixo "3x" ou "3*" para múltiplas unidades
       const prefixMatch = raw.match(/^(\d+)[x*×](.+)/i)
+      let qty = 1
+      let query = raw
       if (prefixMatch) {
-        const qty = Math.max(1, parseInt(prefixMatch[1], 10))
-        const code = prefixMatch[2].trim()
-        const found = findPdvProductByScan(code, products)
-        if (found) { addProduct(found, qty); return }
+        qty = Math.max(1, parseInt(prefixMatch[1], 10))
+        query = prefixMatch[2].trim()
       }
 
-      const found = findPdvProductByScan(raw, products)
+      const found = findPdvProductByScan(query, products)
       if (found) {
-        addProduct(found)
-      } else {
-        bipeRef.current?.select()
+        addProduct(found, qty)
+        return
       }
+
+      // Fallback fuzzy: nome/categoria/SKU/EAN. Se houver match único, adiciona;
+      // se múltiplos, abre busca avançada pré-filtrada para o operador escolher.
+      const matches = filterPdvCatalogBySearch(products, query)
+      if (matches.length === 1) {
+        addProduct(matches[0]!, qty)
+        return
+      }
+      if (matches.length > 1) {
+        setProductSearchInitial(query)
+        setProductSearchOpen(true)
+        setBipeCode("")
+        return
+      }
+
+      bipeRef.current?.select()
     },
     [bipeCode, products, addProduct]
   )
 
-  // ── Remover linha selecionada ──────────────────────────────────────────────
-  const removeSelectedLine = useCallback(() => {
-    if (!selectedLineId) return
+  // ── Remover linha (X / Delete) ─────────────────────────────────────────────
+  const removeLine = useCallback((lineId: string) => {
     setCartRows((prev) => {
-      const idx = prev.findIndex((r) => r.lineId === selectedLineId)
-      const next = prev.filter((r) => r.lineId !== selectedLineId)
-      setSelectedLineId(next[Math.max(0, idx - 1)]?.lineId ?? null)
+      const idx = prev.findIndex((r) => r.lineId === lineId)
+      const next = prev.filter((r) => r.lineId !== lineId)
+      setSelectedLineId((cur) => (cur === lineId ? next[Math.max(0, idx - 1)]?.lineId ?? null : cur))
+      if (next.length === 0) setLastAddedItem(null)
       return next
     })
-  }, [selectedLineId])
+  }, [])
+
+  const removeSelectedLine = useCallback(() => {
+    if (!selectedLineId) return
+    removeLine(selectedLineId)
+  }, [selectedLineId, removeLine])
 
   // ── Atalhos de teclado (F2–F12) ───────────────────────────────────────────
   const handleShortcutAction = useCallback(
@@ -276,10 +298,16 @@ export function PdvBlackEdition() {
         return
       }
       if (isTyping) return
+
+      // Delete/Backspace fora de input: remove item selecionado
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedLineId) {
+        e.preventDefault()
+        removeSelectedLine()
+      }
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [handleShortcutAction])
+  }, [handleShortcutAction, selectedLineId, removeSelectedLine])
 
   // ── Confirmar pagamento ────────────────────────────────────────────────────
   const handlePaymentConfirm = useCallback(() => {
@@ -319,6 +347,7 @@ export function PdvBlackEdition() {
         highlightLineId={highlightLineId}
         selectedLineId={selectedLineId}
         onSelectLine={setSelectedLineId}
+        onRemoveLine={removeLine}
         total={total}
         itemCount={itemCount}
         lastAddedItem={lastAddedItem}
@@ -343,13 +372,18 @@ export function PdvBlackEdition() {
         // Diálogos
         products={products}
         productSearchOpen={productSearchOpen}
+        productSearchInitial={productSearchInitial}
         onProductSearchOpenChange={(open) => {
           setProductSearchOpen(open)
-          if (!open) focusBipe()
+          if (!open) {
+            setProductSearchInitial("")
+            focusBipe()
+          }
         }}
         onAddProductFromSearch={(product) => {
           addProduct(product)
           setProductSearchOpen(false)
+          setProductSearchInitial("")
         }}
         clientSearchOpen={clientSearchOpen}
         onClientSearchOpenChange={(open) => {
