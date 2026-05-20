@@ -925,7 +925,13 @@ function ContasPagar() {
   };
 
   const handleDuplicar = (item: ContaPagar) => {
-    criarPagar({ fornecedor: item.fornecedor, descricao: item.fornecedor, valor: item.valor, vencimento: item.venc })
+    criarPagar({
+      fornecedor: item.fornecedor || "—",
+      descricao: item.descricao || item.fornecedor || "Conta duplicada",
+      categoria: item.categoria || undefined,
+      valor: item.valor,
+      vencimento: item.venc,
+    })
       .then(() => toast.success("Conta duplicada"))
       .catch(() => toast.error("Falha ao duplicar"));
   };
@@ -974,8 +980,10 @@ function ContasPagar() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Doc.</TableHead>
+                <TableHead>Título</TableHead>
                 <TableHead>Fornecedor</TableHead>
+                <TableHead>Categoria</TableHead>
+                <TableHead>Parcela</TableHead>
                 <TableHead>Vencimento</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Valor</TableHead>
@@ -984,16 +992,38 @@ function ContasPagar() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {list.map((p) => (
+              {list.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                    {pagar.length === 0
+                      ? "Nenhuma conta a pagar registrada nesta unidade."
+                      : "Nenhuma conta atende ao filtro selecionado."}
+                  </TableCell>
+                </TableRow>
+              ) : null}
+              {list.map((p) => {
+                const saldo = Math.max(0, p.valor - p.pago)
+                return (
                 <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs">{p.id}</TableCell>
-                  <TableCell>{p.fornecedor}</TableCell>
+                  <TableCell className="max-w-[240px] truncate text-sm" title={p.descricao || p.id}>
+                    {p.descricao || <span className="font-mono text-xs text-muted-foreground">{p.id}</span>}
+                  </TableCell>
+                  <TableCell>{p.fornecedor || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground" title={p.categoria || ""}>
+                    {p.categoria || "—"}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{p.parcela ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {new Date(p.venc).toLocaleDateString("pt-BR")}
+                    {p.venc ? new Date(p.venc).toLocaleDateString("pt-BR") : "—"}
                   </TableCell>
                   <TableCell>{statusBadge(p.status)}</TableCell>
                   <TableCell className="text-right font-medium">{fmt(p.valor)}</TableCell>
-                  <TableCell className="text-right text-primary">{fmt(p.pago)}</TableCell>
+                  <TableCell className="text-right text-primary">
+                    {fmt(p.pago)}
+                    {saldo > 0 && p.pago > 0 ? (
+                      <div className="text-[10px] text-muted-foreground">saldo {fmt(saldo)}</div>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="icon" variant="ghost" title="Pagar" onClick={() => { setSelected(p); setModal("pagar"); }}>
@@ -1017,7 +1047,8 @@ function ContasPagar() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                )
+              })}
             </TableBody>
           </Table>
         </div>

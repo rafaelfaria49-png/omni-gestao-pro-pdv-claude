@@ -30,10 +30,16 @@ export type ContaReceber = {
 export type ContaPagar = {
   id: string
   fornecedor: string
+  descricao: string
+  categoria: string
   valor: number
   pago: number
   venc: string
   status: StatusPagar
+  parcela?: string
+  formaPagamento?: string
+  contaBancaria?: string
+  observacao?: string
 }
 
 export type SummaryReceber = {
@@ -530,13 +536,21 @@ function normalizePagarRows(rows: unknown[], audit: unknown[]): ContaPagar[] {
     const valor = safeNum(row.valor)
     const status = normalizePagarStatus(safeStr(row.status))
     const pago = auditItem ? safeNum(auditItem.pago) : status === "pago" ? valor : 0
+    const descricao = safeStr(row.descricao)
+    const parcelaRaw = typeof row.parcela === "string" ? row.parcela.trim() : ""
     result.push({
       id,
-      fornecedor: safeStr(row.fornecedor) || safeStr(row.descricao) || "—",
+      fornecedor: safeStr(row.fornecedor),
+      descricao,
+      categoria: safeStr(row.categoria),
       valor,
       pago,
       venc: safeStr(row.dataVencimento) || safeStr(row.vencimento),
       status,
+      parcela: parcelaRaw || undefined,
+      formaPagamento: safeStr(row.formaPagamento) || undefined,
+      contaBancaria: safeStr(row.contaBancaria) || undefined,
+      observacao: safeStr(row.observacao) || undefined,
     })
   }
   return result

@@ -57,9 +57,29 @@ function parseHistorico(payload: unknown): HistEntry[] {
 }
 
 function fornecedorFromPayload(payload: unknown): string {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return "Fornecedor"
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return ""
   const p = payload as Record<string, unknown>
-  return String(p.fornecedorNome ?? p.fornecedor ?? "") || "Fornecedor"
+  return String(p.fornecedorNome ?? p.fornecedor ?? "")
+}
+
+function pickStringFromPayload(payload: unknown, ...keys: string[]): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null
+  const p = payload as Record<string, unknown>
+  for (const k of keys) {
+    const v = p[k]
+    if (typeof v === "string" && v.trim()) return v.trim()
+  }
+  return null
+}
+
+function parcelaLabelFromPayload(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null
+  const parc = (payload as Record<string, unknown>).parcela
+  if (!parc || typeof parc !== "object" || Array.isArray(parc)) return null
+  const numero = (parc as Record<string, unknown>).numero
+  const total = (parc as Record<string, unknown>).total
+  if (typeof numero !== "number" || typeof total !== "number") return null
+  return `${numero}/${total}`
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -137,6 +157,12 @@ export async function GET(req: Request) {
           valor: titulo.valor,
           vencimento: titulo.vencimento,
           status: titulo.status,
+          categoria: pickStringFromPayload(titulo.payload, "planoContas", "categoria"),
+          formaPagamento: pickStringFromPayload(titulo.payload, "formaPagamento"),
+          contaBancaria: pickStringFromPayload(titulo.payload, "contaBancaria"),
+          observacao: pickStringFromPayload(titulo.payload, "observacoes", "observacao"),
+          dataConfirmacao: pickStringFromPayload(titulo.payload, "dataConfirmacao"),
+          parcela: parcelaLabelFromPayload(titulo.payload),
           historico: parseHistorico(titulo.payload),
         },
       })
@@ -155,6 +181,11 @@ export async function GET(req: Request) {
       valor: t.valor,
       vencimento: t.vencimento,
       status: t.status,
+      categoria: pickStringFromPayload(t.payload, "planoContas", "categoria"),
+      formaPagamento: pickStringFromPayload(t.payload, "formaPagamento"),
+      contaBancaria: pickStringFromPayload(t.payload, "contaBancaria"),
+      observacao: pickStringFromPayload(t.payload, "observacoes", "observacao"),
+      parcela: parcelaLabelFromPayload(t.payload),
     }))
 
     return NextResponse.json({
