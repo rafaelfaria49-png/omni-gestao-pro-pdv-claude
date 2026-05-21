@@ -8,6 +8,7 @@ import { parsearArquivos } from "@/lib/importador-avancado/parser"
 import { agruparEMerge, labelDominio } from "@/lib/importador-avancado"
 import { persistirImportacao } from "@/lib/importador-avancado/persistidor"
 import type { DominioImport } from "@/lib/importador-avancado/types"
+import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
 export const maxDuration = 120
@@ -18,7 +19,7 @@ async function requireSubscription(_req: NextRequest) {
   // NextAuth v5 primeiro
   try {
     const session = await auth()
-    if (session?.user) return { ok: true as const }
+    if (session?.user) return { ok: true as const, userLabel: session.user.email ?? session.user.name ?? "" }
   } catch { /* fora de contexto — cai no fallback */ }
 
   // Fallback: cookie legacy
@@ -28,7 +29,7 @@ async function requireSubscription(_req: NextRequest) {
   if (isVencimentoExpired(now, sub.vencimento)) {
     return { ok: false as const, res: NextResponse.json({ error: "subscription_expired" }, { status: 402 }) }
   }
-  return { ok: true as const }
+  return { ok: true as const, userLabel: "" }
 }
 
 // ── GET: capabilities ────────────────────────────────────────────────────────
@@ -161,6 +162,43 @@ export async function POST(req: NextRequest) {
     if (entry.acao === "criado") porDominio[entry.dominio]!.criados++
     else if (entry.acao === "atualizado") porDominio[entry.dominio]!.atualizados++
     else if (entry.acao === "erro") porDominio[entry.dominio]!.erros++
+  }
+
+  // ── Auditoria: registra batch para a aba Histórico do Importação HUB ────
+  // Não interrompe o fluxo se o log falhar (best-effort). Usa o modelo
+  // LogsAuditoria já existente — nenhum schema novo.
+  try {
+    const partes = Object.entries(porDominio)
+      .map(([dom, t]) => `${labelDominio(dom as DominioImport)}: ${t.criados + t.atualizados}`)
+      .slice(0, 6)
+      .join(" · ")
+    const detalhe =
+      `${resultado.criados} criados · ${resultado.atualizados} atualizados · ${resultado.ignorados} ignorados · ${resultado.erros} erros` +
+      (partes ? ` — ${partes}` : "")
+    const userLabel = (authResult.userLabel && authResult.userLabel.trim()) || "Importador Avançado"
+    await prisma.logsAuditoria.create({
+      data: {
+        action: resultado.ok ? "import.planilha" : "import.planilha.erro",
+        userLabel: userLabel.slice(0, 500),
+        detail: detalhe.slice(0, 4000),
+        source: "importador_avancado",
+        metadata: JSON.stringify({
+          batchId,
+          storeId,
+          duracaoMs: resultado.duracaoMs,
+          totais: {
+            criados: resultado.criados,
+            atualizados: resultado.atualizados,
+            ignorados: resultado.ignorados,
+            erros: resultado.erros,
+          },
+          porDominio,
+          arquivos: deteccao.map((d) => ({ arquivo: d.arquivo, dominio: d.dominio, confianca: d.confianca, totalLinhas: d.totalLinhas })),
+        }).slice(0, 8000),
+      },
+    })
+  } catch (e) {
+    console.error("[api/import/advanced] falha ao registrar auditoria:", e instanceof Error ? e.message : String(e))
   }
 
   return NextResponse.json({

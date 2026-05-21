@@ -1147,6 +1147,91 @@ export type AuditoriaItemDTO = {
   ip: string
 }
 
+// ── Histórico de importações ─────────────────────────────────────────────────
+// Lê LogsAuditoria filtrando pelos eventos gerados pelo Importador Avançado
+// (action começa com "import."). Não usa mock — se nada foi registrado, a aba
+// "Histórico" mostra um empty state honesto.
+
+export type ImportacaoAuditoriaDTO = {
+  id: string;
+  action: string;
+  /** Tipo amigável: "Planilhas", "XML NF-e", "Outro". */
+  tipo: string;
+  /** "ok" | "erro" | "info" */
+  status: "ok" | "erro" | "info";
+  usuario: string;
+  /** ISO timestamp para ordenação/exibição. */
+  dataIso: string;
+  /** Resumo curto pronto para exibir. */
+  resumo: string;
+  batchId: string | null;
+  totais: {
+    criados: number;
+    atualizados: number;
+    ignorados: number;
+    erros: number;
+  } | null;
+  duracaoMs: number | null;
+  porDominio: Record<string, { criados: number; atualizados: number; erros: number }> | null;
+};
+
+function parseImportacaoMetadata(raw: string | null): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function listImportacoesAuditoria(limit = 50): Promise<ImportacaoAuditoriaDTO[]> {
+  try {
+    const rows = await prisma.logsAuditoria.findMany({
+      where: { action: { startsWith: "import." } },
+      orderBy: { createdAt: "desc" },
+      take: Math.min(Math.max(1, limit), 200),
+    });
+
+    return rows.map((r) => {
+      const meta = parseImportacaoMetadata(r.metadata);
+      const isXml = r.action.includes("xml");
+      const isErro = r.action.endsWith(".erro") || r.action.endsWith("_erro");
+      const tipo = isXml ? "XML NF-e" : r.action.startsWith("import.planilha") || r.action === "import.advanced" ? "Planilhas" : "Outro";
+      const totais =
+        meta.totais && typeof meta.totais === "object" && !Array.isArray(meta.totais)
+          ? {
+              criados: Number((meta.totais as Record<string, unknown>).criados ?? 0),
+              atualizados: Number((meta.totais as Record<string, unknown>).atualizados ?? 0),
+              ignorados: Number((meta.totais as Record<string, unknown>).ignorados ?? 0),
+              erros: Number((meta.totais as Record<string, unknown>).erros ?? 0),
+            }
+          : null;
+      const porDominioRaw = meta.porDominio;
+      const porDominio =
+        porDominioRaw && typeof porDominioRaw === "object" && !Array.isArray(porDominioRaw)
+          ? (porDominioRaw as Record<string, { criados: number; atualizados: number; erros: number }>)
+          : null;
+      return {
+        id: r.id,
+        action: r.action,
+        tipo,
+        status: isErro ? "erro" : totais && totais.erros > 0 ? "erro" : "ok",
+        usuario: r.userLabel || "—",
+        dataIso: r.createdAt.toISOString(),
+        resumo: (r.detail ?? "").slice(0, 240),
+        batchId: typeof meta.batchId === "string" ? (meta.batchId as string) : null,
+        totais,
+        duracaoMs: typeof meta.duracaoMs === "number" ? (meta.duracaoMs as number) : null,
+        porDominio,
+      };
+    });
+  } catch (err) {
+    console.error("[listImportacoesAuditoria]", err instanceof Error ? err.message : String(err));
+    return [];
+  }
+}
+
 export async function listLogsAuditoriaCadastros(): Promise<AuditoriaItemDTO[]> {
   const rows = await prisma.logsAuditoria.findMany({
     orderBy: { createdAt: "desc" },

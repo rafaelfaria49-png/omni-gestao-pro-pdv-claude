@@ -7,7 +7,8 @@ import {
 } from "lucide-react";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea, useToggle } from "./ui-kit";
-import { ProductAIModal, QualityScore, InteligenciaCadastros, ImportIAActions } from "./produto-ia";
+import { ProductAIModal, QualityScore, InteligenciaCadastros } from "./produto-ia";
+import { ImportacaoHub } from "./ImportacaoHub";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
 import {
@@ -64,7 +65,6 @@ type TabId = (typeof TABS)[number]["id"];
 export function CadastrosHub() {
   const [tab, setTab] = useState<TabId>("dashboard");
   const novo = useToggle();
-  const importar = useToggle();
   const { lojaAtivaId } = useLojaAtiva();
   const storeId = (lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID;
 
@@ -98,8 +98,9 @@ export function CadastrosHub() {
                 />
               </div>
               <button
-                onClick={importar.openIt}
+                onClick={() => setTab("importacao")}
                 className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-accent transition"
+                title="Abrir HUB de Importação"
               >
                 <Upload className="h-4 w-4" /> <span className="hidden md:inline">Importar</span>
               </button>
@@ -170,9 +171,6 @@ export function CadastrosHub() {
         </div>
       </Modal>
 
-      <Modal open={importar.open} onClose={importar.close} title="Importar planilha" subtitle="CSV ou XLSX • até 10.000 linhas.">
-        <ImportFlow />
-      </Modal>
     </div>
   );
 }
@@ -1930,92 +1928,10 @@ function CategoriasPanel({ storeId }: { storeId: string }) {
 }
 
 /* ───── IMPORTAÇÃO ───── */
+// Hub completo: Planilhas (real) + XML NF-e (preparatório) + Histórico.
+// Implementação em ./ImportacaoHub.tsx — substitui o ImportFlow mock antigo.
 function ImportacaoPanel() {
-  return (
-    <div className="grid w-full min-w-0 gap-6 lg:grid-cols-3">
-      <div className="space-y-6 lg:col-span-2">
-        <ImportIAActions />
-        <Card className="p-6">
-          <SectionTitle title="Importar dados" subtitle="CSV ou XLSX. Mapeamento de colunas e validação automática." />
-          <ImportFlow />
-        </Card>
-      </div>
-      <Card className="p-6">
-        <SectionTitle title="O que você pode importar" />
-        <ul className="space-y-2 text-sm">
-          {["Clientes", "Produtos", "Serviços", "Fornecedores", "Técnicos", "Equipamentos / modelos"].map((i) => (
-            <li key={i} className="flex items-center gap-2 rounded-lg border border-border bg-background p-3 text-foreground">
-              <CheckCircle2 className="h-4 w-4 text-primary" /> {i}
-            </li>
-          ))}
-        </ul>
-      </Card>
-    </div>
-  );
-}
-
-function ImportFlow() {
-  const errors = [
-    { l: "SKU duplicado", n: 3, t: "danger" as const },
-    { l: "Telefone inválido", n: 2, t: "warning" as const },
-    { l: "Preço ausente", n: 4, t: "warning" as const },
-    { l: "Categoria inexistente", n: 1, t: "danger" as const },
-  ];
-  return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-dashed border-border bg-background p-10 text-center">
-        <Upload className="mx-auto h-8 w-8 text-muted-foreground" />
-        <div className="mt-3 text-sm font-medium text-foreground">Arraste sua planilha ou clique para selecionar</div>
-        <div className="text-xs text-muted-foreground">Aceitamos .csv e .xlsx (até 10MB)</div>
-        <button className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Selecionar arquivo</button>
-      </div>
-
-      <div>
-        <div className="mb-2 text-sm font-medium text-foreground">Mapeamento de colunas</div>
-        <div className="overflow-hidden rounded-xl border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-surface text-xs uppercase text-muted-foreground">
-              <tr><th className="px-4 py-2 text-left">Coluna da planilha</th><th className="px-4 py-2 text-left">Campo do sistema</th><th className="px-4 py-2 text-left">Preview</th></tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {[
-                ["nome_completo", "Nome", "João Silva"],
-                ["doc", "CPF/CNPJ", "123.456.789-00"],
-                ["fone", "Telefone", "(11) 98123-4521"],
-                ["cidade_uf", "Cidade", "São Paulo/SP"],
-              ].map((r) => (
-                <tr key={r[0]}>
-                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{r[0]}</td>
-                  <td className="px-4 py-2"><Badge tone="primary">{r[1]}</Badge></td>
-                  <td className="px-4 py-2 text-foreground">{r[2]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div>
-        <div className="mb-2 text-sm font-medium text-foreground">Validação</div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {errors.map((e) => (
-            <div key={e.l} className="rounded-xl border border-border bg-background p-3">
-              <div className="text-xs text-muted-foreground">{e.l}</div>
-              <div className="mt-1 flex items-center justify-between">
-                <div className="text-xl font-bold text-foreground">{e.n}</div>
-                <Badge tone={e.t}>erros</Badge>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-2">
-        <button className="rounded-lg border border-border px-4 py-2 text-sm">Baixar relatório</button>
-        <button className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Importar 118 linhas válidas</button>
-      </div>
-    </div>
-  );
+  return <ImportacaoHub />;
 }
 
 /* ───── AUDITORIA ───── */
