@@ -8,6 +8,7 @@ import {
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea, useToggle } from "./ui-kit";
 import { ProductAIModal, QualityScore, InteligenciaCadastros } from "./produto-ia";
+import { MovimentacaoEstoqueModal } from "./MovimentacaoEstoqueModal";
 import { ImportacaoHub } from "./ImportacaoHub";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
@@ -674,6 +675,7 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
   const [editing, setEditing] = useState<ProdutoDTO | null>(null);
   const [deleting, setDeleting] = useState<ProdutoDTO | null>(null);
   const [deleteResult, setDeleteResult] = useState<DeleteProdutoResult | null>(null);
+  const [estoqueProduto, setEstoqueProduto] = useState<ProdutoDTO | null>(null);
   const [rows, setRows] = useState<ProdutoDTO[]>([]);
   const [filterQuery, setFilterQuery] = useState("");
   // loadingRows: bloqueia apenas a tabela; loadingAlerts: atualiza os cards silenciosamente
@@ -875,6 +877,14 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
                           Publicar
                         </button>
                         <button
+                          className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/25 dark:text-emerald-400"
+                          title="Entrada / ajuste de estoque"
+                          type="button"
+                          onClick={() => setEstoqueProduto(p)}
+                        >
+                          <Package className="h-3 w-3" /> Estoque
+                        </button>
+                        <button
                           className="flex items-center gap-1 rounded-md bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/25"
                           title="Editar ficha"
                           type="button"
@@ -931,6 +941,24 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
               }
             : undefined
         }
+      />
+
+      <MovimentacaoEstoqueModal
+        open={estoqueProduto !== null}
+        onClose={() => setEstoqueProduto(null)}
+        storeId={storeId}
+        produto={
+          estoqueProduto
+            ? {
+                id: estoqueProduto.id,
+                nome: estoqueProduto.nome,
+                sku: estoqueProduto.sku,
+                estoque: estoqueProduto.estoque,
+                custo: estoqueProduto.custo,
+              }
+            : null
+        }
+        onSaved={refreshRows}
       />
 
       {deleting && (

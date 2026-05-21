@@ -97,6 +97,7 @@ model Store {
   marketplaceConnections   MarketplaceConnection[]
   marketplaceSyncLogs      MarketplaceSyncLog[]
   marketplaceProductLinks  MarketplaceProductLink[]
+  movimentacoesEstoque     MovimentacaoEstoque[]
 
   @@index([profile])
   @@map("stores")
@@ -728,11 +729,59 @@ model Produto {
   marketplaceListings     MarketplaceListing[]
   marketplaceProductLinks MarketplaceProductLink[]
   marketplaceSyncLogs     MarketplaceSyncLog[]
+  movimentacoesEstoque    MovimentacaoEstoque[]
 
   @@unique([storeId, sku], name: "storeId_sku")
   @@unique([storeId, barcode], name: "storeId_barcode")
   @@index([storeId])
   @@map("estoque_produtos")
+}
+
+/**
+ * Livro-razão de estoque (append-only). Cada entrada de mercadoria ou ajuste de saldo
+ * gera um registro imutável. O saldo atual vive em Produto.stock; este modelo é a
+ * trilha auditável de COMO o saldo chegou ali, com custo médio ponderado.
+ * Não substitui o decremento de venda do PDV/OS (Fase futura migra o adapter da OS).
+ */
+model MovimentacaoEstoque {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  produtoId String?  @map("produtoId")
+  produto   Produto? @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+
+  /** Snapshot para auditoria — sobrevive à exclusão/edição do produto. */
+  produtoSku  String? @map("produtoSku")
+  produtoNome String  @map("produtoNome")
+
+  /** "entrada" | "ajuste" | "saida" */
+  tipo   String @map("tipo")
+  /** "manual" | "importacao" | "os" | "pdv" */
+  origem String @default("manual") @map("origem")
+
+  /** Delta assinado aplicado ao saldo (+ entrada, +/- ajuste). */
+  quantidade    Int @map("quantidade")
+  estoqueAntes  Int @map("estoqueAntes")
+  estoqueDepois Int @map("estoqueDepois")
+
+  custoUnitario    Float @default(0) @map("custoUnitario")
+  custoMedioAntes  Float @default(0) @map("custoMedioAntes")
+  custoMedioDepois Float @default(0) @map("custoMedioDepois")
+  /** quantidade × custoUnitario (valor da movimentação). */
+  valorTotal       Float @default(0) @map("valorTotal")
+
+  documento  String? @map("documento")
+  fornecedor String? @map("fornecedor")
+  motivo     String? @map("motivo")
+  observacao String? @map("observacao")
+  usuario    String? @map("usuario")
+
+  createdAt DateTime @default(now()) @map("createdAt")
+
+  @@index([storeId])
+  @@index([storeId, produtoId])
+  @@index([storeId, createdAt])
+  @@map("movimentacoes_estoque")
 }
 
 model Tecnico {
