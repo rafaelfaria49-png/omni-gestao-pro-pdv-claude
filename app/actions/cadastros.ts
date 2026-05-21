@@ -1060,6 +1060,60 @@ export async function upsertProduto(
   return created;
 }
 
+export type DeleteProdutoResult =
+  | {
+      ok: true;
+      deleted: true;
+      produto: { id: string; nome: string };
+    }
+  | {
+      ok: false;
+      reason: string;
+      vinculos?: { osItens: number; listings: number; links: number };
+      produto?: { id: string; nome: string };
+    };
+
+/**
+ * Excluir produto físico. Bloqueia se houver vínculos operacionais (OS, marketplace),
+ * forçando o usuário a inativar (badge Ativar/Inativar) em vez de apagar. Sem soft delete
+ * separado — `Produto.active` já cobre isso.
+ */
+export async function deleteProduto(
+  storeId: string,
+  produtoId: string
+): Promise<DeleteProdutoResult> {
+  if (!produtoId?.trim()) return { ok: false, reason: "ID inválido" };
+  const sid = (storeId ?? "").trim();
+  if (!sid) return { ok: false, reason: "Loja não selecionada" };
+
+  const produto = await prisma.produto.findFirst({
+    where: { id: produtoId, storeId: sid },
+    select: { id: true, name: true },
+  });
+  if (!produto) return { ok: false, reason: "Produto não encontrado nesta loja" };
+
+  // Marketplace listings usa `productId` (inconsistência histórica do schema). Links usa `produtoId`.
+  const [osItens, listings, links] = await Promise.all([
+    prisma.ordemServicoItem.count({ where: { produtoId } }),
+    prisma.marketplaceListing.count({ where: { productId: produtoId } }),
+    prisma.marketplaceProductLink.count({ where: { produtoId } }),
+  ]);
+
+  if (osItens + listings + links > 0) {
+    return {
+      ok: false,
+      reason:
+        "Produto vinculado a registros operacionais (OS, anúncios ou marketplace). Use o botão de status para Inativar em vez de excluir.",
+      vinculos: { osItens, listings, links },
+      produto: { id: produto.id, nome: produto.name },
+    };
+  }
+
+  await prisma.produto.delete({ where: { id: produtoId } });
+  revalidatePath("/dashboard/cadastros-v2");
+  return { ok: true, deleted: true, produto: { id: produto.id, nome: produto.name } };
+}
+
 export async function listServicos(storeId: string): Promise<ServicoDTO[]> {
   const rows = await prisma.servico.findMany({
     where: { storeId },

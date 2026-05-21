@@ -40,6 +40,8 @@ import {
   updateCliente,
   upsertServico,
   upsertProduto,
+  deleteProduto,
+  type DeleteProdutoResult,
 } from "@/app/actions/cadastros";
 import { catalogQualityScore } from "@/lib/cadastros/produto-quality-score";
 
@@ -670,6 +672,8 @@ function ClientesPanel({ storeId }: { storeId: string }) {
 function ProdutosPanel({ storeId }: { storeId: string }) {
   const m = useToggle();
   const [editing, setEditing] = useState<ProdutoDTO | null>(null);
+  const [deleting, setDeleting] = useState<ProdutoDTO | null>(null);
+  const [deleteResult, setDeleteResult] = useState<DeleteProdutoResult | null>(null);
   const [rows, setRows] = useState<ProdutoDTO[]>([]);
   const [filterQuery, setFilterQuery] = useState("");
   // loadingRows: bloqueia apenas a tabela; loadingAlerts: atualiza os cards silenciosamente
@@ -881,6 +885,17 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
                         >
                           <Edit3 className="h-3 w-3" /> Editar
                         </button>
+                        <button
+                          className="flex items-center gap-1 rounded-md bg-destructive/15 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/25"
+                          title="Excluir produto"
+                          type="button"
+                          onClick={() => {
+                            setDeleting(p);
+                            setDeleteResult(null);
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" /> Excluir
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -917,6 +932,100 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
             : undefined
         }
       />
+
+      {deleting && (
+        <Modal
+          open={true}
+          onClose={() => {
+            if (saving) return;
+            setDeleting(null);
+            setDeleteResult(null);
+          }}
+          title="Excluir produto?"
+          subtitle="Ação destrutiva — não pode ser desfeita"
+          size="md"
+        >
+          <div className="space-y-3 text-sm">
+            <div className="rounded-lg border border-border bg-secondary/30 p-3">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Produto</div>
+              <div className="mt-1 line-clamp-3 font-medium text-foreground">{deleting.nome}</div>
+              <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                <div>
+                  <span className="block text-[10px] uppercase text-muted-foreground">SKU</span>
+                  <span className="text-foreground">{deleting.sku && deleting.sku !== "—" ? deleting.sku : "—"}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-muted-foreground">Estoque</span>
+                  <span className="text-foreground">{deleting.estoque}</span>
+                </div>
+                <div>
+                  <span className="block text-[10px] uppercase text-muted-foreground">Preço</span>
+                  <span className="text-foreground">{deleting.preco ? `R$ ${deleting.preco}` : "—"}</span>
+                </div>
+              </div>
+            </div>
+
+            {deleting.estoque > 0 && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100">
+                Atenção: produto com estoque {deleting.estoque}. A exclusão remove o cadastro e o saldo registrado.
+                Considere inativar pelo botão de status, na coluna Status.
+              </div>
+            )}
+
+            {deleteResult && !deleteResult.ok && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                <div className="font-medium">{deleteResult.reason}</div>
+                {deleteResult.vinculos && (
+                  <div className="mt-1 text-[11px]">
+                    Vínculos encontrados: {deleteResult.vinculos.osItens} item(ns) de OS ·{" "}
+                    {deleteResult.vinculos.listings} anúncio(s) · {deleteResult.vinculos.links} integração(ões) marketplace.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground hover:bg-accent"
+                onClick={() => {
+                  setDeleting(null);
+                  setDeleteResult(null);
+                }}
+                disabled={saving}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+                disabled={saving || (deleteResult !== null && !deleteResult.ok)}
+                onClick={() => {
+                  if (!deleting) return;
+                  startSaving(async () => {
+                    try {
+                      const res = await deleteProduto(storeId, deleting.id);
+                      setDeleteResult(res);
+                      if (res.ok) {
+                        await refreshRows();
+                        setDeleting(null);
+                        setDeleteResult(null);
+                      }
+                    } catch (e) {
+                      setDeleteResult({
+                        ok: false,
+                        reason: e instanceof Error ? e.message : "Falha ao excluir produto",
+                      });
+                    }
+                  });
+                }}
+              >
+                {saving ? "Excluindo…" : "Confirmar exclusão"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

@@ -18,6 +18,7 @@ import type { Prisma } from "@/generated/prisma"
 import { StatusOrdemServico } from "@/generated/prisma"
 import { upsertContaReceber } from "@/lib/financeiro/services/contas-receber-service"
 import { upsertContaPagar } from "@/lib/financeiro/services/contas-pagar-service"
+import { normalizeProdutoSku, looksLikeEan, nomePareceDocumento } from "@/lib/produto-sku-normalize"
 
 // ── Utilitários ───────────────────────────────────────────────
 
@@ -195,6 +196,17 @@ async function persistirProdutos(
         continue
       }
 
+      // Guard de documento: termos/contratos que vazam para a planilha não viram produto.
+      if (nomePareceDocumento(campos.name)) {
+        log.push({
+          dominio: "produtos",
+          chave: reg.chave,
+          acao: "ignorado",
+          detalhe: "Linha parece termo/documento, não produto (revisar)",
+        })
+        continue
+      }
+
       const catSlug = slugCategoria(campos.category || "produto")
 
       // SKU vazio: gera sintético para evitar colisão no unique(storeId, sku)
@@ -202,10 +214,18 @@ async function persistirProdutos(
         ? campos.sku.trim()
         : `IMP-${catSlug}-${norm(campos.name).slice(0, 20).replace(/\s+/g, "-")}`
 
-      // Upsert: tenta por SKU primeiro
+      // Dedupe forte: encontra produto existente mesmo que outro importador tenha gravado
+      // com prefixo gc-/imp- ou com o EAN no campo barcode. Evita duplicar (gc-123 vs 123).
+      const skuNorm = normalizeProdutoSku(skuSafe)
+      const orMatch: Prisma.ProdutoWhereInput[] = [{ sku: skuSafe }]
+      if (skuNorm && skuNorm !== skuSafe.toLowerCase()) orMatch.push({ sku: skuNorm })
+      if (skuNorm) orMatch.push({ sku: `gc-${skuNorm}` })
+      if (campos.barcode) orMatch.push({ barcode: campos.barcode })
+      if (looksLikeEan(skuNorm)) orMatch.push({ barcode: skuNorm })
+
       const existenteProduto = await prisma.produto.findFirst({
-        where: { storeId, sku: skuSafe },
-        select: { id: true },
+        where: { storeId, OR: orMatch },
+        select: { id: true, barcode: true },
       })
 
       const produtoData = {
@@ -221,23 +241,25 @@ async function persistirProdutos(
       }
 
       if (existenteProduto) {
+        // Preservação: não zera estoque nem apaga preço/custo/barcode quando o valor
+        // vier vazio/zerado da planilha (regras 7-9 do fix de duplicação).
         await prisma.produto.update({
           where: { id: existenteProduto.id },
           data: {
             name: produtoData.name,
             category: produtoData.category,
-            precoCusto: produtoData.precoCusto,
-            price: produtoData.price,
-            stock: produtoData.stock,
-            barcode: produtoData.barcode,
-            brand: produtoData.brand,
+            precoCusto: produtoData.precoCusto > 0 ? produtoData.precoCusto : undefined,
+            price: produtoData.price > 0 ? produtoData.price : undefined,
+            stock: produtoData.stock > 0 ? produtoData.stock : undefined,
+            barcode: produtoData.barcode ?? existenteProduto.barcode ?? undefined,
+            brand: produtoData.brand || undefined,
           },
         })
       } else {
         await prisma.produto.create({ data: produtoData })
       }
 
-      log.push({ dominio: "produtos", chave: reg.chave, acao: "criado" })
+      log.push({ dominio: "produtos", chave: reg.chave, acao: existenteProduto ? "atualizado" : "criado" })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       if (msg.includes("Unique")) {

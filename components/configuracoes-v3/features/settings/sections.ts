@@ -11,11 +11,13 @@ import {
   Upload,
   Users,
   ShieldCheck,
+  CreditCard,
 } from "lucide-react";
 
 export type SectionId =
   | "geral"
   | "lojas"
+  | "plano"
   | "aparencia"
   | "pdv"
   | "vendas"
@@ -36,6 +38,7 @@ export interface SectionItem {
 export const SETTINGS_SECTIONS: SectionItem[] = [
   { id: "geral", label: "Geral", description: "Dados da empresa e preferências", icon: Settings },
   { id: "lojas", label: "Lojas", description: "Gerencie suas unidades", icon: Store },
+  { id: "plano", label: "Plano e Assinatura", description: "Assinatura, créditos e cobrança", icon: CreditCard },
   { id: "aparencia", label: "Aparência", description: "Tema visual do sistema", icon: Palette },
   { id: "pdv", label: "PDV", description: "Layout do ponto de venda", icon: Monitor },
   { id: "vendas", label: "Vendas", description: "Regras de operação", icon: ShoppingCart },

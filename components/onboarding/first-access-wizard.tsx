@@ -20,7 +20,7 @@ function emptyAddress() {
 
 export function FirstAccessWizard() {
   const { toast } = useToast()
-  const { lojaAtivaId, lojaAtivaRaw, cadastroBasicoIncompleto, refreshStoresList } = useLojaAtiva()
+  const { lojaAtivaId, lojaAtivaRaw, cadastroBasicoIncompleto, storesLoaded, refreshStoresList } = useLojaAtiva()
   const storeId = (lojaAtivaId || lojaAtivaRaw?.id || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID
 
   const [open, setOpen] = useState(false)
@@ -53,13 +53,21 @@ export function FirstAccessWizard() {
       /* ignore */
     }
 
+    // Só avalia o onboarding após a hidratação remota das lojas terminar —
+    // antes disso `cadastroBasicoIncompleto` pode oscilar (true→false) por causa
+    // do delay do fetch /api/stores, causando flicker (modal abre e some).
+    if (!storesLoaded) {
+      setOpen(false)
+      return
+    }
+
     if (cadastroBasicoIncompleto && !dismissed) {
       setOpen(true)
       setStep(1)
     } else {
       setOpen(false)
     }
-  }, [cadastroBasicoIncompleto, dismissKey, dismissed])
+  }, [cadastroBasicoIncompleto, storesLoaded, dismissKey, dismissed])
 
   useEffect(() => {
     // Prefill com dados remotos (se existirem) para evitar “wizard infinito” por falta de hidratação.

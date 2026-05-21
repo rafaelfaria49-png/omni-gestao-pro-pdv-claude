@@ -34,12 +34,27 @@ export async function GET(req: Request) {
               OR: [
                 { name: { contains: q, mode: "insensitive" as const } },
                 { phone: { contains: q, mode: "insensitive" as const } },
+                { document: { contains: q, mode: "insensitive" as const } },
+                { city: { contains: q, mode: "insensitive" as const } },
               ],
             }
           : {}),
       },
       orderBy: { createdAt: "desc" },
-      select: { id: true, name: true, phone: true, email: true, document: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        document: true,
+        kind: true,
+        city: true,
+        tags: true,
+        active: true,
+        totalSpent: true,
+        lastPurchaseAt: true,
+        createdAt: true,
+      },
       take: 200,
     })
 
@@ -58,11 +73,37 @@ export async function POST(req: Request) {
   try {
     const gate = await requireAdmin()
     if (!gate.ok) return gate.res
-    const body = (await req.json()) as { name?: unknown; phone?: unknown; email?: unknown }
+    const body = (await req.json()) as {
+      name?: unknown
+      phone?: unknown
+      email?: unknown
+      kind?: unknown
+      document?: unknown
+      city?: unknown
+      tags?: unknown
+      active?: unknown
+      totalSpent?: unknown
+      lastPurchaseAt?: unknown
+    }
 
     const name = typeof body.name === "string" ? body.name.trim() : ""
     const phone = typeof body.phone === "string" ? body.phone.trim() : ""
     const email = typeof body.email === "string" ? body.email.trim() : ""
+    const kind = typeof body.kind === "string" ? body.kind.trim() : "PF"
+    const document = typeof body.document === "string" ? body.document.trim() : ""
+    const city = typeof body.city === "string" ? body.city.trim() : ""
+    const tags = body.tags !== undefined ? body.tags : null
+    const active = typeof body.active === "boolean" ? body.active : true
+    const totalSpent = typeof body.totalSpent === "number" ? body.totalSpent : 0
+    
+    let lastPurchaseAt: Date | null = null
+    if (body.lastPurchaseAt) {
+      const d = new Date(body.lastPurchaseAt as string)
+      if (!Number.isNaN(d.getTime())) {
+        lastPurchaseAt = d
+      }
+    }
+
     const storeId = storeIdFromAssistecRequestForWrite(req)
     if (!storeId) {
       return badRequest("Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId.")
@@ -77,9 +118,29 @@ export async function POST(req: Request) {
         name,
         phone,
         email: email || null,
+        kind,
+        document,
+        city,
+        tags: tags || undefined,
+        active,
+        totalSpent,
+        lastPurchaseAt,
         storeId,
       },
-      select: { id: true, name: true, phone: true, email: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        document: true,
+        kind: true,
+        city: true,
+        tags: true,
+        active: true,
+        totalSpent: true,
+        lastPurchaseAt: true,
+        createdAt: true,
+      },
     })
 
     return json({ ok: true, cliente: created }, { status: 201 })
@@ -92,3 +153,4 @@ export async function POST(req: Request) {
     )
   }
 }
+

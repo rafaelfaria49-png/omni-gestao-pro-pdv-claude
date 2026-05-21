@@ -75,6 +75,8 @@ type LojaAtivaContextType = {
   lojaAtivaRaw: PerfilLojaUnidade | null
   /** Primeiro acesso: cadastro básico ainda não preenchido (nome fantasia e CNPJ). */
   cadastroBasicoIncompleto: boolean
+  /** Verdadeiro apenas após a primeira hidratação remota (refreshStoresList) ter terminado. Usado para evitar avaliar onboarding antes da carga real. */
+  storesLoaded: boolean
   /** Empresa efetiva para cupom, OS e garantias (unidade atual). */
   empresaDocumentos: ConfiguracaoEmpresa
   getEnderecoDocumentos: () => string
@@ -120,6 +122,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
   const lojasConfig = useMemo(() => config.minhasLojas?.lojas ?? [], [config.minhasLojas?.lojas])
   const [lojasRemote, setLojasRemote] = useState<PerfilLojaUnidade[] | null>(null)
   const [storesRefreshNonce, setStoresRefreshNonce] = useState(0)
+  const [storesLoaded, setStoresLoaded] = useState(false)
   const lojas = useMemo(() => {
     const map = new Map<string, PerfilLojaUnidade>()
     for (const l of lojasConfig) {
@@ -153,6 +156,8 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       setStoresRefreshNonce((n) => n + 1)
     } catch {
       /* ignore */
+    } finally {
+      setStoresLoaded(true)
     }
   }, [])
 
@@ -304,6 +309,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       storesRefreshNonce,
       lojaAtivaRaw: lojaSelecionada ?? null,
       cadastroBasicoIncompleto,
+      storesLoaded,
       empresaDocumentos,
       getEnderecoDocumentos,
       opsStorageKey,
@@ -316,6 +322,7 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
       storesRefreshNonce,
       lojaSelecionada,
       cadastroBasicoIncompleto,
+      storesLoaded,
       empresaDocumentos,
       getEnderecoDocumentos,
       opsStorageKey,
@@ -337,6 +344,7 @@ export function useLojaAtiva(): LojaAtivaContextType {
       storesRefreshNonce: 0,
       lojaAtivaRaw: null,
       cadastroBasicoIncompleto: false,
+      storesLoaded: false,
       empresaDocumentos: fallbackEmpresa,
       getEnderecoDocumentos: () => formatEnderecoEmpresa(fallbackEmpresa.endereco),
       opsStorageKey: OPS_KEY_LEGACY,

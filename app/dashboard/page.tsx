@@ -9,6 +9,7 @@ import { AiInsights } from "@/components/painel-inicial/AiInsights";
 import { CriticalStock } from "@/components/painel-inicial/CriticalStock";
 import { RecentActivityTable } from "@/components/painel-inicial/RecentActivityTable";
 import { DashboardDemoNotice } from "@/components/painel-inicial/DashboardDemoNotice";
+import { EmpresaSetupCard } from "@/components/painel-inicial/EmpresaSetupCard";
 import { ShoppingCart, Wrench, AlertTriangle, Banknote } from "lucide-react";
 import { useDashboardElite } from "@/hooks/use-dashboard-elite";
 import { Button } from "@/components/ui/button";
@@ -63,6 +64,8 @@ export default function DashboardInicioPage() {
       </div>
 
       <DashboardDemoNotice />
+
+      <EmpresaSetupCard />
 
       {!hasStore ? (
         <div

@@ -1,64 +1,42 @@
-"use client"
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Icon } from "./Icons";
-import { PRODUCTS, CATEGORIAS, LOYALTY_CUSTOMERS, POINTS_PER_REAL, TIER_COLORS } from "./data";
-import {
-  formatBRL,
-  formatNum,
-  parseAmount,
-  METHODS,
-  SearchModal,
-  QtyModal,
-  CustomerModal,
-  DiscountModal,
-  CpfNotaModal,
-  CancelModal,
-  SuspendModal,
-  PaymentModal,
-  SuccessModal,
-  ReturnModal,
-  CashOpsModal,
-  CashCloseModal,
-  TurnHistoryModal,
-  LoyaltyModal
-} from "./Modals";
-import "./pdv-original-scope.css";
+/* ============== PDV principal — OmniGestão Pro ============== */
 
-const initialCart: any[] = [];
+const initialCart = [];
 
-const FISCAL_LABELS: any = {
+const FISCAL_LABELS = {
   nfe:     { nome: "NF-e",  icon: "receipt", finalize: "Finalizar com NF-e",   ds: "Emite cupom fiscal eletrônico" },
   simples: { nome: "Cupom simples", icon: "doc", finalize: "Finalizar sem nota", ds: "Recibo não fiscal" },
 };
 
-export function PdvGithubOriginal() {
+const PDV = () => {
   /* ----------- estado ----------- */
   const [cart, setCart] = useState(initialCart);
   const [selectedId, setSelectedId] = useState(null);
   const [scanValue, setScanValue] = useState("");
   const [received, setReceived] = useState("");
-  const [customer, setCustomer] = useState<any>(null);
+  const [customer, setCustomer] = useState(null);
   const [docNota, setDocNota] = useState(""); // CPF/CNPJ na nota (independente de cliente)
-  const [discount, setDiscount] = useState<any>(null); // { tipo, modo, valor, autorizado }
-  const [suspended, setSuspended] = useState<any[]>([]);
+  const [discount, setDiscount] = useState(null); // { tipo, modo, valor, autorizado }
+  const [suspended, setSuspended] = useState([]);
   const [now, setNow] = useState(new Date());
   const [online, setOnline] = useState(true);
   const [cupomNum, setCupomNum] = useState(1042);
-  const [lastSale, setLastSale] = useState<any>(null);
+  const [lastSale, setLastSale] = useState(null);
 
   /* ---- novos ---- */
   const [fiscalMode, setFiscalMode] = useState("nfe"); // "nfe" | "simples"
   const [selfService, setSelfService] = useState(false);
-  const [cashOps, setCashOps] = useState<any[]>([]);
-  const [turnSales, setTurnSales] = useState<any[]>([]);
+  const [cashOps, setCashOps] = useState(window.SEED_CASH_OPS || []);
+  const [turnSales, setTurnSales] = useState(window.SEED_TURN_SALES || []);
   const [itemsScanned, setItemsScanned] = useState(38); // contador acumulado do turno
 
   /* modais (somente um por vez) */
-  const [modal, setModal] = useState<string | null>(null);
+  const [modal, setModal] = useState(null);
+  // "search" | "qty" | "customer" | "discount" | "cpfnota" | "cancel" | "suspend" | "payment" | "success"
+  // | "return" | "cashops" | "cashclose" | "history" | "loyalty"
   const [searchInitial, setSearchInitial] = useState("");
 
-  const scanRef = useRef<HTMLInputElement>(null);
-  const cartScrollRef = useRef<HTMLDivElement>(null);
+  const scanRef = useRef(null);
+  const cartScrollRef = useRef(null);
 
   const MAX_SUSPENDED = 5;
 
@@ -66,14 +44,6 @@ export function PdvGithubOriginal() {
   useEffect(() => {
     const i = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(i);
-  }, []);
-
-  // Set window seeds effect
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setCashOps((window as any).SEED_CASH_OPS || []);
-      setTurnSales((window as any).SEED_TURN_SALES || []);
-    }
   }, []);
 
   /* ----------- foco no scan ----------- */
@@ -117,7 +87,7 @@ export function PdvGithubOriginal() {
   }, [cart.length]);
 
   /* ----------- regras: adicionar / remover ----------- */
-  const addProduct = (product: any, qtd = 1) => {
+  const addProduct = (product, qtd = 1) => {
     setCart((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) {
@@ -136,24 +106,24 @@ export function PdvGithubOriginal() {
     setItemsScanned((n) => n + qtd);
   };
 
-  const addReturnLines = (lines: any[]) => {
+  const addReturnLines = (lines) => {
     setCart((prev) => [...prev, ...lines]);
     if (lines[0]) setSelectedId(lines[0].id);
   };
 
-  const removeItem = (id: any) => {
+  const removeItem = (id) => {
     setCart((prev) => prev.filter((i) => i.id !== id));
     setSelectedId(null);
   };
 
-  const updateQty = (id: any, newQty: number) => {
+  const updateQty = (id, newQty) => {
     setCart((prev) => prev.map((i) =>
       i.id === id ? { ...i, qtd: Math.max(1, newQty) } : i
     ));
   };
 
   /* ----------- regras: scan/bipar ----------- */
-  const handleScan = (rawInput: string) => {
+  const handleScan = (rawInput) => {
     const input = String(rawInput || "").trim();
     if (!input) return;
 
@@ -205,7 +175,7 @@ export function PdvGithubOriginal() {
   };
 
   /* ----------- finalização ----------- */
-  const completeSale = ({ payments, change, paid }: any) => {
+  const completeSale = ({ payments, change, paid }) => {
     const cupomStr = String(cupomNum).padStart(6, "0");
     const hasReturns = cart.some((i) => i.isReturn);
     const sale = {
@@ -223,7 +193,7 @@ export function PdvGithubOriginal() {
       customer: customer || (docNota ? { nome: "Consumidor final", doc: docNota } : null),
       fiscalMode,
       status: hasReturns && total <= 0 ? "devolucao" : "finalizada",
-      pointsEarned: customer?.loyalty ? Math.floor(total * ((window as any).POINTS_PER_REAL || 1)) : 0,
+      pointsEarned: customer?.loyalty ? Math.floor(total * (window.POINTS_PER_REAL || 1)) : 0,
       items: cart.map((it) => ({
         id: it.id, codigo: it.codigo, nome: it.nome, icone: it.icone,
         qtd: it.qtd, preco: it.preco, isReturn: !!it.isReturn,
@@ -234,7 +204,7 @@ export function PdvGithubOriginal() {
     setModal("success");
   };
 
-  const cancelTurnSale = (cupom: string) => {
+  const cancelTurnSale = (cupom) => {
     setTurnSales((arr) => arr.map((s) =>
       s.cupom === cupom ? { ...s, status: "cancelada" } : s
     ));
@@ -298,7 +268,7 @@ export function PdvGithubOriginal() {
     setCustomer(null);
     setDiscount(null);
   };
-  const resumeSale = (id: string) => {
+  const resumeSale = (id) => {
     const s = suspended.find((x) => x.id === id);
     if (!s) return;
     // se há carrinho ativo, sugere suspender primeiro
@@ -330,11 +300,11 @@ export function PdvGithubOriginal() {
     setSuspended((all) => all.filter((x) => x.id !== id));
     setModal(null);
   };
-  const discardSuspended = (id: string) => setSuspended((all) => all.filter((x) => x.id !== id));
+  const discardSuspended = (id) => setSuspended((all) => all.filter((x) => x.id !== id));
 
   /* ----------- atalhos globais ----------- */
   useEffect(() => {
-    const handler = (e: KeyboardEvent | any) => {
+    const handler = (e) => {
       // Esc fecha modal
       if (e.key === "Escape") {
         if (modal) { e.preventDefault(); setModal(null); return; }
@@ -412,7 +382,7 @@ export function PdvGithubOriginal() {
   const timeStr = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
   return (
-    <div className={`pdv-original-scope app ${selfService ? "self-service" : ""}`}>
+    <div className={`app ${selfService ? "self-service" : ""}`}>
       {/* ============== HEADER ============== */}
       <header className="header">
         <div className="brand">
@@ -515,7 +485,7 @@ export function PdvGithubOriginal() {
             <div className="suspended-strip">
               <div className="ss-lb"><Icon name="pause" size={11}/> Em espera</div>
               {suspended.map((s) => {
-                const ttl = s.items.reduce((sum: number, i: any) => sum + i.qtd * i.preco, 0);
+                const ttl = s.items.reduce((sum, i) => sum + i.qtd * i.preco, 0);
                 const mins = Math.max(0, Math.floor((Date.now() - (s.suspendedAt || Date.now())) / 60000));
                 return (
                   <button
@@ -627,22 +597,14 @@ export function PdvGithubOriginal() {
                       <div className={`disc ${(it.descontoItem || 0) === 0 ? "zero" : ""}`}>
                         {(it.descontoItem || 0) === 0 ? "—" : "−" + formatBRL(it.descontoItem)}
                       </div>
-                      <div className="total" style={it.isReturn ? { color: "var(--warn)" } : undefined}>{formatBRL(lineTotal)}</div>
-                      <div className="actions" style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+                      <div className="total" style={it.isReturn ? { color: "var(--warn)" } : null}>{formatBRL(lineTotal)}</div>
+                      <div className="actions">
                         <button
                           className="row-x"
                           onClick={(e) => { e.stopPropagation(); removeItem(it.id); }}
                           title="Remover item"
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "var(--danger, #ff4444)",
-                            cursor: "pointer",
-                            padding: "4px",
-                            display: "flex"
-                          }}
                         >
-                          <Icon name="x" size={16}/>
+                          <Icon name="trash" size={13}/>
                         </button>
                       </div>
                     </div>
@@ -659,7 +621,7 @@ export function PdvGithubOriginal() {
             <div className="total-label">Total da venda</div>
             <div className="total-value">
               <span className="currency">R$</span>
-              <span>{formatNum(Math.floor(total)).split(',')[0]}</span>
+              <span>{formatNum(Math.floor(total), 0)}</span>
               <span className="cents">,{(total.toFixed(2).split(".")[1])}</span>
             </div>
 
@@ -735,7 +697,7 @@ export function PdvGithubOriginal() {
               </button>
             </div>
             <div className="customer-row">
-              <div className="customer-avatar" style={customer?.loyalty ? { background: TIER_COLORS[customer.loyalty.tier as keyof typeof TIER_COLORS], color: "#06180f" } : undefined}>
+              <div className="customer-avatar" style={customer?.loyalty ? { background: TIER_COLORS[customer.loyalty.tier], color: "#06180f" } : null}>
                 <Icon name="user" size={16}/>
               </div>
               <div className="customer-info">
@@ -762,11 +724,11 @@ export function PdvGithubOriginal() {
                 </div>
                 <div className="lr-cell">
                   <span className="lb">+ Nesta venda</span>
-                  <span className="vl mono" style={{ color: "var(--accent)" }}>+{Math.floor(total * ((window as any).POINTS_PER_REAL || 1)).toLocaleString("pt-BR")}</span>
+                  <span className="vl mono" style={{ color: "var(--accent)" }}>+{Math.floor(total * (window.POINTS_PER_REAL || 1)).toLocaleString("pt-BR")}</span>
                 </div>
                 <div className="lr-cell">
                   <span className="lb">Tier</span>
-                  <span className="vl" style={{ color: TIER_COLORS[customer.loyalty.tier as keyof typeof TIER_COLORS] }}>{customer.loyalty.tier}</span>
+                  <span className="vl" style={{ color: TIER_COLORS[customer.loyalty.tier] }}>{customer.loyalty.tier}</span>
                 </div>
               </div>
             )}
@@ -905,7 +867,7 @@ export function PdvGithubOriginal() {
         <SearchModal
           initialQuery={searchInitial}
           onClose={() => setModal(null)}
-          onPick={(p: any) => { addProduct(p, 1); setModal(null); }}
+          onPick={(p) => { addProduct(p, 1); setModal(null); }}
         />
       )}
       {modal === "qty" && selectedId && (() => {
@@ -915,7 +877,7 @@ export function PdvGithubOriginal() {
           <QtyModal
             item={it}
             onClose={() => setModal(null)}
-            onSave={(n: number) => { updateQty(it.id, n); setModal(null); }}
+            onSave={(n) => { updateQty(it.id, n); setModal(null); }}
           />
         );
       })()}
@@ -923,7 +885,7 @@ export function PdvGithubOriginal() {
         <CustomerModal
           customer={customer}
           onClose={() => setModal(null)}
-          onSave={(c: any) => { setCustomer(c); setModal(null); }}
+          onSave={(c) => { setCustomer(c); setModal(null); }}
         />
       )}
       {modal === "discount" && (
@@ -931,14 +893,14 @@ export function PdvGithubOriginal() {
           subtotal={subtotal}
           current={discount}
           onClose={() => setModal(null)}
-          onSave={(d: any) => { setDiscount(d); setModal(null); }}
+          onSave={(d) => { setDiscount(d); setModal(null); }}
         />
       )}
       {modal === "cpfnota" && (
         <CpfNotaModal
           current={docNota}
           onClose={() => setModal(null)}
-          onSave={(d: string) => { setDocNota(d); setModal(null); }}
+          onSave={(d) => { setDocNota(d); setModal(null); }}
         />
       )}
       {modal === "cancel" && (
@@ -978,7 +940,7 @@ export function PdvGithubOriginal() {
         <ReturnModal
           pastSales={turnSales}
           onClose={() => setModal(null)}
-          onConfirm={({ lines, mode }: any) => {
+          onConfirm={({ lines, mode }) => {
             addReturnLines(lines);
             setModal(null);
             if (mode === "troca") {
@@ -994,22 +956,22 @@ export function PdvGithubOriginal() {
           customer={customer}
           currentTotal={total}
           onClose={() => setModal(null)}
-          onSet={(c: any) => { setCustomer(c); setModal(null); }}
+          onSet={(c) => { setCustomer(c); setModal(null); }}
         />
       )}
 
       {modal === "cashops" && (
         <CashOpsModal
           ops={cashOps}
-          openingBalance={(window as any).OPENING_BALANCE || 0}
+          openingBalance={window.OPENING_BALANCE || 0}
           onClose={() => setModal(null)}
-          onAdd={(op: any) => setCashOps((arr) => [...arr, op])}
+          onAdd={(op) => setCashOps((arr) => [...arr, op])}
         />
       )}
 
       {modal === "cashclose" && (
         <CashCloseModal
-          openingBalance={(window as any).OPENING_BALANCE || 0}
+          openingBalance={window.OPENING_BALANCE || 0}
           ops={cashOps}
           sales={turnSales}
           fiscalSummary={fiscalSummary}
@@ -1029,21 +991,23 @@ export function PdvGithubOriginal() {
         <TurnHistoryModal
           sales={turnSales}
           onClose={() => setModal(null)}
-          onCancel={(cupom: string) => cancelTurnSale(cupom)}
+          onCancel={(cupom) => cancelTurnSale(cupom)}
         />
       )}
     </div>
   );
-}
+};
 
 /* Sucesso: também finaliza com Enter */
-function SuccessModalAuto({ sale, onNew }: any) {
+const SuccessModalAuto = ({ sale, onNew }) => {
   useEffect(() => {
-    const handler = (e: KeyboardEvent | any) => {
+    const handler = (e) => {
       if (e.key === "Enter") { e.preventDefault(); onNew(); }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onNew]);
   return <SuccessModal sale={sale} onNew={onNew}/>;
-}
+};
+
+window.PDV = PDV;

@@ -57,7 +57,7 @@ export default function LoginPage() {
                   id="email"
                   name="email"
                   type="email"
-                  placeholder="admin@rafacell.com.br"
+                  placeholder="seu@email.com"
                   autoComplete="email"
                   required
                 />

@@ -8,6 +8,7 @@ import { isSectionId, parseSectionFromSearchParam } from "./features/settings/se
 import { SettingsSidebar } from "./features/settings/components/SettingsSidebar";
 import { GeralSection } from "./features/settings/sections/GeralSection";
 import { LojasSection } from "./features/settings/sections/LojasSection";
+import { PlanoSection } from "./features/settings/sections/PlanoSection";
 import { AparenciaSection } from "./features/settings/sections/AparenciaSection";
 import { PdvSection } from "./features/settings/sections/PdvSection";
 import { VendasSection } from "./features/settings/sections/VendasSection";
@@ -27,6 +28,7 @@ import "./configuracoes-v3.css";
 const SECTION_COMPONENTS: Record<SectionId, () => JSX.Element> = {
   geral: GeralSection,
   lojas: LojasSection,
+  plano: PlanoSection,
   aparencia: AparenciaSection,
   pdv: PdvSection,
   vendas: VendasSection,
