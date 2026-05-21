@@ -514,7 +514,9 @@ export function extrairCamposProduto(reg: RegistroMergeado): {
   const c = reg.campos
   const custo = (c["financeiro.custo"] as number | null) ?? toNumberBr(c["_raw.Valor de custo"]) ?? 0
   const preco = (c["financeiro.precoVenda"] as number | null) ?? toNumberBr(c["_raw.Valor Varejo"]) ?? 0
-  const estoque = (c["produto.estoque"] as number | null) ?? toNumberBr(c["_raw.Estoque atual"]) ?? 0
+  // `produto.estoque` é gravado como string por `normalizarLinha` (cai no else genérico),
+  // então o cast `as number | null` é só de TypeScript — em runtime precisamos converter.
+  const estoque = toNumberBr(c["produto.estoque"] ?? c["_raw.Estoque atual"]) ?? 0
 
   return {
     name: String(c["produto.nome"] ?? c["_raw.Produto"] ?? "").trim(),
