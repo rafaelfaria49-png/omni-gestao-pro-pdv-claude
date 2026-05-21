@@ -174,6 +174,8 @@ export function FirstAccessWizard() {
     }
   }
 
+  if (!storesLoaded) return null
+
   return (
     <Dialog
       open={open}

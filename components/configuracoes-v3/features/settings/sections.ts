@@ -33,12 +33,20 @@ export interface SectionItem {
   label: string;
   description: string;
   icon: LucideIcon;
+  /** Quando definido, o item do menu navega para esta rota em vez de trocar a seção interna. */
+  href?: string;
 }
 
 export const SETTINGS_SECTIONS: SectionItem[] = [
   { id: "geral", label: "Geral", description: "Dados da empresa e preferências", icon: Settings },
   { id: "lojas", label: "Lojas", description: "Gerencie suas unidades", icon: Store },
-  { id: "plano", label: "Plano e Assinatura", description: "Assinatura, créditos e cobrança", icon: CreditCard },
+  {
+    id: "plano",
+    label: "Plano e Assinatura",
+    description: "Assinatura, créditos e cobrança",
+    icon: CreditCard,
+    href: "/dashboard/billing",
+  },
   { id: "aparencia", label: "Aparência", description: "Tema visual do sistema", icon: Palette },
   { id: "pdv", label: "PDV", description: "Layout do ponto de venda", icon: Monitor },
   { id: "vendas", label: "Vendas", description: "Regras de operação", icon: ShoppingCart },

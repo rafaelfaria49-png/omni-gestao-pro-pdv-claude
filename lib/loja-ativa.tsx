@@ -278,10 +278,11 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
   }, [lojas, lojaAtivaId])
 
   const cadastroBasicoIncompleto = useMemo(() => {
+    if (!storesLoaded) return false
     const nome = (lojaSelecionada?.nomeFantasia || "").trim()
     const cnpj = (lojaSelecionada?.cnpj || "").trim()
     return !nome || !cnpj
-  }, [lojaSelecionada?.cnpj, lojaSelecionada?.nomeFantasia])
+  }, [lojaSelecionada?.cnpj, lojaSelecionada?.nomeFantasia, storesLoaded])
 
   const empresaDocumentos = useMemo(
     () => mergeEmpresaComLoja(config.empresa, lojaSelecionada),

@@ -57,7 +57,7 @@ export default function LoginPage() {
                   id="email"
                   name="email"
                   type="email"
-                  placeholder="seu@email.com"
+                  placeholder="email@empresa.com.br"
                   autoComplete="email"
                   required
                 />

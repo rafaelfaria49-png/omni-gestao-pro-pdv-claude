@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SETTINGS_SECTIONS, SectionId } from "../sections";
 import { cn } from "../../../lib/utils";
 import { Sparkles } from "lucide-react";
@@ -23,28 +24,33 @@ export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
       <nav className="flex-1 overflow-y-auto px-4 py-4">
         <ul className="flex flex-col gap-2">
           {SETTINGS_SECTIONS.map((s) => {
-            const isActive = active === s.id;
+            const isActive = !s.href && active === s.id;
             const Icon = s.icon;
+            const itemClassName = cn(
+              "group flex w-full items-center gap-3 rounded-lg border border-transparent px-4 py-2.5 text-left text-sm tracking-wide transition-colors",
+              isActive
+                ? "bg-sidebarActive font-semibold text-sidebarActive-foreground"
+                : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
+            );
+
             return (
               <li key={s.id}>
-                <button
-                  type="button"
-                  onClick={() => onChange(s.id)}
-                  className={cn(
-                    "group flex w-full items-center gap-3 rounded-lg border border-transparent px-4 py-2.5 text-left text-sm tracking-wide transition-colors",
-                    isActive
-                      ? "bg-sidebarActive font-semibold text-sidebarActive-foreground"
-                      : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <Icon
-                    className={cn(
-                      "h-4 w-4 shrink-0",
-                      isActive ? "text-sidebarActive-foreground" : "text-muted-foreground group-hover:text-foreground",
-                    )}
-                  />
-                  <span className="truncate">{s.label}</span>
-                </button>
+                {s.href ? (
+                  <Link href={s.href} className={itemClassName}>
+                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
+                    <span className="truncate">{s.label}</span>
+                  </Link>
+                ) : (
+                  <button type="button" onClick={() => onChange(s.id)} className={itemClassName}>
+                    <Icon
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        isActive ? "text-sidebarActive-foreground" : "text-muted-foreground group-hover:text-foreground",
+                      )}
+                    />
+                    <span className="truncate">{s.label}</span>
+                  </button>
+                )}
               </li>
             );
           })}
