@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { auth } from "@/auth"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { upsertVendaInTransaction, type SalePayload } from "@/lib/ops-upsert-venda"
 
 export const runtime = "nodejs"
@@ -41,10 +43,14 @@ export async function POST(req: Request) {
   )
   if (denied) return denied
 
+  // Resolve o operador a partir da sessão NextAuth — mais confiável que o cashierId do cliente.
+  const session = await auth()
+  const operadorLabel = session?.user ? getOperatorLabelFromSession(session) : undefined
+
   try {
     await prismaEnsureConnected()
     await prisma.$transaction(async (tx) => {
-      await upsertVendaInTransaction(tx, lojaId, sale)
+      await upsertVendaInTransaction(tx, lojaId, sale, operadorLabel)
     })
 
     return NextResponse.json({ ok: true })
