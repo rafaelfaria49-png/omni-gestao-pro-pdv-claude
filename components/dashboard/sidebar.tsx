@@ -21,6 +21,7 @@ import {
   ShoppingBag,
   Receipt,
   MessageCircle,
+  History,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
@@ -87,6 +88,7 @@ export function Sidebar({ onNavigate, currentPage = "dashboard", collapsed = fal
       items: [
         { icon: Package, label: "Cadastro de Produtos", page: "produtos" },
         { icon: Store, label: "Movimentação/Inventário", page: "planejamento-compras" },
+        { icon: History, label: "Auditoria de Estoque", externalPath: "/dashboard/estoque/auditoria" },
       ],
     },
     {

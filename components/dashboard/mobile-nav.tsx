@@ -78,6 +78,7 @@ const fullMenuItems: MobileFullItem[] = [
     sub: [
       { label: "Produtos", page: "produtos", externalPath: "/dashboard/estoque" },
       { label: "Serviços", page: "servicos", externalPath: "/dashboard/cadastros-v2" },
+      { label: "Auditoria de Estoque", externalPath: "/dashboard/estoque/auditoria" },
       { label: "Planejamento de Compras", page: "planejamento-compras" },
     ],
   },
