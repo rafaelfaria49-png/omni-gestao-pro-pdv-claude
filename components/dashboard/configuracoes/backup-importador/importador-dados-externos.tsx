@@ -1939,13 +1939,22 @@ export function ImportadorDadosExternos() {
 
   const fetchWithTimeout = async (
     input: RequestInfo | URL,
-    init: RequestInit & { timeoutMs?: number } = {}
+    init: RequestInit & { timeoutMs?: number; label?: string } = {}
   ) => {
-    const timeoutMs = init.timeoutMs ?? 60_000
+    // Extrai opções extras para não vazarem para o fetch nativo. Passa `reason` no abort
+    // para o erro do AbortController carregar mensagem útil (substitui "signal is aborted without reason").
+    const { timeoutMs = 60_000, label, ...restInit } = init
     const ctrl = new AbortController()
-    const t = window.setTimeout(() => ctrl.abort(), timeoutMs)
+    const t = window.setTimeout(() => {
+      const where = label ? ` em ${label}` : ""
+      const reason = new DOMException(
+        `Tempo esgotado${where} após ${Math.round(timeoutMs / 1000)}s. O servidor demorou demais para responder.`,
+        "TimeoutError"
+      )
+      ctrl.abort(reason)
+    }, timeoutMs)
     try {
-      return await fetch(input, { ...init, signal: ctrl.signal })
+      return await fetch(input, { ...restInit, signal: ctrl.signal })
     } finally {
       window.clearTimeout(t)
     }
@@ -2039,6 +2048,9 @@ export function ImportadorDadosExternos() {
       setProgressLabel(`Enviando lote ${b + 1}/${batches}... (até item ${end} de ${total})`)
       await yieldToUi()
 
+      console.log("[import] inventory batch sending:", { batch: `${b + 1}/${batches}`, items: chunk.length })
+      // Timeout de 180s acomoda o N+1 do endpoint (3 roundtrips por produto: findFirst + upsert lookup + write).
+      // Em conexão típica com Supabase (~30ms RTT), 500 produtos ≈ 45s; folga para conexões lentas ou cold start.
       const res = await fetchWithTimeout("/api/ops/inventory/import", {
         method: "PUT",
         headers: {
@@ -2047,7 +2059,8 @@ export function ImportadorDadosExternos() {
         },
         body: JSON.stringify({ items: chunk }),
         credentials: "include",
-        timeoutMs: 60_000,
+        timeoutMs: 180_000,
+        label: `envio do lote de produtos ${b + 1}/${batches}`,
       })
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string; detail?: string } | null
@@ -2141,6 +2154,7 @@ export function ImportadorDadosExternos() {
     setProgressTotal(0)
     setProgressLabel("")
     setSelectedFileName(file?.name ?? "")
+    console.log("[import] upload started:", { name: file?.name, size: file?.size })
     try {
       const parsed = await parseFileUniversal(file)
       const enriched: ParsedSheet =
@@ -2155,9 +2169,15 @@ export function ImportadorDadosExternos() {
       const gridNorm = enriched.grid ? normalizeXlsxGridRaw(enriched.grid, enriched.fileName) : enriched.grid
       const finalSheet = { ...enriched, rows: rowsNorm, grid: gridNorm }
       setSheet(finalSheet)
+      console.log("[import] preview parsed:", {
+        rows: rowsNorm.length,
+        headers: enriched.headers.length,
+        detectedKind: enriched.detectedKind,
+      })
       // Segurança de destino: não alteramos automaticamente a aba ativa.
       // O usuário escolhe explicitamente (Produtos / Financeiro / etc.) para evitar mistura de importações.
     } catch (e) {
+      console.error("[import] upload error:", e)
       setParseError(e instanceof Error ? e.message : "Falha ao ler o arquivo.")
     }
   }
@@ -2215,6 +2235,7 @@ export function ImportadorDadosExternos() {
       body: JSON.stringify(body),
       credentials: "include",
       timeoutMs: 120_000,
+      label: `validação de ${kind}`,
     })
     const data = (await res.json().catch(() => null)) as {
       ok?: boolean
@@ -2241,6 +2262,10 @@ export function ImportadorDadosExternos() {
     setParseError(null)
     setValidationErrors([])
 
+    const startedAt = Date.now()
+    const rowCount = sheet.rows.length
+    console.log("[import] import started:", { kind, rows: rowCount })
+    let errored = false
     try {
       setProgressLabel("Validando colunas no servidor (sem gravar ainda)…")
       setProgressTotal(100)
@@ -2592,13 +2617,29 @@ export function ImportadorDadosExternos() {
         return
       }
     } catch (e) {
-      setParseError(e instanceof Error ? e.message : "Falha na importação.")
+      errored = true
+      const isAbort = e instanceof DOMException && (e.name === "AbortError" || e.name === "TimeoutError")
+      const raw = e instanceof Error ? e.message : String(e ?? "")
+      const msg = raw || (isAbort ? "Importação cancelada." : "Falha na importação.")
+      if (isAbort) {
+        console.error("[import] import aborted:", { kind, reason: msg, name: (e as DOMException).name })
+      } else {
+        console.error("[import] import error:", { kind, message: msg, error: e })
+      }
+      setParseError(msg)
     } finally {
       importRunRef.current = false
       setIsImporting(false)
       setProgressLabel("")
       setProgressNow(0)
       setProgressTotal(0)
+      if (!errored) {
+        console.log("[import] import completed:", {
+          kind,
+          rows: rowCount,
+          durationMs: Date.now() - startedAt,
+        })
+      }
     }
   }
 
