@@ -2189,6 +2189,7 @@ function AuditoriaFechamento() {
   const entidadeLabel: Record<string, string> = {
     movimentacao: "Movimentação", receber: "Conta a receber", pagar: "Conta a pagar",
     carteira: "Carteira", dre: "DRE", fechamento: "Fechamento", conciliacao: "Conciliação",
+    os: "Ordem de serviço",
   };
 
   return (

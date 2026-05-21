@@ -59,6 +59,7 @@ import { auth } from "@/auth"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator";
+import { registrarAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-financeira-service";
 
 export type OSPrioridade = "baixa" | "media" | "alta" | "critica";
 
@@ -135,6 +136,30 @@ async function resolveOperador(autor?: string): Promise<string> {
   return getOperatorLabelFromSession(await auth());
 }
 
+/**
+ * Helper interno: registra auditoria operacional/financeira a partir da sessão NextAuth.
+ * Falha-silenciosa (`registrarAuditoriaFinanceira` já é safe).
+ */
+async function auditOS(params: {
+  storeId: string;
+  osId: string;
+  acao: "criar" | "editar" | "liquidar" | "estornar" | "cancelar";
+  antes?: unknown;
+  depois?: unknown;
+}): Promise<void> {
+  const session = await auth();
+  await registrarAuditoriaFinanceira({
+    storeId: params.storeId,
+    entidade: "os",
+    entidadeId: params.osId,
+    acao: params.acao,
+    antes: params.antes,
+    depois: params.depois,
+    usuarioId: session?.user?.id?.trim() || undefined,
+    usuarioNome: getOperatorLabelFromSession(session),
+  });
+}
+
 export async function listOS(storeId: string): Promise<OperacoesOSPayload[]> {
   await requireOperacaoAuth(
     storeId,
@@ -186,6 +211,18 @@ export async function createOS(
   await prisma.ordemServico.update({
     where: { id: created.id },
     data: { payload: payload as unknown as Prisma.InputJsonValue },
+  });
+
+  void auditOS({
+    storeId,
+    osId: created.id,
+    acao: "criar",
+    depois: {
+      codigo,
+      clienteId: input.clienteId || null,
+      equipamento: payload.equipamento ? `${payload.equipamento.marca} ${payload.equipamento.modelo}`.trim() : null,
+      status: input.status,
+    },
   });
 
   revalidatePath("/dashboard/operacoes-v2");
@@ -244,6 +281,16 @@ export async function updateOSStatus(
     where: { id: osId },
     data: { status: toPrismaStatus(effective), payload: next as unknown as Prisma.InputJsonValue },
   });
+
+  if (currentEff !== effective) {
+    void auditOS({
+      storeId,
+      osId,
+      acao: effective === "cancelada" ? "cancelar" : "editar",
+      antes: { status: currentEff },
+      depois: { status: effective },
+    });
+  }
 
   // Restauração automática do estoque quando a OS sai de "entregue" ou é cancelada.
   // Importante: falhas NÃO podem quebrar a transição de status.
@@ -390,6 +437,18 @@ export async function updateOSPayload(
     cancelContaReceberFromOS,
     makeTimelineEvent,
     appendTimelineEvent: ({ storeId: s, osId: o, ev }) => appendTimelineEvent<OperacoesOSPayload>(prisma, { storeId: s, osId: o, ev }),
+    onContaReceberChanged: async ({ contaReceberTituloId, localKey, action, valor }) => {
+      const session = await auth();
+      await registrarAuditoriaFinanceira({
+        storeId,
+        entidade: "receber",
+        entidadeId: contaReceberTituloId,
+        acao: action === "cancelled" ? "cancelar" : "criar",
+        usuarioId: session?.user?.id?.trim() || undefined,
+        usuarioNome: getOperatorLabelFromSession(session),
+        depois: { localKey, valor, origemAdapter: "os-faturamento", osId },
+      });
+    },
   });
 
   revalidatePath("/dashboard/operacoes-v2");
@@ -825,6 +884,19 @@ export async function gerarCobrancaOSAction(
     faturamentoFormaPagamento: formaPagamento,
     timeline: [...tl, ev],
   } as Partial<OperacoesOSPayload>);
+
+  void auditOS({
+    storeId,
+    osId,
+    acao: "editar",
+    depois: {
+      tipo: "cobranca_gerada",
+      modo: input.modo,
+      formaPagamento,
+      parcelas: parcelas.length,
+      total,
+    },
+  });
 
   const stAfter = normalizeOperacaoStatus(patched.status);
   if (stAfter === "entregue" && patched.garantia?.ativa && (patched.garantia.prazoDias ?? 0) > 0) {

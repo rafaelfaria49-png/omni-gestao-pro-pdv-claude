@@ -46,6 +46,18 @@ export async function syncFinanceiroAfterOSPayloadUpdate(params: {
   >;
   makeTimelineEvent: (tipo: EventoTimeline["tipo"], conteudo: string, metadata?: Record<string, unknown>) => any;
   appendTimelineEvent: (input: { storeId: string; osId: string; ev: any }) => Promise<void>;
+  /**
+   * Opcional: callback chamado quando a CR é criada/atualizada/cancelada pelo adapter OS,
+   * para registrar auditoria financeira (entidade="receber"). O caller (Server Action) já
+   * tem acesso à sessão NextAuth — passar callback evita acoplar este serviço ao auth.
+   * Falha-silenciosa: erros do callback não interrompem o sync.
+   */
+  onContaReceberChanged?: (input: {
+    contaReceberTituloId: string;
+    localKey: string;
+    action: "created" | "updated" | "cancelled";
+    valor?: number;
+  }) => Promise<void> | void;
 }): Promise<void> {
   if (!shouldSyncFinanceiroFromPatch(params.patch)) return;
 
@@ -68,6 +80,18 @@ export async function syncFinanceiroAfterOSPayloadUpdate(params: {
             { contaReceberTituloId: r.id, localKey: r.localKey }
           ),
         });
+        if (params.onContaReceberChanged) {
+          try {
+            await params.onContaReceberChanged({
+              contaReceberTituloId: r.id,
+              localKey: r.localKey,
+              action: r.action,
+              valor: params.next.faturamentoTotal,
+            });
+          } catch {
+            /* auditoria não interrompe sync */
+          }
+        }
       }
       return;
     }
@@ -87,6 +111,17 @@ export async function syncFinanceiroAfterOSPayloadUpdate(params: {
             localKey: r.localKey,
           }),
         });
+        if (params.onContaReceberChanged && r.id) {
+          try {
+            await params.onContaReceberChanged({
+              contaReceberTituloId: r.id,
+              localKey: r.localKey,
+              action: "cancelled",
+            });
+          } catch {
+            /* auditoria não interrompe sync */
+          }
+        }
       }
     }
   } catch (e) {

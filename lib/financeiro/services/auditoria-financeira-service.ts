@@ -20,6 +20,7 @@ export type EntidadeAuditoria =
   | "dre"
   | "fechamento"
   | "conciliacao"
+  | "os"
 
 export type AcaoAuditoria =
   | "criar"
