@@ -158,6 +158,53 @@ function makeEv(tipo: EventoTimeline["tipo"], conteudo: string, metadata?: Recor
   return { id: newId("ev"), tipo, autor: "Sistema", autorTipo: "sistema", conteudo, metadata, criadoEm: nowIso() };
 }
 
+/**
+ * Registra a baixa/retorno no livro-razão de estoque (MovimentacaoEstoque).
+ * Best-effort: roda dentro da transação da OS, mas NUNCA quebra o fluxo — se falhar,
+ * apenas loga (o estoque já é a fonte da verdade; a trilha é complementar).
+ */
+async function registrarLedgerOS(
+  tx: Prisma.TransactionClient,
+  params: {
+    storeId: string;
+    osId: string;
+    produtoId: string;
+    sku: string | null;
+    nome: string;
+    custoMedio: number;
+    tipo: "saida" | "entrada";
+    quantidadeAbs: number;
+    estoqueAntes: number;
+    estoqueDepois: number;
+  }
+): Promise<void> {
+  try {
+    await tx.movimentacaoEstoque.create({
+      data: {
+        storeId: params.storeId,
+        produtoId: params.produtoId,
+        produtoSku: params.sku,
+        produtoNome: params.nome,
+        tipo: params.tipo,
+        origem: "os",
+        quantidade: params.tipo === "saida" ? -params.quantidadeAbs : params.quantidadeAbs,
+        estoqueAntes: params.estoqueAntes,
+        estoqueDepois: params.estoqueDepois,
+        custoUnitario: 0,
+        custoMedioAntes: params.custoMedio,
+        custoMedioDepois: params.custoMedio,
+        valorTotal: 0,
+        motivo: `OS ${params.osId}`,
+      },
+    });
+  } catch (e) {
+    console.error(
+      "[os-estoque] falha ao registrar movimentação no livro-razão (ignorado):",
+      e instanceof Error ? e.message : e
+    );
+  }
+}
+
 export async function consumeEstoqueFromOS(params: { storeId: string; osId: string; osPayload?: OrdemServico }): Promise<ConsumeResult> {
   if (!params.storeId || !params.osId) return { ok: false, status: "error", error: "Parâmetros inválidos", ignored: [] };
 
@@ -193,7 +240,7 @@ export async function consumeEstoqueFromOS(params: { storeId: string; osId: stri
 
       // Aplica baixa + cria itens da OS
       for (const it of items) {
-        const p = await tx.produto.findFirstOrThrow({ where: { id: it.produtoId, storeId: params.storeId }, select: { id: true, stock: true, name: true, price: true } });
+        const p = await tx.produto.findFirstOrThrow({ where: { id: it.produtoId, storeId: params.storeId }, select: { id: true, stock: true, name: true, price: true, sku: true, precoCusto: true } });
         const anterior = p.stock;
         const depois = anterior - it.quantidade;
 
@@ -212,6 +259,19 @@ export async function consumeEstoqueFromOS(params: { storeId: string; osId: stri
             precoUnitario: unit,
             observacao: "",
           },
+        });
+
+        await registrarLedgerOS(tx, {
+          storeId: params.storeId,
+          osId: params.osId,
+          produtoId: p.id,
+          sku: p.sku,
+          nome: p.name,
+          custoMedio: p.precoCusto ?? 0,
+          tipo: "saida",
+          quantidadeAbs: it.quantidade,
+          estoqueAntes: anterior,
+          estoqueDepois: depois,
         });
 
         movimentos.push({
@@ -280,7 +340,25 @@ export async function restoreEstoqueFromOS(params: {
       const itens = await tx.ordemServicoItem.findMany({ where: { ordemServicoId: params.osId } });
       for (const it of itens) {
         if (!it.produtoId) continue;
+        const p = await tx.produto.findFirst({
+          where: { id: it.produtoId, storeId: params.storeId },
+          select: { id: true, stock: true, name: true, sku: true, precoCusto: true },
+        });
         await tx.produto.update({ where: { id: it.produtoId }, data: { stock: { increment: it.quantidade } } });
+        if (p) {
+          await registrarLedgerOS(tx, {
+            storeId: params.storeId,
+            osId: params.osId,
+            produtoId: p.id,
+            sku: p.sku,
+            nome: p.name,
+            custoMedio: p.precoCusto ?? 0,
+            tipo: "entrada",
+            quantidadeAbs: it.quantidade,
+            estoqueAntes: p.stock,
+            estoqueDepois: p.stock + it.quantidade,
+          });
+        }
       }
       await tx.ordemServicoItem.deleteMany({ where: { ordemServicoId: params.osId } });
 
@@ -410,7 +488,7 @@ export async function applyEstoqueDelta(params: {
         if (d.tipo === "consumo") {
           const p = await tx.produto.findFirstOrThrow({
             where: { id: d.produtoId, storeId: params.storeId },
-            select: { id: true, price: true },
+            select: { id: true, price: true, stock: true, name: true, sku: true, precoCusto: true },
           });
           await tx.produto.update({ where: { id: d.produtoId }, data: { stock: { decrement: d.diferenca } } });
           await tx.ordemServicoItem.create({
@@ -424,9 +502,39 @@ export async function applyEstoqueDelta(params: {
               observacao: "",
             },
           });
+          await registrarLedgerOS(tx, {
+            storeId: params.storeId,
+            osId: params.osId,
+            produtoId: p.id,
+            sku: p.sku,
+            nome: p.name,
+            custoMedio: p.precoCusto ?? 0,
+            tipo: "saida",
+            quantidadeAbs: d.diferenca,
+            estoqueAntes: p.stock,
+            estoqueDepois: p.stock - d.diferenca,
+          });
         } else {
           const toRestore = Math.abs(d.diferenca);
+          const pRest = await tx.produto.findFirst({
+            where: { id: d.produtoId, storeId: params.storeId },
+            select: { id: true, stock: true, name: true, sku: true, precoCusto: true },
+          });
           await tx.produto.update({ where: { id: d.produtoId }, data: { stock: { increment: toRestore } } });
+          if (pRest) {
+            await registrarLedgerOS(tx, {
+              storeId: params.storeId,
+              osId: params.osId,
+              produtoId: pRest.id,
+              sku: pRest.sku,
+              nome: pRest.name,
+              custoMedio: pRest.precoCusto ?? 0,
+              tipo: "entrada",
+              quantidadeAbs: toRestore,
+              estoqueAntes: pRest.stock,
+              estoqueDepois: pRest.stock + toRestore,
+            });
+          }
 
           let remaining = toRestore;
           const rows = itens.filter((it) => it.produtoId && it.produtoId === d.produtoId);

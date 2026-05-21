@@ -2,6 +2,23 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { auth } from "@/auth";
+
+/**
+ * Resolve quem está registrando a movimentação a partir da sessão NextAuth (fonte confiável).
+ * Cai para o valor enviado pelo cliente apenas se não houver sessão. Nunca lança.
+ */
+async function resolverUsuario(fallback?: string): Promise<string | null> {
+  try {
+    const session = await auth();
+    const u = session?.user;
+    const fromSession = (u?.name || u?.email || "").trim();
+    if (fromSession) return fromSession;
+  } catch {
+    /* sem contexto de sessão — usa fallback */
+  }
+  return fallback?.trim() || null;
+}
 
 /**
  * Movimentação de estoque (livro-razão). Toda entrada/ajuste:
@@ -25,6 +42,7 @@ export type MovimentacaoEstoqueDTO = {
   fornecedor: string | null;
   motivo: string | null;
   observacao: string | null;
+  usuario: string | null;
   produtoNome: string;
   produtoSku: string | null;
   createdAt: string;
@@ -65,6 +83,8 @@ export async function registrarEntradaEstoque(
   const custoUnit = Math.max(0, Number(input.custoUnitario ?? 0));
   if (!Number.isFinite(custoUnit)) return { ok: false, reason: "Custo unitário inválido" };
 
+  const usuario = await resolverUsuario(input.usuario);
+
   try {
     const out = await prisma.$transaction(async (tx) => {
       const prod = await tx.produto.findFirst({
@@ -100,7 +120,7 @@ export async function registrarEntradaEstoque(
           documento: input.documento?.trim() || null,
           fornecedor: input.fornecedor?.trim() || null,
           observacao: input.observacao?.trim() || null,
-          usuario: input.usuario?.trim() || null,
+          usuario,
         },
         select: { id: true },
       });
@@ -153,6 +173,8 @@ export async function registrarAjusteEstoque(
     return { ok: false, reason: "Novo saldo deve ser um inteiro >= 0" };
   }
 
+  const usuario = await resolverUsuario(input.usuario);
+
   try {
     const out = await prisma.$transaction(async (tx) => {
       const prod = await tx.produto.findFirst({
@@ -183,7 +205,7 @@ export async function registrarAjusteEstoque(
           valorTotal: 0,
           motivo: input.motivo.trim(),
           observacao: input.observacao?.trim() || null,
-          usuario: input.usuario?.trim() || null,
+          usuario,
         },
         select: { id: true },
       });
@@ -201,6 +223,61 @@ export async function registrarAjusteEstoque(
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar ajuste" };
   }
+}
+
+export type EstoqueResumo = {
+  totalSkus: number;
+  skusComEstoque: number;
+  skusSemEstoque: number;
+  totalUnidades: number;
+  valorCusto: number; // Σ stock × precoCusto
+  valorVenda: number; // Σ stock × price
+  margemPotencial: number; // valorVenda − valorCusto
+};
+
+/** KPIs de estoque da loja: valor a custo, valor a venda, unidades e cobertura de SKUs. */
+export async function getEstoqueResumo(storeId: string): Promise<EstoqueResumo> {
+  const sid = (storeId ?? "").trim();
+  const vazio: EstoqueResumo = {
+    totalSkus: 0,
+    skusComEstoque: 0,
+    skusSemEstoque: 0,
+    totalUnidades: 0,
+    valorCusto: 0,
+    valorVenda: 0,
+    margemPotencial: 0,
+  };
+  if (!sid) return vazio;
+
+  // Produto.stock × precoCusto/price não é expressável em aggregate do Prisma → soma em JS.
+  const rows = await prisma.produto.findMany({
+    where: { storeId: sid, active: true },
+    select: { stock: true, precoCusto: true, price: true },
+  });
+
+  let totalUnidades = 0;
+  let valorCusto = 0;
+  let valorVenda = 0;
+  let skusComEstoque = 0;
+  for (const r of rows) {
+    const stock = r.stock ?? 0;
+    if (stock > 0) skusComEstoque += 1;
+    totalUnidades += stock;
+    valorCusto += stock * (r.precoCusto ?? 0);
+    valorVenda += stock * (r.price ?? 0);
+  }
+  valorCusto = arredonda2(valorCusto);
+  valorVenda = arredonda2(valorVenda);
+
+  return {
+    totalSkus: rows.length,
+    skusComEstoque,
+    skusSemEstoque: rows.length - skusComEstoque,
+    totalUnidades,
+    valorCusto,
+    valorVenda,
+    margemPotencial: arredonda2(valorVenda - valorCusto),
+  };
 }
 
 /** Histórico de movimentações — por produto (se informado) ou geral da loja. */
@@ -236,6 +313,7 @@ export async function listMovimentacoesEstoque(
     fornecedor: m.fornecedor,
     motivo: m.motivo,
     observacao: m.observacao,
+    usuario: m.usuario,
     produtoNome: m.produtoNome,
     produtoSku: m.produtoSku,
     createdAt: m.createdAt.toISOString(),

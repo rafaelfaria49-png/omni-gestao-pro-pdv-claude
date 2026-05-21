@@ -8,7 +8,8 @@ import {
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea, useToggle } from "./ui-kit";
 import { ProductAIModal, QualityScore, InteligenciaCadastros } from "./produto-ia";
-import { MovimentacaoEstoqueModal } from "./MovimentacaoEstoqueModal";
+import { MovimentacaoEstoqueModal, HistoricoEstoqueGeralModal } from "./MovimentacaoEstoqueModal";
+import { getEstoqueResumo, type EstoqueResumo } from "@/app/actions/estoque";
 import { ImportacaoHub } from "./ImportacaoHub";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
@@ -676,6 +677,8 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
   const [deleting, setDeleting] = useState<ProdutoDTO | null>(null);
   const [deleteResult, setDeleteResult] = useState<DeleteProdutoResult | null>(null);
   const [estoqueProduto, setEstoqueProduto] = useState<ProdutoDTO | null>(null);
+  const [histGeralOpen, setHistGeralOpen] = useState(false);
+  const [resumo, setResumo] = useState<EstoqueResumo | null>(null);
   const [rows, setRows] = useState<ProdutoDTO[]>([]);
   const [filterQuery, setFilterQuery] = useState("");
   // loadingRows: bloqueia apenas a tabela; loadingAlerts: atualiza os cards silenciosamente
@@ -713,7 +716,10 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
     () => async () => {
       setLoadingAlerts(true);
       try {
-        const dash = await getCadastrosDashboardStats(storeId);
+        const [dash, resumoEstoque] = await Promise.all([
+          getCadastrosDashboardStats(storeId),
+          getEstoqueResumo(storeId),
+        ]);
         setAlerts([
           { l: "Estoque baixo", n: dash.produtoAlerts.estoqueBaixo, t: "warning" },
           { l: "Sem preço", n: dash.produtoAlerts.semPreco, t: "danger" },
@@ -721,6 +727,7 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
           { l: "Margem baixa", n: dash.produtoAlerts.margemBaixa, t: "warning" },
           { l: "Prontos p/ Marketplace", n: dash.produtoAlerts.prontosMarketplace, t: "success" },
         ]);
+        setResumo(resumoEstoque);
       } catch {
         // alertas são não-críticos: mantém valores anteriores sem propagar erro
       } finally {
@@ -754,8 +761,55 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
     });
   }, [rows, filterQuery]);
 
+  const fmtBRL = (n: number) =>
+    n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
   return (
     <div className="w-full min-w-0">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-stretch">
+        <div className="grid min-w-0 flex-1 grid-cols-2 gap-3 md:grid-cols-4">
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">Valor em estoque (custo)</div>
+            <div className="mt-1 text-2xl font-bold text-foreground">
+              {resumo ? fmtBRL(resumo.valorCusto) : <span className="text-base text-muted-foreground">—</span>}
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              {resumo ? `${resumo.totalUnidades} un · ${resumo.skusComEstoque} SKU c/ saldo` : ""}
+            </div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">Venda potencial</div>
+            <div className="mt-1 text-2xl font-bold text-foreground">
+              {resumo ? fmtBRL(resumo.valorVenda) : <span className="text-base text-muted-foreground">—</span>}
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">se vender todo o saldo</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">Margem potencial</div>
+            <div className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+              {resumo ? fmtBRL(resumo.margemPotencial) : <span className="text-base text-muted-foreground">—</span>}
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">venda − custo</div>
+          </Card>
+          <Card className="p-4">
+            <div className="text-xs text-muted-foreground">SKUs sem saldo</div>
+            <div className="mt-1 text-2xl font-bold text-foreground">
+              {resumo ? resumo.skusSemEstoque : <span className="text-base text-muted-foreground">—</span>}
+            </div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
+              {resumo ? `de ${resumo.totalSkus} ativos` : ""}
+            </div>
+          </Card>
+        </div>
+        <button
+          type="button"
+          onClick={() => setHistGeralOpen(true)}
+          className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:bg-accent lg:w-44"
+        >
+          <History className="h-4 w-4" /> Histórico de estoque
+        </button>
+      </div>
+
       <div className="mb-4 grid min-w-0 grid-cols-2 gap-3 md:grid-cols-5">
         {alerts.map((a) => (
           <Card key={a.l} className="p-4">
@@ -958,8 +1012,13 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
               }
             : null
         }
-        onSaved={refreshRows}
+        onSaved={() => {
+          void refreshRows();
+          void refreshAlerts();
+        }}
       />
+
+      <HistoricoEstoqueGeralModal open={histGeralOpen} onClose={() => setHistGeralOpen(false)} storeId={storeId} />
 
       {deleting && (
         <Modal
