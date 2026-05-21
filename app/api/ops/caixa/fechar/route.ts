@@ -14,7 +14,7 @@ const schema = z.object({
   saldoFinal: z.number().min(0).optional(),
   saldoContado: z.number().min(0).optional(),
   observacao: z.string().max(500).default(""),
-  /** Snapshot do ledger diário para auditoria. */
+  /** Snapshot do ledger diário para auditoria (enviado pelo cliente). */
   payload: z.record(z.unknown()).optional(),
 })
 
@@ -61,14 +61,40 @@ export async function POST(req: Request) {
       )
     }
 
+    // Busca observação anterior e horário de abertura para calcular totalVendas server-side
     const prev = await prisma.sessaoCaixa.findUnique({
       where: { id: sessaoId },
-      select: { observacao: true },
+      select: { observacao: true, abertaEm: true },
     })
     const obsMerge =
       observacao.trim() && prev?.observacao?.trim()
         ? `${prev.observacao.trim()}\n[Fechamento] ${observacao.trim()}`
         : observacao.trim() || prev?.observacao?.trim() || ""
+
+    // Calcula totalVendas a partir do ledger financeiro para auditoria fiel.
+    // O valor do cliente (localStorage) pode divergir; o server-side é o canônico.
+    const agora = new Date()
+    const movFinAgg = await prisma.movimentacaoFinanceira.aggregate({
+      where: {
+        storeId: lojaId,
+        origem: "venda",
+        tipo: "entrada",
+        createdAt: { gte: prev?.abertaEm ?? agora, lte: agora },
+      },
+      _sum: { valor: true },
+      _count: true,
+    })
+    const totalVendasServer = Math.round((movFinAgg._sum.valor ?? 0) * 100) / 100
+
+    // Mescla payload do cliente com totais server-side.
+    // O cliente envia o snapshot do ledger diário (localStorage); o servidor sobrepõe
+    // o totalVendas com o valor calculado do banco para garantir auditoria correta.
+    const payloadFinal: Prisma.InputJsonValue = {
+      ...(payload ? (payload as Record<string, unknown>) : {}),
+      totalVendasServer,
+      totalVendasCount: movFinAgg._count,
+      computadoEm: agora.toISOString(),
+    }
 
     const sessao = await prisma.sessaoCaixa.update({
       where: { id: sessaoId },
@@ -77,8 +103,8 @@ export async function POST(req: Request) {
         saldoFinal: saldoFinal ?? null,
         saldoContado: saldoContado ?? null,
         observacao: obsMerge,
-        fechadaEm: new Date(),
-        payload: payload ? (payload as Prisma.InputJsonValue) : undefined,
+        fechadaEm: agora,
+        payload: payloadFinal,
       },
       select: { id: true, fechadaEm: true, status: true },
     })

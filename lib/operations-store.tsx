@@ -488,6 +488,38 @@ export function OperationsProvider({
             sales: mergeSalesById(prev.sales, remoteSales),
           }))
         }
+
+        // Reconcilia sessão de caixa com o servidor (best-effort).
+        // Se o server tem sessão ABERTA mas o localStorage diz fechado (ou perdeu o sessaoId),
+        // restaura para evitar sessão órfã e duplicação de abertura.
+        try {
+          const rCaixa = await fetch(
+            `/api/ops/caixa/sessoes?lojaId=${encodeURIComponent(lj)}&status=ABERTA&take=1`,
+            { credentials: "include", headers }
+          )
+          if (!cancelled && rCaixa.ok) {
+            const jCaixa = (await rCaixa.json()) as {
+              sessoes?: Array<{ id: string; saldoInicial: number; abertaEm: string }>
+            }
+            const openSessao = jCaixa.sessoes?.[0] ?? null
+            const localCaixa = stateRef.current.caixa
+            if (openSessao && !localCaixa.isOpen) {
+              // Servidor tem sessão aberta, mas estado local diz fechado — recupera.
+              setState((prev) => ({
+                ...prev,
+                caixaSessaoId: openSessao.id,
+                caixa: {
+                  ...prev.caixa,
+                  isOpen: true,
+                  saldoInicial: openSessao.saldoInicial,
+                  dataAbertura: new Date(openSessao.abertaEm),
+                },
+              }))
+            }
+          }
+        } catch {
+          /* ignorar — reconciliação é best-effort */
+        }
       } catch {
         if (!cancelled) {
           lastSentOpsRef.current = JSON.stringify({
