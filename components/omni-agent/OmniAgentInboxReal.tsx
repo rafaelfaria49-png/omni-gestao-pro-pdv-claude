@@ -12,7 +12,7 @@ import {
   listOmniAgentCommands,
   rejectOmniAgentCommand,
 } from "@/app/actions/omni-agent"
-import { Check, X, RefreshCw } from "lucide-react"
+import { Check, X, RefreshCw, CheckCircle2, XCircle, Clock, AlertTriangle, Loader2, Inbox } from "lucide-react"
 
 type Props = {
   storeId: string
@@ -22,19 +22,59 @@ type Props = {
   onCommandsChanged?: () => void
 }
 
-function statusLabel(s: OmniAgentCommandDTO["status"]): string {
-  switch (s) {
-    case "PENDENTE":
-      return "pendente"
-    case "AGUARDANDO_CONFIRMACAO":
-      return "aguardando confirmação"
-    case "EXECUTADO":
-      return "executado"
-    case "ERRO":
-      return "erro"
-    default:
-      return s
-  }
+const STATUS_META = {
+  PENDENTE: {
+    label: "Pendente",
+    badgeVariant: "secondary" as const,
+    borderClass: "border-l-amber-500",
+    icon: Clock,
+    iconClass: "text-amber-500 dark:text-amber-400",
+  },
+  AGUARDANDO_CONFIRMACAO: {
+    label: "Ag. confirmação",
+    badgeVariant: "secondary" as const,
+    borderClass: "border-l-blue-500",
+    icon: AlertTriangle,
+    iconClass: "text-blue-500 dark:text-blue-400",
+  },
+  EXECUTADO: {
+    label: "Executado",
+    badgeVariant: "default" as const,
+    borderClass: "border-l-emerald-500",
+    icon: CheckCircle2,
+    iconClass: "text-emerald-500 dark:text-emerald-400",
+  },
+  ERRO: {
+    label: "Erro",
+    badgeVariant: "destructive" as const,
+    borderClass: "border-l-destructive",
+    icon: XCircle,
+    iconClass: "text-destructive",
+  },
+} as const
+
+function InboxSkeleton() {
+  return (
+    <div className="space-y-3">
+      {[...Array(3)].map((_, i) => (
+        <Card key={i} className="border-l-4 border-l-muted p-4">
+          <div className="space-y-2.5">
+            <div className="flex items-start gap-2">
+              <div className="mt-0.5 h-4 w-4 shrink-0 rounded-full bg-muted animate-pulse" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-1/2 rounded bg-muted animate-pulse" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <div className="h-5 w-20 rounded bg-muted animate-pulse" />
+              <div className="h-5 w-12 rounded bg-muted animate-pulse" />
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
 }
 
 export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange, onCommandsChanged }: Props) {
@@ -113,89 +153,194 @@ export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange, onComma
     return Array.isArray(amb) ? (amb as { id: string; nome: string; telefone: string }[]) : null
   }
 
+  const FILTERS = [
+    { key: "all" as const, label: "Todos", count: items.length },
+    { key: "PENDENTE" as const, label: "Pendentes", count: counts.PENDENTE },
+    { key: "AGUARDANDO_CONFIRMACAO" as const, label: "Aguardando", count: counts.AGUARDANDO_CONFIRMACAO },
+    { key: "EXECUTADO" as const, label: "Executados", count: counts.EXECUTADO },
+    { key: "ERRO" as const, label: "Erros", count: counts.ERRO },
+  ]
+
   return (
-    <div className="space-y-3">
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {(["all", "PENDENTE", "AGUARDANDO_CONFIRMACAO", "EXECUTADO", "ERRO"] as const).map((f) => (
-            <Button key={f} size="sm" variant={filter === f ? "default" : "outline"} onClick={() => setFilter(f)}>
-              {f === "all" ? "Todos" : statusLabel(f)}
-            </Button>
+    <div className="space-y-4">
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                filter === f.key
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+              )}
+            >
+              {f.label}
+              {f.count > 0 && (
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
+                    filter === f.key
+                      ? "bg-primary-foreground/20 text-primary-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  {f.count}
+                </span>
+              )}
+            </button>
           ))}
-          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => void refresh()} disabled={loading}>
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          </Button>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          {counts.PENDENTE} pendentes · {counts.AGUARDANDO_CONFIRMACAO} aguardando confirmação · {counts.EXECUTADO} executados ·{" "}
-          {counts.ERRO} erros
-        </p>
-      </Card>
-
-      {visible.map((i) => (
-        <Card key={i.id} className="p-4 space-y-2">
-          <div className="flex flex-wrap items-start gap-2 justify-between">
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="font-medium break-words">{i.interpretacao.action}</div>
-              <div className="text-xs text-muted-foreground">Original: &quot;{i.comandoOriginal}&quot;</div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="outline">{i.interpretacao.intent}</Badge>
-                <Badge variant="secondary">{Math.round(i.interpretacao.confidence * 100)}%</Badge>
-                <Badge variant={i.status === "EXECUTADO" ? "default" : i.status === "ERRO" ? "destructive" : "secondary"}>
-                  {statusLabel(i.status)}
-                </Badge>
-                <span className="text-muted-foreground">{new Date(i.createdAt).toLocaleString("pt-BR")}</span>
-              </div>
-            </div>
-            {(i.status === "PENDENTE" || i.status === "AGUARDANDO_CONFIRMACAO") && (
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => void onConfirm(i.id)} disabled={busy === i.id}>
-                  <Check className="h-4 w-4 mr-1" />
-                  {i.status === "PENDENTE" ? "Interpretar e executar" : "Confirmar execução"}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => void onReject(i.id)} disabled={busy === i.id}>
-                  <X className="h-4 w-4 mr-1" />
-                  Recusar
-                </Button>
-              </div>
-            )}
-          </div>
-
-          {ambiguous(i) && i.status === "AGUARDANDO_CONFIRMACAO" && (
-            <div className="rounded-md border border-border p-2 space-y-2">
-              <div className="text-xs font-medium">Escolha o cliente:</div>
-              <div className="flex flex-wrap gap-2">
-                {ambiguous(i)!.map((c) => (
-                  <Button key={c.id} size="sm" variant="outline" disabled={busy === i.id} onClick={() => void onConfirm(i.id, c.id)}>
-                    {c.nome} · {c.telefone}
-                  </Button>
-                ))}
-              </div>
-            </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="ml-auto h-8 gap-1.5"
+          onClick={() => void refresh()}
+          disabled={loading}
+        >
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
           )}
+          <span className="hidden sm:inline text-xs">Atualizar</span>
+        </Button>
+      </div>
 
-          <div className="rounded-md bg-muted/50 p-2 text-xs space-y-1">
-            <div className="font-medium text-muted-foreground">Interpretação (campos)</div>
-            <div className="grid gap-1 sm:grid-cols-2">
-              {Object.entries(i.interpretacao.fields).map(([k, v]) => (
-                <div key={k}>
-                  <span className="text-muted-foreground capitalize">{k}:</span> <span className="font-medium">{v || "—"}</span>
-                </div>
-              ))}
+      {/* Content */}
+      {loading ? (
+        <InboxSkeleton />
+      ) : visible.length === 0 ? (
+        <Card className="flex flex-col items-center gap-3 p-10 text-center">
+          <div className="rounded-full bg-muted p-3">
+            <Inbox className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="space-y-1">
+            <div className="text-sm font-medium">
+              {filter === "all"
+                ? "Inbox vazia"
+                : `Nenhum item "${FILTERS.find((f) => f.key === filter)?.label}"`}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {filter === "all"
+                ? 'Use "Novo" ou os exemplos de teste para criar comandos.'
+                : "Tente outro filtro."}
             </div>
           </div>
-
-          {i.resultado && (
-            <div className="rounded-md border border-border p-2 text-xs max-h-48 overflow-y-auto">
-              <div className="font-medium mb-1">Resultado / ação executada</div>
-              <pre className="whitespace-pre-wrap break-words font-mono text-[11px]">{JSON.stringify(i.resultado, null, 2)}</pre>
-            </div>
-          )}
         </Card>
-      ))}
+      ) : (
+        <div className="space-y-2">
+          {visible.map((i) => {
+            const meta = STATUS_META[i.status] ?? STATUS_META.PENDENTE
+            const StatusIcon = meta.icon
+            const isBusy = busy === i.id
+            return (
+              <Card key={i.id} className={cn("border-l-4 p-4 transition-all", meta.borderClass)}>
+                <div className="flex flex-wrap items-start gap-3 justify-between">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <StatusIcon className={cn("mt-0.5 h-4 w-4 shrink-0", meta.iconClass)} />
+                      <div className="min-w-0">
+                        <div className="font-medium leading-snug break-words">{i.interpretacao.action}</div>
+                        <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                          &quot;{i.comandoOriginal}&quot;
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                      <Badge variant="outline" className="font-mono text-[10px]">
+                        {i.interpretacao.intent}
+                      </Badge>
+                      <Badge variant="secondary" className="tabular-nums text-[10px]">
+                        {Math.round(i.interpretacao.confidence * 100)}%
+                      </Badge>
+                      <span className="self-center text-muted-foreground">
+                        {new Date(i.createdAt).toLocaleString("pt-BR")}
+                      </span>
+                    </div>
+                  </div>
 
-      {!loading && visible.length === 0 && (
-        <Card className="p-6 text-sm text-muted-foreground text-center">Nenhum comando registado. Use &quot;Novo&quot; ou os exemplos de teste.</Card>
+                  {(i.status === "PENDENTE" || i.status === "AGUARDANDO_CONFIRMACAO") && (
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 gap-1.5"
+                        onClick={() => void onConfirm(i.id)}
+                        disabled={isBusy}
+                      >
+                        {isBusy ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        {i.status === "PENDENTE" ? "Executar" : "Confirmar"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
+                        onClick={() => void onReject(i.id)}
+                        disabled={isBusy}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        Recusar
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {ambiguous(i) && i.status === "AGUARDANDO_CONFIRMACAO" && (
+                  <div className="mt-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 space-y-2">
+                    <div className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                      Confirme o cliente:
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {ambiguous(i)!.map((c) => (
+                        <Button
+                          key={c.id}
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          disabled={isBusy}
+                          onClick={() => void onConfirm(i.id, c.id)}
+                        >
+                          {c.nome} · {c.telefone}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-3 rounded-md bg-muted/40 px-3 py-2.5 text-xs">
+                  <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Campos interpretados
+                  </div>
+                  <div className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                    {Object.entries(i.interpretacao.fields).map(([k, v]) => (
+                      <div key={k} className="flex gap-1.5">
+                        <span className="shrink-0 capitalize text-muted-foreground">{k}:</span>
+                        <span className="truncate font-medium">{v || "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {i.resultado && (
+                  <div className="mt-2 rounded-md border border-border bg-card px-3 py-2.5 text-xs">
+                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Resultado
+                    </div>
+                    <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted-foreground">
+                      {JSON.stringify(i.resultado, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </Card>
+            )
+          })}
+        </div>
       )}
     </div>
   )

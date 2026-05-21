@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 21 Mai 2026 — Sessão: Cadastros HUB > Importação reestruturado (Planilhas + XML NF-e + Histórico)
+> Última atualização: 21 Mai 2026 — Sessão: Omni Agent HUB Visual Premium (remoção dados sintéticos, distribuição real, inbox/automações/memória premium)
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,104 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Operações HUB — Adapter OS → Estoque Fase 2 (concluído 21/05/2026)
+
+**Antes:** o adapter `lib/operacoes/adapters/os-estoque.ts` já fazia consumo/restauração/delta real do estoque com transação, idempotência, anti-negativo e ledger profissional (`MovimentacaoEstoque` com `tipo:"saida"`, `origem:"os"`). Mas as movimentações geradas pela OS gravavam `usuario: null`, `documento: null`, `custoUnitario: 0` e `valorTotal: 0` — sem auditoria de quem baixou, sem vínculo humano com a OS e sem valor consumido para KPIs.
+
+**Arquivos alterados:**
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/operacoes/adapters/os-estoque.ts` | `registrarLedgerOS` recebe `osNumero` e `operador` e grava: `usuario` (do session label), `documento` = número da OS (ex.: `OS-2026-00012`), `motivo` igual ao `documento`, `custoUnitario` = `arredonda2(max(0, precoCusto))` e `valorTotal` = `qtd × custoUnitario`. As três funções públicas (`consumeEstoqueFromOS`, `restoreEstoqueFromOS`, `applyEstoqueDelta`) ganham `operador?: string \| null`, leem `OrdemServico.numero` na mesma transação e repassam ao ledger. `tipo` e `origem` mantidos. |
+| `app/actions/operacoes.ts` | `updateOSStatus` e `updateOSPayload` resolvem `getOperatorLabelFromSession(await auth())` uma vez e propagam para as 4 chamadas (1 consume + 2 restore + 1 delta). |
+
+**Campos do `MovimentacaoEstoque` para `origem:"os"`:**
+
+| Campo | Antes | Depois |
+|---|---|---|
+| `usuario` | `null` | operador NextAuth (`name` ou `email`) |
+| `documento` | `null` | `OrdemServico.numero` (fallback `OS {osId}`) |
+| `motivo` | `OS {osId}` (cuid) | mesmo do `documento` (número humano) |
+| `custoUnitario` | `0` | `precoCusto` atual do produto |
+| `valorTotal` | `0` | `qtd × custoUnitario` |
+
+**Validação:** `npx tsc --noEmit` — 0 erros novos nos arquivos modificados. Os 4 erros pré-existentes em `components/omni-agent/OmniAgentHub.tsx` (linhas 732–744, `points`/`heatmap` undefined) eram causados pelas variáveis de gráfico sintético e foram **resolvidos na sessão de refatoração visual de 21/05/2026** (remoção dos `useMemo` com `Math.random()`).
+
+**Comportamento preservado (NÃO alterado):**
+
+- Idempotência (`payload.estoqueConsumido`, `estoqueUltimaRevisaoEm`).
+- Validação anti-negativo prévia em transação.
+- Best-effort: falhas registram `estoque_sync_erro` na timeline, não quebram a OS.
+- `tipo:"saida"` + `origem:"os"` mantidos como par diferenciador (PDV usa `origem:"pdv"`).
+
+**Riscos remanescentes / pendências:**
+
+- Operador pode vir `null` em transições disparadas fora de sessão NextAuth (job interno) — schema aceita; relatórios precisarão tratar.
+- Produtos com `precoCusto = 0` (legados GestaoClick) continuarão gerando `valorTotal = 0` até cadastro de custo — não é regressão.
+- Movimentos históricos pré-21/05/2026 continuam com campos `null/0` — só novas baixas/restaurações são preenchidas. Backfill opcional fica como próximo passo.
+- `registrarLedgerOS` continua silencioso em falha (`console.error`) — endurecer com evento `estoque_ledger_erro` fica para fase futura.
+
+**Próximos passos sugeridos:** F2.4 — evento `estoque_item_ignorado` visível na timeline; F2.5 — defesa em profundidade na idempotência via consulta ao ledger; F2.6 — KPI "valor consumido por OS" agora que `valorTotal` é confiável.
+
+---
+
+### Omni Agent HUB — Refinamento Visual Premium (concluído 21/05/2026)
+
+**Contexto:** backend, Prisma, server actions, automações e lógica de comandos mantidos intactos. Sessão exclusivamente de visual/UX.
+
+**Problema principal:** gráfico SVG "Comandos por hora" e "Mapa de calor (semana)" usavam `Math.random()` em `useMemo` — dados 100% sintéticos apresentados como tendências reais. Quatro erros TypeScript (`points`/`heatmap` undefined) eram consequência direta dessas variáveis.
+
+**Arquivos alterados:**
+
+| Arquivo | Tipo |
+|---|---|
+| `components/omni-agent/OmniAgentHub.tsx` | Múltiplas edições cirúrgicas (visual/UX) |
+| `components/omni-agent/OmniAgentInboxReal.tsx` | Reescrita completa visual (lógica inalterada) |
+
+**Mudanças em `OmniAgentHub.tsx`:**
+
+- **Dados sintéticos removidos:** `useMemo` com `Math.random()` para `hours`, `points` e `heatmap` eliminados
+- **Gráfico fake → distribuição real:** card "Comandos por hora" substituído por barras de distribuição por status usando `stats.executed`, `stats.pending`, `stats.awaitingConfirmation`, `stats.error` (dados Prisma reais) com skeleton loading
+- **Heatmap aleatório → resumo honesto:** 4 métricas reais (hoje, total histórico, taxa de acerto, pendentes) com skeleton por célula
+- **Stat component:** prop `loading` com skeleton animado; prop `accent` para cor semântica por tipo de métrica
+- **Header:** ícone `Bot` → `Cpu`; status badge com cor semântica (verde/cinza); notificações com lista scrollável e link "Ver Inbox"; botões `sm:inline-flex`
+- **Tabs:** labels `hidden sm:inline`; badges de pendência com formato compacto
+- **Feed rows:** borda esquerda `border-l-2` colorida por `badgeKind` (`emerald`/`amber`/`blue`/`destructive`)
+- **Último comando:** card com borda colorida e badge de status contextual
+- **AutomationsTab:** borda esquerda `emerald` (ativa) / `border` (inativa); badge Ativa/Inativa; template em bloco `bg-muted/50 font-mono`; skeleton de loading; empty state com ícone `Zap`
+- **MemoryTab:** avatar de iniciais (2 letras, `rounded-full`) na lista; skeleton de 5 itens; empty state com ícone `Users`
+- **ReportsTab:** stat grid com `loading` prop e cores semânticas; barras `rounded-full` com `transition-all duration-500`; cards financeiros com cores por tipo (receita=verde, despesa=vermelho, pend.=âmbar); skeleton do financeiro em vez de texto simples
+- **SettingsTab:** audit log com ponto `bg-primary/40` por linha, monospace, hover sutil, container `bg-muted/30`
+- **Floating button:** pill com `ring-2`; cor semântica online/pausado; label dinâmico ("X pendentes" / "Online" / "Pausado"); mini-dashboard expandido polido
+
+**Mudanças em `OmniAgentInboxReal.tsx`:**
+
+- **Skeleton loading:** 3 cards animados com avatar, texto e badges
+- **Filtros pill:** barra no estilo das Tabs principais; contadores por status integrados ao label
+- **Borda esquerda colorida por status:** `amber`=pendente · `blue`=aguardando · `emerald`=executado · `destructive`=erro
+- **Ícone semântico por card:** `Clock` (pendente) · `AlertTriangle` (aguardando) · `CheckCircle2` (executado) · `XCircle` (erro)
+- **Botão "Executar":** spinner `Loader2` durante processamento; "Recusar" com hover `text-destructive`
+- **Confirmação de cliente ambíguo:** container `bg-blue-500/5 border-blue-500/20`
+- **Campos interpretados:** label `uppercase tracking-wider`; `sm:grid-cols-2`
+- **Resultado:** container `bg-card` com label uppercase
+- **Empty state:** ícone `Inbox` centralizado com subtexto orientativo
+
+**Validação:** `npx tsc --noEmit` → **0 erros** (os 4 erros pré-existentes de `points`/`heatmap` foram eliminados junto com as variáveis).
+
+**O que NÃO foi alterado:**
+- Prisma, server actions, automações, event bus
+- WhatsApp backend, auth, proxy
+- Lógica de interpretação de comandos, tipos, APIs
+- Mocks de "sugestões" no OverviewTab (cards de ação UI, não dados)
+- WhatsAppTab, CommandsTab, NewCommandModal, CommandPalette (sem mudanças visuais além das passadas pelo Stat refatorado)
+
+**Pontos que ainda dependem do backend para evolução futura:**
+- Gráfico de comandos por hora: exigiria `OmniAgentHubStatsDTO` com breakdown `por hora`
+- Memória operacional / timeline unificada do cliente: fase 3
+- Créditos IA / plano no SettingsTab: localStorage local, sem backend
+
+---
 
 ### Cadastros HUB > Importação — HUB reestruturado (concluído 21/05/2026)
 

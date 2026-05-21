@@ -9,6 +9,7 @@ import {
   Settings as SettingsIcon, Eye, QrCode, Phone, Zap, Brain, Lightbulb,
   Inbox, Search, Command as CmdIcon, Clock, FileText,
   AlertTriangle, UserCog, Maximize2, Minimize2,
+  CheckCircle2, XCircle, Loader2, Circle, Cpu, ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -368,24 +369,62 @@ export default function OmniAgentHub() {
         if (a.type === "simulate") simulate();
       }} />
 
-      {/* Floating mini dashboard */}
+      {/* Floating status button */}
       <button
         onClick={() => setFloatingOpen(o => !o)}
-        className="fixed bottom-4 right-4 z-40 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg transition-transform hover:scale-105"
+        className={cn(
+          "fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full px-4 py-2.5 text-xs font-semibold shadow-lg ring-2 transition-all hover:scale-105",
+          agentOnline
+            ? "bg-primary text-primary-foreground ring-primary/30"
+            : "bg-muted text-muted-foreground ring-border",
+        )}
       >
-        <Zap className="h-4 w-4" /> Status
+        {agentOnline
+          ? <span className="h-1.5 w-1.5 rounded-full bg-primary-foreground animate-pulse" />
+          : <Zap className="h-3.5 w-3.5" />
+        }
+        {pendingCount > 0 ? `${pendingCount} pendente${pendingCount > 1 ? "s" : ""}` : agentOnline ? "Online" : "Pausado"}
       </button>
       {floatingOpen && (
-        <div className="fixed bottom-16 right-4 z-40 w-72 rounded-xl border border-border bg-card p-4 shadow-xl animate-scale-in">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="font-semibold text-sm">Mini Dashboard</span>
-            <button onClick={() => setFloatingOpen(false)}><X className="h-4 w-4" /></button>
+        <div className="fixed bottom-20 right-6 z-40 w-72 rounded-xl border border-border bg-card shadow-xl overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Cpu className="h-3.5 w-3.5 text-primary" />
+              <span className="text-sm font-semibold">Status do Agent</span>
+            </div>
+            <button
+              onClick={() => setFloatingOpen(false)}
+              className="rounded-md p-1 hover:bg-accent transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Agente</span><Badge variant={agentOnline ? "default" : "secondary"}>{agentOnline ? "Online" : "Pausado"}</Badge></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Pendências</span><span className="font-medium">{pendingCount}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Último</span><span className="font-medium text-xs">{feedRows[0] ? relTime(feedRows[0].ts) : "—"}</span></div>
-            <Button size="sm" className="w-full" onClick={() => { setTab("inbox"); setFloatingOpen(false); }}><Inbox /> Ir p/ Inbox</Button>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Agente</span>
+              <div className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium",
+                agentOnline
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+                  : "border-border bg-muted text-muted-foreground",
+              )}>
+                <span className={cn("h-1.5 w-1.5 rounded-full", agentOnline ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground")} />
+                {agentOnline ? "Online" : "Pausado"}
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Pendências</span>
+              <span className={cn("font-bold tabular-nums", pendingCount > 0 && "text-amber-600 dark:text-amber-400")}>
+                {pendingCount}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Último</span>
+              <span className="text-xs font-medium">{feedRows[0] ? relTime(feedRows[0].ts) : "—"}</span>
+            </div>
+            <Button size="sm" className="w-full gap-1.5 mt-1" onClick={() => { setTab("inbox"); setFloatingOpen(false); }}>
+              <Inbox className="h-3.5 w-3.5" /> Abrir Inbox IA
+            </Button>
           </div>
         </div>
       )}
@@ -426,58 +465,96 @@ function Header({
   useEffect(() => { const id = setInterval(() => setClock(nowTime()), 30000); return () => clearInterval(id); }, []);
 
   return (
-    <header className="sticky top-0 z-30 w-full border-b border-border bg-background/80 backdrop-blur">
+    <header className="sticky top-0 z-30 w-full border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Bot className="h-5 w-5" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+            <Cpu className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold">Omni Agent HUB</h1>
-            <p className="truncate text-xs text-muted-foreground">Central operacional de IA do OmniGestão Pro</p>
+            <h1 className="truncate text-base font-semibold tracking-tight">Omni Agent HUB</h1>
+            <p className="truncate text-xs text-muted-foreground">Central operacional de IA</p>
           </div>
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="gap-1">
-            <span className={cn("h-2 w-2 rounded-full", agentOnline ? "bg-primary animate-pulse" : "bg-muted-foreground")} />
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <div className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+            agentOnline
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+              : "border-border bg-muted text-muted-foreground",
+          )}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", agentOnline ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground")} />
             {agentOnline ? "Online" : "Pausado"}
+          </div>
+
+          <Badge variant="outline" className="gap-1 hidden sm:inline-flex">
+            <Clock className="h-3 w-3" /> {clock}
           </Badge>
-          <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> {clock}</Badge>
-          <Badge variant="outline">Fase 2 · núcleo real</Badge>
+          <Badge variant="outline" className="hidden md:inline-flex text-[10px]">Fase 2 · real</Badge>
 
           <div className="relative">
-            <Button variant="outline" size="sm" onClick={() => setBellOpen(o => !o)}>
-              <Bell />
-              {(notifications.length > 0 || pendingCount > 0) && (
-                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground flex items-center justify-center">
-                  {Math.max(notifications.length, pendingCount)}
+            <Button variant="outline" size="sm" className="relative h-8 w-8 p-0" onClick={() => setBellOpen(o => !o)}>
+              <Bell className="h-3.5 w-3.5" />
+              {(pendingCount > 0) && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
+                  {pendingCount > 9 ? "9+" : pendingCount}
                 </span>
               )}
             </Button>
             {bellOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 rounded-lg border border-border bg-popover p-2 shadow-xl z-50">
-                <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Pendências</div>
-                {notifications.length === 0 && <div className="p-3 text-sm text-muted-foreground">Nenhuma pendência</div>}
-                {notifications.map((n) => (
-                  <button key={n.id} onClick={() => { setBellOpen(false); onGotoInbox(); }} className="w-full rounded-md p-2 text-left text-sm hover:bg-accent">
-                    <div className="truncate font-medium">{n.desc}</div>
-                    <div className="text-[10px] text-muted-foreground">{n.module} · {(n.confidence * 100).toFixed(0)}%</div>
+              <div className="absolute right-0 top-full mt-2 w-80 rounded-xl border border-border bg-popover shadow-xl z-50 overflow-hidden">
+                <div className="border-b border-border px-3 py-2 flex items-center justify-between">
+                  <span className="text-xs font-semibold">Pendências</span>
+                  <span className="text-[10px] text-muted-foreground">{pendingCount} itens</span>
+                </div>
+                {notifications.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 p-6 text-center">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500/60" />
+                    <div className="text-sm text-muted-foreground">Nenhuma pendência</div>
+                  </div>
+                ) : (
+                  <div className="max-h-64 overflow-y-auto">
+                    {notifications.map((n) => (
+                      <button key={n.id} onClick={() => { setBellOpen(false); onGotoInbox(); }}
+                        className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent transition-colors border-b border-border/50 last:border-0">
+                        <div className="truncate font-medium text-xs">{n.desc}</div>
+                        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                          <span>{n.module}</span>
+                          <span>·</span>
+                          <span className="tabular-nums">{(n.confidence * 100).toFixed(0)}% confiança</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="border-t border-border p-2">
+                  <button onClick={() => { setBellOpen(false); onGotoInbox(); }}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-primary hover:bg-accent transition-colors">
+                    Ver Inbox completa <ChevronRight className="h-3 w-3" />
                   </button>
-                ))}
+                </div>
               </div>
             )}
           </div>
 
-          <Button variant="outline" size="sm" onClick={onOpenPalette} title='Atalho: "/"'><Search /> <kbd className="ml-1 rounded bg-muted px-1 text-[10px]">/</kbd></Button>
-
-          <Button variant="ghost" size="sm" onClick={() => setCompact(!compact)} title="Modo compacto">
-            {compact ? <Maximize2 /> : <Minimize2 />}
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={onOpenPalette} title='Atalho: "/"'>
+            <Search className="h-3.5 w-3.5" />
           </Button>
 
-          <Button variant="outline" size="sm" onClick={onSimulate}><Play /> Simular</Button>
-          <Button variant="outline" size="sm" onClick={() => setAgentOnline(!agentOnline)}><Power /> {agentOnline ? "Pausar" : "Ativar"}</Button>
-          <Button size="sm" onClick={onNewCmd}><Plus /> Novo</Button>
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setCompact(!compact)} title="Modo compacto">
+            {compact ? <Maximize2 className="h-3.5 w-3.5" /> : <Minimize2 className="h-3.5 w-3.5" />}
+          </Button>
+
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 hidden sm:inline-flex" onClick={onSimulate}>
+            <Play className="h-3.5 w-3.5" /> Simular
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 hidden sm:inline-flex" onClick={() => setAgentOnline(!agentOnline)}>
+            <Power className="h-3.5 w-3.5" /> {agentOnline ? "Pausar" : "Ativar"}
+          </Button>
+          <Button size="sm" className="h-8 gap-1.5" onClick={onNewCmd}>
+            <Plus className="h-3.5 w-3.5" /> Novo
+          </Button>
         </div>
       </div>
     </header>
@@ -487,18 +564,28 @@ function Header({
 /* ---------- Tabs ---------- */
 function Tabs({ current, onChange, pendingCount, waUnread }: { current: TabId; onChange: (t: TabId) => void; pendingCount: number; waUnread: number }) {
   return (
-    <div className="mt-6 flex w-full gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1">
+    <div className="mt-5 flex w-full gap-0.5 overflow-x-auto rounded-xl border border-border bg-card p-1 scrollbar-none">
       {TABS.map(t => {
         const Icon = t.icon;
         const active = current === t.id;
         const badge = t.id === "inbox" ? pendingCount : t.id === "whatsapp" ? waUnread : 0;
         return (
           <button key={t.id} onClick={() => onChange(t.id)}
-            className={cn("relative inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-              active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground")}>
-            <Icon className="h-4 w-4" /> {t.label}
+            className={cn(
+              "relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all",
+              active
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}>
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden sm:inline">{t.label}</span>
             {badge > 0 && (
-              <Badge className="ml-1 h-5 min-w-5 px-1 text-[10px] animate-pulse" variant={active ? "secondary" : "destructive"}>{badge}</Badge>
+              <span className={cn(
+                "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold",
+                active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-destructive text-destructive-foreground animate-pulse",
+              )}>
+                {badge > 9 ? "9+" : badge}
+              </span>
             )}
           </button>
         );
@@ -511,14 +598,25 @@ function Tabs({ current, onChange, pendingCount, waUnread }: { current: TabId; o
 function Card({ children, className }: any) {
   return <div className={cn("rounded-xl border border-border bg-card p-4", className)}>{children}</div>;
 }
-function Stat({ icon: Icon, label, value, hint }: any) {
+function Stat({ icon: Icon, label, value, hint, loading, accent }: any) {
+  if (loading) return (
+    <Card className="flex items-center gap-3">
+      <div className="h-10 w-10 shrink-0 rounded-lg bg-muted animate-pulse" />
+      <div className="flex-1 min-w-0 space-y-2">
+        <div className="h-2.5 w-20 rounded bg-muted animate-pulse" />
+        <div className="h-6 w-14 rounded bg-muted animate-pulse" />
+      </div>
+    </Card>
+  );
   return (
     <Card className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-accent-foreground"><Icon className="h-5 w-5" /></div>
+      <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg", accent ?? "bg-primary/10 text-primary")}>
+        <Icon className="h-5 w-5" />
+      </div>
       <div className="min-w-0">
         <div className="truncate text-xs text-muted-foreground">{label}</div>
-        <div className="text-xl font-semibold">{value}</div>
-        {hint && <div className="text-[10px] text-muted-foreground">{hint}</div>}
+        <div className="text-2xl font-bold tabular-nums leading-tight mt-0.5">{value}</div>
+        {hint && <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{hint}</div>}
       </div>
     </Card>
   );
@@ -593,12 +691,6 @@ function OverviewTab({
     { id: "s3", icon: Wallet, title: "Cobrar clientes vencidos", hint: "3 clientes com pagamento em atraso" },
   ]);
 
-  // synthetic chart data: 24 hours
-  const hours = useMemo(() => Array.from({ length: 24 }, (_, h) => Math.floor(2 + Math.sin(h / 3) * 4 + Math.random() * 5)), []);
-  const maxH = Math.max(...hours, 1);
-  const points = hours.map((v, i) => `${(i / 23) * 100},${100 - (v / maxH) * 100}`).join(" ");
-  const heatmap = useMemo(() => Array.from({ length: 7 }, () => Math.random()), []);
-
   const uptimeMin = Math.floor((now - onlineSince) / 60000);
   const uptimeStr = agentOnline ? `${Math.floor(uptimeMin / 60)}h ${uptimeMin % 60}min` : "—";
 
@@ -620,15 +712,23 @@ function OverviewTab({
     <div className="space-y-6">
       <OnboardingChecklist />
 
-      <Card className="bg-gradient-to-br from-primary/10 to-accent/30">
+      <Card className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/20">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
-            <h2 className="text-2xl font-bold">Omni Agent HUB</h2>
-            <p className="text-sm text-muted-foreground">Controle sua operação por WhatsApp, voz e IA.</p>
+            <div className="flex items-center gap-2 mb-1">
+              <Cpu className="h-4 w-4 text-primary" />
+              <span className="text-xs font-medium text-primary">Central IA Operacional</span>
+            </div>
+            <h2 className="text-xl font-bold tracking-tight">Omni Agent HUB</h2>
+            <p className="text-sm text-muted-foreground">Comandos em linguagem natural, interpretação determinística, execução controlada.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={onSimulate}><Sparkles /> Simular agora</Button>
-            <Button variant="outline" size="sm" onClick={() => void onRefresh()}><RefreshCw /> Atualizar</Button>
+            <Button size="sm" onClick={onSimulate} className="gap-1.5">
+              <Sparkles className="h-3.5 w-3.5" /> Simular
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => void onRefresh()} className="gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+            </Button>
           </div>
         </div>
       </Card>
@@ -638,62 +738,136 @@ function OverviewTab({
           icon={MessageCircle}
           label="Comandos hoje"
           value={today}
-          hint={stats ? `Total histórico: ${stats.total}` : "Carregando…"}
+          hint={stats ? `Total: ${stats.total}` : undefined}
+          loading={!stats}
+          accent="bg-blue-500/10 text-blue-600 dark:text-blue-400"
         />
-        <Stat icon={Check} label="Executados" value={executed} hint="status EXECUTADO" />
+        <Stat
+          icon={CheckCircle2}
+          label="Executados"
+          value={executed}
+          hint="status EXECUTADO"
+          loading={!stats}
+          accent="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+        />
         <Stat
           icon={Bell}
-          label="Pendentes + aguardando"
+          label="Pendentes"
           value={pendAll}
-          hint={stats ? `${stats.pending} pendentes · ${stats.awaitingConfirmation} aguard. conf.` : ""}
+          hint={stats ? `${stats.pending} pend. · ${stats.awaitingConfirmation} conf.` : undefined}
+          loading={!stats}
+          accent={pendAll > 0 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-primary/10 text-primary"}
         />
         <Stat
           icon={BarChart3}
-          label="Acerto (exec / exec+erro)"
+          label="Acerto"
           value={acc != null ? `${acc}%` : "—"}
-          hint={`Erros: ${err} · Uptime UI ${uptimeStr}`}
+          hint={`Erros: ${err} · UI ${uptimeStr}`}
+          loading={!stats}
+          accent="bg-primary/10 text-primary"
         />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold">Comandos por hora</h3>
-            <Badge variant="secondary">24h</Badge>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold">Distribuição por status</h3>
+            <Badge variant="secondary" className="tabular-nums">{stats?.total ?? "—"} total</Badge>
           </div>
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-32 w-full">
-            <polyline fill="none" stroke="var(--primary)" strokeWidth="1.5" points={points} vectorEffect="non-scaling-stroke" />
-            <polyline fill="color-mix(in oklab, var(--primary) 18%, transparent)" stroke="none" points={`0,100 ${points} 100,100`} />
-          </svg>
-          <div className="mt-2 flex justify-between text-[10px] text-muted-foreground"><span>00h</span><span>12h</span><span>23h</span></div>
+          {!stats ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <div className="h-2.5 w-28 rounded bg-muted animate-pulse" />
+                  <div className="h-2 flex-1 rounded bg-muted animate-pulse" />
+                  <div className="h-2.5 w-8 rounded bg-muted animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : stats.total === 0 ? (
+            <div className="flex h-24 flex-col items-center justify-center gap-2 text-center">
+              <Circle className="h-6 w-6 text-muted-foreground/40" />
+              <div className="text-sm text-muted-foreground">Nenhum comando registrado ainda</div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {[
+                { label: "Executado", count: stats.executed, colorClass: "bg-emerald-500/80" },
+                { label: "Ag. confirmação", count: stats.awaitingConfirmation, colorClass: "bg-blue-500/80" },
+                { label: "Pendente", count: stats.pending, colorClass: "bg-amber-500/80" },
+                { label: "Erro", count: stats.error, colorClass: "bg-destructive/80" },
+              ].map((row) => (
+                <div key={row.label} className="flex items-center gap-3 text-xs">
+                  <span className="w-32 shrink-0 text-muted-foreground">{row.label}</span>
+                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn("h-full rounded-full transition-all duration-500", row.colorClass)}
+                      style={{ width: `${Math.round((row.count / (stats.total || 1)) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="w-8 shrink-0 text-right font-medium tabular-nums">{row.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         <Card>
-          <h3 className="mb-3 font-semibold">Mapa de calor (semana)</h3>
-          <div className="grid grid-cols-7 gap-1">
-            {["S", "T", "Q", "Q", "S", "S", "D"].map((d, i) => (
-              <div key={i} className="text-center">
-                <div className="text-[10px] text-muted-foreground mb-1">{d}</div>
-                <div className="h-12 rounded" style={{ backgroundColor: `color-mix(in oklab, var(--primary) ${15 + heatmap[i] * 70}%, transparent)` }} title={`${Math.floor(heatmap[i] * 100)} comandos`} />
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="font-semibold">Resumo do período</h3>
+            <Badge variant="outline" className="text-[10px]">dados reais</Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { label: "Hoje", value: today, sub: "comandos", urgent: false },
+              { label: "Total histórico", value: stats?.total ?? "—", sub: "registros", urgent: false },
+              { label: "Taxa de acerto", value: acc != null ? `${acc}%` : "—", sub: "exec / exec+erro", urgent: false },
+              { label: "Pendentes", value: pendAll, sub: pendAll > 0 ? "atenção necessária" : "tudo em dia", urgent: pendAll > 0 },
+            ].map((m) => (
+              <div key={m.label} className={cn("rounded-lg p-3 text-center", m.urgent ? "bg-amber-500/10" : "bg-muted/40")}>
+                <div className={cn("text-2xl font-bold tabular-nums leading-tight", m.urgent && "text-amber-600 dark:text-amber-400")}>
+                  {!stats && m.label !== "Pendentes" ? (
+                    <div className="mx-auto h-6 w-12 rounded bg-muted animate-pulse" />
+                  ) : m.value}
+                </div>
+                <div className="mt-1 text-xs font-medium">{m.label}</div>
+                <div className="text-[10px] text-muted-foreground">{m.sub}</div>
               </div>
             ))}
-          </div>
-          <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
-            <span>menos uso</span><span>mais uso</span>
           </div>
         </Card>
       </div>
 
       {lastHighlight && (
-        <Card className="flex items-center justify-between">
-          <div>
-            <div className="text-xs text-muted-foreground">Último comando (destaque)</div>
-            <div className="font-medium truncate">{lastHighlight.text}</div>
-            <div className="text-xs text-muted-foreground">
-              {relTime(lastHighlight.ts)} · {lastHighlight.statusLabel} · {lastHighlight.intent}
+        <Card className={cn(
+          "flex items-center gap-4 border-l-4",
+          lastHighlight.badgeKind === "ok" && "border-l-emerald-500",
+          lastHighlight.badgeKind === "error" && "border-l-destructive",
+          lastHighlight.badgeKind === "awaiting" && "border-l-blue-500",
+          lastHighlight.badgeKind === "pending" && "border-l-amber-500",
+        )}>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="text-xs text-muted-foreground">Último comando</span>
+              <Badge
+                variant={lastHighlight.badgeKind === "ok" ? "default" : lastHighlight.badgeKind === "error" ? "destructive" : "secondary"}
+                className="text-[10px]"
+              >
+                {lastHighlight.statusLabel}
+              </Badge>
+            </div>
+            <div className="font-medium truncate text-sm">{lastHighlight.text}</div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span>{relTime(lastHighlight.ts)}</span>
+              <span>·</span>
+              <span>{lastHighlight.module}</span>
+              <span>·</span>
+              <span className="tabular-nums">{(lastHighlight.confidence * 100).toFixed(0)}%</span>
             </div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => onDetails(lastHighlight)}><Eye /> Ver</Button>
+          <Button size="sm" variant="ghost" className="h-8 w-8 shrink-0 p-0" onClick={() => onDetails(lastHighlight)}>
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
         </Card>
       )}
 
@@ -748,23 +922,48 @@ function OverviewTab({
         </div>
         <div className="space-y-2">
           {feed.slice(0, 8).map((c) => (
-            <div key={c.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background/40 p-3 transition-colors hover:bg-accent/40">
+            <div
+              key={c.id}
+              className={cn(
+                "flex flex-wrap items-center gap-3 rounded-lg border-l-2 border border-border bg-background/40 p-3 transition-colors hover:bg-accent/40",
+                c.badgeKind === "ok" && "border-l-emerald-500",
+                c.badgeKind === "error" && "border-l-destructive",
+                c.badgeKind === "awaiting" && "border-l-blue-500",
+                c.badgeKind === "pending" && "border-l-amber-500",
+              )}
+            >
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm">{c.text}</div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <Badge variant="outline">{c.category}</Badge>
+                <div className="truncate text-sm font-medium">{c.text}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">{c.intent}</span>
+                  <span>·</span>
                   <span>{c.module}</span>
-                  <span>· {c.intent}</span>
-                  <span>· {c.time}</span>
-                  <span>· {(c.confidence * 100).toFixed(0)}%</span>
+                  <span>·</span>
+                  <span>{c.time}</span>
+                  <span>·</span>
+                  <span className="tabular-nums">{(c.confidence * 100).toFixed(0)}%</span>
                 </div>
               </div>
-              <Badge variant={badgeVariantForRow(c.badgeKind)}>{c.statusLabel}</Badge>
-              <Button size="sm" variant="outline" onClick={() => onDetails(c)}><Eye /> Detalhes</Button>
-              <Button size="sm" variant="ghost" onClick={() => void onReexecute(c)}><RefreshCw /> Reexecutar</Button>
+              <Badge variant={badgeVariantForRow(c.badgeKind)} className="shrink-0 text-[10px]">
+                {c.statusLabel}
+              </Badge>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => onDetails(c)}>
+                  <Eye className="h-3.5 w-3.5" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => void onReexecute(c)}>
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
           ))}
-          {feed.length === 0 && <div className="text-sm text-muted-foreground py-4 text-center">Nenhum comando na unidade. Use Simular ou Novo.</div>}
+          {feed.length === 0 && (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <Inbox className="h-8 w-8 text-muted-foreground/30" />
+              <div className="text-sm font-medium text-muted-foreground">Nenhum comando registrado</div>
+              <div className="text-xs text-muted-foreground/70">Use &quot;Novo&quot; ou &quot;Simular&quot; para testar o pipeline real</div>
+            </div>
+          )}
         </div>
       </Card>
     </div>
@@ -1372,50 +1571,80 @@ function AutomationsTab({
       </div>
 
       {loading ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">A carregar automações…</Card>
+        <div className="space-y-3">
+          {[...Array(2)].map((_, i) => (
+            <Card key={i} className="border-l-4 border-l-muted p-4">
+              <div className="space-y-2.5">
+                <div className="flex gap-2">
+                  <div className="h-4 w-40 rounded bg-muted animate-pulse" />
+                  <div className="h-4 w-16 rounded bg-muted animate-pulse" />
+                </div>
+                <div className="h-3 w-full rounded bg-muted animate-pulse" />
+                <div className="h-3 w-1/2 rounded bg-muted animate-pulse" />
+              </div>
+            </Card>
+          ))}
+        </div>
       ) : rows.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-muted-foreground">
-          Nenhuma automação. Recarregue a página ou verifique permissões — o servidor deveria criar regras padrão na
-          primeira consulta.
+        <Card className="flex flex-col items-center gap-3 p-10 text-center">
+          <div className="rounded-full bg-muted p-3">
+            <Zap className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="space-y-1">
+            <div className="text-sm font-medium">Nenhuma automação configurada</div>
+            <div className="text-xs text-muted-foreground">
+              Recarregue a página ou verifique permissões — o servidor cria regras padrão na primeira consulta.
+            </div>
+          </div>
         </Card>
       ) : (
         <div className="space-y-3">
           {rows.map((r) => (
-            <Card key={r.id}>
+            <Card
+              key={r.id}
+              className={cn(
+                "border-l-4 transition-all",
+                r.enabled ? "border-l-emerald-500/70" : "border-l-border",
+              )}
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="font-medium flex flex-wrap items-center gap-2">
-                    {r.name}
-                    <Badge variant="outline">{OMNI_AGENT_TRIGGER_LABELS[r.triggerKey as OmniAgentAutomationTriggerKey] ?? r.triggerKey}</Badge>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-sm">{r.name}</span>
+                    <Badge
+                      variant={r.enabled ? "default" : "secondary"}
+                      className="text-[10px]"
+                    >
+                      {r.enabled ? "Ativa" : "Inativa"}
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px]">
+                      {OMNI_AGENT_TRIGGER_LABELS[r.triggerKey as OmniAgentAutomationTriggerKey] ?? r.triggerKey}
+                    </Badge>
                   </div>
-                  <div className="text-xs text-muted-foreground font-mono break-all">{r.commandTemplate}</div>
-                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span>Prioridade: {r.priority}</span>
-                    <span>·</span>
-                    <span>{r.runCount} execuções registadas</span>
+                  <div className="rounded-md bg-muted/50 px-2.5 py-1.5 text-xs font-mono text-muted-foreground break-all">
+                    {r.commandTemplate}
+                  </div>
+                  <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                    <span>Prioridade: <span className="font-medium text-foreground tabular-nums">{r.priority}</span></span>
+                    <span>Execuções: <span className="font-medium text-foreground tabular-nums">{r.runCount}</span></span>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor={`en-${r.id}`} className="text-xs text-muted-foreground">
-                      Ativa
-                    </Label>
-                    <Switch
-                      id={`en-${r.id}`}
-                      checked={r.enabled}
-                      onCheckedChange={async (v) => {
-                        try {
-                          const updated = await setOmniAgentAutomationEnabled(storeId, r.id, v);
-                          setRows((prev) => prev.map((x) => (x.id === r.id ? updated : x)));
-                          logAudit(`Automação ${updated.name}: ${v ? "ativada" : "desativada"}`);
-                          toast.success(v ? "Automação ativa" : "Automação desativada");
-                        } catch (e) {
-                          toast.error(e instanceof Error ? e.message : "Falha");
-                        }
-                      }}
-                    />
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => {
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <Switch
+                    id={`en-${r.id}`}
+                    checked={r.enabled}
+                    onCheckedChange={async (v) => {
+                      try {
+                        const updated = await setOmniAgentAutomationEnabled(storeId, r.id, v);
+                        setRows((prev) => prev.map((x) => (x.id === r.id ? updated : x)));
+                        logAudit(`Automação ${updated.name}: ${v ? "ativada" : "desativada"}`);
+                        toast.success(v ? "Automação ativa" : "Automação desativada");
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Falha");
+                      }
+                    }}
+                  />
+                  <Button size="sm" variant="outline" className="h-8" onClick={() => {
                     setEditRow(r);
                     setEditName(r.name);
                     setEditTpl(r.commandTemplate);
@@ -1426,17 +1655,18 @@ function AutomationsTab({
                   <Button
                     size="sm"
                     variant="outline"
+                    className="h-8 w-8 p-0"
                     onClick={() => {
                       setLogFor(r);
                       logAudit(`Log automação: ${r.name}`);
                     }}
                   >
-                    <FileText /> Log
+                    <FileText className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-destructive"
+                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                     onClick={async () => {
                       if (!confirm(`Remover automação «${r.name}»?`)) return;
                       try {
@@ -1449,7 +1679,7 @@ function AutomationsTab({
                       }
                     }}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
@@ -1681,9 +1911,24 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
           <div className="text-sm font-semibold">Clientes (cadastro)</div>
           <Input placeholder="Buscar nome, telefone, documento…" value={q} onChange={(e) => setQ(e.target.value)} />
           <div className="space-y-1 max-h-[480px] overflow-y-auto min-w-0">
-            {loading && <div className="text-xs text-muted-foreground">A carregar…</div>}
+            {loading && (
+              <div className="space-y-1.5 p-1">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-2 rounded-lg px-2.5 py-2">
+                    <div className="h-7 w-7 shrink-0 rounded-full bg-muted animate-pulse" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 w-3/4 rounded bg-muted animate-pulse" />
+                      <div className="h-2.5 w-1/2 rounded bg-muted animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {!loading && filtered.length === 0 && (
-              <div className="text-xs text-muted-foreground py-4 text-center">Sem clientes ou sem correspondência.</div>
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <Users className="h-5 w-5 text-muted-foreground/40" />
+                <div className="text-xs text-muted-foreground">Sem clientes ou sem correspondência</div>
+              </div>
             )}
             {!loading &&
               filtered.map((cl) => (
@@ -1692,12 +1937,22 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
                   type="button"
                   onClick={() => setSel(cl.id)}
                   className={cn(
-                    "w-full rounded-md px-3 py-2 text-left text-sm transition-colors min-w-0",
+                    "w-full rounded-lg px-2.5 py-2 text-left text-sm transition-colors min-w-0",
                     sel === cl.id ? "bg-primary text-primary-foreground" : "hover:bg-accent",
                   )}
                 >
-                  <div className="font-medium truncate">{cl.nome}</div>
-                  <div className="text-[10px] opacity-80 truncate">{cl.telefone}</div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold uppercase",
+                      sel === cl.id ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/10 text-primary",
+                    )}>
+                      {cl.nome.slice(0, 2)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-medium truncate text-xs">{cl.nome}</div>
+                      <div className="text-[10px] opacity-70 truncate">{cl.telefone}</div>
+                    </div>
+                  </div>
                 </button>
               ))}
           </div>
@@ -1924,10 +2179,35 @@ function ReportsTab({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon={Activity} label="Comandos hoje" value={stats ? String(stats.todayCount) : "—"} hint="OmniAgentCommand" />
-        <Stat icon={Zap} label="Executados" value={stats ? String(stats.executed) : "—"} />
-        <Stat icon={Inbox} label="Pendente + confirmação" value={stats ? String(stats.pending + stats.awaitingConfirmation) : "—"} />
-        <Stat icon={AlertTriangle} label="Erros" value={stats ? String(stats.error) : "—"} />
+        <Stat
+          icon={Activity}
+          label="Comandos hoje"
+          value={stats ? String(stats.todayCount) : "—"}
+          hint="OmniAgentCommand"
+          loading={loading}
+          accent="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+        />
+        <Stat
+          icon={CheckCircle2}
+          label="Executados"
+          value={stats ? String(stats.executed) : "—"}
+          loading={loading}
+          accent="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+        />
+        <Stat
+          icon={Inbox}
+          label="Pendentes + conf."
+          value={stats ? String(stats.pending + stats.awaitingConfirmation) : "—"}
+          loading={loading}
+          accent="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        />
+        <Stat
+          icon={XCircle}
+          label="Erros"
+          value={stats ? String(stats.error) : "—"}
+          loading={loading}
+          accent="bg-destructive/10 text-destructive"
+        />
       </div>
 
       <Card>
@@ -1940,24 +2220,37 @@ function ReportsTab({
           )}
         </div>
         {loading ? (
-          <div className="text-sm text-muted-foreground">A carregar…</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="rounded-lg border border-border p-3 space-y-2">
+                <div className="h-2.5 w-20 rounded bg-muted animate-pulse" />
+                <div className="h-4 w-16 rounded bg-muted animate-pulse" />
+              </div>
+            ))}
+          </div>
         ) : snap?.financeiroSemPermissao ? (
-          <div className="text-sm text-muted-foreground">
-            Esta conta não tem permissão para indicadores financeiros neste painel.
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <XCircle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+            Esta conta não tem permissão para indicadores financeiros.
           </div>
         ) : !snap?.financeiroHoje ? (
-          <div className="text-sm text-muted-foreground">Sem dados ou serviço indisponível para o período.</div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Circle className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+            Sem dados ou serviço indisponível para o período.
+          </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              ["Receita", indicadores?.receitaTotal],
-              ["Despesa", indicadores?.despesaTotal],
-              ["Lucro líquido", indicadores?.lucroLiquido],
-              ["A receber pend.", indicadores?.receberPendente],
-            ].map(([label, val]) => (
-              <div key={String(label)} className="rounded-lg border border-border bg-background/40 p-2">
-                <div className="text-[10px] text-muted-foreground">{label}</div>
-                <div className="text-sm font-semibold">{typeof val === "number" ? fmtBrl(val) : "—"}</div>
+              { label: "Receita", val: indicadores?.receitaTotal, accent: "text-emerald-600 dark:text-emerald-400" },
+              { label: "Despesa", val: indicadores?.despesaTotal, accent: "text-destructive" },
+              { label: "Lucro líquido", val: indicadores?.lucroLiquido, accent: "" },
+              { label: "A receber pend.", val: indicadores?.receberPendente, accent: "text-amber-600 dark:text-amber-400" },
+            ].map(({ label, val, accent }) => (
+              <div key={label} className="rounded-lg border border-border bg-background/40 p-3">
+                <div className="text-[10px] text-muted-foreground mb-1">{label}</div>
+                <div className={cn("text-sm font-bold tabular-nums", accent)}>
+                  {typeof val === "number" ? fmtBrl(val) : "—"}
+                </div>
               </div>
             ))}
           </div>
@@ -1970,18 +2263,32 @@ function ReportsTab({
           <Badge variant="secondary">Até 400 mais recentes</Badge>
         </div>
         {loading ? (
-          <div className="text-sm text-muted-foreground">A carregar…</div>
+          <div className="space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className="h-3 w-36 rounded bg-muted animate-pulse" />
+                <div className="h-2 flex-1 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-8 rounded bg-muted animate-pulse" />
+              </div>
+            ))}
+          </div>
         ) : !snap?.intentCounts.length ? (
-          <div className="text-sm text-muted-foreground">Nenhum comando registado ainda.</div>
+          <div className="flex flex-col items-center gap-2 py-6 text-center">
+            <BarChart3 className="h-6 w-6 text-muted-foreground/40" />
+            <div className="text-sm text-muted-foreground">Nenhum comando registrado ainda</div>
+          </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {snap.intentCounts.map((row) => (
               <div key={row.intent} className="flex items-center gap-3 text-xs min-w-0">
-                <span className="w-36 shrink-0 font-mono text-muted-foreground truncate">{row.intent}</span>
-                <div className="h-3 flex-1 min-w-0 rounded bg-muted overflow-hidden">
-                  <div className="h-full bg-primary" style={{ width: `${Math.round((row.count / maxIntent) * 100)}%` }} />
+                <span className="w-36 shrink-0 font-mono text-[10px] text-muted-foreground truncate">{row.intent}</span>
+                <div className="h-2 flex-1 min-w-0 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary/70 transition-all duration-500"
+                    style={{ width: `${Math.round((row.count / maxIntent) * 100)}%` }}
+                  />
                 </div>
-                <span className="w-8 shrink-0 text-right font-medium">{row.count}</span>
+                <span className="w-8 shrink-0 text-right font-medium tabular-nums">{row.count}</span>
               </div>
             ))}
           </div>
@@ -2227,8 +2534,18 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
             </Button>
           </div>
         </div>
-        <div className="space-y-1 text-xs text-muted-foreground max-h-72 overflow-y-auto">
-          {audit.map((l, i) => <div key={i} className="rounded bg-background/40 px-2 py-1">{l}</div>)}
+        <div className="max-h-64 overflow-y-auto rounded-lg border border-border bg-muted/30 p-1.5 space-y-0.5">
+          {audit.length === 0 && (
+            <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
+              Sem atividade registrada nesta sessão
+            </div>
+          )}
+          {audit.map((l, i) => (
+            <div key={i} className="flex items-start gap-2 rounded-md px-2 py-1 text-xs hover:bg-background/60 transition-colors">
+              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary/40" />
+              <span className="font-mono text-muted-foreground leading-relaxed">{l}</span>
+            </div>
+          ))}
         </div>
       </Card>
 
