@@ -39,6 +39,7 @@ export function ProductAIModal({
     categoria: string;
     marca: string;
     fornecedor: string;
+    estoque: number;
     custo: number;
     preco: number;
     garantia: number;
@@ -58,6 +59,7 @@ export function ProductAIModal({
   const marcaRef = useRef<HTMLInputElement | null>(null);
   const modeloRef = useRef<HTMLInputElement | null>(null);
   const fornecedorRef = useRef<HTMLInputElement | null>(null);
+  const estoqueRef = useRef<HTMLInputElement | null>(null);
   const custoRef = useRef<HTMLInputElement | null>(null);
   const precoRef = useRef<HTMLInputElement | null>(null);
   const garantiaRef = useRef<HTMLInputElement | null>(null);
@@ -164,6 +166,7 @@ export function ProductAIModal({
             <Field label="Marca"><Input ref={marcaRef} defaultValue={initial?.marca ?? ""} /></Field>
             <Field label="Modelo compatível"><Input ref={modeloRef} defaultValue="" /></Field>
             <Field label="Fornecedor provável"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? ""} /></Field>
+            <Field label="Estoque atual"><Input ref={estoqueRef} type="number" min={0} step={1} defaultValue={initial?.estoque !== undefined ? String(initial.estoque) : (productId ? "" : "0")} placeholder="0" /></Field>
             <Field label="Custo"><Input ref={custoRef} defaultValue={initial?.custo !== undefined ? String(initial.custo) : ""} /></Field>
             <Field label="Preço sugerido"><Input ref={precoRef} defaultValue={initial?.preco !== undefined ? String(initial.preco) : ""} /></Field>
             <Field label="Margem"><Input readOnly defaultValue="" placeholder="Calculada após custo e preço" /></Field>
@@ -250,6 +253,15 @@ export function ProductAIModal({
                   const custo = Number(String(custoRef.current?.value ?? "").replace(/[^\d,.-]/g, "").replace(",", "."));
                   const preco = Number(String(precoRef.current?.value ?? "").replace(/[^\d,.-]/g, "").replace(",", "."));
                   const garantia = Number(String(garantiaRef.current?.value ?? "").replace(/[^\d,.-]/g, "").replace(",", "."));
+                  // Estoque: só envia se o usuário digitou algo. Em edição, undefined preserva o valor atual.
+                  const estoqueRaw = estoqueRef.current?.value;
+                  const estoqueStr = typeof estoqueRaw === "string" ? estoqueRaw.trim() : "";
+                  const estoqueNum = estoqueStr ? parseInt(estoqueStr, 10) : NaN;
+                  const estoque = Number.isFinite(estoqueNum) && estoqueNum >= 0 ? estoqueNum : undefined;
+                  if (estoqueStr && estoque === undefined) {
+                    window.alert("Estoque inválido — informe um número inteiro ≥ 0.");
+                    return;
+                  }
                   await upsertProduto(storeId, {
                     id: productId,
                     nome: (nomeRef.current?.value ?? "").trim(),
@@ -258,6 +270,7 @@ export function ProductAIModal({
                     categoria: (categoriaRef.current?.value ?? "").trim(),
                     marca: (marcaRef.current?.value ?? "").trim(),
                     fornecedor: (fornecedorRef.current?.value ?? "").trim(),
+                    estoque,
                     custo: Number.isFinite(custo) ? custo : 0,
                     preco: Number.isFinite(preco) ? preco : 0,
                     garantia: Number.isFinite(garantia) ? garantia : 0,

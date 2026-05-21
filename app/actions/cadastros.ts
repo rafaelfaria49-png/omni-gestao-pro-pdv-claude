@@ -1013,6 +1013,16 @@ export async function upsertProduto(
     }
   }
 
+  // Stock: só inclui no patch quando o caller enviou número inteiro >= 0.
+  // `undefined` significa "não tocar" — evita zerar estoque ao editar outros campos.
+  // (Bug histórico: `Math.trunc(input.estoque ?? 0)` sobrescrevia stock com 0
+  // em qualquer chamada sem estoque, ex.: botão Ativar/Inativar antes do fix.)
+  const stockPatch: { stock?: number } = {};
+  if (input.estoque !== undefined) {
+    const n = Math.trunc(Number(input.estoque));
+    if (Number.isFinite(n) && n >= 0) stockPatch.stock = n;
+  }
+
   const common = {
     name: nome,
     sku: (input.sku ?? "").trim() || null,
@@ -1020,12 +1030,12 @@ export async function upsertProduto(
     category: (input.categoria ?? "").trim() || null,
     brand: (input.marca ?? "").trim(),
     supplierName: (input.fornecedor ?? "").trim(),
-    stock: Math.max(0, Math.trunc(input.estoque ?? 0)),
     precoCusto: Number(input.custo ?? 0),
     price: Number(input.preco ?? 0),
     warrantyDays: Math.max(0, Math.trunc(input.garantia ?? 0)),
     active: input.active ?? true,
     status: input.active === false ? "Inativo" : "Ativo",
+    ...stockPatch,
     ...metadataPart,
   };
 
@@ -1041,8 +1051,9 @@ export async function upsertProduto(
     return updated;
   }
 
+  // Create: estoque inicial é o que o caller enviou; quando ausente, default 0.
   const created = await prisma.produto.create({
-    data: { ...common, storeId },
+    data: { ...common, storeId, stock: stockPatch.stock ?? 0 },
     select: { id: true },
   });
   revalidatePath("/dashboard/cadastros-v2");

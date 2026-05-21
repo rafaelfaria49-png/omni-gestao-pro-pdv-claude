@@ -911,6 +911,7 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
                 categoria: editing.categoria === "—" ? "" : editing.categoria,
                 marca: editing.marca === "—" ? "" : editing.marca,
                 fornecedor: editing.fornecedor === "—" ? "" : editing.fornecedor,
+                estoque: editing.estoque,
                 custo: editing.custo,
                 preco: editing.preco,
                 garantia: editing.garantia,
