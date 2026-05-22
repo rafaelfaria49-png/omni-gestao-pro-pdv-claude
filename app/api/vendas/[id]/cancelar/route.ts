@@ -13,6 +13,7 @@ import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest, requireOpsSubscription } from "@/lib/ops-api-gate"
 import { estornarMovimentacaoPorReferencia } from "@/lib/financeiro/services/movimentacoes-service"
+import { cancelContaReceber } from "@/lib/financeiro/services/contas-receber-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
@@ -279,6 +280,17 @@ export async function POST(
         estornoReceber = res.ok && res.action === "created"
       } catch (e) {
         console.error("[vendas/cancelar] estorno financeiro (a prazo) falhou:", e)
+      }
+      // Marca o título como cancelado se ainda não estiver pago (best-effort).
+      try {
+        await cancelContaReceber({
+          storeId,
+          id: venda.contaReceberTituloId,
+          motivo: motivo.trim(),
+          userLabel: operadorCancelamento,
+        })
+      } catch (e) {
+        console.error("[vendas/cancelar] cancelContaReceber falhou:", e)
       }
     }
 
