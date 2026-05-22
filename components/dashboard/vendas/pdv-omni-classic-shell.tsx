@@ -60,9 +60,9 @@ const PosField = forwardRef<
       <span className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
         <span>{label}</span>
         {hint ? (
-          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+          <kbd className="rounded border border-b-2 border-border bg-muted/65 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground uppercase tracking-normal">
             {hint}
-          </span>
+          </kbd>
         ) : null}
       </span>
       <div className="relative">
@@ -74,7 +74,7 @@ const PosField = forwardRef<
         <input
           ref={ref}
           className={cn(
-            "tabular-pdv h-9 w-full rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground/50 shadow-sm outline-none transition-colors focus:border-primary/60 focus:ring-2 focus:ring-primary/20",
+            "tabular-pdv h-9 w-full rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground/70 shadow-sm outline-none transition-colors focus:border-[hsl(var(--pos-action))]/60 focus:ring-2 focus:ring-[hsl(var(--pos-action))]/20",
             icon && "pl-8",
             className
           )}
@@ -159,12 +159,12 @@ function ItemsTable({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto bg-card">
           {rows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground/60">
-              <PackageOpen className="h-10 w-10 opacity-40" strokeWidth={1.5} />
-              <p className="text-sm font-semibold text-foreground/80">Nenhum item bipado</p>
-              <p className="max-w-sm px-4 text-center text-xs text-muted-foreground/60">
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground/85">
+              <PackageOpen className="h-10 w-10 opacity-65 text-muted-foreground" strokeWidth={1.5} />
+              <p className="text-sm font-semibold text-foreground/90">Nenhum item bipado</p>
+              <p className="max-w-sm px-4 text-center text-xs text-muted-foreground/80">
                 Bipe no campo acima ou pressione{" "}
-                <kbd className="rounded border border-border bg-muted/60 px-1 text-[10px] font-bold text-muted-foreground/75">
+                <kbd className="rounded border border-b-2 border-border bg-muted/65 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
                   F3
                 </kbd>{" "}
                 para pesquisar
@@ -203,7 +203,7 @@ function ItemsTable({
                   <div className="text-muted-foreground/50">{item.unit}</div>
                   <div className="text-right text-foreground/80">R$ {fmt(item.unitPrice)}</div>
                   <div className="text-right font-medium">{fmt(item.qty)}</div>
-                  <div className="text-right font-semibold text-primary">R$ {fmt(lineTotal)}</div>
+                  <div className="text-right font-semibold text-[hsl(var(--pos-action))]">R$ {fmt(lineTotal)}</div>
                 </button>
               )
             })
@@ -282,8 +282,17 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       window.setTimeout(() => clientSearchInputRef.current?.focus(), 60)
     }
   }, [props.clientSearchOpen])
-  
-  const now = new Date().toLocaleString("pt-BR")
+
+  const [currentTime, setCurrentTime] = useState("")
+
+  useEffect(() => {
+    const updateClock = () => {
+      setCurrentTime(new Date().toLocaleString("pt-BR"))
+    }
+    updateClock()
+    const interval = setInterval(updateClock, 1000)
+    return () => clearInterval(interval)
+  }, [])
 
   // Índice da sugestão activa via teclado (-1 = nenhuma)
   const [bipeActiveIdx, setBipeActiveIdx] = useState(-1)
@@ -374,7 +383,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               </span>
             </>
           ) : null}
-          <span className="text-xs tabular-pdv text-muted-foreground/65">{now}</span>
+          <span className="text-xs font-mono tabular-nums text-muted-foreground/75">{currentTime}</span>
         </div>
       </header>
 
@@ -489,7 +498,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
                     Total
                   </span>
-                  <div className="text-2xl font-extrabold sm:text-3xl mt-1 tabular-nums text-primary">
+                  <div className="text-2xl font-extrabold sm:text-3xl mt-1 tabular-nums text-[hsl(var(--pos-action))]">
                     R$ {fmt(props.total)}
                   </div>
                 </div>
@@ -514,7 +523,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               <Button
                 type="button"
                 onClick={() => props.onShortcutAction("F1")}
-                className="h-11 w-full shrink-0 gap-2 bg-primary font-semibold text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                className="h-11 w-full shrink-0 gap-2 bg-[hsl(var(--pos-action))] font-semibold text-[hsl(var(--pos-action-foreground))] hover:bg-[hsl(var(--pos-action))]/90 cursor-pointer transition-colors shadow-sm"
               >
                 <Receipt className="h-4 w-4" />
                 Finalizar (F1)
@@ -541,7 +550,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   </span>
                   <Calculator className="h-4 w-4 text-muted-foreground/65" />
                 </div>
-                <div className="mt-2 text-[clamp(1.75rem,5vw,2.5rem)] font-semibold leading-none tracking-tight tabular-pdv text-primary">
+                <div className="mt-2 text-[clamp(1.75rem,5vw,2.5rem)] font-semibold leading-none tracking-tight tabular-pdv text-[hsl(var(--pos-action))]">
                   R$ {fmt(props.total)}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-xs">
@@ -567,7 +576,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                 <Button
                   type="button"
                   onClick={() => props.onShortcutAction("F1")}
-                  className="mt-4 w-full gap-2 bg-primary font-semibold text-primary-foreground hover:bg-primary/90 cursor-pointer"
+                  className="mt-4 w-full gap-2 bg-[hsl(var(--pos-action))] font-semibold text-[hsl(var(--pos-action-foreground))] hover:bg-[hsl(var(--pos-action))]/90 cursor-pointer transition-colors shadow-sm"
                 >
                   <Receipt className="h-4 w-4" />
                   Finalizar (F1)
@@ -631,7 +640,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   <span className="font-mono text-muted-foreground/60">{p.barcode || p.sku || p.id}</span>
                   <span className="truncate text-foreground/80">{p.name}</span>
                   <span className="text-muted-foreground/50">{p.vendaPorPeso ? "KG" : "UN"}</span>
-                  <span className="text-right font-semibold tabular-pdv text-primary">
+                  <span className="text-right font-semibold tabular-pdv text-[hsl(var(--pos-action))]">
                     {p.vendaPorPeso ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg` : `R$ ${fmt(p.price)}`}
                   </span>
                 </button>
@@ -720,7 +729,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             ref={qtyEditRef}
             defaultValue={props.qtyEditDefault}
             inputMode="decimal"
-            className="tabular-pdv h-11 w-full rounded-md border border-border bg-background px-3 text-2xl font-semibold outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/25"
+            className="tabular-pdv h-11 w-full rounded-md border border-border bg-background px-3 text-2xl font-semibold outline-none focus:border-[hsl(var(--pos-action))]/60 focus:ring-1 focus:ring-[hsl(var(--pos-action))]/25"
           />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" className="cursor-pointer" onClick={() => props.onQtyEditOpenChange(false)}>
@@ -728,7 +737,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             </Button>
             <Button
               type="button"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
+              className="bg-[hsl(var(--pos-action))] text-[hsl(var(--pos-action-foreground))] hover:bg-[hsl(var(--pos-action))]/90 cursor-pointer"
               onClick={() => props.onQtyEditConfirm(qtyEditRef.current?.value ?? "1")}
             >
               Aplicar

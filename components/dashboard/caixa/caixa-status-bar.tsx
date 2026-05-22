@@ -135,7 +135,7 @@ export function CaixaStatusBar({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 min-w-0">
+          <div className="flex flex-wrap items-stretch justify-center gap-3 sm:gap-4 min-w-0">
             <div className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-lg min-w-0">
               <DollarSign className="w-4 h-4 text-muted-foreground shrink-0" />
               <div className="text-right min-w-0">
@@ -160,10 +160,10 @@ export function CaixaStatusBar({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-lg min-w-0">
+            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg min-w-0">
               <div className="text-right min-w-0">
-                <p className="text-xs text-primary">Saldo Atual</p>
-                <p className="font-bold text-lg text-primary truncate">{formatCurrency(getSaldoAtual())}</p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">Saldo Atual</p>
+                <p className="font-bold text-lg text-emerald-500 truncate">{formatCurrency(getSaldoAtual())}</p>
               </div>
             </div>
           </div>

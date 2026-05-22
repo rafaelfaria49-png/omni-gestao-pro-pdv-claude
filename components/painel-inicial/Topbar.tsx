@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package, PanelLeftOpen } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
 import { useUserCredits } from "@/hooks/useUserCredits";
@@ -62,6 +63,11 @@ export function Topbar() {
   const { credits, loading, error } = useUserCredits();
   const { data: session, status } = useSession();
   const { collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed } = useSidebarCollapsed();
+
+  const pathname = usePathname();
+  const isPDV = useMemo(() => {
+    return pathname?.includes("/vendas") || pathname?.includes("/pdv-next");
+  }, [pathname]);
 
   const perms = useMemo(() => {
     if (status !== "authenticated" || !session?.user?.role) return null;
@@ -134,13 +140,13 @@ export function Topbar() {
 
         <ThemeSwitcher />
 
-        {creditsLabel ? (
+        {!isPDV && creditsLabel ? (
           <div className="hidden sm:inline-flex items-center rounded-full border border-border bg-surface/60 px-3 py-1.5 text-[12px] font-medium text-muted-foreground">
             {creditsLabel}
           </div>
         ) : null}
 
-        {(showNone || showLow) && (
+        {!isPDV && (showNone || showLow) && (
           <Link
             href="/dashboard/creditos"
             className={[
@@ -157,12 +163,14 @@ export function Topbar() {
           </Link>
         )}
 
-        <Link
-          href="/dashboard/creditos"
-          className="hidden sm:inline-flex h-8 items-center rounded-full border border-border bg-background/60 px-3 text-[12px] font-medium text-foreground/80 transition hover:bg-muted/50 hover:text-foreground"
-        >
-          Comprar créditos
-        </Link>
+        {!isPDV && (
+          <Link
+            href="/dashboard/creditos"
+            className="hidden sm:inline-flex h-8 items-center rounded-full border border-border bg-background/60 px-3 text-[12px] font-medium text-foreground/80 transition hover:bg-muted/50 hover:text-foreground"
+          >
+            Comprar créditos
+          </Link>
+        )}
 
         <button className="relative h-8 w-8 rounded-md border border-border bg-panel hover:bg-muted/60 transition-colors grid place-items-center">
           <Bell className="h-3.5 w-3.5" strokeWidth={1.75} />

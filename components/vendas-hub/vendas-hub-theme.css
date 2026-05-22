@@ -22,6 +22,8 @@
   --success-foreground: 0 0% 100%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
+  --pos-action: 142 71% 45%;
+  --pos-action-foreground: 0 0% 100%;
 }
 
 [data-vendas-hub-theme-root][data-theme="soft-ice"] {
@@ -39,6 +41,8 @@
   --success-foreground: 0 0% 100%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
+  --pos-action: 200 90% 50%;
+  --pos-action-foreground: 0 0% 100%;
 }
 
 [data-vendas-hub-theme-root][data-theme="midnight"] {
@@ -46,16 +50,18 @@
   --foreground: 210 40% 98%;
   --card: 222 47% 14%;
   --card-foreground: 210 40% 98%;
-  --border: 217 33% 25%;
-  --input: 217 33% 25%;
+  --border: 217 30% 32%;
+  --input: 217 30% 32%;
   --primary: 217 91% 60%;
   --primary-foreground: 0 0% 100%;
   --muted: 217 33% 20%;
-  --muted-foreground: 215 20% 65%;
+  --muted-foreground: 215 20% 72%;
   --success: 142 71% 45%;
   --success-foreground: 0 0% 100%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
+  --pos-action: 217 91% 60%;
+  --pos-action-foreground: 0 0% 100%;
 }
 
 [data-vendas-hub-theme-root][data-theme="black"] {
@@ -63,14 +69,16 @@
   --foreground: 0 0% 98%;
   --card: 0 0% 8%;
   --card-foreground: 0 0% 98%;
-  --border: 0 0% 14%;
-  --input: 0 0% 14%;
+  --border: 0 0% 22%;
+  --input: 0 0% 22%;
   --primary: 142 100% 50%;
   --primary-foreground: 0 0% 100%;
   --muted: 0 0% 12%;
-  --muted-foreground: 0 0% 65%;
+  --muted-foreground: 0 0% 75%;
   --success: 142 100% 50%;
   --success-foreground: 0 0% 4%;
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
+  --pos-action: 142 100% 50%;
+  --pos-action-foreground: 0 0% 4%;
 }
