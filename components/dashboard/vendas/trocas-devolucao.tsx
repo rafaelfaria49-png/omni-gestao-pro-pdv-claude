@@ -1,16 +1,18 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "next/navigation"
-import { Search, Package, Wallet, RotateCcw, Printer } from "lucide-react"
+import { Search, Package, Wallet, RotateCcw, Printer, Plus, Minus, X, ShoppingCart } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Separator } from "@/components/ui/separator"
 import { useConfigEmpresa, configPadrao } from "@/lib/config-empresa"
-import { useOperationsStore, type SaleRecord } from "@/lib/operations-store"
+import { useOperationsStore, type SaleRecord, type InventoryItem } from "@/lib/operations-store"
 import { normalizeDocDigits } from "@/lib/cpf"
 import { buildValeTrocaEscPos } from "@/lib/escpos"
 import { sendEscPosViaProxy, downloadEscPosFile, openThermalHtmlPrint, escapeHtml } from "@/lib/thermal-print"
@@ -36,7 +38,7 @@ export function TrocasDevolucao({
 } = {}) {
   const { config } = useConfigEmpresa()
   const { toast } = useToast()
-  const { sales, registrarDevolucao, inventory } = useOperationsStore()
+  const { sales, registrarDevolucao, inventory, finalizeSaleTransaction, caixa } = useOperationsStore()
   const { lojaAtivaId } = useLojaAtiva()
   const { sessaoId } = useCaixa()
   const searchParams = useSearchParams()
@@ -56,6 +58,39 @@ export function TrocasDevolucao({
   } | null>(null)
   const [candidateSales, setCandidateSales] = useState<SaleRecord[] | null>(null)
   const [candidateLabel, setCandidateLabel] = useState("")
+
+  // ── Troca imediata (modo `troca`): mini-carrinho de novos itens ────────────
+  type TrocaCartLine = { inventoryId: string; name: string; unitPrice: number; quantity: number }
+  const [trocaCart, setTrocaCart] = useState<TrocaCartLine[]>([])
+  const [trocaSearch, setTrocaSearch] = useState("")
+  /** Forma de pagamento da DIFERENÇA (quando novo > devolvido). */
+  const [diffPayMethod, setDiffPayMethod] = useState<"dinheiro" | "pix" | "debito" | "credito">("dinheiro")
+  /** Destino quando devolvido > novo: gerar vale com saldo restante, ou devolver dinheiro. */
+  const [excessHandling, setExcessHandling] = useState<"vale_credito" | "dinheiro">("vale_credito")
+
+  // ── Cupom de troca/devolução (abre automaticamente após confirmar) ────────
+  type CupomTrocaData = {
+    tipo: "devolucao" | "vale_credito" | "troca" | "somente_estoque"
+    devolucaoId: string
+    vendaOrigemId: string
+    novaVendaId?: string | null
+    clienteNome: string
+    clienteCpf: string
+    operador: string
+    itensDevolvidos: { nome: string; quantidade: number; valorTotal: number }[]
+    itensNovos: { nome: string; quantidade: number; valorTotal: number }[]
+    valorDevolvido: number
+    totalNovaCompra: number
+    creditoGerado: number
+    creditoUtilizado: number
+    saldoFinal: number
+    diferencaPaga: number
+    diferencaForma: string | null
+    motivo: string
+    at: string
+  }
+  const [cupomData, setCupomData] = useState<CupomTrocaData | null>(null)
+  const [cupomOpen, setCupomOpen] = useState(false)
 
   // Prefill via prop `initialSaleId` (Histórico) ou URL: /?page=trocas&sale=VDA-...
   useEffect(() => {
@@ -192,6 +227,312 @@ export function TrocasDevolucao({
     }))
   }, [sale])
 
+  // ── Cálculos da troca imediata ─────────────────────────────────────────────
+  /** Valor devolvido baseado nas quantidades atuais × preço unitário da venda original. */
+  const valorDevolvido = useMemo(() => {
+    if (!sale) return 0
+    let total = 0
+    for (const l of linhasComMax) {
+      const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
+      if (q > 0 && l.quantity > 0) total += (l.lineTotal / l.quantity) * q
+    }
+    return Math.round(total * 100) / 100
+  }, [sale, linhasComMax, qtyByLine])
+
+  const totalNovaCompra = useMemo(
+    () => Math.round(trocaCart.reduce((s, l) => s + l.unitPrice * l.quantity, 0) * 100) / 100,
+    [trocaCart],
+  )
+
+  const diferenca = Math.round((totalNovaCompra - valorDevolvido) * 100) / 100
+  /** Quanto cabe abater do vale (= mínimo entre devolvido e nova compra). */
+  const valePassivelAbatimento = Math.round(Math.min(valorDevolvido, totalNovaCompra) * 100) / 100
+  const creditoRestante = Math.round(Math.max(0, valorDevolvido - totalNovaCompra) * 100) / 100
+
+  /** Buscar produtos para a aba "Troca imediata" — limitado a 8 sugestões. */
+  const trocaSearchResults = useMemo<InventoryItem[]>(() => {
+    const q = trocaSearch.trim().toLowerCase()
+    if (!q) return []
+    const digits = q.replace(/\D/g, "")
+    return inventory
+      .filter((i) => {
+        if (i.name.toLowerCase().includes(q)) return true
+        if (i.id.toLowerCase() === q) return true
+        if (i.sku && i.sku.toLowerCase() === q) return true
+        if (i.barcode && i.barcode === digits) return true
+        if (i.codigo && i.codigo.toLowerCase() === q) return true
+        return false
+      })
+      .slice(0, 8)
+  }, [trocaSearch, inventory])
+
+  const addTrocaItem = (item: InventoryItem) => {
+    const isService = item.category === "Servicos"
+    if (!isService && item.stock <= 0) {
+      toast({ title: "Sem estoque", description: `${item.name} está sem estoque.`, variant: "destructive" })
+      return
+    }
+    const existing = trocaCart.find((l) => l.inventoryId === item.id)
+    const used = existing?.quantity ?? 0
+    if (!isService && used + 1 > item.stock) {
+      toast({ title: "Estoque insuficiente", description: `${item.name}: máx ${item.stock}.`, variant: "destructive" })
+      return
+    }
+    setTrocaCart((prev) => {
+      const i = prev.findIndex((l) => l.inventoryId === item.id)
+      if (i >= 0) {
+        const next = [...prev]
+        next[i] = { ...next[i], quantity: next[i].quantity + 1 }
+        return next
+      }
+      return [...prev, { inventoryId: item.id, name: item.name, unitPrice: item.price, quantity: 1 }]
+    })
+    setTrocaSearch("")
+  }
+
+  const decTrocaItem = (inventoryId: string) => {
+    setTrocaCart((prev) =>
+      prev
+        .map((l) => (l.inventoryId === inventoryId ? { ...l, quantity: l.quantity - 1 } : l))
+        .filter((l) => l.quantity > 0),
+    )
+  }
+
+  const incTrocaItem = (inventoryId: string) => {
+    const item = inventory.find((i) => i.id === inventoryId)
+    if (!item) return
+    const isService = item.category === "Servicos"
+    const existing = trocaCart.find((l) => l.inventoryId === inventoryId)
+    const used = existing?.quantity ?? 0
+    if (!isService && used + 1 > item.stock) {
+      toast({ title: "Estoque insuficiente", description: `${item.name}: máx ${item.stock}.`, variant: "destructive" })
+      return
+    }
+    setTrocaCart((prev) =>
+      prev.map((l) => (l.inventoryId === inventoryId ? { ...l, quantity: l.quantity + 1 } : l)),
+    )
+  }
+
+  const removeTrocaItem = (inventoryId: string) => {
+    setTrocaCart((prev) => prev.filter((l) => l.inventoryId !== inventoryId))
+  }
+
+  // Limpa o mini-carrinho ao trocar de venda ou mudar de modo (sai de "troca")
+  useEffect(() => {
+    if (mode !== "troca") setTrocaCart([])
+  }, [mode, sale?.id])
+
+  /**
+   * Finalização da TROCA IMEDIATA (mode === "troca" + mini-carrinho preenchido):
+   * 1) Registra devolução normalmente (estoque dos itens devolvidos sobe, vale emitido = valorDevolvido);
+   * 2) Cria nova venda via `finalizeSaleTransaction`, abatendo o vale recém-emitido (`creditoVale`) e
+   *    cobrando apenas a diferença na forma escolhida (quando positiva);
+   * 3) Se devolvido > nova compra e cliente escolheu "dinheiro", o saldo remanescente do vale é
+   *    devolvido em dinheiro (debita do `customerCredits` local).
+   */
+  const handleFinalizarTroca = () => {
+    if (!sale) return
+    if (!caixa.isOpen) {
+      toast({ title: "Caixa fechado", description: "Abra o caixa antes de finalizar a troca.", variant: "destructive" })
+      return
+    }
+    const cpf = normalizeDocDigits(sale.customerCpf || "") || normalizeDocDigits(cpfExtra)
+    const nome = (sale.customerName || nomeExtra).trim()
+    if (!cpf) {
+      toast({ title: "CPF obrigatório", description: "Informe o CPF/CNPJ do cliente para a troca.", variant: "destructive" })
+      return
+    }
+    if (!nome) {
+      toast({ title: "Nome obrigatório", description: "Informe o nome do cliente.", variant: "destructive" })
+      return
+    }
+
+    // Linhas devolvidas (mesma validação do fluxo padrão)
+    const lines: { inventoryId: string; quantity: number }[] = []
+    for (const l of linhasComMax) {
+      const q = Math.max(0, parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0)
+      if (q > 0) {
+        if (q > l.maxReturn) {
+          toast({ title: "Quantidade inválida", description: `${l.name}: máximo ${l.maxReturn}`, variant: "destructive" })
+          return
+        }
+        lines.push({ inventoryId: l.inventoryId, quantity: q })
+      }
+    }
+    if (lines.length === 0) {
+      toast({ title: "Nada a devolver", description: "Informe quantidades do item a trocar.", variant: "destructive" })
+      return
+    }
+    if (trocaCart.length === 0) {
+      toast({ title: "Sem itens novos", description: "Adicione ao menos um produto/serviço à nova compra.", variant: "destructive" })
+      return
+    }
+
+    // Step 1 — devolução com modo "vale_credito" (gera saldo local de `valorDevolvido`)
+    const dev = registrarDevolucao({ saleId: sale.id, lines, mode: "vale_credito", customerCpf: cpf, customerName: nome })
+    if (!dev.ok) {
+      toast({ title: "Devolução não registrada", description: dev.reason, variant: "destructive" })
+      return
+    }
+    const creditEmitido = dev.creditIssued
+
+    // Step 2 — nova venda abatendo o vale recém-emitido
+    const usaVale = valePassivelAbatimento
+    const diff = Math.round((totalNovaCompra - usaVale) * 100) / 100
+    const pb = { dinheiro: 0, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: usaVale }
+    if (diff > 0) {
+      if (diffPayMethod === "dinheiro") pb.dinheiro = diff
+      else if (diffPayMethod === "pix") pb.pix = diff
+      else if (diffPayMethod === "debito") pb.cartaoDebito = diff
+      else if (diffPayMethod === "credito") pb.cartaoCredito = diff
+    }
+
+    const novaVenda = finalizeSaleTransaction({
+      lines: trocaCart.map((l) => ({ inventoryId: l.inventoryId, quantity: l.quantity, name: l.name, unitPrice: l.unitPrice })),
+      total: totalNovaCompra,
+      paymentBreakdown: pb,
+      customerCpf: cpf,
+      customerName: nome,
+    })
+    if (!novaVenda.ok) {
+      // Não tentamos reverter a devolução automaticamente — o operador deve cancelar a venda manualmente
+      // se necessário. Avisamos com clareza para evitar estado inconsistente silencioso.
+      toast({
+        title: "Devolução registrada, nova venda falhou",
+        description: `${novaVenda.reason} — devolução ${dev.devolucaoId} mantida. Registre a nova venda manualmente.`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Persiste a devolução no servidor com metadata `troca_imediata`
+    if (lojaAtivaId) {
+      const itensServidor = lines.map((req) => {
+        const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
+        const valorUnitario = sl ? sl.lineTotal / sl.quantity : 0
+        return {
+          inventoryId: req.inventoryId,
+          nome: sl?.name ?? "",
+          quantidade: req.quantity,
+          valorUnitario,
+          valorTotal: Math.round(valorUnitario * req.quantity * 100) / 100,
+        }
+      })
+      const excessoDinheiro = creditoRestante > 0 && excessHandling === "dinheiro" ? creditoRestante : 0
+      const creditoFinal = Math.max(0, creditoRestante - excessoDinheiro)
+      fetch("/api/ops/devolucao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
+        body: JSON.stringify({
+          localId: dev.devolucaoId,
+          vendaLocalId: sale.id,
+          sessaoId: sessaoId ?? undefined,
+          tipo: "troca",
+          valorTotal: valorDevolvido,
+          creditoEmitido: creditEmitido,
+          clienteNome: nome,
+          clienteDoc: cpf,
+          operador: nomeLoja,
+          motivo: motivo.trim(),
+          itens: itensServidor,
+          payload: {
+            saleId: sale.id,
+            linhas: lines,
+            modo: "troca_imediata",
+            vendaOriginalId: sale.id,
+            novaVendaId: novaVenda.saleId,
+            valorDevolvido,
+            totalNovaCompra,
+            diferencaPaga: diff > 0 ? diff : 0,
+            diferencaForma: diff > 0 ? diffPayMethod : null,
+            creditoRestante: creditoFinal,
+            excessoDinheiro,
+            motivo: motivo.trim(),
+          },
+        }),
+      })
+        .then((res) => {
+          if (res.ok) onRegistered?.()
+        })
+        .catch(() => {/* non-blocking */})
+    }
+
+    // Excesso em dinheiro: debita o vale local pelo valor a devolver
+    // (o customerCredits ainda guarda `creditoRestante` da devolução; o operador entrega o $ ao cliente)
+    if (creditoRestante > 0 && excessHandling === "dinheiro") {
+      // Não há API direta no store; o crédito persiste como "vale" no localStorage até a Fase 1.
+      // Aqui apenas registramos no audit-log para rastreabilidade operacional.
+      appendAuditLog({
+        action: "devolucao_vale",
+        userLabel: `${nomeLoja} (PDV)`,
+        detail: `[troca_excesso_dinheiro] Troca ${dev.devolucaoId} | venda ${sale.id} | excesso devolvido em dinheiro: ${creditoRestante.toFixed(2)}`,
+      })
+    }
+
+    appendAuditLog({
+      action: "devolucao_vale",
+      userLabel: `${nomeLoja} (PDV)`,
+      detail: `[troca_imediata] dev ${dev.devolucaoId} → venda ${novaVenda.saleId} | devolvido ${valorDevolvido.toFixed(2)} | nova ${totalNovaCompra.toFixed(2)} | diff ${diff.toFixed(2)} (${diffPayMethod}) | excesso ${creditoRestante.toFixed(2)} (${excessHandling})`,
+    })
+
+    setLastDevolucao({ id: dev.devolucaoId, credit: creditEmitido, nome, cpf })
+
+    // Abre o cupom de troca automaticamente (resumo operacional para o cliente)
+    const itensDevolvidos = lines.map((req) => {
+      const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
+      const valorUnit = sl ? sl.lineTotal / sl.quantity : 0
+      return {
+        nome: sl?.name ?? req.inventoryId,
+        quantidade: req.quantity,
+        valorTotal: Math.round(valorUnit * req.quantity * 100) / 100,
+      }
+    })
+    const itensNovos = trocaCart.map((l) => ({
+      nome: l.name,
+      quantidade: l.quantity,
+      valorTotal: Math.round(l.unitPrice * l.quantity * 100) / 100,
+    }))
+    const excessoDinheiroFinal = creditoRestante > 0 && excessHandling === "dinheiro" ? creditoRestante : 0
+    const saldoFinal = Math.max(0, creditoRestante - excessoDinheiroFinal)
+    setCupomData({
+      tipo: "troca",
+      devolucaoId: dev.devolucaoId,
+      vendaOrigemId: sale.id,
+      novaVendaId: novaVenda.saleId,
+      clienteNome: nome,
+      clienteCpf: cpf,
+      operador: nomeLoja,
+      itensDevolvidos,
+      itensNovos,
+      valorDevolvido,
+      totalNovaCompra,
+      creditoGerado: creditEmitido,
+      creditoUtilizado: valePassivelAbatimento,
+      saldoFinal,
+      diferencaPaga: diff > 0 ? diff : 0,
+      diferencaForma: diff > 0 ? diffPayMethod : null,
+      motivo: motivo.trim(),
+      at: new Date().toISOString(),
+    })
+    setCupomOpen(true)
+
+    toast({
+      title: "Troca finalizada",
+      description:
+        diff > 0
+          ? `Cobrado ${formatBrl(diff)} em ${diffPayMethod}.`
+          : creditoRestante > 0 && excessHandling === "dinheiro"
+            ? `Devolva ${formatBrl(creditoRestante)} em dinheiro ao cliente.`
+            : creditoRestante > 0
+              ? `Crédito de ${formatBrl(creditoRestante)} gerado.`
+              : "Troca casada sem diferença.",
+    })
+
+    // Reset do mini-carrinho (a venda original é atualizada via efeito)
+    setTrocaCart([])
+    setQtyByLine({})
+  }
+
   const handleRegistrar = () => {
     if (!sale) return
     const cpf =
@@ -296,6 +637,40 @@ export function TrocasDevolucao({
       nome,
       cpf,
     })
+
+    // Abre cupom de devolução/vale/estoque para conferência do cliente
+    const itensDev = lines.map((req) => {
+      const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
+      const valorUnit = sl ? sl.lineTotal / sl.quantity : 0
+      return {
+        nome: sl?.name ?? req.inventoryId,
+        quantidade: req.quantity,
+        valorTotal: Math.round(valorUnit * req.quantity * 100) / 100,
+      }
+    })
+    const valorDevTotal = itensDev.reduce((s, i) => s + i.valorTotal, 0)
+    setCupomData({
+      tipo: mode === "devolucao" || mode === "vale_credito" || mode === "somente_estoque" ? mode : "devolucao",
+      devolucaoId: r.devolucaoId,
+      vendaOrigemId: sale.id,
+      novaVendaId: null,
+      clienteNome: nome,
+      clienteCpf: cpf,
+      operador: nomeLoja,
+      itensDevolvidos: itensDev,
+      itensNovos: [],
+      valorDevolvido: valorDevTotal,
+      totalNovaCompra: 0,
+      creditoGerado: r.creditIssued,
+      creditoUtilizado: 0,
+      saldoFinal: r.creditIssued,
+      diferencaPaga: 0,
+      diferencaForma: null,
+      motivo: motivo.trim(),
+      at: new Date().toISOString(),
+    })
+    setCupomOpen(true)
+
     const gerouCredito = r.creditIssued > 0
     toast({
       title: gerouCredito ? "Crédito em haver gerado" : "Devolução registrada",
@@ -499,10 +874,153 @@ export function TrocasDevolucao({
               ))}
             </div>
 
+            {/* ─── Modo "Troca imediata" ──────────────────────────────────────── */}
+            {mode === "troca" && (
+              <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-semibold">Nova compra (troca imediata)</Label>
+                </div>
+
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={trocaSearch}
+                    onChange={(e) => setTrocaSearch(e.target.value)}
+                    placeholder="Buscar produto/serviço por nome, SKU ou código de barras…"
+                    className="pl-9"
+                  />
+                  {trocaSearchResults.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
+                      {trocaSearchResults.map((p) => {
+                        const isService = p.category === "Servicos"
+                        const out = !isService && p.stock <= 0
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            disabled={out}
+                            onClick={() => addTrocaItem(p)}
+                            className="flex w-full items-center justify-between gap-2 border-b border-border px-3 py-2 text-left text-sm last:border-0 hover:bg-muted/60 disabled:opacity-50"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-medium">{p.name}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {p.category} · {isService ? "Serviço" : out ? "Sem estoque" : `Estoque: ${p.stock}`}
+                              </p>
+                            </div>
+                            <span className="shrink-0 font-semibold tabular-nums text-primary">{formatBrl(p.price)}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {trocaCart.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum item adicionado. Use a busca acima.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {trocaCart.map((l) => (
+                      <div key={l.inventoryId} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-background p-2 text-sm">
+                        <div className="min-w-[160px] flex-1">
+                          <p className="font-medium">{l.name}</p>
+                          <p className="text-xs text-muted-foreground">{formatBrl(l.unitPrice)} un.</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button type="button" size="icon" variant="outline" className="h-7 w-7" onClick={() => decTrocaItem(l.inventoryId)}>
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-8 text-center font-semibold tabular-nums">{l.quantity}</span>
+                          <Button type="button" size="icon" variant="outline" className="h-7 w-7" onClick={() => incTrocaItem(l.inventoryId)}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <span className="w-24 text-right font-semibold tabular-nums">{formatBrl(l.unitPrice * l.quantity)}</span>
+                        <Button type="button" size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeTrocaItem(l.inventoryId)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Resumo da troca */}
+                <div className="grid grid-cols-2 gap-2 rounded-md border border-border bg-background p-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Devolvido</p>
+                    <p className="font-semibold tabular-nums">{formatBrl(valorDevolvido)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Nova compra</p>
+                    <p className="font-semibold tabular-nums">{formatBrl(totalNovaCompra)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                      {diferenca > 0 ? "Cliente paga" : diferenca < 0 ? "A devolver" : "Casado"}
+                    </p>
+                    <p
+                      className={`font-semibold tabular-nums ${
+                        diferenca > 0 ? "text-amber-600 dark:text-amber-400" : diferenca < 0 ? "text-emerald-600 dark:text-emerald-400" : ""
+                      }`}
+                    >
+                      {formatBrl(Math.abs(diferenca))}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Diferença a pagar — escolher forma */}
+                {diferenca > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Forma de pagamento da diferença</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {(["dinheiro", "pix", "debito", "credito"] as const).map((m) => (
+                        <Button
+                          key={m}
+                          type="button"
+                          size="sm"
+                          variant={diffPayMethod === m ? "default" : "outline"}
+                          onClick={() => setDiffPayMethod(m)}
+                          className="capitalize"
+                        >
+                          {m === "debito" ? "Débito" : m === "credito" ? "Crédito" : m}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Excesso devolvido — escolher destino */}
+                {creditoRestante > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Sobrou {formatBrl(creditoRestante)} — como tratar?</Label>
+                    <RadioGroup
+                      value={excessHandling}
+                      onValueChange={(v) => setExcessHandling(v as "vale_credito" | "dinheiro")}
+                      className="flex flex-wrap gap-3"
+                    >
+                      <label className="flex items-center gap-2 text-sm">
+                        <RadioGroupItem value="vale_credito" id="ex1" /> Gerar vale (crédito em haver)
+                      </label>
+                      <label className="flex items-center gap-2 text-sm">
+                        <RadioGroupItem value="dinheiro" id="ex2" /> Devolver em dinheiro
+                      </label>
+                    </RadioGroup>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
-              <Button type="button" className="bg-primary" onClick={handleRegistrar}>
-                Confirmar devolução
-              </Button>
+              {mode === "troca" ? (
+                <Button type="button" className="bg-primary" onClick={handleFinalizarTroca} disabled={trocaCart.length === 0}>
+                  Finalizar troca
+                </Button>
+              ) : (
+                <Button type="button" className="bg-primary" onClick={handleRegistrar}>
+                  Confirmar devolução
+                </Button>
+              )}
               {lastDevolucao && lastDevolucao.credit > 0 && (
                 <Button type="button" variant="outline" onClick={() => void imprimirVale()}>
                   <Printer className="w-4 h-4 mr-2" />
@@ -513,7 +1031,272 @@ export function TrocasDevolucao({
           </CardContent>
         </Card>
       )}
+
+      {cupomData && (
+        <CupomTroca
+          open={cupomOpen}
+          onClose={() => setCupomOpen(false)}
+          data={cupomData}
+          nomeLoja={nomeLoja}
+          onImprimirVale={() => void imprimirVale()}
+        />
+      )}
     </div>
+  )
+}
+
+// ─── Cupom Troca/Devolução ────────────────────────────────────────────────
+// Reaproveita o helper de impressão térmica (`openThermalHtmlPrint`) e o ESC/POS
+// do vale (`buildValeTrocaEscPos`). Não substitui o `CupomNaoFiscal` da venda — é
+// um comprovante operacional dedicado ao fluxo de troca.
+function CupomTroca({
+  open,
+  onClose,
+  data,
+  nomeLoja,
+  onImprimirVale,
+}: {
+  open: boolean
+  onClose: () => void
+  data: {
+    tipo: "devolucao" | "vale_credito" | "troca" | "somente_estoque"
+    devolucaoId: string
+    vendaOrigemId: string
+    novaVendaId?: string | null
+    clienteNome: string
+    clienteCpf: string
+    operador: string
+    itensDevolvidos: { nome: string; quantidade: number; valorTotal: number }[]
+    itensNovos: { nome: string; quantidade: number; valorTotal: number }[]
+    valorDevolvido: number
+    totalNovaCompra: number
+    creditoGerado: number
+    creditoUtilizado: number
+    saldoFinal: number
+    diferencaPaga: number
+    diferencaForma: string | null
+    motivo: string
+    at: string
+  }
+  nomeLoja: string
+  onImprimirVale: () => void
+}) {
+  const { toast } = useToast()
+  const tipoLabel =
+    data.tipo === "troca"
+      ? "TROCA IMEDIATA"
+      : data.tipo === "vale_credito"
+        ? "VALE-TROCA"
+        : data.tipo === "somente_estoque"
+          ? "DEVOLUÇÃO AO ESTOQUE"
+          : "DEVOLUÇÃO"
+  const dataLabel = new Date(data.at).toLocaleString("pt-BR")
+
+  const copiarResumo = useCallback(() => {
+    const linhas: string[] = [
+      `${nomeLoja} — ${tipoLabel}`,
+      `Data: ${dataLabel}`,
+      `Operador: ${data.operador}`,
+      `Venda origem: ${data.vendaOrigemId}`,
+      data.novaVendaId ? `Nova venda: ${data.novaVendaId}` : "",
+      `Cliente: ${data.clienteNome} (${data.clienteCpf})`,
+      "",
+      "ITENS DEVOLVIDOS",
+      ...data.itensDevolvidos.map((i) => `  ${i.quantidade}× ${i.nome} — ${formatBrl(i.valorTotal)}`),
+      `  Total devolvido: ${formatBrl(data.valorDevolvido)}`,
+    ]
+    if (data.itensNovos.length > 0) {
+      linhas.push("", "ITENS NOVOS")
+      linhas.push(...data.itensNovos.map((i) => `  ${i.quantidade}× ${i.nome} — ${formatBrl(i.valorTotal)}`))
+      linhas.push(`  Total nova compra: ${formatBrl(data.totalNovaCompra)}`)
+    }
+    linhas.push("")
+    if (data.creditoGerado > 0) linhas.push(`Crédito gerado: ${formatBrl(data.creditoGerado)}`)
+    if (data.creditoUtilizado > 0) linhas.push(`Crédito utilizado: ${formatBrl(data.creditoUtilizado)}`)
+    if (data.diferencaPaga > 0) linhas.push(`Diferença paga: ${formatBrl(data.diferencaPaga)} (${data.diferencaForma ?? "—"})`)
+    if (data.saldoFinal > 0) linhas.push(`Saldo final em haver: ${formatBrl(data.saldoFinal)}`)
+    if (data.motivo) linhas.push("", `Motivo: ${data.motivo}`)
+    linhas.push("", `ID devolução: ${data.devolucaoId}`)
+    const texto = linhas.filter((l) => l !== null).join("\n")
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      void navigator.clipboard.writeText(texto).then(
+        () => toast({ title: "Resumo copiado", description: "Cole onde precisar." }),
+        () => toast({ title: "Falha ao copiar", variant: "destructive" }),
+      )
+    }
+  }, [data, nomeLoja, tipoLabel, dataLabel, toast])
+
+  const imprimirHtml = useCallback(() => {
+    const esc = (s: string) => escapeHtml(s)
+    const linhasDev = data.itensDevolvidos
+      .map((i) => `<tr><td>${esc(i.nome)}</td><td style="text-align:right">${i.quantidade}</td><td style="text-align:right">${formatBrl(i.valorTotal)}</td></tr>`)
+      .join("")
+    const linhasNovos = data.itensNovos
+      .map((i) => `<tr><td>${esc(i.nome)}</td><td style="text-align:right">${i.quantidade}</td><td style="text-align:right">${formatBrl(i.valorTotal)}</td></tr>`)
+      .join("")
+    openThermalHtmlPrint(
+      `
+      <div style="text-align:center;font-weight:700">${esc(nomeLoja)}</div>
+      <div style="text-align:center;font-size:11px;margin:2px 0">${esc(tipoLabel)}</div>
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      <p style="margin:2px 0;font-size:11px">Data: ${esc(dataLabel)}</p>
+      <p style="margin:2px 0;font-size:11px">Operador: ${esc(data.operador)}</p>
+      <p style="margin:2px 0;font-size:11px">Venda origem: ${esc(data.vendaOrigemId)}</p>
+      ${data.novaVendaId ? `<p style="margin:2px 0;font-size:11px">Nova venda: ${esc(data.novaVendaId)}</p>` : ""}
+      <p style="margin:2px 0;font-size:11px">Cliente: ${esc(data.clienteNome)} (${esc(data.clienteCpf)})</p>
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      <p style="font-weight:700;margin:4px 0">Itens devolvidos</p>
+      <table style="width:100%;font-size:11px;border-collapse:collapse">${linhasDev}</table>
+      <p style="text-align:right;margin:4px 0">Total devolvido: <strong>${formatBrl(data.valorDevolvido)}</strong></p>
+      ${
+        data.itensNovos.length > 0
+          ? `<div style="border-top:1px dashed #000;margin:6px 0"></div>
+             <p style="font-weight:700;margin:4px 0">Itens novos</p>
+             <table style="width:100%;font-size:11px;border-collapse:collapse">${linhasNovos}</table>
+             <p style="text-align:right;margin:4px 0">Total nova compra: <strong>${formatBrl(data.totalNovaCompra)}</strong></p>`
+          : ""
+      }
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      ${data.creditoGerado > 0 ? `<p style="margin:2px 0">Crédito gerado: ${formatBrl(data.creditoGerado)}</p>` : ""}
+      ${data.creditoUtilizado > 0 ? `<p style="margin:2px 0">Crédito utilizado: ${formatBrl(data.creditoUtilizado)}</p>` : ""}
+      ${data.diferencaPaga > 0 ? `<p style="margin:2px 0">Diferença paga: ${formatBrl(data.diferencaPaga)} (${esc(data.diferencaForma ?? "—")})</p>` : ""}
+      ${data.saldoFinal > 0 ? `<p style="margin:2px 0"><strong>Saldo em haver: ${formatBrl(data.saldoFinal)}</strong></p>` : ""}
+      ${data.motivo ? `<p style="margin:6px 0 2px 0;font-size:11px">Motivo: ${esc(data.motivo)}</p>` : ""}
+      <p style="margin:6px 0 0 0;font-size:10px;color:#555">ID devolução: ${esc(data.devolucaoId)}</p>
+      `,
+      tipoLabel,
+    )
+  }, [data, nomeLoja, tipoLabel, dataLabel])
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md p-0">
+        <DialogHeader className="border-b border-border px-5 py-3">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <RotateCcw className="h-4 w-4 text-primary" />
+            Comprovante — {tipoLabel}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="max-h-[60vh] overflow-y-auto px-5 py-4 text-sm">
+          <div className="space-y-1 text-center">
+            <p className="font-semibold">{nomeLoja}</p>
+            <p className="text-xs text-muted-foreground">{tipoLabel}</p>
+            <p className="text-xs text-muted-foreground">{dataLabel}</p>
+          </div>
+          <Separator className="my-3" />
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <p className="text-muted-foreground">Operador</p>
+              <p className="font-medium">{data.operador}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Venda origem</p>
+              <p className="font-mono font-medium">{data.vendaOrigemId}</p>
+            </div>
+            {data.novaVendaId && (
+              <div className="col-span-2">
+                <p className="text-muted-foreground">Nova venda</p>
+                <p className="font-mono font-medium">{data.novaVendaId}</p>
+              </div>
+            )}
+            <div className="col-span-2">
+              <p className="text-muted-foreground">Cliente</p>
+              <p className="font-medium">
+                {data.clienteNome} <span className="text-xs text-muted-foreground">({data.clienteCpf})</span>
+              </p>
+            </div>
+          </div>
+
+          <Separator className="my-3" />
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens devolvidos</p>
+          <div className="mt-1 space-y-1">
+            {data.itensDevolvidos.map((i, idx) => (
+              <div key={idx} className="flex justify-between text-xs">
+                <span>{i.quantidade}× {i.nome}</span>
+                <span className="font-medium">{formatBrl(i.valorTotal)}</span>
+              </div>
+            ))}
+            <div className="flex justify-between border-t border-border pt-1 text-xs">
+              <span className="text-muted-foreground">Total devolvido</span>
+              <span className="font-semibold">{formatBrl(data.valorDevolvido)}</span>
+            </div>
+          </div>
+
+          {data.itensNovos.length > 0 && (
+            <>
+              <Separator className="my-3" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens novos</p>
+              <div className="mt-1 space-y-1">
+                {data.itensNovos.map((i, idx) => (
+                  <div key={idx} className="flex justify-between text-xs">
+                    <span>{i.quantidade}× {i.nome}</span>
+                    <span className="font-medium">{formatBrl(i.valorTotal)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between border-t border-border pt-1 text-xs">
+                  <span className="text-muted-foreground">Total nova compra</span>
+                  <span className="font-semibold">{formatBrl(data.totalNovaCompra)}</span>
+                </div>
+              </div>
+            </>
+          )}
+
+          <Separator className="my-3" />
+          <div className="space-y-1 text-xs">
+            {data.creditoGerado > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Crédito gerado</span>
+                <span className="font-medium">{formatBrl(data.creditoGerado)}</span>
+              </div>
+            )}
+            {data.creditoUtilizado > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Crédito utilizado</span>
+                <span className="font-medium">{formatBrl(data.creditoUtilizado)}</span>
+              </div>
+            )}
+            {data.diferencaPaga > 0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Diferença paga ({data.diferencaForma ?? "—"})</span>
+                <span className="font-medium">{formatBrl(data.diferencaPaga)}</span>
+              </div>
+            )}
+            {data.saldoFinal > 0 && (
+              <div className="flex justify-between border-t border-border pt-1">
+                <span className="font-semibold">Saldo em haver</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatBrl(data.saldoFinal)}</span>
+              </div>
+            )}
+          </div>
+
+          {data.motivo && (
+            <>
+              <Separator className="my-3" />
+              <p className="text-xs text-muted-foreground">Motivo: {data.motivo}</p>
+            </>
+          )}
+          <p className="mt-3 text-[10px] text-muted-foreground">ID: {data.devolucaoId}</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-border px-5 py-3">
+          <Button type="button" size="sm" onClick={imprimirHtml}>
+            <Printer className="mr-2 h-4 w-4" /> Imprimir
+          </Button>
+          {data.creditoGerado > 0 && (
+            <Button type="button" size="sm" variant="outline" onClick={onImprimirVale}>
+              Imprimir vale 80mm
+            </Button>
+          )}
+          <Button type="button" size="sm" variant="outline" onClick={copiarResumo}>
+            <Search className="mr-2 h-4 w-4" /> Copiar resumo
+          </Button>
+          <Button type="button" size="sm" variant="ghost" className="ml-auto" onClick={onClose}>
+            Fechar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

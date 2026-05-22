@@ -134,21 +134,32 @@ export async function GET(
           precoUnitario: it.precoUnitario,
           lineTotal: it.lineTotal,
         })),
-        devolucoes: devolucoes.map((d) => ({
-          id: d.id,
-          localId: d.localId,
-          at: d.at.toISOString(),
-          tipo: d.tipo,
-          valorTotal: d.valorTotal,
-          creditoEmitido: d.creditoEmitido,
-          operador: d.operador,
-          motivo: d.motivo,
-          itens: d.itens.map((it) => ({
-            nome: it.nome,
-            quantidade: it.quantidade,
-            valorTotal: it.valorTotal,
-          })),
-        })),
+        devolucoes: devolucoes.map((d) => {
+          // Extrai metadata de troca imediata do payload (vendaOriginalId, novaVendaId, totais).
+          const meta =
+            d.payload && typeof d.payload === "object"
+              ? (d.payload as Record<string, unknown>)
+              : null
+          const modo = meta && typeof meta.modo === "string" ? (meta.modo as string) : null
+          const novaVendaId = meta && typeof meta.novaVendaId === "string" ? (meta.novaVendaId as string) : null
+          return {
+            id: d.id,
+            localId: d.localId,
+            at: d.at.toISOString(),
+            tipo: d.tipo,
+            valorTotal: d.valorTotal,
+            creditoEmitido: d.creditoEmitido,
+            operador: d.operador,
+            motivo: d.motivo,
+            modo,
+            novaVendaId,
+            itens: d.itens.map((it) => ({
+              nome: it.nome,
+              quantidade: it.quantidade,
+              valorTotal: it.valorTotal,
+            })),
+          }
+        }),
       },
     })
   } catch (e) {

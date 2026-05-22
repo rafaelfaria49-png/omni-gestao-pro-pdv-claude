@@ -135,6 +135,8 @@ type VendaDetalhe = {
     creditoEmitido: number
     operador: string
     motivo: string
+    modo?: string | null
+    novaVendaId?: string | null
     itens: Array<{ nome: string; quantidade: number; valorTotal: number }>
   }>
 }
@@ -1044,24 +1046,50 @@ export function VendasArquivoGeral() {
                       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                         Devoluções ({detalhe.devolucoes.length})
                       </h3>
-                      {detalhe.devolucoes.map((dev) => (
-                        <div key={dev.id} className="rounded-lg border border-border bg-background/40 p-3 text-sm space-y-1">
-                          <div className="flex justify-between">
-                            <Badge variant="outline" className="text-[10px]">
-                              {dev.tipo === "vale_credito" ? "Vale/Crédito" : dev.tipo === "troca" ? "Troca" : dev.tipo === "devolucao" ? "Devolução" : "Estoque"}
-                            </Badge>
-                            <span className="font-semibold text-destructive">{fmtBrl(dev.valorTotal)}</span>
+                      {detalhe.devolucoes.map((dev) => {
+                        const isTrocaImediata = dev.modo === "troca_imediata"
+                        const badgeLabel = isTrocaImediata
+                          ? "Troca imediata"
+                          : dev.tipo === "vale_credito"
+                            ? "Vale/Crédito"
+                            : dev.tipo === "troca"
+                              ? "Troca"
+                              : dev.tipo === "devolucao"
+                                ? "Devolução"
+                                : "Estoque"
+                        return (
+                          <div key={dev.id} className="rounded-lg border border-border bg-background/40 p-3 text-sm space-y-1">
+                            <div className="flex justify-between">
+                              <Badge variant="outline" className={`text-[10px] ${isTrocaImediata ? "border-primary/40 bg-primary/10 text-primary" : ""}`}>
+                                {badgeLabel}
+                              </Badge>
+                              <span className="font-semibold text-destructive">{fmtBrl(dev.valorTotal)}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground">{fmtDate(dev.at)} · {dev.operador || "Operador"}</p>
+                            {dev.creditoEmitido > 0 && (
+                              <p className="text-xs text-emerald-600 dark:text-emerald-400">Crédito gerado: {fmtBrl(dev.creditoEmitido)}</p>
+                            )}
+                            {dev.motivo && <p className="text-xs text-muted-foreground">Motivo: {dev.motivo}</p>}
+                            {dev.itens.map((it, i) => (
+                              <p key={i} className="text-xs text-foreground/70">{it.quantidade}x {it.nome}</p>
+                            ))}
+                            {/* Mini-timeline da troca imediata */}
+                            {isTrocaImediata && (
+                              <div className="mt-2 rounded border border-primary/20 bg-primary/5 p-2 text-[11px]">
+                                <p className="font-semibold text-primary mb-1">Fluxo da troca</p>
+                                <p className="font-mono text-foreground/80">
+                                  {detalhe.id} <span className="text-muted-foreground">→</span> dev {dev.localId}
+                                  {dev.novaVendaId ? (
+                                    <>
+                                      {" "}<span className="text-muted-foreground">→</span> nova venda <span className="text-primary">{dev.novaVendaId}</span>
+                                    </>
+                                  ) : null}
+                                </p>
+                              </div>
+                            )}
                           </div>
-                          <p className="text-xs text-muted-foreground">{fmtDate(dev.at)} · {dev.operador || "Operador"}</p>
-                          {dev.creditoEmitido > 0 && (
-                            <p className="text-xs text-emerald-600 dark:text-emerald-400">Crédito gerado: {fmtBrl(dev.creditoEmitido)}</p>
-                          )}
-                          {dev.motivo && <p className="text-xs text-muted-foreground">Motivo: {dev.motivo}</p>}
-                          {dev.itens.map((it, i) => (
-                            <p key={i} className="text-xs text-foreground/70">{it.quantidade}x {it.nome}</p>
-                          ))}
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </>
                 )}
