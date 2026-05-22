@@ -21,7 +21,6 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
-import { useStudioTheme } from "@/components/theme/ThemeProvider"
 import { cn } from "@/lib/utils"
 
 type StoreProfile = "ASSISTENCIA" | "VARIEDADES" | "SUPERMERCADO"
@@ -76,8 +75,6 @@ export type GestaoUnidadesSaasProps = {
 }
 
 export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
-  const { mode } = useStudioTheme()
-  const isBlack = mode === "black"
   const { toast } = useToast()
   const { lojaAtivaId, setLojaAtivaId } = useLojaAtiva()
 
@@ -322,27 +319,21 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
     <div className="space-y-6">
       {loading ? (
         <div className="flex flex-col items-center gap-3 py-10">
-          <RefreshCw className={cn("h-6 w-6 animate-spin", isBlack ? "text-white/40" : "text-slate-400")} />
-          <p className={cn("text-sm", isBlack ? "text-white/60" : "text-slate-500")}>
+          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">
             Carregando unidades…
           </p>
         </div>
       ) : apiError ? (
-        <div className={cn(
-          "flex flex-col items-center gap-4 rounded-xl border px-6 py-10 text-center",
-          isBlack ? "border-red-500/25 bg-red-500/5" : "border-red-200 bg-red-50/60",
-        )}>
-          <div className={cn(
-            "flex h-12 w-12 items-center justify-center rounded-full",
-            isBlack ? "bg-red-500/15" : "bg-red-100",
-          )}>
-            <AlertTriangle className={cn("h-6 w-6", isBlack ? "text-red-400" : "text-red-500")} />
+        <div className="flex flex-col items-center gap-4 rounded-xl border border-destructive/20 bg-destructive/5 px-6 py-10 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+            <AlertTriangle className="h-6 w-6 text-destructive" />
           </div>
           <div className="space-y-1">
-            <p className={cn("font-semibold", isBlack ? "text-white" : "text-slate-900")}>
+            <p className="font-semibold text-foreground">
               Não foi possível carregar as unidades
             </p>
-            <p className={cn("text-sm", isBlack ? "text-white/55" : "text-slate-500")}>
+            <p className="text-sm text-muted-foreground">
               Ocorreu um erro ao buscar os dados. Seus dados estão seguros — tente novamente.
             </p>
           </div>
@@ -351,7 +342,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
             variant="outline"
             size="sm"
             onClick={loadStores}
-            className={cn("gap-2", isBlack ? "border-white/20 bg-transparent text-white hover:bg-white/10" : "")}
+            className="gap-2 cursor-pointer"
           >
             <RefreshCw className="h-4 w-4" />
             Tentar novamente
@@ -376,14 +367,10 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                   }
                 }}
                 className={cn(
-                  "flex flex-col gap-3 rounded-xl border p-4 text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-                  isBlack
-                    ? isSelected
-                      ? "border-primary bg-[#000000] shadow-[0_0_0_1px] shadow-primary/35"
-                      : "border-white/10 bg-[#000000]/90 hover:border-white/25"
-                    : isSelected
-                      ? "border-primary bg-white shadow-md ring-2 ring-primary/20"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm",
+                  "flex flex-col gap-3 rounded-xl border p-4 text-left transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 cursor-pointer",
+                  isSelected
+                    ? "border-primary bg-card shadow-md ring-1 ring-primary/30"
+                    : "border-border bg-card/60 hover:bg-card hover:border-border-hover/60 hover:shadow-sm"
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -392,19 +379,14 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                       "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl",
                       isSelected
                         ? "bg-primary/15 text-primary"
-                        : isBlack
-                          ? "bg-white/5 text-white/85"
-                          : "bg-slate-100 text-slate-700",
+                        : "bg-muted text-muted-foreground",
                     )}
                   >
                     <Store className="h-5 w-5" aria-hidden />
                   </div>
                   {isPrincipal && (
                     <Badge
-                      className={cn(
-                        "shrink-0 gap-1 border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200",
-                        isBlack && "border-amber-400/35 text-amber-200",
-                      )}
+                      className="shrink-0 gap-1 border-amber-500/35 bg-amber-500/10 text-amber-600 dark:text-amber-300"
                       variant="outline"
                     >
                       <ShieldCheck className="h-3 w-3" />
@@ -414,19 +396,13 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                 </div>
                 <div className="min-w-0 space-y-1">
                   <p
-                    className={cn(
-                      "truncate text-base font-semibold leading-tight",
-                      isBlack ? "text-white" : "text-slate-900",
-                    )}
+                    className="truncate text-base font-semibold leading-tight text-foreground"
                     title={name}
                   >
                     {name}
                   </p>
                   <p
-                    className={cn(
-                      "truncate font-mono text-[11px]",
-                      isBlack ? "text-white/45" : "text-slate-500",
-                    )}
+                    className="truncate font-mono text-[11px] text-muted-foreground/75"
                     title={s.id}
                   >
                     {s.id}
@@ -435,19 +411,16 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     variant="secondary"
-                    className={cn(
-                      "font-normal",
-                      isBlack ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "text-emerald-800",
-                    )}
+                    className="font-normal border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300"
                   >
                     Ativa
                   </Badge>
-                  <span className={cn("text-xs", isBlack ? "text-white/60" : "text-slate-500")}>
+                  <span className="text-xs text-muted-foreground">
                     {profileLabel(s.profile)}
                   </span>
-                  <span className={cn("text-xs font-medium", isBlack ? "text-white/70" : "text-slate-600")}>
+                  <span className="text-xs font-medium text-muted-foreground/90">
                     Plano:{" "}
-                    <span className={cn("text-foreground", isBlack && "text-white")}>{planLabel(s.subscriptionPlan)}</span>
+                    <span className="text-foreground">{planLabel(s.subscriptionPlan)}</span>
                   </span>
                 </div>
                 <div className="mt-auto flex gap-2">
@@ -455,12 +428,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                     type="button"
                     size="sm"
                     variant={isSelected ? "default" : "outline"}
-                    className={cn(
-                      "flex-1",
-                      isBlack &&
-                        !isSelected &&
-                        "border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white",
-                    )}
+                    className="flex-1 cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation()
                       selectStore(s.id)
@@ -475,10 +443,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                       variant="ghost"
                       disabled
                       title="A loja principal da conta não pode ser excluída."
-                      className={cn(
-                        "shrink-0 cursor-not-allowed opacity-30",
-                        isBlack ? "text-white/40" : "text-slate-400",
-                      )}
+                      className="shrink-0 cursor-not-allowed opacity-30 text-muted-foreground/40"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -488,10 +453,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                       type="button"
                       size="sm"
                       variant="ghost"
-                      className={cn(
-                        "shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive",
-                        isBlack && "text-red-400 hover:bg-red-500/10 hover:text-red-400",
-                      )}
+                      className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
                       title="Excluir unidade"
                       onClick={(e) => {
                         e.stopPropagation()
@@ -510,19 +472,16 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
         /* ── Empty / onboarding state ── */
         <div className={cn(
           "flex flex-col items-center gap-5 rounded-xl border border-dashed px-8 py-14 text-center",
-          isBlack ? "border-white/10" : "border-slate-200",
+          "border-border",
         )}>
-          <div className={cn(
-            "flex h-14 w-14 items-center justify-center rounded-2xl",
-            isBlack ? "bg-white/5" : "bg-primary/10",
-          )}>
-            <Store className={cn("h-7 w-7", isBlack ? "text-white/50" : "text-primary/70")} />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+            <Store className="h-7 w-7 text-muted-foreground/70" />
           </div>
           <div className="space-y-1.5">
-            <p className={cn("text-base font-semibold", isBlack ? "text-white" : "text-slate-900")}>
+            <p className="text-base font-semibold text-foreground">
               Configure sua primeira unidade
             </p>
-            <p className={cn("text-sm max-w-xs", isBlack ? "text-white/55" : "text-slate-500")}>
+            <p className="text-sm max-w-xs text-muted-foreground">
               Cadastre sua loja principal para começar a usar vendas, financeiro, estoque e operações.
             </p>
           </div>
@@ -531,7 +490,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
             size="sm"
             onClick={createStore}
             disabled={loading}
-            className="gap-2"
+            className="gap-2 cursor-pointer"
           >
             <Plus className="h-4 w-4" />
             Criar primeira unidade
@@ -540,43 +499,31 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
       )}
 
       {/* ── Bottom action bar ── */}
-      <div
-        className={cn(
-          "flex flex-wrap justify-center gap-2 border-t pt-6 mt-2",
-          isBlack ? "border-white/10" : "border-slate-200/80",
-        )}
-      >
+      <div className="flex flex-wrap justify-center gap-2 border-t border-border pt-6 mt-2">
         <Button
           type="button"
           variant="outline"
           onClick={createStore}
           disabled={loading}
-          className={cn(
-            isBlack
-              ? "border-white/20 bg-[#000000] text-white hover:bg-white/10 hover:text-white"
-              : "border-slate-200 bg-white",
-          )}
+          className="cursor-pointer"
         >
           Nova unidade
         </Button>
-        <Button type="button" onClick={save} disabled={!draft}>
+        <Button type="button" className="cursor-pointer" onClick={save} disabled={!draft}>
           Salvar unidade
         </Button>
       </div>
 
       {!draft ? (
-        <p className={cn("text-center text-sm", isBlack ? "text-white/55" : "text-slate-600")}>
+        <p className="text-center text-sm text-muted-foreground">
           {stores.length ? "Selecione uma unidade para editar os dados." : ""}
         </p>
       ) : (
         <div className="mt-8 space-y-5 pt-2">
-          <h3 className={cn("text-lg font-semibold leading-snug tracking-tight", isBlack ? "text-white" : "text-slate-900")}>
+          <h3 className="text-lg font-semibold leading-snug tracking-tight text-foreground">
             Dados da unidade selecionada
           </h3>
-          <div className={cn(
-            "rounded-xl border p-5 shadow-sm sm:p-6",
-            isBlack ? "border-white/10 bg-[#000000]/50" : "border-slate-200/90 bg-white",
-          )}>
+          <div className="rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-3">
                 <div className="space-y-1">
@@ -734,17 +681,12 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
   }
 
   return (
-    <Card
-      className={cn(
-        "border transition-colors duration-300",
-        isBlack ? "border-white/10 bg-[#000000] text-white" : "border-slate-200 bg-white text-foreground",
-      )}
-    >
+    <Card className="border border-border bg-card text-foreground transition-colors duration-300">
       <CardHeader>
-        <CardTitle className={cn("text-2xl font-bold", isBlack ? "text-white" : "text-slate-900")}>
+        <CardTitle className="text-2xl font-bold text-foreground">
           Gestão de Unidades (SaaS)
         </CardTitle>
-        <CardDescription className={cn(isBlack ? "text-white/65" : "text-slate-600")}>
+        <CardDescription className="text-muted-foreground/85">
           Cadastre filiais, defina perfil (Assistência / Variedades / Supermercado) e personalize rodapé do cupom por
           unidade.
         </CardDescription>

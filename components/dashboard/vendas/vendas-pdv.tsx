@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { PdvClassic, type VendasPDVProps } from "./pdv-classic"
 import { PdvSupermercado } from "./pdv-supermercado"
+import { LoadingState } from "@/components/ui/states"
 import { usePerfilLoja } from "@/lib/perfil-loja-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
@@ -15,7 +16,7 @@ import {
   readPdvClassicLayout,
 } from "@/lib/pdv-classic-layout"
 
-type PdvLayout = "classic" | "supermercado"
+type PdvLayout = "classic" | "supermercado" | "next"
 
 const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout"
 const RAMO_ATUACAO_STORAGE_PREFIX = "@omnigestao:ramo-atuacao:"
@@ -39,7 +40,7 @@ export function VendasPDV(props: VendasPDVProps) {
     const readLayout = () => {
       try {
         const raw = String(localStorage.getItem(PDV_LAYOUT_STORAGE_KEY) || "").trim()
-        if (raw === "supermercado" || raw === "classic") {
+        if (raw === "supermercado" || raw === "classic" || raw === "next") {
           setLayout(raw)
           return
         }
@@ -100,6 +101,7 @@ export function VendasPDV(props: VendasPDVProps) {
     }
   }, [hydrated, pdvParams.pdvClassicLayout])
 
+  if (layout === "next") return <LoadingState message="Redirecionando para o PDV Next…" />
   if (layout === "supermercado") return <PdvSupermercado {...props} />
 
   return <PdvClassic {...props} uiShell="omni-smart" classicLayoutKind={classicLayout} />
