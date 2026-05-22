@@ -58,16 +58,16 @@ const SHORTCUTS = [
 
 function ShortcutBar({ onAction }: { onAction: (key: string) => void }) {
   return (
-    <div className="flex flex-wrap gap-1 border-t border-white/10 bg-[#0a0a0a] px-2 py-1.5">
+    <div className="flex flex-wrap gap-1 border-t border-border bg-card px-2 py-1.5">
       {SHORTCUTS.map((s) => (
         <button
           key={s.key}
           type="button"
           onClick={() => onAction(s.key)}
           className={cn(
-            "group flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium transition-all",
-            "border-white/10 bg-black text-white/80 hover:-translate-y-px hover:border-emerald-500/30 hover:shadow-sm",
-            s.tone === "accent" && "border-emerald-500/25",
+            "group flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium transition-all cursor-pointer",
+            "border-border bg-background text-foreground/80 hover:-translate-y-px hover:border-primary/50 hover:shadow-sm",
+            s.tone === "accent" && "border-primary/30",
             s.tone === "destructive" && "border-red-500/25"
           )}
         >
@@ -75,15 +75,15 @@ function ShortcutBar({ onAction }: { onAction: (key: string) => void }) {
             className={cn(
               "rounded border border-b-2 px-1.5 py-0.5 text-[10px] font-bold",
               s.tone === "accent"
-                ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-300"
+                ? "border-primary/50 bg-primary/15 text-primary"
                 : s.tone === "destructive"
-                  ? "border-red-400/50 bg-red-500/15 text-red-300"
-                  : "border-white/20 bg-black text-white/70"
+                  ? "border-red-400/50 bg-red-500/15 text-red-600 dark:text-red-300"
+                  : "border-border bg-muted/40 text-muted-foreground"
             )}
           >
             {s.key}
           </kbd>
-          <span className="text-white/50 group-hover:text-white/90">{s.label}</span>
+          <span className="text-muted-foreground group-hover:text-foreground">{s.label}</span>
         </button>
       ))}
     </div>
@@ -107,7 +107,7 @@ function ItemsTable({
   const gridCols = "grid-cols-[48px_96px_1fr_60px_108px_76px_120px_36px]"
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className={cn("grid gap-3 border-b border-white/10 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-white/35", gridCols)}>
+      <div className={cn("grid gap-3 border-b border-border/80 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60", gridCols)}>
         <div>Item</div>
         <div>Código</div>
         <div>Descrição</div>
@@ -135,27 +135,27 @@ function ItemsTable({
                 }
               }}
               className={cn(
-                "group grid w-full gap-3 border-b border-white/8 px-4 py-2.5 text-left text-sm tabular-nums text-white transition-colors cursor-pointer",
+                "group grid w-full gap-3 border-b border-border/60 px-4 py-2.5 text-left text-sm tabular-nums text-foreground transition-colors cursor-pointer",
                 gridCols,
-                isHighlight && "animate-in fade-in bg-emerald-500/15 duration-300",
-                isSelected && "ring-1 ring-inset ring-emerald-400/60",
-                !isHighlight && !isSelected && "hover:bg-white/4"
+                isHighlight && "animate-in fade-in bg-primary/10 duration-300",
+                isSelected && "ring-1 ring-inset ring-primary/60",
+                !isHighlight && !isSelected && "hover:bg-muted/40"
               )}
             >
-              <div className="font-mono text-white/30">{String(idx + 1).padStart(3, "0")}</div>
-              <div className="font-mono text-white/80">{item.code}</div>
+              <div className="font-mono text-muted-foreground/40">{String(idx + 1).padStart(3, "0")}</div>
+              <div className="font-mono text-muted-foreground/80">{item.code}</div>
               <div className="min-w-0">
                 <div className="truncate font-medium">{item.description}</div>
                 {item.detail && (
-                  <div className="mt-0.5 truncate font-mono text-[10px] leading-snug text-cyan-200/70">
+                  <div className="mt-0.5 truncate font-mono text-[10px] leading-snug text-primary/70">
                     {item.detail}
                   </div>
                 )}
               </div>
-              <div className="text-white/40">{item.unit}</div>
-              <div className="text-right text-white/80">R$ {fmt(item.unitPrice)}</div>
+              <div className="text-muted-foreground/50">{item.unit}</div>
+              <div className="text-right text-foreground/80">R$ {fmt(item.unitPrice)}</div>
               <div className="text-right font-medium">{fmt(item.qty)}</div>
-              <div className="text-right font-semibold text-emerald-300">R$ {fmt(lineTotal)}</div>
+              <div className="text-right font-semibold text-primary">R$ {fmt(lineTotal)}</div>
               <div className="flex items-center justify-end">
                 <button
                   type="button"
@@ -165,7 +165,7 @@ function ItemsTable({
                     e.stopPropagation()
                     onRemove(item.lineId)
                   }}
-                  className="grid h-6 w-6 place-items-center rounded text-white/30 opacity-60 hover:bg-red-500/20 hover:text-red-300 hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-red-400/40 group-hover:opacity-100 transition"
+                  className="grid h-6 w-6 place-items-center rounded text-muted-foreground/45 opacity-60 hover:bg-destructive/15 hover:text-destructive hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-1 focus:ring-destructive/40 group-hover:opacity-100 transition cursor-pointer"
                 >
                   <X className="h-3.5 w-3.5" strokeWidth={2.2} />
                 </button>
@@ -181,25 +181,25 @@ function ItemsTable({
 // ── Estado vazio ──────────────────────────────────────────────────────────────
 function EmptyState() {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-8 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-white/4">
-        <ShoppingCart className="h-7 w-7 text-white/25" strokeWidth={1.5} />
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-8 text-center bg-background">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border bg-muted/40">
+        <ShoppingCart className="h-7 w-7 text-muted-foreground/30" strokeWidth={1.5} />
       </div>
       <div>
-        <p className="text-sm font-semibold text-white/70">Comece bipando um produto</p>
-        <p className="mt-1 max-w-xs text-xs leading-relaxed text-white/35">
+        <p className="text-sm font-semibold text-foreground/80">Comece bipando um produto</p>
+        <p className="mt-1 max-w-xs text-xs leading-relaxed text-muted-foreground/60">
           Use o leitor de código de barras, digite o código, EAN ou o nome do produto. Para
           múltiplas unidades use o prefixo{" "}
-          <kbd className="rounded border border-white/15 px-1 font-mono text-[10px]">3x</kbd>
+          <kbd className="rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">3x</kbd>
           {" "}ou{" "}
-          <kbd className="rounded border border-white/15 px-1 font-mono text-[10px]">3*</kbd>
+          <kbd className="rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">3*</kbd>
         </p>
       </div>
       <div className="flex flex-wrap justify-center gap-1.5">
         {["1001", "3x arroz", "2×1886", "camiseta", "7891234560866"].map((ex) => (
           <span
             key={ex}
-            className="rounded border border-white/12 bg-white/4 px-2.5 py-1 font-mono text-xs text-white/40"
+            className="rounded border border-border/75 bg-muted/30 px-2.5 py-1 font-mono text-xs text-muted-foreground/60"
           >
             {ex}
           </span>
@@ -330,7 +330,7 @@ function ProductSearchPanel({
   return (
     <div className="flex flex-col gap-3">
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
         <input
           ref={inputRef}
           value={query}
@@ -339,13 +339,13 @@ function ProductSearchPanel({
           placeholder="Buscar por nome, código, EAN ou SKU"
           autoComplete="off"
           spellCheck={false}
-          className="h-10 w-full rounded-md border border-white/15 bg-black pl-10 pr-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-500/55 focus:ring-1 focus:ring-emerald-500/25"
+          className="h-10 w-full rounded-md border border-border bg-background pl-10 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:border-primary/60 focus:ring-1 focus:ring-primary/25"
         />
       </div>
 
       <div
         ref={listRef}
-        className="max-h-80 overflow-y-auto rounded-md border border-white/10"
+        className="max-h-80 overflow-y-auto rounded-md border border-border"
         role="listbox"
         aria-label="Resultados da busca"
       >
@@ -361,16 +361,16 @@ function ProductSearchPanel({
               onMouseEnter={() => setActiveIdx(idx)}
               onClick={() => onPick(p)}
               className={cn(
-                "grid w-full grid-cols-[112px_1fr_52px_110px] gap-2 border-b border-white/8 px-3 py-2 text-left text-sm transition-colors",
-                isActive ? "bg-emerald-500/15 text-white" : "text-white/85 hover:bg-white/5"
+                "grid w-full grid-cols-[112px_1fr_52px_110px] gap-2 border-b border-border/40 px-3 py-2 text-left text-sm transition-colors cursor-pointer",
+                isActive ? "bg-primary/15 text-primary" : "text-foreground/85 hover:bg-muted/40"
               )}
             >
-              <span className="truncate font-mono text-[11px] text-white/45">
+              <span className="truncate font-mono text-[11px] text-muted-foreground/60">
                 {p.barcode || p.sku || p.codigo || p.id}
               </span>
               <span className="truncate">{p.name}</span>
-              <span className="text-white/35">{p.vendaPorPeso ? "KG" : "UN"}</span>
-              <span className="text-right font-semibold tabular-nums text-emerald-300">
+              <span className="text-muted-foreground/50">{p.vendaPorPeso ? "KG" : "UN"}</span>
+              <span className="text-right font-semibold tabular-nums text-primary">
                 {p.vendaPorPeso
                   ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg`
                   : `R$ ${fmt(p.price)}`}
@@ -379,7 +379,7 @@ function ProductSearchPanel({
           )
         })}
         {results.length === 0 && (
-          <p className="py-6 text-center text-sm text-white/35">
+          <p className="py-6 text-center text-sm text-muted-foreground/50">
             {query.trim()
               ? `Nenhum produto encontrado para "${query.trim()}".`
               : "Nenhum produto cadastrado."}
@@ -387,15 +387,15 @@ function ProductSearchPanel({
         )}
       </div>
 
-      <div className="flex items-center justify-between text-[11px] text-white/35">
+      <div className="flex items-center justify-between text-[11px] text-muted-foreground/55">
         <span>
           {results.length} resultado{results.length === 1 ? "" : "s"}
           {products.length > results.length && results.length === 50 ? " (mostrando 50)" : ""}
         </span>
         <span className="space-x-2">
-          <kbd className="rounded border border-white/15 px-1.5 py-0.5 font-mono">↑↓</kbd>
-          <kbd className="rounded border border-white/15 px-1.5 py-0.5 font-mono">Enter</kbd>
-          <kbd className="rounded border border-white/15 px-1.5 py-0.5 font-mono">Esc</kbd>
+          <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono">↑↓</kbd>
+          <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono">Enter</kbd>
+          <kbd className="rounded border border-border bg-background px-1.5 py-0.5 font-mono">Esc</kbd>
         </span>
       </div>
     </div>
@@ -428,41 +428,41 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
   }, [props.qtyEditOpen])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[#000000] text-white">
+    <div className="flex min-h-0 flex-1 flex-col bg-background text-foreground">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <header className="flex flex-wrap items-center gap-1.5 border-b border-white/10 bg-[#0d0d0d] px-3 py-1.5">
+      <header className="flex flex-wrap items-center gap-1.5 border-b border-border bg-card px-3 py-1.5">
         {/* Logo */}
         <div className="flex shrink-0 items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#0e3527]">
-            <Zap className="h-4 w-4 text-emerald-400" />
+          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/15">
+            <Zap className="h-4 w-4 text-primary" />
           </div>
-          <span className="text-sm font-bold text-white/90">OmniGestão Pro PDV</span>
+          <span className="text-sm font-bold text-foreground/90">OmniGestão Pro PDV</span>
         </div>
 
         {/* Status caixa */}
         {props.caixaAberto ? (
           <>
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-600 px-2.5 py-0.5 text-[11px] font-semibold text-white">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/70" />
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary-foreground/75" />
               Caixa aberto
             </span>
             <button
               type="button"
-              className="flex shrink-0 items-center gap-1.5 rounded border border-white/15 px-2.5 py-1 text-[11px] text-white/65 hover:bg-white/5"
+              className="flex shrink-0 items-center gap-1.5 rounded border border-border bg-background px-2.5 py-1 text-[11px] text-foreground/65 hover:bg-muted/40 cursor-pointer"
             >
               <Receipt className="h-3.5 w-3.5" /> Caixa
             </button>
             <button
               type="button"
-              className="flex shrink-0 items-center gap-1.5 rounded border border-white/15 px-2.5 py-1 text-[11px] text-white/65 hover:bg-white/5"
+              className="flex shrink-0 items-center gap-1.5 rounded border border-border bg-background px-2.5 py-1 text-[11px] text-foreground/65 hover:bg-muted/40 cursor-pointer"
             >
               <Clock className="h-3.5 w-3.5" /> Turno {props.turno}
             </button>
             <button
               type="button"
               onClick={props.onFecharCaixa}
-              className="flex shrink-0 items-center gap-1.5 rounded border border-white/15 px-2.5 py-1 text-[11px] text-white/65 hover:bg-white/5"
+              className="flex shrink-0 items-center gap-1.5 rounded border border-border bg-background px-2.5 py-1 text-[11px] text-foreground/65 hover:bg-muted/40 cursor-pointer"
             >
               <Lock className="h-3.5 w-3.5" /> Fechar caixa
             </button>
@@ -471,28 +471,28 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
           <button
             type="button"
             onClick={props.onAbrirCaixa}
-            className="flex shrink-0 items-center gap-1.5 rounded border border-amber-500/40 bg-amber-600/15 px-2.5 py-1 text-[11px] text-amber-300 hover:bg-amber-600/25"
+            className="flex shrink-0 items-center gap-1.5 rounded border border-amber-500/40 bg-amber-600/15 px-2.5 py-1 text-[11px] text-amber-500 hover:bg-amber-600/25 dark:text-amber-300 cursor-pointer"
           >
             Caixa fechado — Abrir
           </button>
         )}
 
         {/* Separador */}
-        <div className="mx-1 hidden h-5 w-px shrink-0 bg-white/15 lg:block" />
+        <div className="mx-1 hidden h-5 w-px shrink-0 bg-border lg:block" />
 
         {/* Operador · Loja · Cupom */}
         <div className="hidden items-center gap-4 text-[11px] md:flex">
-          <span className="text-white/40 uppercase tracking-wide">
+          <span className="text-muted-foreground/60 uppercase tracking-wide">
             OPERADOR{" "}
-            <span className="font-medium text-white/75">{props.operadorNome}</span>
+            <span className="font-medium text-foreground/80">{props.operadorNome}</span>
           </span>
-          <span className="text-white/40 uppercase tracking-wide">
+          <span className="text-muted-foreground/60 uppercase tracking-wide">
             LOJA{" "}
-            <span className="font-medium text-white/75">{props.storeName}</span>
+            <span className="font-medium text-foreground/80">{props.storeName}</span>
           </span>
-          <span className="text-white/40 uppercase tracking-wide">
+          <span className="text-muted-foreground/60 uppercase tracking-wide">
             CUPOM{" "}
-            <span className="font-mono font-medium text-white/75">
+            <span className="font-mono font-medium text-foreground/80">
               #{String(props.cupomNum).padStart(6, "0")}
             </span>
           </span>
@@ -502,15 +502,15 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
 
         {/* Relógio + Online */}
         <div className="flex shrink-0 items-center gap-3 text-[11px]">
-          <span className="hidden items-center gap-1.5 text-white/40 md:flex">
+          <span className="hidden items-center gap-1.5 text-muted-foreground/60 md:flex">
             <Clock className="h-3.5 w-3.5" />
             {clock}
           </span>
-          <span className="flex items-center gap-1.5 font-medium text-emerald-400">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+          <span className="flex items-center gap-1.5 font-medium text-primary">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             Online
           </span>
-          <span className="hidden text-white/30 md:block">
+          <span className="hidden text-muted-foreground/40 md:block">
             <Wifi className="h-3.5 w-3.5" />
           </span>
         </div>
@@ -521,9 +521,9 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
         {/* Esquerda: barcode + tabela */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {/* Linha do barcode */}
-          <div className="flex items-center gap-2 border-b border-white/10 bg-black px-3 py-2">
+          <div className="flex items-center gap-2 border-b border-border bg-card px-3 py-2">
             <div className="relative flex-1">
-              <Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+              <Barcode className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" />
               <input
                 ref={props.bipeRef}
                 value={props.bipeCode}
@@ -531,9 +531,9 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
                 onKeyDown={props.onBipeKeyDown}
                 placeholder="Bipe o código de barras ou digite o produto"
                 autoComplete="off"
-                className="h-9 w-full rounded-md border border-white/15 bg-black pl-10 pr-12 text-sm text-white outline-none placeholder:text-white/28 focus:border-emerald-500/55 focus:ring-1 focus:ring-emerald-500/20"
+                className="h-9 w-full rounded-md border border-border bg-background pl-10 pr-12 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
               />
-              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-white/20 bg-black px-1.5 py-0.5 text-[10px] font-bold text-white/45">
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground/75">
                 F2
               </kbd>
             </div>
@@ -543,11 +543,11 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
               variant="outline"
               size="sm"
               onClick={() => props.onProductSearchOpenChange(true)}
-              className="h-9 shrink-0 gap-1.5 border-white/15 bg-black text-white/65 hover:border-white/25 hover:bg-white/5 hover:text-white"
+              className="h-9 shrink-0 gap-1.5 border-border bg-background text-foreground/70 hover:border-primary/40 hover:bg-muted/45 hover:text-foreground cursor-pointer"
             >
               <Search className="h-4 w-4" />
               Buscar
-              <kbd className="rounded border border-white/20 bg-white/8 px-1 text-[10px] font-bold">
+              <kbd className="rounded border border-border bg-muted/40 px-1 text-[10px] font-bold">
                 F3
               </kbd>
             </Button>
@@ -557,17 +557,17 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
               size="sm"
               disabled={props.itemCount === 0}
               onClick={props.onFinalizeClick}
-              className="h-9 shrink-0 gap-1.5 bg-emerald-600 font-semibold text-white hover:bg-emerald-500 disabled:opacity-35"
+              className="h-9 shrink-0 gap-1.5 bg-primary font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-35 cursor-pointer"
             >
               Finalizar
-              <kbd className="rounded border border-emerald-400/40 bg-emerald-500/25 px-1 text-[10px] font-bold">
+              <kbd className="rounded border border-primary-foreground/35 bg-primary-foreground/20 px-1 text-[10px] font-bold">
                 F12
               </kbd>
             </Button>
           </div>
 
           {/* Tabela ou estado vazio */}
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden bg-background">
             {props.cartRows.length > 0 ? (
               <ItemsTable
                 rows={props.cartRows}
@@ -583,64 +583,64 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
         </div>
 
         {/* Direita: sidebar de pagamento */}
-        <aside className="hidden w-[320px] shrink-0 flex-col border-l border-white/10 bg-[#000000] lg:flex">
+        <aside className="hidden w-[320px] shrink-0 flex-col border-l border-border bg-card lg:flex">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
 
             {/* TOTAL DA VENDA */}
-            <div className="border-b border-white/10 px-4 py-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            <div className="border-b border-border px-4 py-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                 Total da Venda
               </div>
-              <div className="mt-0.5 text-[2.8rem] font-bold leading-none tabular-nums text-white">
+              <div className="mt-0.5 text-[2.8rem] font-bold leading-none tabular-nums text-foreground">
                 R$ {fmt(props.total)}
               </div>
-              <div className="mt-1.5 flex justify-between text-[11px] text-white/35">
+              <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground/50">
                 <span>Subtotal · {props.itemCount} itens</span>
                 <span>R$ {fmt(props.total)}</span>
               </div>
             </div>
 
             {/* ÚLTIMO ADICIONADO */}
-            <div className="border-b border-white/10 px-4 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            <div className="border-b border-border px-4 py-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                 Último Adicionado
               </div>
-              <p className="mt-1 text-xs text-white/45">
+              <p className="mt-1 text-xs text-foreground/75">
                 {props.lastAddedItem ?? "Nenhum produto adicionado ainda."}
               </p>
             </div>
 
             {/* CLIENTE */}
-            <div className="border-b border-white/10 px-4 py-2">
+            <div className="border-b border-border px-4 py-2">
               <div className="flex items-center justify-between">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                   Cliente
                 </div>
                 <button
                   type="button"
                   onClick={props.onClientSearchOpen}
-                  className="flex items-center gap-1.5 rounded border border-white/15 px-2 py-0.5 text-[11px] text-white/55 hover:bg-white/5"
+                  className="flex items-center gap-1.5 rounded border border-border bg-background px-2 py-0.5 text-[11px] text-foreground/65 hover:bg-muted/40 cursor-pointer"
                 >
                   <User className="h-3 w-3" /> Identificar
-                  <kbd className="rounded border border-white/15 px-1 text-[9px] font-bold text-white/50">
+                  <kbd className="rounded border border-border bg-muted/40 px-1 text-[9px] font-bold text-muted-foreground/60">
                     F5
                   </kbd>
                 </button>
               </div>
               <div className="mt-2.5 flex items-center gap-2.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/6">
-                  <User className="h-4 w-4 text-white/35" />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border bg-muted/40">
+                  <User className="h-4 w-4 text-muted-foreground/60" />
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-white/75">
+                  <div className="text-sm font-medium text-foreground/80">
                     {props.customerDisplay || "Consumidor final"}
                   </div>
-                  <div className="mt-0.5 text-[11px] text-white/30">
+                  <div className="mt-0.5 text-[11px] text-muted-foreground/50">
                     Sem documento na nota{" "}
                     <button
                       type="button"
                       onClick={() => props.onShortcutAction("F9")}
-                      className="text-emerald-500/65 hover:text-emerald-400"
+                      className="text-primary hover:text-primary/80 hover:underline font-semibold cursor-pointer"
                     >
                       + CPF/CNPJ F9
                     </button>
@@ -650,12 +650,12 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
             </div>
 
             {/* DOCUMENTO FISCAL */}
-            <div className="border-b border-white/10 px-4 py-2">
+            <div className="border-b border-border px-4 py-2">
               <div className="flex items-center justify-between">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                   Documento Fiscal
                 </div>
-                <kbd className="rounded border border-white/15 bg-white/4 px-1.5 py-0.5 text-[10px] font-bold text-white/40">
+                <kbd className="rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground/60">
                   F7
                 </kbd>
               </div>
@@ -664,10 +664,10 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
                   type="button"
                   onClick={() => props.onEmitirNotaChange(true)}
                   className={cn(
-                    "flex flex-col items-start rounded-md border p-2 text-left transition-colors",
+                    "flex flex-col items-start rounded-md border p-2 text-left transition-colors cursor-pointer",
                     props.emitirNota
-                      ? "border-emerald-500/55 bg-emerald-600/20 text-white"
-                      : "border-white/10 bg-white/3 text-white/35 hover:bg-white/7"
+                      ? "border-primary/50 bg-primary/10 text-primary"
+                      : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/45 hover:text-foreground"
                   )}
                 >
                   <div className="flex items-center gap-1.5">
@@ -680,10 +680,10 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
                   type="button"
                   onClick={() => props.onEmitirNotaChange(false)}
                   className={cn(
-                    "flex flex-col items-start rounded-md border p-2 text-left transition-colors",
+                    "flex flex-col items-start rounded-md border p-2 text-left transition-colors cursor-pointer",
                     !props.emitirNota
-                      ? "border-white/22 bg-white/7 text-white/75"
-                      : "border-white/10 bg-white/3 text-white/35 hover:bg-white/7"
+                      ? "border-primary/50 bg-primary/10 text-primary"
+                      : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/45 hover:text-foreground"
                   )}
                 >
                   <div className="flex items-center gap-1.5">
@@ -696,8 +696,8 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
             </div>
 
             {/* VALOR RECEBIDO EM DINHEIRO */}
-            <div className="border-b border-white/10 px-4 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+            <div className="border-b border-border px-4 py-2">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                 Valor Recebido em Dinheiro
               </div>
               <input
@@ -706,18 +706,18 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
                 onChange={(e) => props.onValorRecebidoChange(e.target.value)}
                 inputMode="decimal"
                 placeholder="0,00"
-                className="mt-2 h-10 w-full rounded border border-white/12 bg-transparent px-3 text-right text-lg tabular-nums text-white/65 outline-none placeholder:text-white/20 focus:border-white/28 focus:text-white"
+                className="mt-2 h-10 w-full rounded border border-border bg-background px-3 text-right text-lg tabular-nums text-foreground outline-none placeholder:text-muted-foreground/30 focus:border-primary/60 focus:ring-1 focus:ring-primary/25"
               />
             </div>
 
             {/* Troco */}
-            <div className="border-b border-white/10 px-4 py-2">
+            <div className="border-b border-border px-4 py-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-white/45">Troco</span>
+                <span className="text-sm text-muted-foreground/60">Troco</span>
                 <span
                   className={cn(
                     "text-sm font-bold tabular-nums",
-                    props.troco > 0 ? "text-emerald-400" : "text-white/40"
+                    props.troco > 0 ? "text-primary" : "text-muted-foreground/45"
                   )}
                 >
                   R$ {fmt(props.troco)}
@@ -732,10 +732,10 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
                 onClick={props.onFinalizeClick}
                 disabled={props.itemCount === 0}
                 className={cn(
-                  "flex w-full items-center justify-center gap-2 rounded-md py-3 text-sm font-semibold transition-colors",
+                  "flex w-full items-center justify-center gap-2 rounded-md py-3 text-sm font-semibold transition-colors cursor-pointer",
                   props.itemCount > 0
-                    ? "bg-emerald-700 text-white hover:bg-emerald-600"
-                    : "cursor-not-allowed bg-white/5 text-white/25"
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                    : "cursor-not-allowed bg-muted text-muted-foreground"
                 )}
               >
                 <Receipt className="h-4 w-4" />
@@ -753,10 +753,10 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
 
       {/* Pesquisa de produto (F3) */}
       <Dialog open={props.productSearchOpen} onOpenChange={props.onProductSearchOpenChange}>
-        <DialogContent className="max-w-2xl border-white/10 bg-[#111111] text-white">
+        <DialogContent className="max-w-2xl border-border bg-card text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-white">Busca avançada (F3)</DialogTitle>
-            <DialogDescription className="text-white/50">
+            <DialogTitle className="text-foreground">Busca avançada (F3)</DialogTitle>
+            <DialogDescription className="text-muted-foreground/70">
               Digite nome, código, EAN ou SKU. Use ↑/↓ para navegar, Enter para adicionar.
             </DialogDescription>
           </DialogHeader>
@@ -772,10 +772,10 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
 
       {/* Pesquisa de cliente (F5) */}
       <Dialog open={props.clientSearchOpen} onOpenChange={props.onClientSearchOpenChange}>
-        <DialogContent className="max-w-md border-white/10 bg-[#111111] text-white">
+        <DialogContent className="max-w-md border-border bg-card text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-white">Identificar Cliente (F5)</DialogTitle>
-            <DialogDescription className="text-white/50">
+            <DialogTitle className="text-foreground">Identificar Cliente (F5)</DialogTitle>
+            <DialogDescription className="text-muted-foreground/70">
               Selecione o cliente desta venda.
             </DialogDescription>
           </DialogHeader>
@@ -788,14 +788,14 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
                   props.onPickClient(c.label)
                   props.onClientSearchOpenChange(false)
                 }}
-                className="flex w-full items-center justify-between rounded-md border border-white/10 bg-black px-3 py-2.5 text-left text-sm hover:border-white/20 hover:bg-white/5"
+                className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2.5 text-left text-sm hover:border-primary/50 hover:bg-muted/30 cursor-pointer"
               >
-                <span className="font-medium text-white/85">{c.label}</span>
-                <ChevronRight className="h-4 w-4 text-white/35" />
+                <span className="font-medium text-foreground/80">{c.label}</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground/60" />
               </button>
             ))}
             {props.clientOptions.length === 0 && (
-              <p className="py-4 text-center text-sm text-white/35">
+              <p className="py-4 text-center text-sm text-muted-foreground/50">
                 Digite no campo acima e aguarde os resultados.
               </p>
             )}
@@ -805,10 +805,10 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
 
       {/* Alterar quantidade (F4) */}
       <Dialog open={props.qtyEditOpen} onOpenChange={props.onQtyEditOpenChange}>
-        <DialogContent className="max-w-sm border-white/10 bg-[#111111] text-white">
+        <DialogContent className="max-w-sm border-border bg-card text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-white">Alterar Quantidade (F4)</DialogTitle>
-            <DialogDescription className="text-white/50">
+            <DialogTitle className="text-foreground">Alterar Quantidade (F4)</DialogTitle>
+            <DialogDescription className="text-muted-foreground/70">
               Nova quantidade para o item selecionado.
             </DialogDescription>
           </DialogHeader>
@@ -817,20 +817,20 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
             ref={qtyEditRef}
             defaultValue={props.qtyEditDefault}
             inputMode="decimal"
-            className="h-12 w-full rounded-md border border-white/15 bg-black px-3 text-center text-2xl font-semibold tabular-nums text-white outline-none focus:border-emerald-500/60"
+            className="h-12 w-full rounded-md border border-border bg-background px-3 text-center text-2xl font-semibold tabular-nums text-foreground outline-none focus:border-primary/60 focus:ring-1 focus:ring-primary/25"
           />
           <div className="flex justify-end gap-2">
             <Button
               type="button"
               variant="outline"
               onClick={() => props.onQtyEditOpenChange(false)}
-              className="border-white/20 bg-transparent text-white/70 hover:bg-white/8"
+              className="border-border bg-transparent text-foreground/70 hover:bg-muted cursor-pointer"
             >
               Voltar
             </Button>
             <Button
               type="button"
-              className="bg-emerald-600 text-white hover:bg-emerald-500"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
               onClick={() => props.onQtyEditConfirm(qtyEditRef.current?.value ?? "1")}
             >
               Aplicar
@@ -841,10 +841,10 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
 
       {/* Cancelar venda (F10) */}
       <Dialog open={props.cancelSaleOpen} onOpenChange={props.onCancelSaleOpenChange}>
-        <DialogContent className="max-w-md border-white/10 bg-[#111111] text-white">
+        <DialogContent className="max-w-md border-border bg-card text-foreground">
           <DialogHeader>
-            <DialogTitle className="text-white">Cancelar Venda (F10)</DialogTitle>
-            <DialogDescription className="text-white/50">
+            <DialogTitle className="text-foreground">Cancelar Venda (F10)</DialogTitle>
+            <DialogDescription className="text-muted-foreground/70">
               Todos os itens serão removidos. Confirme para limpar o cupom.
             </DialogDescription>
           </DialogHeader>
@@ -853,11 +853,11 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
               type="button"
               variant="outline"
               onClick={() => props.onCancelSaleOpenChange(false)}
-              className="border-white/20 bg-transparent text-white/70 hover:bg-white/8"
+              className="border-border bg-transparent text-foreground/70 hover:bg-muted cursor-pointer"
             >
               Voltar
             </Button>
-            <Button type="button" variant="destructive" onClick={props.onConfirmCancelSale}>
+            <Button type="button" variant="destructive" className="cursor-pointer" onClick={props.onConfirmCancelSale}>
               Cancelar venda
             </Button>
           </div>

@@ -17,7 +17,6 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
 import { RightPanel } from "@/components/ia-mestre/RightPanel";
 import { ModelSelect, type ModelId } from "@/components/ia-mestre/ModelSelect";
 import { IdentitySwitch } from "@/components/ia-mestre/IdentitySwitch";
@@ -374,7 +373,6 @@ function Shell() {
             <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/60 px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition hover:text-foreground">
               <Plus className="h-3.5 w-3.5" /> Nova conversa
             </button>
-            <ThemeSwitcher />
           </div>
         </header>
 

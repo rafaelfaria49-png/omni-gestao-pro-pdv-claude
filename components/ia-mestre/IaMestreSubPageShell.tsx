@@ -1,6 +1,5 @@
 "use client"
 
-import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher"
 import type { ReactNode } from "react"
 
 export function IaMestreSubPageShell({
@@ -28,7 +27,6 @@ export function IaMestreSubPageShell({
         </div>
         <div className="flex items-center gap-2">
           {actions}
-          <ThemeSwitcher />
         </div>
       </header>
       <main className="scroll-elegant flex-1 overflow-y-auto overflow-x-hidden px-8 py-6">{children}</main>
