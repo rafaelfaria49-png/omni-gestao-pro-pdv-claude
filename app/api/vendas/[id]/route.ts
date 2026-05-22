@@ -60,10 +60,11 @@ function extractCustomerCpf(payload: unknown): string | null {
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
-  const pedidoId = params.id?.trim()
+  const { id: rawId } = await params
+  const pedidoId = rawId?.trim()
 
   if (!pedidoId) {
     return NextResponse.json({ ok: false, error: "ID da venda obrigatório" }, { status: 400 })

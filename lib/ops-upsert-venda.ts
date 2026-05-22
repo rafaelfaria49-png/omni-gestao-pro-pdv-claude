@@ -86,11 +86,22 @@ export async function upsertVendaInTransaction(
     },
   })
 
-  // ── 2. ItemVenda (recria para idempotência) ──────────────────────────────────
+  // ── 2. ItemVenda (recria para idempotência) + resolução de produto ───────────
+  // inventoryId vindo do PDV pode ser SKU ou cuid; resolvemos via OR lookup e
+  // armazenamos o cuid real em ItemVenda.inventoryId e no cache para o Step 3.
   await tx.itemVenda.deleteMany({ where: { vendaId: v.id } })
 
+  type ResolvedProduct = {
+    dbId: string
+    stock: number
+    precoCusto: number
+    sku: string | null
+    name: string
+  }
+  const resolvedProductMap = new Map<string, ResolvedProduct>()
+
   for (const line of lines) {
-    const inventoryId = typeof line.inventoryId === "string" ? line.inventoryId : null
+    const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : null
     const nome = typeof line.name === "string" ? line.name : ""
     const qRaw = typeof line.quantity === "number" && Number.isFinite(line.quantity) ? line.quantity : 0
     const quantidade = Math.max(0, Math.min(2_000_000_000, Math.round(qRaw)))
@@ -100,6 +111,30 @@ export async function upsertVendaInTransaction(
       typeof line.lineTotal === "number" && Number.isFinite(line.lineTotal)
         ? line.lineTotal
         : Math.round(precoUnitario * quantidade * 100) / 100
+
+    // Resolve produto real via OR (id | sku | barcode); evita busca duplicada por linha
+    if (rawInvId && !isOsVirtualSaleLine(rawInvId) && !resolvedProductMap.has(rawInvId)) {
+      const produto = await tx.produto.findFirst({
+        where: {
+          storeId: lojaId,
+          OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }],
+        },
+        select: { id: true, stock: true, precoCusto: true, sku: true, name: true },
+      })
+      if (produto) {
+        resolvedProductMap.set(rawInvId, {
+          dbId: produto.id,
+          stock: produto.stock,
+          precoCusto: produto.precoCusto,
+          sku: produto.sku ?? null,
+          name: produto.name,
+        })
+      }
+    }
+
+    // Usa o cuid real do banco; preserva rawInvId para linhas virtuais/serviço
+    const resolvedProduct = rawInvId ? resolvedProductMap.get(rawInvId) : undefined
+    const inventoryId = resolvedProduct ? resolvedProduct.dbId : rawInvId
 
     await tx.itemVenda.create({
       data: {
@@ -114,41 +149,47 @@ export async function upsertVendaInTransaction(
   }
 
   // ── 3. MovimentacaoEstoque (saída PDV) ──────────────────────────────────────
-  // Idempotência: verifica se já existe ledger para este pedidoId antes de criar.
-  // Impede dupla baixa em caso de retry da rota.
+  // Usa o resolvedProductMap do Step 2 — não refaz OR lookup.
+  // Idempotência: checa por produtoId (cuid) antes de criar.
   for (const line of lines) {
-    const invId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
-    if (!invId || isOsVirtualSaleLine(invId)) continue
+    const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
+    if (!rawInvId || isOsVirtualSaleLine(rawInvId)) continue
 
     const qty = Math.max(0, Math.round(typeof line.quantity === "number" ? line.quantity : 0))
     if (qty === 0) continue
 
+    const resolved = resolvedProductMap.get(rawInvId)
+    if (!resolved) continue // produto não encontrado no banco — aviso implícito via ausência de ledger
+
+    const produtoId = resolved.dbId
+
     const jaExiste = await tx.movimentacaoEstoque.findFirst({
-      where: { storeId: lojaId, documento: pedidoId, produtoId: invId, origem: "pdv" },
+      where: { storeId: lojaId, documento: pedidoId, produtoId, origem: "pdv" },
       select: { id: true },
     })
     if (jaExiste) continue
 
-    const produto = await tx.produto.findFirst({
-      where: { id: invId, storeId: lojaId },
-      select: { stock: true, precoCusto: true, sku: true, name: true },
+    // Re-lê stock atual dentro da transação para estoqueAntes preciso
+    const produtoAtual = await tx.produto.findUnique({
+      where: { id: produtoId },
+      select: { stock: true, precoCusto: true },
     })
-    if (!produto) continue
+    if (!produtoAtual) continue
 
-    const estoqueAntes = produto.stock
-    const custo = arredonda2(Math.max(0, produto.precoCusto))
+    const estoqueAntes = produtoAtual.stock
+    const custo = arredonda2(Math.max(0, produtoAtual.precoCusto))
 
     await tx.produto.update({
-      where: { id: invId },
+      where: { id: produtoId },
       data: { stock: { decrement: qty } },
     })
 
     await tx.movimentacaoEstoque.create({
       data: {
         storeId: lojaId,
-        produtoId: invId,
-        produtoSku: produto.sku ?? null,
-        produtoNome: produto.name,
+        produtoId,
+        produtoSku: resolved.sku ?? null,
+        produtoNome: resolved.name,
         tipo: "saida",
         origem: "pdv",
         quantidade: -qty,

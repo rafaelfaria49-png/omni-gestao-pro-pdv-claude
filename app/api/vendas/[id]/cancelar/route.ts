@@ -23,10 +23,11 @@ export const revalidate = 0
 
 export async function POST(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
-  const pedidoId = params.id?.trim()
+  const { id: rawId } = await params
+  const pedidoId = rawId?.trim()
 
   const session = await auth()
   if (session?.user) {
