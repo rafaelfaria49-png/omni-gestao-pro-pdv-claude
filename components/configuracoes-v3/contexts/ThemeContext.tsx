@@ -5,9 +5,9 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
-  useState,
   ReactNode,
 } from "react";
+import { useTheme as useGlobalTheme } from "@/components/theme/ThemeProvider";
 
 export type ThemeId = "light" | "soft-ice" | "midnight" | "black";
 
@@ -18,36 +18,28 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-const STORAGE_KEY = "omnigestao.theme";
-const DEFAULT_THEME: ThemeId = "light";
-
-const VALID_THEMES: readonly ThemeId[] = ["light", "soft-ice", "midnight", "black"];
-
-function normalizeStoredTheme(raw: string | null): ThemeId {
-  if (!raw) return DEFAULT_THEME;
-  if (raw === "black-edition") return "black";
-  if (VALID_THEMES.includes(raw as ThemeId)) return raw as ThemeId;
-  return DEFAULT_THEME;
-}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeId>(() => {
-    if (typeof window === "undefined") return DEFAULT_THEME;
-    return normalizeStoredTheme(localStorage.getItem(STORAGE_KEY));
-  });
+  const { theme: globalTheme, setTheme: setGlobalTheme } = useGlobalTheme();
+
+  const theme: ThemeId = useMemo(() => {
+    if (globalTheme === "black-edition") return "black";
+    return (globalTheme as ThemeId) || "light";
+  }, [globalTheme]);
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
       theme,
-      setTheme: (t) => setThemeState(t),
-      resetTheme: () => setThemeState(DEFAULT_THEME),
+      setTheme: (t) => {
+        setGlobalTheme(t === "black" ? "black-edition" : t);
+      },
+      resetTheme: () => setGlobalTheme("light"),
     }),
-    [theme],
+    [theme, setGlobalTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
