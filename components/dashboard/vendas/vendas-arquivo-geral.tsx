@@ -1248,7 +1248,7 @@ export function VendasArquivoGeral() {
           if (!o) closeTroca()
         }}
       >
-        <DialogContent className="max-h-[min(95vh,900px)] w-[min(100vw-2rem,62rem)] border-border bg-card p-0 flex flex-col overflow-hidden">
+        <DialogContent className="max-h-[min(90vh,680px)] w-[min(100vw-2rem,82rem)] sm:max-w-[82rem] border-border bg-card p-0 flex flex-col overflow-hidden">
           <DialogHeader className="border-b border-border px-4 py-3 sm:px-6">
             <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
               <RotateCcw className="h-4 w-4 text-primary" />

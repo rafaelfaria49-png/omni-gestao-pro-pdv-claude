@@ -792,16 +792,20 @@ export function TrocasDevolucao({
       )}
 
       {sale && (
-        <Card className="bg-card border-border shadow-md">
-          <CardHeader className="border-b border-border/60 pb-4">
-            <div className="flex items-center justify-between">
+        <div className="w-full space-y-4">
+          {/* Cabeçalho Compacto da Venda de Origem */}
+          <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl border border-border bg-muted/15">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                <Package className="w-4 h-4" />
+              </div>
               <div>
-                <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                  <Package className="w-5 h-5 text-primary" />
-                  Origem: {sale.id}
-                </CardTitle>
-                <CardDescription className="text-xs mt-0.5 flex items-center gap-2">
-                  Realizada em {new Date(sale.at).toLocaleString("pt-BR")}
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs text-muted-foreground uppercase tracking-wider">Origem:</span>
+                  <span className="font-mono text-sm font-bold text-primary">{sale.id}</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+                  <span>Realizada em {new Date(sale.at).toLocaleString("pt-BR")}</span>
                   {initialSaleId && (
                     <>
                       <span>·</span>
@@ -818,139 +822,118 @@ export function TrocasDevolucao({
                       </button>
                     </>
                   )}
-                </CardDescription>
-              </div>
-              <div className="text-right">
-                <span className="text-xs text-muted-foreground uppercase tracking-wider block">Total da Venda</span>
-                <span className="text-lg font-extrabold text-foreground tabular-nums">{formatBrl(sale.total)}</span>
+                </p>
               </div>
             </div>
-          </CardHeader>
+            <div className="text-right">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">Total da Venda</span>
+              <span className="text-base font-extrabold text-foreground tabular-nums">{formatBrl(sale.total)}</span>
+            </div>
+          </div>
 
-          <CardContent className="p-4 sm:p-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Coluna Esquerda: Dados do Cliente e Modo de Operação (lg:col-span-5) */}
-              <div className="lg:col-span-5 space-y-5">
-                {/* CPF / Nome */}
-                <div className="space-y-4 rounded-xl border border-border/50 bg-muted/10 p-4">
-                  <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Search className="w-3.5 h-3.5 text-primary" />
-                    Identificação do Cliente
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-muted-foreground">CPF/CNPJ (se não veio na venda)</Label>
-                      <Input
-                        value={cpfExtra}
-                        onChange={(e) => setCpfExtra(e.target.value)}
-                        placeholder="Somente números"
-                        className="h-10 border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-muted-foreground">Nome do Cliente</Label>
-                      <Input
-                        value={nomeExtra}
-                        onChange={(e) => setNomeExtra(e.target.value)}
-                        placeholder="Nome completo do cliente"
-                        className="h-10 border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                      />
-                    </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+            {/* Coluna Esquerda: Dados do Cliente e Modo de Operação (lg:col-span-4) */}
+            <div className="lg:col-span-4 space-y-3">
+              {/* CPF / Nome */}
+              <div className="space-y-2 rounded-lg border border-border/50 bg-muted/10 p-2.5">
+                <h3 className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <Search className="w-3 h-3 text-primary" />
+                  Identificação do Cliente
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-0.5">
+                    <Label className="text-[9px] font-semibold text-muted-foreground">CPF/CNPJ (se não veio)</Label>
+                    <Input
+                      value={cpfExtra}
+                      onChange={(e) => setCpfExtra(e.target.value)}
+                      placeholder="Somente números"
+                      className="h-7 text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+                    />
+                  </div>
+                  <div className="space-y-0.5">
+                    <Label className="text-[9px] font-semibold text-muted-foreground">Nome do Cliente</Label>
+                    <Input
+                      value={nomeExtra}
+                      onChange={(e) => setNomeExtra(e.target.value)}
+                      placeholder="Nome completo"
+                      className="h-7 text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+                    />
                   </div>
                 </div>
+              </div>
 
                 {/* Modo de Operação */}
-                <div className="space-y-3">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
+                <div className="space-y-1.5">
+                  <Label className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground block">
                     Modo de Operação
                   </Label>
-                  <div className="grid grid-cols-2 gap-2.5">
+                  <div className="grid grid-cols-2 gap-1.5">
                     {/* Tile 1: Troca Imediata */}
                     <button
                       type="button"
                       onClick={() => setMode("troca")}
-                      className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all ${
                         mode === "troca"
                           ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
                           : "border-border bg-background hover:bg-muted/50"
                       }`}
                     >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <RotateCcw className={`w-3.5 h-3.5 ${mode === "troca" ? "text-primary" : "text-muted-foreground"}`} />
-                        <span className="font-bold text-xs text-foreground">Troca Imediata</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground leading-normal">
-                        Devolve itens ao estoque e realiza nova compra simultânea.
-                      </span>
+                      <RotateCcw className={`w-3.5 h-3.5 shrink-0 ${mode === "troca" ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">Troca Imediata</span>
                     </button>
 
                     {/* Tile 2: Vale Crédito */}
                     <button
                       type="button"
                       onClick={() => setMode("vale_credito")}
-                      className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all ${
                         mode === "vale_credito"
                           ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
                           : "border-border bg-background hover:bg-muted/50"
                       }`}
                     >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Wallet className={`w-3.5 h-3.5 ${mode === "vale_credito" ? "text-primary" : "text-muted-foreground"}`} />
-                        <span className="font-bold text-xs text-foreground font-sans">Vale-Troca</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground leading-normal">
-                        Gera saldo associado ao CPF para uso em compras futuras.
-                      </span>
+                      <Wallet className={`w-3.5 h-3.5 shrink-0 ${mode === "vale_credito" ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">Vale-Troca</span>
                     </button>
 
                     {/* Tile 3: Devolução/Reembolso */}
                     <button
                       type="button"
                       onClick={() => setMode("devolucao")}
-                      className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all ${
                         mode === "devolucao"
                           ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
                           : "border-border bg-background hover:bg-muted/50"
                       }`}
                     >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <RotateCcw className={`w-3.5 h-3.5 ${mode === "devolucao" ? "text-primary" : "text-muted-foreground"}`} />
-                        <span className="font-bold text-xs text-foreground">Reembolso</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground leading-normal">
-                        Devolve itens e reembolsa o valor em dinheiro ou PIX.
-                      </span>
+                      <RotateCcw className={`w-3.5 h-3.5 shrink-0 ${mode === "devolucao" ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">Reembolso</span>
                     </button>
 
                     {/* Tile 4: Somente Estoque */}
                     <button
                       type="button"
                       onClick={() => setMode("somente_estoque")}
-                      className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                      className={`flex items-center gap-1.5 p-2 rounded-lg border text-left transition-all ${
                         mode === "somente_estoque"
                           ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
                           : "border-border bg-background hover:bg-muted/50"
                       }`}
                     >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Package className={`w-3.5 h-3.5 ${mode === "somente_estoque" ? "text-primary" : "text-muted-foreground"}`} />
-                        <span className="font-bold text-xs text-foreground">Apenas Estoque</span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground leading-normal">
-                        Retorna produtos ao estoque físico sem gerar créditos.
-                      </span>
+                      <Package className={`w-3.5 h-3.5 shrink-0 ${mode === "somente_estoque" ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="font-semibold text-[11px] text-foreground font-sans leading-none">Apenas Estoque</span>
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* Coluna Direita: Quantidades, Carrinho (se Troca), Resumo e Ações (lg:col-span-7) */}
-              <div className="lg:col-span-7 space-y-5">
+              {/* Coluna Direita: Quantidades, Carrinho (se Troca), Resumo e Ações (lg:col-span-8) */}
+              <div className="lg:col-span-8 space-y-3">
                 {/* Seleção de Itens a Devolver */}
-                <div className="space-y-4">
+                <div className="space-y-2">
                   <div className="flex items-center gap-2 pb-1 border-b border-border/40">
-                    <Package className="w-4 h-4 text-primary" />
-                    <h3 className="font-bold text-sm text-foreground">Selecione as Quantidades a Devolver</h3>
+                    <Package className="w-3.5 h-3.5 text-primary" />
+                    <h3 className="font-bold text-xs text-foreground">Selecione as Quantidades a Devolver</h3>
                   </div>
 
                   <div className="space-y-2">
@@ -959,33 +942,33 @@ export function TrocasDevolucao({
                       return (
                         <div
                           key={l.inventoryId}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-border bg-muted/20"
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-1.5 px-3 rounded-lg border border-border bg-muted/20"
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-sm text-foreground truncate">{l.name}</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
+                            <p className="font-semibold text-xs text-foreground truncate">{l.name}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
                               Vendido: {l.quantity} · Devolvido: {l.qtyReturned ?? 0} · Disponível: <span className="font-medium text-foreground">{l.maxReturn}</span>
                             </p>
                           </div>
 
-                          {/* Incrementador +/- Premium */}
-                          <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg p-1 self-start sm:self-center shadow-sm">
+                          {/* Incrementador +/- Premium Compacto */}
+                          <div className="flex items-center gap-1 bg-background border border-border rounded-md p-0.5 self-start sm:self-center shadow-sm">
                             <Button
                               type="button"
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md"
+                              className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                               disabled={l.maxReturn <= 0 || currentQty <= 0}
                               onClick={() => {
                                 const val = Math.max(0, currentQty - 1)
                                 setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
                               }}
                             >
-                              <Minus className="h-4 w-4" />
+                              <Minus className="h-3 w-3" />
                             </Button>
                             <input
                               type="text"
-                              className="w-12 text-center bg-transparent border-0 font-bold text-sm text-foreground tabular-nums focus:ring-0 focus:outline-none"
+                              className="w-10 text-center bg-transparent border-0 font-bold text-xs text-foreground tabular-nums focus:ring-0 focus:outline-none"
                               value={qtyByLine[l.inventoryId] ?? "0"}
                               readOnly
                             />
@@ -993,14 +976,14 @@ export function TrocasDevolucao({
                               type="button"
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md"
+                              className="h-6.5 w-6.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded"
                               disabled={l.maxReturn <= 0 || currentQty >= l.maxReturn}
                               onClick={() => {
                                 const val = Math.min(l.maxReturn, currentQty + 1)
                                 setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
                               }}
                             >
-                              <Plus className="h-4 w-4" />
+                              <Plus className="h-3 w-3" />
                             </Button>
                           </div>
                         </div>
@@ -1010,40 +993,40 @@ export function TrocasDevolucao({
                 </div>
 
                 {/* Motivo (Opcional) */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground">Motivo da Troca/Devolução (opcional)</Label>
-                  <Textarea
+                <div className="space-y-1">
+                  <Label className="text-[10px] font-semibold text-muted-foreground">Motivo da Troca/Devolução (opcional)</Label>
+                  <Input
                     value={motivo}
                     onChange={(e) => setMotivo(e.target.value)}
-                    placeholder="Ex.: produto com defeito de fábrica, tamanho incorreto, insatisfação..."
-                    className="h-16 resize-none text-sm border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+                    placeholder="Ex.: produto com defeito, tamanho incorreto, insatisfação..."
+                    className="h-7 text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
                   />
                 </div>
 
                 {/* Carrinho da Nova Compra - Apenas se modo "troca" */}
                 {mode === "troca" && (
-                  <div className="space-y-4 pt-4 border-t border-border/80">
+                  <div className="space-y-3 pt-3 border-t border-border/80">
                     <div className="flex items-center gap-2 pb-1 border-b border-border/40">
-                      <ShoppingCart className="h-4 w-4 text-primary" />
-                      <h3 className="font-bold text-sm text-foreground">Carrinho da Nova Compra</h3>
+                      <ShoppingCart className="h-3.5 w-3.5 text-primary" />
+                      <h3 className="font-bold text-xs text-foreground">Carrinho da Nova Compra</h3>
                     </div>
 
                     {/* Busca Inline */}
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-muted-foreground">Buscar Novo Produto</Label>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-semibold text-muted-foreground">Buscar Novo Produto</Label>
                       <div className="relative">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           value={trocaSearch}
                           onChange={(e) => setTrocaSearch(e.target.value)}
                           placeholder="Buscar por nome, SKU, código de barras..."
-                          className="pl-9 h-10 border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+                          className="pl-8.5 h-7.5 text-xs border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
                         />
                       </div>
 
                       {/* Resultados Inline */}
                       {trocaSearchResults.length > 0 && (
-                        <div className="rounded-lg border border-border bg-muted/20 overflow-hidden divide-y divide-border/60 max-h-48 overflow-y-auto shadow-inner mt-1">
+                        <div className="rounded-lg border border-border bg-muted/20 overflow-hidden divide-y divide-border/60 max-h-40 overflow-y-auto shadow-inner mt-1">
                           {trocaSearchResults.map((p) => {
                             const isService = p.category === "Servicos"
                             const out = !isService && p.stock <= 0
@@ -1053,11 +1036,11 @@ export function TrocasDevolucao({
                                 type="button"
                                 disabled={out}
                                 onClick={() => addTrocaItem(p)}
-                                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-primary/5 transition-colors disabled:opacity-40"
+                                className="flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-[11px] hover:bg-primary/5 transition-colors disabled:opacity-40"
                               >
                                 <div className="min-w-0 flex-1">
                                   <p className="truncate font-semibold text-foreground">{p.name}</p>
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                  <p className="text-[9px] text-muted-foreground">
                                     {p.category} · {isService ? "Serviço" : out ? "Sem estoque" : `Estoque: ${p.stock}`}
                                   </p>
                                 </div>
@@ -1070,40 +1053,40 @@ export function TrocasDevolucao({
                     </div>
 
                     {/* Mini-carrinho */}
-                    <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold text-muted-foreground">Itens da Nova Compra</Label>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] font-semibold text-muted-foreground">Itens da Nova Compra</Label>
                       {trocaCart.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-4 border border-dashed border-border/80 rounded-xl bg-muted/10 text-center">
-                          <ShoppingCart className="w-7 h-7 text-muted-foreground/45 mb-1" />
-                          <p className="text-xs text-muted-foreground">Busque produtos acima para adicionar ao carrinho.</p>
+                        <div className="flex flex-col items-center justify-center p-3 border border-dashed border-border/80 rounded-lg bg-muted/10 text-center">
+                          <ShoppingCart className="w-6 h-6 text-muted-foreground/45 mb-1" />
+                          <p className="text-[11px] text-muted-foreground">Busque produtos acima para adicionar ao carrinho.</p>
                         </div>
                       ) : (
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                           {trocaCart.map((l) => (
-                            <div key={l.inventoryId} className="flex items-center justify-between gap-2 p-2 rounded-xl border border-border bg-background shadow-sm text-xs">
+                            <div key={l.inventoryId} className="flex items-center justify-between gap-2 py-1 px-2.5 rounded-lg border border-border bg-background shadow-sm text-xs">
                               <div className="min-w-0 flex-1">
                                 <p className="font-semibold text-foreground truncate">{l.name}</p>
-                                <p className="text-[10px] text-muted-foreground mt-0.5">{formatBrl(l.unitPrice)} cada</p>
+                                <p className="text-[10px] text-muted-foreground">{formatBrl(l.unitPrice)} cada</p>
                               </div>
                               <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded-md">
                                 <Button
                                   type="button"
                                   size="icon"
                                   variant="ghost"
-                                  className="h-6 w-6 rounded-md hover:bg-muted"
+                                  className="h-5 w-5 rounded-md hover:bg-muted"
                                   onClick={() => decTrocaItem(l.inventoryId)}
                                 >
-                                  <Minus className="h-3 w-3" />
+                                  <Minus className="h-2.5 w-2.5" />
                                 </Button>
-                                <span className="w-6 text-center font-bold tabular-nums text-xs text-foreground">{l.quantity}</span>
+                                <span className="w-5 text-center font-bold tabular-nums text-xs text-foreground">{l.quantity}</span>
                                 <Button
                                   type="button"
                                   size="icon"
                                   variant="ghost"
-                                  className="h-6 w-6 rounded-md hover:bg-muted"
+                                  className="h-5 w-5 rounded-md hover:bg-muted"
                                   onClick={() => incTrocaItem(l.inventoryId)}
                                 >
-                                  <Plus className="h-3 w-3" />
+                                  <Plus className="h-2.5 w-2.5" />
                                 </Button>
                               </div>
                               <div className="text-right w-16 shrink-0 font-bold tabular-nums text-foreground">
@@ -1113,10 +1096,10 @@ export function TrocasDevolucao({
                                 type="button"
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-md"
+                                className="h-5 w-5 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-md"
                                 onClick={() => removeTrocaItem(l.inventoryId)}
                               >
-                                <X className="h-3 w-3" />
+                                <X className="h-2.5 w-2.5" />
                               </Button>
                             </div>
                           ))}
@@ -1128,50 +1111,50 @@ export function TrocasDevolucao({
 
                 {/* Resumo Financeiro e Ações da Devolução (se modo NÃO troca) */}
                 {mode !== "troca" && (
-                  <div className="rounded-xl border border-border/85 bg-muted/20 p-4 space-y-4 shadow-inner">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-semibold text-muted-foreground">Valor Total a Devolver:</span>
-                      <span className="font-extrabold text-base text-foreground tabular-nums">{formatBrl(valorDevolvido)}</span>
+                  <div className="rounded-lg border border-border bg-muted/15 p-2.5 flex items-center justify-between gap-3 shadow-sm">
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">Total a Devolver</span>
+                      <span className="font-extrabold text-lg text-foreground tabular-nums leading-none">{formatBrl(valorDevolvido)}</span>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-border/60">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {lastDevolucao && lastDevolucao.credit > 0 && (
+                        <Button type="button" variant="outline" size="sm" className="rounded-md h-8.5 px-3 text-xs" onClick={() => void imprimirVale()}>
+                          <Printer className="w-3.5 h-3.5 mr-1.5" />
+                          Imprimir Comprovante
+                        </Button>
+                      )}
                       <Button
                         type="button"
-                        size="default"
-                        className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-5 rounded-lg flex-1"
+                        size="sm"
+                        className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold h-8.5 px-4 rounded-md text-xs"
                         onClick={handleRegistrar}
                         disabled={valorDevolvido <= 0}
                       >
                         Confirmar Devolução
                       </Button>
-                      {lastDevolucao && lastDevolucao.credit > 0 && (
-                        <Button type="button" variant="outline" className="rounded-lg px-4" onClick={() => void imprimirVale()}>
-                          <Printer className="w-4 h-4 mr-2" />
-                          Imprimir Comprovante (80mm)
-                        </Button>
-                      )}
                     </div>
                   </div>
                 )}
 
                 {/* Resumo Financeiro da Troca Imediata */}
                 {mode === "troca" && (
-                  <div className="rounded-xl border border-border/85 bg-muted/20 p-4 space-y-3 shadow-inner">
-                    <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-lg border border-border bg-muted/15 p-2.5 space-y-2 shadow-sm">
+                    <div className="grid grid-cols-3 gap-2 text-center bg-background p-1.5 rounded border border-border/60">
                       <div>
                         <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">Devolvido</p>
-                        <p className="font-extrabold text-sm text-foreground mt-1 tabular-nums">{formatBrl(valorDevolvido)}</p>
+                        <p className="font-extrabold text-xs text-foreground mt-0.5 tabular-nums">{formatBrl(valorDevolvido)}</p>
                       </div>
                       <div>
                         <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">Nova Compra</p>
-                        <p className="font-extrabold text-sm text-foreground mt-1 tabular-nums">{formatBrl(totalNovaCompra)}</p>
+                        <p className="font-extrabold text-xs text-foreground mt-0.5 tabular-nums">{formatBrl(totalNovaCompra)}</p>
                       </div>
                       <div>
                         <p className="text-[9px] uppercase font-bold text-muted-foreground tracking-wider">
                           {diferenca > 0 ? "Diferença" : diferenca < 0 ? "Crédito" : "Saldo"}
                         </p>
                         <p
-                          className={`font-extrabold text-sm mt-1 tabular-nums ${
+                          className={`font-extrabold text-xs mt-0.5 tabular-nums ${
                             diferenca > 0
                               ? "text-amber-600 dark:text-amber-400"
                               : diferenca < 0
@@ -1186,9 +1169,9 @@ export function TrocasDevolucao({
 
                     {/* Forma de pagamento da diferença */}
                     {diferenca > 0 && (
-                      <div className="space-y-2 pt-2.5 border-t border-border/60">
-                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">Forma de pagamento da diferença</Label>
-                        <div className="grid grid-cols-2 gap-1.5">
+                      <div className="space-y-1 pt-1.5 border-t border-border/60">
+                        <Label className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Forma de pagamento da diferença</Label>
+                        <div className="grid grid-cols-4 gap-1">
                           {(["dinheiro", "pix", "debito", "credito"] as const).map((m) => (
                             <Button
                               key={m}
@@ -1196,7 +1179,7 @@ export function TrocasDevolucao({
                               size="sm"
                               variant={diffPayMethod === m ? "default" : "outline"}
                               onClick={() => setDiffPayMethod(m)}
-                              className="capitalize text-xs h-8 border-border/80"
+                              className="capitalize text-[10px] h-7 border-border/80 px-1"
                             >
                               {m === "debito" ? "Débito" : m === "credito" ? "Crédito" : m}
                             </Button>
@@ -1207,50 +1190,49 @@ export function TrocasDevolucao({
 
                     {/* Excesso devolvido — escolher destino */}
                     {creditoRestante > 0 && (
-                      <div className="space-y-2 pt-2.5 border-t border-border/60">
-                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wide">Sobrou {formatBrl(creditoRestante)} — como tratar?</Label>
+                      <div className="space-y-1 pt-1.5 border-t border-border/60">
+                        <Label className="text-[9px] uppercase font-bold text-muted-foreground tracking-wide">Sobrou {formatBrl(creditoRestante)} — tratar como:</Label>
                         <RadioGroup
                           value={excessHandling}
                           onValueChange={(v) => setExcessHandling(v as "vale_credito" | "dinheiro")}
-                          className="flex flex-col gap-2"
+                          className="flex flex-row gap-4"
                         >
-                          <label className="flex items-center gap-2 text-xs cursor-pointer text-foreground font-medium">
-                            <RadioGroupItem value="vale_credito" id="ex1" />
-                            <span>Gerar vale (crédito em haver)</span>
+                          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer text-foreground font-medium">
+                            <RadioGroupItem value="vale_credito" id="ex1" className="h-3.5 w-3.5" />
+                            <span>Gerar vale</span>
                           </label>
-                          <label className="flex items-center gap-2 text-xs cursor-pointer text-foreground font-medium">
-                            <RadioGroupItem value="dinheiro" id="ex2" />
-                            <span>Devolver dinheiro ao cliente</span>
+                          <label className="flex items-center gap-1.5 text-[11px] cursor-pointer text-foreground font-medium">
+                            <RadioGroupItem value="dinheiro" id="ex2" className="h-3.5 w-3.5" />
+                            <span>Devolver dinheiro</span>
                           </label>
                         </RadioGroup>
                       </div>
                     )}
 
                     {/* Ações da Troca Imediata */}
-                    <div className="pt-2 flex flex-col gap-2">
+                    <div className="pt-1.5 flex gap-1.5">
+                      {lastDevolucao && lastDevolucao.credit > 0 && (
+                        <Button type="button" size="sm" variant="outline" className="flex-1 h-8.5 border-border/80 text-xs" onClick={() => void imprimirVale()}>
+                          <Printer className="w-3.5 h-3.5 mr-1.5" />
+                          Imprimir
+                        </Button>
+                      )}
                       <Button
                         type="button"
-                        size="lg"
-                        className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold w-full h-11"
+                        size="sm"
+                        className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold flex-1 h-8.5 text-xs"
                         onClick={handleFinalizarTroca}
                         disabled={trocaCart.length === 0 || valorDevolvido <= 0}
                       >
                         Finalizar Troca Imediata
                       </Button>
-                      {lastDevolucao && lastDevolucao.credit > 0 && (
-                        <Button type="button" size="lg" variant="outline" className="w-full h-11 border-border/80" onClick={() => void imprimirVale()}>
-                          <Printer className="w-4 h-4 mr-2" />
-                          Imprimir Comprovante 80mm
-                        </Button>
-                      )}
                     </div>
                   </div>
                 )}
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        )}
 
       {cupomData && (
         <CupomTroca
