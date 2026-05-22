@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 21 Mai 2026 — Sessão: Omni Agent HUB Visual Premium (remoção dados sintéticos, distribuição real, inbox/automações/memória premium)
+> Última atualização: 22 Mai 2026 — Sessão: Unificação fluxos de novo cadastro (Topbar + ProductAIModal)
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,161 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Fluxos de Novo Cadastro — Unificação (concluído 22/05/2026)
+
+**Contexto:** Existiam 3 pontos de entrada para criar cadastros (Topbar, CadastrosHub modal, DashboardPanel) com comportamento inconsistente. O Topbar apontava para páginas legacy. O ProductAIModal tinha botões mortos e animação fake de IA.
+
+**Arquivos alterados:**
+
+| Arquivo | Mudança |
+|---------|---------|
+| `components/painel-inicial/Topbar.tsx` | "Novo Cliente" e "Novo Produto" agora apontam para `/dashboard/cadastros-v2` (CadastrosHub canônico) em vez de páginas legacy |
+| `components/cadastros/lovable/components/cadastros/produto-ia.tsx` | Botão "Preencher com IA" desabilitado com label "Em breve"; "Salvar rascunho" desabilitado; seção "Imagem IA" marcada como "Em breve" com `pointer-events-none` |
+
+**O que já funcionava e não foi alterado:**
+
+- Modal "Novo cadastro" do CadastrosHub: todos os 6 cards (Cliente, Produto, Serviço, Fornecedor, Técnico, Equipamento) já abriam formulários reais via `autoOpen` — mecanismo correto, nenhuma mudança necessária.
+- `upsertProduto`: estoque, custo, preço e todos os campos mapeados já salvavam corretamente.
+- Todos os 6 painéis do CadastrosHub: persistência real via server actions.
+
+**O que ficou como "Em breve" (documentado em `docs/auditoria/CADASTROS_FLUXOS_UNIFICACAO.md`):**
+
+- Preenchimento automático de produto por IA (OCR, voz, link, código de barras)
+- Upload e processamento de imagem de produto
+- Rascunhos de produto
+- Campos NCM, Tributação, Tags, Descrição, Modelo — presentes no form mas não mapeados em `upsertProduto`
+
+**Validação:** `npx tsc --noEmit` → 0 erros. `npx next build --webpack` → Compiled successfully.
+
+---
+
+### Bug: decremento de estoque ignorava quantidade total quando mesmo produto em múltiplas linhas (corrigido 21/05/2026)
+
+**Problema em produção:** produto com estoque 2, vendido em 2 unidades → estoque ficava 1 (deveria ficar 0).
+
+**Causa raiz:** o PDV pode enviar o mesmo produto em N linhas do carrinho (ex.: 2 cliques → 2 linhas qty=1, ou manualmente incrementado → 1 linha qty=2). O Step 3 de `upsertVendaInTransaction` processava linha por linha. Após criar `MovimentacaoEstoque` para a linha 1, o guard de idempotência `findFirst({ documento, produtoId, origem:"pdv" })` encontrava essa entrada na linha 2 e pulava → só 1 unidade decrementada em vez da soma correta.
+
+**Solução — agregação prévia por produto (1 arquivo, 1 bloco):**
+
+`lib/ops-upsert-venda.ts` Step 3: antes de criar o ledger, agrega `qtyByProdutoId: Map<dbId, totalQty>` somando as quantidades de todas as linhas do mesmo produto. Cria `resolvedByDbId` mapa reverso para acessar `sku/nome`. Então itera por produto único (não por linha), criando um único `MovimentacaoEstoque` e um único `decrement` com a quantidade total. Idempotência preservada: o guard `findFirst(documento+produtoId)` continua bloqueando retry da mesma venda.
+
+| Cenário | Antes | Depois |
+|---|---|---|
+| 1 linha qty=2 | ✓ (decrementa 2) | ✓ (decrementa 2) |
+| 2 linhas qty=1 mesmo produto | ✗ (decrementa 1) | ✓ (decrementa 2) |
+| Retry da mesma venda | ✓ (bloqueado) | ✓ (bloqueado) |
+| Produtos diferentes | ✓ | ✓ |
+
+**Validação:** `npx tsc --noEmit` → 0 erros. `npx next build --webpack` → OK.
+
+---
+
+### Bug: estoque PDV não baixava + detalhe de venda falhava (corrigido 21/05/2026)
+
+**Problema em produção:** vendas finalizadas no PDV mostravam saldo no financeiro/caixa mas:
+- `Produto.stock` nunca decrementava;
+- Nenhuma `MovimentacaoEstoque` era criada;
+- Botão "Detalhes" na venda retornava erro 400 "ID da venda obrigatório".
+
+**Causa raiz 1 — OR lookup ausente (estoque):**
+`app/api/ops/inventory/route.ts` → `rowToItem()` retorna `id = skuTrim || row.id`. Quando o produto tem SKU (ex. "P001"), `InventoryItem.id = "P001"` (não o cuid). O PDV grava `inventoryId: "P001"` no carrinho. `upsertVendaInTransaction` Step 3 fazia `findFirst({ id: "P001" })` — campo `id` é cuid, não SKU → retornava `null` → `continue` → sem decremento, sem ledger.
+
+**Causa raiz 2 — params não-await (detalhe):**
+`app/api/vendas/[id]/route.ts` usava `{ params }: { params: { id: string } }` + `params.id` síncrono. No Next.js 16.2.0 `params` é uma `Promise` — `params.id === undefined` → 400 "ID da venda obrigatório".
+
+**Solução (3 arquivos, mínimo necessário):**
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/ops-upsert-venda.ts` | Step 2 (ItemVenda): resolve produto via `OR [{ id }, { sku }, { barcode }]` + caches resultado em `resolvedProductMap<rawInvId, ResolvedProduct>`. Grava `ItemVenda.inventoryId = resolved.dbId` (cuid real). Step 3 (MovimentacaoEstoque): consome `resolvedProductMap` — sem re-busca; usa `resolved.dbId` para idempotência, decremento e ledger. |
+| `app/api/vendas/[id]/route.ts` | `params: Promise<{ id: string }>` + `const { id: rawId } = await params`. |
+| `app/api/vendas/[id]/cancelar/route.ts` | Mesma correção de `params`. |
+
+**Efeito colateral positivo:** `ItemVenda.inventoryId` agora armazena o cuid real do `Produto` em vez do SKU, tornando as consultas de detalhe/devolução mais robustas.
+
+**Validação:** `npx tsc --noEmit` → 0 erros. `npx next build --webpack` → OK.
+
+---
+
+### Caixa Híbrido → SessaoCaixa Server como fonte principal (concluído 21/05/2026)
+
+**Problema:** estado do caixa vivia 100% em localStorage. Se limpo entre turnos, o PDV perdia a sessão ativa (abre sessão duplicada no server), e o fechamento gravava `totalVendas` vindo do localStorage (que podia divergir do banco).
+
+**Solução (3 arquivos, best-effort/backward-compatible):**
+
+| Arquivo | Mudança |
+|---|---|
+| `app/api/ops/caixa/sessao-detalhe/route.ts` | Agrega `MovimentacaoFinanceira(origem:"venda")` no intervalo da sessão → devolve `totalVendas` + `totalVendasCount` em `totais`. Sem mudança de assinatura existente (campo novo, adição). |
+| `app/api/ops/caixa/fechar/route.ts` | Lê `abertaEm` da sessão; calcula `totalVendasServer` e `totalVendasCount` do banco; mescla com payload do cliente antes de gravar em `SessaoCaixa.payload`. Registro de fechamento agora é auditável mesmo se localStorage estava divergente. |
+| `lib/operations-store.tsx` | No `loadDb` bootstrap, após sincronizar inventory/orders/sales, faz `GET /api/ops/caixa/sessoes?status=ABERTA&take=1`. Se server tem sessão ABERTA e estado local diz fechado (ou sem sessaoId): restaura `caixaSessaoId`, `isOpen=true`, `saldoInicial`, `dataAbertura`. Best-effort — falha silenciosa; não auto-fecha sessão no sentido inverso (segurança). |
+
+**Fonte de verdade por campo após esta sessão:**
+
+| Campo | Antes | Depois |
+|---|---|---|
+| `caixa.isOpen` | localStorage | localStorage + reconciliação server no bootstrap |
+| `caixaSessaoId` | localStorage | localStorage + recuperação server no bootstrap |
+| `caixa.saldoInicial` | localStorage | localStorage + recuperação server no bootstrap |
+| `caixa.totalEntradas` | localStorage (acumulativo) | localStorage (runtime); `totalVendasServer` em `SessaoCaixa.payload` no fechamento |
+| `totalVendas` histórico | localStorage snapshot em payload | banco (`MovimentacaoFinanceira`) — calculado server-side no fechamento e no `sessao-detalhe` |
+| sangria/suprimento | `CaixaOperacao` DB (já era) | inalterado |
+
+**O que NÃO foi alterado:**
+- Fluxo de abertura/fechamento do caixa (modal UX, botões, toasts).
+- `totalEntradas` runtime na barra PDV (ainda vem do localStorage acumulativo — mudá-la seria refatoração visual).
+- Auth, proxy, OS, Marketplace, WhatsApp.
+- Idempotência de `MovimentacaoFinanceira` e `MovimentacaoEstoque` (sessão anterior).
+
+**Riscos remanescentes:**
+- `totalEntradas` na barra PDV pode divergir de `totalVendasServer` (se vendas falharam no sync ou se localStorage foi parcialmente limpo). Resolver exigiria polling de `sessao-detalhe` durante o turno — fora de escopo.
+- Sessões históricas (pré-21/05/2026) terão `totalVendasServer = 0` em `sessao-detalhe` (não existiam `MovimentacaoFinanceira(origem:"venda")` antes dessa data).
+- Se caixa fechado no server mas localStorage diz aberto (raro — requereria fechamento externo direto no DB), a reconciliação NÃO fecha localmente. Operador verá caixa "aberto" que já foi fechado. Solução futura: verificar `status=FECHADA` do `sessaoId` local.
+
+**Validação:** `npx tsc --noEmit` → 0 erros. `npm run build` → OK.
+
+---
+
+### PDV → Financeiro + Estoque — consolidação do fluxo de venda (concluído 21/05/2026)
+
+**Problema:** o PDV finalizava a venda, decrementava estoque em memória (localStorage) e persistia `Venda` + `ItemVenda` no banco, mas:
+- `Produto.stock` nunca era decrementado no banco;
+- Nenhum `MovimentacaoEstoque` era criado para rastreabilidade;
+- Nenhuma `MovimentacaoFinanceira` era lançada (receita PDV invisível no DRE/fluxo).
+
+**Solução (cirúrgica — apenas 2 arquivos):**
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/ops-upsert-venda.ts` | `SalePayload` ganha `paymentBreakdown?: Partial<PaymentBreakdownFull>`. `upsertVendaInTransaction` ganha parâmetro `operadorLabel?` e, dentro da mesma transação, executa: (3) `MovimentacaoEstoque` por linha real com idempotência via `documento=pedidoId + produtoId + origem:"pdv"`; (4) `MovimentacaoFinanceira(entrada, "venda")` pelo valor imediato (total − aPrazo) com idempotência via `referenciaId=pedidoId + origem:"venda"`. |
+| `app/api/ops/venda-persist/route.ts` | Resolve `operadorLabel` da sessão NextAuth e propaga ao `upsertVendaInTransaction`. |
+
+**Comportamento completo de uma venda PDV (do confirm ao banco):**
+
+1. `finalizeSaleTransaction` (client-side): valida caixa, decrementa estoque em memória, grava `SaleRecord` em localStorage, emite `venda_finalizada`, dispara `POST /api/ops/venda-persist` (fire-and-forget).
+2. `venda-persist` → `upsertVendaInTransaction` (mesma transação Prisma):
+   - Upsert `Venda` + recria `ItemVenda` (idempotente por `pedidoId`).
+   - Para cada item físico: cria `MovimentacaoEstoque(tipo:"saida", origem:"pdv")` e decrementa `Produto.stock`.
+   - Se `valorImediato > 0`: cria `MovimentacaoFinanceira(tipo:"entrada", origem:"venda")`.
+3. Se aPrazo > 0: client chama `appendContaReceberTituloPdvAprazo` → `ContaReceberTitulo` no banco (fluxo pré-existente, não alterado).
+
+**Idempotência (anti-dupla movimentação em retry):**
+- `MovimentacaoEstoque`: `findFirst({ documento, produtoId, origem:"pdv" })` antes de criar.
+- `MovimentacaoFinanceira`: `findFirst({ referenciaId, origem:"venda", tipo:"entrada" })` antes de criar.
+
+**O que NÃO foi alterado:**
+- `operations-store.tsx` (client-side), fluxo aPrazo, auth/proxy/schema.prisma.
+- PDV Classic, Assistência e Supermercado — usam o mesmo `finalizeSaleTransaction` e `venda-persist`, ganham os efeitos automaticamente.
+- PDV Black Edition — `handlePaymentConfirm` ainda não chama `venda-persist` (pendência pré-existente, não escopo desta sessão).
+
+**Riscos remanescentes:**
+- Histórico de vendas anteriores (245 no banco): `Produto.stock` está inflado em relação ao que foi vendido. Novas vendas serão decrementadas corretamente a partir desta sessão.
+- Operações offline (venda no localStorage sem sync): `Produto.stock` e ledgers não são retroativamente corrigidos — depende de um reconciliador futuro.
+- `creditoVale` não gera `MovimentacaoFinanceira` (é abatimento de saldo já existente, não receita nova).
+
+**Validação:** `npx tsc --noEmit` → 0 erros. `npm run build` → OK.
+
+---
 
 ### Operações HUB — Adapter OS → Estoque Fase 2 (concluído 21/05/2026)
 

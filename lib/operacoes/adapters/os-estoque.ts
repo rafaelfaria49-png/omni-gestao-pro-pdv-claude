@@ -42,6 +42,10 @@ function safeQty(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function arredonda2(n: number): number {
+  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100;
+}
+
 export function getEstoqueLocalKey(storeId: string, ordemServicoId: string): string {
   return `os-estoque:${storeId}:${ordemServicoId}`;
 }
@@ -168,6 +172,8 @@ async function registrarLedgerOS(
   params: {
     storeId: string;
     osId: string;
+    osNumero?: string | null;
+    operador?: string | null;
     produtoId: string;
     sku: string | null;
     nome: string;
@@ -179,6 +185,13 @@ async function registrarLedgerOS(
   }
 ): Promise<void> {
   try {
+    const numero = (params.osNumero ?? "").trim();
+    const docLabel = numero || `OS ${params.osId}`;
+    const operador = (params.operador ?? "").trim() || null;
+    // Custo unitário e valor total refletem o custo médio atual do produto — base para KPIs de
+    // valor consumido por OS. Em entrada (restauração), representa o valor reintegrado ao estoque.
+    const custoUnitario = arredonda2(Math.max(0, params.custoMedio));
+    const valorTotal = arredonda2(params.quantidadeAbs * custoUnitario);
     await tx.movimentacaoEstoque.create({
       data: {
         storeId: params.storeId,
@@ -190,11 +203,13 @@ async function registrarLedgerOS(
         quantidade: params.tipo === "saida" ? -params.quantidadeAbs : params.quantidadeAbs,
         estoqueAntes: params.estoqueAntes,
         estoqueDepois: params.estoqueDepois,
-        custoUnitario: 0,
+        custoUnitario,
         custoMedioAntes: params.custoMedio,
         custoMedioDepois: params.custoMedio,
-        valorTotal: 0,
-        motivo: `OS ${params.osId}`,
+        valorTotal,
+        documento: docLabel,
+        motivo: docLabel,
+        usuario: operador,
       },
     });
   } catch (e) {
@@ -205,16 +220,17 @@ async function registrarLedgerOS(
   }
 }
 
-export async function consumeEstoqueFromOS(params: { storeId: string; osId: string; osPayload?: OrdemServico }): Promise<ConsumeResult> {
+export async function consumeEstoqueFromOS(params: { storeId: string; osId: string; osPayload?: OrdemServico; operador?: string | null }): Promise<ConsumeResult> {
   if (!params.storeId || !params.osId) return { ok: false, status: "error", error: "Parâmetros inválidos", ignored: [] };
 
   try {
     const result = await prisma.$transaction(async (tx) => {
       const row = await tx.ordemServico.findFirst({
         where: { id: params.osId, storeId: params.storeId },
-        select: { id: true, storeId: true, payload: true },
+        select: { id: true, storeId: true, numero: true, payload: true },
       });
       if (!row) throw new Error("OS não encontrada");
+      const osNumero = row.numero ?? null;
 
       const payload = (params.osPayload ?? (row.payload as unknown as OrdemServico)) as OrdemServico;
       if (!isOSEstoqueConsumivel(payload)) throw new Error("OS inválida para consumo de estoque");
@@ -264,6 +280,8 @@ export async function consumeEstoqueFromOS(params: { storeId: string; osId: stri
         await registrarLedgerOS(tx, {
           storeId: params.storeId,
           osId: params.osId,
+          osNumero,
+          operador: params.operador ?? null,
           produtoId: p.id,
           sku: p.sku,
           nome: p.name,
@@ -323,11 +341,13 @@ export async function restoreEstoqueFromOS(params: {
   storeId: string;
   osId: string;
   motivo?: "manual" | "automatico";
+  operador?: string | null;
 }): Promise<{ ok: boolean; status: string; error?: string }> {
   try {
     await prisma.$transaction(async (tx) => {
-      const row = await tx.ordemServico.findFirst({ where: { id: params.osId, storeId: params.storeId }, select: { payload: true } });
+      const row = await tx.ordemServico.findFirst({ where: { id: params.osId, storeId: params.storeId }, select: { numero: true, payload: true } });
       if (!row) throw new Error("OS não encontrada");
+      const osNumero = row.numero ?? null;
       const payload = row.payload as unknown as (OrdemServico & Record<string, unknown>);
       if (payload.estoqueConsumido !== true) {
         return;
@@ -349,6 +369,8 @@ export async function restoreEstoqueFromOS(params: {
           await registrarLedgerOS(tx, {
             storeId: params.storeId,
             osId: params.osId,
+            osNumero,
+            operador: params.operador ?? null,
             produtoId: p.id,
             sku: p.sku,
             nome: p.name,
@@ -438,11 +460,13 @@ export async function applyEstoqueDelta(params: {
   osId: string;
   osPayload?: OrdemServico;
   revisaoKey: string; // idempotência por revisão (ex.: orcamentoRevisaoAtual.revisadoEm)
+  operador?: string | null;
 }): Promise<{ ok: boolean; status: "applied" | "no_delta" | "already_applied" | "skipped" | "error"; error?: string; delta?: EstoqueDeltaItem[] }> {
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const row = await tx.ordemServico.findFirst({ where: { id: params.osId, storeId: params.storeId }, select: { payload: true } });
+      const row = await tx.ordemServico.findFirst({ where: { id: params.osId, storeId: params.storeId }, select: { numero: true, payload: true } });
       if (!row) throw new Error("OS não encontrada");
+      const osNumero = row.numero ?? null;
       const payload = (params.osPayload ?? (row.payload as unknown as OrdemServico)) as (OrdemServico & Record<string, unknown>);
 
       if (payload.estoqueConsumido !== true) return { ok: true as const, status: "skipped" as const };
@@ -505,6 +529,8 @@ export async function applyEstoqueDelta(params: {
           await registrarLedgerOS(tx, {
             storeId: params.storeId,
             osId: params.osId,
+            osNumero,
+            operador: params.operador ?? null,
             produtoId: p.id,
             sku: p.sku,
             nome: p.name,
@@ -525,6 +551,8 @@ export async function applyEstoqueDelta(params: {
             await registrarLedgerOS(tx, {
               storeId: params.storeId,
               osId: params.osId,
+              osNumero,
+              operador: params.operador ?? null,
               produtoId: pRest.id,
               sku: pRest.sku,
               nome: pRest.name,

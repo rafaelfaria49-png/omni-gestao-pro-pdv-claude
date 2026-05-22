@@ -1,8 +1,21 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { Check, CheckCircle2, Crown, FileClock, QrCode, Sparkles, XCircle, Zap } from "lucide-react"
+import {
+  Check,
+  CheckCircle2,
+  Crown,
+  FileClock,
+  Gem,
+  Info,
+  QrCode,
+  Sparkles,
+  XCircle,
+  Zap,
+  ArrowRight,
+} from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,6 +29,12 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 import {
+  BILLING_DASHBOARD_PATH,
+  OFFICIAL_SUBSCRIPTION_PLANS,
+  findOfficialPlanByLocalId,
+  type PlanLocalId,
+} from "@/lib/subscription-plans-catalog"
+import {
   Table,
   TableBody,
   TableCell,
@@ -24,62 +43,63 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-const recursosPorPlano = {
-  bronze: [
-    ["Gestão básica + WhatsApp", true],
-    ["Consulta de Crédito", false],
-    ["Relatórios avançados", false],
-    ["Multiloja", false],
-    ["Emissão de boletos", false],
-  ],
-  prata: [
-    ["Gestão básica + WhatsApp", true],
-    ["Consulta de Crédito", true],
-    ["Relatórios avançados", true],
-    ["Multiloja", false],
-    ["Emissão de boletos", false],
-  ],
-  ouro: [
-    ["Gestão básica + WhatsApp", true],
-    ["Consulta de Crédito", true],
-    ["Relatórios avançados", true],
-    ["Multiloja", true],
-    ["Emissão de boletos", true],
-  ],
+const PLAN_ICONS = {
+  bronze: Zap,
+  prata: Sparkles,
+  ouro: Crown,
+  diamante: Gem,
 } as const
 
-const PLAN_ORDER: Record<"bronze" | "prata" | "ouro", number> = {
-  bronze: 0,
-  prata: 1,
-  ouro: 2,
+const recursosComparativo: Record<
+  PlanLocalId,
+  readonly [string, boolean][]
+> = {
+  bronze: [
+    ["250 créditos IA/mês", true],
+    ["PDV rápido", true],
+    ["Estoque básico", true],
+    ["1 usuário", true],
+    ["Suporte chat", true],
+    ["NF-e / NFC-e", false],
+    ["Multi-lojas", false],
+    ["API / integrações", false],
+  ],
+  prata: [
+    ["700 créditos IA/mês", true],
+    ["PDV rápido", true],
+    ["NF-e / NFC-e", true],
+    ["Relatórios de vendas", true],
+    ["3 usuários", true],
+    ["Marketing IA", false],
+    ["Multi-lojas", false],
+  ],
+  ouro: [
+    ["2.000 créditos IA/mês", true],
+    ["Marketing IA", true],
+    ["Automação WhatsApp", true],
+    ["Multi-lojas", true],
+    ["Master console", true],
+    ["Até 25 lojas", false],
+    ["IA preditiva de estoque", false],
+  ],
+  diamante: [
+    ["7.000 créditos IA/mês", true],
+    ["IA avançada", true],
+    ["Até 25 lojas", true],
+    ["API / integrações", true],
+    ["IA preditiva de estoque", true],
+  ],
 }
 
-const GRID_PLANOS = [
-  {
-    id: "bronze" as const,
-    nome: "Bronze",
-    preco: 49.9,
-    icone: Zap,
-    subtitulo: "Gestão básica + WhatsApp",
-    bullets: ["PDV e Ordens de Serviço", "Integração WhatsApp", "Ideal para começar"],
-  },
-  {
-    id: "prata" as const,
-    nome: "Prata",
-    preco: 99.9,
-    icone: Sparkles,
-    subtitulo: "Tudo do Bronze, mais performance",
-    bullets: ["Consulta de Crédito", "Relatórios avançados", "Suporte prioritário"],
-  },
-  {
-    id: "ouro" as const,
-    nome: "Ouro",
-    preco: 149.9,
-    icone: Crown,
-    subtitulo: "Operação completa",
-    bullets: ["Multiloja", "Emissão de boletos", "Máxima escala para sua rede"],
-  },
-]
+const GRID_PLANOS = OFFICIAL_SUBSCRIPTION_PLANS.map((plan) => ({
+  id: plan.localId,
+  nome: plan.name,
+  preco: plan.monthlyPrice,
+  icone: PLAN_ICONS[plan.localId],
+  subtitulo: plan.description,
+  bullets: plan.features,
+  highlighted: plan.highlighted ?? false,
+}))
 
 const notasFiscaisServico = [
   { id: "NF-000213", emissao: "2026-02-10", valor: 99.9, situacao: "Pago" },
@@ -110,13 +130,11 @@ export function MinhaAssinatura() {
   }, [mounted, vencimentoStr, vencimentoValido])
 
   const expirado = serverTrustExpired ?? expiradoLocal
-  const planoAtual = (config?.assinatura?.plano ?? "bronze") as "bronze" | "prata" | "ouro"
-  const recursos = useMemo(() => {
-    if (planoAtual === "bronze" || planoAtual === "prata" || planoAtual === "ouro") {
-      return recursosPorPlano[planoAtual]
-    }
-    return recursosPorPlano.bronze
-  }, [planoAtual])
+  const planoRaw = (config?.assinatura?.plano ?? "bronze").toLowerCase()
+  const planoAtual: PlanLocalId =
+    planoRaw === "prata" || planoRaw === "ouro" || planoRaw === "diamante" ? planoRaw : "bronze"
+  const planoOficial = findOfficialPlanByLocalId(planoAtual)
+  const recursos = useMemo(() => recursosComparativo[planoAtual] ?? recursosComparativo.bronze, [planoAtual])
   const blockedFlow = searchParams.get("blocked") === "1"
 
   useEffect(() => {
@@ -155,16 +173,6 @@ export function MinhaAssinatura() {
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
 
-  const tierAtual = PLAN_ORDER[planoAtual] ?? 0
-
-  const handleEscolherPlano = (id: "bronze" | "prata" | "ouro", valor: number) => {
-    if (id === planoAtual) return
-    updateAssinatura({ plano: id, valor })
-    toast({
-      title: "Plano atualizado",
-      description: `Seu plano agora é ${id.charAt(0).toUpperCase() + id.slice(1)} (${formatCurrency(valor)}/mês).`,
-    })
-  }
 
   if (!configHydrated) {
     return (
@@ -179,9 +187,27 @@ export function MinhaAssinatura() {
 
   return (
     <div className="space-y-8 rounded-xl bg-background p-4 lg:p-6">
-      <div className="text-center space-y-1">
+      <div className="text-center space-y-3">
         <h1 className="text-3xl font-bold text-foreground">Minha Assinatura</h1>
-        <p className="text-muted-foreground">Gerencie plano, mensalidade e recursos liberados</p>
+        <p className="text-muted-foreground">Visualização legada — planos alinhados ao site oficial</p>
+        <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+          <Button asChild size="lg" className="gap-2">
+            <Link href={BILLING_DASHBOARD_PATH}>
+              Gerenciar assinatura
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+        <p className="mx-auto flex max-w-xl items-center justify-center gap-1.5 text-xs text-muted-foreground">
+          <Info className="h-3.5 w-3.5 shrink-0" />
+          Gerenciamento real da assinatura em{" "}
+          <Link
+            href={BILLING_DASHBOARD_PATH}
+            className="font-medium text-primary underline-offset-2 hover:underline"
+          >
+            /dashboard/billing
+          </Link>
+        </p>
       </div>
       {blockedFlow && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100">
@@ -195,12 +221,12 @@ export function MinhaAssinatura() {
           Planos {APP_DISPLAY_NAME}
         </h2>
         <p className="text-sm text-muted-foreground text-center mb-6 max-w-2xl mx-auto">
-          Compare os níveis e faça upgrade quando precisar de mais recursos.
+          Valores e recursos iguais à Landing Page. Checkout, trial e portal Stripe ficam na página de
+          assinatura oficial.
         </p>
-        <div className="grid gap-6 md:grid-cols-3 max-w-6xl mx-auto">
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 max-w-6xl mx-auto">
           {GRID_PLANOS.map((p) => {
             const Icon = p.icone
-            const tier = PLAN_ORDER[p.id]
             const isCurrent = p.id === planoAtual
             return (
               <Card
@@ -208,12 +234,19 @@ export function MinhaAssinatura() {
                 className={`relative flex flex-col border bg-card text-card-foreground shadow-sm transition-colors ${
                   isCurrent
                     ? "border-primary ring-2 ring-primary/30"
-                    : "border-border hover:border-primary/40"
+                    : p.highlighted
+                      ? "border-primary/50 ring-1 ring-primary/20"
+                      : "border-border hover:border-primary/40"
                 }`}
               >
-                {p.id === "ouro" && (
+                {p.highlighted && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary-foreground">
-                    Completo
+                    Mais escolhido
+                  </div>
+                )}
+                {p.id === "diamante" && !p.highlighted && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-border bg-muted px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Enterprise
                   </div>
                 )}
                 <CardHeader className="pb-2 pt-6">
@@ -238,22 +271,11 @@ export function MinhaAssinatura() {
                   </ul>
                   {isCurrent ? (
                     <Button disabled className="w-full bg-secondary text-secondary-foreground cursor-default">
-                      Plano Atual
-                    </Button>
-                  ) : tier > tierAtual ? (
-                    <Button
-                      className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                      onClick={() => handleEscolherPlano(p.id, p.preco)}
-                    >
-                      Fazer Upgrade
+                      Plano atual (local)
                     </Button>
                   ) : (
-                    <Button
-                      variant="outline"
-                      className="w-full border-border bg-secondary/50 hover:bg-secondary"
-                      onClick={() => handleEscolherPlano(p.id, p.preco)}
-                    >
-                      Alterar para este plano
+                    <Button asChild className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                      <Link href={BILLING_DASHBOARD_PATH}>Assinar via Stripe</Link>
                     </Button>
                   )}
                 </CardContent>
@@ -269,10 +291,29 @@ export function MinhaAssinatura() {
             <CardTitle>Plano Contratado</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              Dados abaixo vêm do armazenamento local legado (cookie/PIN). Para status real, trial e
+              faturas use{" "}
+              <Link href={BILLING_DASHBOARD_PATH} className="font-medium text-primary hover:underline">
+                /dashboard/billing
+              </Link>
+              .
+            </p>
             <div className="rounded-lg border border-border overflow-hidden">
               <Table>
                 <TableBody>
-                  <TableRow><TableCell className="font-medium">Nome do Plano</TableCell><TableCell className="text-right uppercase">{config.assinatura.plano}</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Nome do Plano</TableCell>
+                    <TableCell className="text-right uppercase">
+                      {planoOficial?.name ?? config.assinatura.plano}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell className="font-medium">Referência oficial</TableCell>
+                    <TableCell className="text-right">
+                      {planoOficial ? formatCurrency(planoOficial.monthlyPrice) : "—"}/mês
+                    </TableCell>
+                  </TableRow>
                   <TableRow><TableCell className="font-medium">Vencimento</TableCell><TableCell className="text-right">{formatDate(config.assinatura.vencimento)}</TableCell></TableRow>
                   <TableRow><TableCell className="font-medium">Período</TableCell><TableCell className="text-right capitalize">{config.assinatura.periodo}</TableCell></TableRow>
                   <TableRow><TableCell className="font-medium">Valor</TableCell><TableCell className="text-right">{formatCurrency(config.assinatura.valor)}</TableCell></TableRow>
@@ -304,7 +345,10 @@ export function MinhaAssinatura() {
                   Historico de Pagamentos
                 </Button>
                 <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setIsRenewModalOpen(true)}>
-                  Renovar Assinatura
+                  Renovar (legado / demo)
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href={BILLING_DASHBOARD_PATH}>Ir para assinatura real</Link>
                 </Button>
               </div>
             </div>

@@ -7,87 +7,36 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import {
+  OFFICIAL_SUBSCRIPTION_PLANS,
+  planYearlyPricing,
+  type PlanStripeKey,
+} from "@/lib/subscription-plans-catalog"
 
-// ─── Configuração dos planos ─────────────────────────────────────────────────
+// ─── Configuração dos planos (catálogo oficial = Landing Page) ───────────────
 
-const PLANS = [
-  {
-    key: "BRONZE",
-    label: "Bronze",
-    icon: Zap,
-    description: "Ideal para lojistas iniciando a gestão digital",
-    monthlyPrice: 59.9,
-    yearlyMonthly: 47.92,
-    yearlyTotal: 575.04,
-    creditsIA: 250,
-    featured: false,
-    features: [
-      "PDV completo",
-      "Controle de estoque",
-      "1 loja",
-      "250 créditos IA / mês",
-      "Suporte por email",
-    ],
-  },
-  {
-    key: "PRATA",
-    label: "Prata",
-    icon: Star,
-    description: "Para negócios em crescimento com mais volume",
-    monthlyPrice: 149.9,
-    yearlyMonthly: 119.92,
-    yearlyTotal: 1439.04,
-    creditsIA: 700,
-    featured: false,
-    features: [
-      "Tudo do Bronze",
-      "Financeiro HUB",
-      "WhatsApp HUB",
-      "700 créditos IA / mês",
-      "Relatórios avançados",
-      "Suporte prioritário",
-    ],
-  },
-  {
-    key: "OURO",
-    label: "Ouro",
-    icon: Sparkles,
-    description: "O plano mais escolhido por assistências técnicas",
-    monthlyPrice: 279.9,
-    yearlyMonthly: 223.92,
-    yearlyTotal: 2687.04,
-    creditsIA: 2000,
-    featured: true,
-    features: [
-      "Tudo do Prata",
-      "Ordens de Serviço (OS)",
-      "Marketplace integrado",
-      "2.000 créditos IA / mês",
-      "Marketing IA",
-      "Multi-loja (até 3)",
-      "Suporte dedicado",
-    ],
-  },
-  {
-    key: "DIAMANTE",
-    label: "Diamante",
-    icon: Diamond,
-    description: "Para redes com alto volume e necessidades enterprise",
-    monthlyPrice: 499.9,
-    yearlyMonthly: 399.92,
-    yearlyTotal: 4799.04,
-    creditsIA: 7000,
-    featured: false,
-    features: [
-      "Tudo do Ouro",
-      "Multi-loja ilimitado",
-      "7.000 créditos IA / mês",
-      "API personalizada",
-      "Onboarding dedicado",
-      "SLA garantido",
-    ],
-  },
-] as const
+const PLAN_ICONS: Record<PlanStripeKey, typeof Zap> = {
+  BRONZE: Zap,
+  PRATA: Star,
+  OURO: Sparkles,
+  DIAMANTE: Diamond,
+}
+
+const PLANS = OFFICIAL_SUBSCRIPTION_PLANS.map((plan) => {
+  const { yearlyMonthly, yearlyTotal } = planYearlyPricing(plan.monthlyPrice)
+  return {
+    key: plan.stripeKey,
+    label: plan.name,
+    icon: PLAN_ICONS[plan.stripeKey],
+    description: plan.description,
+    monthlyPrice: plan.monthlyPrice,
+    yearlyMonthly,
+    yearlyTotal,
+    creditsIA: plan.creditsIA,
+    featured: plan.highlighted ?? false,
+    features: [...plan.features],
+  }
+})
 
 type PlanKey = (typeof PLANS)[number]["key"]
 

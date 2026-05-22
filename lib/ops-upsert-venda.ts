@@ -149,20 +149,31 @@ export async function upsertVendaInTransaction(
   }
 
   // ── 3. MovimentacaoEstoque (saída PDV) ──────────────────────────────────────
-  // Usa o resolvedProductMap do Step 2 — não refaz OR lookup.
-  // Idempotência: checa por produtoId (cuid) antes de criar.
+  // Agrega quantidade total por produto antes de criar o ledger.
+  // Isso garante que 2 linhas de qty=1 para o mesmo produto gerem um único
+  // decremento de qty=2, e que retry da mesma venda seja bloqueado pelo guard.
+  const qtyByProdutoId = new Map<string, number>()
   for (const line of lines) {
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
     if (!rawInvId || isOsVirtualSaleLine(rawInvId)) continue
-
+    const resolved = resolvedProductMap.get(rawInvId)
+    if (!resolved) continue
     const qty = Math.max(0, Math.round(typeof line.quantity === "number" ? line.quantity : 0))
     if (qty === 0) continue
+    qtyByProdutoId.set(resolved.dbId, (qtyByProdutoId.get(resolved.dbId) ?? 0) + qty)
+  }
 
-    const resolved = resolvedProductMap.get(rawInvId)
-    if (!resolved) continue // produto não encontrado no banco — aviso implícito via ausência de ledger
+  // Mapa reverso dbId → resolved (para acessar sku/nome)
+  const resolvedByDbId = new Map<string, ResolvedProduct>()
+  for (const resolved of resolvedProductMap.values()) {
+    resolvedByDbId.set(resolved.dbId, resolved)
+  }
 
-    const produtoId = resolved.dbId
+  for (const [produtoId, qty] of qtyByProdutoId) {
+    const resolved = resolvedByDbId.get(produtoId)
+    if (!resolved) continue
 
+    // Idempotência: bloqueia retry da mesma venda (mesmo pedidoId + produto)
     const jaExiste = await tx.movimentacaoEstoque.findFirst({
       where: { storeId: lojaId, documento: pedidoId, produtoId, origem: "pdv" },
       select: { id: true },

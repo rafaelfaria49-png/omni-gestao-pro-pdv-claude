@@ -190,101 +190,103 @@ function ItemsTable({
   return (
     <div
       className={cn(
-        "flex h-full min-h-0 flex-col overflow-hidden rounded-md border shadow-pos",
+        "flex h-full min-h-0 flex-col overflow-x-auto rounded-md border shadow-pos",
         isBlack ? "border-white/10 bg-[#000000]" : "pos-divider bg-pos-panel"
       )}
     >
-      <div
-        className={cn(
-          "grid grid-cols-[56px_110px_1fr_72px_120px_88px_140px] gap-3 border-b px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider",
-          isBlack ? "border-white/10 bg-[#000000] text-white/55" : "pos-divider bg-pos-header text-pos-label"
-        )}
-      >
-        <div>Item</div>
-        <div>Código</div>
-        <div>Descrição</div>
-        <div>Unid.</div>
-        <div className="text-right">Unitário</div>
-        <div className="text-right">Qtd</div>
-        <div className="text-right">Total</div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {rows.length === 0 ? (
-          <div
-            className={cn(
-              "flex flex-col items-center justify-center gap-2 py-10",
-              isBlack ? "text-white/50" : "text-pos-label"
-            )}
-          >
-            <PackageOpen className="h-10 w-10 opacity-40" strokeWidth={1.5} />
-            <p className={cn("text-sm font-medium", isBlack && "text-white/80")}>Nenhum item bipado</p>
-            <p className={cn("max-w-sm px-4 text-center text-xs", isBlack && "text-white/55")}>
-              Bipe no campo acima ou pressione{" "}
-              <kbd
-                className={cn(
-                  "rounded border px-1 text-[10px] font-bold",
-                  isBlack ? "border-white/20 bg-black text-white/80" : "border-[hsl(var(--pos-input-border))] bg-secondary"
-                )}
-              >
-                F3
-              </kbd>{" "}
-              para pesquisar
-            </p>
-          </div>
-        ) : (
-          rows.map((item, idx) => {
-            const lineTotal = item.qty * item.unitPrice
-            const isHighlight = item.lineId === highlightLineId
-            const isFlash = flashLineId != null && item.lineId === flashLineId
-            const isSelected = item.lineId === selectedLineId
-            return (
-              <button
-                type="button"
-                key={item.lineId}
-                onClick={() => onSelect(item.lineId)}
-                className={cn(
-                  "grid w-full grid-cols-[56px_110px_1fr_72px_120px_88px_140px] gap-3 border-b px-4 py-2.5 text-left text-sm tabular-pdv transition-colors",
-                  isFlash && "pdv-rapido-row-flash",
-                  isBlack
-                    ? cn(
-                        "border-white/10 bg-[#000000] text-white",
-                        isHighlight && "bg-emerald-500/15 animate-in fade-in duration-300",
-                        isSelected && "ring-1 ring-inset ring-emerald-400/70",
-                        "hover:bg-emerald-500/10"
-                      )
-                    : cn(
-                        "border-[hsl(var(--pos-divider))] text-foreground",
-                        idx % 2 === 0 ? "bg-pos-row" : "bg-pos-row-alt",
-                        isHighlight && "bg-pos-row-highlight animate-in fade-in duration-300",
-                        isSelected && "ring-1 ring-inset ring-[hsl(var(--pos-input-focus))]",
-                        "hover:bg-pos-row-highlight/60"
-                      )
-                )}
-              >
-                <div className={cn("font-mono", isBlack ? "text-white/45" : "text-pos-label")}>{String(idx + 1).padStart(3, "0")}</div>
-                <div className={cn("font-mono", isBlack ? "text-white" : "text-foreground")}>{item.code}</div>
-                <div className="min-w-0">
-                  <div className="truncate font-medium">{item.description}</div>
-                  {item.detail ? (
-                    <div
-                      className={cn(
-                        "mt-0.5 truncate font-mono text-[10px] leading-snug",
-                        isBlack ? "text-cyan-200/80" : "text-slate-600"
-                      )}
-                      title={item.detail}
-                    >
-                      {item.detail}
-                    </div>
-                  ) : null}
-                </div>
-                <div className={isBlack ? "text-white/45" : "text-pos-label"}>{item.unit}</div>
-                <div className="text-right">R$ {fmt(item.unitPrice)}</div>
-                <div className="text-right font-medium">{fmt(item.qty)}</div>
-                <div className="text-right font-semibold">R$ {fmt(lineTotal)}</div>
-              </button>
-            )
-          })
-        )}
+      <div className="min-w-[850px] flex flex-col flex-1 min-h-0">
+        <div
+          className={cn(
+            "grid grid-cols-[56px_110px_1fr_72px_120px_88px_140px] gap-3 border-b px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider",
+            isBlack ? "border-white/10 bg-[#000000] text-white/55" : "pos-divider bg-pos-header text-pos-label"
+          )}
+        >
+          <div>Item</div>
+          <div>Código</div>
+          <div>Descrição</div>
+          <div>Unid.</div>
+          <div className="text-right">Unitário</div>
+          <div className="text-right">Qtd</div>
+          <div className="text-right">Total</div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {rows.length === 0 ? (
+            <div
+              className={cn(
+                "flex flex-col items-center justify-center gap-2 py-10",
+                isBlack ? "text-white/50" : "text-pos-label"
+              )}
+            >
+              <PackageOpen className="h-10 w-10 opacity-40" strokeWidth={1.5} />
+              <p className={cn("text-sm font-medium", isBlack && "text-white/80")}>Nenhum item bipado</p>
+              <p className={cn("max-w-sm px-4 text-center text-xs", isBlack && "text-white/55")}>
+                Bipe no campo acima ou pressione{" "}
+                <kbd
+                  className={cn(
+                    "rounded border px-1 text-[10px] font-bold",
+                    isBlack ? "border-white/20 bg-black text-white/80" : "border-[hsl(var(--pos-input-border))] bg-secondary"
+                  )}
+                >
+                  F3
+                </kbd>{" "}
+                para pesquisar
+              </p>
+            </div>
+          ) : (
+            rows.map((item, idx) => {
+              const lineTotal = item.qty * item.unitPrice
+              const isHighlight = item.lineId === highlightLineId
+              const isFlash = flashLineId != null && item.lineId === flashLineId
+              const isSelected = item.lineId === selectedLineId
+              return (
+                <button
+                  type="button"
+                  key={item.lineId}
+                  onClick={() => onSelect(item.lineId)}
+                  className={cn(
+                    "grid w-full grid-cols-[56px_110px_1fr_72px_120px_88px_140px] gap-3 border-b px-4 py-2.5 text-left text-sm tabular-pdv transition-colors",
+                    isFlash && "pdv-rapido-row-flash",
+                    isBlack
+                      ? cn(
+                          "border-white/10 bg-[#000000] text-white",
+                          isHighlight && "bg-emerald-500/15 animate-in fade-in duration-300",
+                          isSelected && "ring-1 ring-inset ring-emerald-400/70",
+                          "hover:bg-emerald-500/10"
+                        )
+                      : cn(
+                          "border-[hsl(var(--pos-divider))] text-foreground",
+                          idx % 2 === 0 ? "bg-pos-row" : "bg-pos-row-alt",
+                          isHighlight && "bg-pos-row-highlight animate-in fade-in duration-300",
+                          isSelected && "ring-1 ring-inset ring-[hsl(var(--pos-input-focus))]",
+                          "hover:bg-pos-row-highlight/60"
+                        )
+                  )}
+                >
+                  <div className={cn("font-mono", isBlack ? "text-white/45" : "text-pos-label")}>{String(idx + 1).padStart(3, "0")}</div>
+                  <div className={cn("font-mono truncate min-w-0", isBlack ? "text-white" : "text-foreground")} title={item.code}>{item.code}</div>
+                  <div className="min-w-0">
+                    <div className="truncate font-medium" title={item.description}>{item.description}</div>
+                    {item.detail ? (
+                      <div
+                        className={cn(
+                          "mt-0.5 truncate font-mono text-[10px] leading-snug",
+                          isBlack ? "text-cyan-200/80" : "text-slate-600"
+                        )}
+                        title={item.detail}
+                      >
+                        {item.detail}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className={isBlack ? "text-white/45" : "text-pos-label"}>{item.unit}</div>
+                  <div className="text-right">R$ {fmt(item.unitPrice)}</div>
+                  <div className="text-right font-medium">{fmt(item.qty)}</div>
+                  <div className="text-right font-semibold">R$ {fmt(lineTotal)}</div>
+                </button>
+              )
+            })
+          )}
+        </div>
       </div>
     </div>
   )
@@ -614,33 +616,45 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                 isBlackEdition ? "border-white/10 bg-[#000000]" : "border-border bg-card"
               )}
             >
-              <div className="min-w-0 space-y-3">
+              <div className={cn(
+                "min-w-0 rounded-2xl border p-4 bg-muted/30 border-border shadow-sm space-y-4",
+                isBlackEdition && "border-white/10 bg-white/5"
+              )}>
                 <div>
                   <span
                     className={cn(
-                      "text-[10px] font-medium uppercase tracking-wider",
-                      isBlackEdition ? "text-white/50" : "text-muted-foreground"
+                      "text-[10px] font-medium uppercase tracking-wider text-muted-foreground",
+                      isBlackEdition && "text-white/50"
                     )}
                   >
                     Total
                   </span>
                   <div
                     className={cn(
-                      "text-xl font-semibold tabular-pdv sm:text-2xl",
-                      isBlackEdition ? "text-emerald-400" : "text-pos-total"
+                      "text-2xl font-extrabold sm:text-3xl mt-1 tabular-nums text-primary",
+                      isBlackEdition && "text-emerald-400"
                     )}
                   >
                     R$ {fmt(props.total)}
                   </div>
                 </div>
-                <p className={cn("text-sm tabular-pdv", isBlackEdition ? "text-white/70" : "text-muted-foreground")}>
-                  {props.itemCount} {props.itemCount === 1 ? "item" : "itens"}
-                </p>
-                {props.previousSaleTotal != null ? (
-                  <p className={cn("text-xs tabular-pdv", isBlackEdition ? "text-white/45" : "text-muted-foreground")}>
-                    Venda anterior: R$ {fmt(props.previousSaleTotal)}
-                  </p>
-                ) : null}
+                
+                <div className={cn("border-t pt-3 space-y-2 text-xs", isBlackEdition ? "border-white/10" : "border-border")}>
+                  <div className="flex justify-between items-center">
+                    <span className={cn("text-muted-foreground", isBlackEdition && "text-white/55")}>Nº de itens</span>
+                    <span className={cn("font-semibold tabular-nums text-foreground", isBlackEdition && "text-white")}>
+                      {props.itemCount} {props.itemCount === 1 ? "item" : "itens"}
+                    </span>
+                  </div>
+                  {props.previousSaleTotal != null && (
+                    <div className="flex justify-between items-center">
+                      <span className={cn("text-muted-foreground", isBlackEdition && "text-white/55")}>Venda anterior</span>
+                      <span className={cn("font-semibold tabular-nums text-foreground", isBlackEdition && "text-white")}>
+                        R$ {fmt(props.previousSaleTotal)}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
               <Button
                 type="button"

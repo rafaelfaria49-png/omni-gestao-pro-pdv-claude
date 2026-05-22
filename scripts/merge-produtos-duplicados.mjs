@@ -133,24 +133,32 @@ try {
     if (!APPLY) continue
 
     // ── APPLY ──
-    await prisma.$transaction(async (tx) => {
-      // 1. Remove/inativa losers primeiro (libera unique de barcode/sku).
-      for (const lo of losers) {
-        const v = await vinculosDe(lo.id)
-        if (v.total > 0) {
-          await tx.produto.update({ where: { id: lo.id }, data: { active: false, status: "Inativo" } })
-          registrosInativados += 1
-        } else {
-          await tx.produto.delete({ where: { id: lo.id } })
-          registrosRemovidos += 1
+    // Pré-calcula vínculos fora da transação para minimizar tempo na tx (Prisma timeout padrão é 5s).
+    const losersComVinculo = []
+    for (const lo of losers) {
+      const v = await vinculosDe(lo.id)
+      losersComVinculo.push({ lo, vinculado: v.total > 0 })
+    }
+    await prisma.$transaction(
+      async (tx) => {
+        // 1. Remove/inativa losers primeiro (libera unique de barcode/sku).
+        for (const { lo, vinculado } of losersComVinculo) {
+          if (vinculado) {
+            await tx.produto.update({ where: { id: lo.id }, data: { active: false, status: "Inativo" } })
+            registrosInativados += 1
+          } else {
+            await tx.produto.delete({ where: { id: lo.id } })
+            registrosRemovidos += 1
+          }
         }
-      }
-      // 2. Enriquece o keeper.
-      if (Object.keys(patch).length > 0) {
-        await tx.produto.update({ where: { id: keeper.id }, data: patch })
-        registrosEnriquecidos += 1
-      }
-    })
+        // 2. Enriquece o keeper.
+        if (Object.keys(patch).length > 0) {
+          await tx.produto.update({ where: { id: keeper.id }, data: patch })
+          registrosEnriquecidos += 1
+        }
+      },
+      { timeout: 30_000 },
+    )
     console.log(`   ✓ aplicado`)
   }
 

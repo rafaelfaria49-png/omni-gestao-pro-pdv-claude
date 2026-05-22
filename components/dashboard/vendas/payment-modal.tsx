@@ -47,6 +47,23 @@ import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { normalizeDocDigits } from "@/lib/cpf"
 import { cn } from "@/lib/utils"
 
+function formatMoneyInput(value: string): string {
+  const clean = value.replace(/\D/g, "")
+  if (!clean) return ""
+  const cents = parseInt(clean, 10)
+  if (isNaN(cents)) return ""
+  return (cents / 100).toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+function parseMoneyString(value: string): number {
+  const clean = value.replace(/\D/g, "")
+  if (!clean) return 0
+  return parseInt(clean, 10) / 100
+}
+
 /** CPF (11) ou CNPJ (14) só com dígitos. */
 function documentoClienteValido(raw: string): boolean {
   const d = normalizeDocDigits(raw)
@@ -281,8 +298,7 @@ export function PaymentModal({
         if (type === "credito_vale") {
           max = Math.min(rem, Math.max(0, customerStoreCredit))
         }
-        const raw = currentValue.replace(",", ".").trim()
-        const parsed = parseFloat(raw)
+        const parsed = parseMoneyString(currentValue)
         const parsedOk = Number.isFinite(parsed) && parsed > 0
         const base = parsedOk ? parsed : max
         const value =
@@ -343,7 +359,7 @@ export function PaymentModal({
   }
 
   const handleQuickValue = (value: number) => {
-    setCurrentValue(value.toString())
+    setCurrentValue(formatMoneyInput((value * 100).toFixed(0)))
   }
 
   const formatCurrency = (value: number) => {
@@ -367,7 +383,7 @@ export function PaymentModal({
   }
 
   const handleGerarBoletoCarne = () => {
-    const valorTotal = parseFloat(currentValue) || faltaPagar
+    const valorTotal = parseMoneyString(currentValue) || faltaPagar
     const qtd = Math.max(1, parseInt(carneInstallments || "1", 10))
     const parcelas = gerarParcelasCarne(valorTotal, qtd)
     const empresa = config.empresa
@@ -435,15 +451,15 @@ export function PaymentModal({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto bg-card border-border">
-        <DialogHeader className="pb-2">
+      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 overflow-hidden bg-card border-border">
+        <DialogHeader className="p-6 pb-2 border-b border-border shrink-0">
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <Calculator className="w-6 h-6 text-primary" />
             Finalizar Pagamento
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
           <div className="rounded-lg border border-border bg-secondary/40 p-4 space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
@@ -485,7 +501,8 @@ export function PaymentModal({
           <PdvVisorTotal
             label="Total a pagar"
             valorFormatado={formatCurrency(total)}
-            className="py-6 [&_p]:text-5xl [&_p]:font-bold"
+            glow="none"
+            className="bg-primary/5 border border-primary/25 rounded-2xl p-4 py-6 text-center [&_p]:text-3xl [&_p]:font-extrabold"
           />
 
           {exibirCapturaCpf && selectedCustomer && (
@@ -603,11 +620,13 @@ export function PaymentModal({
                 <div className="relative flex-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
                   <Input
-                    type="number"
-                    placeholder={faltaPagar.toFixed(2)}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder={faltaPagar.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     value={currentValue}
-                    onChange={(e) => setCurrentValue(e.target.value)}
+                    onChange={(e) => setCurrentValue(formatMoneyInput(e.target.value))}
                     className="pl-10 h-12 text-lg font-semibold bg-secondary border-border"
+                    style={{ paddingLeft: "2.5rem" }}
                   />
                 </div>
               </div>
@@ -683,45 +702,42 @@ export function PaymentModal({
                 </div>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <Button
-                  size="lg"
-                  variant="outline"
+                <button
+                  type="button"
                   onClick={() => {
                     setSelectedType("dinheiro")
                     handleAddPayment("dinheiro")
                   }}
                   className={cn(
-                    "h-14 flex flex-col gap-0.5 border-2 text-xs font-semibold text-foreground shadow-sm transition-colors bg-background hover:bg-muted/30 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-white/5",
+                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm",
                     selectedType === "dinheiro" 
                       ? "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400/70 dark:bg-emerald-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-emerald-400/45"
                   )}
                 >
-                  <Banknote className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  <Banknote className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                   <span>Dinheiro</span>
-                </Button>
+                </button>
                 
-                <Button
-                  size="lg"
-                  variant="outline"
+                <button
+                  type="button"
                   onClick={() => {
                     setSelectedType("pix")
                     handleAddPayment("pix")
                   }}
                   className={cn(
-                    "h-14 flex flex-col gap-0.5 border-2 text-xs font-semibold text-foreground shadow-sm transition-colors bg-background hover:bg-muted/30 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-white/5",
+                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm",
                     selectedType === "pix" 
                       ? "border-teal-500 bg-teal-500/10 dark:border-teal-400/70 dark:bg-teal-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-teal-400/45"
                   )}
                 >
-                  <QrCode className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                  <QrCode className="h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
                   <span>Pix</span>
-                </Button>
+                </button>
 
-                <Button
-                  size="lg"
-                  variant="outline"
+                <button
+                  type="button"
                   disabled={!cartaoLiberado}
                   title={
                     !cartaoLiberado
@@ -733,19 +749,18 @@ export function PaymentModal({
                     handleAddPayment("cartao_debito")
                   }}
                   className={cn(
-                    "h-14 flex flex-col gap-0.5 border-2 text-xs font-semibold text-foreground shadow-sm transition-colors bg-background hover:bg-muted/30 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-white/5",
+                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
                     selectedType === "cartao_debito"
                       ? "border-slate-500 bg-slate-500/10 dark:border-slate-400/70 dark:bg-slate-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-slate-400/45"
                   )}
                 >
-                  <CreditCard className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+                  <CreditCard className="h-5 w-5 shrink-0 text-slate-600 dark:text-slate-300" />
                   <span>Débito</span>
-                </Button>
+                </button>
 
-                <Button
-                  size="lg"
-                  variant="outline"
+                <button
+                  type="button"
                   disabled={!cartaoLiberado}
                   title={
                     !cartaoLiberado
@@ -757,19 +772,18 @@ export function PaymentModal({
                     handleAddPayment("cartao_credito")
                   }}
                   className={cn(
-                    "h-14 flex flex-col gap-0.5 border-2 text-xs font-semibold text-foreground shadow-sm transition-colors bg-background hover:bg-muted/30 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-white/5",
+                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
                     selectedType === "cartao_credito"
                       ? "border-blue-500 bg-blue-500/10 dark:border-blue-400/70 dark:bg-blue-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-blue-400/45"
                   )}
                 >
-                  <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <CreditCard className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
                   <span>Crédito</span>
-                </Button>
+                </button>
 
-                <Button
-                  size="lg"
-                  variant="outline"
+                <button
+                  type="button"
                   title={
                     !selectedCustomer
                       ? "Clique para ver o aviso: selecione o cliente na tela do PDV para à prazo"
@@ -784,51 +798,49 @@ export function PaymentModal({
                     handleAddPayment("a_prazo")
                   }}
                   className={cn(
-                    "h-14 flex flex-col gap-0.5 border-2 text-xs font-semibold text-foreground shadow-sm transition-colors bg-background hover:bg-muted/30 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-white/5",
+                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
                     selectedType === "a_prazo"
                       ? "border-violet-500 bg-violet-500/10 dark:border-violet-400/70 dark:bg-violet-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-violet-400/45"
                   )}
                 >
-                  <CalendarClock className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                  <CalendarClock className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
                   <span>À prazo</span>
-                </Button>
+                </button>
                 
-                <Button
-                  size="lg"
-                  variant="outline"
+                <button
+                  type="button"
                   disabled={!selectedCustomer || customerStoreCredit <= 0}
                   onClick={() => {
                     setSelectedType("credito_vale")
                     handleAddPayment("credito_vale")
                   }}
                   className={cn(
-                    "h-14 flex flex-col gap-0.5 border-2 text-xs font-semibold text-foreground shadow-sm transition-colors bg-background hover:bg-muted/30 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-white/5",
+                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
                     selectedType === "credito_vale"
                       ? "border-amber-500 bg-amber-500/10 dark:border-amber-400/70 dark:bg-amber-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-amber-400/45"
                   )}
                 >
-                  <Wallet className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                  <Wallet className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
                   <span>Crédito/Vale</span>
-                </Button>
+                </button>
                 
-                <Button
-                  size="lg"
-                  variant="outline"
+                <button
+                  type="button"
                   disabled={!selectedCustomer}
                   title={!selectedCustomer ? "Selecione o cliente no PDV para carnê ou boleto" : undefined}
                   onClick={() => setSelectedType("carne")}
                   className={cn(
-                    "h-14 flex flex-col gap-0.5 border-2 text-xs font-semibold text-foreground shadow-sm transition-colors bg-background hover:bg-muted/30 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-white/5",
+                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
                     selectedType === "carne" 
                       ? "border-orange-500 bg-orange-500/10 dark:border-orange-400/70 dark:bg-orange-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-orange-400/45"
                   )}
                 >
-                  <FileText className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                  <FileText className="h-5 w-5 shrink-0 text-orange-600 dark:text-orange-400" />
                   <span>Carnê</span>
-                </Button>
+                </button>
               </div>
             </div>
           )}
@@ -853,7 +865,7 @@ export function PaymentModal({
                       <SelectContent>
                         {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
                           <SelectItem key={n} value={n.toString()}>
-                            {n}x de {formatCurrency((parseFloat(currentValue) || faltaPagar) / n)}
+                            {n}x de {formatCurrency((parseMoneyString(currentValue) || faltaPagar) / n)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -862,7 +874,7 @@ export function PaymentModal({
                   <div className="space-y-2">
                     <Label className="text-sm">Valor Total Carnê</Label>
                     <div className="h-10 px-3 flex items-center bg-secondary rounded-md border border-border">
-                      <span className="font-semibold">{formatCurrency(parseFloat(currentValue) || faltaPagar)}</span>
+                      <span className="font-semibold">{formatCurrency(parseMoneyString(currentValue) || faltaPagar)}</span>
                     </div>
                   </div>
                 </div>
@@ -885,7 +897,7 @@ export function PaymentModal({
                   </Button>
                 </div>
                 <div className="space-y-1 text-xs text-muted-foreground">
-                  {gerarParcelasCarne(parseFloat(currentValue) || faltaPagar, parseInt(carneInstallments || "1", 10)).map((p) => (
+                  {gerarParcelasCarne(parseMoneyString(currentValue) || faltaPagar, parseInt(carneInstallments || "1", 10)).map((p) => (
                     <p key={p.numero}>{p.numero}/{carneInstallments} - {formatCurrency(p.valor)} - vence em {p.vencimento}</p>
                   ))}
                 </div>
@@ -1024,8 +1036,11 @@ export function PaymentModal({
             </div>
           </div>
 
+        </div>
+
+        <div className="p-6 border-t border-border bg-card shrink-0">
           {/* Botões de Ação */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3">
             <Button
               variant="outline"
               onClick={onClose}

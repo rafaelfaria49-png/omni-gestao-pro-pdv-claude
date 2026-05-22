@@ -3,7 +3,7 @@ import {
   Search, Plus, Upload, Users, Package, Wrench, Truck, HardHat, Smartphone,
   AlertTriangle, RefreshCw, LayoutDashboard, Tag, FileSpreadsheet, History,
   Sparkles, MessageCircle, ShoppingCart, Edit3, Eye, Trash2, ChevronRight,
-  CheckCircle2, ArrowUpRight, Database, Filter, Download, Workflow,
+  CheckCircle2, ArrowUpRight, Database, Filter, Download, Workflow, Barcode,
 } from "lucide-react";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea, useToggle } from "./ui-kit";
@@ -68,6 +68,7 @@ type TabId = (typeof TABS)[number]["id"];
 
 export function CadastrosHub() {
   const [tab, setTab] = useState<TabId>("dashboard");
+  const [autoOpenNew, setAutoOpenNew] = useState<string | null>(null);
   const novo = useToggle();
   const { lojaAtivaId } = useLojaAtiva();
   const storeId = (lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID;
@@ -102,7 +103,10 @@ export function CadastrosHub() {
                 />
               </div>
               <button
-                onClick={() => setTab("importacao")}
+                onClick={() => {
+                  setTab("importacao");
+                  setAutoOpenNew(null);
+                }}
                 className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-accent transition"
                 title="Abrir HUB de Importação"
               >
@@ -126,7 +130,10 @@ export function CadastrosHub() {
               return (
                 <button
                   key={t.id}
-                  onClick={() => setTab(t.id)}
+                  onClick={() => {
+                    setTab(t.id);
+                    setAutoOpenNew(null);
+                  }}
                   className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
                     active
                       ? "bg-primary text-primary-foreground"
@@ -144,13 +151,60 @@ export function CadastrosHub() {
 
       {/* CONTENT */}
       <main className="w-full min-w-0 px-6 py-8">
-        {tab === "dashboard" && <DashboardPanel />}
-        {tab === "clientes" && <ClientesPanel storeId={storeId} />}
-        {tab === "produtos" && <ProdutosPanel storeId={storeId} />}
-        {tab === "servicos" && <ServicosPanel storeId={storeId} />}
-        {tab === "fornecedores" && <FornecedoresPanel storeId={storeId} />}
-        {tab === "tecnicos" && <TecnicosPanel storeId={storeId} />}
-        {tab === "equipamentos" && <EquipamentosPanel storeId={storeId} />}
+        {tab === "dashboard" && (
+          <DashboardPanel
+            onAction={(targetTab, openNew) => {
+              setTab(targetTab);
+              if (openNew) {
+                setAutoOpenNew(targetTab);
+              } else {
+                setAutoOpenNew(null);
+              }
+            }}
+          />
+        )}
+        {tab === "clientes" && (
+          <ClientesPanel
+            storeId={storeId}
+            autoOpen={autoOpenNew === "clientes"}
+            onAutoOpenConsumed={() => setAutoOpenNew(null)}
+          />
+        )}
+        {tab === "produtos" && (
+          <ProdutosPanel
+            storeId={storeId}
+            autoOpen={autoOpenNew === "produtos"}
+            onAutoOpenConsumed={() => setAutoOpenNew(null)}
+          />
+        )}
+        {tab === "servicos" && (
+          <ServicosPanel
+            storeId={storeId}
+            autoOpen={autoOpenNew === "servicos"}
+            onAutoOpenConsumed={() => setAutoOpenNew(null)}
+          />
+        )}
+        {tab === "fornecedores" && (
+          <FornecedoresPanel
+            storeId={storeId}
+            autoOpen={autoOpenNew === "fornecedores"}
+            onAutoOpenConsumed={() => setAutoOpenNew(null)}
+          />
+        )}
+        {tab === "tecnicos" && (
+          <TecnicosPanel
+            storeId={storeId}
+            autoOpen={autoOpenNew === "tecnicos"}
+            onAutoOpenConsumed={() => setAutoOpenNew(null)}
+          />
+        )}
+        {tab === "equipamentos" && (
+          <EquipamentosPanel
+            storeId={storeId}
+            autoOpen={autoOpenNew === "equipamentos"}
+            onAutoOpenConsumed={() => setAutoOpenNew(null)}
+          />
+        )}
         {tab === "categorias" && <CategoriasPanel storeId={storeId} />}
         {tab === "importacao" && <ImportacaoPanel />}
         {tab === "auditoria" && <AuditoriaPanel />}
@@ -159,10 +213,22 @@ export function CadastrosHub() {
       <Modal open={novo.open} onClose={novo.close} title="Novo cadastro" subtitle="Selecione o tipo de cadastro que deseja criar.">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {[
-            { l: "Cliente", i: Users }, { l: "Produto", i: Package }, { l: "Serviço", i: Wrench },
-            { l: "Fornecedor", i: Truck }, { l: "Técnico", i: HardHat }, { l: "Equipamento", i: Smartphone },
+            { l: "Cliente", i: Users, tab: "clientes" as TabId },
+            { l: "Produto", i: Package, tab: "produtos" as TabId },
+            { l: "Serviço", i: Wrench, tab: "servicos" as TabId },
+            { l: "Fornecedor", i: Truck, tab: "fornecedores" as TabId },
+            { l: "Técnico", i: HardHat, tab: "tecnicos" as TabId },
+            { l: "Equipamento", i: Smartphone, tab: "equipamentos" as TabId },
           ].map((x) => (
-            <button key={x.l} className="flex items-center gap-3 rounded-xl border border-border bg-background p-4 text-left hover:border-primary hover:bg-accent transition">
+            <button
+              key={x.l}
+              onClick={() => {
+                setTab(x.tab);
+                setAutoOpenNew(x.tab);
+                novo.close();
+              }}
+              className="flex items-center gap-3 rounded-xl border border-border bg-background p-4 text-left hover:border-primary hover:bg-accent transition"
+            >
               <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
                 <x.i className="h-5 w-5" />
               </div>
@@ -180,11 +246,15 @@ export function CadastrosHub() {
 }
 
 /* ───── DASHBOARD ───── */
-function DashboardPanel() {
+function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: boolean) => void }) {
   const quick = [
-    { l: "Novo cliente", i: Users }, { l: "Novo produto", i: Package }, { l: "Novo serviço", i: Wrench },
-    { l: "Novo fornecedor", i: Truck }, { l: "Novo técnico", i: HardHat },
-    { l: "Importar planilha", i: Upload }, { l: "Revisar incompletos", i: AlertTriangle },
+    { l: "Novo cliente", i: Users, tab: "clientes" as TabId, autoOpen: true },
+    { l: "Novo produto", i: Package, tab: "produtos" as TabId, autoOpen: true },
+    { l: "Novo serviço", i: Wrench, tab: "servicos" as TabId, autoOpen: true },
+    { l: "Novo fornecedor", i: Truck, tab: "fornecedores" as TabId, autoOpen: true },
+    { l: "Novo técnico", i: HardHat, tab: "tecnicos" as TabId, autoOpen: true },
+    { l: "Importar planilha", i: Upload, tab: "importacao" as TabId, autoOpen: false },
+    { l: "Revisar incompletos", i: AlertTriangle, tab: "produtos" as TabId, autoOpen: false },
   ];
   const { lojaAtivaId } = useLojaAtiva();
   const storeId = (lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID;
@@ -223,8 +293,26 @@ function DashboardPanel() {
         {(stats?.kpis ?? []).map((k) => {
           const Icon = ICONS[k.icon] ?? Package;
           const negative = k.delta.startsWith("-");
+          const mapIconToTab = (icon: string): TabId | null => {
+            switch (icon) {
+              case "Users": return "clientes";
+              case "Package": return "produtos";
+              case "Wrench": return "servicos";
+              case "Truck": return "fornecedores";
+              case "HardHat": return "tecnicos";
+              case "Smartphone": return "equipamentos";
+              case "AlertTriangle": return "produtos";
+              case "RefreshCw": return "auditoria";
+              default: return null;
+            }
+          };
+          const targetTab = mapIconToTab(k.icon);
           return (
-            <Card key={k.label} className="p-5">
+            <Card
+              key={k.label}
+              className={`p-5 ${targetTab ? "cursor-pointer hover:border-primary hover:shadow-md transition" : ""}`}
+              onClick={targetTab ? () => onAction(targetTab) : undefined}
+            >
               <div className="flex items-center justify-between">
                 <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
                   <Icon className="h-5 w-5" />
@@ -243,7 +331,11 @@ function DashboardPanel() {
         <SectionTitle title="Cards rápidos" subtitle="Operações mais usadas em um clique." />
         <div className="grid min-w-0 grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7">
           {quick.map((q) => (
-            <button key={q.l} className="group flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:ring-primary-glow">
+            <button
+              key={q.l}
+              onClick={() => onAction(q.tab, q.autoOpen)}
+              className="group flex flex-col items-start gap-3 rounded-xl border border-border bg-card p-4 text-left transition hover:border-primary hover:ring-primary-glow w-full"
+            >
               <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary/10 text-primary">
                 <q.i className="h-4 w-4" />
               </div>
@@ -404,7 +496,15 @@ function applyDocMask(v: string, tipo: "PF" | "PJ"): string {
 }
 
 /* ───── CLIENTES ───── */
-function ClientesPanel({ storeId }: { storeId: string }) {
+function ClientesPanel({
+  storeId,
+  autoOpen,
+  onAutoOpenConsumed,
+}: {
+  storeId: string;
+  autoOpen?: boolean;
+  onAutoOpenConsumed?: () => void;
+}) {
   const m = useToggle();
   const [editing, setEditing] = useState<ClienteDTO | null>(null);
   const [rows, setRows] = useState<ClienteDTO[]>([]);
@@ -420,6 +520,13 @@ function ClientesPanel({ storeId }: { storeId: string }) {
   const cidadeRef = useRef<HTMLInputElement | null>(null);
   const tagsRef = useRef<HTMLInputElement | null>(null);
   const statusRef = useRef<HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    if (autoOpen) {
+      m.openIt();
+      onAutoOpenConsumed?.();
+    }
+  }, [autoOpen, onAutoOpenConsumed, m]);
 
   const refresh = useMemo(
     () => async () => {
@@ -671,7 +778,54 @@ function ClientesPanel({ storeId }: { storeId: string }) {
 }
 
 /* ───── PRODUTOS ───── */
-function ProdutosPanel({ storeId }: { storeId: string }) {
+
+/** Alinhado ao backend: estoque baixo = 1–5 unidades (stock > 0 e < 6). */
+const ESTOQUE_BAIXO_LIMITE = 6;
+
+/**
+ * Remove prefixos automáticos de importador (gc-, imp-, etc.) para exibição amigável.
+ * O SKU bruto no banco é preservado; isto é só camada visual.
+ */
+const SKU_DISPLAY_PREFIX_RE = /^(?:gc-|imp-|prod-|id-)+/i;
+function displaySku(sku: string | undefined | null): string {
+  const s = String(sku ?? "").trim();
+  if (!s || s === "—") return "";
+  return s.replace(SKU_DISPLAY_PREFIX_RE, "") || s;
+}
+
+function estoqueBadge(estoque: number): { tone: "danger" | "warning" | "success"; label: string; title: string } {
+  if (estoque <= 0) {
+    return { tone: "danger", label: "Sem saldo", title: "Produto sem unidades disponíveis" };
+  }
+  if (estoque < ESTOQUE_BAIXO_LIMITE) {
+    return { tone: "warning", label: `${estoque} · baixo`, title: "Saldo entre 1 e 5 unidades — considere repor" };
+  }
+  return { tone: "success", label: String(estoque), title: "Saldo adequado" };
+}
+
+function produtoStatusBadge(status: ProdutoDTO["status"]): { tone: "success" | "warning" | "default"; label: string } {
+  if (status === "Ativo") return { tone: "success", label: "Ativo" };
+  if (status === "Inativo") return { tone: "default", label: "Inativo" };
+  return { tone: "warning", label: "Incompleto" };
+}
+
+const ALERTA_PRODUTO_HINTS: Record<string, string> = {
+  "Estoque baixo": "Ativos com 1–5 unidades",
+  "Sem preço": "Preço de venda zerado ou ausente",
+  "Sem fornecedor": "Campo fornecedor vazio",
+  "Margem baixa": "Margem abaixo de 20%",
+  "Prontos p/ Marketplace": "Ativos, com preço, estoque e categoria",
+};
+
+function ProdutosPanel({
+  storeId,
+  autoOpen,
+  onAutoOpenConsumed,
+}: {
+  storeId: string;
+  autoOpen?: boolean;
+  onAutoOpenConsumed?: () => void;
+}) {
   const m = useToggle();
   const [editing, setEditing] = useState<ProdutoDTO | null>(null);
   const [deleting, setDeleting] = useState<ProdutoDTO | null>(null);
@@ -681,6 +835,13 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
   const [resumo, setResumo] = useState<EstoqueResumo | null>(null);
   const [rows, setRows] = useState<ProdutoDTO[]>([]);
   const [filterQuery, setFilterQuery] = useState("");
+
+  useEffect(() => {
+    if (autoOpen) {
+      m.openIt();
+      onAutoOpenConsumed?.();
+    }
+  }, [autoOpen, onAutoOpenConsumed, m]);
   // loadingRows: bloqueia apenas a tabela; loadingAlerts: atualiza os cards silenciosamente
   const [loadingRows, setLoadingRows] = useState(true);
   const [loadingAlerts, setLoadingAlerts] = useState(true);
@@ -764,59 +925,98 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
   const fmtBRL = (n: number) =>
     n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+  const resumoLoading = loadingAlerts && !resumo;
+
   return (
     <div className="w-full min-w-0">
+      <SectionTitle
+        title="Resumo de estoque"
+        subtitle="Indicadores da unidade ativa — atualizados após movimentações e cadastros"
+      />
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-stretch">
-        <div className="grid min-w-0 flex-1 grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid min-w-0 flex-1 grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="p-4">
             <div className="text-xs text-muted-foreground">Valor em estoque (custo)</div>
             <div className="mt-1 text-2xl font-bold text-foreground">
-              {resumo ? fmtBRL(resumo.valorCusto) : <span className="text-base text-muted-foreground">—</span>}
+              {resumoLoading ? (
+                <span className="inline-block h-8 w-28 animate-pulse rounded bg-muted" aria-hidden />
+              ) : resumo ? (
+                fmtBRL(resumo.valorCusto)
+              ) : (
+                <span className="text-base text-muted-foreground">—</span>
+              )}
             </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
-              {resumo ? `${resumo.totalUnidades} un · ${resumo.skusComEstoque} SKU c/ saldo` : ""}
+              {resumoLoading
+                ? "Calculando…"
+                : resumo
+                  ? `${resumo.totalUnidades} un · ${resumo.skusComEstoque} SKU com saldo`
+                  : "Custo médio × saldo de todos os produtos"}
             </div>
           </Card>
           <Card className="p-4">
             <div className="text-xs text-muted-foreground">Venda potencial</div>
             <div className="mt-1 text-2xl font-bold text-foreground">
-              {resumo ? fmtBRL(resumo.valorVenda) : <span className="text-base text-muted-foreground">—</span>}
+              {resumoLoading ? (
+                <span className="inline-block h-8 w-28 animate-pulse rounded bg-muted" aria-hidden />
+              ) : resumo ? (
+                fmtBRL(resumo.valorVenda)
+              ) : (
+                <span className="text-base text-muted-foreground">—</span>
+              )}
             </div>
-            <div className="mt-1 text-[11px] text-muted-foreground">se vender todo o saldo</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">Receita se vender todo o saldo atual</div>
           </Card>
           <Card className="p-4">
             <div className="text-xs text-muted-foreground">Margem potencial</div>
             <div className="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-              {resumo ? fmtBRL(resumo.margemPotencial) : <span className="text-base text-muted-foreground">—</span>}
+              {resumoLoading ? (
+                <span className="inline-block h-8 w-28 animate-pulse rounded bg-muted" aria-hidden />
+              ) : resumo ? (
+                fmtBRL(resumo.margemPotencial)
+              ) : (
+                <span className="text-base text-muted-foreground">—</span>
+              )}
             </div>
-            <div className="mt-1 text-[11px] text-muted-foreground">venda − custo</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">Diferença entre venda potencial e custo</div>
           </Card>
           <Card className="p-4">
             <div className="text-xs text-muted-foreground">SKUs sem saldo</div>
             <div className="mt-1 text-2xl font-bold text-foreground">
-              {resumo ? resumo.skusSemEstoque : <span className="text-base text-muted-foreground">—</span>}
+              {resumoLoading ? (
+                <span className="inline-block h-8 w-12 animate-pulse rounded bg-muted" aria-hidden />
+              ) : resumo ? (
+                resumo.skusSemEstoque
+              ) : (
+                <span className="text-base text-muted-foreground">—</span>
+              )}
             </div>
             <div className="mt-1 text-[11px] text-muted-foreground">
-              {resumo ? `de ${resumo.totalSkus} ativos` : ""}
+              {resumo ? `de ${resumo.totalSkus} produtos ativos` : "Produtos ativos com estoque zero"}
             </div>
           </Card>
         </div>
         <button
           type="button"
           onClick={() => setHistGeralOpen(true)}
-          className="flex items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:bg-accent lg:w-44"
+          className="flex min-h-[3rem] items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-3 text-sm font-medium text-foreground hover:bg-accent lg:w-44"
         >
-          <History className="h-4 w-4" /> Histórico de estoque
+          <History className="h-4 w-4 shrink-0" /> Histórico de estoque
         </button>
       </div>
 
-      <div className="mb-4 grid min-w-0 grid-cols-2 gap-3 md:grid-cols-5">
+      <div className="mb-4 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {alerts.map((a) => (
           <Card key={a.l} className="p-4">
             <div className="text-xs text-muted-foreground">{a.l}</div>
-            <div className="mt-1 flex items-end justify-between">
+            <div className="mt-0.5 text-[10px] text-muted-foreground/80">{ALERTA_PRODUTO_HINTS[a.l] ?? ""}</div>
+            <div className="mt-2 flex items-end justify-between gap-2">
               <div className="text-2xl font-bold text-foreground">
-                {loadingAlerts ? <span className="text-muted-foreground text-base">—</span> : a.n}
+                {loadingAlerts ? (
+                  <span className="inline-block h-7 w-8 animate-pulse rounded bg-muted" aria-hidden />
+                ) : (
+                  a.n
+                )}
               </div>
               <Badge tone={a.t}>{a.t === "success" ? "OK" : "Revisar"}</Badge>
             </div>
@@ -831,7 +1031,15 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
         filterQuery={filterQuery}
         onFilterQueryChange={setFilterQuery}
       />
-      {loadingRows && <div className="mb-3 text-sm text-muted-foreground">Carregando produtos…</div>}
+      {loadingRows && (
+        <Card className="mb-4 overflow-hidden p-4" aria-busy="true" aria-label="Carregando produtos">
+          <div className="space-y-2">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-10 animate-pulse rounded-md bg-muted" />
+            ))}
+          </div>
+        </Card>
+      )}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
       {!loadingRows && !err && rows.length === 0 && (
         <Card className="mb-4 border-dashed border-2 border-border/80 bg-gradient-to-br from-card to-muted/20 p-10 text-center">
@@ -856,9 +1064,10 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
           Nenhum produto corresponde à busca. Limpe o filtro ou ajuste os termos.
         </Card>
       )}
+      {!loadingRows && !err && rows.length > 0 && (
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[56rem] text-sm">
             <thead className="bg-surface text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 {["Produto", "SKU", "Categoria", "Estoque", "Preço", "Margem", "Qualidade", "Status", "Ações"].map((h) => (
@@ -870,21 +1079,53 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
               {visibleRows.map((p) => {
                 const score = catalogQualityScore(p);
                 const iaStub = p.metadata && typeof p.metadata.cadastroIa === "object";
+                const est = estoqueBadge(p.estoque);
+                const st = produtoStatusBadge(p.status);
+                const inativo = p.status === "Inativo";
                 return (
-                  <tr key={p.id} className="hover:bg-accent/40">
-                    <td className="px-4 py-3">
+                  <tr
+                    key={p.id}
+                    className={`hover:bg-accent/40 ${inativo ? "bg-muted/20 opacity-80" : ""}`}
+                  >
+                    <td className="px-4 py-3 min-w-0">
                       <div className="font-medium text-foreground">{p.nome}</div>
                       <div className="text-xs text-muted-foreground">{p.marca} • {p.fornecedor}</div>
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-foreground">{p.sku}</td>
+                    <td className="px-4 py-3 min-w-0">
+                      {(() => {
+                        const skuLimpo = displaySku(p.sku);
+                        const tinhaPrefixo = skuLimpo !== "" && skuLimpo !== (p.sku ?? "").trim();
+                        return (
+                          <div
+                            className="font-mono text-xs text-foreground"
+                            title={tinhaPrefixo ? `Código no banco: ${p.sku}` : undefined}
+                          >
+                            {skuLimpo || <span className="text-muted-foreground">—</span>}
+                          </div>
+                        );
+                      })()}
+                      {p.barras && p.barras !== "—" && p.barras !== p.sku && (
+                        <div
+                          className="mt-0.5 inline-flex items-center gap-1 text-[10px] text-muted-foreground"
+                          title="Código de barras (EAN/GTIN)"
+                        >
+                          <Barcode className="h-3 w-3 shrink-0" />
+                          <span className="font-mono">{p.barras}</span>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3"><Badge>{p.categoria}</Badge></td>
-                    <td className="px-4 py-3"><Badge tone={p.estoque === 0 ? "danger" : p.estoque < 6 ? "warning" : "success"}>{p.estoque}</Badge></td>
+                    <td className="px-4 py-3">
+                      <span title={est.title}>
+                        <Badge tone={est.tone}>{est.label}</Badge>
+                      </span>
+                    </td>
                     <td className="px-4 py-3 font-medium text-foreground">{p.preco ? `R$ ${p.preco}` : <span className="text-destructive">—</span>}</td>
                     <td className="px-4 py-3 text-foreground">{p.margem ? `${p.margem.toFixed(1)}%` : "—"}</td>
                     <td className="px-4 py-3"><QualityScore value={score} /></td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1">
-                        {p.status === "Incompleto" && <Badge tone="warning">Incompleto</Badge>}
+                        {p.status === "Incompleto" && <Badge tone="warning">Cadastro incompleto</Badge>}
                         {iaStub && (
                           <Badge tone="primary">
                             <Sparkles className="mr-1 inline h-3 w-3" /> pipeline
@@ -916,50 +1157,52 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
                             });
                           }}
                           className="inline-flex"
-                          title="Ativar/Inativar"
+                          title={inativo ? "Clique para reativar o produto" : "Clique para inativar o produto"}
                         >
-                        <Badge tone={p.status === "Ativo" ? "success" : "warning"}>{p.status === "Incompleto" ? "Rascunho" : p.status}</Badge>
+                        <Badge tone={st.tone}>{st.label}</Badge>
                         </button>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground cursor-not-allowed" title="Fase 2" type="button" disabled>
-                          Anúncio
-                        </button>
-                        <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground cursor-not-allowed" title="Fase 2" type="button" disabled>
-                          Publicar
-                        </button>
+                      <div className="flex min-w-[10.5rem] flex-wrap items-center gap-1">
                         <button
-                          className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/25 dark:text-emerald-400"
-                          title="Entrada / ajuste de estoque"
+                          className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-1.5 text-[11px] font-medium text-emerald-600 hover:bg-emerald-500/25 dark:text-emerald-400"
+                          title="Entrada ou ajuste de estoque"
                           type="button"
                           onClick={() => setEstoqueProduto(p)}
                         >
-                          <Package className="h-3 w-3" /> Estoque
+                          <Package className="h-3 w-3 shrink-0" /> Estoque
                         </button>
                         <button
-                          className="flex items-center gap-1 rounded-md bg-primary/15 px-2 py-1 text-[11px] font-medium text-primary hover:bg-primary/25"
-                          title="Editar ficha"
+                          className="flex items-center gap-1 rounded-md bg-primary/15 px-2 py-1.5 text-[11px] font-medium text-primary hover:bg-primary/25"
+                          title="Editar ficha do produto"
                           type="button"
                           onClick={() => {
                             setEditing(p);
                             m.openIt();
                           }}
                         >
-                          <Edit3 className="h-3 w-3" /> Editar
+                          <Edit3 className="h-3 w-3 shrink-0" /> Editar
                         </button>
                         <button
-                          className="flex items-center gap-1 rounded-md bg-destructive/15 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/25"
-                          title="Excluir produto"
+                          className="flex items-center gap-1 rounded-md bg-destructive/15 px-2 py-1.5 text-[11px] font-medium text-destructive hover:bg-destructive/25"
+                          title="Excluir produto permanentemente"
                           type="button"
                           onClick={() => {
                             setDeleting(p);
                             setDeleteResult(null);
                           }}
                         >
-                          <Trash2 className="h-3 w-3" /> Excluir
+                          <Trash2 className="h-3 w-3 shrink-0" /> Excluir
                         </button>
+                        <span className="hidden xl:contents">
+                          <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground cursor-not-allowed" title="Em breve" type="button" disabled>
+                            Anúncio
+                          </button>
+                          <button className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground cursor-not-allowed" title="Em breve" type="button" disabled>
+                            Publicar
+                          </button>
+                        </span>
                       </div>
                     </td>
                   </tr>
@@ -969,6 +1212,7 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
           </table>
         </div>
       </Card>
+      )}
 
       <ProductAIModal
         open={m.open}
@@ -1095,6 +1339,7 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
                       setDeleteResult(res);
                       if (res.ok) {
                         await refreshRows();
+                        void refreshAlerts();
                         setDeleting(null);
                         setDeleteResult(null);
                       }
@@ -1118,7 +1363,15 @@ function ProdutosPanel({ storeId }: { storeId: string }) {
 }
 
 /* ───── SERVIÇOS ───── */
-function ServicosPanel({ storeId }: { storeId: string }) {
+function ServicosPanel({
+  storeId,
+  autoOpen,
+  onAutoOpenConsumed,
+}: {
+  storeId: string;
+  autoOpen?: boolean;
+  onAutoOpenConsumed?: () => void;
+}) {
   const m = useToggle();
   const [editing, setEditing] = useState<ServicoDTO | null>(null);
   const [rows, setRows] = useState<ServicoDTO[]>([]);
@@ -1140,6 +1393,13 @@ function ServicosPanel({ storeId }: { storeId: string }) {
   const garantiaRef = useRef<HTMLInputElement | null>(null);
   const termoRef = useRef<HTMLTextAreaElement | null>(null);
   const statusRef = useRef<HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    if (autoOpen) {
+      m.openIt();
+      onAutoOpenConsumed?.();
+    }
+  }, [autoOpen, onAutoOpenConsumed, m]);
 
   const refresh = useMemo(
     () => async () => {
@@ -1299,7 +1559,15 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /* ───── FORNECEDORES ───── */
-function FornecedoresPanel({ storeId }: { storeId: string }) {
+function FornecedoresPanel({
+  storeId,
+  autoOpen,
+  onAutoOpenConsumed,
+}: {
+  storeId: string;
+  autoOpen?: boolean;
+  onAutoOpenConsumed?: () => void;
+}) {
   const m = useToggle();
   const [rows, setRows] = useState<FornecedorDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1319,6 +1587,13 @@ function FornecedoresPanel({ storeId }: { storeId: string }) {
   const pagamentoRef = useRef<HTMLInputElement | null>(null);
   const obsRef = useRef<HTMLTextAreaElement | null>(null);
   const statusRef = useRef<HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    if (autoOpen) {
+      m.openIt();
+      onAutoOpenConsumed?.();
+    }
+  }, [autoOpen, onAutoOpenConsumed, m]);
 
   const refresh = useMemo(
     () => async () => {
@@ -1492,7 +1767,15 @@ function FornecedoresPanel({ storeId }: { storeId: string }) {
 }
 
 /* ───── TÉCNICOS ───── */
-function TecnicosPanel({ storeId }: { storeId: string }) {
+function TecnicosPanel({
+  storeId,
+  autoOpen,
+  onAutoOpenConsumed,
+}: {
+  storeId: string;
+  autoOpen?: boolean;
+  onAutoOpenConsumed?: () => void;
+}) {
   const m = useToggle();
   const [rows, setRows] = useState<TecnicoDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1508,6 +1791,13 @@ function TecnicosPanel({ storeId }: { storeId: string }) {
   const comissaoRef = useRef<HTMLInputElement | null>(null);
   const permissaoRef = useRef<HTMLSelectElement | null>(null);
   const statusRef = useRef<HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    if (autoOpen) {
+      m.openIt();
+      onAutoOpenConsumed?.();
+    }
+  }, [autoOpen, onAutoOpenConsumed, m]);
 
   const refresh = useMemo(
     () => async () => {
@@ -1686,7 +1976,15 @@ function TecnicosPanel({ storeId }: { storeId: string }) {
 }
 
 /* ───── EQUIPAMENTOS ───── */
-function EquipamentosPanel({ storeId }: { storeId: string }) {
+function EquipamentosPanel({
+  storeId,
+  autoOpen,
+  onAutoOpenConsumed,
+}: {
+  storeId: string;
+  autoOpen?: boolean;
+  onAutoOpenConsumed?: () => void;
+}) {
   const m = useToggle();
   const [rows, setRows] = useState<EquipamentoModeloDTO[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1703,6 +2001,13 @@ function EquipamentosPanel({ storeId }: { storeId: string }) {
   const defectsRef = useRef<HTMLTextAreaElement | null>(null);
   const checklistRef = useRef<HTMLTextAreaElement | null>(null);
   const statusRef = useRef<HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    if (autoOpen) {
+      m.openIt();
+      onAutoOpenConsumed?.();
+    }
+  }, [autoOpen, onAutoOpenConsumed, m]);
 
   const refresh = useMemo(
     () => async () => {

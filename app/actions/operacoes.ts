@@ -292,10 +292,13 @@ export async function updateOSStatus(
     });
   }
 
+  // Operador da sessão — fonte única para auditoria das movimentações de estoque desta transição.
+  const operadorEstoque = getOperatorLabelFromSession(await auth());
+
   // Restauração automática do estoque quando a OS sai de "entregue" ou é cancelada.
   // Importante: falhas NÃO podem quebrar a transição de status.
   if (normalizeOperacaoStatus((current as OperacoesOSPayload).status) === "entregue" && effective !== "entregue") {
-    const r = await restoreEstoqueFromOS({ storeId, osId, motivo: "automatico" });
+    const r = await restoreEstoqueFromOS({ storeId, osId, motivo: "automatico", operador: operadorEstoque });
     if (!r.ok) {
       await appendTimelineEvent<OperacoesOSPayload>(prisma, {
         storeId,
@@ -304,7 +307,7 @@ export async function updateOSStatus(
       });
     }
   } else if (effective === "cancelada") {
-    const r = await restoreEstoqueFromOS({ storeId, osId, motivo: "automatico" });
+    const r = await restoreEstoqueFromOS({ storeId, osId, motivo: "automatico", operador: operadorEstoque });
     if (!r.ok) {
       await appendTimelineEvent<OperacoesOSPayload>(prisma, {
         storeId,
@@ -317,7 +320,7 @@ export async function updateOSStatus(
   // Consumo real de estoque (idempotente) apenas quando a OS vira entregue.
   // Importante: falhas NÃO podem quebrar a transição de status.
   if (effective === "entregue") {
-    const r = await consumeEstoqueFromOS({ storeId, osId, osPayload: next as unknown as OrdemServico });
+    const r = await consumeEstoqueFromOS({ storeId, osId, osPayload: next as unknown as OrdemServico, operador: operadorEstoque });
     if (!r.ok) {
       await appendTimelineEvent<OperacoesOSPayload>(prisma, {
         storeId,
@@ -418,7 +421,8 @@ export async function updateOSPayload(
   // Importante: falhas NÃO podem quebrar o update do payload.
   const revisaoKey = (nextWithPolicy as any)?.orcamentoRevisaoAtual?.revisadoEm as string | undefined;
   if (typeof revisaoKey === "string" && revisaoKey) {
-    const r = await applyEstoqueDelta({ storeId, osId, osPayload: nextWithPolicy as unknown as OrdemServico, revisaoKey });
+    const operadorDelta = getOperatorLabelFromSession(await auth());
+    const r = await applyEstoqueDelta({ storeId, osId, osPayload: nextWithPolicy as unknown as OrdemServico, revisaoKey, operador: operadorDelta });
     if (!r.ok) {
       await appendTimelineEvent<OperacoesOSPayload>(prisma, {
         storeId,

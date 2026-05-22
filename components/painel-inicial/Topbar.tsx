@@ -44,14 +44,14 @@ const novoItems: NovoItem[] = [
   },
   {
     label: "Novo Cliente",
-    href: "/dashboard/clientes",
+    href: "/dashboard/cadastros-v2",
     icon: UserPlus,
     kbd: "N C",
     visible: (p) => p.hubs.cadastros,
   },
   {
     label: "Novo Produto",
-    href: "/dashboard/estoque",
+    href: "/dashboard/cadastros-v2",
     icon: Package,
     kbd: "N P",
     visible: (p) => p.hubs.cadastros,

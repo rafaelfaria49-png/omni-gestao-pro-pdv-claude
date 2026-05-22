@@ -13,7 +13,7 @@ export function Modal({ open, onClose, title, subtitle, children, size = "lg" }:
       <div className={`relative w-full ${w} max-h-[90vh] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl flex flex-col`}>
         <div
           data-omni-ui-kit="modal-header"
-          className="flex items-start justify-between gap-3 border-b border-border px-4 py-3"
+          className="flex items-start justify-between gap-3 border-b border-border px-5 py-4 md:px-6"
         >
           <div>
             <h2 className="text-base font-semibold leading-tight text-foreground">{title}</h2>
@@ -23,7 +23,7 @@ export function Modal({ open, onClose, title, subtitle, children, size = "lg" }:
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div data-omni-ui-kit="modal-body" className="overflow-y-auto p-4">
+        <div data-omni-ui-kit="modal-body" className="overflow-y-auto p-5 md:p-6">
           {children}
         </div>
       </div>
@@ -33,8 +33,8 @@ export function Modal({ open, onClose, title, subtitle, children, size = "lg" }:
 
 export function Field({ label, children, span = 1 }: { label: string; children: ReactNode; span?: 1 | 2 }) {
   return (
-    <div className={span === 2 ? "col-span-2" : ""}>
-      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</label>
+    <div className={span === 2 ? "col-span-2 space-y-1.5" : "space-y-1.5"}>
+      <label className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</label>
       {children}
     </div>
   );
@@ -49,7 +49,7 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
       {...props}
       ref={ref}
       data-omni-ui-kit="control"
-      className={`w-full rounded-md border border-input bg-background text-foreground outline-none focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
+      className={`w-full h-10 px-3 rounded-lg border border-input bg-background text-foreground outline-none text-sm transition-colors focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
     />
   );
 });
@@ -63,7 +63,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
       {...props}
       ref={ref}
       data-omni-ui-kit="control"
-      className={`w-full rounded-md border border-input bg-background text-foreground outline-none focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
+      className={`w-full p-3 rounded-lg border border-input bg-background text-foreground outline-none text-sm transition-colors focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
     />
   );
 });
@@ -77,7 +77,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
       {...props}
       ref={ref}
       data-omni-ui-kit="control"
-      className={`w-full rounded-md border border-input bg-background text-foreground outline-none focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
+      className={`w-full h-10 px-3 rounded-lg border border-input bg-background text-foreground outline-none text-sm transition-colors focus:ring-2 focus:ring-ring ${props.className ?? ""}`}
     >
       {children}
     </select>

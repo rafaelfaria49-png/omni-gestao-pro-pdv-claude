@@ -124,12 +124,11 @@ export function ProductAIModal({
               </div>
             )}
             <button
-              onClick={runAI}
-              disabled={running}
-              className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
+              disabled
+              title="Preenchimento automático por IA — em breve. Preencha os campos manualmente abaixo."
+              className="flex cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-40"
             >
-              {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-              {running ? "Processando…" : "Preencher com IA"}
+              <Wand2 className="h-4 w-4" /> Preencher com IA · Em breve
             </button>
           </div>
 
@@ -152,7 +151,7 @@ export function ProductAIModal({
         {/* FORM (preenchido pela IA) */}
         <div>
           <SectionTitle title="Ficha do produto" subtitle={filled ? "Campos preenchidos automaticamente — revise se quiser." : "Preenchimento manual ou via IA acima."} />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-y-4 gap-x-6">
             <Field label="Nome" span={2}>
               <Input
                 ref={nomeRef}
@@ -185,9 +184,9 @@ export function ProductAIModal({
           <div className="mb-3 flex items-center gap-2">
             <ImageIcon className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold text-foreground">Imagem IA</h3>
-            <Badge tone="primary">Auto</Badge>
+            <Badge tone="warning">Em breve</Badge>
           </div>
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr]">
+          <div className="pointer-events-none grid gap-3 opacity-50 md:grid-cols-[1fr_1fr]">
             <div className="rounded-xl border border-dashed border-border bg-background p-6 text-center">
               <ImagePlus className="mx-auto h-7 w-7 text-muted-foreground" />
               <div className="mt-2 text-sm text-foreground">Soltar fotos do produto</div>
@@ -242,7 +241,7 @@ export function ProductAIModal({
 
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm">Cancelar</button>
-          <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm" type="button">
+          <button disabled title="Rascunho — em breve" className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm opacity-40" type="button">
             Salvar rascunho
           </button>
           <button

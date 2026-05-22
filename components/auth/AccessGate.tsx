@@ -224,7 +224,8 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
                       value={pin}
                       onChange={(e) => setPin(e.target.value)}
                       placeholder="Digite 123456"
-                      className="h-12 rounded-2xl border-border bg-background/70 pl-10 text-base"
+                      className="h-12 rounded-2xl border-border bg-background/70 text-base"
+                      style={{ paddingLeft: "2.5rem" }}
                     />
                   </div>
                 </div>
