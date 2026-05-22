@@ -96,6 +96,18 @@ export async function GET(
       ? ((venda.payload as Record<string, unknown>).sessaoId as string | undefined)
       : undefined
 
+    // Flags de cancelamento ERP-safe: houve reposição de estoque / estorno financeiro?
+    const [movEstoqueCancel, movFinCancel] = await Promise.all([
+      prisma.movimentacaoEstoque.findFirst({
+        where: { storeId, documento: pedidoId, origem: "cancelamento_pdv" },
+        select: { id: true },
+      }),
+      prisma.movimentacaoFinanceira.findFirst({
+        where: { storeId, referenciaId: pedidoId, tipo: "saida", origem: "cancelamento_pdv" },
+        select: { id: true },
+      }),
+    ])
+
     return NextResponse.json({
       ok: true,
       venda: {
@@ -111,6 +123,8 @@ export async function GET(
         canceladaEm: venda.canceladaEm?.toISOString() ?? null,
         canceladaPor: venda.canceladaPor ?? null,
         motivoCancelamento: venda.motivoCancelamento ?? null,
+        estoqueReposto: !!movEstoqueCancel,
+        estornoFinanceiro: !!movFinCancel,
         sessaoId: sessaoIdPayload ?? null,
         pagamentos: extractPayments(venda.payload),
         itens: venda.itens.map((it) => ({

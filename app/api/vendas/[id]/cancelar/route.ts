@@ -15,11 +15,17 @@ import { opsLojaIdFromRequest, requireOpsSubscription } from "@/lib/ops-api-gate
 import { estornarMovimentacaoPorReferencia } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
+import { isOsVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { auth } from "@/auth"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
+
+function arredonda2(n: number): number {
+  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
+}
 
 export async function POST(
   req: Request,
@@ -86,10 +92,15 @@ export async function POST(
       )
     }
 
-    // Verificar se há devoluções vinculadas
+    // Verificar se há devoluções vinculadas (com itens para o netting de estoque)
     const devolucoes = await prisma.devolucaoVenda.findMany({
       where: { storeId, vendaLocalId: pedidoId },
-      select: { id: true, tipo: true, valorTotal: true },
+      select: {
+        id: true,
+        tipo: true,
+        valorTotal: true,
+        itens: { select: { inventoryId: true, quantidade: true } },
+      },
     })
 
     const hasPartialReturn = devolucoes.length > 0 && venda.status !== "devolvida"
@@ -116,19 +127,148 @@ export async function POST(
 
     const now = new Date()
     const operadorCancelamento = canceladaPor?.trim() || "Operador"
+    // Operador para a trilha de auditoria das movimentações (preferir sessão NextAuth).
+    const operadorLedger =
+      (session?.user ? getOperatorLabelFromSession(session) : "") || operadorCancelamento
+    // sessaoId apenas como metadata no estorno — NÃO reabrimos sessão fechada (risco documentado).
+    const sessaoIdVenda =
+      venda.payload && typeof venda.payload === "object"
+        ? ((venda.payload as Record<string, unknown>).sessaoId as string | undefined)
+        : undefined
 
-    await prisma.venda.update({
-      where: { id: venda.id },
-      data: {
-        status: "cancelada",
-        canceladaEm: now,
-        canceladaPor: operadorCancelamento,
-        motivoCancelamento: motivo.trim(),
-      },
+    let estoqueRepostoCount = 0
+    let estornoVendaRealizado = false
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Marca a venda como cancelada
+      await tx.venda.update({
+        where: { id: venda.id },
+        data: {
+          status: "cancelada",
+          canceladaEm: now,
+          canceladaPor: operadorCancelamento,
+          motivoCancelamento: motivo.trim(),
+        },
+      })
+
+      // Resolução de produto (id|sku|barcode) com cache por inventoryId.
+      const resolveCache = new Map<string, string | null>()
+      const resolveProdutoId = async (rawInvId: string): Promise<string | null> => {
+        if (resolveCache.has(rawInvId)) return resolveCache.get(rawInvId) ?? null
+        const p = await tx.produto.findFirst({
+          where: { storeId, OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }] },
+          select: { id: true },
+        })
+        const id = p?.id ?? null
+        resolveCache.set(rawInvId, id)
+        return id
+      }
+
+      // 2. Reposição de estoque — repõe o LÍQUIDO (vendido − já devolvido na Fase 0),
+      // evitando duplicidade de entrada quando a venda já tem devoluções. origem "cancelamento_pdv".
+      const soldByProdutoId = new Map<string, number>()
+      for (const it of venda.itens) {
+        const raw = (it.inventoryId ?? "").trim()
+        if (!raw || isOsVirtualSaleLine(raw)) continue
+        const q = Math.max(0, Math.round(it.quantidade))
+        if (q <= 0) continue
+        const pid = await resolveProdutoId(raw)
+        if (!pid) continue
+        soldByProdutoId.set(pid, (soldByProdutoId.get(pid) ?? 0) + q)
+      }
+      const returnedByProdutoId = new Map<string, number>()
+      for (const dev of devolucoes) {
+        for (const it of dev.itens) {
+          const raw = (it.inventoryId ?? "").trim()
+          if (!raw || isOsVirtualSaleLine(raw)) continue
+          const q = Math.max(0, Math.round(it.quantidade))
+          if (q <= 0) continue
+          const pid = await resolveProdutoId(raw)
+          if (!pid) continue
+          returnedByProdutoId.set(pid, (returnedByProdutoId.get(pid) ?? 0) + q)
+        }
+      }
+      for (const [produtoId, sold] of soldByProdutoId) {
+        const net = sold - (returnedByProdutoId.get(produtoId) ?? 0)
+        if (net <= 0) continue
+        // Idempotência: não repor duas vezes a mesma venda/produto.
+        const jaExiste = await tx.movimentacaoEstoque.findFirst({
+          where: { storeId, documento: pedidoId, produtoId, origem: "cancelamento_pdv" },
+          select: { id: true },
+        })
+        if (jaExiste) continue
+        const atual = await tx.produto.findUnique({
+          where: { id: produtoId },
+          select: { stock: true, precoCusto: true, sku: true, name: true },
+        })
+        if (!atual) continue
+        const estoqueAntes = atual.stock
+        const custo = arredonda2(Math.max(0, atual.precoCusto))
+        await tx.produto.update({ where: { id: produtoId }, data: { stock: { increment: net } } })
+        await tx.movimentacaoEstoque.create({
+          data: {
+            storeId,
+            produtoId,
+            produtoSku: atual.sku ?? null,
+            produtoNome: atual.name,
+            tipo: "entrada",
+            origem: "cancelamento_pdv",
+            quantidade: net,
+            estoqueAntes,
+            estoqueDepois: estoqueAntes + net,
+            custoUnitario: custo,
+            custoMedioAntes: custo,
+            custoMedioDepois: custo,
+            valorTotal: arredonda2(net * custo),
+            documento: pedidoId,
+            motivo: `Cancelamento venda ${pedidoId}`,
+            usuario: operadorLedger || null,
+          },
+        })
+        estoqueRepostoCount += 1
+      }
+
+      // 3. Estorno financeiro à vista — reverte o valor LÍQUIDO da entrada de venda
+      // (origem "venda") descontando o que já foi estornado por devoluções. Idempotente.
+      const jaEstornado = await tx.movimentacaoFinanceira.findFirst({
+        where: { storeId, referenciaId: pedidoId, tipo: "saida", origem: "cancelamento_pdv" },
+        select: { id: true },
+      })
+      if (!jaEstornado) {
+        const entradas = await tx.movimentacaoFinanceira.findMany({
+          where: { storeId, referenciaId: pedidoId, tipo: "entrada", origem: "venda" },
+          select: { valor: true },
+        })
+        const valorEntrada = arredonda2(entradas.reduce((s, m) => s + (m.valor ?? 0), 0))
+        let valorJaRefund = 0
+        const devIds = devolucoes.map((d) => d.id)
+        if (devIds.length > 0) {
+          const refunds = await tx.movimentacaoFinanceira.findMany({
+            where: { storeId, referenciaId: { in: devIds }, tipo: "saida", origem: "devolucao_pdv" },
+            select: { valor: true },
+          })
+          valorJaRefund = arredonda2(refunds.reduce((s, m) => s + (m.valor ?? 0), 0))
+        }
+        const valorEstorno = arredonda2(Math.max(0, valorEntrada - valorJaRefund))
+        if (valorEstorno > 0) {
+          await tx.movimentacaoFinanceira.create({
+            data: {
+              storeId,
+              tipo: "saida",
+              valor: valorEstorno,
+              descricao: `Estorno cancelamento venda ${pedidoId}${sessaoIdVenda ? ` | sessão ${sessaoIdVenda}` : ""}`,
+              origem: "cancelamento_pdv",
+              referenciaId: pedidoId,
+            },
+          })
+          estornoVendaRealizado = true
+        }
+      }
     })
 
-    // Estornar movimentação financeira se houver contaReceberTitulo vinculado
-    let estornoRealizado = false
+    // 4. Estorno do título à prazo (Contas a Receber), quando houver — lógica existente.
+    // Mantido fora da transação por reaproveitar o recálculo de saldo de carteira.
+    let estornoReceber = false
     if (venda.contaReceberTituloId) {
       try {
         const res = await estornarMovimentacaoPorReferencia(
@@ -136,9 +276,9 @@ export async function POST(
           venda.contaReceberTituloId,
           "receber"
         )
-        estornoRealizado = res.ok && res.action === "created"
+        estornoReceber = res.ok && res.action === "created"
       } catch (e) {
-        console.error("[vendas/cancelar] estorno financeiro falhou:", e)
+        console.error("[vendas/cancelar] estorno financeiro (a prazo) falhou:", e)
       }
     }
 
@@ -149,7 +289,9 @@ export async function POST(
       canceladaEm: now.toISOString(),
       canceladaPor: operadorCancelamento,
       motivoCancelamento: motivo.trim(),
-      estornoFinanceiro: estornoRealizado,
+      estoqueReposto: estoqueRepostoCount,
+      estornoVenda: estornoVendaRealizado,
+      estornoFinanceiro: estornoReceber || estornoVendaRealizado,
       devolucoesMantidas: devolucoes.length,
     })
   } catch (e) {

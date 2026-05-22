@@ -13,6 +13,26 @@
 
 ## ✅ Concluído e Funcionando
 
+### Cancelamento de Venda — Fase 2 ERP-safe (concluído 22/05/2026)
+
+**Contexto:** o cancelamento marcava `status="cancelada"` + motivo/operador/data e estornava **apenas** o título à prazo (`contaReceberTituloId`). **Não repunha estoque** nem estornava a entrada à vista (`MovimentacaoFinanceira origem:"venda"`). Sem trilha de auditoria de estoque/financeiro no cancelamento.
+
+**Arquivos alterados:**
+
+| Arquivo | Mudança |
+|---|---|
+| `app/api/vendas/[id]/cancelar/route.ts` | Cancelamento agora roda em **transação**: (1) marca cancelada; (2) **repõe estoque** por `ItemVenda` resolvendo produto via `OR[id,sku,barcode]`, criando `MovimentacaoEstoque(tipo:"entrada", origem:"cancelamento_pdv", documento=pedidoId)` — repõe o **líquido** (vendido − já devolvido na Fase 0) para não duplicar entrada; (3) **estorna à vista** criando `MovimentacaoFinanceira(saida, origem:"cancelamento_pdv")` pelo valor líquido (entrada `venda` − refunds de devolução). Idempotente em estoque (`documento+produtoId+origem`) e financeiro (`referenciaId+tipo+origem`). `sessaoId` registrado na descrição do estorno (não reabre sessão). Estorno à prazo (`contaReceberTitulo`) mantido. |
+| `app/api/vendas/[id]/route.ts` | Detalhe expõe `estoqueReposto` e `estornoFinanceiro` (flags do cancelamento). |
+| `components/dashboard/vendas/vendas-arquivo-geral.tsx` | Banner de cancelamento mostra "Estoque reposto" / "Estorno financeiro registrado". |
+
+**Idempotência:** retry do cancelamento é bloqueado por `status==="cancelada"` (409) **e** por guards `findFirst` em estoque/financeiro (defesa em profundidade). Reposição/estorno nunca duplicam.
+
+**Validação:** `npx tsc --noEmit` → 0 erros. `npx next build --webpack` → Compiled successfully.
+
+**Riscos/pendências:** sessão de caixa fechada não é reaberta — estorno é registrado mesmo assim (auditável; impacto operacional documentado). Crédito/vale persistente segue fora de escopo (Fase 1).
+
+---
+
 ### Trocas & Devoluções — Fase 0 (unificação real, concluído 22/05/2026)
 
 **Contexto:** o F8 do PDV Assistência abria um `TrocasModal` 100% mock (inputs `itemDesc`/`motivo`, toast fake, `setTimeout(1500)`). Os botões "Trocas"/"Devoluções" do shell Omni/Classic eram placeholders. O Histórico de Vendas não tinha entrada para troca/devolução. A devolução existente (`/api/ops/devolucao`) persistia `DevolucaoVenda` + financeiro, **mas não devolvia estoque real** nem atualizava `Venda.status`.

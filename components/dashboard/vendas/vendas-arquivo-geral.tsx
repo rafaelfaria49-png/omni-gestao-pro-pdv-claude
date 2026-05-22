@@ -121,6 +121,8 @@ type VendaDetalhe = {
   canceladaEm: string | null
   canceladaPor: string | null
   motivoCancelamento: string | null
+  estoqueReposto?: boolean
+  estornoFinanceiro?: boolean
   sessaoId: string | null
   pagamentos: Array<{ label: string; valor: number }>
   itens: Array<{ id: string; nome: string; quantidade: number; precoUnitario: number; lineTotal: number }>
@@ -933,6 +935,12 @@ export function VendasArquivoGeral() {
                       )}
                       {detalhe.canceladaPor && (
                         <p className="text-[11px] opacity-80">Por: {detalhe.canceladaPor}</p>
+                      )}
+                      {detalhe.status === "cancelada" && detalhe.estoqueReposto && (
+                        <p className="text-[11px] opacity-80">Estoque reposto ao cancelar</p>
+                      )}
+                      {detalhe.status === "cancelada" && detalhe.estornoFinanceiro && (
+                        <p className="text-[11px] opacity-80">Estorno financeiro registrado</p>
                       )}
                     </div>
                   </div>
