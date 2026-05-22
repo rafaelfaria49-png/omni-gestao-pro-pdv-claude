@@ -1,15 +1,17 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
 import {
-  Search, RefreshCw, ReceiptText, User, Calendar,
-  ShoppingBag, TrendingUp, BarChart3, AlertTriangle,
+  Search, RefreshCw,
+  TrendingUp, BarChart3, AlertTriangle,
   Printer, Eye, XCircle, ChevronLeft, ChevronRight,
-  CheckCircle, Filter, X, Tag, Clock, DollarSign, UserCheck,
+  CheckCircle, Filter, X, Tag, Clock, DollarSign, UserCheck, RotateCcw,
+  Receipt, Download, MoreHorizontal, Loader2, Calendar,
 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
@@ -28,6 +30,12 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet"
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -37,9 +45,33 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
+import { TrocasDevolucao } from "./trocas-devolucao"
 import { useToast } from "@/hooks/use-toast"
 import type { SaleRecord } from "@/lib/operations-sale-types"
 
@@ -98,6 +130,7 @@ type VendaDetalhe = {
     at: string
     tipo: string
     valorTotal: number
+    creditoEmitido: number
     operador: string
     motivo: string
     itens: Array<{ nome: string; quantidade: number; valorTotal: number }>
@@ -121,6 +154,18 @@ function fmtDate(iso: string) {
     })
   } catch {
     return iso
+  }
+}
+
+function fmtDateParts(iso: string): { date: string; time: string } {
+  try {
+    const d = new Date(iso)
+    return {
+      date: d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" }),
+      time: d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    }
+  } catch {
+    return { date: iso, time: "" }
   }
 }
 
@@ -204,6 +249,11 @@ export function VendasArquivoGeral() {
   // Cupom modal
   const [cupomOpen, setCupomOpen] = useState(false)
   const [cupomData, setCupomData] = useState<CupomData | null>(null)
+
+  // Troca / Devolução modal
+  const [trocaOpen, setTrocaOpen] = useState(false)
+  const [trocaSaleId, setTrocaSaleId] = useState<string | null>(null)
+  const [trocaInitialSale, setTrocaInitialSale] = useState<SaleRecord | undefined>(undefined)
 
   // Cancel dialog
   const [cancelandoId, setCancelandoId] = useState<string | null>(null)
@@ -395,6 +445,38 @@ export function VendasArquivoGeral() {
     }
   }, [cancelandoId, cancelMotivo, storeId, detalhe, openDetalhe, load, toast])
 
+  const openTroca = useCallback(
+    (vendaId: string) => {
+      setTrocaSaleId(vendaId)
+      setTrocaInitialSale(remoteSales.find((s) => s.id === vendaId))
+      setTrocaOpen(true)
+    },
+    [remoteSales],
+  )
+
+  const closeTroca = useCallback(() => {
+    setTrocaOpen(false)
+    setTrocaSaleId(null)
+    setTrocaInitialSale(undefined)
+  }, [])
+
+  const startCancel = useCallback((vendaId: string) => {
+    setCancelandoId(vendaId)
+    setCancelMotivo("")
+    setCancelConfirmForcar(false)
+  }, [])
+
+  const clearAllFilters = useCallback(() => {
+    setStatusFiltro("todos")
+    setPagamentoFiltro("todos")
+    setBuscaInput("")
+    setBusca("")
+    setOperadorFiltro("")
+    setOperadorInput("")
+    setFromDate("")
+    setToDate("")
+  }, [])
+
   // ── KPI Cards ──────────────────────────────────────────────────────────────
 
   const kpiCards = [
@@ -431,17 +513,44 @@ export function VendasArquivoGeral() {
   const hasActiveFilters = statusFiltro !== "todos" || pagamentoFiltro !== "todos" || busca !== "" || fromDate !== "" || toDate !== "" || operadorFiltro !== ""
 
   return (
-    <div className="space-y-6 pb-8">
+    <TooltipProvider delayDuration={300}>
+    <div className="space-y-5 pb-8 min-w-0">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Histórico de Vendas</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Vendas reais registradas no banco de dados · unidade{" "}
-          <span className="font-mono text-xs">{storeId}</span>
-          {remoteLoading && (
-            <span className="text-muted-foreground text-xs ml-2">· sincronizando…</span>
-          )}
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3 min-w-0">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary shadow-sm">
+            <Receipt className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Histórico de Vendas</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Consulte, reimprima, cancele ou registre trocas e devoluções · unidade{" "}
+              <span className="font-mono text-xs">{storeId}</span>
+              {remoteLoading && (
+                <span className="inline-flex items-center gap-1 ml-2 text-xs">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  sincronizando…
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="sm" disabled className="gap-1.5 opacity-70">
+                <Download className="h-4 w-4" />
+                Exportar
+                <Badge variant="secondary" className="text-[9px] px-1 py-0 font-normal">Em breve</Badge>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Exportação CSV/Excel — disponível em breve</TooltipContent>
+          </Tooltip>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={load} disabled={loading}>
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       {/* KPI bar */}
@@ -465,59 +574,49 @@ export function VendasArquivoGeral() {
         ))}
       </div>
 
-      {/* Search + filters */}
-      <Card className="border-border bg-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <ReceiptText className="h-4 w-4 text-muted-foreground" />
-            Registros de vendas
-            {hasActiveFilters && (
-              <Badge variant="secondary" className="ml-auto text-[10px] bg-primary/10 text-primary border-primary/20">
-                Filtros ativos
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-            <div className="relative flex-1">
+      {/* Toolbar operacional */}
+      <Card className="border-border bg-card shadow-sm">
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+            <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                className="pl-9"
-                placeholder="Buscar por cliente ou ID da venda…"
+                className="pl-9 h-10 bg-background"
+                placeholder="Buscar por cupom, cliente ou ID da venda…"
                 value={buscaInput}
                 onChange={(e) => setBuscaInput(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant={showFilters ? "default" : "outline"}
                 size="sm"
-                className="gap-1.5"
+                className="gap-1.5 h-9"
                 onClick={() => setShowFilters((v) => !v)}
               >
                 <Filter className="h-4 w-4" />
                 Filtros
+                {hasActiveFilters && (
+                  <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground/20 text-[10px] font-bold">
+                    !
+                  </span>
+                )}
               </Button>
-              <p className="text-xs text-muted-foreground whitespace-nowrap hidden sm:block">
-                {loading ? "Carregando…" : `${total.toLocaleString("pt-BR")} venda${total !== 1 ? "s" : ""}`}
-              </p>
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={load} title="Atualizar">
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-              </Button>
+              <Badge variant="outline" className="h-9 px-3 font-normal text-muted-foreground border-border">
+                {loading ? "…" : `${total.toLocaleString("pt-BR")} registro${total !== 1 ? "s" : ""}`}
+              </Badge>
             </div>
           </div>
 
-          {/* Expandable filters */}
           {showFilters && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-1 border-t border-border">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 pt-3 border-t border-border">
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
                   <Tag className="h-3 w-3" /> Status
-                </label>
+                </Label>
                 <Select value={statusFiltro} onValueChange={setStatusFiltro}>
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="Todos os status" />
+                  <SelectTrigger className="h-9 text-sm bg-background">
+                    <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos os status</SelectItem>
@@ -529,12 +628,12 @@ export function VendasArquivoGeral() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
                   <DollarSign className="h-3 w-3" /> Pagamento
-                </label>
+                </Label>
                 <Select value={pagamentoFiltro} onValueChange={setPagamentoFiltro}>
-                  <SelectTrigger className="h-9 text-sm">
-                    <SelectValue placeholder="Todas as formas" />
+                  <SelectTrigger className="h-9 text-sm bg-background">
+                    <SelectValue placeholder="Todas" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todas as formas</SelectItem>
@@ -549,55 +648,31 @@ export function VendasArquivoGeral() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Data inicial
-                </label>
-                <Input
-                  type="date"
-                  className="h-9 text-sm"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                />
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> De
+                </Label>
+                <Input type="date" className="h-9 text-sm bg-background" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Data final
-                </label>
-                <Input
-                  type="date"
-                  className="h-9 text-sm"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                />
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> Até
+                </Label>
+                <Input type="date" className="h-9 text-sm bg-background" value={toDate} onChange={(e) => setToDate(e.target.value)} />
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
                   <UserCheck className="h-3 w-3" /> Operador
-                </label>
+                </Label>
                 <Input
-                  className="h-9 text-sm"
-                  placeholder="Filtrar por nome ou ID do operador…"
+                  className="h-9 text-sm bg-background"
+                  placeholder="Nome ou ID…"
                   value={operadorInput}
                   onChange={(e) => setOperadorInput(e.target.value)}
                 />
               </div>
               {hasActiveFilters && (
-                <div className="sm:col-span-2 flex justify-end">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground gap-1.5 h-8"
-                    onClick={() => {
-                      setStatusFiltro("todos")
-                      setPagamentoFiltro("todos")
-                      setBuscaInput("")
-                      setBusca("")
-                      setOperadorFiltro("")
-                      setOperadorInput("")
-                      setFromDate("")
-                      setToDate("")
-                    }}
-                  >
+                <div className="sm:col-span-2 lg:col-span-5 flex justify-end">
+                  <Button variant="ghost" size="sm" className="text-muted-foreground gap-1.5 h-8" onClick={clearAllFilters}>
                     <X className="h-3.5 w-3.5" />
                     Limpar filtros
                   </Button>
@@ -608,7 +683,7 @@ export function VendasArquivoGeral() {
         </CardContent>
       </Card>
 
-      {/* Content */}
+      {/* Tabela ERP */}
       {apiError ? (
         <div className="flex flex-col items-center gap-4 rounded-2xl border border-destructive/20 bg-destructive/5 px-8 py-14 text-center">
           <AlertTriangle className="h-8 w-8 text-destructive" />
@@ -621,157 +696,194 @@ export function VendasArquivoGeral() {
             Tentar novamente
           </Button>
         </div>
-      ) : loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-4">
-              <div className="space-y-2 flex-1">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-3 w-56" />
-              </div>
-              <Skeleton className="h-8 w-24" />
-            </div>
-          ))}
-        </div>
-      ) : mergedVendas.length === 0 ? (
-        <div className="flex flex-col items-center gap-5 rounded-2xl border border-dashed border-border bg-card px-8 py-16 text-center shadow-card">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <BarChart3 className="h-7 w-7 text-primary/70" />
-          </div>
-          <div className="space-y-1.5">
-            <h3 className="text-base font-semibold text-foreground">
-              {hasActiveFilters ? "Nenhuma venda encontrada" : "Nenhuma venda registrada"}
-            </h3>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              {hasActiveFilters
-                ? "Nenhum resultado com os filtros aplicados. Ajuste os filtros ou limpe a busca."
-                : "As vendas realizadas pelo PDV aparecerão aqui automaticamente após a sincronização com o banco."}
-            </p>
-          </div>
-          {hasActiveFilters && (
-            <Button variant="outline" size="sm" onClick={() => {
-              setStatusFiltro("todos")
-              setPagamentoFiltro("todos")
-              setBuscaInput("")
-              setBusca("")
-              setOperadorFiltro("")
-              setOperadorInput("")
-              setFromDate("")
-              setToDate("")
-            }}>
-              Limpar filtros
-            </Button>
-          )}
-        </div>
       ) : (
-        <div className="space-y-2">
-          {mergedVendas.map((v) => (
-            <div
-              key={v.id}
-              className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border bg-card p-4 transition-colors ${
-                v.cancelada
-                  ? "border-destructive/20 opacity-75 hover:opacity-100"
-                  : "border-border hover:bg-panel/60"
-              }`}
-            >
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-sm font-semibold text-foreground">{v.id}</span>
-                  <Badge
-                    variant="secondary"
-                    className={`border text-[10px] font-semibold px-1.5 py-0 ${statusBadgeClass(v.status)}`}
-                  >
-                    {statusLabel(v.status)}
-                  </Badge>
-                  {v.formaPagamento !== "—" && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
-                      {v.formaPagamento}
-                    </Badge>
-                  )}
-                  {remoteOnlyIds.has(v.id) && (
-                    <span className="bg-secondary text-muted-foreground text-[10px] px-1.5 py-0.5 rounded">
-                      Servidor
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    {v.cliente}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {fmtDate(v.at)}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <ShoppingBag className="h-3 w-3" />
-                    {v.quantidadeItens} item{v.quantidadeItens !== 1 ? "s" : ""}
-                  </span>
-                  {v.operador && (
-                    <span className="inline-flex items-center gap-1">
-                      <User className="h-3 w-3" />
-                      {v.operador}
-                    </span>
-                  )}
-                </div>
-                {v.cancelada && v.motivoCancelamento && (
-                  <p className="text-[11px] text-destructive/70 italic">
-                    Cancelada: {v.motivoCancelamento}
-                  </p>
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40 hover:bg-muted/40 border-border">
+                  <TableHead className="min-w-[130px] font-semibold text-foreground">Data / Hora</TableHead>
+                  <TableHead className="min-w-[120px] font-semibold text-foreground">Cupom</TableHead>
+                  <TableHead className="min-w-[140px] font-semibold text-foreground">Cliente</TableHead>
+                  <TableHead className="min-w-[100px] font-semibold text-foreground hidden md:table-cell">Pagamento</TableHead>
+                  <TableHead className="min-w-[80px] font-semibold text-foreground hidden lg:table-cell text-center">Itens</TableHead>
+                  <TableHead className="min-w-[90px] font-semibold text-foreground hidden xl:table-cell">Operador</TableHead>
+                  <TableHead className="min-w-[100px] font-semibold text-foreground">Status</TableHead>
+                  <TableHead className="min-w-[100px] font-semibold text-foreground text-right">Total</TableHead>
+                  <TableHead className="min-w-[180px] font-semibold text-foreground text-right sticky right-0 bg-muted/40 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
+                    Ações
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell colSpan={9} className="py-3">
+                        <Skeleton className="h-8 w-full" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : mergedVendas.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="py-16 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <BarChart3 className="h-10 w-10 text-muted-foreground/50" />
+                        <p className="font-medium text-foreground">
+                          {hasActiveFilters ? "Nenhuma venda encontrada" : "Nenhuma venda registrada"}
+                        </p>
+                        <p className="text-sm text-muted-foreground max-w-sm">
+                          {hasActiveFilters
+                            ? "Ajuste os filtros ou limpe a busca."
+                            : "As vendas do PDV aparecem aqui após sincronização com o banco."}
+                        </p>
+                        {hasActiveFilters && (
+                          <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                            Limpar filtros
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  mergedVendas.map((v) => {
+                    const { date, time } = fmtDateParts(v.at)
+                    return (
+                      <TableRow
+                        key={v.id}
+                        className={cn(
+                          "group border-border transition-colors",
+                          v.cancelada && "opacity-80 bg-destructive/[0.02]",
+                        )}
+                      >
+                        <TableCell className="tabular-nums">
+                          <div className="text-foreground font-medium">{date}</div>
+                          <div className="text-[11px] text-muted-foreground">{time}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-xs font-semibold text-foreground">{v.id}</span>
+                            {remoteOnlyIds.has(v.id) && (
+                              <Badge variant="secondary" className="text-[9px] px-1 py-0">Sync</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-foreground truncate max-w-[160px] inline-block" title={v.cliente}>
+                            {v.cliente}
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">
+                          <span className="text-xs text-muted-foreground">{v.formaPagamento}</span>
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell text-center tabular-nums text-muted-foreground">
+                          {v.quantidadeItens}
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell">
+                          <span className="text-xs text-muted-foreground truncate max-w-[100px] inline-block" title={v.operador ?? ""}>
+                            {v.operador ?? "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn("text-[10px] font-semibold", statusBadgeClass(v.status))}>
+                            {statusLabel(v.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className={cn("font-bold tabular-nums", v.cancelada && "line-through text-muted-foreground")}>
+                            {fmtBrl(v.total)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right sticky right-0 bg-card group-hover:bg-muted/50 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)] transition-colors">
+                          <div className="flex items-center justify-end gap-0.5">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openDetalhe(v.id)}>
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Detalhes</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openCupomFromRow(v.id)}>
+                                  <Printer className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Imprimir</TooltipContent>
+                            </Tooltip>
+                            {!v.cancelada && (
+                              <>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openTroca(v.id)}>
+                                      <RotateCcw className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Troca / Devolução</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => startCancel(v.id)}
+                                    >
+                                      <XCircle className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Cancelar venda</TooltipContent>
+                                </Tooltip>
+                              </>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 md:hidden">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem onClick={() => void openDetalhe(v.id)}>
+                                  <Eye className="h-4 w-4 mr-2" /> Detalhes
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => void openCupomFromRow(v.id)}>
+                                  <Printer className="h-4 w-4 mr-2" /> Imprimir
+                                </DropdownMenuItem>
+                                {!v.cancelada && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => openTroca(v.id)}>
+                                      <RotateCcw className="h-4 w-4 mr-2" /> Troca / Devolução
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => startCancel(v.id)}>
+                                      <XCircle className="h-4 w-4 mr-2" /> Cancelar venda
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
                 )}
-              </div>
+              </TableBody>
+            </Table>
+          </div>
 
-              <div className="flex items-center gap-2 justify-end shrink-0">
-                <div className="text-right mr-1">
-                  <p className={`font-bold ${v.cancelada ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                    {fmtBrl(v.total)}
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-xs"
-                  onClick={() => void openCupomFromRow(v.id)}
-                >
-                  <Printer className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Imprimir</span>
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-xs"
-                  onClick={() => void openDetalhe(v.id)}
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Detalhes</span>
-                </Button>
-              </div>
-            </div>
-          ))}
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4">
+          {totalPages > 1 && !loading && (
+            <div className="flex items-center justify-between border-t border-border px-4 py-3 bg-muted/20">
               <p className="text-xs text-muted-foreground">
-                Página {page + 1} de {totalPages}
+                Página {page + 1} de {totalPages} · {total.toLocaleString("pt-BR")} vendas
               </p>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page === 0}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                >
+                <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages - 1}
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                >
+                <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -896,6 +1008,14 @@ export function VendasArquivoGeral() {
                       ))}
                     </div>
                   )}
+                  {detalhe.itens.length > 0 && (
+                    <div className="flex justify-between text-sm text-muted-foreground pt-1">
+                      <span>Subtotal ({detalhe.itens.length} {detalhe.itens.length === 1 ? "item" : "itens"})</span>
+                      <span className="tabular-nums">
+                        {fmtBrl(detalhe.itens.reduce((acc, it) => acc + it.lineTotal, 0))}
+                      </span>
+                    </div>
+                  )}
                   {(detalhe.desconto ?? 0) > 0 && (
                     <div className="flex justify-between text-sm text-destructive">
                       <span>Desconto</span>
@@ -920,11 +1040,14 @@ export function VendasArquivoGeral() {
                         <div key={dev.id} className="rounded-lg border border-border bg-background/40 p-3 text-sm space-y-1">
                           <div className="flex justify-between">
                             <Badge variant="outline" className="text-[10px]">
-                              {dev.tipo === "vale_credito" ? "Vale/Crédito" : dev.tipo === "troca" ? "Troca" : "Estoque"}
+                              {dev.tipo === "vale_credito" ? "Vale/Crédito" : dev.tipo === "troca" ? "Troca" : dev.tipo === "devolucao" ? "Devolução" : "Estoque"}
                             </Badge>
                             <span className="font-semibold text-destructive">{fmtBrl(dev.valorTotal)}</span>
                           </div>
                           <p className="text-xs text-muted-foreground">{fmtDate(dev.at)} · {dev.operador || "Operador"}</p>
+                          {dev.creditoEmitido > 0 && (
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400">Crédito gerado: {fmtBrl(dev.creditoEmitido)}</p>
+                          )}
                           {dev.motivo && <p className="text-xs text-muted-foreground">Motivo: {dev.motivo}</p>}
                           {dev.itens.map((it, i) => (
                             <p key={i} className="text-xs text-foreground/70">{it.quantidade}x {it.nome}</p>
@@ -970,54 +1093,104 @@ export function VendasArquivoGeral() {
                   </Button>
                 )}
               </div>
+              {detalhe.status !== "cancelada" && detalhe.status !== "devolvida" && (
+                <Button
+                  variant="outline"
+                  className="w-full h-10 gap-2 text-sm"
+                  onClick={() => openTroca(detalhe.id)}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Trocar / Devolver
+                </Button>
+              )}
             </div>
           )}
         </SheetContent>
       </Sheet>
 
       {/* ── Cancel Dialog ──────────────────────────────────────────────────────── */}
-      <AlertDialog open={!!cancelandoId} onOpenChange={(o) => !o && setCancelandoId(null)}>
-        <AlertDialogContent className="border-border bg-card">
+      <AlertDialog
+        open={!!cancelandoId}
+        onOpenChange={(o) => {
+          if (!o && !cancelLoading) {
+            setCancelandoId(null)
+            setCancelMotivo("")
+            setCancelConfirmForcar(false)
+          }
+        }}
+      >
+        <AlertDialogContent className="border-border bg-card max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">
-              {cancelConfirmForcar ? "Confirmar cancelamento com devoluções" : "Cancelar venda"}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              {cancelConfirmForcar
-                ? "Esta venda possui devoluções registradas. O cancelamento irá apenas marcar a venda — as devoluções serão mantidas. Deseja continuar?"
-                : `Informe o motivo do cancelamento da venda ${cancelandoId ?? ""}.`}
-            </AlertDialogDescription>
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-destructive/10 text-destructive">
+                {cancelLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <XCircle className="h-5 w-5" />
+                )}
+              </span>
+              <div className="min-w-0 space-y-1">
+                <AlertDialogTitle className="text-foreground text-left">
+                  {cancelConfirmForcar ? "Confirmar cancelamento com devoluções" : "Cancelar venda"}
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-muted-foreground text-left">
+                  {cancelConfirmForcar
+                    ? "Esta venda possui devoluções registradas. O cancelamento irá apenas marcar a venda — as devoluções serão mantidas."
+                    : `A venda ${cancelandoId ?? ""} será marcada como cancelada no histórico.`}
+                </AlertDialogDescription>
+              </div>
+            </div>
           </AlertDialogHeader>
 
           {!cancelConfirmForcar && (
-            <div className="py-2">
-              <Input
-                placeholder="Motivo do cancelamento (obrigatório)…"
-                value={cancelMotivo}
-                onChange={(e) => setCancelMotivo(e.target.value)}
-                className="bg-background border-border"
-                autoFocus
-              />
+            <div className="space-y-3 py-1">
+              <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground flex items-center gap-1.5 mb-1">
+                  <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0" />
+                  Atenção
+                </p>
+                <p>
+                  O cancelamento registra o motivo e altera o status da venda. Reposição de estoque e estorno financeiro
+                  serão tratados na próxima fase.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cancel-motivo" className="text-sm text-foreground">
+                  Motivo do cancelamento <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
+                  id="cancel-motivo"
+                  placeholder="Descreva o motivo (obrigatório)…"
+                  value={cancelMotivo}
+                  onChange={(e) => setCancelMotivo(e.target.value)}
+                  className="min-h-[88px] resize-none bg-background border-border"
+                  disabled={cancelLoading}
+                  autoFocus
+                />
+              </div>
             </div>
           )}
 
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              className="border-border"
-              onClick={() => {
-                setCancelandoId(null)
-                setCancelMotivo("")
-                setCancelConfirmForcar(false)
-              }}
-            >
+          {cancelConfirmForcar && (
+            <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-xs text-muted-foreground">
+              Deseja continuar mesmo assim?
+            </div>
+          )}
+
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="border-border" disabled={cancelLoading}>
               Voltar
             </AlertDialogCancel>
             <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 gap-2"
               disabled={cancelLoading || (!cancelConfirmForcar && !cancelMotivo.trim())}
-              onClick={() => void handleCancelar(cancelConfirmForcar)}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleCancelar(cancelConfirmForcar)
+              }}
             >
-              {cancelLoading ? "Cancelando…" : cancelConfirmForcar ? "Confirmar mesmo assim" : "Cancelar venda"}
+              {cancelLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {cancelLoading ? "Cancelando…" : cancelConfirmForcar ? "Confirmar mesmo assim" : "Confirmar cancelamento"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1031,6 +1204,48 @@ export function VendasArquivoGeral() {
           data={cupomData}
         />
       )}
+
+      {/* ── Troca / Devolução ──────────────────────────────────────────────────── */}
+      <Dialog
+        open={trocaOpen}
+        onOpenChange={(o) => {
+          if (!o) closeTroca()
+        }}
+      >
+        <DialogContent className="max-h-[min(90vh,900px)] w-[min(100vw-2rem,42rem)] overflow-y-auto border-border bg-card p-0">
+          <DialogHeader className="border-b border-border px-4 py-3 sm:px-6">
+            <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-primary" />
+              Troca / Devolução
+              {trocaSaleId && (
+                <span className="font-mono text-xs font-normal text-muted-foreground">{trocaSaleId}</span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[calc(90vh-4rem)] overflow-y-auto p-4 sm:p-6">
+            <Suspense fallback={
+              <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span className="text-sm">Carregando formulário…</span>
+              </div>
+            }>
+              {trocaSaleId && (
+                <TrocasDevolucao
+                  key={trocaSaleId}
+                  initialSaleId={trocaSaleId}
+                  initialSale={trocaInitialSale}
+                  onRegistered={() => {
+                    load()
+                    if (detalhe?.id === trocaSaleId) void openDetalhe(trocaSaleId)
+                    closeTroca()
+                  }}
+                />
+              )}
+            </Suspense>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+    </TooltipProvider>
   )
 }

@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { useConfigEmpresa, configPadrao } from "@/lib/config-empresa"
 import { useOperationsStore, type SaleRecord } from "@/lib/operations-store"
@@ -18,7 +19,21 @@ import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 
-export function TrocasDevolucao() {
+/** Modos de operação expostos na UI. `troca`/`vale_credito` geram crédito local; `devolucao`/`somente_estoque` não. */
+type DevMode = "devolucao" | "troca" | "vale_credito" | "somente_estoque"
+
+export function TrocasDevolucao({
+  initialSaleId,
+  initialSale,
+  onRegistered,
+}: {
+  /** Pré-carrega uma venda pelo ID (ex.: abertura a partir do Histórico de Vendas). */
+  initialSaleId?: string
+  /** Snapshot da venda (ex.: de `/api/ops/vendas-list`) quando ainda não está no localStorage. */
+  initialSale?: SaleRecord
+  /** Disparado após o servidor confirmar a devolução — usado para refresh externo (histórico). */
+  onRegistered?: () => void
+} = {}) {
   const { config } = useConfigEmpresa()
   const { toast } = useToast()
   const { sales, registrarDevolucao, inventory } = useOperationsStore()
@@ -29,7 +44,8 @@ export function TrocasDevolucao() {
   const [busca, setBusca] = useState("")
   const [sale, setSale] = useState<SaleRecord | null>(null)
   const [qtyByLine, setQtyByLine] = useState<Record<string, string>>({})
-  const [mode, setMode] = useState<"vale_credito" | "somente_estoque">("vale_credito")
+  const [mode, setMode] = useState<DevMode>("vale_credito")
+  const [motivo, setMotivo] = useState("")
   const [cpfExtra, setCpfExtra] = useState("")
   const [nomeExtra, setNomeExtra] = useState("")
   const [lastDevolucao, setLastDevolucao] = useState<{
@@ -41,20 +57,29 @@ export function TrocasDevolucao() {
   const [candidateSales, setCandidateSales] = useState<SaleRecord[] | null>(null)
   const [candidateLabel, setCandidateLabel] = useState("")
 
-  // Prefill via URL: /?page=trocas&sale=VDA-...
+  // Prefill via prop `initialSaleId` (Histórico) ou URL: /?page=trocas&sale=VDA-...
   useEffect(() => {
-    const id = (searchParams.get("sale") || "").trim()
+    const id = (initialSaleId || searchParams.get("sale") || "").trim()
     if (!id) return
     setBusca(id)
     const upper = id.toUpperCase()
+    const idNorm = id.replace(/\s/g, "").toUpperCase()
+
+    if (initialSale && (initialSale.id.toUpperCase() === upper || initialSale.id.replace(/\s/g, "").toUpperCase() === idNorm)) {
+      aplicarVenda(initialSale)
+      return
+    }
+
     const s = sales.find(
-      (x) => x.id.toUpperCase() === upper || x.id.replace(/\s/g, "").toUpperCase() === upper.replace(/\s/g, "")
+      (x) =>
+        x.id.toUpperCase() === upper ||
+        x.id.replace(/\s/g, "").toUpperCase() === idNorm
     )
     if (s) {
-      setSale(s)
-      toast({ title: "Venda localizada", description: s.id })
+      aplicarVenda(s)
     }
-  }, [searchParams, sales, toast])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- aplicarVenda estável o suficiente para prefill
+  }, [initialSaleId, initialSale, searchParams, sales])
 
   useEffect(() => {
     if (!sale) return
@@ -200,10 +225,14 @@ export function TrocasDevolucao() {
       return
     }
 
+    // `troca` e `vale_credito` geram crédito local (vale); `devolucao` e `somente_estoque` não.
+    const localMode: "vale_credito" | "somente_estoque" =
+      mode === "troca" || mode === "vale_credito" ? "vale_credito" : "somente_estoque"
+
     const r = registrarDevolucao({
       saleId: sale.id,
       lines,
-      mode,
+      mode: localMode,
       customerCpf: cpf,
       customerName: nome,
     })
@@ -215,7 +244,7 @@ export function TrocasDevolucao() {
     appendAuditLog({
       action: "devolucao_vale",
       userLabel: `${nomeLoja} (PDV)`,
-      detail: `${r.devolucaoId} | venda ${sale.id} | modo ${mode} | crédito ${r.creditIssued.toFixed(2)}`,
+      detail: `${r.devolucaoId} | venda ${sale.id} | modo ${mode} | crédito ${r.creditIssued.toFixed(2)}${motivo.trim() ? ` | motivo ${motivo.trim()}` : ""}`,
     })
 
     // Persistir devolução no servidor — fire-and-forget, não bloqueia o fluxo local
@@ -249,10 +278,16 @@ export function TrocasDevolucao() {
           clienteNome: nome,
           clienteDoc: cpf,
           operador: nomeLoja,
+          motivo: motivo.trim(),
           itens: itensServidor,
-          payload: { saleId: sale.id, linhas: lines },
+          payload: { saleId: sale.id, linhas: lines, modo: mode, motivo: motivo.trim() },
         }),
-      }).catch(() => {/* non-blocking */})
+      })
+        .then((res) => {
+          // Servidor confirmou: estoque real devolvido + status da venda atualizado.
+          if (res.ok) onRegistered?.()
+        })
+        .catch(() => {/* non-blocking */})
     }
 
     setLastDevolucao({
@@ -261,9 +296,10 @@ export function TrocasDevolucao() {
       nome,
       cpf,
     })
+    const gerouCredito = r.creditIssued > 0
     toast({
-      title: mode === "vale_credito" ? "Crédito em haver gerado" : "Estoque atualizado",
-      description: mode === "vale_credito" ? `${formatBrl(r.creditIssued)} para ${nome}` : "Itens retornaram ao estoque.",
+      title: gerouCredito ? "Crédito em haver gerado" : "Devolução registrada",
+      description: gerouCredito ? `${formatBrl(r.creditIssued)} para ${nome}` : "Itens retornaram ao estoque.",
     })
   }
 
@@ -394,21 +430,48 @@ export function TrocasDevolucao() {
               <Label>Modo</Label>
               <RadioGroup
                 value={mode}
-                onValueChange={(v) => setMode(v as "vale_credito" | "somente_estoque")}
+                onValueChange={(v) => setMode(v as DevMode)}
                 className="flex flex-col gap-2"
               >
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <RadioGroupItem value="vale_credito" id="m1" />
+                  <RadioGroupItem value="devolucao" id="m0" />
                   <span className="flex items-center gap-2">
-                    <Wallet className="w-4 h-4 text-primary" />
-                    Crédito em haver (vale-troca) — cliente não leva produto novo agora
+                    <RotateCcw className="w-4 h-4 text-muted-foreground" />
+                    Devolução — dinheiro de volta ao cliente (sem gerar vale)
                   </span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <RadioGroupItem value="somente_estoque" id="m2" />
-                  <span>Apenas devolver ao estoque (sem gerar crédito)</span>
+                  <RadioGroupItem value="troca" id="m1" />
+                  <span className="flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4 text-primary" />
+                    Troca — devolve ao estoque e gera vale para nova compra
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <RadioGroupItem value="vale_credito" id="m2" />
+                  <span className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-primary" />
+                    Crédito em haver (vale-troca) — cliente usa depois
+                  </span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <RadioGroupItem value="somente_estoque" id="m3" />
+                  <span className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-muted-foreground" />
+                    Apenas devolver ao estoque (sem valor)
+                  </span>
                 </label>
               </RadioGroup>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Motivo (opcional)</Label>
+              <Textarea
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Ex.: produto com defeito, arrependimento, tamanho incorreto…"
+                className="h-16 resize-none text-sm"
+              />
             </div>
 
             <div className="space-y-3">

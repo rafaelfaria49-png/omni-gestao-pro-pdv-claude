@@ -13,6 +13,41 @@
 
 ## ✅ Concluído e Funcionando
 
+### Trocas & Devoluções — Fase 0 (unificação real, concluído 22/05/2026)
+
+**Contexto:** o F8 do PDV Assistência abria um `TrocasModal` 100% mock (inputs `itemDesc`/`motivo`, toast fake, `setTimeout(1500)`). Os botões "Trocas"/"Devoluções" do shell Omni/Classic eram placeholders. O Histórico de Vendas não tinha entrada para troca/devolução. A devolução existente (`/api/ops/devolucao`) persistia `DevolucaoVenda` + financeiro, **mas não devolvia estoque real** nem atualizava `Venda.status`.
+
+**Objetivo da fase:** substituir o mock pelo fluxo real **reaproveitando** `TrocasDevolucao`, `/api/ops/devolucao`, `GET /api/vendas/[id]`, `qtyReturned` e `buildValeTrocaEscPos` — sem criar sistema novo.
+
+**Arquivos alterados:**
+
+| Arquivo | Mudança |
+|---|---|
+| `app/api/ops/devolucao/route.ts` | **Estoque REAL** dentro da transação: resolve produto por `OR [id, sku, barcode]`, `increment` em `Produto.stock` e cria `MovimentacaoEstoque(tipo:"entrada", origem:"devolucao")` com custo/auditoria (mesmo padrão do adapter OS→Estoque). Idempotência por `documento(localId)+produtoId+origem`. **`Venda.status`** atualizado para `parcialmente_devolvida`/`devolvida` agregando devoluções vs `ItemVenda`. `tipo` zod aceita `devolucao`. |
+| `app/api/vendas/[id]/route.ts` | Detalhe expõe `creditoEmitido` por devolução. |
+| `components/dashboard/vendas/trocas-devolucao.tsx` | 4 modos (devolução / troca / crédito-vale / somente estoque) mapeados ao modo local; campo **motivo**; props `initialSaleId` + `initialSale` (prefill) e `onRegistered` (refresh externo). `qtyReturned`, bloqueio de excesso e impressão ESC/POS preservados. |
+| `components/dashboard/vendas/pdv-assistencia-enterprise.tsx` | `TrocasModal` mock **removido**; F8 abre `<TrocasDevolucao />` real em Dialog. |
+| `components/dashboard/vendas/pdv-omni-classic-shell.tsx` + `pdv-classic.tsx` | Botões "Trocas"/"Devoluções" do diálogo avançado ligados ao modal real (`onOpenTrocas` → `showDevolucaoModal`). |
+| `components/dashboard/vendas/vendas-arquivo-geral.tsx` | Botão "Trocar / Devolver" (linha, menu e drawer) abre `TrocasDevolucao` com a venda pré-carregada (snapshot); drawer mostra crédito gerado por devolução e label "Devolução". |
+
+**Status real vs mock:**
+
+| Item | Status |
+|---|---|
+| F8 PDV Assistência → fluxo real | ✅ Real |
+| Trocas/Devoluções no Omni/Classic | ✅ Real |
+| Botão Trocar/Devolver no Histórico | ✅ Real (carrega cliente + itens) |
+| Estoque devolvido ao banco + ledger auditável | ✅ Real (`origem:"devolucao"`) |
+| `Venda.status` parcial/total automático | ✅ Real (server-side) |
+| Vale-troca ESC/POS | ✅ Real (inalterado) |
+| Crédito do cliente | ⚠️ Local (localStorage) — persistência DB fica para Fase 1 |
+
+**Fora de escopo (Fase 1/2):** estorno de cartão, PIX automático, financeiro avançado, crédito persistente em DB, carrinho negativo, multi-venda avançada.
+
+**Validação:** `npx tsc --noEmit` → 0 erros. `npx next build --webpack` → Compiled successfully.
+
+---
+
 ### Fluxos de Novo Cadastro — Unificação (concluído 22/05/2026)
 
 **Contexto:** Existiam 3 pontos de entrada para criar cadastros (Topbar, CadastrosHub modal, DashboardPanel) com comportamento inconsistente. O Topbar apontava para páginas legacy. O ProductAIModal tinha botões mortos e animação fake de IA.

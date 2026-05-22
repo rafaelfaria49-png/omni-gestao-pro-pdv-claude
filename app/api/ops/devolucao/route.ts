@@ -6,12 +6,17 @@ import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { createSaida } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
+import { isOsVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import type { Prisma } from "@/generated/prisma"
 import { z } from "zod"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
+
+function arredonda2(n: number): number {
+  return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
+}
 
 const itemSchema = z.object({
   inventoryId: z.string().optional(),
@@ -25,7 +30,7 @@ const schema = z.object({
   localId: z.string().min(1),
   vendaLocalId: z.string().default(""),
   sessaoId: z.string().optional(),
-  tipo: z.enum(["vale_credito", "somente_estoque", "troca"]),
+  tipo: z.enum(["vale_credito", "somente_estoque", "troca", "devolucao"]),
   valorTotal: z.number().min(0).default(0),
   creditoEmitido: z.number().min(0).default(0),
   clienteNome: z.string().default(""),
@@ -134,10 +139,88 @@ export async function POST(req: Request) {
         include: { itens: true },
       })
 
+      // 2. Estoque REAL — devolve itens ao estoque + ledger auditável.
+      // Mesmo padrão do adapter OS → Estoque (MovimentacaoEstoque + decrement/increment de Produto.stock).
+      // origem: "devolucao" diferencia de "pdv" (saída de venda) e "os".
+      // Idempotência: a devolução só é criada uma vez (guard `existing` no topo); o findFirst
+      // por documento+produto+origem é defesa extra contra reprocessamento na mesma tx.
+      for (const it of data.itens) {
+        const rawInvId = (it.inventoryId ?? "").trim()
+        if (!rawInvId || isOsVirtualSaleLine(rawInvId)) continue
+        const qty = Math.max(0, Math.round(it.quantidade))
+        if (qty <= 0) continue
+
+        const produto = await tx.produto.findFirst({
+          where: { storeId: lojaId, OR: [{ id: rawInvId }, { sku: rawInvId }, { barcode: rawInvId }] },
+          select: { id: true, stock: true, precoCusto: true, sku: true, name: true },
+        })
+        if (!produto) continue
+
+        const jaExiste = await tx.movimentacaoEstoque.findFirst({
+          where: { storeId: lojaId, documento: data.localId, produtoId: produto.id, origem: "devolucao" },
+          select: { id: true },
+        })
+        if (jaExiste) continue
+
+        const estoqueAntes = produto.stock
+        const custo = arredonda2(Math.max(0, produto.precoCusto))
+        await tx.produto.update({ where: { id: produto.id }, data: { stock: { increment: qty } } })
+        await tx.movimentacaoEstoque.create({
+          data: {
+            storeId: lojaId,
+            produtoId: produto.id,
+            produtoSku: produto.sku ?? null,
+            produtoNome: produto.name,
+            tipo: "entrada",
+            origem: "devolucao",
+            quantidade: qty,
+            estoqueAntes,
+            estoqueDepois: estoqueAntes + qty,
+            custoUnitario: custo,
+            custoMedioAntes: custo,
+            custoMedioDepois: custo,
+            valorTotal: arredonda2(qty * custo),
+            documento: data.localId,
+            motivo: data.motivo?.trim() || `Devolução ${data.localId}`,
+            usuario: operadorFinal || null,
+          },
+        })
+      }
+
+      // 3. Status da Venda — parcialmente_devolvida / devolvida (com base no total devolvido).
+      // Agrega as quantidades de todas as devoluções da venda (inclui a recém-criada) e
+      // compara com o total vendido. Best-effort: venda pode não existir no banco.
+      if (data.vendaLocalId) {
+        const venda = await tx.venda.findFirst({
+          where: { pedidoId: data.vendaLocalId, storeId: lojaId },
+          select: { id: true, status: true, itens: { select: { quantidade: true } } },
+        })
+        if (venda && venda.status !== "cancelada") {
+          const totalVendido = venda.itens.reduce((s, i) => s + (i.quantidade || 0), 0)
+          const devs = await tx.devolucaoVenda.findMany({
+            where: { storeId: lojaId, vendaLocalId: data.vendaLocalId },
+            select: { itens: { select: { quantidade: true } } },
+          })
+          const totalDevolvido = devs.reduce(
+            (s, d) => s + d.itens.reduce((a, i) => a + (i.quantidade || 0), 0),
+            0,
+          )
+          const novoStatus =
+            totalVendido > 0 && totalDevolvido >= totalVendido
+              ? "devolvida"
+              : totalDevolvido > 0
+                ? "parcialmente_devolvida"
+                : venda.status
+          if (novoStatus !== venda.status) {
+            await tx.venda.update({ where: { id: venda.id }, data: { status: novoStatus } })
+          }
+        }
+      }
+
       return dev
     })
 
-    // 2. Integração financeira — saída por devolução (fora da tx para não bloquear)
+    // 4. Integração financeira — saída por devolução (fora da tx para não bloquear)
     // Só cria movimentação se há valor devolvido real (não apenas troca de estoque)
     if (data.valorTotal > 0 && data.tipo !== "somente_estoque") {
       try {

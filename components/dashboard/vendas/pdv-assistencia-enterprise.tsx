@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import {
   Barcode,
   Banknote,
@@ -75,6 +75,7 @@ import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
+import { TrocasDevolucao } from "./trocas-devolucao"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 
 // ─── Cart persistence ─────────────────────────────────────────────────────────
@@ -639,89 +640,6 @@ function HelpOverlay({ open, onClose }: { open: boolean; onClose: () => void }) 
   )
 }
 
-// ─── TrocasModal ──────────────────────────────────────────────────────────────
-
-function TrocasModal({
-  open,
-  onClose,
-}: {
-  open: boolean
-  onClose: () => void
-}) {
-  const [itemDesc, setItemDesc] = useState("")
-  const [motivo, setMotivo] = useState("")
-  const [done, setDone] = useState(false)
-
-  function handleConfirm() {
-    if (!itemDesc.trim()) return
-    setDone(true)
-    setTimeout(() => {
-      setDone(false)
-      setItemDesc("")
-      setMotivo("")
-      onClose()
-    }, 1500)
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-sm rounded-2xl border-border bg-card">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-foreground">
-            <RotateCcw className="h-5 w-5 text-blue-500" />
-            Trocas e Devoluções
-          </DialogTitle>
-        </DialogHeader>
-
-        {done ? (
-          <div className="flex flex-col items-center gap-3 py-8">
-            <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-            <p className="font-semibold text-foreground">Troca registrada com sucesso!</p>
-          </div>
-        ) : (
-          <div className="space-y-4 py-2">
-            <div>
-              <Label className="mb-1 block text-sm">Item devolvido / trocado</Label>
-              <Input
-                autoFocus
-                value={itemDesc}
-                onChange={(e) => setItemDesc(e.target.value)}
-                placeholder="Ex: Película Samsung A54"
-                className="rounded-xl"
-              />
-            </div>
-            <div>
-              <Label className="mb-1 block text-sm">Motivo</Label>
-              <Textarea
-                value={motivo}
-                onChange={(e) => setMotivo(e.target.value)}
-                placeholder="Ex: Produto com defeito, tamanho errado…"
-                className="h-20 resize-none rounded-xl text-sm"
-              />
-            </div>
-          </div>
-        )}
-
-        {!done && (
-          <DialogFooter>
-            <Button variant="outline" className="rounded-xl" onClick={onClose}>
-              Cancelar
-            </Button>
-            <Button
-              disabled={!itemDesc.trim()}
-              className="rounded-xl bg-blue-600 font-bold text-white hover:bg-blue-700 disabled:opacity-50"
-              onClick={handleConfirm}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Registrar Troca
-            </Button>
-          </DialogFooter>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 // ─── EditarAtalhosModal ───────────────────────────────────────────────────────
 
 function EditarAtalhosModal({
@@ -1150,18 +1068,37 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [localAtalhos, setLocalAtalhos] = useState<AtalhoSaved[]>([])
 
   const quickServices = useMemo(() => {
-    const active = localAtalhos.filter((a) => a.categoria === "Servicos" && a.ativo !== false)
-    return active.map((a) => realCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
+    const result: PdvCatalogProduct[] = []
+    for (const a of localAtalhos) {
+      if (a.ativo === false) continue
+      const live = realCatalog.find((p) => p.id === a.id)
+      if (!live) continue
+      const cat = a.categoria ?? live.category ?? "Outros"
+      if (cat === "Servicos") result.push(live)
+    }
+    return result
   }, [localAtalhos, realCatalog])
 
   const quickProducts = useMemo(() => {
-    const active = localAtalhos.filter((a) => a.categoria !== "Servicos" && a.categoria !== undefined && a.ativo !== false)
-    return active.map((a) => realCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
+    const result: PdvCatalogProduct[] = []
+    for (const a of localAtalhos) {
+      if (a.ativo === false) continue
+      const live = realCatalog.find((p) => p.id === a.id)
+      if (!live) continue
+      const cat = a.categoria ?? live.category ?? "Outros"
+      if (cat !== "Servicos") result.push(live)
+    }
+    return result
   }, [localAtalhos, realCatalog])
 
   const quickFavorites = useMemo(() => {
-    const active = localAtalhos.filter((a) => a.favorito && a.ativo !== false)
-    return active.map((a) => realCatalog.find((p) => p.id === a.id)).filter((p): p is PdvCatalogProduct => p !== undefined)
+    const result: PdvCatalogProduct[] = []
+    for (const a of localAtalhos) {
+      if (!a.favorito || a.ativo === false) continue
+      const live = realCatalog.find((p) => p.id === a.id)
+      if (live) result.push(live)
+    }
+    return result
   }, [localAtalhos, realCatalog])
 
   // ── Hydratação dos atalhos: localStorage (fast-path) → banco (fallback) ──────
@@ -1191,6 +1128,20 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     // Sem atalhos salvos → estado vazio honesto (empty state guia o usuário)
     setHydratedFromDb(true)
   }, [shortcutsKey, settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
+
+  // ── Normalizar atalhos: preenche `categoria` ausente usando catálogo real ───
+  useEffect(() => {
+    if (!hydratedFromDb || localAtalhos.length === 0 || realCatalog.length === 0) return
+    const needsPatch = localAtalhos.some((a) => !a.categoria)
+    if (!needsPatch) return
+    const patched = localAtalhos.map((a) => {
+      if (a.categoria) return a
+      const live = realCatalog.find((p) => p.id === a.id)
+      return { ...a, categoria: live?.category ?? "Outros" }
+    })
+    setLocalAtalhos(patched)
+    try { localStorage.setItem(shortcutsKey, JSON.stringify(patched)) } catch { /* ignore */ }
+  }, [hydratedFromDb, localAtalhos, realCatalog, shortcutsKey])
 
   // ── Restaurar carrinho do localStorage ──────────────────────────────────────
   useEffect(() => {
@@ -2317,7 +2268,19 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       </AlertDialog>
 
 
-      <TrocasModal open={trocasOpen} onClose={() => setTrocasOpen(false)} />
+      {/* F8 — Troca / Devolução real (reaproveita o fluxo TrocasDevolucao) */}
+      <Dialog open={trocasOpen} onOpenChange={(o) => !o && setTrocasOpen(false)}>
+        <DialogContent className="max-h-[min(90vh,900px)] w-[min(100vw-2rem,42rem)] overflow-y-auto border-border bg-card p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Troca / Devolução</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+            <Suspense fallback={<div className="py-8 text-center text-muted-foreground">Carregando…</div>}>
+              <TrocasDevolucao />
+            </Suspense>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
 

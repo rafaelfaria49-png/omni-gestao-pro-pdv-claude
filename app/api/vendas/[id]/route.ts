@@ -126,6 +126,7 @@ export async function GET(
           at: d.at.toISOString(),
           tipo: d.tipo,
           valorTotal: d.valorTotal,
+          creditoEmitido: d.creditoEmitido,
           operador: d.operador,
           motivo: d.motivo,
           itens: d.itens.map((it) => ({

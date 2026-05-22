@@ -1398,6 +1398,10 @@ export function PdvClassic({
                 setShellAdvancedOpen(open)
                 if (!open) focusShellBipe()
               }}
+              onOpenTrocas={() => {
+                setShellAdvancedOpen(false)
+                setShowDevolucaoModal(true)
+              }}
               receivablesOpen={shellReceivablesOpen}
               onReceivablesOpenChange={(open) => {
                 setShellReceivablesOpen(open)

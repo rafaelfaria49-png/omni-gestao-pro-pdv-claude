@@ -339,6 +339,8 @@ export type PdvOmniClassicShellProps = {
   onConfirmCancelSale: () => void
   advancedOpen: boolean
   onAdvancedOpenChange: (open: boolean) => void
+  /** Abre o fluxo real de Troca / Devolução (chamado pelos botões Trocas/Devoluções). */
+  onOpenTrocas?: () => void
   receivablesOpen: boolean
   onReceivablesOpenChange: (open: boolean) => void
   onOpenReceivablesModule: () => void
@@ -948,7 +950,10 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               <button
                 key={opt}
                 type="button"
-                onClick={() => props.onAdvancedOpenChange(false)}
+                onClick={() => {
+                  props.onAdvancedOpenChange(false)
+                  if (opt === "Trocas" || opt === "Devoluções") props.onOpenTrocas?.()
+                }}
                 className="rounded-md border border-border bg-background px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/60"
               >
                 {opt}
