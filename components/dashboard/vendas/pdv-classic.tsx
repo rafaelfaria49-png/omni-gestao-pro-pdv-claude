@@ -30,6 +30,7 @@ import {
   LayoutGrid,
   CalendarClock,
   Layers,
+  RotateCcw,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -2275,8 +2276,14 @@ export function PdvClassic({
       />
 
       <Dialog open={showDevolucaoModal} onOpenChange={setShowDevolucaoModal}>
-        <DialogContent className="max-h-[min(90vh,900px)] w-[min(100vw-2rem,42rem)] overflow-y-auto border-border bg-card p-0">
-          <div className="max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="max-h-[min(95vh,900px)] w-[min(100vw-2rem,62rem)] border-border bg-card p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="border-b border-border px-4 py-3 sm:px-6">
+            <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-primary" />
+              Troca / Devolução
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6">
             <Suspense fallback={<div className="py-8 text-center text-muted-foreground">Carregando…</div>}>
               <TrocasDevolucao />
             </Suspense>

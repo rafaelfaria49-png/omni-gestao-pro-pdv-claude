@@ -1248,7 +1248,7 @@ export function VendasArquivoGeral() {
           if (!o) closeTroca()
         }}
       >
-        <DialogContent className="max-h-[min(90vh,900px)] w-[min(100vw-2rem,42rem)] overflow-y-auto border-border bg-card p-0">
+        <DialogContent className="max-h-[min(95vh,900px)] w-[min(100vw-2rem,62rem)] border-border bg-card p-0 flex flex-col overflow-hidden">
           <DialogHeader className="border-b border-border px-4 py-3 sm:px-6">
             <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
               <RotateCcw className="h-4 w-4 text-primary" />
@@ -1258,7 +1258,7 @@ export function VendasArquivoGeral() {
               )}
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[calc(90vh-4rem)] overflow-y-auto p-4 sm:p-6">
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6">
             <Suspense fallback={
               <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -1267,14 +1267,14 @@ export function VendasArquivoGeral() {
             }>
               {trocaSaleId && (
                 <TrocasDevolucao
-                  key={trocaSaleId}
-                  initialSaleId={trocaSaleId}
-                  initialSale={trocaInitialSale}
-                  onRegistered={() => {
-                    load()
-                    if (detalhe?.id === trocaSaleId) void openDetalhe(trocaSaleId)
-                    closeTroca()
-                  }}
+                   key={trocaSaleId}
+                   initialSaleId={trocaSaleId}
+                   initialSale={trocaInitialSale}
+                   onRegistered={() => {
+                     load()
+                     if (detalhe?.id === trocaSaleId) void openDetalhe(trocaSaleId)
+                     closeTroca()
+                   }}
                 />
               )}
             </Suspense>
