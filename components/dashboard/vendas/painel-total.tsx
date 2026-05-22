@@ -37,7 +37,7 @@ export function PdvVisorTotal({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-white/10 bg-black/20 px-3 py-3 text-center dark:bg-black/50 dark:backdrop-blur-md",
+        "rounded-2xl border border-border bg-muted/30 px-3 py-3 text-center backdrop-blur-sm dark:bg-card/60 dark:backdrop-blur-md",
         className
       )}
     >

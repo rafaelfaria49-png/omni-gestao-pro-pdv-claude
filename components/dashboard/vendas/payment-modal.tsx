@@ -451,7 +451,7 @@ export function PaymentModal({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="max-w-2xl h-[90vh] flex flex-col p-0 overflow-hidden bg-card border-border">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-card border-border">
         <DialogHeader className="p-6 pb-2 border-b border-border shrink-0">
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <Calculator className="w-6 h-6 text-primary" />
@@ -502,7 +502,7 @@ export function PaymentModal({
             label="Total a pagar"
             valorFormatado={formatCurrency(total)}
             glow="none"
-            className="bg-primary/5 border border-primary/25 rounded-2xl p-4 py-6 text-center [&_p]:text-3xl [&_p]:font-extrabold"
+            className="bg-primary/5 border border-primary/25 rounded-2xl py-4 text-center [&_p]:text-2xl [&_p]:font-bold"
           />
 
           {exibirCapturaCpf && selectedCustomer && (
@@ -618,15 +618,14 @@ export function PaymentModal({
               <Label className="text-sm text-muted-foreground">Valor a Adicionar</Label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground select-none">R$</span>
                   <Input
                     type="text"
                     inputMode="numeric"
                     placeholder={faltaPagar.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     value={currentValue}
                     onChange={(e) => setCurrentValue(formatMoneyInput(e.target.value))}
-                    className="pl-10 h-12 text-lg font-semibold bg-secondary border-border"
-                    style={{ paddingLeft: "2.5rem" }}
+                    className="pl-12 h-12 text-lg font-semibold bg-secondary border-border"
                   />
                 </div>
               </div>
@@ -701,7 +700,7 @@ export function PaymentModal({
                   </Select>
                 </div>
               )}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -709,16 +708,16 @@ export function PaymentModal({
                     handleAddPayment("dinheiro")
                   }}
                   className={cn(
-                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm",
-                    selectedType === "dinheiro" 
+                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors",
+                    selectedType === "dinheiro"
                       ? "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400/70 dark:bg-emerald-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-emerald-400/45"
                   )}
                 >
                   <Banknote className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <span>Dinheiro</span>
+                  <span className="leading-none">Dinheiro</span>
                 </button>
-                
+
                 <button
                   type="button"
                   onClick={() => {
@@ -726,14 +725,14 @@ export function PaymentModal({
                     handleAddPayment("pix")
                   }}
                   className={cn(
-                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm",
-                    selectedType === "pix" 
+                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors",
+                    selectedType === "pix"
                       ? "border-teal-500 bg-teal-500/10 dark:border-teal-400/70 dark:bg-teal-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-teal-400/45"
                   )}
                 >
                   <QrCode className="h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
-                  <span>Pix</span>
+                  <span className="leading-none">Pix</span>
                 </button>
 
                 <button
@@ -749,14 +748,14 @@ export function PaymentModal({
                     handleAddPayment("cartao_debito")
                   }}
                   className={cn(
-                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
+                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                     selectedType === "cartao_debito"
                       ? "border-slate-500 bg-slate-500/10 dark:border-slate-400/70 dark:bg-slate-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-slate-400/45"
                   )}
                 >
                   <CreditCard className="h-5 w-5 shrink-0 text-slate-600 dark:text-slate-300" />
-                  <span>Débito</span>
+                  <span className="leading-none">Débito</span>
                 </button>
 
                 <button
@@ -772,14 +771,14 @@ export function PaymentModal({
                     handleAddPayment("cartao_credito")
                   }}
                   className={cn(
-                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
+                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                     selectedType === "cartao_credito"
                       ? "border-blue-500 bg-blue-500/10 dark:border-blue-400/70 dark:bg-blue-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-blue-400/45"
                   )}
                 >
                   <CreditCard className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-                  <span>Crédito</span>
+                  <span className="leading-none">Crédito</span>
                 </button>
 
                 <button
@@ -798,16 +797,16 @@ export function PaymentModal({
                     handleAddPayment("a_prazo")
                   }}
                   className={cn(
-                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
+                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors",
                     selectedType === "a_prazo"
                       ? "border-violet-500 bg-violet-500/10 dark:border-violet-400/70 dark:bg-violet-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-violet-400/45"
                   )}
                 >
                   <CalendarClock className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
-                  <span>À prazo</span>
+                  <span className="leading-none">À prazo</span>
                 </button>
-                
+
                 <button
                   type="button"
                   disabled={!selectedCustomer || customerStoreCredit <= 0}
@@ -816,30 +815,30 @@ export function PaymentModal({
                     handleAddPayment("credito_vale")
                   }}
                   className={cn(
-                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
+                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                     selectedType === "credito_vale"
                       ? "border-amber-500 bg-amber-500/10 dark:border-amber-400/70 dark:bg-amber-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-amber-400/45"
                   )}
                 >
                   <Wallet className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-                  <span>Crédito/Vale</span>
+                  <span className="leading-none">Créd./Vale</span>
                 </button>
-                
+
                 <button
                   type="button"
                   disabled={!selectedCustomer}
                   title={!selectedCustomer ? "Selecione o cliente no PDV para carnê ou boleto" : undefined}
                   onClick={() => setSelectedType("carne")}
                   className={cn(
-                    "h-16 flex flex-col items-center justify-center gap-1 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed",
-                    selectedType === "carne" 
+                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                    selectedType === "carne"
                       ? "border-orange-500 bg-orange-500/10 dark:border-orange-400/70 dark:bg-orange-500/20"
                       : "border-border dark:border-white/10 dark:hover:border-orange-400/45"
                   )}
                 >
                   <FileText className="h-5 w-5 shrink-0 text-orange-600 dark:text-orange-400" />
-                  <span>Carnê</span>
+                  <span className="leading-none">Carnê</span>
                 </button>
               </div>
             </div>

@@ -2,10 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
-import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info, Cpu } from "lucide-react";
+import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info, Cpu, Eye } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/configuracoes-v3/components/ui/radio-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/configuracoes-v3/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/components/configuracoes-v3/lib/utils";
 import { ConfigEmpresaProvider } from "@/lib/config-empresa";
@@ -41,12 +49,22 @@ type PdvFlowId = "classico" | "assistencia" | "supermercado";
 
 type ClassicModoInicial = "normal" | "rapido";
 
+type PreviewVariant = PdvFlowId | "next";
+
 interface PdvFlowOption {
   id: PdvFlowId;
   name: string;
   description: string;
+  whenToUse: string;
   icon: React.ElementType;
-  image: string;
+}
+
+interface PdvPreviewMeta {
+  id: PreviewVariant;
+  name: string;
+  description: string;
+  whenToUse: string;
+  icon: React.ElementType;
 }
 
 /** Três fluxos oficiais na UI (Classic/Omni, Assistência, Supermercado). Modo rápido e venda completa são internos ao Classic. */
@@ -58,24 +76,38 @@ const FLOWS: PdvFlowOption[] = [
     name: "PDV Clássico / Omni Classic",
     description:
       "Shell principal de vendas (grade, bipe, atalhos). Inclui modo balcão, modo rápido e venda completa no mesmo fluxo — não são PDVs separados.",
+    whenToUse:
+      "Use no balcão do dia a dia: grade de produtos, leitor de código de barras, busca por nome/SKU e total sempre à vista. É o fluxo padrão recomendado para a maioria das lojas.",
     icon: LayoutGrid,
-    image: "/images/pdv-classic-thumb.png",
   },
   {
     id: "assistencia",
     name: "PDV Assistência",
     description: "Fluxo especializado para assistência técnica, peças e atendimento.",
+    whenToUse:
+      "Use quando o atendimento gira em torno de ordens de serviço: identificar o cliente, registrar o aparelho e o defeito e montar o orçamento antes de fechar a venda.",
     icon: Wrench,
-    image: "/images/pdv-assistencia-thumb.png",
   },
   {
     id: "supermercado",
     name: "PDV Supermercado",
     description: "Fluxo de alto giro com visão em tabela e painel lateral.",
+    whenToUse:
+      "Use em operações de alto giro com fila no caixa: itens grandes, totais sempre visíveis e teclado numérico em destaque para máxima velocidade de bipe.",
     icon: Store,
-    image: "/images/pdv-supermercado-thumb.png",
   },
 ];
+
+/** PDV Next / Black Edition — não é um layout selecionável; abre em rota própria (`/dashboard/pdv-next`). */
+const PDV_NEXT_META: PdvPreviewMeta = {
+  id: "next",
+  name: "PDV Next / Black Edition",
+  description:
+    "Caixa premium com design monocromático, barra operacional completa e atalhos F1–F9. Rota exclusiva em /dashboard/pdv-next.",
+  whenToUse:
+    "Use como caixa premium opcional, com visual escuro e barra operacional completa (loja, caixa, operador, cupom). Abre em rota própria e não substitui o layout principal escolhido acima.",
+  icon: Cpu,
+};
 
 /**
  * Motor real (rota `/dashboard/vendas`):
@@ -137,6 +169,124 @@ function safePrinterRecord(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {};
 }
 
+/**
+ * Mini-preview do layout do PDV desenhado em CSS/React (sem screenshot).
+ * Os três fluxos oficiais usam tokens semânticos para acompanhar os 4 temas.
+ * O variant "next" é intencionalmente monocromático (preto + esmeralda),
+ * espelhando o PDV Black Edition que é sempre escuro independente do tema.
+ */
+function PdvMiniPreview({ variant }: { variant: PreviewVariant }) {
+  if (variant === "classico") {
+    return (
+      <div className="flex h-full w-full gap-1.5 bg-muted/40 p-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="h-2.5 w-2/3 rounded-full bg-muted-foreground/20" />
+          <div className="grid flex-1 grid-cols-3 gap-1.5">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-md bg-card shadow-sm ring-1 ring-border/60" />
+            ))}
+          </div>
+        </div>
+        <div className="flex w-[34%] flex-col gap-1 rounded-md bg-card p-1.5 ring-1 ring-border/60">
+          <div className="h-1.5 w-3/4 rounded-full bg-muted-foreground/20" />
+          <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/15" />
+          <div className="h-1.5 w-1/2 rounded-full bg-muted-foreground/15" />
+          <div className="mt-auto rounded-md bg-primary/15 p-1.5">
+            <div className="h-1.5 w-1/2 rounded-full bg-primary/40" />
+            <div className="mt-1 h-2.5 w-3/4 rounded bg-primary/70" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "assistencia") {
+    return (
+      <div className="flex h-full w-full flex-col gap-1.5 bg-muted/40 p-2">
+        <div className="flex items-center gap-1.5 rounded-md bg-card p-1.5 ring-1 ring-border/60">
+          <div className="h-4 w-4 shrink-0 rounded-full bg-primary/30" />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="h-1.5 w-1/2 rounded-full bg-muted-foreground/25" />
+            <div className="h-1.5 w-1/3 rounded-full bg-muted-foreground/15" />
+          </div>
+          <div className="h-2 w-7 shrink-0 rounded-full bg-primary/20" />
+        </div>
+        <div className="flex items-center gap-1.5 rounded-md bg-card p-1.5 ring-1 ring-border/60">
+          <div className="h-6 w-4 shrink-0 rounded-sm bg-muted-foreground/25" />
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/25" />
+            <div className="h-1.5 w-1/2 rounded-full bg-muted-foreground/15" />
+          </div>
+        </div>
+        <div className="flex flex-1 flex-col gap-1.5 rounded-md bg-card p-1.5 ring-1 ring-border/60">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <div className="h-1.5 w-1/2 rounded-full bg-muted-foreground/20" />
+              <div className="h-1.5 w-1/5 rounded-full bg-muted-foreground/15" />
+            </div>
+          ))}
+          <div className="mt-auto flex items-center justify-between">
+            <div className="h-1.5 w-1/4 rounded-full bg-muted-foreground/25" />
+            <div className="h-2.5 w-1/3 rounded bg-primary/60" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (variant === "supermercado") {
+    return (
+      <div className="flex h-full w-full gap-1.5 bg-muted/40 p-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex flex-1 items-center justify-between gap-2 rounded-md bg-card px-2 ring-1 ring-border/60"
+            >
+              <div className="h-2 w-1/2 rounded-full bg-muted-foreground/25" />
+              <div className="h-2.5 w-1/4 rounded bg-primary/40" />
+            </div>
+          ))}
+        </div>
+        <div className="grid w-[38%] grid-cols-3 grid-rows-4 gap-1 rounded-md bg-card p-1.5 ring-1 ring-border/60">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div
+              key={i}
+              className={cn("rounded-sm", i === 11 ? "bg-primary/60" : "bg-muted-foreground/15")}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // variant === "next" — Black Edition (sempre escuro)
+  return (
+    <div className="flex h-full w-full flex-col gap-1.5 bg-[#0a0a0a] p-2">
+      <div className="flex items-center gap-1.5 rounded-md bg-[#141414] p-1.5 ring-1 ring-emerald-500/20">
+        <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+        <div className="h-1.5 w-1/4 rounded-full bg-white/20" />
+        <div className="ml-auto h-1.5 w-1/5 rounded-full bg-white/10" />
+      </div>
+      <div className="grid flex-1 grid-cols-2 gap-1.5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex flex-col justify-between rounded-md bg-[#141414] p-1.5 ring-1 ring-emerald-500/15"
+          >
+            <div className="h-1.5 w-2/3 rounded-full bg-white/15" />
+            <div className="h-1.5 w-1/2 rounded-full bg-emerald-400/60" />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between rounded-md bg-[#141414] p-1.5 ring-1 ring-emerald-500/30">
+        <div className="h-1.5 w-1/4 rounded-full bg-white/15" />
+        <div className="h-2.5 w-1/3 rounded bg-emerald-500/80" />
+      </div>
+    </div>
+  );
+}
+
 function PdvSectionContent() {
   const { toast } = useToast();
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva();
@@ -148,6 +298,7 @@ function PdvSectionContent() {
   const [draftClassicModo, setDraftClassicModo] = useState<ClassicModoInicial>("normal");
   const [savedClassicModo, setSavedClassicModo] = useState<ClassicModoInicial>("normal");
   const [saving, setSaving] = useState(false);
+  const [previewFlow, setPreviewFlow] = useState<PreviewVariant | null>(null);
 
   const syncFromServer = useCallback(() => {
     const base = safePrinterRecord(settings?.printerConfig);
@@ -264,6 +415,15 @@ function PdvSectionContent() {
 
   const controlsDisabled = busy || noLoja;
 
+  const previewMeta: PdvPreviewMeta | undefined =
+    previewFlow === null
+      ? undefined
+      : previewFlow === "next"
+        ? PDV_NEXT_META
+        : FLOWS.find((f) => f.id === previewFlow);
+  const PreviewIcon = previewMeta?.icon ?? Monitor;
+  const previewIsActiveFlow = previewMeta !== undefined && previewMeta.id === draftFlow;
+
   return (
     <div className="space-y-6">
       <SectionHeader
@@ -307,23 +467,35 @@ function PdvSectionContent() {
           {FLOWS.map((opt) => {
             const active = draftFlow === opt.id;
             const Icon = opt.icon;
+            const selectCard = () => {
+              if (!controlsDisabled) setDraftFlow(opt.id);
+            };
             return (
               <div
                 key={opt.id}
                 data-testid={PDV_CARD_TEST_ID[opt.id]}
+                role="button"
+                tabIndex={controlsDisabled ? -1 : 0}
+                aria-pressed={active}
+                aria-label={`Selecionar ${opt.name}`}
+                onClick={selectCard}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    selectCard();
+                  }
+                }}
                 className={cn(
-                  "group relative flex h-full w-full min-w-0 max-w-none flex-col rounded-xl p-4 transition-all duration-200",
+                  "group relative flex h-full w-full min-w-0 max-w-none flex-col rounded-xl p-4 outline-none transition-all duration-200",
+                  "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  controlsDisabled ? "cursor-default" : "cursor-pointer",
                   active
-                    ? "bg-primary/5 ring-1 ring-primary/30 shadow-md dark:bg-primary/10"
+                    ? "bg-primary/5 ring-2 ring-primary shadow-md dark:bg-primary/10"
                     : "bg-card ring-1 ring-slate-900/5 shadow-sm hover:ring-primary/40 hover:shadow-card dark:ring-white/10"
                 )}
               >
-                <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl border border-border/40 bg-muted">
-                  <img
-                    src={opt.image}
-                    alt={opt.name}
-                    className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
-                  />
+                <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl border border-border/40 bg-muted transition-transform duration-500 group-hover:scale-[1.02]">
+                  <PdvMiniPreview variant={opt.id} />
                   <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/10" />
                 </div>
 
@@ -332,48 +504,80 @@ function PdvSectionContent() {
                     <Icon className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0 pr-12">
-                    <h4 className="truncate text-[15px] font-semibold tracking-tight text-foreground">{opt.name}</h4>
-                    <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">{opt.description}</p>
+                    <h4 title={opt.name} className="text-[15px] font-semibold leading-tight tracking-tight text-foreground">{opt.name}</h4>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{opt.description}</p>
                   </div>
                   {active && (
                     <div className="absolute right-0 top-0">
-                      <Badge variant="outline" className="border-primary/30 bg-primary/10 px-1.5 py-0 text-[10px] uppercase tracking-wide text-primary">
+                      <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/10 px-1.5 py-0 text-[10px] uppercase tracking-wide text-primary">
+                        <Check className="h-3 w-3" />
                         Ativo
                       </Badge>
                     </div>
                   )}
                 </div>
 
-                <div className="mt-auto flex w-full">
+                <div className="mt-auto flex w-full items-center gap-2">
                   <Button
                     type="button"
                     size="sm"
-                    className="w-full transition-all duration-200 hover:scale-[1.01]"
-                    variant={active ? "secondary" : "outline"}
-                    disabled={active || controlsDisabled}
-                    onClick={() => {
-                      setDraftFlow(opt.id);
+                    variant="outline"
+                    className="shrink-0"
+                    title={`Visualizar ${opt.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewFlow(opt.id);
                     }}
                   >
-                    {active ? "Layout ativo" : "Usar layout"}
+                    <Eye className="h-4 w-4" />
+                    <span className="hidden sm:inline">Visualizar</span>
                   </Button>
+                  {active ? (
+                    <div className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">
+                      <Check className="h-4 w-4" />
+                      Layout ativo
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="default"
+                      className="flex-1 transition-all duration-200 hover:scale-[1.01]"
+                      disabled={controlsDisabled}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDraftFlow(opt.id);
+                      }}
+                    >
+                      Usar layout
+                    </Button>
+                  )}
                 </div>
               </div>
             );
           })}
 
-          {/* 4º PDV: Black Edition — rota própria /dashboard/pdv-next */}
+          {/* 4º PDV: Black Edition — rota própria /dashboard/pdv-next (não é layout selecionável) */}
           <div
             data-testid="pdv-black-edition"
-            className="group relative flex h-full w-full min-w-0 max-w-none flex-col rounded-xl p-4 ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card hover:ring-emerald-500/40 hover:shadow-card transition-all duration-200"
+            role="button"
+            tabIndex={0}
+            aria-label="Visualizar PDV Next / Black Edition"
+            onClick={() => setPreviewFlow("next")}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setPreviewFlow("next");
+              }
+            }}
+            className={cn(
+              "group relative flex h-full w-full min-w-0 max-w-none cursor-pointer flex-col rounded-xl p-4 outline-none transition-all duration-200",
+              "ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card hover:ring-emerald-500/40 hover:shadow-card",
+              "focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            )}
           >
-            {/* Preview: miniatura black */}
-            <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl border border-border/40 bg-[#000000]">
-              <img
-                src="/images/pdv-next-thumb.png"
-                alt="PDV Black Edition"
-                className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
-              />
+            <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl border border-border/40 transition-transform duration-500 group-hover:scale-[1.02]">
+              <PdvMiniPreview variant="next" />
               <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
             </div>
 
@@ -382,9 +586,9 @@ function PdvSectionContent() {
                 <Cpu className="h-5 w-5" />
               </div>
               <div className="flex-1 min-w-0 pr-12">
-                <h4 className="truncate text-[15px] font-semibold tracking-tight text-foreground">PDV Next / Black Edition</h4>
-                <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                  Caixa premium com design monocromático, barra operacional completa e atalhos F1–F9. Rota exclusiva em /dashboard/pdv-next.
+                <h4 title={PDV_NEXT_META.name} className="text-[15px] font-semibold leading-tight tracking-tight text-foreground">{PDV_NEXT_META.name}</h4>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                  {PDV_NEXT_META.description}
                 </p>
               </div>
               <div className="absolute right-0 top-0">
@@ -394,11 +598,26 @@ function PdvSectionContent() {
               </div>
             </div>
 
-            <div className="mt-auto flex w-full">
+            <div className="mt-auto flex w-full items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                title="Visualizar PDV Next / Black Edition"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPreviewFlow("next");
+                }}
+              >
+                <Eye className="h-4 w-4" />
+                <span className="hidden sm:inline">Visualizar</span>
+              </Button>
               <a
                 href="/dashboard/pdv-next"
+                onClick={(e) => e.stopPropagation()}
                 className={cn(
-                  "inline-flex h-9 w-full items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-all duration-200 hover:scale-[1.01]",
+                  "inline-flex h-9 flex-1 items-center justify-center gap-2 rounded-md px-3 text-sm font-medium transition-all duration-200 hover:scale-[1.01]",
                   "bg-[#000000] text-emerald-400 hover:bg-[#111111] border border-emerald-500/20 hover:border-emerald-500/50"
                 )}
               >
@@ -407,6 +626,71 @@ function PdvSectionContent() {
             </div>
           </div>
         </div>
+
+        <Dialog open={previewFlow !== null} onOpenChange={(open) => { if (!open) setPreviewFlow(null); }}>
+          <DialogContent className="max-w-2xl">
+            {previewMeta && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-start gap-3 pr-6 text-left">
+                    <div
+                      className={cn(
+                        "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+                        previewMeta.id === "next" ? "bg-[#000000] text-emerald-400" : "bg-accent text-accent-foreground"
+                      )}
+                    >
+                      <PreviewIcon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <DialogTitle>{previewMeta.name}</DialogTitle>
+                      <DialogDescription className="mt-1">{previewMeta.description}</DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border/50 bg-muted">
+                  <PdvMiniPreview variant={previewMeta.id} />
+                </div>
+
+                <div className="rounded-lg border border-border bg-card-muted/60 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Quando usar</p>
+                  <p className="mt-1 text-sm leading-relaxed text-foreground">{previewMeta.whenToUse}</p>
+                </div>
+
+                <DialogFooter>
+                  {previewMeta.id === "next" ? (
+                    <a
+                      href="/dashboard/pdv-next"
+                      className={cn(
+                        "inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium transition-all duration-200",
+                        "bg-[#000000] text-emerald-400 hover:bg-[#111111] border border-emerald-500/20 hover:border-emerald-500/50"
+                      )}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Acessar PDV Next
+                    </a>
+                  ) : previewIsActiveFlow ? (
+                    <div className="inline-flex h-10 items-center justify-center gap-1.5 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground">
+                      <Check className="h-4 w-4" />
+                      Layout ativo
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      disabled={controlsDisabled}
+                      onClick={() => {
+                        if (isOfficialFlowCard(previewMeta.id)) setDraftFlow(previewMeta.id);
+                        setPreviewFlow(null);
+                      }}
+                    >
+                      Usar layout
+                    </Button>
+                  )}
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {draftFlow === "classico" ? (
           <div

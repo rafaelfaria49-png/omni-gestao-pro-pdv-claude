@@ -194,10 +194,10 @@ function ItemsTable({
         isBlack ? "border-white/10 bg-[#000000]" : "pos-divider bg-pos-panel"
       )}
     >
-      <div className="min-w-[850px] flex flex-col flex-1 min-h-0">
+      <div className="min-w-[820px] flex flex-col flex-1 min-h-0">
         <div
           className={cn(
-            "grid grid-cols-[56px_110px_1fr_72px_120px_88px_140px] gap-3 border-b px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider",
+            "grid grid-cols-[48px_130px_1fr_64px_110px_80px_130px] gap-2 border-b px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider",
             isBlack ? "border-white/10 bg-[#000000] text-white/55" : "pos-divider bg-pos-header text-pos-label"
           )}
         >
@@ -244,7 +244,7 @@ function ItemsTable({
                   key={item.lineId}
                   onClick={() => onSelect(item.lineId)}
                   className={cn(
-                    "grid w-full grid-cols-[56px_110px_1fr_72px_120px_88px_140px] gap-3 border-b px-4 py-2.5 text-left text-sm tabular-pdv transition-colors",
+                    "grid w-full grid-cols-[48px_130px_1fr_64px_110px_80px_130px] gap-2 border-b px-4 py-2.5 text-left text-sm tabular-pdv transition-colors",
                     isFlash && "pdv-rapido-row-flash",
                     isBlack
                       ? cn(

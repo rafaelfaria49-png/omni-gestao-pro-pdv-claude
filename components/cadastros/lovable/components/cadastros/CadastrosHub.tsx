@@ -4,6 +4,7 @@ import {
   AlertTriangle, RefreshCw, LayoutDashboard, Tag, FileSpreadsheet, History,
   Sparkles, MessageCircle, ShoppingCart, Edit3, Eye, Trash2, ChevronRight,
   CheckCircle2, ArrowUpRight, Database, Filter, Download, Workflow, Barcode,
+  ArrowRight,
 } from "lucide-react";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea, useToggle } from "./ui-kit";
@@ -210,15 +211,15 @@ export function CadastrosHub() {
         {tab === "auditoria" && <AuditoriaPanel />}
       </main>
 
-      <Modal open={novo.open} onClose={novo.close} title="Novo cadastro" subtitle="Selecione o tipo de cadastro que deseja criar.">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+      <Modal open={novo.open} onClose={novo.close} title="Novo cadastro" subtitle="Selecione o tipo de registro que deseja criar.">
+        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3">
           {[
-            { l: "Cliente", i: Users, tab: "clientes" as TabId },
-            { l: "Produto", i: Package, tab: "produtos" as TabId },
-            { l: "Serviço", i: Wrench, tab: "servicos" as TabId },
-            { l: "Fornecedor", i: Truck, tab: "fornecedores" as TabId },
-            { l: "Técnico", i: HardHat, tab: "tecnicos" as TabId },
-            { l: "Equipamento", i: Smartphone, tab: "equipamentos" as TabId },
+            { l: "Cliente", i: Users, tab: "clientes" as TabId, desc: "PF ou PJ" },
+            { l: "Produto", i: Package, tab: "produtos" as TabId, desc: "Peças e mercadorias" },
+            { l: "Serviço", i: Wrench, tab: "servicos" as TabId, desc: "Mão de obra" },
+            { l: "Fornecedor", i: Truck, tab: "fornecedores" as TabId, desc: "Empresa ou autônomo" },
+            { l: "Técnico", i: HardHat, tab: "tecnicos" as TabId, desc: "Membro da equipe" },
+            { l: "Equipamento", i: Smartphone, tab: "equipamentos" as TabId, desc: "Modelo para OS" },
           ].map((x) => (
             <button
               key={x.l}
@@ -227,15 +228,16 @@ export function CadastrosHub() {
                 setAutoOpenNew(x.tab);
                 novo.close();
               }}
-              className="flex items-center gap-3 rounded-xl border border-border bg-background p-4 text-left hover:border-primary hover:bg-accent transition"
+              className="group flex items-center gap-3 rounded-xl border border-border bg-background p-3.5 text-left transition-all hover:border-primary/60 hover:bg-primary/5 hover:shadow-sm active:scale-[0.98]"
             >
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
-                <x.i className="h-5 w-5" />
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary/20">
+                <x.i className="h-4 w-4" />
               </div>
-              <div>
-                <div className="text-sm font-medium text-foreground">{x.l}</div>
-                <div className="text-xs text-muted-foreground">Criar novo</div>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-foreground">{x.l}</div>
+                <div className="truncate text-[11px] text-muted-foreground">{x.desc}</div>
               </div>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 transition-all group-hover:translate-x-0.5 group-hover:text-primary/60" />
             </button>
           ))}
         </div>

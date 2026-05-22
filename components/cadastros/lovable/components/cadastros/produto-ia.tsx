@@ -151,28 +151,34 @@ export function ProductAIModal({
         {/* FORM (preenchido pela IA) */}
         <div>
           <SectionTitle title="Ficha do produto" subtitle={filled ? "Campos preenchidos automaticamente — revise se quiser." : "Preenchimento manual ou via IA acima."} />
-          <div className="grid grid-cols-2 gap-y-4 gap-x-6">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-5">
             <Field label="Nome" span={2}>
               <Input
                 ref={nomeRef}
                 defaultValue={initial?.nome ?? ""}
                 placeholder="Nome do produto"
+                className="font-medium"
               />
             </Field>
-            <Field label="SKU"><Input ref={skuRef} defaultValue={initial?.sku ?? ""} /></Field>
-            <Field label="Código de barras"><Input ref={barrasRef} defaultValue={initial?.barras ?? ""} /></Field>
-            <Field label="Categoria"><Input ref={categoriaRef} defaultValue={initial?.categoria ?? ""} /></Field>
-            <Field label="Marca"><Input ref={marcaRef} defaultValue={initial?.marca ?? ""} /></Field>
-            <Field label="Modelo compatível"><Input ref={modeloRef} defaultValue="" /></Field>
-            <Field label="Fornecedor provável"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? ""} /></Field>
+            <Field label="SKU"><Input ref={skuRef} defaultValue={initial?.sku ?? ""} placeholder="SKU-001" /></Field>
+            <Field label="Código de barras"><Input ref={barrasRef} defaultValue={initial?.barras ?? ""} placeholder="7891234500011" /></Field>
+            <Field label="Categoria"><Input ref={categoriaRef} defaultValue={initial?.categoria ?? ""} placeholder="Ex.: Telas" /></Field>
+            <Field label="Marca"><Input ref={marcaRef} defaultValue={initial?.marca ?? ""} placeholder="Ex.: Apple" /></Field>
+            <Field label="Modelo compatível"><Input ref={modeloRef} defaultValue="" placeholder="Ex.: iPhone 11" /></Field>
+            <Field label="Fornecedor"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? ""} placeholder="Nome do fornecedor" /></Field>
             <Field label="Estoque atual"><Input ref={estoqueRef} type="number" min={0} step={1} defaultValue={initial?.estoque !== undefined ? String(initial.estoque) : (productId ? "" : "0")} placeholder="0" /></Field>
-            <Field label="Custo"><Input ref={custoRef} defaultValue={initial?.custo !== undefined ? String(initial.custo) : ""} /></Field>
-            <Field label="Preço sugerido"><Input ref={precoRef} defaultValue={initial?.preco !== undefined ? String(initial.preco) : ""} /></Field>
-            <Field label="Margem"><Input readOnly defaultValue="" placeholder="Calculada após custo e preço" /></Field>
-            <Field label="Garantia (dias)"><Input ref={garantiaRef} defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : ""} /></Field>
-            <Field label="NCM"><Input placeholder="Fase fiscal futura" /></Field>
+            <Field label="Garantia (dias)"><Input ref={garantiaRef} defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : ""} placeholder="90" /></Field>
+            <div className="col-span-2">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Precificação</p>
+              <div className="grid grid-cols-3 gap-4 rounded-xl border border-border bg-muted/20 p-4">
+                <Field label="Custo (R$)"><Input ref={custoRef} defaultValue={initial?.custo !== undefined ? String(initial.custo) : ""} placeholder="0,00" /></Field>
+                <Field label="Preço venda (R$)"><Input ref={precoRef} defaultValue={initial?.preco !== undefined ? String(initial.preco) : ""} placeholder="0,00" /></Field>
+                <Field label="Margem"><Input readOnly defaultValue="" placeholder="Auto" className="bg-muted/40 text-muted-foreground cursor-default" /></Field>
+              </div>
+            </div>
+            <Field label="NCM"><Input placeholder="Fase fiscal futura" className="text-muted-foreground" /></Field>
             <Field label="Tributação"><Select defaultValue=""><option value="">—</option><option>Simples</option><option>Lucro Presumido</option><option>Lucro Real</option></Select></Field>
-            <Field label="Tags"><Input placeholder="Separadas por vírgula" /></Field>
+            <Field label="Tags" span={2}><Input placeholder="Separadas por vírgula — Ex.: apple, tela, original" /></Field>
             <Field label="Descrição" span={2}>
               <Textarea rows={3} placeholder="Descrição comercial (opcional)" />
             </Field>

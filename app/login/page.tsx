@@ -1,7 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
+import { Eye, EyeOff } from "lucide-react"
 import { signInAction } from "@/app/actions/auth"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -22,6 +24,7 @@ function SubmitButton() {
 
 export default function LoginPage() {
   const [state, formAction] = useActionState(signInAction, { error: null })
+  const [showPassword, setShowPassword] = useState(false)
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -65,14 +68,30 @@ export default function LoginPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="password">Senha</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    required
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground focus:outline-none"
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
               </div>
 
               {state.error && (
