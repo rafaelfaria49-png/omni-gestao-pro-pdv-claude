@@ -44,6 +44,7 @@ export function TrocasDevolucao({
   const searchParams = useSearchParams()
 
   const [busca, setBusca] = useState("")
+  const [showSearch, setShowSearch] = useState(!initialSaleId)
   const [sale, setSale] = useState<SaleRecord | null>(null)
   const [qtyByLine, setQtyByLine] = useState<Record<string, string>>({})
   const [mode, setMode] = useState<DevMode>("vale_credito")
@@ -97,6 +98,7 @@ export function TrocasDevolucao({
     const id = (initialSaleId || searchParams.get("sale") || "").trim()
     if (!id) return
     setBusca(id)
+    setShowSearch(false)
     const upper = id.toUpperCase()
     const idNorm = id.replace(/\s/g, "").toUpperCase()
 
@@ -130,6 +132,7 @@ export function TrocasDevolucao({
     setSale(s)
     setCandidateSales(null)
     setCandidateLabel("")
+    setShowSearch(false)
     const q: Record<string, string> = {}
     for (const l of s.lines) {
       const max = l.quantity - (l.qtyReturned ?? 0)
@@ -716,43 +719,45 @@ export function TrocasDevolucao({
 
   return (
     <div className="space-y-6 w-full">
-      <Card className="bg-card border-border shadow-sm">
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-xl font-bold">
-            <RotateCcw className="w-6 h-6 text-primary" />
-            Troca e Devolução
-          </CardTitle>
-          <CardDescription className="text-sm">
-            Busque pelo <strong>ID do cupom</strong>, <strong>nome do cliente</strong> ou <strong>código/bip do produto</strong>.
-            Ao bipar um item, listamos as últimas vendas em que ele aparece para você escolher a origem da troca. Os itens
-            retornam ao estoque; use <strong>crédito em haver</strong> vinculado ao CPF quando aplicável.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1 space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground">Venda, cliente ou código de barras do produto</Label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="VDA-2026-0001 · João Silva · código do produto"
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") encontrarVenda()
-                  }}
-                  className="h-11 pl-9 font-mono text-sm border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                />
+      {(!sale || showSearch) && (
+        <Card className="bg-card border-border shadow-sm">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center gap-2 text-xl font-bold">
+              <RotateCcw className="w-6 h-6 text-primary" />
+              Troca e Devolução
+            </CardTitle>
+            <CardDescription className="text-sm">
+              Busque pelo <strong>ID do cupom</strong>, <strong>nome do cliente</strong> ou <strong>código/bip do produto</strong>.
+              Ao bipar um item, listamos as últimas vendas em que ele aparece para você escolher a origem da troca. Os itens
+              retornam ao estoque; use <strong>crédito em haver</strong> vinculado ao CPF quando aplicável.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs font-semibold text-muted-foreground">Venda, cliente ou código de barras do produto</Label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="VDA-2026-0001 · João Silva · código do produto"
+                    value={busca}
+                    onChange={(e) => setBusca(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") encontrarVenda()
+                    }}
+                    className="h-11 pl-9 font-mono text-sm border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+                  />
+                </div>
+              </div>
+              <div className="flex items-end">
+                <Button type="button" className="h-11 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-6" onClick={encontrarVenda}>
+                  Buscar Venda
+                </Button>
               </div>
             </div>
-            <div className="flex items-end">
-              <Button type="button" className="h-11 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-6" onClick={encontrarVenda}>
-                Buscar Venda
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {candidateSales && candidateSales.length > 0 && (
         <Card className="border-primary/30 bg-primary/5 shadow-inner">
@@ -795,8 +800,24 @@ export function TrocasDevolucao({
                   <Package className="w-5 h-5 text-primary" />
                   Origem: {sale.id}
                 </CardTitle>
-                <CardDescription className="text-xs mt-0.5">
+                <CardDescription className="text-xs mt-0.5 flex items-center gap-2">
                   Realizada em {new Date(sale.at).toLocaleString("pt-BR")}
+                  {initialSaleId && (
+                    <>
+                      <span>·</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSale(null)
+                          setShowSearch(true)
+                          setBusca("")
+                        }}
+                        className="text-primary hover:underline font-semibold"
+                      >
+                        Trocar venda
+                      </button>
+                    </>
+                  )}
                 </CardDescription>
               </div>
               <div className="text-right">
@@ -806,175 +827,186 @@ export function TrocasDevolucao({
             </div>
           </CardHeader>
 
-          <CardContent className="space-y-6 pt-6">
-            {/* CPF / Nome e Modo no topo, ocupando largura total */}
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground">CPF/CNPJ (se não veio na venda)</Label>
-                <Input
-                  value={cpfExtra}
-                  onChange={(e) => setCpfExtra(e.target.value)}
-                  placeholder="Somente números"
-                  className="h-10 border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground">Nome do Cliente</Label>
-                <Input
-                  value={nomeExtra}
-                  onChange={(e) => setNomeExtra(e.target.value)}
-                  placeholder="Nome completo do cliente"
-                  className="h-10 border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                />
-              </div>
-            </div>
-
-            {/* Custom Mode Tiles (Grade 2x2 Premium) */}
-            <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground">Modo de Operação</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Tile 1: Troca Imediata */}
-                <button
-                  type="button"
-                  onClick={() => setMode("troca")}
-                  className={`flex flex-col items-start p-4 rounded-xl border text-left transition-all ${
-                    mode === "troca"
-                      ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
-                      : "border-border bg-background hover:bg-muted/50"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <RotateCcw className={`w-4 h-4 ${mode === "troca" ? "text-primary" : "text-muted-foreground"}`} />
-                    <span className="font-bold text-sm text-foreground">Troca Imediata</span>
+          <CardContent className="p-4 sm:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Coluna Esquerda: Dados do Cliente e Modo de Operação (lg:col-span-5) */}
+              <div className="lg:col-span-5 space-y-5">
+                {/* CPF / Nome */}
+                <div className="space-y-4 rounded-xl border border-border/50 bg-muted/10 p-4">
+                  <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <Search className="w-3.5 h-3.5 text-primary" />
+                    Identificação do Cliente
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">CPF/CNPJ (se não veio na venda)</Label>
+                      <Input
+                        value={cpfExtra}
+                        onChange={(e) => setCpfExtra(e.target.value)}
+                        placeholder="Somente números"
+                        className="h-10 border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">Nome do Cliente</Label>
+                      <Input
+                        value={nomeExtra}
+                        onChange={(e) => setNomeExtra(e.target.value)}
+                        placeholder="Nome completo do cliente"
+                        className="h-10 border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+                      />
+                    </div>
                   </div>
-                  <span className="text-xs text-muted-foreground leading-relaxed">
-                    Devolve itens ao estoque e realiza uma nova compra casada de forma simultânea.
-                  </span>
-                </button>
-
-                {/* Tile 2: Vale Crédito */}
-                <button
-                  type="button"
-                  onClick={() => setMode("vale_credito")}
-                  className={`flex flex-col items-start p-4 rounded-xl border text-left transition-all ${
-                    mode === "vale_credito"
-                      ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
-                      : "border-border bg-background hover:bg-muted/50"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Wallet className={`w-4 h-4 ${mode === "vale_credito" ? "text-primary" : "text-muted-foreground"}`} />
-                    <span className="font-bold text-sm text-foreground">Crédito em Haver (Vale-Troca)</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground leading-relaxed">
-                    Gera saldo associado ao documento do cliente para uso em compras futuras.
-                  </span>
-                </button>
-
-                {/* Tile 3: Devolução/Reembolso */}
-                <button
-                  type="button"
-                  onClick={() => setMode("devolucao")}
-                  className={`flex flex-col items-start p-4 rounded-xl border text-left transition-all ${
-                    mode === "devolucao"
-                      ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
-                      : "border-border bg-background hover:bg-muted/50"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <RotateCcw className={`w-4 h-4 ${mode === "devolucao" ? "text-primary" : "text-muted-foreground"}`} />
-                    <span className="font-bold text-sm text-foreground">Devolução (Reembolso)</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground leading-relaxed">
-                    Devolve itens ao estoque e reembolsa o valor correspondente em dinheiro/PIX.
-                  </span>
-                </button>
-
-                {/* Tile 4: Somente Estoque */}
-                <button
-                  type="button"
-                  onClick={() => setMode("somente_estoque")}
-                  className={`flex flex-col items-start p-4 rounded-xl border text-left transition-all ${
-                    mode === "somente_estoque"
-                      ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
-                      : "border-border bg-background hover:bg-muted/50"
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Package className={`w-4 h-4 ${mode === "somente_estoque" ? "text-primary" : "text-muted-foreground"}`} />
-                    <span className="font-bold text-sm text-foreground">Apenas Devolver ao Estoque</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground leading-relaxed">
-                    Retorna os produtos ao estoque físico sem gerar qualquer crédito ou reembolso financeiro.
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            <Separator className="border-border/60" />
-
-            {/* Grid Principal Adaptativo */}
-            <div className={`grid gap-6 ${mode === "troca" ? "lg:grid-cols-12" : "grid-cols-1"}`}>
-              {/* Coluna da Devolução (Itens de Origem) */}
-              <div className={`${mode === "troca" ? "lg:col-span-7" : ""} space-y-4`}>
-                <div className="flex items-center gap-2 pb-1 border-b border-border/40">
-                  <Package className="w-4 h-4 text-primary" />
-                  <h3 className="font-bold text-sm text-foreground">Selecione as Quantidades a Devolver</h3>
                 </div>
 
-                <div className="space-y-2">
-                  {linhasComMax.map((l) => {
-                    const currentQty = parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0
-                    return (
-                      <div
-                        key={l.inventoryId}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-border bg-muted/20"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-sm text-foreground truncate">{l.name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            Vendido: {l.quantity} · Devolvido: {l.qtyReturned ?? 0} · Disponível: <span className="font-medium text-foreground">{l.maxReturn}</span>
-                          </p>
-                        </div>
-
-                        {/* Incrementador +/- Premium */}
-                        <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg p-1 self-start sm:self-center shadow-sm">
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md"
-                            disabled={l.maxReturn <= 0 || currentQty <= 0}
-                            onClick={() => {
-                              const val = Math.max(0, currentQty - 1)
-                              setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
-                            }}
-                          >
-                            <Minus className="h-4 w-4" />
-                          </Button>
-                          <input
-                            type="text"
-                            className="w-12 text-center bg-transparent border-0 font-bold text-sm text-foreground tabular-nums focus:ring-0 focus:outline-none"
-                            value={qtyByLine[l.inventoryId] ?? "0"}
-                            readOnly
-                          />
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md"
-                            disabled={l.maxReturn <= 0 || currentQty >= l.maxReturn}
-                            onClick={() => {
-                              const val = Math.min(l.maxReturn, currentQty + 1)
-                              setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
-                            }}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </div>
+                {/* Modo de Operação */}
+                <div className="space-y-3">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
+                    Modo de Operação
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Tile 1: Troca Imediata */}
+                    <button
+                      type="button"
+                      onClick={() => setMode("troca")}
+                      className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                        mode === "troca"
+                          ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
+                          : "border-border bg-background hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <RotateCcw className={`w-3.5 h-3.5 ${mode === "troca" ? "text-primary" : "text-muted-foreground"}`} />
+                        <span className="font-bold text-xs text-foreground">Troca Imediata</span>
                       </div>
-                    )
-                  })}
+                      <span className="text-[10px] text-muted-foreground leading-normal">
+                        Devolve itens ao estoque e realiza nova compra simultânea.
+                      </span>
+                    </button>
+
+                    {/* Tile 2: Vale Crédito */}
+                    <button
+                      type="button"
+                      onClick={() => setMode("vale_credito")}
+                      className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                        mode === "vale_credito"
+                          ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
+                          : "border-border bg-background hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Wallet className={`w-3.5 h-3.5 ${mode === "vale_credito" ? "text-primary" : "text-muted-foreground"}`} />
+                        <span className="font-bold text-xs text-foreground font-sans">Vale-Troca</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground leading-normal">
+                        Gera saldo associado ao CPF para uso em compras futuras.
+                      </span>
+                    </button>
+
+                    {/* Tile 3: Devolução/Reembolso */}
+                    <button
+                      type="button"
+                      onClick={() => setMode("devolucao")}
+                      className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                        mode === "devolucao"
+                          ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
+                          : "border-border bg-background hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <RotateCcw className={`w-3.5 h-3.5 ${mode === "devolucao" ? "text-primary" : "text-muted-foreground"}`} />
+                        <span className="font-bold text-xs text-foreground">Reembolso</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground leading-normal">
+                        Devolve itens e reembolsa o valor em dinheiro ou PIX.
+                      </span>
+                    </button>
+
+                    {/* Tile 4: Somente Estoque */}
+                    <button
+                      type="button"
+                      onClick={() => setMode("somente_estoque")}
+                      className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                        mode === "somente_estoque"
+                          ? "border-primary bg-primary/5 ring-1 ring-primary shadow-sm"
+                          : "border-border bg-background hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Package className={`w-3.5 h-3.5 ${mode === "somente_estoque" ? "text-primary" : "text-muted-foreground"}`} />
+                        <span className="font-bold text-xs text-foreground">Apenas Estoque</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground leading-normal">
+                        Retorna produtos ao estoque físico sem gerar créditos.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Coluna Direita: Quantidades, Carrinho (se Troca), Resumo e Ações (lg:col-span-7) */}
+              <div className="lg:col-span-7 space-y-5">
+                {/* Seleção de Itens a Devolver */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 pb-1 border-b border-border/40">
+                    <Package className="w-4 h-4 text-primary" />
+                    <h3 className="font-bold text-sm text-foreground">Selecione as Quantidades a Devolver</h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    {linhasComMax.map((l) => {
+                      const currentQty = parseInt(qtyByLine[l.inventoryId] || "0", 10) || 0
+                      return (
+                        <div
+                          key={l.inventoryId}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border border-border bg-muted/20"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-sm text-foreground truncate">{l.name}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Vendido: {l.quantity} · Devolvido: {l.qtyReturned ?? 0} · Disponível: <span className="font-medium text-foreground">{l.maxReturn}</span>
+                            </p>
+                          </div>
+
+                          {/* Incrementador +/- Premium */}
+                          <div className="flex items-center gap-1.5 bg-background border border-border rounded-lg p-1 self-start sm:self-center shadow-sm">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md"
+                              disabled={l.maxReturn <= 0 || currentQty <= 0}
+                              onClick={() => {
+                                const val = Math.max(0, currentQty - 1)
+                                setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
+                              }}
+                            >
+                              <Minus className="h-4 w-4" />
+                            </Button>
+                            <input
+                              type="text"
+                              className="w-12 text-center bg-transparent border-0 font-bold text-sm text-foreground tabular-nums focus:ring-0 focus:outline-none"
+                              value={qtyByLine[l.inventoryId] ?? "0"}
+                              readOnly
+                            />
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md"
+                              disabled={l.maxReturn <= 0 || currentQty >= l.maxReturn}
+                              onClick={() => {
+                                const val = Math.min(l.maxReturn, currentQty + 1)
+                                setQtyByLine((prev) => ({ ...prev, [l.inventoryId]: String(val) }))
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
 
                 {/* Motivo (Opcional) */}
@@ -984,131 +1016,146 @@ export function TrocasDevolucao({
                     value={motivo}
                     onChange={(e) => setMotivo(e.target.value)}
                     placeholder="Ex.: produto com defeito de fábrica, tamanho incorreto, insatisfação..."
-                    className="h-20 resize-none text-sm border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+                    className="h-16 resize-none text-sm border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
                   />
                 </div>
 
-                {/* Botões de Ação para Modos Sem Troca Casada */}
-                {mode !== "troca" && (
-                  <div className="pt-2 flex flex-wrap gap-2">
-                    <Button type="button" size="lg" className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-6" onClick={handleRegistrar}>
-                      Confirmar Devolução
-                    </Button>
-                    {lastDevolucao && lastDevolucao.credit > 0 && (
-                      <Button type="button" size="lg" variant="outline" onClick={() => void imprimirVale()}>
-                        <Printer className="w-4 h-4 mr-2" />
-                        Imprimir Comprovante 80mm
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Coluna da Direita (Carrinho e Busca de Produtos - Apenas para Troca Imediata) */}
-              {mode === "troca" && (
-                <div className="lg:col-span-5 space-y-5 border-t lg:border-t-0 lg:border-l border-border/80 pt-6 lg:pt-0 lg:pl-6">
-                  <div className="flex items-center gap-2 pb-1 border-b border-border/40">
-                    <ShoppingCart className="h-4 w-4 text-primary" />
-                    <h3 className="font-bold text-sm text-foreground">Carrinho da Nova Compra</h3>
-                  </div>
-
-                  {/* Busca Inline */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-muted-foreground">Buscar Novo Produto</Label>
-                    <div className="relative">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        value={trocaSearch}
-                        onChange={(e) => setTrocaSearch(e.target.value)}
-                        placeholder="Buscar por nome, SKU, código de barras..."
-                        className="pl-9 h-10 border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
-                      />
+                {/* Carrinho da Nova Compra - Apenas se modo "troca" */}
+                {mode === "troca" && (
+                  <div className="space-y-4 pt-4 border-t border-border/80">
+                    <div className="flex items-center gap-2 pb-1 border-b border-border/40">
+                      <ShoppingCart className="h-4 w-4 text-primary" />
+                      <h3 className="font-bold text-sm text-foreground">Carrinho da Nova Compra</h3>
                     </div>
 
-                    {/* Resultados Inline */}
-                    {trocaSearchResults.length > 0 && (
-                      <div className="rounded-lg border border-border bg-muted/20 overflow-hidden divide-y divide-border/60 max-h-48 overflow-y-auto shadow-inner mt-1">
-                        {trocaSearchResults.map((p) => {
-                          const isService = p.category === "Servicos"
-                          const out = !isService && p.stock <= 0
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              disabled={out}
-                              onClick={() => addTrocaItem(p)}
-                              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-primary/5 transition-colors disabled:opacity-40"
-                            >
+                    {/* Busca Inline */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">Buscar Novo Produto</Label>
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          value={trocaSearch}
+                          onChange={(e) => setTrocaSearch(e.target.value)}
+                          placeholder="Buscar por nome, SKU, código de barras..."
+                          className="pl-9 h-10 border-border bg-background focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-0"
+                        />
+                      </div>
+
+                      {/* Resultados Inline */}
+                      {trocaSearchResults.length > 0 && (
+                        <div className="rounded-lg border border-border bg-muted/20 overflow-hidden divide-y divide-border/60 max-h-48 overflow-y-auto shadow-inner mt-1">
+                          {trocaSearchResults.map((p) => {
+                            const isService = p.category === "Servicos"
+                            const out = !isService && p.stock <= 0
+                            return (
+                              <button
+                                key={p.id}
+                                type="button"
+                                disabled={out}
+                                onClick={() => addTrocaItem(p)}
+                                className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-primary/5 transition-colors disabled:opacity-40"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate font-semibold text-foreground">{p.name}</p>
+                                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                                    {p.category} · {isService ? "Serviço" : out ? "Sem estoque" : `Estoque: ${p.stock}`}
+                                  </p>
+                                </div>
+                                <span className="shrink-0 font-bold text-primary tabular-nums">{formatBrl(p.price)}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Mini-carrinho */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">Itens da Nova Compra</Label>
+                      {trocaCart.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center p-4 border border-dashed border-border/80 rounded-xl bg-muted/10 text-center">
+                          <ShoppingCart className="w-7 h-7 text-muted-foreground/45 mb-1" />
+                          <p className="text-xs text-muted-foreground">Busque produtos acima para adicionar ao carrinho.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {trocaCart.map((l) => (
+                            <div key={l.inventoryId} className="flex items-center justify-between gap-2 p-2 rounded-xl border border-border bg-background shadow-sm text-xs">
                               <div className="min-w-0 flex-1">
-                                <p className="truncate font-semibold text-foreground">{p.name}</p>
-                                <p className="text-[10px] text-muted-foreground mt-0.5">
-                                  {p.category} · {isService ? "Serviço" : out ? "Sem estoque" : `Estoque: ${p.stock}`}
-                                </p>
+                                <p className="font-semibold text-foreground truncate">{l.name}</p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">{formatBrl(l.unitPrice)} cada</p>
                               </div>
-                              <span className="shrink-0 font-bold text-primary tabular-nums">{formatBrl(p.price)}</span>
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Mini-carrinho */}
-                  <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-muted-foreground">Itens da Nova Compra</Label>
-                    {trocaCart.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center p-6 border border-dashed border-border/80 rounded-xl bg-muted/10 text-center">
-                        <ShoppingCart className="w-8 h-8 text-muted-foreground/45 mb-2" />
-                        <p className="text-xs text-muted-foreground">Busque produtos acima para adicionar ao carrinho.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                        {trocaCart.map((l) => (
-                          <div key={l.inventoryId} className="flex items-center justify-between gap-2 p-2 rounded-xl border border-border bg-background shadow-sm text-xs">
-                            <div className="min-w-0 flex-1">
-                              <p className="font-semibold text-foreground truncate">{l.name}</p>
-                              <p className="text-[10px] text-muted-foreground mt-0.5">{formatBrl(l.unitPrice)} cada</p>
-                            </div>
-                            <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded-md">
+                              <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded-md">
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 rounded-md hover:bg-muted"
+                                  onClick={() => decTrocaItem(l.inventoryId)}
+                                >
+                                  <Minus className="h-3 w-3" />
+                                </Button>
+                                <span className="w-6 text-center font-bold tabular-nums text-xs text-foreground">{l.quantity}</span>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-6 w-6 rounded-md hover:bg-muted"
+                                  onClick={() => incTrocaItem(l.inventoryId)}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              <div className="text-right w-16 shrink-0 font-bold tabular-nums text-foreground">
+                                {formatBrl(l.unitPrice * l.quantity)}
+                              </div>
                               <Button
                                 type="button"
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 rounded-md hover:bg-muted"
-                                onClick={() => decTrocaItem(l.inventoryId)}
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-md"
+                                onClick={() => removeTrocaItem(l.inventoryId)}
                               >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span className="w-6 text-center font-bold tabular-nums text-xs text-foreground">{l.quantity}</span>
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                className="h-6 w-6 rounded-md hover:bg-muted"
-                                onClick={() => incTrocaItem(l.inventoryId)}
-                              >
-                                <Plus className="h-3 w-3" />
+                                <X className="h-3 w-3" />
                               </Button>
                             </div>
-                            <div className="text-right w-16 shrink-0 font-bold tabular-nums text-foreground">
-                              {formatBrl(l.unitPrice * l.quantity)}
-                            </div>
-                            <Button
-                              type="button"
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-md"
-                              onClick={() => removeTrocaItem(l.inventoryId)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
+                )}
 
-                  {/* Resumo Financeiro da Troca */}
+                {/* Resumo Financeiro e Ações da Devolução (se modo NÃO troca) */}
+                {mode !== "troca" && (
+                  <div className="rounded-xl border border-border/85 bg-muted/20 p-4 space-y-4 shadow-inner">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-semibold text-muted-foreground">Valor Total a Devolver:</span>
+                      <span className="font-extrabold text-base text-foreground tabular-nums">{formatBrl(valorDevolvido)}</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-border/60">
+                      <Button
+                        type="button"
+                        size="default"
+                        className="bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-5 rounded-lg flex-1"
+                        onClick={handleRegistrar}
+                        disabled={valorDevolvido <= 0}
+                      >
+                        Confirmar Devolução
+                      </Button>
+                      {lastDevolucao && lastDevolucao.credit > 0 && (
+                        <Button type="button" variant="outline" className="rounded-lg px-4" onClick={() => void imprimirVale()}>
+                          <Printer className="w-4 h-4 mr-2" />
+                          Imprimir Comprovante (80mm)
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Resumo Financeiro da Troca Imediata */}
+                {mode === "troca" && (
                   <div className="rounded-xl border border-border/85 bg-muted/20 p-4 space-y-3 shadow-inner">
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div>
@@ -1178,28 +1225,28 @@ export function TrocasDevolucao({
                         </RadioGroup>
                       </div>
                     )}
-                  </div>
 
-                  {/* Ações da Troca Imediata */}
-                  <div className="pt-2 flex flex-col gap-2">
-                    <Button
-                      type="button"
-                      size="lg"
-                      className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold w-full h-11"
-                      onClick={handleFinalizarTroca}
-                      disabled={trocaCart.length === 0 || valorDevolvido <= 0}
-                    >
-                      Finalizar Troca Imediata
-                    </Button>
-                    {lastDevolucao && lastDevolucao.credit > 0 && (
-                      <Button type="button" size="lg" variant="outline" className="w-full h-11 border-border/80" onClick={() => void imprimirVale()}>
-                        <Printer className="w-4 h-4 mr-2" />
-                        Imprimir Comprovante 80mm
+                    {/* Ações da Troca Imediata */}
+                    <div className="pt-2 flex flex-col gap-2">
+                      <Button
+                        type="button"
+                        size="lg"
+                        className="bg-primary hover:bg-primary/95 text-primary-foreground font-bold w-full h-11"
+                        onClick={handleFinalizarTroca}
+                        disabled={trocaCart.length === 0 || valorDevolvido <= 0}
+                      >
+                        Finalizar Troca Imediata
                       </Button>
-                    )}
+                      {lastDevolucao && lastDevolucao.credit > 0 && (
+                        <Button type="button" size="lg" variant="outline" className="w-full h-11 border-border/80" onClick={() => void imprimirVale()}>
+                          <Printer className="w-4 h-4 mr-2" />
+                          Imprimir Comprovante 80mm
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
