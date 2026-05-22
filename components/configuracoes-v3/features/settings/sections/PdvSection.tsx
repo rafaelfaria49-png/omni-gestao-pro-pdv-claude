@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTheme } from "@/components/theme/ThemeProvider";
 import { SectionHeader } from "../components/SectionHeader";
 import { Monitor, Check, Zap, Wrench, LayoutGrid, MessageCircle, FileText, ExternalLink, Store, Info, Cpu, Eye } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
@@ -156,8 +157,19 @@ function safePrinterRecord(raw: unknown): Record<string, unknown> {
 
 /**
  * Mini-preview do layout do PDV usando as capturas de tela reais armazenadas no repositório.
+ * Seleciona a imagem dinamicamente de acordo com o tema selecionado na barra superior.
  */
 function PdvMiniPreview({ variant }: { variant: PdvFlowId }) {
+  const { mode } = useTheme();
+  const themeMode = mode === "classic" ? "light" : mode; // "light" | "soft-ice" | "midnight" | "black"
+
+  const flowPrefixMap: Record<PdvFlowId, string> = {
+    classico: "classic",
+    assistencia: "assistencia",
+    supermercado: "supermercado",
+    next: "next",
+  };
+
   const srcMap: Record<PdvFlowId, string> = {
     classico: "/images/pdv-classic-thumb.png",
     assistencia: "/images/pdv-assistencia-thumb.png",
@@ -165,14 +177,25 @@ function PdvMiniPreview({ variant }: { variant: PdvFlowId }) {
     next: "/images/pdv-next-thumb.png",
   };
 
+  const prefix = flowPrefixMap[variant];
+  const dynamicSrc = `/images/pdv-${prefix}-${themeMode}.png`;
+
   return (
     <div className="relative h-full w-full bg-muted">
       <img
-        src={srcMap[variant]}
+        src={dynamicSrc}
         alt={`Preview ${variant}`}
         className="h-full w-full object-cover object-top"
         onError={(e) => {
-          e.currentTarget.style.display = "none";
+          // Fallback resiliente: se a imagem do tema não existir, usa a de preview legado do repositório
+          const fallback = srcMap[variant];
+          const currentUrl = e.currentTarget.src;
+          const fallbackAbsolute = window.location.origin + fallback;
+          if (currentUrl !== fallbackAbsolute) {
+            e.currentTarget.src = fallback;
+          } else {
+            e.currentTarget.style.display = "none";
+          }
         }}
       />
     </div>
