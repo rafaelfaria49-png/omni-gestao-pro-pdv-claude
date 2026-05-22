@@ -13,6 +13,33 @@
 
 ## ✅ Concluído e Funcionando
 
+### Trocas — Fase 3 Troca Imediata + Cupom (concluído 22/05/2026)
+
+**Contexto:** modo "troca" da Fase 0 emitia apenas vale-crédito local; não havia ligação com nova venda. Operador precisava abrir o PDV em paralelo. Não havia comprovante operacional.
+
+**Arquivos alterados:**
+
+| Arquivo | Mudança |
+|---|---|
+| `components/dashboard/vendas/trocas-devolucao.tsx` | Mini-PDV embutido (modo "troca"): busca produto/SKU/EAN no inventory real, mini-carrinho com `+/-/x`, resumo "Devolvido / Nova compra / Diferença". Cobrança da diferença via `paymentBreakdown` (dinheiro/pix/débito/crédito) usando o **próprio `finalizeSaleTransaction`** existente — abate `creditoVale` recém-emitido como crédito interno. Excesso devolvido escolhe entre vale ou dinheiro. **Cupom de Troca/Devolução** (`CupomTroca`) abre automaticamente após confirmar (devolução simples, vale e troca imediata): imprimir 80mm, imprimir vale ESC/POS, copiar resumo. |
+| `app/api/vendas/[id]/route.ts` | GET expõe `modo` e `novaVendaId` extraídos do `payload` de cada devolução (vínculo para a timeline). |
+| `components/dashboard/vendas/vendas-arquivo-geral.tsx` | Drawer: badge "Troca imediata" em destaque + mini-timeline `venda original → devolução → nova venda` quando `payload.modo === "troca_imediata"`. |
+
+**Cenários da troca imediata:**
+- `nova > devolvido` → cobra **só a diferença** na forma escolhida; cria nova venda real (PDV core inalterado).
+- `nova = devolvido` → finaliza sem cobrança; vale consumido integralmente.
+- `nova < devolvido` → vale parcial consumido + opção de gerar vale-troca ou devolver em dinheiro.
+
+**Vínculo via payload (sem alterar schema):** `DevolucaoVenda.payload` agora guarda `{ modo: "troca_imediata", vendaOriginalId, novaVendaId, valorDevolvido, totalNovaCompra, diferencaPaga, diferencaForma, creditoRestante, excessoDinheiro }`. A nova venda é criada via `finalizeSaleTransaction` standard.
+
+**Reaproveitamento:** `finalizeSaleTransaction` (PDV core), `registrarDevolucao` (Fase 0), `/api/ops/devolucao` (estoque + status server), `buildValeTrocaEscPos`, `openThermalHtmlPrint`. Nenhuma duplicação de lógica de PDV.
+
+**Validação:** `npx tsc --noEmit` → 0 erros. `npx next build --webpack` → Compiled successfully.
+
+**Limitações / Fase 4:** crédito persistente em DB segue fora de escopo (Fase 1); excesso em dinheiro só é registrado no audit-log (não cria `MovimentacaoFinanceira` saída — operador entrega no caixa); recovery automático se `finalizeSaleTransaction` falhar após `registrarDevolucao` continua manual (toast com instrução clara).
+
+---
+
 ### Cancelamento de Venda — Fase 2 ERP-safe (concluído 22/05/2026)
 
 **Contexto:** o cancelamento marcava `status="cancelada"` + motivo/operador/data e estornava **apenas** o título à prazo (`contaReceberTituloId`). **Não repunha estoque** nem estornava a entrada à vista (`MovimentacaoFinanceira origem:"venda"`). Sem trilha de auditoria de estoque/financeiro no cancelamento.
