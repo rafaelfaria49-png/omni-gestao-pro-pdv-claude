@@ -66,7 +66,9 @@
 [data-density="operational"] :where([data-slot="input"], [data-slot="textarea"]) {
   height: auto;
   min-height: var(--density-control-h);
-  padding-inline: var(--density-control-px) !important;
+  /* padding-inline intencionalmente NÃO forçado: o Input base já usa px-2.5 (10px = --density-control-px).
+     Forçar com !important quebra overrides legítimos (pl-9/pr-9) que reservam espaço para ícones absolutos
+     em search bars (Vendas, Histórico, Orçamentos, PDV). */
   padding-block: var(--density-control-py) !important;
   font-size: var(--density-control-text) !important;
   line-height: var(--density-line-snug) !important;
@@ -154,7 +156,7 @@
   ):not([type="file"]):not([type="hidden"]) {
   min-height: var(--density-control-h);
   height: var(--density-control-h);
-  padding-inline: var(--density-control-px) !important;
+  /* padding-inline intencionalmente NÃO forçado: ver justificativa na regra [data-slot="input"] acima. */
   padding-block: var(--density-control-py) !important;
   font-size: var(--density-control-text) !important;
   line-height: var(--density-line-snug) !important;
