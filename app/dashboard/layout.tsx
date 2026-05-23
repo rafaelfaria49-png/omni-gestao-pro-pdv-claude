@@ -2,16 +2,13 @@
 
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect } from "react"
-import { useSession } from "next-auth/react"
 import { AppOpsProviders } from "@/components/dashboard/app-ops-providers"
-import { AccessGate } from "@/components/auth/AccessGate"
 import { FirstAccessWizard } from "@/components/onboarding/first-access-wizard"
 import { AppShell } from "@/components/painel-inicial/AppShell"
 
 export default function DashboardSegmentLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { data: session } = useSession()
 
   const goToPage = (page: string) => {
     if (page === "dashboard") {
@@ -57,7 +54,7 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
 
   return (
     <AppOpsProviders>
-      {session ? shell : <AccessGate>{shell}</AccessGate>}
+      {shell}
     </AppOpsProviders>
   )
 }

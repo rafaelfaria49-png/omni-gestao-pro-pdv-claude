@@ -23,14 +23,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useStaffSession } from "@/components/auth/AccessGate"
+import { useSession, signOut } from "next-auth/react"
 
 export function Header() {
   const { config } = useConfigEmpresa()
   const { empresaDocumentos, lojas, lojaAtivaId, setLojaAtivaId, storesRefreshNonce } = useLojaAtiva()
-  const staffSession = useStaffSession()
+  const { data: session } = useSession()
   const [storesRemote, setStoresRemote] = useState<Array<{ id: string; name: string; cnpj: string }>>([])
   const [isAdmin, setIsAdmin] = useState(false)
+
+  const profileName = session?.user?.name?.trim() || "Usuário"
+  const cargo = session?.user?.role?.trim() || ""
 
   const logoUrl = empresaDocumentos.identidadeVisual.logoUrl || config.empresa.identidadeVisual.logoUrl
 
@@ -98,21 +101,18 @@ export function Header() {
     return lojaLinha ? labelStore(lojaLinha, idx) : labelStore({ id: lojaIdAtual, name: "", cnpj: "" }, idx)
   }, [effectiveStores, empresaDocumentos.nomeFantasia, lojaIdAtual, lojaLinha])
 
-  const perfilSubtitulo =
-    (empresaDocumentos.nomeFantasia || config.empresa.nomeFantasia || "").trim() || tituloMarca
-
   const handleSair = async () => {
-    staffSession.logout()
     try {
       await fetch("/api/auth/staff", { method: "DELETE", credentials: "include" })
     } catch {
-      /* segue mesmo se a sessão já tiver expirado */
+      /* legado */
     }
     try {
       await fetch("/api/auth/admin", { method: "DELETE", credentials: "include" })
     } catch {
       /* legado */
     }
+    await signOut({ callbackUrl: "/login" })
   }
 
   return (
@@ -213,8 +213,8 @@ export function Header() {
                 <User className="w-4 h-4" />
               </span>
               <span className="hidden text-left leading-tight md:block">
-                <span className="block text-xs font-semibold text-foreground">{staffSession.profileName}</span>
-                <span className="block text-[10px] text-muted-foreground">{staffSession.cargo}</span>
+                <span className="block text-xs font-semibold text-foreground">{profileName}</span>
+                <span className="block text-[10px] text-muted-foreground">{cargo}</span>
               </span>
             </Button>
           </DropdownMenuTrigger>
@@ -225,10 +225,10 @@ export function Header() {
                   <User className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-foreground">{staffSession.profileName} - {staffSession.cargo}</span>
-                  <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground" title={staffSession.lojaStatus}>
+                  <span className="block text-sm font-semibold text-foreground">{profileName}{cargo ? ` - ${cargo}` : ""}</span>
+                  <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground" title={tituloMarca}>
                     <Store className="h-3.5 w-3.5 shrink-0" />
-                    {staffSession.lojaStatus}
+                    {tituloMarca}
                   </span>
                 </div>
               </div>

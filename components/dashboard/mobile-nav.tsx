@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useStaffAccess } from "@/components/auth/AccessGate"
+import { useSession } from "next-auth/react"
 import { useMemo, useState } from "react"
 import { useConfigEmpresa } from "@/lib/config-empresa"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
@@ -136,7 +136,8 @@ interface MobileNavProps {
 
 export function MobileNav({ onNavigate, currentPage = "dashboard" }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const staffRole = useStaffAccess()
+  const { data: session } = useSession()
+  const staffRole = session?.user?.role ?? null
   const { config } = useConfigEmpresa()
   const { cadastroBasicoIncompleto } = useLojaAtiva()
   const { pdvParams } = useStoreSettings()
