@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import type { FechamentoResumo } from "@/lib/caixa-fechamento-resumo"
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
@@ -167,6 +168,43 @@ export function CaixaHistoricoClient() {
     const suprimentos = s.operacoes.filter((o) => o.tipo === "suprimento").reduce((a, o) => a + o.valor, 0)
     const totalDev = s.devolucoes.reduce((a, d) => a + d.valorTotal, 0)
 
+    // Comprovante ERP: usa o resumoFechamento (por origem + pagamento + totais) quando
+    // a sessão foi fechada já com a consolidação premium; senão cai no ledger legado.
+    const resumo = (payload?.resumoFechamento ?? null) as FechamentoResumo | null
+    const ledger = payload?.ledger as Record<string, number> | null
+
+    let secaoVendas = ""
+    if (resumo) {
+      const origem = resumo.porOrigem
+        .map((o) => `<p>${o.label}: ${fmt(o.valorBruto)} (${o.qtdItens} itens)</p>`)
+        .join("")
+      const pg = resumo.porPagamento
+      secaoVendas = `<hr><strong>VENDAS POR ORIGEM</strong>
+      ${origem || "<p>—</p>"}
+      <hr><strong>FORMAS DE PAGAMENTO</strong>
+      <p>Dinheiro: ${fmt(pg.dinheiro)}</p>
+      <p>Pix: ${fmt(pg.pix)}</p>
+      <p>Débito: ${fmt(pg.cartaoDebito)}</p>
+      <p>Crédito: ${fmt(pg.cartaoCredito)}</p>
+      <p>Carnê: ${fmt(pg.carne)}</p>
+      <p>A prazo: ${fmt(pg.aPrazo)}</p>
+      <p>Vale/Crédito: ${fmt(pg.creditoVale)}</p>
+      <hr><strong>CONSOLIDAÇÃO</strong>
+      <p>Vendas (qtd): ${resumo.qtdVendas}</p>
+      <p>Subtotal bruto: ${fmt(resumo.subtotalBruto)}</p>
+      <p>Descontos: -${fmt(resumo.descontos)}</p>
+      <p>Total líquido: ${fmt(resumo.totalLiquido)}</p>
+      <p>Total recebido: ${fmt(resumo.totalRecebido)}</p>
+      <p>Ticket médio: ${fmt(resumo.ticketMedio)}</p>`
+    } else if (ledger) {
+      secaoVendas = `<hr>
+      <p>Dinheiro: ${fmt(ledger.vendasDinheiro ?? 0)}</p>
+      <p>Pix: ${fmt(ledger.vendasPix ?? 0)}</p>
+      <p>Débito: ${fmt(ledger.vendasCartaoDebito ?? 0)}</p>
+      <p>Crédito: ${fmt(ledger.vendasCartaoCredito ?? 0)}</p>
+      <p>Carnê: ${fmt(ledger.vendasCarne ?? 0)}</p>`
+    }
+
     const html = `<html><head><title>Fechamento de Caixa</title>
     <style>body{font-family:monospace;font-size:12px;margin:16px}</style>
     </head><body>
@@ -182,13 +220,7 @@ export function CaixaHistoricoClient() {
     <p>Sangrias: ${fmt(sangrias)}</p>
     <p>Suprimentos: ${fmt(suprimentos)}</p>
     <p>Devoluções: ${fmt(totalDev)}</p>
-    ${payload?.ledger ? `<hr>
-    <p>Dinheiro: ${fmt((payload.ledger as Record<string, number>).vendasDinheiro ?? 0)}</p>
-    <p>Pix: ${fmt((payload.ledger as Record<string, number>).vendasPix ?? 0)}</p>
-    <p>Débito: ${fmt((payload.ledger as Record<string, number>).vendasCartaoDebito ?? 0)}</p>
-    <p>Crédito: ${fmt((payload.ledger as Record<string, number>).vendasCartaoCredito ?? 0)}</p>
-    <p>Carnê: ${fmt((payload.ledger as Record<string, number>).vendasCarne ?? 0)}</p>
-    ` : ""}
+    ${secaoVendas}
     </body></html>`
     const w = window.open("", "_blank", "width=500,height=600")
     if (w) { w.document.write(html); w.document.close(); w.print() }
@@ -341,6 +373,7 @@ function SessaoDetalheView({
   const totalDev = sessao.devolucoes.reduce((a, d) => a + d.valorTotal, 0)
   const payload = sessao.payload as Record<string, unknown> | null
   const ledger = payload?.ledger as Record<string, number> | null
+  const resumo = (payload?.resumoFechamento ?? null) as FechamentoResumo | null
 
   const diferenca =
     sessao.saldoContado != null && sessao.saldoFinal != null
@@ -384,6 +417,25 @@ function SessaoDetalheView({
               ? `Diferença de ${fmt(diferenca)} detectada no fechamento`
               : "Fechamento conferido sem diferença"}
           </span>
+        </div>
+      )}
+
+      {/* Vendas por origem (consolidação ERP — sessões fechadas com resumo premium) */}
+      {resumo && resumo.porOrigem.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Vendas por origem
+          </p>
+          <div className="grid grid-cols-2 gap-1.5 text-sm sm:grid-cols-3">
+            {resumo.porOrigem.map((o) => (
+              <div key={o.key} className="rounded-lg border border-border bg-secondary/50 px-2 py-1.5 text-center">
+                <p className="text-[10px] text-muted-foreground">
+                  {o.label} ({o.qtdItens})
+                </p>
+                <p className="font-semibold">{fmt(o.valorBruto)}</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

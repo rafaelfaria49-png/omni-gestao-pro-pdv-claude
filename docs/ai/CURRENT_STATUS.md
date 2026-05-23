@@ -13,6 +13,30 @@
 
 ## ✅ Concluído e Funcionando
 
+### Caixa — Fechamento ERP Premium (estilo Gestão Click) (concluído 23/05/2026)
+
+**Contexto:** evoluir o fechamento de caixa para padrão ERP — consolidação por
+origem, por forma de pagamento e resumo operacional. Detalhes em
+[`docs/ai/FECHAMENTO_CAIXA_ERP_PREMIUM_REPORT.md`](./FECHAMENTO_CAIXA_ERP_PREMIUM_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/caixa-fechamento-resumo.ts` (NOVO) | Helper puro único: `classifyLineOrigem`, `filterSalesDaSessao`, `computeFechamentoResumo` → por origem (PDV/Balcão, Item Avulso, O.S.), por pagamento e consolidação. Convenção `recebido = líquido − aPrazo` alinhada ao `MovimentacaoFinanceira(origem:"venda")`. |
+| `components/dashboard/caixa/fechamento-caixa-modal.tsx` | Resumo ERP (KPIs + por origem + por pagamento + gaveta), **conferência por dinheiro físico** (`saldoInicial + dinheiro + suprimentos − sangrias`, corrige conferir gaveta contra total que incluía pix/cartão), cabeçalho operador/sessão, impressão/cópia ERP, persistência do resumo em `SessaoCaixa.payload.resumoFechamento`. |
+| `components/dashboard/caixa/caixa-relatorio.tsx` | Card "Vendas por origem" reusando o helper. |
+| `components/dashboard/caixa/caixa-historico-client.tsx` | Comprovante (impressão + detalhe) consome `payload.resumoFechamento`, com fallback ao ledger legado. |
+
+**Sem schema novo** (resumo viaja no `payload` JSONB existente). Rotas
+`caixa/{fechar,sessao-detalhe}` e o ledger financeiro **inalterados**.
+Multi-terminal **não** iniciado (fora de escopo).
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Pendências (relatório):** PDV Balcão × Venda Completa não são distinguíveis na
+origem (mesmo `finalizeSaleTransaction`, sem marcador); operador é o `cashierId`
+local (nome amigável fica no server); vendas `syncPending` entram no resumo
+operacional (canônico financeiro segue sendo `totalVendasServer`).
+
 ### PDV — Venda Avulsa via tecla INSERT (Item Avulso) (concluído 23/05/2026)
 
 **Contexto:** trazer ao OmniGestão o fluxo do sistema antigo onde **INSERT**

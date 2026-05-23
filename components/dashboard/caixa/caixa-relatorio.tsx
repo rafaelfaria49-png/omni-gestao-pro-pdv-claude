@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { Printer, Copy, TrendingUp, TrendingDown, DollarSign, RotateCcw, ShoppingBag } from "lucide-react"
+import { Printer, Copy, TrendingUp, TrendingDown, DollarSign, RotateCcw, Layers } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { useCaixa } from "./caixa-provider"
 import { ensureLedger, useOperationsStore } from "@/lib/operations-store"
 import { useToast } from "@/hooks/use-toast"
+import { computeFechamentoResumo } from "@/lib/caixa-fechamento-resumo"
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
@@ -46,6 +47,15 @@ export function CaixaRelatorio({ nomeLoja = "Loja", operador = "" }: Props) {
   const devolucoesHoje = useMemo(
     () => devolucoes.filter((d) => String(d.at).startsWith(today)),
     [devolucoes, today]
+  )
+
+  // Resumo por origem (PDV/Balcão, Item Avulso, O.S.) reutilizando o helper de
+  // fechamento — só consumimos `porOrigem` aqui (sem duplicar cálculo de saldo).
+  const porOrigem = useMemo(
+    () =>
+      computeFechamentoResumo({ sales: vendasHoje, sangrias: 0, suprimentos: 0, saldoInicial: 0 })
+        .porOrigem,
+    [vendasHoje]
   )
 
   const totalBruto = vendasHoje.reduce((s, v) => s + (v.total ?? 0), 0)
@@ -198,6 +208,31 @@ export function CaixaRelatorio({ nomeLoja = "Loja", operador = "" }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Vendas por origem */}
+      {porOrigem.length > 0 && (
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-2 pt-4">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Layers className="h-4 w-4 text-primary" />
+              Vendas por origem
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pb-4">
+            <div className="space-y-2">
+              {porOrigem.map((o) => (
+                <div key={o.key} className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {o.label}
+                    <span className="ml-1 text-xs text-muted-foreground/70">({o.qtdItens})</span>
+                  </span>
+                  <span className="font-medium text-foreground">{fmt(o.valorBruto)}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Saldo do caixa */}
       <Card className="border-border bg-card">
