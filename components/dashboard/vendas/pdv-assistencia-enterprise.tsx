@@ -76,6 +76,8 @@ import { appendAuditLog } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { TrocasDevolucao } from "./trocas-devolucao"
+import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
+import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 
 // ─── Cart persistence ─────────────────────────────────────────────────────────
@@ -151,7 +153,17 @@ function fromAtalhoEntry(e: AtalhoEntry): AtalhoSaved {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type CartLine = { lineId: string; inventoryId: string; title: string; price: number; qty: number }
+type CartLine = {
+  lineId: string
+  inventoryId: string
+  title: string
+  price: number
+  qty: number
+  /** Item Avulso (INSERT): não baixa estoque, persistido no payload da venda. */
+  isAvulso?: boolean
+  /** Custo unitário opcional informado no balcão. `null` = desconhecido. */
+  custoUnitario?: number | null
+}
 
 type PayMethod = "dinheiro" | "pix" | "credito" | "debito" | "a_prazo" | "multiplo"
 
@@ -221,14 +233,41 @@ function brl(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
 }
 
+/** Monetário BRL: aceita 4,99 · 4.99 · 1.234,56 · 20,00 */
 function parseBrl(s: string): number {
-  const v = Number(s.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, ""))
-  return Number.isFinite(v) && v >= 0 ? v : 0
+  const t = s.trim()
+  if (!t || t === "," || t === ".") return 0
+
+  if (t.includes(",")) {
+    const n = Number(t.replace(/\./g, "").replace(",", "."))
+    return Number.isFinite(n) && n >= 0 ? n : 0
+  }
+
+  if (t.includes(".")) {
+    const parts = t.split(".")
+    const last = parts[parts.length - 1] ?? ""
+    if (parts.length > 1 && last.length === 3 && parts.every((p) => /^\d+$/.test(p))) {
+      const n = Number(parts.join(""))
+      return Number.isFinite(n) && n >= 0 ? n : 0
+    }
+    const n = Number(t)
+    return Number.isFinite(n) && n >= 0 ? n : 0
+  }
+
+  const n = Number(t.replace(/\D/g, ""))
+  return Number.isFinite(n) && n >= 0 ? n : 0
 }
 
-function parseDiscountField(s: string): number {
-  const v = Number(String(s || "").replace(",", "."))
-  return Number.isFinite(v) && v >= 0 ? v : 0
+function parsePercentInput(s: string): number {
+  const t = s.trim().replace(",", ".")
+  if (!t || t === ".") return 0
+  const n = Number(t.replace(/[^\d.]/g, ""))
+  return Number.isFinite(n) && n >= 0 ? n : 0
+}
+
+/** Compara valores monetários em centavos (evita erro de float). */
+function moneyGte(a: number, b: number): boolean {
+  return Math.round(a * 100) >= Math.round(b * 100)
 }
 
 function computeMerchandiseDiscount(
@@ -415,6 +454,14 @@ function PaymentModal({
   const [multiplo1Value, setMultiplo1Value] = useState("")
   const [multiplo2, setMultiplo2] = useState<PayMethod>("pix")
   const [notes, setNotes] = useState("")
+  const [discountReaisDraft, setDiscountReaisDraft] = useState("")
+  const [discountPercentDraft, setDiscountPercentDraft] = useState("")
+
+  useEffect(() => {
+    if (!open) return
+    setDiscountReaisDraft(discountReais > 0.009 ? String(discountReais).replace(".", ",") : "")
+    setDiscountPercentDraft(discountPercent > 0.009 ? String(discountPercent).replace(".", ",") : "")
+  }, [open, discountReais, discountPercent])
 
   const descontoManualAtivo = discountAmount > 0.009
   const creditoValeAplicado = usarCredito ? Math.min(customerStoreCredit, total) : 0
@@ -426,7 +473,7 @@ function PaymentModal({
   const m2val = Math.max(0, totalComDesconto - m1val)
 
   const missingCustomer = method === "a_prazo" && !customerName.trim()
-  const multiplo1Error = method === "multiplo" && m1val > totalComDesconto
+  const multiplo1Error = method === "multiplo" && m1val > totalComDesconto + 0.009
   const supervisorOk = !descontoManualAtivo || adminSessionOk
   const canConfirm =
     !discountOverTotal &&
@@ -438,8 +485,8 @@ function PaymentModal({
       method === "credito" ||
       method === "debito" ||
       method === "a_prazo" ||
-      (method === "dinheiro" && paid >= totalComDesconto) ||
-      (method === "multiplo" && m1val > 0 && m1val < totalComDesconto))
+      (method === "dinheiro" && moneyGte(paid, totalComDesconto)) ||
+      (method === "multiplo" && m1val > 0.009 && !moneyGte(m1val, totalComDesconto)))
 
   function handleConfirm() {
     if (!canConfirm) return
@@ -509,7 +556,10 @@ function PaymentModal({
                 <div className="flex rounded-lg border border-border bg-background p-0.5">
                   <button
                     type="button"
-                    onClick={() => onDiscountTypeChange("reais")}
+                    onClick={() => {
+                      setDiscountPercentDraft("")
+                      onDiscountTypeChange("reais")
+                    }}
                     className={cn(
                       "rounded-md px-2.5 py-1 text-xs font-bold transition-colors",
                       discountType === "reais"
@@ -521,7 +571,10 @@ function PaymentModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => onDiscountTypeChange("percent")}
+                    onClick={() => {
+                      setDiscountReaisDraft("")
+                      onDiscountTypeChange("percent")
+                    }}
                     className={cn(
                       "rounded-md px-2.5 py-1 text-xs font-bold transition-colors",
                       discountType === "percent"
@@ -536,8 +589,12 @@ function PaymentModal({
               {discountType === "reais" ? (
                 <Input
                   ref={discountInputRef}
-                  value={discountReais > 0 ? String(discountReais) : ""}
-                  onChange={(e) => onDiscountReaisChange(parseDiscountField(e.target.value))}
+                  value={discountReaisDraft}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    setDiscountReaisDraft(raw)
+                    onDiscountReaisChange(parseBrl(raw))
+                  }}
                   placeholder="0,00"
                   className="h-10 rounded-xl border-border bg-background text-right text-sm tabular-nums"
                   inputMode="decimal"
@@ -545,8 +602,12 @@ function PaymentModal({
               ) : (
                 <Input
                   ref={discountInputRef}
-                  value={discountPercent > 0 ? String(discountPercent) : ""}
-                  onChange={(e) => onDiscountPercentChange(parseDiscountField(e.target.value))}
+                  value={discountPercentDraft}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    setDiscountPercentDraft(raw)
+                    onDiscountPercentChange(parsePercentInput(raw))
+                  }}
                   placeholder="0"
                   className="h-10 rounded-xl border-border bg-background text-right text-sm tabular-nums"
                   inputMode="decimal"
@@ -719,25 +780,25 @@ function PaymentModal({
                         "flex items-center justify-between rounded-xl border px-4 py-3",
                         troco > 0
                           ? "border-success/30 bg-success/10"
-                          : paid < totalComDesconto
+                          : !moneyGte(paid, totalComDesconto)
                             ? "border-destructive/30 bg-destructive/10"
                             : "border-border bg-muted/40",
                       )}
                     >
                       <span className="text-sm font-semibold text-muted-foreground">
-                        {troco > 0 ? "Troco" : paid < totalComDesconto ? "Faltam" : "Valor exato"}
+                        {troco > 0 ? "Troco" : !moneyGte(paid, totalComDesconto) ? "Faltam" : "Valor exato"}
                       </span>
                       <span
                         className={cn(
                           "text-xl font-black tabular-nums",
                           troco > 0
                             ? "text-success"
-                            : paid < totalComDesconto
+                            : !moneyGte(paid, totalComDesconto)
                               ? "text-destructive"
                               : "text-foreground",
                         )}
                       >
-                        {troco > 0 ? brl(troco) : paid < totalComDesconto ? brl(totalComDesconto - paid) : "✓"}
+                        {troco > 0 ? brl(troco) : !moneyGte(paid, totalComDesconto) ? brl(Math.max(0, totalComDesconto - paid)) : "✓"}
                       </span>
                     </div>
                   )}
@@ -1327,6 +1388,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [discountReais, setDiscountReais] = useState(0)
   const [discountPercent, setDiscountPercent] = useState(0)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
+  const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
 
   // ── Customer ──────────────────────────────────────────────────────────────────
   const [customerName, setCustomerName] = useState("")
@@ -1742,6 +1804,14 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           }
           break
         case "F12": openPaymentModal("multiplo"); break
+        case "Insert":
+          // Venda Avulsa de balcão (item não cadastrado). Não baixa estoque —
+          // `isVirtualSaleLine` cobre o prefixo `__avulso__` em todos os pontos.
+          if (!anyModalOpen) {
+            e.preventDefault()
+            setShowItemAvulsoModal(true)
+          }
+          break
       }
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
@@ -1841,6 +1911,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         quantity: l.qty,
         name: l.title,
         unitPrice: l.price,
+        ...(l.isAvulso ? { isAvulso: true as const } : {}),
+        ...(l.custoUnitario !== undefined ? { custoUnitario: l.custoUnitario } : {}),
       })),
       total,
       paymentBreakdown: {
@@ -2637,6 +2709,41 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         </AlertDialogContent>
       </AlertDialog>
 
+
+      {/* INSERT — Item Avulso (Venda Avulsa de balcão, não baixa estoque) */}
+      <ItemAvulsoModal
+        open={showItemAvulsoModal}
+        onOpenChange={setShowItemAvulsoModal}
+        onConfirm={(payload: ItemAvulsoPayload) => {
+          const nid = newLineId()
+          const inventoryId = avulsoInventoryId(nid)
+          const qty = Math.max(1, Math.round(payload.quantity))
+          const price = Math.max(0, Math.round(payload.unitPrice * 100) / 100)
+          const custoUnitario =
+            payload.custoUnitario !== null && payload.custoUnitario >= 0
+              ? Math.round(payload.custoUnitario * 100) / 100
+              : null
+          setCart((prev) => [
+            ...prev,
+            {
+              lineId: nid,
+              inventoryId,
+              title: payload.description,
+              price,
+              qty,
+              isAvulso: true,
+              custoUnitario,
+            },
+          ])
+          setShowItemAvulsoModal(false)
+          appendAuditLog({
+            action: "pdv_item_avulso_adicionado",
+            userLabel: cashierId.slice(0, 8),
+            detail: `${payload.description} · ${qty}x R$ ${price.toFixed(2)}${custoUnitario !== null ? ` · custo R$ ${custoUnitario.toFixed(2)}` : " · custo n/i"}`,
+          })
+          queueMicrotask(() => inputRef.current?.focus())
+        }}
+      />
 
       {/* F8 — Troca / Devolução real (reaproveita o fluxo TrocasDevolucao) */}
       <Dialog open={trocasOpen} onOpenChange={(o) => !o && setTrocasOpen(false)}>
