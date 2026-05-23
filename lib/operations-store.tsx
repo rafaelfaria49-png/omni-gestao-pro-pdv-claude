@@ -624,8 +624,7 @@ export function OperationsProvider({
     }
   }, [ledgerKey, storageKey])
 
-  useEffect(() => {
-    if (!opsDbReady) return
+  const flushPendingSales = useCallback(() => {
     const pending = stateRef.current.sales.filter((s) => s.syncPending === true)
     if (pending.length === 0) return
     const lj = opsLojaIdFromStorageKey(storageKey)
@@ -653,7 +652,36 @@ export function OperationsProvider({
           console.warn("[venda-persist] re-sync rede", sale.id, err)
         })
     }
-  }, [opsDbReady, storageKey])
+  }, [storageKey])
+
+  // Recupera vendas pendentes ao montar/abrir o PDV (bootstrap).
+  useEffect(() => {
+    if (!opsDbReady) return
+    flushPendingSales()
+  }, [opsDbReady, flushPendingSales])
+
+  // Rede de segurança em sessão: re-tenta vendas pendentes quando a conexão volta,
+  // quando a aba reganha foco e periodicamente. `venda-persist` é idempotente
+  // (upsert por pedidoId + guards de estoque/financeiro), então reenviar a mesma
+  // venda não duplica movimentações — apenas garante que nenhuma venda se perca.
+  useEffect(() => {
+    if (!opsDbReady) return
+    const onWake = () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return
+      flushPendingSales()
+    }
+    const onVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") onWake()
+    }
+    window.addEventListener("online", onWake)
+    document.addEventListener("visibilitychange", onVisible)
+    const interval = window.setInterval(onWake, 30_000)
+    return () => {
+      window.removeEventListener("online", onWake)
+      document.removeEventListener("visibilitychange", onVisible)
+      window.clearInterval(interval)
+    }
+  }, [opsDbReady, flushPendingSales])
 
   const setOrdens: OperationsContextType["setOrdens"] = useCallback((updater) => {
     setState((prev) => ({

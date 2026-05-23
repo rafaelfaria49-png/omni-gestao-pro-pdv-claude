@@ -13,6 +13,24 @@
 
 ## ✅ Concluído e Funcionando
 
+### PDV & Caixa — Estabilização para operação real (concluído 23/05/2026)
+
+**Contexto:** preparar PDV/Caixa para uso real em loja. Auditoria completa do fluxo
+(abrir caixa → vender → finalizar → fechar) + 2 correções cirúrgicas. Detalhes em
+[`docs/ai/PDV_CAIXA_GOAL_REPORT.md`](./PDV_CAIXA_GOAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `components/dashboard/caixa/abertura-caixa-modal.tsx` | Abertura deixou de **falhar em silêncio**: toast destrutivo quando a sessão não é registrada no servidor (caixa abre local, mas o operador é avisado). |
+| `lib/operations-store.tsx` | **Rede de segurança de venda**: além do reenvio no bootstrap, vendas `syncPending` são reenviadas em `online`, foco da aba e a cada 30s (`venda-persist` é idempotente). Reduz risco de venda presa só no localStorage até reload. |
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Risco crítico documentado:** PDV Black Edition (`/dashboard/pdv-next`) **não persiste
+vendas** (`handlePaymentConfirm` só reseta UI) — não usar para operação real. Demais
+riscos (fechamento offline reabre no reload mas auto-cura; abertura duplicada;
+`totalEntradas` acumulativo) listados no relatório.
+
 ### Trocas — Fase 4 Crédito/Vale persistente no banco (concluído 22/05/2026)
 
 **Contexto:** crédito/vale do cliente estava 100% em `localStorage` (`customerCredits`) — sumia entre navegadores, caixas e computadores.

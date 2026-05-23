@@ -95,6 +95,7 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
 
       // ── 1. Registrar sessão no servidor ───────────────────────────────────
       let sid: string | undefined
+      let serverRegistered = false
       if (lojaAtivaId) {
         try {
           const res = await fetch("/api/ops/caixa/abrir", {
@@ -111,11 +112,26 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
             if (data.sessaoId) {
               sid = data.sessaoId
               setSessaoId(data.sessaoId)
+              serverRegistered = true
             }
+          } else {
+            console.error("[caixa/abrir] server HTTP:", res.status)
           }
         } catch (err: unknown) {
           console.error("[caixa/abrir] server:", err)
         }
+      }
+
+      // Não falhar em silêncio: o caixa abriu localmente, mas o operador precisa
+      // saber que a sessão não foi registrada no servidor (vendas persistem mesmo
+      // assim e o fechamento cria sessão retroativa).
+      if (lojaAtivaId && !serverRegistered) {
+        toast({
+          variant: "destructive",
+          title: "Caixa aberto localmente",
+          description:
+            "Sessão não confirmada no servidor — verifique a conexão. As vendas continuam sendo salvas e reenviadas automaticamente.",
+        })
       }
 
       // ── 2. Reconciliação de estoque ────────────────────────────────────────
