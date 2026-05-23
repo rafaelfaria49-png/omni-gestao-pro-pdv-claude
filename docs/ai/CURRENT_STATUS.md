@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 22 Mai 2026 — Sessão: Fase 4 — Crédito/vale do cliente persistente no banco
+> Última atualização: 23 Mai 2026 — Sessão: Goal 2 — Auditoria PDV ↔ Estoque para uso real
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,31 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### PDV ↔ Estoque — Auditoria de integração para uso real (concluído 23/05/2026)
+
+**Contexto:** segunda fase de preparação para operação real em loja — auditoria ponta-a-ponta
+do caminho venda PDV → baixa de estoque → ledger → financeiro nos 3 PDVs operacionais
+(Clássico, Assistência, Supermercado). Detalhes em
+[`docs/ai/ESTOQUE_PDV_GOAL_REPORT.md`](./ESTOQUE_PDV_GOAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/ops-upsert-venda.ts` | Coleta `unresolvedInventoryIds[]` no Step 3 e emite `console.warn("[upsert-venda] estoque-nao-baixado", { pedidoId, lojaId, unresolvedInventoryIds })` quando uma linha não-virtual não casa por id/sku/barcode. Dá observabilidade para o cenário "venda OK mas estoque inflado" (produto deletado mid-sale, SKU divergente). Sem mudança de contrato. |
+
+**Idempotência confirmada em todas as camadas:** `Venda.pedidoId` (PK), `ItemVenda`
+(deleteMany+create), `MovimentacaoEstoque` (guard `documento+produtoId+origem`),
+`MovimentacaoFinanceira` (guard `referenciaId+origem+tipo`), `DevolucaoVenda`
+(`@unique storeId_localId`), e cancelamento (mesmos guards com `origem:"cancelamento_pdv"`).
+Reenvios da rede de segurança Goal 1 (online/visibilitychange/30 s) **não duplicam** estoque
+nem financeiro.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Orientação para uso amanhã:** usar **Clássico / Assistência / Supermercado**. **NÃO usar
+`/dashboard/pdv-next`** (continua não persistindo vendas, Goal 1). Riscos restantes (estoque
+negativo em concorrência, venda por peso truncada como int) documentados como pré-existentes
+no relatório.
 
 ### PDV & Caixa — Estabilização para operação real (concluído 23/05/2026)
 

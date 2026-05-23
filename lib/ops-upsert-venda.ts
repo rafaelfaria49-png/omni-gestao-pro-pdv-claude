@@ -155,14 +155,26 @@ export async function upsertVendaInTransaction(
   // Isso garante que 2 linhas de qty=1 para o mesmo produto gerem um único
   // decremento de qty=2, e que retry da mesma venda seja bloqueado pelo guard.
   const qtyByProdutoId = new Map<string, number>()
+  const unresolvedInventoryIds: string[] = []
   for (const line of lines) {
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
     if (!rawInvId || isOsVirtualSaleLine(rawInvId)) continue
     const resolved = resolvedProductMap.get(rawInvId)
-    if (!resolved) continue
+    if (!resolved) {
+      // Item vendido referencia inventoryId sem casamento por id/sku/barcode.
+      // Causa típica: produto removido após cache do PDV ou SKU divergente. Sem ledger.
+      unresolvedInventoryIds.push(rawInvId)
+      continue
+    }
     const qty = Math.max(0, Math.round(typeof line.quantity === "number" ? line.quantity : 0))
     if (qty === 0) continue
     qtyByProdutoId.set(resolved.dbId, (qtyByProdutoId.get(resolved.dbId) ?? 0) + qty)
+  }
+  if (unresolvedInventoryIds.length > 0) {
+    console.warn(
+      "[upsert-venda] estoque-nao-baixado",
+      JSON.stringify({ pedidoId, lojaId, unresolvedInventoryIds }),
+    )
   }
 
   // Mapa reverso dbId → resolved (para acessar sku/nome)
