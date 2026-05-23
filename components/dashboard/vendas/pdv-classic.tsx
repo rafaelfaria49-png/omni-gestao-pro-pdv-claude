@@ -1364,7 +1364,7 @@ export function PdvClassic({
                   setCustomerSearch("")
                 } else {
                   const c = filteredCustomers.find((x) => x.id === row.id)
-                  if (c) setSelectedCustomer({ id: c.id, name: c.name, cpf: "", phone: c.phone ?? "" })
+                  if (c) setSelectedCustomer({ id: c.id, name: c.name, cpf: c.document ?? "", phone: c.phone ?? "" })
                   setCustomerSearch("")
                 }
                 setShellClientSearchOpen(false)
@@ -1525,7 +1525,7 @@ export function PdvClassic({
                             if (e.key === "Enter" && filteredCustomers.length > 0) {
                               e.preventDefault()
                               const c = filteredCustomers[0]!
-                              setSelectedCustomer({ id: c.id, name: c.name, cpf: "", phone: c.phone ?? "" })
+                              setSelectedCustomer({ id: c.id, name: c.name, cpf: c.document ?? "", phone: c.phone ?? "" })
                               setCustomerSearch("")
                               setShowCustomerDropdown(false)
                             }
@@ -1560,7 +1560,7 @@ export function PdvClassic({
                               type="button"
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => {
-                                setSelectedCustomer({ id: customer.id, name: customer.name, cpf: "", phone: customer.phone ?? "" })
+                                setSelectedCustomer({ id: customer.id, name: customer.name, cpf: customer.document ?? "", phone: customer.phone ?? "" })
                                 setCustomerSearch("")
                                 setShowCustomerDropdown(false)
                               }}
@@ -1609,7 +1609,7 @@ export function PdvClassic({
                             if (e.key === "Enter" && filteredCustomers.length > 0) {
                               e.preventDefault()
                               const c = filteredCustomers[0]!
-                              setSelectedCustomer({ id: c.id, name: c.name, cpf: "", phone: c.phone ?? "" })
+                              setSelectedCustomer({ id: c.id, name: c.name, cpf: c.document ?? "", phone: c.phone ?? "" })
                               setCustomerSearch("")
                               setShowCustomerDropdown(false)
                             }
@@ -1635,7 +1635,7 @@ export function PdvClassic({
                               type="button"
                               onMouseDown={(e) => e.preventDefault()}
                               onClick={() => {
-                                setSelectedCustomer({ id: customer.id, name: customer.name, cpf: "", phone: customer.phone ?? "" })
+                                setSelectedCustomer({ id: customer.id, name: customer.name, cpf: customer.document ?? "", phone: customer.phone ?? "" })
                                 setCustomerSearch("")
                                 setShowCustomerDropdown(false)
                               }}

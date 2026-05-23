@@ -285,5 +285,8 @@ export async function upsertVendaInTransaction(
       })
       restante = arredonda2(restante - debit)
     }
+    if (restante > 0.001) {
+      console.warn("[upsert-venda] credito-sub-debitado", { pedidoId, cpfNorm, creditoValeUsado, restante })
+    }
   }
 }

@@ -7,6 +7,7 @@ type ClienteResult = {
   name: string
   phone: string | null
   email: string | null
+  document: string | null
 }
 
 type UseClienteSearchResult = {
@@ -60,6 +61,7 @@ export function useClienteSearch(
               name: String(r["name"] ?? ""),
               phone: r["phone"] != null ? String(r["phone"]) : null,
               email: r["email"] != null ? String(r["email"]) : null,
+              document: r["document"] != null ? String(r["document"]) : null,
             }
           }),
         )

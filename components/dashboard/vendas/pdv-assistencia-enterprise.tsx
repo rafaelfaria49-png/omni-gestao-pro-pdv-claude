@@ -2031,7 +2031,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                     const c = clienteSugestoes[0]!
                     setCustomerName(c.name)
                     setSelectedClienteId(c.id)
-                    setSelectedClienteDoc(null)
+                    setSelectedClienteDoc(c.document ?? null)
                     setClienteQuery("")
                     setShowCustomerSidebarDropdown(false)
                   }
@@ -2092,7 +2092,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                           onClick={() => {
                             setCustomerName(c.name)
                             setSelectedClienteId(c.id)
-                            setSelectedClienteDoc(null)
+                            setSelectedClienteDoc(c.document ?? null)
                             setClienteQuery("")
                             setShowCustomerSidebarDropdown(false)
                           }}
