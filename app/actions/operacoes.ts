@@ -1141,9 +1141,18 @@ export async function criarVendaDeOSAction(os: OrdemServico): Promise<Venda> {
   const year = new Date().getFullYear();
   const count = await prisma.venda.count({ where: { storeId: os.storeId } })
   const pedidoId = `VND-${year}-${(count + 1).toString().padStart(5, "0")}`
+  // Resolve nome do cliente sem cair em ID quando o snapshot do payload não trouxe nome.
+  const clienteNomeOS = (os.cliente?.nome ?? "").trim()
+  const clienteIdOS = (os.clienteId ?? "").trim() || null
+  const clienteNomeFallback = clienteIdOS
+    ? (await prisma.cliente
+        .findFirst({ where: { id: clienteIdOS, storeId: os.storeId }, select: { name: true } })
+        .catch(() => null))?.name?.trim() ?? ""
+    : ""
+  const clienteNome = clienteNomeOS || clienteNomeFallback || "Cliente"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const payload: any = {
-    clienteId: os.clienteId,
+    clienteId: clienteIdOS,
     origem: "os",
     origemRefId: os.id,
     itens: os.orcamento.pecas,
@@ -1156,7 +1165,10 @@ export async function criarVendaDeOSAction(os: OrdemServico): Promise<Venda> {
       storeId: os.storeId,
       pedidoId,
       total: os.orcamento.total,
-      clienteNome: os.clienteId,
+      clienteNome,
+      // FK real Venda → Cliente (Goal 4 Cadastros). Mantém o vínculo histórico
+      // mesmo se o nome do cliente mudar depois no cadastro.
+      ...(clienteIdOS ? { clienteId: clienteIdOS } : {}),
       payload,
       itens: {
         create: os.orcamento.pecas.map((p) => ({

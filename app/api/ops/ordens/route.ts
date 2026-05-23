@@ -101,6 +101,29 @@ export async function PUT(req: Request) {
     })
   }
 
+  // Guard de segurança: este PUT é uma migração one-shot do localStorage legado
+  // para o banco (`lib/operations-store.tsx` só chama quando ambos inventory+ordens
+  // vêm vazios do servidor). Se a loja já tem OS persistidas, recusar — evita que
+  // uma chamada acidental (curl, bug de UI, terceiro malicioso com permissão de
+  // edição) apague todas as OS via deleteMany.
+  try {
+    const existingCount = await prisma.ordemServico.count({ where: { storeId } })
+    if (existingCount > 0) {
+      return NextResponse.json(
+        {
+          error: "Operação bloqueada: a loja já possui ordens de serviço persistidas.",
+          code: "ordens_ja_existentes",
+          existingCount,
+        },
+        { status: 409 },
+      )
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error("[ops/ordens PUT] guard count", msg)
+    return NextResponse.json({ error: "Falha ao validar estado atual das ordens" }, { status: 503 })
+  }
+
   try {
     await prisma.$transaction([
       prisma.ordemServico.deleteMany({ where: { storeId } }),

@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 23 Mai 2026 — Sessão: Goal 3 — Estabilização do financeiro PDV para uso real
+> Última atualização: 23 Mai 2026 — Sessão: Goal 4 — Auditoria Operações HUB para uso real
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,31 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Operações HUB — Auditoria e estabilização para uso real (concluído 23/05/2026)
+
+**Contexto:** quarta fase de preparação para operação real — auditoria
+ponta-a-ponta de OS (criar → editar → status → estoque → faturamento →
+cancelar). Detalhes em
+[`docs/ai/OPERACOES_HUB_GOAL_REPORT.md`](./OPERACOES_HUB_GOAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `app/api/ops/ordens/route.ts` | **PUT** agora bloqueia (`409 ordens_ja_existentes`) quando a loja já tem OS persistidas. O endpoint era usado apenas para migração one-shot do localStorage legado quando o banco está vazio (`lib/operations-store.tsx` bootstrap), mas o `deleteMany`+`createMany` original podia apagar/zerar todas as OS de uma loja se chamado por engano ou com permissão de edição. Guard server-side preserva o caso legítimo. |
+| `app/actions/operacoes.ts` | `criarVendaDeOSAction` agora resolve `clienteNome` por prioridade (`os.cliente?.nome` → lookup por `clienteId` → fallback `"Cliente"`) e persiste a FK `Venda.clienteId`. Antes gravava `clienteId` no campo `clienteNome` (cuid aparecia no Histórico de Vendas) e quebrava o cálculo de `Cliente.totalGasto` para vendas oriundas de OS. |
+
+**Idempotência confirmada:** consumo/restauração/delta de estoque via flags em
+`payload.estoqueConsumido` + `estoqueRestaurado` + `estoqueUltimaRevisaoEm`;
+adapter OS→Faturamento via `localKey: adapter_os_faturamento:{storeId}:{osId}`
+com merge de revisões em `payload.revisoes[]`. Multi-loja preservado em todas
+as Server Actions via `requireOperacaoAuth`.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Orientação para uso amanhã:** Operações HUB V2 (`/dashboard/operacoes-v2`)
+pronto. PDV (Goals 1–3) inalterado. Riscos restantes (Lovable hub usa
+`CURRENT_STORE_ID = "loja-1"` mutável; race teórica em `nextCodigo`; estoque
+fora da tx do status) documentados no relatório.
 
 ### Financeiro do PDV — Estabilização para operação real de caixa (concluído 23/05/2026)
 
