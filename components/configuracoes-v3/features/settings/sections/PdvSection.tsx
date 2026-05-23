@@ -159,9 +159,9 @@ function safePrinterRecord(raw: unknown): Record<string, unknown> {
  * Mini-preview do layout do PDV usando as capturas de tela reais armazenadas no repositório.
  * Seleciona a imagem dinamicamente de acordo com o tema selecionado na barra superior.
  */
-function PdvMiniPreview({ variant }: { variant: PdvFlowId }) {
+function PdvMiniPreview({ variant, activeTheme }: { variant: PdvFlowId; activeTheme?: string }) {
   const { mode } = useTheme();
-  const themeMode = mode === "classic" ? "light" : mode; // "light" | "soft-ice" | "midnight" | "black"
+  const themeMode = activeTheme || (mode === "classic" ? "light" : mode); // "light" | "soft-ice" | "midnight" | "black"
 
   const flowPrefixMap: Record<PdvFlowId, string> = {
     classico: "classic",
@@ -178,14 +178,18 @@ function PdvMiniPreview({ variant }: { variant: PdvFlowId }) {
   };
 
   const prefix = flowPrefixMap[variant];
-  const dynamicSrc = `/images/pdv-${prefix}-${themeMode}.png`;
+  let dynamicSrc = `/images/pdv-${prefix}-${themeMode}.png`;
+
+  if (variant === "next") {
+    dynamicSrc = `/images/pdv-next/${themeMode}.png`;
+  }
 
   return (
     <div className="relative h-full w-full bg-muted">
       <img
         src={dynamicSrc}
         alt={`Preview ${variant}`}
-        className="h-full w-full object-cover object-top"
+        className="h-full w-full object-cover object-top transition-all duration-300"
         onError={(e) => {
           // Fallback resiliente: se a imagem do tema não existir, usa a de preview legado do repositório
           const fallback = srcMap[variant];
@@ -214,6 +218,23 @@ function PdvSectionContent() {
   const [savedClassicModo, setSavedClassicModo] = useState<ClassicModoInicial>("normal");
   const [saving, setSaving] = useState(false);
   const [previewFlow, setPreviewFlow] = useState<PreviewVariant | null>(null);
+
+  const { mode } = useTheme();
+  const themeMode = mode === "classic" ? "light" : mode;
+  const [nextCardTheme, setNextCardTheme] = useState<string>("black");
+  const [modalActiveTheme, setModalActiveTheme] = useState<string>("black");
+
+  useEffect(() => {
+    if (themeMode === "light" || themeMode === "soft-ice" || themeMode === "midnight" || themeMode === "black") {
+      setNextCardTheme(themeMode);
+    }
+  }, [themeMode]);
+
+  useEffect(() => {
+    if (previewFlow === "next") {
+      setModalActiveTheme(nextCardTheme || themeMode);
+    }
+  }, [previewFlow, nextCardTheme, themeMode]);
 
   const syncFromServer = useCallback(() => {
     const base = safePrinterRecord(settings?.printerConfig);
@@ -411,7 +432,41 @@ function PdvSectionContent() {
                 )}
               >
                 <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl border border-border/40 bg-muted transition-transform duration-500 group-hover:scale-[1.02]">
-                  <PdvMiniPreview variant={opt.id} />
+                  <PdvMiniPreview variant={opt.id} activeTheme={opt.id === "next" ? nextCardTheme : undefined} />
+                  
+                  {opt.id === "next" && (
+                    <>
+                      <div className="absolute top-2 left-2 z-10">
+                        <Badge className="bg-emerald-500/95 text-white border-none hover:bg-emerald-500 text-[9px] font-bold uppercase tracking-wide">
+                          Prévia Real
+                        </Badge>
+                      </div>
+                      <div className="absolute bottom-2 right-2 z-10 flex gap-1 bg-black/60 backdrop-blur-sm p-1 rounded-full border border-white/10">
+                        {[
+                          { key: "light", color: "bg-white border-slate-300", label: "Light" },
+                          { key: "soft-ice", color: "bg-[#e2eafc] border-[#b6ccfe]", label: "Soft Ice" },
+                          { key: "midnight", color: "bg-[#1e293b] border-blue-900", label: "Midnight" },
+                          { key: "black", color: "bg-black border-emerald-500", label: "Black" }
+                        ].map((t) => (
+                          <button
+                            key={t.key}
+                            type="button"
+                            title={`Visualizar tema ${t.label}`}
+                            className={cn(
+                              "h-3 w-3 rounded-full border transition-all duration-200 hover:scale-125",
+                              t.color,
+                              nextCardTheme === t.key ? "ring-2 ring-emerald-400 scale-110" : "opacity-80"
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setNextCardTheme(t.key);
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+
                   <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/10" />
                 </div>
 
@@ -476,7 +531,7 @@ function PdvSectionContent() {
         </div>
 
         <Dialog open={previewFlow !== null} onOpenChange={(open) => { if (!open) setPreviewFlow(null); }}>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className={cn("transition-all duration-300", previewFlow === "next" ? "max-w-4xl w-full" : "max-w-2xl")}>
             {previewMeta && (
               <>
                 <DialogHeader>
@@ -489,16 +544,72 @@ function PdvSectionContent() {
                     >
                       <PreviewIcon className="h-5 w-5" />
                     </div>
-                    <div className="min-w-0">
-                      <DialogTitle>{previewMeta.name}</DialogTitle>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <DialogTitle>{previewMeta.name}</DialogTitle>
+                        {previewMeta.id === "next" && (
+                          <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] uppercase font-bold tracking-wide">
+                            Black Edition — Multi-Temas Reais
+                          </Badge>
+                        )}
+                      </div>
                       <DialogDescription className="mt-1">{previewMeta.description}</DialogDescription>
                     </div>
                   </div>
                 </DialogHeader>
 
-                <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border/50 bg-muted">
-                  <PdvMiniPreview variant={previewMeta.id} />
-                </div>
+                {previewMeta.id === "next" ? (
+                  <div className="space-y-4">
+                    {/* Seletor de Temas (Abas) */}
+                    <div className="flex flex-wrap gap-1.5 p-1 bg-muted rounded-lg border border-border/60">
+                      {[
+                        { key: "light", label: "Light Mode", desc: "Claro corporativo limpo" },
+                        { key: "soft-ice", label: "Soft Ice Mode", desc: "Tom azul gelo suave" },
+                        { key: "midnight", label: "Midnight Mode", desc: "Azul escuro moderno" },
+                        { key: "black", label: "Black Mode", desc: "Modo escuro oficial premium" }
+                      ].map((t) => {
+                        const isSelected = modalActiveTheme === t.key;
+                        return (
+                          <button
+                            key={t.key}
+                            type="button"
+                            onClick={() => setModalActiveTheme(t.key)}
+                            className={cn(
+                              "flex-1 min-w-[120px] px-3 py-2 text-xs font-semibold rounded-md transition-all duration-200 text-center flex flex-col items-center justify-center gap-0.5",
+                              isSelected 
+                                ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                                : "text-muted-foreground hover:bg-background/40 hover:text-foreground"
+                            )}
+                          >
+                            <span>{t.label}</span>
+                            <span className="text-[9px] font-normal opacity-70">{t.desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Imagem Ampliada */}
+                    <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-black shadow-inner">
+                      <img
+                        src={`/images/pdv-next/${modalActiveTheme}.png`}
+                        alt={`PDV Next Tema ${modalActiveTheme}`}
+                        className="h-full w-full object-contain transition-all duration-300"
+                        onError={(e) => {
+                          e.currentTarget.src = "/images/pdv-next-thumb.png";
+                        }}
+                      />
+                      
+                      {/* Overlay indicando qual tema está sendo visualizado */}
+                      <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded text-[10px] text-white font-medium border border-white/10 uppercase tracking-wider">
+                        Visualizando: {modalActiveTheme.replace("-", " ")}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border/50 bg-muted">
+                    <PdvMiniPreview variant={previewMeta.id} />
+                  </div>
+                )}
 
                 <div className="rounded-lg border border-border bg-card-muted/60 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Quando usar</p>
