@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { StatusOrdemServico } from "@/generated/prisma"
 import { isValidPhoneBr } from "@/lib/phone-br"
 import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { requireAdmin } from "@/lib/require-admin"
@@ -58,7 +59,45 @@ export async function GET(req: Request) {
       take: 200,
     })
 
-    return json({ clientes })
+    // Total gasto REAL e consistente com o Cadastros HUB: agrega OS concluídas
+    // (Pronto/Entregue) + Vendas concluídas por clienteId. Fallback para a coluna
+    // estática Cliente.totalSpent (clientes importados sem OS/Venda no app).
+    let totalPorCliente = new Map<string, number>()
+    try {
+      const [osTotals, vendaTotals] = await Promise.all([
+        prisma.ordemServico.groupBy({
+          by: ["clienteId"],
+          where: {
+            storeId,
+            clienteId: { not: null },
+            status: { in: [StatusOrdemServico.Pronto, StatusOrdemServico.Entregue] },
+          },
+          _sum: { valorTotal: true },
+        }),
+        prisma.venda.groupBy({
+          by: ["clienteId"],
+          where: { storeId, clienteId: { not: null }, status: "concluida" },
+          _sum: { total: true },
+        }),
+      ])
+      const totais = new Map<string, number>()
+      for (const r of osTotals) {
+        if (r.clienteId) totais.set(r.clienteId, (totais.get(r.clienteId) ?? 0) + Number(r._sum.valorTotal ?? 0))
+      }
+      for (const r of vendaTotals) {
+        if (r.clienteId) totais.set(r.clienteId, (totais.get(r.clienteId) ?? 0) + Number(r._sum.total ?? 0))
+      }
+      totalPorCliente = totais
+    } catch (aggErr) {
+      console.error("[api/clientes GET] agregação totalSpent falhou:", aggErr instanceof Error ? aggErr.message : aggErr)
+    }
+
+    const clientesComTotal = clientes.map((c) => ({
+      ...c,
+      totalSpent: totalPorCliente.get(c.id) ?? Number(c.totalSpent ?? 0),
+    }))
+
+    return json({ clientes: clientesComTotal })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[api/clientes GET]", msg)

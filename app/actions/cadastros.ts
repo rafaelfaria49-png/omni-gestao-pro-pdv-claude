@@ -639,6 +639,7 @@ export type ClienteDTO = {
   nome: string;
   tipo: ClienteKind;
   telefone: string;
+  email: string;
   documento: string;
   cidade: string;
   totalGasto: number;
@@ -749,6 +750,7 @@ export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
       nome: c.name,
       tipo: (c.kind === "PJ" ? "PJ" : "PF") satisfies ClienteKind,
       telefone: c.phone ?? "—",
+      email: c.email ?? "",
       documento: c.document || "—",
       cidade: c.city || "—",
       totalGasto: totalPorCliente.get(c.id) ?? Number(c.totalSpent ?? 0),

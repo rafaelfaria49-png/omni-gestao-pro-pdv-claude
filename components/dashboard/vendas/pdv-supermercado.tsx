@@ -43,6 +43,8 @@ import { PdvPainelLateralTerminal, PdvVisorTotal } from "./painel-total"
 import { PdvTabelaItemLinha, PdvTabelaItens } from "./tabela-itens"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
+import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 
 import type { VendasPDVProps } from "./pdv-classic"
 
@@ -95,6 +97,10 @@ type CartItem = {
   quantity: number
   vendaPorPeso?: boolean
   atributosLabel?: string
+  /** Item avulso (INSERT): não baixa estoque, persistido no payload da venda. */
+  isAvulso?: boolean
+  /** Custo unitário opcional informado no balcão. `null` = desconhecido. */
+  custoUnitario?: number | null
 }
 
 export function PdvSupermercado({
@@ -146,6 +152,7 @@ export function PdvSupermercado({
   const [attrDialogOpen, setAttrDialogOpen] = useState(false)
   const [attrProduct, setAttrProduct] = useState<Product | null>(null)
   const [attrSelections, setAttrSelections] = useState<Record<string, string>>({})
+  const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
 
   const hardFocusSearch = useCallback(() => {
     // Hard-focus: o caixa não deve precisar tocar no mouse.
@@ -356,6 +363,32 @@ export function PdvSupermercado({
 
   const removeFromCart = useCallback((lineId: string) => setCart((prev) => prev.filter((i) => i.lineId !== lineId)), [])
 
+  /** Item Avulso (INSERT) — não passa por `addToCart` porque não há produto/estoque. */
+  const addItemAvulso = useCallback(
+    (payload: ItemAvulsoPayload) => {
+      const lineId = newPdvLineId("avulso")
+      const inventoryId = avulsoInventoryId(lineId)
+      const quantity = Math.max(1, Math.round(payload.quantity))
+      const price = Math.max(0, Math.round(payload.unitPrice * 100) / 100)
+      const custoUnitario =
+        payload.custoUnitario !== null && payload.custoUnitario >= 0
+          ? Math.round(payload.custoUnitario * 100) / 100
+          : null
+      setCart((prev) => [
+        ...prev,
+        { lineId, inventoryId, name: payload.description, price, quantity, isAvulso: true, custoUnitario },
+      ])
+      setShowItemAvulsoModal(false)
+      if (isModoRapido) {
+        setRapidoFlashLineId(lineId)
+        window.setTimeout(() => setRapidoFlashLineId((h) => (h === lineId ? null : h)), 150)
+        playPdvRapidoItemBeepIfEnabled()
+      }
+      queueMicrotask(hardFocusSearch)
+    },
+    [hardFocusSearch, isModoRapido],
+  )
+
   const updateQuantity = useCallback((lineId: string, delta: number) => {
     setCart((prev) =>
       prev
@@ -534,19 +567,20 @@ export function PdvSupermercado({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
-      if (e.key !== "F2" && e.key !== "F3" && e.key !== "F4") return
+      if (e.key !== "F2" && e.key !== "F3" && e.key !== "F4" && e.key !== "Insert") return
       // Quando modal aberto, não interceptar (deixa o modal controlar o teclado)
-      if (isPaymentModalOpen) return
+      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || showItemAvulsoModal) return
 
       e.preventDefault()
       e.stopPropagation()
-      if (e.key === "F2") openPaymentModal("dinheiro")
+      if (e.key === "Insert") setShowItemAvulsoModal(true)
+      else if (e.key === "F2") openPaymentModal("dinheiro")
       else if (e.key === "F3") openPaymentModal("pix")
       else openPaymentModal("cartao_debito")
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, openPaymentModal])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, openPaymentModal])
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
@@ -940,12 +974,17 @@ export function PdvSupermercado({
         cashierId={cashierId}
         onConfirm={(payments, meta) => {
           const saleLines = cart
-            .filter((item) => inventory.some((i) => i.id === item.inventoryId))
+            .filter(
+              (item) =>
+                isAvulsoSaleLine(item.inventoryId) || inventory.some((i) => i.id === item.inventoryId),
+            )
             .map((item) => ({
               inventoryId: item.inventoryId,
               quantity: item.quantity,
               unitPrice: item.price,
               name: item.name,
+              ...(item.isAvulso ? { isAvulso: true as const } : {}),
+              ...(item.custoUnitario !== undefined ? { custoUnitario: item.custoUnitario } : {}),
             }))
 
           let dinheiro = 0
@@ -1011,6 +1050,12 @@ export function PdvSupermercado({
             }
           })
         }}
+      />
+
+      <ItemAvulsoModal
+        open={showItemAvulsoModal}
+        onOpenChange={setShowItemAvulsoModal}
+        onConfirm={addItemAvulso}
       />
 
       <AttrProductDialog

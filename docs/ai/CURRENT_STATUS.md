@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 23 Mai 2026 — Sessão: Goal 5 — Auditoria Vendas HUB para uso real
+> Última atualização: 23 Mai 2026 — Sessão: Goal 9 — PDV Item Avulso via tecla INSERT
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,124 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### PDV — Venda Avulsa via tecla INSERT (Item Avulso) (concluído 23/05/2026)
+
+**Contexto:** trazer ao OmniGestão o fluxo do sistema antigo onde **INSERT**
+vendia rápido um item não cadastrado no balcão. Detalhes em
+[`docs/ai/PDV_ITEM_AVULSO_INSERT_GOAL_REPORT.md`](./PDV_ITEM_AVULSO_INSERT_GOAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/os-pdv-virtual-lines.ts` | + `AVULSO_PREFIX`, `isAvulsoSaleLine`, `isVirtualSaleLine` (união O.S.+avulso), `avulsoInventoryId()`. Linha avulsa = `inventoryId` com prefixo `__avulso__` — não toca estoque. |
+| `lib/operations-sale-types.ts` | `SaleLineRecord` + `isAvulso?` e `custoUnitario?: number\|null`. |
+| `lib/operations-store.tsx` | `finalizeSaleTransaction` aceita avulso; usa `isVirtualSaleLine` para pular validação/decremento de stock; mapping propaga `isAvulso`/`custoUnitario`. |
+| `lib/ops-upsert-venda.ts` | `SalePayload.lines[]` + `isAvulso?`/`custoUnitario?`; Step 2/3 pulam resolução de produto e ledger para avulso. `MovimentacaoFinanceira` do total à vista inalterada. |
+| `components/dashboard/vendas/item-avulso-modal.tsx` (NOVO) | Modal com descrição/valor/qtd/custo opcional; mostra total e margem estimada; tokens semânticos. |
+| `components/dashboard/vendas/pdv-classic.tsx` · `pdv-supermercado.tsx` · `pdv-assistencia-enterprise.tsx` | Tecla INSERT + handler `addItemAvulso` + filter do `onConfirm` aceitando avulso, nos **3 PDVs operacionais**. Clássico ainda ganha item "Item Avulso" no menu Operações de Caixa. Linha avulsa rotulada "AVULSO" no carrinho. |
+| `lib/audit-log.ts` | + action `pdv_item_avulso_adicionado`. |
+| `app/api/ops/devolucao/route.ts` · `app/api/vendas/[id]/cancelar/route.ts` | Trocam `isOsVirtualSaleLine`→`isVirtualSaleLine` (defesa: cancelar/devolver venda com avulso não tenta repor estoque inexistente). |
+
+**Comportamento:** item avulso entra na venda, caixa, financeiro, cupom e
+histórico; **não** baixa estoque, **não** cria `MovimentacaoEstoque`, **não**
+cria produto. Custo opcional vai em `Venda.payload.lines[].custoUnitario`
+(ausente = custo desconhecido). Idempotência/retry/syncPending preservados.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Cobertura:** os **3 PDVs operacionais** (Clássico, Assistência, Supermercado)
+têm Item Avulso via INSERT.
+
+**Pendências (relatório):** relatórios de margem ainda não distinguem "custo
+zero" de "custo desconhecido" (avulso sem custo informado fica `undefined` no
+payload); item avulso é sempre quantidade inteira (sem venda por peso);
+`pdv-next` segue sem persistir venda (não usar).
+
+### CRM / Clientes HUB — Auditoria e estabilização para uso real (concluído 23/05/2026)
+
+**Contexto:** oitava fase — auditoria ponta-a-ponta do CRM `/dashboard/clientes`
+(SPA Lovable-style ~2.235 linhas): listagem, drawer de cadastro/edição (5 abas),
+drawer de perfil (3 abas), histórico de compras + OS, timeline, total gasto,
+integrações Venda→Cliente / OS→Cliente, multi-loja. Detalhes em
+[`docs/ai/CLIENTES_HUB_GOAL_REPORT.md`](./CLIENTES_HUB_GOAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `app/api/clientes/route.ts` | **Bug de consistência crítico:** `totalSpent` retornado era a coluna estática `Cliente.totalSpent` (preenchida só no import, nunca atualizada por PDV/OS). Agora a lista agrega `OrdemServico Pronto/Entregue` + `Venda concluida` por `clienteId` (dois `groupBy` paralelos, scoped por `storeId`), com fallback à coluna estática — mesma estratégia do `listClientes` do Cadastros HUB. Consistência entre módulos. |
+| `app/api/clientes/[id]/route.ts` | Detalhe do cliente agora retorna `totalSpent` **agregado** (dois `aggregate` paralelos somando OS+Vendas sem o limite de 15 do `include`), com fallback ao estático. Resolve o caso "perfil mostra R$ 0,00 mas histórico abaixo lista 5 vendas". |
+| `app/dashboard/clientes/ClientesPageClient.tsx` | (1) **Métrica falsa removida:** KPI "Ticket Médio" caía para `380.00` hardcoded quando não havia `totalSpent>0` → trocado por `0`. (2) **Contraste de tema corrigido:** caixas `listError` e `formError` usavam `bg-red-950/20 text-red-200` (invisível em Light/Soft Ice) → tokens semânticos `border-destructive/30 bg-destructive/10 text-destructive` (legíveis nos 4 temas). |
+
+**Auditoria (real, multi-loja preservado):** busca server-side por
+nome/CPF/CNPJ/cidade; filtros por PF/PJ/status/VIP/inadimplente/cidade reais;
+KPIs reais; drawer de cadastro com 5 abas persistindo `tags` estruturadas
+(labels, address, financial, operational); drawer de perfil com histórico real
+de OS e Vendas (relações Prisma) e timeline derivada de eventos reais; ações
+WhatsApp/Nova OS/Iniciar Venda com deep-link `?clienteId=`. `storeId` via
+`ASSISTEC_LOJA_HEADER` em todas as chamadas.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Riscos restantes (documentados no relatório):** dois editores de cliente com
+formatos diferentes de `tags` (Cadastros HUB salva como `string[]` → sobrescreve
+o objeto estruturado do CRM); histórico do perfil limitado a 15 últimos (total
+agora é agregado sem esse limite); opções hardcoded de Carteira/Técnico
+Responsável no form; `toastRafacell` força tom preto cross-tema (marca); coluna
+`Cliente.totalSpent` permanece estática (não é atualizada por PDV/OS — agregação
+em leitura é o suficiente).
+
+### Estoque HUB — Auditoria e estabilização para operação real (concluído 23/05/2026)
+
+**Contexto:** sétima fase — auditoria ponta-a-ponta do Estoque HUB: saldo,
+movimentações, inventário, ajustes, entradas/saídas, integrações PDV→estoque e
+OS→estoque, filtros/busca, multi-loja. Detalhes em
+[`docs/ai/ESTOQUE_HUB_GOAL_REPORT.md`](./ESTOQUE_HUB_GOAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `components/dashboard/estoque/gestao-produtos.tsx` | **Mock enganoso crítico corrigido:** a importação de XML NF-e (`confirmarEntradaMercadoria`) só alterava o estado local do React mas exibia "Entrada de mercadoria concluída / Estoque atualizado com sucesso" — nada era persistido (sumia ao recarregar). Tornado **pré-visualização honesta**: função fake removida, botão "Confirmar Entrada" desabilitado ("em breve"), banner âmbar explicando que XML não grava no estoque (entrada real via Cadastros → Estoque ou Importador Avançado), copy corrigida. Removido também `const mockProducts` morto. |
+
+**Auditoria (real, multi-loja preservado):** backend `app/actions/estoque.ts`
+(entrada com custo médio ponderado, ajuste com delta, livro-razão imutável
+`MovimentacaoEstoque`, KPIs/alertas, tudo `storeId`-scoped); Auditoria de Estoque
+(`auditoria-estoque.tsx`) e Movimentação/Inventário (`planejamento-compras.tsx`)
+são reais; integrações PDV→estoque (`origem:"pdv"`) e OS→estoque (`origem:"os"`)
+visíveis e auditáveis. `toast.info` confirmado existente no hook.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Riscos restantes (documentados no relatório):** "Estoque Mínimo (Alerta)" do
+form **não persiste** (sem coluna no schema) → KPI "Estoque Baixo" conta
+`stock<=0`; entrada real por NF-e segue pendente (preview); editar "Estoque Atual"
+pelo produto sobrescreve saldo **sem livro-razão** (use Entrada/Ajuste para
+trilha); estoque negativo possível em concorrência (já detectado na Auditoria);
+`servicos.tsx` do estoque é código morto.
+
+### Cadastros HUB — Auditoria e estabilização para uso real (concluído 23/05/2026)
+
+**Contexto:** sexta fase — auditoria ponta-a-ponta do Cadastros HUB
+(`/dashboard/cadastros-v2`): Dashboard, Clientes, Produtos, Serviços,
+Fornecedores, Técnicos, Equipamentos, Categorias/Marcas, Importação e
+Auditoria. Detalhes em [`docs/ai/CADASTROS_HUB_GOAL_REPORT.md`](./CADASTROS_HUB_GOAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `app/actions/cadastros.ts` | **Bug crítico de perda de dados:** `ClienteDTO` ganha `email` e `listClientes` mapeia `c.email`. Antes o DTO não trazia email → o modal de edição usava `defaultValue=""` → `updateCliente` gravava `email: null`, **apagando o email** de qualquer cliente editado sem redigitar o campo. |
+| `components/cadastros/lovable/components/cadastros/CadastrosHub.tsx` | (1) Email do cliente prefilled na edição (`defaultValue={editing?.email}`). (2) Card fake "IA de Cadastros" (números hardcoded + botão "Corrigir com IA" morto) → "Sugestões de melhoria" com dados **reais** de `stats` + botão real que navega para Produtos. (3) Busca global morta do header removida. (4) Botões mortos "Filtros"/"Exportar" do `Toolbar` desabilitados ("em breve"); busca do `Toolbar` agora condicional ao handler. (5) Busca real ligada em Serviços/Fornecedores/Técnicos/Equipamentos (antes a caixa não filtrava). (6) Botões IA do card de Equipamento desabilitados (não disparam mais o modal por bubbling). |
+
+**Auditoria (todas reais, multi-loja preservado):** CRUD real via Server
+Actions → Prisma para Clientes, Produtos (com exclusão protegida por vínculos),
+Serviços, Fornecedores, Técnicos, Equipamentos, Categorias/Marcas; estoque via
+`app/actions/estoque`; Importação (auditada 21/05) e Auditoria de logs reais.
+`storeId` resolvido por loja ativa em todas as actions.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Riscos restantes (documentados no relatório):** campos do form de Cliente
+(Endereço/UF/Observações/Consentimento LGPD) e de Serviço (Peças/Checklist/
+Marketing IA) **não persistem** (sem coluna no schema); cards de Técnico com
+métricas zeradas fixas; coluna "Categoria" de Fornecedor sempre "—"; Auditoria
+e Histórico de importação **não filtram por `storeId`** (logs globais,
+pré-existente). Nenhum exige correção sem mudança de schema/queries.
 
 ### Vendas HUB — Auditoria e estabilização para uso real (concluído 23/05/2026)
 

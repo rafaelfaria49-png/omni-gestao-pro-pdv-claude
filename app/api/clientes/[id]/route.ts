@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { Prisma } from "@/generated/prisma"
+import { Prisma, StatusOrdemServico } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { isValidPhoneBr } from "@/lib/phone-br"
 import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
@@ -45,7 +45,33 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
       return json({ error: "Cliente não encontrado" }, { status: 404 })
     }
 
-    return json({ ok: true, cliente })
+    // Total gasto REAL (não limitado aos 15 últimos do include): agrega TODAS as
+    // OS concluídas (Pronto/Entregue) + Vendas concluídas do cliente. Fallback para
+    // a coluna estática Cliente.totalSpent quando não há OS/Venda no app.
+    let totalSpentReal: number = cliente.totalSpent
+    try {
+      const [osAgg, vendaAgg] = await Promise.all([
+        prisma.ordemServico.aggregate({
+          where: {
+            storeId,
+            clienteId: id,
+            status: { in: [StatusOrdemServico.Pronto, StatusOrdemServico.Entregue] },
+          },
+          _sum: { valorTotal: true },
+        }),
+        prisma.venda.aggregate({
+          where: { storeId, clienteId: id, status: "concluida" },
+          _sum: { total: true },
+        }),
+      ])
+      if (osAgg._sum.valorTotal != null || vendaAgg._sum.total != null) {
+        totalSpentReal = Number(osAgg._sum.valorTotal ?? 0) + Number(vendaAgg._sum.total ?? 0)
+      }
+    } catch (aggErr) {
+      console.error("[api/clientes/[id] GET] agregação totalSpent falhou:", aggErr instanceof Error ? aggErr.message : aggErr)
+    }
+
+    return json({ ok: true, cliente: { ...cliente, totalSpent: totalSpentReal } })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[api/clientes/[id] GET]", msg)

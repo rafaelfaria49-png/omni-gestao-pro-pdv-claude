@@ -140,8 +140,6 @@ type NFeItem = {
   valorUnitario: number
 }
 
-const mockProducts: Product[] = []
-
 const emptyProduct: Omit<Product, "id"> = {
   nome: "",
   sku: "",
@@ -1251,59 +1249,10 @@ export function GestaoProdutos({
     setImportFeedback("Chave de acesso validada. Agora envie o XML correspondente para leitura.")
   }
 
-  const confirmarEntradaMercadoria = () => {
-    if (nfeItens.length === 0) {
-      setImportFeedback("Nenhum item de NF-e para confirmar.")
-      return
-    }
-    setProducts((prev) => {
-      let next = [...prev]
-      nfeItens.forEach((item) => {
-        const map = dePara[item.id]
-        if (map?.modo === "existente" && map.existingId) {
-          next = next.map((p) =>
-            p.id === map.existingId
-              ? {
-                  ...p,
-                  estoqueAtual: p.estoqueAtual + item.quantidade,
-                  precoCusto: item.valorUnitario || p.precoCusto,
-                }
-              : p
-          )
-          return
-        }
-        next.push({
-          id: `${Date.now()}-${item.id}`,
-          nome: item.nome,
-          sku: "",
-          codigo: item.codigo,
-          barcode: "",
-          codigoBarras: "",
-          categoria: "peca",
-          precoCusto: item.valorUnitario,
-          precoVenda: +(item.valorUnitario * 1.7).toFixed(2),
-          estoqueAtual: item.quantidade,
-          estoqueMinimo: Math.max(1, Math.floor(item.quantidade * 0.2)),
-          ncm: item.ncm,
-          cfop: item.cfop,
-          cest: "",
-          origemMercadoria: "0",
-          imei: "",
-          numeroSerie: "",
-          possuiGarantia: false,
-          diasGarantia: 90,
-          descricaoVenda: "",
-        })
-      })
-      return next
-    })
-    toast({
-      title: "Entrada de mercadoria concluída",
-      description: `${nfeItens.length} item(ns) processado(s) no estoque.`,
-    })
-    setNfeItens([])
-    setImportFeedback("Estoque atualizado com sucesso.")
-  }
+  // Entrada automática por XML NÃO está disponível nesta fase (sem backend fiscal):
+  // a leitura/De-Para abaixo é apenas pré-visualização para conferência — não grava no
+  // estoque. O botão "Confirmar Entrada" fica desabilitado. A entrada real (com
+  // livro-razão) é feita em Cadastros → Estoque (Entrada manual) ou no Importador Avançado.
 
   const getCategoryIcon = (categoria: string) => {
     switch (categoria) {
@@ -2312,7 +2261,7 @@ export function GestaoProdutos({
 
           <div className="space-y-4 py-4">
             <p className="text-muted-foreground">
-              Entrada de mercadoria via XML: leia a NF-e, faça o De-Para e confirme a atualização do estoque.
+              Pré-visualização da NF-e para conferência. A gravação automática no estoque ainda não está disponível nesta fase.
             </p>
 
             <div className="grid gap-2">
@@ -2348,9 +2297,9 @@ export function GestaoProdutos({
               onChange={handleImportFile}
             />
 
-            <div className="p-3 rounded-lg bg-secondary">
-              <p className="text-sm text-muted-foreground">
-                <strong>Dica:</strong> O XML da NF-e deve conter as tags de produto (`det/prod`). Os itens serão incluídos com custo automático.
+            <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                <strong>Pré-visualização:</strong> a entrada por XML ainda não grava no estoque. Confira os itens abaixo e dê entrada real em <strong>Cadastros → Estoque</strong> (Entrada manual, com livro-razão) ou pelo Importador Avançado.
               </p>
             </div>
             {nfeItens.length > 0 && (
@@ -2410,11 +2359,15 @@ export function GestaoProdutos({
 
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setIsImportModalOpen(false)}>
-              Cancelar
+              Fechar
             </Button>
-            <Button className="bg-primary hover:bg-primary/90" onClick={confirmarEntradaMercadoria} disabled={nfeItens.length === 0}>
+            <Button
+              className="bg-primary hover:bg-primary/90"
+              disabled
+              title="Entrada automática por XML — em breve. Use a Entrada manual em Cadastros → Estoque."
+            >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
-              Confirmar Entrada
+              Confirmar Entrada (em breve)
             </Button>
           </div>
         </DialogContent>

@@ -18,6 +18,18 @@ export interface SaleLineRecord {
   unitPrice: number
   lineTotal: number
   qtyReturned?: number
+  /**
+   * `true` quando o item não veio do catálogo (Venda Avulsa via tecla INSERT no PDV).
+   * Avulsos não baixam estoque e não exigem `Produto` resolvido no banco.
+   * Persistido também em `Venda.payload.lines[]` para auditoria/relatórios.
+   */
+  isAvulso?: boolean
+  /**
+   * Custo unitário informado pelo operador no momento da venda avulsa.
+   * Opcional: `null` ou ausente = custo desconhecido (não assumir lucro 100%).
+   * Não há coluna `custoUnitario` em `ItemVenda` — o valor vive em `Venda.payload`.
+   */
+  custoUnitario?: number | null
 }
 
 export interface SaleRecord {

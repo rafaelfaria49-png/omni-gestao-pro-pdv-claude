@@ -17,7 +17,7 @@ import { cancelContaReceber } from "@/lib/financeiro/services/contas-receber-ser
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
-import { isOsVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { auth } from "@/auth"
 
 export const runtime = "nodejs"
@@ -170,7 +170,7 @@ export async function POST(
       const soldByProdutoId = new Map<string, number>()
       for (const it of venda.itens) {
         const raw = (it.inventoryId ?? "").trim()
-        if (!raw || isOsVirtualSaleLine(raw)) continue
+        if (!raw || isVirtualSaleLine(raw)) continue
         const q = Math.max(0, Math.round(it.quantidade))
         if (q <= 0) continue
         const pid = await resolveProdutoId(raw)
@@ -181,7 +181,7 @@ export async function POST(
       for (const dev of devolucoes) {
         for (const it of dev.itens) {
           const raw = (it.inventoryId ?? "").trim()
-          if (!raw || isOsVirtualSaleLine(raw)) continue
+          if (!raw || isVirtualSaleLine(raw)) continue
           const q = Math.max(0, Math.round(it.quantidade))
           if (q <= 0) continue
           const pid = await resolveProdutoId(raw)

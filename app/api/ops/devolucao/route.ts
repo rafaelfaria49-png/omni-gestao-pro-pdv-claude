@@ -6,7 +6,7 @@ import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { createSaida } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
-import { isOsVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import type { Prisma } from "@/generated/prisma"
 import { z } from "zod"
 
@@ -146,7 +146,7 @@ export async function POST(req: Request) {
       // por documento+produto+origem é defesa extra contra reprocessamento na mesma tx.
       for (const it of data.itens) {
         const rawInvId = (it.inventoryId ?? "").trim()
-        if (!rawInvId || isOsVirtualSaleLine(rawInvId)) continue
+        if (!rawInvId || isVirtualSaleLine(rawInvId)) continue
         const qty = Math.max(0, Math.round(it.quantidade))
         if (qty <= 0) continue
 

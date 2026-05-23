@@ -93,7 +93,14 @@ import {
 import { appendAuditLog } from "@/lib/audit-log"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { formatEntradaRapidaResumo, mergeEntradaRapida } from "@/lib/os-entrada-checklist"
-import { isOsVirtualSaleLine, osPecasInventoryId, osServicoInventoryId } from "@/lib/os-pdv-virtual-lines"
+import {
+  avulsoInventoryId,
+  isAvulsoSaleLine,
+  isOsVirtualSaleLine,
+  osPecasInventoryId,
+  osServicoInventoryId,
+} from "@/lib/os-pdv-virtual-lines"
+import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import { productMatchesPdvSearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 
@@ -118,6 +125,10 @@ type CartItem = {
   atributosLabel?: string
   /** Resumo checklist entrada (O.S. / serviço). */
   lineDetail?: string
+  /** Item avulso (INSERT): não baixa estoque, persistido no payload da venda. */
+  isAvulso?: boolean
+  /** Custo unitário opcional informado no balcão. `null` = desconhecido. */
+  custoUnitario?: number | null
 }
 
 type Product = PdvCatalogProduct
@@ -197,6 +208,7 @@ export function PdvClassic({
   const [operationType, setOperationType] = useState<"sangria" | "suprimento" | null>(null)
   const [fechamentoCaixaSignal, setFechamentoCaixaSignal] = useState(0)
   const [showDevolucaoModal, setShowDevolucaoModal] = useState(false)
+  const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
   const [operationValue, setOperationValue] = useState("")
   const [operationReason, setOperationReason] = useState("")
   const [cashHistory, setCashHistory] = useState<
@@ -402,8 +414,11 @@ export function PdvClassic({
     () =>
       cart.map((i) => {
         const inv = inventory.find((x) => x.id === i.inventoryId)
-        const code =
-          isOsVirtualSaleLine(i.inventoryId) ? "OS" : (inv?.barcode && inv.barcode.trim()) || i.inventoryId
+        const code = isAvulsoSaleLine(i.inventoryId)
+          ? "AVULSO"
+          : isOsVirtualSaleLine(i.inventoryId)
+            ? "OS"
+            : (inv?.barcode && inv.barcode.trim()) || i.inventoryId
         return {
           lineId: i.lineId,
           code,
@@ -626,6 +641,59 @@ export function PdvClassic({
 
   const addQuickItem = (item: Product) => {
     addToCart(item)
+  }
+
+  /**
+   * Adiciona ao carrinho um Item Avulso (Venda Avulsa via tecla INSERT).
+   * Cria um `inventoryId` virtual com prefixo `__avulso__` — `isVirtualSaleLine`
+   * faz o restante do pipeline (finalize, upsert venda, ledger) pular a baixa de
+   * estoque automaticamente. Descrição, valor, qtd e custo opcional vêm do modal.
+   */
+  const addItemAvulso = (payload: ItemAvulsoPayload) => {
+    const lineId = newPdvLineId("avulso")
+    const inventoryId = avulsoInventoryId(lineId)
+    const quantity = Math.max(1, Math.round(payload.quantity))
+    const price = Math.max(0, Math.round(payload.unitPrice * 100) / 100)
+    const custoUnitario =
+      payload.custoUnitario !== null && payload.custoUnitario >= 0
+        ? Math.round(payload.custoUnitario * 100) / 100
+        : null
+    setCart((prev) => [
+      ...prev,
+      {
+        lineId,
+        inventoryId,
+        name: payload.description,
+        price,
+        quantity,
+        complementos: [],
+        isAvulso: true,
+        custoUnitario,
+      },
+    ])
+    setSelectedCartLineId(lineId)
+    setShowItemAvulsoModal(false)
+    appendAuditLog({
+      action: "pdv_item_avulso_adicionado",
+      userLabel: auditUser(),
+      detail: `${payload.description} · ${quantity}x ${formatBrlAudit(price)}${custoUnitario !== null ? ` · custo ${formatBrlAudit(custoUnitario)}` : " · custo n/i"}`,
+    })
+    if (isModoRapido) {
+      setRapidoFlashLineId(lineId)
+      window.setTimeout(() => {
+        setRapidoFlashLineId((h) => (h === lineId ? null : h))
+      }, 150)
+      playPdvRapidoItemBeepIfEnabled()
+    }
+    if (uiShell !== "default") {
+      setShellHighlightLineId(lineId)
+      window.setTimeout(() => {
+        setShellHighlightLineId((h) => (h === lineId ? null : h))
+      }, 1400)
+      queueMicrotask(() => shellBipeRef.current?.focus())
+    } else {
+      queueMicrotask(() => productInputRef.current?.focus())
+    }
   }
 
   const handleShellBipeKeyDown = useCallback(
@@ -1032,6 +1100,13 @@ export function PdvClassic({
       } else if (e.key === "F8") {
         e.preventDefault()
         if (cart.length > 0) setCart([])
+      } else if (e.key === "Insert") {
+        // Venda Avulsa — herda do PDV legado. Não exige caixa aberto neste
+        // ponto: o gate continua no `finalizeSaleTransaction`/`payment-modal`.
+        e.preventDefault()
+        if (!isPaymentModalOpen && !attrDialogOpen && !weightDialogOpen && !operationType) {
+          setShowItemAvulsoModal(true)
+        }
       } else if (e.altKey && (e.key === "d" || e.key === "D")) {
         e.preventDefault()
         if (cart.length > 0) setIsPaymentModalOpen(true)
@@ -2136,6 +2211,12 @@ export function PdvClassic({
       </div>
       )}
 
+      <ItemAvulsoModal
+        open={showItemAvulsoModal}
+        onOpenChange={setShowItemAvulsoModal}
+        onConfirm={addItemAvulso}
+      />
+
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => {
@@ -2160,13 +2241,17 @@ export function PdvClassic({
           const saleLines = cart
             .filter(
               (item) =>
-                isOsVirtualSaleLine(item.inventoryId) || inventory.some((i) => i.id === item.inventoryId)
+                isOsVirtualSaleLine(item.inventoryId) ||
+                isAvulsoSaleLine(item.inventoryId) ||
+                inventory.some((i) => i.id === item.inventoryId)
             )
             .map((item) => ({
               inventoryId: item.inventoryId,
               quantity: item.quantity,
               unitPrice: item.price,
               name: item.name,
+              ...(item.isAvulso ? { isAvulso: true as const } : {}),
+              ...(item.custoUnitario !== undefined ? { custoUnitario: item.custoUnitario } : {}),
             }))
           let dinheiro = 0
           let pix = 0
@@ -2278,6 +2363,14 @@ export function PdvClassic({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
+              <Button
+                variant="outline"
+                className="w-full justify-start border-primary/30 hover:bg-primary/10"
+                onClick={() => { setShowOperationsMenu(false); setShowItemAvulsoModal(true) }}
+              >
+                Item Avulso
+                <span className="ml-auto text-xs text-muted-foreground">INS</span>
+              </Button>
               <Button variant="outline" className="w-full justify-start border-primary/30 hover:bg-primary/10" onClick={() => openOperation("sangria")}>
                 Sangria
               </Button>

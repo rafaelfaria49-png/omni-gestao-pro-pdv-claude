@@ -96,13 +96,6 @@ export function CadastrosHub() {
             </div>
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              <div className="relative hidden lg:block">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  placeholder="Buscar em todos os cadastros…"
-                  className="w-80 rounded-lg border border-input bg-card py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
               <button
                 onClick={() => {
                   setTab("importacao");
@@ -377,28 +370,54 @@ function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: bool
           </div>
         </Card>
 
-        {/* IA */}
+        {/* Sugestões reais derivadas do banco (sem dados fake) */}
         <Card className="p-6">
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-semibold text-foreground">IA de Cadastros</h3>
+            <h3 className="text-lg font-semibold text-foreground">Sugestões de melhoria</h3>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">Sugestões automáticas para melhorar a base.</p>
-          <ul className="mt-4 space-y-3 text-sm">
-            {[
-              "12 produtos sem margem definida",
-              "5 clientes possivelmente duplicados",
-              "8 serviços sem termo de garantia",
-              "3 fornecedores sem WhatsApp",
-            ].map((t) => (
-              <li key={t} className="flex items-start gap-2">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <span className="text-foreground">{t}</span>
-              </li>
-            ))}
-          </ul>
-          <button className="mt-5 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90">
-            Corrigir com IA
+          <p className="mt-1 text-sm text-muted-foreground">Itens reais da base que precisam de atenção.</p>
+          {(() => {
+            const a = stats?.produtoAlerts;
+            const ia = stats?.ia;
+            const insights: string[] = [];
+            if (a) {
+              if (a.semPreco > 0) insights.push(`${a.semPreco} produto(s) sem preço de venda`);
+              if (a.semFornecedor > 0) insights.push(`${a.semFornecedor} produto(s) sem fornecedor`);
+              if (a.margemBaixa > 0) insights.push(`${a.margemBaixa} produto(s) com margem abaixo de 20%`);
+              if (a.estoqueBaixo > 0) insights.push(`${a.estoqueBaixo} produto(s) com estoque baixo (1–5 un)`);
+            }
+            if (ia) {
+              if (ia.duplicadosEncontrados > 0) insights.push(`${ia.duplicadosEncontrados} possível(is) duplicado(s) por documento/SKU`);
+              if (ia.produtosSemImagem > 0) insights.push(`${ia.produtosSemImagem} produto(s) sem imagem`);
+            }
+            if (loading) {
+              return <div className="mt-4 text-sm text-muted-foreground">Analisando base…</div>;
+            }
+            if (insights.length === 0) {
+              return (
+                <div className="mt-4 flex items-start gap-2 text-sm">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--success)]" />
+                  <span className="text-foreground">Base de cadastros saudável — nenhum item pendente.</span>
+                </div>
+              );
+            }
+            return (
+              <ul className="mt-4 space-y-3 text-sm">
+                {insights.slice(0, 5).map((t) => (
+                  <li key={t} className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[color:var(--warning)]" />
+                    <span className="text-foreground">{t}</span>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+          <button
+            onClick={() => onAction("produtos")}
+            className="mt-5 w-full rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            Revisar produtos
           </button>
         </Card>
       </div>
@@ -452,19 +471,29 @@ function Toolbar({
 }) {
   return (
     <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2">
-      <div className="relative min-w-0 max-w-full">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          placeholder={`Buscar em ${label.toLowerCase()}…`}
-          value={filterQuery ?? ""}
-          onChange={(e) => onFilterQueryChange?.(e.target.value)}
-          className="w-64 max-w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
-        />
-      </div>
-      <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-accent">
+      {onFilterQueryChange && (
+        <div className="relative min-w-0 max-w-full">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            placeholder={`Buscar em ${label.toLowerCase()}…`}
+            value={filterQuery ?? ""}
+            onChange={(e) => onFilterQueryChange?.(e.target.value)}
+            className="w-64 max-w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+      )}
+      <button
+        disabled
+        title="Filtros avançados — em breve"
+        className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground opacity-50"
+      >
         <Filter className="h-4 w-4" /> Filtros
       </button>
-      <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-accent">
+      <button
+        disabled
+        title="Exportar — em breve"
+        className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground opacity-50"
+      >
         <Download className="h-4 w-4" /> Exportar
       </button>
       <span className="ml-auto text-sm text-muted-foreground">{count} {label}</span>
@@ -700,7 +729,7 @@ function ClientesPanel({
             />
           </Field>
           <Field label="Telefone / WhatsApp"><Input ref={telRef} defaultValue={editing?.telefone === "—" ? "" : editing?.telefone ?? ""} placeholder="(11) 9 0000-0000" /></Field>
-          <Field label="Email"><Input ref={emailRef} defaultValue="" placeholder="email@exemplo.com" /></Field>
+          <Field label="Email"><Input ref={emailRef} defaultValue={editing?.email ?? ""} placeholder="email@exemplo.com" /></Field>
           <Field label="Endereço" span={2}><Input placeholder="Rua, número, bairro" /></Field>
           <Field label="Cidade"><Input ref={cidadeRef} defaultValue={editing?.cidade === "—" ? "" : editing?.cidade ?? ""} placeholder="São Paulo/SP" /></Field>
           <Field label="UF"><Input placeholder="SP" /></Field>
@@ -1377,6 +1406,7 @@ function ServicosPanel({
   const m = useToggle();
   const [editing, setEditing] = useState<ServicoDTO | null>(null);
   const [rows, setRows] = useState<ServicoDTO[]>([]);
+  const [filterQuery, setFilterQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [servCategorias, setServCategorias] = useState<string[]>([]);
@@ -1423,13 +1453,25 @@ function ServicosPanel({
     void refresh();
   }, [refresh]);
 
+  const visibleRows = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((s) => [s.nome, s.categoria].join(" ").toLowerCase().includes(q));
+  }, [rows, filterQuery]);
+
   return (
     <div className="w-full min-w-0">
-      <Toolbar count={rows.length} label="serviços" onNew={m.openIt} />
+      <Toolbar
+        count={visibleRows.length}
+        label="serviços"
+        onNew={m.openIt}
+        filterQuery={filterQuery}
+        onFilterQueryChange={setFilterQuery}
+      />
       {loading && <div className="mb-3 text-sm text-muted-foreground">Carregando serviços…</div>}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
       <div className="grid min-w-0 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {rows.map((s) => (
+        {visibleRows.map((s) => (
           <Card
             key={s.id}
             className="p-5"
@@ -1572,6 +1614,7 @@ function FornecedoresPanel({
 }) {
   const m = useToggle();
   const [rows, setRows] = useState<FornecedorDTO[]>([]);
+  const [filterQuery, setFilterQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
@@ -1617,15 +1660,25 @@ function FornecedoresPanel({
     void refresh();
   }, [refresh]);
 
+  const visibleRows = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((f) =>
+      [f.nome, f.razaoSocial, f.cnpj, f.contato, f.whatsapp, f.email].join(" ").toLowerCase().includes(q)
+    );
+  }, [rows, filterQuery]);
+
   return (
     <div className="w-full min-w-0">
       <Toolbar
-        count={rows.length}
+        count={visibleRows.length}
         label="fornecedores"
         onNew={() => {
           setEditing(null);
           m.openIt();
         }}
+        filterQuery={filterQuery}
+        onFilterQueryChange={setFilterQuery}
       />
       {loading && <div className="mb-3 text-sm text-muted-foreground">Carregando fornecedores…</div>}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
@@ -1636,7 +1689,7 @@ function FornecedoresPanel({
               <tr>{["Fornecedor", "CNPJ", "Contato", "Categoria", "Prazo", "Pagamento", "Última compra", "Status"].map((h) => <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>)}</tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map((f) => (
+              {visibleRows.map((f) => (
                 <tr
                   key={f.id}
                   className="cursor-pointer hover:bg-accent/40"
@@ -1780,6 +1833,7 @@ function TecnicosPanel({
 }) {
   const m = useToggle();
   const [rows, setRows] = useState<TecnicoDTO[]>([]);
+  const [filterQuery, setFilterQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
@@ -1821,13 +1875,27 @@ function TecnicosPanel({
     void refresh();
   }, [refresh]);
 
+  const visibleRows = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((t) =>
+      [t.name, t.email, t.phone, t.role, t.specialty].join(" ").toLowerCase().includes(q)
+    );
+  }, [rows, filterQuery]);
+
   return (
     <div className="w-full min-w-0">
-      <Toolbar count={rows.length} label="técnicos / funcionários" onNew={m.openIt} />
+      <Toolbar
+        count={visibleRows.length}
+        label="técnicos / funcionários"
+        onNew={m.openIt}
+        filterQuery={filterQuery}
+        onFilterQueryChange={setFilterQuery}
+      />
       {loading && <div className="mb-3 text-sm text-muted-foreground">Carregando técnicos…</div>}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
       <div className="grid min-w-0 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {rows.map((t) => (
+        {visibleRows.map((t) => (
           <Card
             key={t.id}
             className="p-5"
@@ -1989,6 +2057,7 @@ function EquipamentosPanel({
 }) {
   const m = useToggle();
   const [rows, setRows] = useState<EquipamentoModeloDTO[]>([]);
+  const [filterQuery, setFilterQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
@@ -2031,20 +2100,28 @@ function EquipamentosPanel({
     void refresh();
   }, [refresh]);
 
+  const visibleRows = useMemo(() => {
+    const q = filterQuery.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((e) => [e.name, e.brand, e.type].join(" ").toLowerCase().includes(q));
+  }, [rows, filterQuery]);
+
   return (
     <div className="w-full min-w-0">
       <Toolbar
-        count={rows.length}
+        count={visibleRows.length}
         label="equipamentos / modelos"
         onNew={() => {
           setEditing(null);
           m.openIt();
         }}
+        filterQuery={filterQuery}
+        onFilterQueryChange={setFilterQuery}
       />
       {loading && <div className="mb-3 text-sm text-muted-foreground">Carregando equipamentos…</div>}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
       <div className="grid min-w-0 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {rows.map((e) => (
+        {visibleRows.map((e) => (
           <Card
             key={e.id}
             className="overflow-hidden"
@@ -2110,10 +2187,18 @@ function EquipamentosPanel({
                 <Badge tone="success">Marketing IA</Badge>
               </div>
               <div className="flex items-center gap-2 pt-2">
-                <button className="flex flex-1 items-center justify-center gap-1 rounded-md bg-primary/15 px-2 py-1.5 text-[11px] font-medium text-primary hover:bg-primary/25">
+                <button
+                  disabled
+                  title="Usar no diagnóstico IA — em breve"
+                  className="flex flex-1 cursor-not-allowed items-center justify-center gap-1 rounded-md bg-primary/10 px-2 py-1.5 text-[11px] font-medium text-muted-foreground opacity-50"
+                >
                   <Sparkles className="h-3 w-3" /> Usar no diagnóstico IA
                 </button>
-                <button className="flex flex-1 items-center justify-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 text-[11px] text-foreground hover:border-primary">
+                <button
+                  disabled
+                  title="Gerar conteúdo Marketing — em breve"
+                  className="flex flex-1 cursor-not-allowed items-center justify-center gap-1 rounded-md border border-border bg-background px-2 py-1.5 text-[11px] text-muted-foreground opacity-50"
+                >
                   Gerar conteúdo Marketing
                 </button>
               </div>

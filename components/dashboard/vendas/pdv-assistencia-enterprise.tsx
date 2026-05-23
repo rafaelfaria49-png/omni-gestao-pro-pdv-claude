@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import {
   Barcode,
   Banknote,
@@ -292,13 +292,15 @@ function computeMerchandiseDiscount(
 ): { amount: number; overTotal: boolean } {
   if (subtotal <= 0) return { amount: 0, overTotal: false }
   if (type === "percent") {
+    if (percent <= 0.009) return { amount: 0, overTotal: false }
     if (percent > 100 + 0.0001) return { amount: 0, overTotal: true }
-    const raw = (subtotal * Math.max(0, percent)) / 100
+    const raw = (subtotal * percent) / 100
     if (raw > subtotal + 0.001) return { amount: 0, overTotal: true }
     return { amount: Math.round(Math.min(subtotal, raw) * 100) / 100, overTotal: false }
   }
+  if (reais <= 0.009) return { amount: 0, overTotal: false }
   if (reais > subtotal + 0.001) return { amount: 0, overTotal: true }
-  return { amount: Math.min(subtotal, Math.max(0, reais)), overTotal: false }
+  return { amount: Math.min(subtotal, reais), overTotal: false }
 }
 
 function newLineId() {
@@ -640,7 +642,7 @@ function PaymentModal({
                   autoComplete="off"
                 />
               )}
-              {discountOverTotal && (
+              {discountOverTotal && discountAmount > 0.009 && (
                 <p className="flex items-center gap-1.5 text-xs text-destructive">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                   Desconto não pode ser maior que o subtotal
@@ -1450,6 +1452,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // ── Modals ───────────────────────────────────────────────────────────────────
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentInitMethod, setPaymentInitMethod] = useState<PayMethod>("dinheiro")
+  const paymentDiscountSnapshotRef = useRef<{
+    discountType: DiscountType
+    discountReais: number
+    discountPercent: number
+  } | null>(null)
   const [trocasOpen, setTrocasOpen] = useState(false)
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -1545,17 +1552,29 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         const data = JSON.parse(raw) as CartPersisted
         const age = Date.now() - new Date(data.savedAt).getTime()
         if (age < CART_MAX_AGE_MS && Array.isArray(data.cart) && data.cart.length > 0) {
-          setCart(data.cart)
+          const restoredCart = data.cart
+          const restoredSubtotal = restoredCart.reduce((s, l) => s + l.price * l.qty, 0)
+          setCart(restoredCart)
           setCustomerName(data.customerName ?? "")
           setSelectedClienteId(data.clienteId ?? null)
           setSelectedClienteDoc(data.clienteDoc ?? null)
-          setDiscountType(data.discountType === "percent" ? "percent" : "reais")
-          if (typeof data.discountReais === "number") {
-            setDiscountReais(data.discountReais)
-          } else if (typeof data.discount === "number") {
-            setDiscountReais(data.discount)
+          const restoredType: DiscountType = data.discountType === "percent" ? "percent" : "reais"
+          setDiscountType(restoredType)
+          if (restoredType === "percent") {
+            const pct = typeof data.discountPercent === "number" ? data.discountPercent : 0
+            setDiscountPercent(pct > 0.009 && pct <= 100 ? pct : 0)
+            setDiscountReais(0)
+          } else {
+            let dr =
+              typeof data.discountReais === "number"
+                ? data.discountReais
+                : typeof data.discount === "number"
+                  ? data.discount
+                  : 0
+            if (dr > restoredSubtotal + 0.001) dr = 0
+            setDiscountReais(Math.max(0, dr))
+            setDiscountPercent(0)
           }
-          if (typeof data.discountPercent === "number") setDiscountPercent(data.discountPercent)
           window.setTimeout(() => {
             toast({
               title: "Carrinho restaurado",
@@ -1578,6 +1597,30 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const desconto = discountCalc.amount
   const discountOverTotal = discountCalc.overTotal
   const total = useMemo(() => Math.max(0, subtotal - desconto), [subtotal, desconto])
+
+  const resetDiscountState = useCallback(() => {
+    setDiscountType("reais")
+    setDiscountReais(0)
+    setDiscountPercent(0)
+  }, [])
+
+  const closePaymentModal = useCallback((revertDiscount: boolean) => {
+    setPaymentOpen(false)
+    if (revertDiscount && paymentDiscountSnapshotRef.current) {
+      const snap = paymentDiscountSnapshotRef.current
+      setDiscountType(snap.discountType)
+      setDiscountReais(snap.discountReais)
+      setDiscountPercent(snap.discountPercent)
+    }
+    paymentDiscountSnapshotRef.current = null
+  }, [])
+
+  useEffect(() => {
+    if (!cartHydratedRef.current) return
+    if (cart.length === 0) {
+      resetDiscountState()
+    }
+  }, [cart.length, resetDiscountState])
 
   // ── Persistir carrinho no localStorage (debounced 500ms) ─────────────────────
   useEffect(() => {
@@ -1667,6 +1710,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         userLabel: cashierId.slice(0, 8),
         detail: `Desconto de ${discountPct.toFixed(1)}% aplicado — ${brl(desconto)} de ${brl(subtotal)}`,
       })
+    }
+    paymentDiscountSnapshotRef.current = {
+      discountType,
+      discountReais,
+      discountPercent,
     }
     setPaymentInitMethod(method)
     setPaymentOpen(true)
@@ -1973,11 +2021,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
 
     // Venda real concluída — limpa carrinho e persistência.
+    paymentDiscountSnapshotRef.current = null
     try { localStorage.removeItem(CART_STORAGE_KEY(storeIdKey)) } catch { /* ignore */ }
     setCart([])
-    setDiscountType("reais")
-    setDiscountReais(0)
-    setDiscountPercent(0)
+    resetDiscountState()
     setCustomerName("")
     setSelectedClienteId(null)
     setSelectedClienteDoc(null)
@@ -1985,7 +2032,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     setSelectedLineId(null)
     setRapidoFlashLineId(null)
     setRapidoPickIdx(0)
-    setPaymentOpen(false)
+    closePaymentModal(false)
     if (notes.trim()) {
       toast({ title: "Venda finalizada", description: notes.trim() })
     } else {
@@ -2624,7 +2671,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   <span className="font-semibold tabular-nums text-destructive">−{brl(desconto)}</span>
                 </div>
               )}
-              {discountOverTotal && (
+              {discountOverTotal && desconto > 0.009 && (
                 <p className="text-xs text-destructive">Desconto acima do subtotal — ajuste antes de finalizar (F7).</p>
               )}
               <Separator className="bg-border" />
@@ -2703,7 +2750,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         customerStoreCredit={customerCredit}
         defaultMethod={paymentInitMethod}
         onConfirm={handlePaymentConfirm}
-        onClose={() => setPaymentOpen(false)}
+        onClose={() => closePaymentModal(true)}
       />
 
       {/* Clear-cart confirmation */}
@@ -2727,9 +2774,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 })
                 try { localStorage.removeItem(CART_STORAGE_KEY(storeIdKey)) } catch { /* ignore */ }
                 setCart([])
-                setDiscountType("reais")
-                setDiscountReais(0)
-                setDiscountPercent(0)
+                resetDiscountState()
                 setSelectedLineId(null)
                 setClearConfirmOpen(false)
               }}

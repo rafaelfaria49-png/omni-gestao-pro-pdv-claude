@@ -1,5 +1,5 @@
 import type { Prisma } from "@/generated/prisma"
-import { isOsVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 
 export type SalePayload = {
@@ -22,6 +22,10 @@ export type SalePayload = {
     unitPrice?: number
     lineTotal?: number
     qtyReturned?: number
+    /** Item avulso (Venda Avulsa via INSERT no PDV) — não baixa estoque. */
+    isAvulso?: boolean
+    /** Custo unitário opcional informado no balcão para relatórios de margem. */
+    custoUnitario?: number | null
   }>
 }
 
@@ -115,7 +119,7 @@ export async function upsertVendaInTransaction(
         : Math.round(precoUnitario * quantidade * 100) / 100
 
     // Resolve produto real via OR (id | sku | barcode); evita busca duplicada por linha
-    if (rawInvId && !isOsVirtualSaleLine(rawInvId) && !resolvedProductMap.has(rawInvId)) {
+    if (rawInvId && !isVirtualSaleLine(rawInvId) && !resolvedProductMap.has(rawInvId)) {
       const produto = await tx.produto.findFirst({
         where: {
           storeId: lojaId,
@@ -158,7 +162,7 @@ export async function upsertVendaInTransaction(
   const unresolvedInventoryIds: string[] = []
   for (const line of lines) {
     const rawInvId = typeof line.inventoryId === "string" ? line.inventoryId.trim() : ""
-    if (!rawInvId || isOsVirtualSaleLine(rawInvId)) continue
+    if (!rawInvId || isVirtualSaleLine(rawInvId)) continue
     const resolved = resolvedProductMap.get(rawInvId)
     if (!resolved) {
       // Item vendido referencia inventoryId sem casamento por id/sku/barcode.

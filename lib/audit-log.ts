@@ -20,6 +20,7 @@ export type AuditAction =
   | "devolucao_vale"
   | "quebra_caixa"
   | "pdv_item_adicionado"
+  | "pdv_item_avulso_adicionado"
   | "pdv_item_removido"
   | "pdv_carrinho_limpo"
   | "pdv_desconto_alterado"
