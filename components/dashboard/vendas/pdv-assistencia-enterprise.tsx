@@ -1182,7 +1182,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       const raw = localStorage.getItem(shortcutsKey)
       if (raw) {
         const parsed = JSON.parse(raw) as AtalhoSaved[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           setLocalAtalhos(parsed)
           setHydratedFromDb(true)
           return
@@ -1193,10 +1193,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     // Server fallback: aguarda hidratação do banco
     if (!settingsHydrated) return
     const saved = pdvParams.atalhosRapidos ?? []
-    if (saved.length > 0) {
-      setLocalAtalhos(saved)
-    }
-    // Sem atalhos salvos → estado vazio honesto (empty state guia o usuário)
+    setLocalAtalhos(saved)
     setHydratedFromDb(true)
   }, [shortcutsKey, settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
 
