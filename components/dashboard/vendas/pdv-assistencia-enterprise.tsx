@@ -1707,6 +1707,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 }}
                 placeholder="Bipe o produto ou busque por nome / código  [F3]"
                 className="h-14 rounded-2xl border-border bg-card pl-12 text-base font-medium placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
+                style={{ paddingLeft: "3rem" }}
               />
               {search ? (
                 <button
@@ -1965,6 +1966,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 }}
                 placeholder="Cliente — A Prazo/Fiado  [F2]"
                 className="h-9 rounded-xl border-border bg-background pl-9 pr-14 text-sm"
+                style={{ paddingLeft: "2.25rem" }}
               />
               {customerName.trim() ? (
                 <button
