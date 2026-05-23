@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 23 Mai 2026 — Sessão: Goal 2 — Auditoria PDV ↔ Estoque para uso real
+> Última atualização: 23 Mai 2026 — Sessão: Goal 3 — Estabilização do financeiro PDV para uso real
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,32 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Financeiro do PDV — Estabilização para operação real de caixa (concluído 23/05/2026)
+
+**Contexto:** terceira fase de preparação para operação real em loja — auditoria
+ponta-a-ponta dos registros financeiros gerados pelo PDV
+(`MovimentacaoFinanceira`, `SessaoCaixa`, `CaixaOperacao`) nos 3 PDVs operacionais
+(Clássico, Assistência, Supermercado). Detalhes em
+[`docs/ai/FINANCEIRO_CAIXA_GOAL_REPORT.md`](./FINANCEIRO_CAIXA_GOAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/ops-upsert-venda.ts` | `MovimentacaoFinanceira(origem:"venda")` agora grava `createdAt = at` (data real da venda no cliente). Vendas offline re-sincronizadas tardiamente passam a cair na sessão de caixa temporalmente correta, em vez de na sessão atual do servidor (`/api/ops/caixa/{fechar,sessao-detalhe}` filtra por `createdAt BETWEEN abertaEm AND fechadaEm`). |
+| `components/dashboard/vendas/pdv-classic.tsx` | Sangria/suprimento deixou de **falhar em silêncio**: substitui `void fetch(...).catch(() => {})` por handler que loga e exibe toast destrutivo "Sangria/Suprimento não confirmado no servidor". O `caixa.totalSaidas`/`totalEntradas` local diverge do DB quando o servidor rejeita ou cai — operador precisa saber para retentar. |
+
+**Idempotência confirmada em todas as origens financeiras críticas:**
+`venda` (referenciaId=pedidoId), `cancelamento_pdv` (referenciaId=pedidoId,
+tipo:saida), `devolucao_pdv` (referenciaId=devolucao.id), `sangria_pdv` /
+`suprimento_pdv` (referenciaId=caixaOperacao.id). Multi-loja preservado em
+todos os endpoints de escrita (`opsLojaIdFromRequestForWrite`).
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Orientação para uso amanhã:** PDV **Clássico / Assistência / Supermercado**.
+**NÃO usar `/dashboard/pdv-next`**. Riscos restantes (idempotência fraca de
+sangria/suprimento, fire-and-forget do título à prazo, devolução com vale gera
+saída financeira) documentados no relatório.
 
 ### PDV ↔ Estoque — Auditoria de integração para uso real (concluído 23/05/2026)
 

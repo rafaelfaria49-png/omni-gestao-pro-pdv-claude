@@ -923,6 +923,10 @@ export function PdvClassic({
       })
     }
     if (lojaAtivaId && sessaoId) {
+      // Falha não pode ser silenciosa: o totalSaidas/totalEntradas já foi
+      // incrementado localmente (adicionarSaida/adicionarEntrada acima). Se o
+      // servidor não confirmar, o caixa local diverge do banco — operador
+      // precisa saber para retentar ou registrar manualmente.
       void fetch("/api/ops/caixa/operacao", {
         method: "POST",
         credentials: "include",
@@ -937,7 +941,33 @@ export function PdvClassic({
           motivo: reason,
           operador: auditUser(),
         }),
-      }).catch(() => {})
+      })
+        .then((res) => {
+          if (!res.ok) {
+            console.error("[caixa/operacao] HTTP", res.status, op, value)
+            toast({
+              variant: "destructive",
+              title:
+                op === "sangria"
+                  ? "Sangria não confirmada no servidor"
+                  : "Suprimento não confirmado no servidor",
+              description:
+                "Operação aplicada apenas no caixa local. Verifique a conexão antes de fechar o caixa.",
+            })
+          }
+        })
+        .catch((err: unknown) => {
+          console.error("[caixa/operacao] rede", op, value, err)
+          toast({
+            variant: "destructive",
+            title:
+              op === "sangria"
+                ? "Sangria não confirmada no servidor"
+                : "Suprimento não confirmado no servidor",
+            description:
+              "Falha de rede. Operação aplicada apenas no caixa local — verifique a conexão.",
+          })
+        })
     }
     setOperationType(null)
     toast({

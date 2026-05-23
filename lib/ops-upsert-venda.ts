@@ -248,6 +248,10 @@ export async function upsertVendaInTransaction(
         typeof sale.customerName === "string" && sale.customerName.trim()
           ? ` — ${sale.customerName.trim().slice(0, 80)}`
           : ""
+      // createdAt = at (data real da venda no cliente). Sem isso, vendas offline
+      // sincronizadas tardiamente cairiam na sessão de caixa errada — a query de
+      // sessao-detalhe/fechamento filtra MovimentacaoFinanceira por createdAt entre
+      // SessaoCaixa.abertaEm e fechadaEm.
       await tx.movimentacaoFinanceira.create({
         data: {
           storeId: lojaId,
@@ -256,6 +260,7 @@ export async function upsertVendaInTransaction(
           descricao: `Venda PDV ${pedidoId}${sufixoCliente}`,
           origem: "venda",
           referenciaId: pedidoId,
+          createdAt: at,
         },
       })
     }
