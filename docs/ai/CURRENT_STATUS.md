@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 23 Mai 2026 — Sessão: Goal 4 — Auditoria Operações HUB para uso real
+> Última atualização: 23 Mai 2026 — Sessão: Goal 5 — Auditoria Vendas HUB para uso real
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,34 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Vendas HUB — Auditoria e estabilização para uso real (concluído 23/05/2026)
+
+**Contexto:** quinta fase — auditoria ponta-a-ponta do Vendas HUB (HUB Central,
+Venda Completa Enterprise, Orçamentos, Histórico de Vendas, links internos) e
+correção do bug visual de inputs/search bars em todos os temas. Detalhes em
+[`docs/ai/VENDAS_HUB_GOAL_REPORT.md`](./VENDAS_HUB_GOAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `styles/operational-density.css` | Removido `padding-inline … !important` das regras `[data-slot="input"]` e `input.border-input.rounded-md`. Esse `!important` (sempre ativo via `data-density="operational"` no `<html>`) sobrescrevia `pl-9`/`pr-9`, fazendo o texto/placeholder colidir com o ícone `absolute` dos search bars (Cliente e Itens na Venda Completa, Histórico, Orçamentos, pickers de PDV) em **todos os temas** (Light/Soft Ice/Midnight/Black). O `<Input>` base já usa `px-2.5` (= `--density-control-px`), então inputs sem ícone não regridem. |
+
+**Auditoria (todas reais):** Venda Completa Enterprise — busca de cliente
+(`/api/clientes`), busca/bipe de itens (inventory + scan), finalização via
+`finalizeSaleTransaction` (estoque + `MovimentacaoFinanceira` + ledger),
+integração com caixa aberto, a prazo (`ContaReceberTitulo`), enrich de dados
+enterprise (`Venda.payload.enterprise`) e cupom não fiscal. HUB Central com cards
+apontando para rotas reais. Histórico (`vendas-arquivo-geral`) com KPIs/detalhe
+reais. Multi-loja preservado.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Riscos restantes:** rotas placeholder do SPA TanStack (`/pdv`, `/vendas/nova`,
+`/orcamentos`, `/pedidos`, `/fiscal`) seguem "Em construção" e desconectadas dos
+cards (código morto navegacional); Orçamentos é fluxo legado/transição;
+`enrichVendaEnterprise` pode perder metadados silenciosamente se todos os retries
+falharem (venda já registrada); PDV Black Edition (`/dashboard/pdv-next`) continua
+sem persistir vendas. Validação visual em navegador nos 4 temas recomendada.
 
 ### Operações HUB — Auditoria e estabilização para uso real (concluído 23/05/2026)
 
