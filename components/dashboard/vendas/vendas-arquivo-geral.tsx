@@ -249,6 +249,7 @@ export function VendasArquivoGeral() {
   const [detalheOpen, setDetalheOpen] = useState(false)
   const [detalheLoading, setDetalheLoading] = useState(false)
   const [detalhe, setDetalhe] = useState<VendaDetalhe | null>(null)
+  const [saldoCredito, setSaldoCredito] = useState<number | null>(null)
 
   // Cupom modal
   const [cupomOpen, setCupomOpen] = useState(false)
@@ -354,13 +355,35 @@ export function VendasArquivoGeral() {
     setDetalheOpen(true)
     setDetalheLoading(true)
     setDetalhe(null)
+    setSaldoCredito(null)
     try {
       const res = await fetch(`/api/vendas/${encodeURIComponent(vendaId)}`, {
         credentials: "include",
         headers: { "x-assistec-loja-id": storeId },
       })
       const data = await res.json()
-      if (data.ok) setDetalhe(data.venda)
+      if (data.ok) {
+        setDetalhe(data.venda)
+        // Busca saldo atual em haver se a venda tem devoluções com crédito e CPF do cliente
+        const venda = data.venda as VendaDetalhe
+        if (venda.clienteCpf) {
+          const totalCreditoGerado = venda.devolucoes.reduce((s, d) => s + (d.creditoEmitido ?? 0), 0)
+          if (totalCreditoGerado > 0) {
+            try {
+              const doc = venda.clienteCpf.replace(/\D/g, "")
+              const rCred = await fetch(
+                `/api/ops/credito-cliente?lojaId=${encodeURIComponent(storeId)}&doc=${encodeURIComponent(doc)}`,
+                { credentials: "include" }
+              )
+              if (rCred.ok) {
+                const jCred = (await rCred.json()) as { creditos?: Record<string, { nome: string; saldo: number }> }
+                const saldo = jCred.creditos?.[doc]?.saldo
+                setSaldoCredito(typeof saldo === "number" ? saldo : null)
+              }
+            } catch { /* silent */ }
+          }
+        }
+      }
     } catch {
       toast({ title: "Erro", description: "Não foi possível carregar o detalhe da venda.", variant: "destructive" })
     } finally {
@@ -1090,6 +1113,26 @@ export function VendasArquivoGeral() {
                           </div>
                         )
                       })}
+                    </div>
+                  </>
+                )}
+                {/* Saldo em haver — mostrado quando há crédito vinculado ao CPF desta venda */}
+                {saldoCredito !== null && detalhe?.clienteCpf && (
+                  <>
+                    <Separator className="bg-border" />
+                    <div className={`rounded-lg border p-3 text-sm ${
+                      saldoCredito > 0
+                        ? "border-emerald-500/20 bg-emerald-500/5"
+                        : "border-muted bg-muted/20"
+                    }`}>
+                      <p className={`text-xs font-semibold ${
+                        saldoCredito > 0 ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"
+                      }`}>
+                        {saldoCredito > 0 ? `Saldo em haver: ${fmtBrl(saldoCredito)}` : "Crédito totalmente utilizado"}
+                      </p>
+                      {saldoCredito > 0 && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Disponível para uso no PDV</p>
+                      )}
                     </div>
                   </>
                 )}

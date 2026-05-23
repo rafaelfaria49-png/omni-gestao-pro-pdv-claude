@@ -520,6 +520,30 @@ export function OperationsProvider({
         } catch {
           /* ignorar — reconciliação é best-effort */
         }
+
+        // Reconcilia créditos do cliente com o servidor (best-effort).
+        // DB é fonte de verdade: saldos conhecidos no DB sobrescrevem localStorage.
+        // Docs apenas locais são mantidos (fallback offline).
+        try {
+          const rCred = await fetch(
+            `/api/ops/credito-cliente?lojaId=${encodeURIComponent(lj)}`,
+            { credentials: "include", headers }
+          )
+          if (!cancelled && rCred.ok) {
+            const jCred = (await rCred.json()) as {
+              creditos?: Record<string, { nome: string; saldo: number }>
+            }
+            const dbCreditos = jCred.creditos ?? {}
+            if (Object.keys(dbCreditos).length > 0) {
+              setState((prev) => ({
+                ...prev,
+                customerCredits: { ...prev.customerCredits, ...dbCreditos },
+              }))
+            }
+          }
+        } catch {
+          /* ignorar — reconciliação é best-effort */
+        }
       } catch {
         if (!cancelled) {
           lastSentOpsRef.current = JSON.stringify({

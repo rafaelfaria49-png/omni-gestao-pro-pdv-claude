@@ -97,32 +97,34 @@ export default function ConfiguracoesV3Page() {
       <ConfiguracoesNavProvider navigateToSection={navigateToSection}>
         <div className="configuracoes-v3-root configuracoes-v3-app flex min-h-screen bg-surface text-foreground">
           {/* Sidebar — desktop */}
-          <div className="hidden lg:flex">
+          <div className={active === "pdv" ? "hidden" : "hidden lg:flex"}>
             <SettingsSidebar active={active} onChange={handleChange} />
           </div>
 
           {/* Conteúdo */}
           <main className="flex-1 min-w-0 flex flex-col">
             {/* Top bar mobile */}
-            <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
-              <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-                <SheetTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-72 p-0">
-                  <SettingsSidebar active={active} onChange={handleChange} />
-                </SheetContent>
-              </Sheet>
-              <div>
-                <p className="text-xs text-muted-foreground">Configurações</p>
-                <h1 className="text-2xl font-semibold leading-[1.3] tracking-normal text-foreground">{currentLabel}</h1>
-              </div>
-            </header>
+            {active !== "pdv" && (
+              <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
+                <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-72 p-0">
+                    <SettingsSidebar active={active} onChange={handleChange} />
+                  </SheetContent>
+                </Sheet>
+                <div>
+                  <p className="text-xs text-muted-foreground">Configurações</p>
+                  <h1 className="text-2xl font-semibold leading-[1.3] tracking-normal text-foreground">{currentLabel}</h1>
+                </div>
+              </header>
+            )}
 
             <div className="flex-1 overflow-y-auto">
-              <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 sm:py-10 animate-fade-in" key={active}>
+              <div className={`mx-auto w-full px-4 py-6 sm:px-8 sm:py-10 animate-fade-in ${active === "pdv" ? "max-w-7xl" : "max-w-5xl"}`} key={active}>
                 <Active />
               </div>
             </div>

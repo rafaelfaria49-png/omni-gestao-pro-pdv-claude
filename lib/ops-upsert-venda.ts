@@ -7,6 +7,8 @@ export type SalePayload = {
   at?: string
   total?: number
   customerName?: string
+  /** CPF/CNPJ somente dígitos — usado para debitar ClienteCredito quando creditoVale > 0. */
+  customerCpf?: string
   /** FK real para Cliente (cuid). Nulo em consumidor final. */
   clienteId?: string
   /** Operador/caixa que realizou a venda (extraído de SaleRecord.cashierId). */
@@ -244,6 +246,44 @@ export async function upsertVendaInTransaction(
           referenciaId: pedidoId,
         },
       })
+    }
+  }
+
+  // ── 5. Debitar ClienteCredito (quando creditoVale foi usado na venda) ─────────
+  // Dentro da mesma transação: se falhar, a venda inteira reverte — sem crédito perdido.
+  const creditoValeUsado = arredonda2(pb?.creditoVale ?? 0)
+  const cpfNorm = typeof sale.customerCpf === "string" ? sale.customerCpf.replace(/\D/g, "") : ""
+  if (creditoValeUsado > 0 && cpfNorm) {
+    const creditos = await tx.clienteCredito.findMany({
+      where: { storeId: lojaId, clienteDoc: cpfNorm, status: "ativo", saldoAtual: { gt: 0 } },
+      orderBy: { createdAt: "asc" },
+    })
+    let restante = creditoValeUsado
+    for (const c of creditos) {
+      if (restante <= 0.001) break
+      const debit = arredonda2(Math.min(c.saldoAtual, restante))
+      if (debit <= 0) continue
+      const saldoAntes = c.saldoAtual
+      const saldoDepois = arredonda2(c.saldoAtual - debit)
+      await tx.clienteCredito.update({
+        where: { id: c.id },
+        data: {
+          saldoAtual: saldoDepois,
+          status: saldoDepois <= 0.001 ? "zerado" : "ativo",
+        },
+      })
+      await tx.usoCreditoCliente.create({
+        data: {
+          creditoId: c.id,
+          storeId: lojaId,
+          vendaId: pedidoId,
+          valor: debit,
+          saldoAntes,
+          saldoDepois,
+          operador: operadorLabel ?? "",
+        },
+      })
+      restante = arredonda2(restante - debit)
     }
   }
 }

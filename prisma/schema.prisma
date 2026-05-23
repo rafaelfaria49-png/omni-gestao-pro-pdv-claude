@@ -98,6 +98,8 @@ model Store {
   marketplaceSyncLogs      MarketplaceSyncLog[]
   marketplaceProductLinks  MarketplaceProductLink[]
   movimentacoesEstoque     MovimentacaoEstoque[]
+  creditos                 ClienteCredito[]
+  usosCredito              UsoCreditoCliente[]
 
   @@index([profile])
   @@map("stores")
@@ -599,6 +601,7 @@ model Cliente {
   ordensServico         OrdemServico[]
   vendas                Venda[]
   whatsappConversations WhatsAppConversation[]
+  creditos              ClienteCredito[]
 
   @@index([storeId])
   @@map("clientes_importados")
@@ -1288,6 +1291,7 @@ model DevolucaoVenda {
   /** Snapshot com linhas e contexto. */
   payload        Json?       @map("payload") @db.JsonB
   itens          ItemDevolucaoVenda[]
+  creditos       ClienteCredito[]
 
   @@unique([storeId, localId])
   @@index([storeId, at])
@@ -1307,6 +1311,63 @@ model ItemDevolucaoVenda {
 
   @@index([devolucaoId])
   @@map("itens_devolucao_venda")
+}
+
+// ─── PDV Enterprise — Crédito do Cliente (Vale-Troca persistente) ─────────────
+
+/**
+ * Saldo de crédito/vale por cliente (CPF/CNPJ).
+ * Criado ao registrar devolução com modo vale_credito ou troca.
+ * Debitado ao usar o vale em nova venda (creditoVale no paymentBreakdown).
+ * clienteDoc é a chave de lookup (CPF/CNPJ somente dígitos).
+ */
+model ClienteCredito {
+  id            String          @id @default(cuid())
+  storeId       String          @map("storeId")
+  store         Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /** CPF/CNPJ somente dígitos — chave de lookup principal */
+  clienteDoc    String          @map("clienteDoc")
+  clienteNome   String          @default("") @map("clienteNome")
+  /** FK opcional ao cliente cadastrado */
+  clienteId     String?         @map("clienteId")
+  cliente       Cliente?        @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  /** Devolução que originou este crédito */
+  devolucaoId   String?         @map("devolucaoId")
+  devolucao     DevolucaoVenda? @relation(fields: [devolucaoId], references: [id], onDelete: SetNull)
+  /** localId da venda que originou a devolução */
+  vendaOrigemId String          @default("") @map("vendaOrigemId")
+  valorOriginal Float           @map("valorOriginal")
+  saldoAtual    Float           @map("saldoAtual")
+  /** "ativo" | "zerado" | "expirado" */
+  status        String          @default("ativo") @map("status")
+  validoAte     DateTime?       @map("validoAte")
+  createdAt     DateTime        @default(now()) @map("createdAt")
+  updatedAt     DateTime        @default(now()) @updatedAt @map("updatedAt")
+  usos          UsoCreditoCliente[]
+
+  @@index([storeId, clienteDoc, status])
+  @@index([storeId, clienteId])
+  @@map("clientes_creditos")
+}
+
+/** Registro de uso de crédito/vale em uma venda. */
+model UsoCreditoCliente {
+  id          String         @id @default(cuid())
+  creditoId   String         @map("creditoId")
+  credito     ClienteCredito @relation(fields: [creditoId], references: [id], onDelete: Cascade)
+  storeId     String         @map("storeId")
+  store       Store          @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /** pedidoId da venda que consumiu este crédito */
+  vendaId     String         @default("") @map("vendaId")
+  valor       Float          @map("valor")
+  saldoAntes  Float          @map("saldoAntes")
+  saldoDepois Float          @map("saldoDepois")
+  operador    String         @default("") @map("operador")
+  at          DateTime       @default(now()) @map("at")
+
+  @@index([creditoId])
+  @@index([storeId])
+  @@map("usos_credito_cliente")
 }
 
 /**

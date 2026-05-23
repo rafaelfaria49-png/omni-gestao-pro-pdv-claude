@@ -1683,7 +1683,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           <div className="shrink-0 p-4">
             <div className="relative">
               <Barcode className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-              <Input
+              <input
                 ref={inputRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -1706,8 +1706,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   }
                 }}
                 placeholder="Bipe o produto ou busque por nome / código  [F3]"
-                className="h-14 rounded-2xl border-border bg-card pl-12 text-base font-medium placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
-                style={{ paddingLeft: "3rem" }}
+                autoComplete="off"
+                className="h-14 w-full rounded-2xl border border-border bg-card text-base font-medium text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/25"
+                style={{ paddingLeft: "3rem", paddingRight: "2.5rem" }}
               />
               {search ? (
                 <button
@@ -1935,7 +1936,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               ) : (
                 <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               )}
-              <Input
+              <input
                 ref={customerInputRef}
                 value={customerName}
                 onChange={(e) => {
@@ -1965,8 +1966,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   }
                 }}
                 placeholder="Cliente — A Prazo/Fiado  [F2]"
-                className="h-9 rounded-xl border-border bg-background pl-9 pr-14 text-sm"
-                style={{ paddingLeft: "2.25rem" }}
+                autoComplete="off"
+                className="h-9 w-full rounded-xl border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/25"
+                style={{ paddingLeft: "2.25rem", paddingRight: "3.5rem" }}
               />
               {customerName.trim() ? (
                 <button

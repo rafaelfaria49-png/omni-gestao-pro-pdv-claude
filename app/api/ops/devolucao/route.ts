@@ -217,6 +217,25 @@ export async function POST(req: Request) {
         }
       }
 
+      // 4. Crédito persistente — cria ClienteCredito quando vale é emitido
+      if (data.creditoEmitido > 0 && data.tipo !== "somente_estoque") {
+        const docNorm = data.clienteDoc.replace(/\D/g, "")
+        if (docNorm) {
+          await tx.clienteCredito.create({
+            data: {
+              storeId: lojaId,
+              clienteDoc: docNorm,
+              clienteNome: data.clienteNome,
+              devolucaoId: dev.id,
+              vendaOrigemId: data.vendaLocalId,
+              valorOriginal: arredonda2(data.creditoEmitido),
+              saldoAtual: arredonda2(data.creditoEmitido),
+              status: "ativo",
+            },
+          })
+        }
+      }
+
       return dev
     })
 

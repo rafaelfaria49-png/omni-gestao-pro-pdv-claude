@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 22 Mai 2026 — Sessão: Unificação fluxos de novo cadastro (Topbar + ProductAIModal)
+> Última atualização: 22 Mai 2026 — Sessão: Fase 4 — Crédito/vale do cliente persistente no banco
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,76 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Trocas — Fase 4 Crédito/Vale persistente no banco (concluído 22/05/2026)
+
+**Contexto:** crédito/vale do cliente estava 100% em `localStorage` (`customerCredits`) — sumia entre navegadores, caixas e computadores.
+
+**Arquivos alterados:**
+
+| Arquivo | Mudança |
+|---|---|
+| `prisma/schema.prisma` | + modelos `ClienteCredito` e `UsoCreditoCliente`. `Store` + `Cliente` + `DevolucaoVenda` ganham relações. Tabelas: `clientes_creditos` e `usos_credito_cliente`. |
+| `app/api/ops/credito-cliente/route.ts` (NOVO) | `GET ?lojaId=&[doc=]` — retorna créditos ativos agregados por CPF/CNPJ. Usado no bootstrap e no drawer de detalhes. |
+| `app/api/ops/devolucao/route.ts` | Passo 4 dentro da transação: cria `ClienteCredito` quando `creditoEmitido > 0` e `tipo !== "somente_estoque"`. Atômico — rollback se devolução falhar. |
+| `lib/ops-upsert-venda.ts` | `SalePayload` + `customerCpf?`. Passo 5 dentro da transação: debita `ClienteCredito` (oldest-first) e cria `UsoCreditoCliente` quando `creditoVale > 0`. Atômico — rollback se venda falhar. |
+| `lib/operations-store.tsx` | `loadDb` bootstrap: fetch `GET /api/ops/credito-cliente` após reconciliação de sessão; DB sobrescreve localStorage para docs conhecidos (best-effort). |
+| `components/dashboard/vendas/vendas-arquivo-geral.tsx` | `saldoCredito` state; `openDetalhe` busca saldo atual se venda tem devolução com crédito; drawer mostra "Saldo em haver: R$ X" ou "Crédito totalmente utilizado". |
+
+**Fluxo completo:**
+1. Operador faz devolução com modo `vale_credito` ou `troca`:
+   - `registrarDevolucao` debita estoque + cria `DevolucaoVenda` + cria `ClienteCredito` (DB) na mesma tx.
+   - `customerCredits[cpf].saldo` em localStorage atualizado imediatamente.
+2. Operador usa o vale em nova venda (`creditoVale` no `paymentBreakdown`):
+   - `finalizeSaleTransaction` valida saldo em localStorage e debita.
+   - `venda-persist` → `upsertVendaInTransaction` debita `ClienteCredito` e cria `UsoCreditoCliente` (DB) na mesma tx.
+3. Ao iniciar o PDV (bootstrap):
+   - `loadDb` busca `GET /api/ops/credito-cliente?lojaId=...` e mescla DB → localStorage. DB vence para CPFs conhecidos.
+4. Drawer Histórico de Vendas:
+   - Se venda tem devolução com crédito e `clienteCpf`, busca saldo atual em `GET /api/ops/credito-cliente?doc=...`.
+   - Mostra "Saldo em haver" (verde) ou "Crédito totalmente utilizado" (neutro).
+
+**Comportamento sem cadastro de cliente (sem CPF):**
+- `registrarDevolucao` requer CPF → não permite vale sem doc (comportamento pré-existente mantido).
+- Crédito sem CPF não é persistido no DB (linha `if (docNorm)` na devolução).
+
+**Schema:**
+
+```prisma
+model ClienteCredito {
+  clienteDoc    String   // CPF/CNPJ dígitos — chave de lookup
+  valorOriginal Float
+  saldoAtual    Float
+  status        String   // "ativo" | "zerado" | "expirado"
+  validoAte     DateTime?
+  usos          UsoCreditoCliente[]
+  // + storeId, clienteId?, devolucaoId?, vendaOrigemId, createdAt, updatedAt
+}
+
+model UsoCreditoCliente {
+  vendaId     String   // pedidoId da venda
+  valor       Float    // quanto foi debitado
+  saldoAntes  Float
+  saldoDepois Float
+  operador    String
+  // + creditoId, storeId, at
+}
+```
+
+**Idempotência e atomicidade:**
+- `ClienteCredito` é criado dentro da transação de `DevolucaoVenda` → rollback se falhar.
+- `UsoCreditoCliente` é criado dentro da transação de `Venda` → rollback se falhar.
+- Não há guards adicionais de idempotência: a transação só é executada uma vez (bloqueada pelo `pedidoId` único no upsert de Venda).
+
+**Validação:** `npx tsc --noEmit` → 0 erros. `npx next build --webpack` → em andamento ao fechar a sessão.
+
+**Limitações / Fases futuras:**
+- `validoAte` (validade opcional) existe no schema mas não é verificada no PDV ainda.
+- Crédito gerado antes da Fase 4 (pré-22/05/2026) está apenas em localStorage — não migrado retroativamente.
+- Bootstrap recupera do DB, mas operação offline (sem internet) ainda usa só localStorage.
+- `getSaldoCreditoCliente` continua retornando valor de localStorage; após bootstrap, os valores são sincronizados.
+
+---
 
 ### Trocas — Fase 3 Troca Imediata + Cupom (concluído 22/05/2026)
 

@@ -340,6 +340,7 @@ function ProductSearchPanel({
           autoComplete="off"
           spellCheck={false}
           className="h-10 w-full rounded-md border border-border bg-background pl-10 pr-3 text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:border-primary/60 focus:ring-1 focus:ring-primary/25"
+          style={{ paddingLeft: "2.5rem" }}
         />
       </div>
 
@@ -532,6 +533,7 @@ export function PdvBlackShell(props: PdvBlackShellProps) {
                 placeholder="Bipe o código de barras ou digite o produto"
                 autoComplete="off"
                 className="h-9 w-full rounded-md border border-border bg-background pl-10 pr-12 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                style={{ paddingLeft: "2.5rem", paddingRight: "3rem" }}
               />
               <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground/75">
                 F2
