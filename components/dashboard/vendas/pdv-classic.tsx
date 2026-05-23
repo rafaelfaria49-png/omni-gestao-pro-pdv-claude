@@ -224,6 +224,7 @@ export function PdvClassic({
   const [shellReceivablesOpen, setShellReceivablesOpen] = useState(false)
   const [lastSaleTotal, setLastSaleTotal] = useState<number | null>(null)
   const [shellCustomerField, setShellCustomerField] = useState("CONSUMIDOR")
+  const [customerCreditFetched, setCustomerCreditFetched] = useState<number | null>(null)
 
   const resolvedClassicLayout: PdvClassicLayoutKind =
     classicLayoutKind === "services" || classicLayoutKind === "lovable"
@@ -505,6 +506,24 @@ export function PdvClassic({
   useEffect(() => {
     setShellCustomerField(selectedCustomer?.name ?? "CONSUMIDOR")
   }, [selectedCustomer])
+
+  useEffect(() => {
+    setCustomerCreditFetched(null)
+    const docNorm = (selectedCustomer?.cpf ?? "").replace(/\D/g, "")
+    const cId = selectedCustomer?.id
+    if (!docNorm && !cId) return
+    const params = new URLSearchParams({ lojaId: lojaKey })
+    if (docNorm) params.set("doc", docNorm)
+    else if (cId) params.set("clienteId", cId)
+    fetch(`/api/ops/credito-cliente?${params.toString()}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { creditos?: Record<string, { nome: string; saldo: number }> } | null) => {
+        const saldo = j?.creditos ? Object.values(j.creditos).reduce((s, v) => s + v.saldo, 0) : 0
+        setCustomerCreditFetched(saldo)
+      })
+      .catch(() => setCustomerCreditFetched(null))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCustomer?.cpf, selectedCustomer?.id, lojaKey])
 
   const updateCustomerCpf = useCallback((customerId: string, cpfDigits: string) => {
     const display = formatBrDocDisplay(cpfDigits)
@@ -2101,7 +2120,7 @@ export function PdvClassic({
         onDiscountPercentChange={setDiscountPercent}
         custoPeca={total * 0.35}
         selectedCustomer={selectedCustomer}
-        customerStoreCredit={selectedCustomer ? getSaldoCreditoCliente(selectedCustomer.cpf) : 0}
+        customerStoreCredit={selectedCustomer ? (customerCreditFetched ?? getSaldoCreditoCliente(selectedCustomer.cpf)) : 0}
         instantPayIntent={instantPayIntent}
         onInstantPayIntentConsumed={() => setInstantPayIntent(null)}
         onCustomerCpfUpdate={updateCustomerCpf}

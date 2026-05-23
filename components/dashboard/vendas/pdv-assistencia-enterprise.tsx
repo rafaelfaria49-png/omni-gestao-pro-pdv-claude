@@ -307,6 +307,7 @@ function PaymentModal({
   open,
   total,
   customerName,
+  customerStoreCredit = 0,
   defaultMethod = "dinheiro",
   onConfirm,
   onClose,
@@ -314,19 +315,21 @@ function PaymentModal({
   open: boolean
   total: number
   customerName: string
+  customerStoreCredit?: number
   defaultMethod?: PayMethod
   onConfirm: (
     method: PayMethod,
     notes: string,
-    payments: { dinheiro: number; pix: number; cartaoDebito: number; cartaoCredito: number; aPrazo: number }
+    payments: { dinheiro: number; pix: number; cartaoDebito: number; cartaoCredito: number; aPrazo: number; creditoVale: number }
   ) => void
   onClose: () => void
 }) {
   const [method, setMethod] = useState<PayMethod>(defaultMethod)
+  const [usarCredito, setUsarCredito] = useState(false)
 
   // Sync default method whenever the modal opens with a different key
   useEffect(() => {
-    if (open) setMethod(defaultMethod)
+    if (open) { setMethod(defaultMethod); setUsarCredito(false) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultMethod])
   const [amountPaid, setAmountPaid] = useState("")
@@ -335,29 +338,38 @@ function PaymentModal({
   const [multiplo2, setMultiplo2] = useState<PayMethod>("pix")
   const [notes, setNotes] = useState("")
 
+  const creditoValeAplicado = usarCredito ? Math.min(customerStoreCredit, total) : 0
+  const totalComDesconto = Math.max(0, total - creditoValeAplicado)
+
   const paid = parseBrl(amountPaid)
-  const troco = Math.max(0, paid - total)
+  const troco = Math.max(0, paid - totalComDesconto)
   const m1val = parseBrl(multiplo1Value)
-  const m2val = Math.max(0, total - m1val)
+  const m2val = Math.max(0, totalComDesconto - m1val)
 
   const missingCustomer = method === "a_prazo" && !customerName.trim()
-  const multiplo1Error = method === "multiplo" && m1val > total
+  const multiplo1Error = method === "multiplo" && m1val > totalComDesconto
   const canConfirm =
     !missingCustomer &&
     !multiplo1Error &&
-    (method === "pix" ||
+    (totalComDesconto <= 0.001 ||
+      method === "pix" ||
       method === "credito" ||
       method === "debito" ||
       method === "a_prazo" ||
-      (method === "dinheiro" && paid >= total) ||
-      (method === "multiplo" && m1val > 0 && m1val < total))
+      (method === "dinheiro" && paid >= totalComDesconto) ||
+      (method === "multiplo" && m1val > 0 && m1val < totalComDesconto))
 
   function handleConfirm() {
     if (!canConfirm) return
     const notesLines: string[] = []
     if (notes) notesLines.push(notes)
-    const payments = { dinheiro: 0, pix: 0, cartaoDebito: 0, cartaoCredito: 0, aPrazo: 0 }
-    if (method === "multiplo") {
+    const payments = { dinheiro: 0, pix: 0, cartaoDebito: 0, cartaoCredito: 0, aPrazo: 0, creditoVale: creditoValeAplicado }
+    if (usarCredito && creditoValeAplicado > 0) {
+      notesLines.push(`Crédito/Vale: ${brl(creditoValeAplicado)}`)
+    }
+    if (totalComDesconto <= 0.001) {
+      // Pago 100% com crédito
+    } else if (method === "multiplo") {
       const m1 = PAY_METHODS.find((p) => p.id === multiplo1)!
       const m2 = PAY_METHODS.find((p) => p.id === multiplo2)!
       notesLines.push(
@@ -372,17 +384,17 @@ function PaymentModal({
       }
       add(multiplo1, m1val)
       add(multiplo2, m2val)
-    }
-    if (method === "dinheiro") {
+    } else if (method === "dinheiro") {
       notesLines.push(`Troco: ${brl(troco)}`)
-      payments.dinheiro = total
-    } else if (method === "pix") payments.pix = total
-    else if (method === "debito") payments.cartaoDebito = total
-    else if (method === "credito") payments.cartaoCredito = total
-    else if (method === "a_prazo") payments.aPrazo = total
+      payments.dinheiro = totalComDesconto
+    } else if (method === "pix") payments.pix = totalComDesconto
+    else if (method === "debito") payments.cartaoDebito = totalComDesconto
+    else if (method === "credito") payments.cartaoCredito = totalComDesconto
+    else if (method === "a_prazo") payments.aPrazo = totalComDesconto
     onConfirm(method, notesLines.join(" | "), payments)
     setAmountPaid("")
     setNotes("")
+    setUsarCredito(false)
   }
 
   return (
@@ -391,157 +403,195 @@ function PaymentModal({
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="flex items-center justify-between text-lg font-bold text-foreground">
             <span>Finalizar Venda</span>
-            <span className="text-2xl font-black tabular-nums text-emerald-500">{brl(total)}</span>
+            <div className="text-right">
+              {creditoValeAplicado > 0 ? (
+                <>
+                  <div className="text-sm font-semibold tabular-nums text-muted-foreground line-through">{brl(total)}</div>
+                  <div className="text-2xl font-black tabular-nums text-emerald-500">{brl(totalComDesconto)}</div>
+                </>
+              ) : (
+                <span className="text-2xl font-black tabular-nums text-emerald-500">{brl(total)}</span>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 px-6 py-5">
-          {/* Method grid */}
-          <div>
-            <Label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Forma de Pagamento
-            </Label>
-            <div className="grid grid-cols-3 gap-2">
-              {PAY_METHODS.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setMethod(m.id)}
-                  className={cn(
-                    "flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-2.5 text-xs font-bold transition-all",
-                    method === m.id
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
-                  )}
-                >
-                  <m.Icon className="h-4 w-4" />
-                  {m.shortLabel}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Method-specific inputs */}
-          {method === "dinheiro" && (
-            <div className="space-y-3">
-              <div>
-                <Label className="mb-1 block text-sm text-muted-foreground">Valor recebido</Label>
-                <Input
-                  autoFocus
-                  value={amountPaid}
-                  onChange={(e) => setAmountPaid(e.target.value)}
-                  placeholder="R$ 0,00"
-                  className="h-12 rounded-xl text-right text-lg font-bold tabular-nums"
-                  inputMode="decimal"
+          {/* Credit/Vale section */}
+          {customerStoreCredit > 0 && (
+            <div className={cn(
+              "flex items-center justify-between rounded-xl border px-4 py-3",
+              usarCredito ? "border-emerald-500/40 bg-emerald-500/10" : "border-border bg-muted/30",
+            )}>
+              <div className="flex items-center gap-2 min-w-0">
+                <input
+                  type="checkbox"
+                  id="usar-credito-modal"
+                  checked={usarCredito}
+                  onChange={(e) => setUsarCredito(e.target.checked)}
+                  className="h-4 w-4 cursor-pointer accent-emerald-600"
                 />
+                <label htmlFor="usar-credito-modal" className="cursor-pointer text-sm font-semibold text-foreground">
+                  Usar crédito/vale
+                </label>
+                <span className="text-xs text-muted-foreground">({brl(customerStoreCredit)} disponível)</span>
               </div>
-              {paid > 0 && (
-                <div
-                  className={cn(
-                    "flex items-center justify-between rounded-xl border px-4 py-3",
-                    troco > 0
-                      ? "border-emerald-500/30 bg-emerald-500/10"
-                      : paid < total
-                        ? "border-destructive/30 bg-destructive/10"
-                        : "border-border bg-muted/40",
-                  )}
-                >
-                  <span className="text-sm font-semibold text-muted-foreground">
-                    {troco > 0 ? "Troco" : paid < total ? "Faltam" : "Valor exato"}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-xl font-black tabular-nums",
-                      troco > 0
-                        ? "text-emerald-500"
-                        : paid < total
-                          ? "text-destructive"
-                          : "text-foreground",
-                    )}
-                  >
-                    {troco > 0 ? brl(troco) : paid < total ? brl(total - paid) : "✓"}
-                  </span>
-                </div>
+              {usarCredito && (
+                <span className="text-sm font-bold tabular-nums text-emerald-600">-{brl(creditoValeAplicado)}</span>
               )}
             </div>
           )}
 
-          {(method === "pix" || method === "credito" || method === "debito") && (
-            <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-4">
-              <span className="text-sm text-muted-foreground">Total a cobrar</span>
-              <span className="text-2xl font-black tabular-nums text-foreground">{brl(total)}</span>
-            </div>
-          )}
-
-          {method === "a_prazo" && (
-            <div className="space-y-3">
-              {missingCustomer && (
-                <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  Informe o nome do cliente no painel antes de usar esta forma.
-                </div>
-              )}
-              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Cliente</p>
-                  <p className="font-semibold text-foreground">
-                    {customerName.trim() || <span className="italic text-muted-foreground">Não informado</span>}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Total fiado</p>
-                  <p className="text-xl font-black tabular-nums text-amber-500">{brl(total)}</p>
+          {/* Method grid + method inputs — hidden when fully paid by credit */}
+          {totalComDesconto > 0.001 && (
+            <>
+              <div>
+                <Label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Forma de Pagamento
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PAY_METHODS.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMethod(m.id)}
+                      className={cn(
+                        "flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-2.5 text-xs font-bold transition-all",
+                        method === m.id
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                      )}
+                    >
+                      <m.Icon className="h-4 w-4" />
+                      {m.shortLabel}
+                    </button>
+                  ))}
                 </div>
               </div>
-            </div>
-          )}
 
-          {method === "multiplo" && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Método 1</Label>
-                  <select
-                    value={multiplo1}
-                    onChange={(e) => setMultiplo1(e.target.value as PayMethod)}
-                    className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
-                  >
-                    {PAY_METHODS.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    value={multiplo1Value}
-                    onChange={(e) => setMultiplo1Value(e.target.value)}
-                    placeholder="R$ 0,00"
-                    className="h-9 rounded-xl text-right text-sm tabular-nums"
-                    inputMode="decimal"
-                  />
-                  {multiplo1Error && (
-                    <p className="text-xs text-destructive">Valor maior que o total</p>
+              {/* Method-specific inputs */}
+              {method === "dinheiro" && (
+                <div className="space-y-3">
+                  <div>
+                    <Label className="mb-1 block text-sm text-muted-foreground">Valor recebido</Label>
+                    <Input
+                      autoFocus
+                      value={amountPaid}
+                      onChange={(e) => setAmountPaid(e.target.value)}
+                      placeholder="R$ 0,00"
+                      className="h-12 rounded-xl text-right text-lg font-bold tabular-nums"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  {paid > 0 && (
+                    <div
+                      className={cn(
+                        "flex items-center justify-between rounded-xl border px-4 py-3",
+                        troco > 0
+                          ? "border-emerald-500/30 bg-emerald-500/10"
+                          : paid < totalComDesconto
+                            ? "border-destructive/30 bg-destructive/10"
+                            : "border-border bg-muted/40",
+                      )}
+                    >
+                      <span className="text-sm font-semibold text-muted-foreground">
+                        {troco > 0 ? "Troco" : paid < totalComDesconto ? "Faltam" : "Valor exato"}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-xl font-black tabular-nums",
+                          troco > 0
+                            ? "text-emerald-500"
+                            : paid < totalComDesconto
+                              ? "text-destructive"
+                              : "text-foreground",
+                        )}
+                      >
+                        {troco > 0 ? brl(troco) : paid < totalComDesconto ? brl(totalComDesconto - paid) : "✓"}
+                      </span>
+                    </div>
                   )}
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Método 2</Label>
-                  <select
-                    value={multiplo2}
-                    onChange={(e) => setMultiplo2(e.target.value as PayMethod)}
-                    className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
-                  >
-                    {PAY_METHODS.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex h-9 items-center justify-end rounded-xl border border-border bg-muted/50 px-3 text-sm font-bold tabular-nums text-foreground">
-                    {brl(m2val >= 0 ? m2val : 0)}
+              )}
+
+              {(method === "pix" || method === "credito" || method === "debito") && (
+                <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-4">
+                  <span className="text-sm text-muted-foreground">Total a cobrar</span>
+                  <span className="text-2xl font-black tabular-nums text-foreground">{brl(totalComDesconto)}</span>
+                </div>
+              )}
+
+              {method === "a_prazo" && (
+                <div className="space-y-3">
+                  {missingCustomer && (
+                    <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      Informe o nome do cliente no painel antes de usar esta forma.
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Cliente</p>
+                      <p className="font-semibold text-foreground">
+                        {customerName.trim() || <span className="italic text-muted-foreground">Não informado</span>}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Total fiado</p>
+                      <p className="text-xl font-black tabular-nums text-amber-500">{brl(totalComDesconto)}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              )}
+
+              {method === "multiplo" && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Método 1</Label>
+                      <select
+                        value={multiplo1}
+                        onChange={(e) => setMultiplo1(e.target.value as PayMethod)}
+                        className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
+                      >
+                        {PAY_METHODS.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        value={multiplo1Value}
+                        onChange={(e) => setMultiplo1Value(e.target.value)}
+                        placeholder="R$ 0,00"
+                        className="h-9 rounded-xl text-right text-sm tabular-nums"
+                        inputMode="decimal"
+                      />
+                      {multiplo1Error && (
+                        <p className="text-xs text-destructive">Valor maior que o total</p>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Método 2</Label>
+                      <select
+                        value={multiplo2}
+                        onChange={(e) => setMultiplo2(e.target.value as PayMethod)}
+                        className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
+                      >
+                        {PAY_METHODS.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.label}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex h-9 items-center justify-end rounded-xl border border-border bg-muted/50 px-3 text-sm font-bold tabular-nums text-foreground">
+                        {brl(m2val >= 0 ? m2val : 0)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Notes */}
@@ -976,7 +1026,7 @@ function EditarAtalhosModal({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
-  const { inventory, finalizeSaleTransaction } = useOperationsStore()
+  const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated } = useStoreSettings()
   const { lojaAtivaId } = useLojaAtiva()
   const shortcutsKey = useMemo(
@@ -1050,6 +1100,27 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [customerName, setCustomerName] = useState("")
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null)
   const [selectedClienteDoc, setSelectedClienteDoc] = useState<string | null>(null)
+  const [customerCreditFetched, setCustomerCreditFetched] = useState<number | null>(null)
+
+  useEffect(() => {
+    setCustomerCreditFetched(null)
+    const docNorm = (selectedClienteDoc ?? "").replace(/\D/g, "")
+    const cId = selectedClienteId
+    if (!docNorm && !cId) return
+    const params = new URLSearchParams({ lojaId: storeIdKey })
+    if (docNorm) params.set("doc", docNorm)
+    else if (cId) params.set("clienteId", cId)
+    fetch(`/api/ops/credito-cliente?${params.toString()}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { creditos?: Record<string, { nome: string; saldo: number }> } | null) => {
+        const saldo = j?.creditos ? Object.values(j.creditos).reduce((s, v) => s + v.saldo, 0) : 0
+        setCustomerCreditFetched(saldo)
+      })
+      .catch(() => setCustomerCreditFetched(null))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClienteDoc, selectedClienteId, storeIdKey])
+
+  const customerCredit = customerCreditFetched ?? (selectedClienteDoc ? getSaldoCreditoCliente(selectedClienteDoc) : 0)
 
   // ── Modals ───────────────────────────────────────────────────────────────────
   const [paymentOpen, setPaymentOpen] = useState(false)
@@ -1491,7 +1562,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const handlePaymentConfirm = (
     method: PayMethod,
     notes: string,
-    payments: { dinheiro: number; pix: number; cartaoDebito: number; cartaoCredito: number; aPrazo: number }
+    payments: { dinheiro: number; pix: number; cartaoDebito: number; cartaoCredito: number; aPrazo: number; creditoVale: number }
   ) => {
     if (cart.length === 0) return
 
@@ -1510,7 +1581,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         cartaoCredito: payments.cartaoCredito,
         carne: 0,
         aPrazo: payments.aPrazo,
-        creditoVale: 0,
+        creditoVale: payments.creditoVale,
       },
       customerName: customerName.trim() || undefined,
       customerCpf: selectedClienteDoc ?? undefined,
@@ -1991,6 +2062,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   F2
                 </kbd>
               )}
+              {/* Crédito disponível */}
+              {customerCredit > 0 && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+                  <span className="font-semibold">{brl(customerCredit)}</span>
+                  <span className="text-muted-foreground">em crédito disponível</span>
+                </div>
+              )}
               {/* Inline dropdown */}
               {showCustomerSidebarDropdown && (clienteSugestoes.length > 0 || buscandoCliente) && (
                 <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto rounded-md border border-border bg-card shadow-lg">
@@ -2234,6 +2312,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         open={paymentOpen}
         total={total}
         customerName={customerName}
+        customerStoreCredit={customerCredit}
         defaultMethod={paymentInitMethod}
         onConfirm={handlePaymentConfirm}
         onClose={() => setPaymentOpen(false)}

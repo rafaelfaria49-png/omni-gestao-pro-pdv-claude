@@ -29,10 +29,13 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url)
   const docFilter = (searchParams.get("doc") ?? "").replace(/\D/g, "")
+  const clienteIdFilter = searchParams.get("clienteId")?.trim() ?? ""
 
   try {
     const where = docFilter
       ? { storeId: lojaId, clienteDoc: docFilter, status: "ativo" as const, saldoAtual: { gt: 0 } }
+      : clienteIdFilter
+      ? { storeId: lojaId, clienteId: clienteIdFilter, status: "ativo" as const, saldoAtual: { gt: 0 } }
       : { storeId: lojaId, status: "ativo" as const, saldoAtual: { gt: 0 } }
 
     const rows = await prisma.clienteCredito.findMany({

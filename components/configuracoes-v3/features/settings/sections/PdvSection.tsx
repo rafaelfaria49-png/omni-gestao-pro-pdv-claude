@@ -176,6 +176,8 @@ function PdvMiniPreview({ variant, activeTheme }: { variant: PdvFlowId; activeTh
 
   if (variant === "next") {
     dynamicSrc = `/images/pdv-next/${themeMode}.png`;
+  } else if (variant === "assistencia") {
+    dynamicSrc = `/images/pdv-assistencia/${themeMode}.png`;
   }
 
   return (
@@ -217,19 +219,23 @@ function PdvSectionContent() {
   const { mode } = useTheme();
   const themeMode = mode === "classic" ? "light" : mode;
   const [nextCardTheme, setNextCardTheme] = useState<string>("black");
+  const [assistenciaCardTheme, setAssistenciaCardTheme] = useState<string>("midnight");
   const [modalActiveTheme, setModalActiveTheme] = useState<string>("black");
 
   useEffect(() => {
     if (themeMode === "light" || themeMode === "soft-ice" || themeMode === "midnight" || themeMode === "black") {
       setNextCardTheme(themeMode);
+      setAssistenciaCardTheme(themeMode);
     }
   }, [themeMode]);
 
   useEffect(() => {
     if (previewFlow === "next") {
       setModalActiveTheme(nextCardTheme || themeMode);
+    } else if (previewFlow === "assistencia") {
+      setModalActiveTheme(assistenciaCardTheme || themeMode);
     }
-  }, [previewFlow, nextCardTheme, themeMode]);
+  }, [previewFlow, nextCardTheme, assistenciaCardTheme, themeMode]);
 
   const syncFromServer = useCallback(() => {
     const base = safePrinterRecord(settings?.printerConfig);
@@ -255,8 +261,8 @@ function PdvSectionContent() {
 
   const isLightTheme = useMemo(() => {
     if (!previewFlow) return false;
-    if (previewFlow !== "next") return true;
-    return modalActiveTheme === "light";
+    if (previewFlow === "classico" || previewFlow === "supermercado") return true;
+    return modalActiveTheme === "light" || modalActiveTheme === "soft-ice";
   }, [previewFlow, modalActiveTheme]);
 
   const noLoja = !lojaAtivaId?.trim();
@@ -447,13 +453,22 @@ function PdvSectionContent() {
               >
                 {/* Preview Dominante */}
                 <div className="relative mb-5 aspect-video w-full overflow-hidden rounded-xl border border-border/40 bg-muted/20 transition-all duration-500 group-hover:scale-[1.005] group-hover:border-border/80 shadow-sm">
-                  <PdvMiniPreview variant={opt.id} activeTheme={opt.id === "next" ? nextCardTheme : undefined} />
+                  <PdvMiniPreview
+                    variant={opt.id}
+                    activeTheme={
+                      opt.id === "next"
+                        ? nextCardTheme
+                        : opt.id === "assistencia"
+                        ? assistenciaCardTheme
+                        : undefined
+                    }
+                  />
                   
-                  {opt.id === "next" && (
+                  {(opt.id === "next" || opt.id === "assistencia") && (
                     <>
                       <div className="absolute top-3 left-3 z-10">
                         <Badge className="bg-emerald-500/90 text-white border-none text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 shadow-sm">
-                          Multi-tema
+                          {opt.id === "next" ? "Multi-tema" : "Prévia real"}
                         </Badge>
                       </div>
                       <div className="absolute bottom-3 right-3 z-10 flex gap-1 bg-black/75 backdrop-blur-md p-1 rounded-full border border-white/10 shadow-lg">
@@ -462,22 +477,26 @@ function PdvSectionContent() {
                           { key: "soft-ice", color: "bg-[#e2eafc] border-[#b6ccfe]", label: "Soft Ice" },
                           { key: "midnight", color: "bg-[#1e293b] border-blue-900", label: "Midnight" },
                           { key: "black", color: "bg-black border-emerald-500", label: "Black" }
-                        ].map((t) => (
-                          <button
-                            key={t.key}
-                            type="button"
-                            title={`Visualizar tema ${t.label}`}
-                            className={cn(
-                              "h-3.5 w-3.5 rounded-full border transition-all duration-205 hover:scale-120",
-                              t.color,
-                              nextCardTheme === t.key ? "ring-1 ring-offset-1 ring-white scale-110" : "opacity-75 hover:opacity-100"
-                            )}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setNextCardTheme(t.key);
-                            }}
-                          />
-                        ))}
+                        ].map((t) => {
+                          const currentTheme = opt.id === "next" ? nextCardTheme : assistenciaCardTheme;
+                          const setTheme = opt.id === "next" ? setNextCardTheme : setAssistenciaCardTheme;
+                          return (
+                            <button
+                              key={t.key}
+                              type="button"
+                              title={`Visualizar tema ${t.label}`}
+                              className={cn(
+                                "h-3.5 w-3.5 rounded-full border transition-all duration-205 hover:scale-120",
+                                t.color,
+                                currentTheme === t.key ? "ring-1 ring-offset-1 ring-white scale-110" : "opacity-75 hover:opacity-100"
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTheme(t.key);
+                              }}
+                            />
+                          );
+                        })}
                       </div>
                     </>
                   )}
@@ -560,7 +579,7 @@ function PdvSectionContent() {
 
         {/* Modal de Prévia Ampliada */}
         <Dialog open={previewFlow !== null} onOpenChange={(open) => { if (!open) setPreviewFlow(null); }}>
-          <DialogContent className={cn("transition-all duration-300 flex flex-col p-0 overflow-hidden max-h-[calc(100vh-6rem)]", previewFlow === "next" ? "max-w-4xl w-full" : "max-w-2xl")}>
+          <DialogContent className={cn("transition-all duration-300 flex flex-col p-0 overflow-hidden max-h-[calc(100vh-6rem)]", (previewFlow === "next" || previewFlow === "assistencia") ? "max-w-4xl w-full" : "max-w-2xl")}>
             {previewMeta && (
               <>
                 {/* Cabeçalho Fixo */}
@@ -569,7 +588,9 @@ function PdvSectionContent() {
                     <div
                       className={cn(
                         "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-                        previewMeta.id === "next" ? "bg-[#000000] text-emerald-400" : "bg-accent text-accent-foreground"
+                        previewMeta.id === "next" ? "bg-[#000000] text-emerald-400" :
+                        previewMeta.id === "assistencia" ? "bg-primary/10 text-primary border border-primary/20" :
+                        "bg-accent text-accent-foreground"
                       )}
                     >
                       <PreviewIcon className="h-5 w-5" />
@@ -582,6 +603,11 @@ function PdvSectionContent() {
                             Black Edition — Multi-Temas Reais
                           </Badge>
                         )}
+                        {previewMeta.id === "assistencia" && (
+                          <Badge className="bg-primary/20 text-primary border border-primary/30 text-[9px] uppercase font-bold tracking-wide">
+                            Assistência Técnica — Multi-Temas Reais
+                          </Badge>
+                        )}
                       </div>
                       <DialogDescription className="mt-1">{previewMeta.description}</DialogDescription>
                     </div>
@@ -590,7 +616,7 @@ function PdvSectionContent() {
 
                 {/* Conteúdo com Scroll */}
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-                  {previewMeta.id === "next" ? (
+                  {(previewMeta.id === "next" || previewMeta.id === "assistencia") ? (
                     <div className="space-y-4">
                       {/* Seletor de Temas (Abas Sticky) */}
                       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-md pb-2 pt-1">
@@ -631,11 +657,19 @@ function PdvSectionContent() {
                       )}>
                         <div className="relative w-full h-full rounded-lg overflow-hidden border border-black/10 dark:border-white/5 bg-slate-200/50 dark:bg-zinc-900/50 shadow-[inset_0_2px_8px_rgba(0,0,0,0.08)]">
                           <img
-                            src={`/images/pdv-next/${modalActiveTheme}.png`}
-                            alt={`PDV Next Tema ${modalActiveTheme}`}
+                            src={
+                              previewMeta.id === "next"
+                                ? `/images/pdv-next/${modalActiveTheme}.png`
+                                : `/images/pdv-assistencia/${modalActiveTheme}.png`
+                            }
+                            alt={`${previewMeta.name} Tema ${modalActiveTheme}`}
                             className="h-full w-full object-contain transition-all duration-300"
                             onError={(e) => {
-                              e.currentTarget.src = "/images/pdv-next-thumb.png";
+                              const fallback =
+                                previewMeta.id === "next"
+                                  ? "/images/pdv-next-thumb.png"
+                                  : "/images/pdv-assistencia-thumb.png";
+                              e.currentTarget.src = fallback;
                             }}
                           />
                         </div>
