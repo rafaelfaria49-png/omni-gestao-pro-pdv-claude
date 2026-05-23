@@ -1851,11 +1851,12 @@ export function PdvClassic({
                   <button
                     key={product.id}
                     type="button"
+                    title={product.name}
                     onClick={() => addToCart(product)}
-                    className="min-h-[118px] w-full rounded-xl border-2 border-border bg-card px-3 py-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/50 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:border-primary/50 dark:hover:bg-black/70 sm:px-4 sm:py-3.5"
+                    className="min-h-[140px] w-full rounded-xl border-2 border-border bg-card px-3 py-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-muted/50 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md dark:hover:border-primary/50 dark:hover:bg-black/70 sm:px-4 sm:py-3.5"
                   >
                     <div className="flex flex-col gap-1.5">
-                      <span className="line-clamp-2 min-h-0 break-words text-left text-base font-bold leading-snug text-foreground dark:text-white sm:text-[1.05rem]">
+                      <span className="line-clamp-3 min-h-0 break-words text-left text-base font-bold leading-snug text-foreground dark:text-white sm:text-[1.05rem]">
                         {product.name}
                       </span>
                       <div className="flex items-baseline justify-between gap-2 border-t border-border/80 pt-1.5 dark:border-white/5">

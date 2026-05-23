@@ -4,6 +4,7 @@ import { Store, Users, Wallet, RefreshCw, AlertTriangle, Plus } from "lucide-rea
 import { KpiCard } from "@/components/master-console/KpiCard";
 import { StoreList, type Store as StoreType } from "@/components/master-console/StoreList";
 import { TeamPanel } from "@/components/master-console/TeamPanel";
+import { SupervisorPinCard } from "@/components/master-console/SupervisorPinCard";
 import { Button } from "@/components/ui/button";
 
 const MasterConsolePage = () => {
@@ -142,6 +143,10 @@ const MasterConsolePage = () => {
           )}
         </div>
       )}
+
+      <div className="mt-8">
+        <SupervisorPinCard />
+      </div>
     </main>
   );
 };
