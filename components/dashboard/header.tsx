@@ -103,11 +103,6 @@ export function Header() {
 
   const handleSair = async () => {
     try {
-      await fetch("/api/auth/staff", { method: "DELETE", credentials: "include" })
-    } catch {
-      /* legado */
-    }
-    try {
       await fetch("/api/auth/admin", { method: "DELETE", credentials: "include" })
     } catch {
       /* legado */
