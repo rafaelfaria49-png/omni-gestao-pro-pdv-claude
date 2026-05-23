@@ -393,7 +393,11 @@ function PdvSectionContent() {
         <div className="mb-6 min-w-0">
           <h2 className="text-lg font-bold text-foreground tracking-tight">Escolha o Layout do PDV</h2>
           <p className="text-sm text-muted-foreground">
-            Selecione o fluxo ideal para sua operação. As alterações afeta        <div
+            Selecione o fluxo ideal para sua operação. As alterações afetam a unidade ativa.
+          </p>
+        </div>
+
+        <div
           className="grid w-full min-w-0 auto-rows-fr gap-6 grid-cols-1 lg:grid-cols-2"
           data-pdv-layout-cards={String(FLOWS.length)}
         >
