@@ -233,14 +233,20 @@ function brl(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
 }
 
-/** Monetário BRL: aceita 4,99 · 4.99 · 1.234,56 · 20,00 */
-function parseBrl(s: string): number {
-  const t = s.trim()
-  if (!t || t === "," || t === ".") return 0
+/** Monetário BRL — parse para cálculo/validação; não usar para controlar o input. */
+function parseBrlInput(value: string): number {
+  let t = value.trim()
+  if (!t) return 0
+
+  while (t.endsWith(",") || t.endsWith(".")) {
+    if (t.length <= 1) return 0
+    t = t.slice(0, -1).trim()
+  }
+  if (!t) return 0
 
   if (t.includes(",")) {
     const n = Number(t.replace(/\./g, "").replace(",", "."))
-    return Number.isFinite(n) && n >= 0 ? n : 0
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0
   }
 
   if (t.includes(".")) {
@@ -251,17 +257,25 @@ function parseBrl(s: string): number {
       return Number.isFinite(n) && n >= 0 ? n : 0
     }
     const n = Number(t)
-    return Number.isFinite(n) && n >= 0 ? n : 0
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0
   }
 
   const n = Number(t.replace(/\D/g, ""))
   return Number.isFinite(n) && n >= 0 ? n : 0
 }
 
-function parsePercentInput(s: string): number {
-  const t = s.trim().replace(",", ".")
-  if (!t || t === ".") return 0
-  const n = Number(t.replace(/[^\d.]/g, ""))
+/** Percentual — aceita 10,5 · 10.5 · estados parciais 10, */
+function parsePercentInput(value: string): number {
+  let t = value.trim()
+  if (!t) return 0
+
+  while (t.endsWith(",") || t.endsWith(".")) {
+    if (t.length <= 1) return 0
+    t = t.slice(0, -1).trim()
+  }
+  if (!t) return 0
+
+  const n = Number(t.replace(",", "."))
   return Number.isFinite(n) && n >= 0 ? n : 0
 }
 
@@ -419,14 +433,37 @@ function PaymentModal({
   const [supervisorPin, setSupervisorPin] = useState("")
   const [supervisorBusy, setSupervisorBusy] = useState(false)
   const [supervisorErr, setSupervisorErr] = useState<string | null>(null)
+  const paymentFieldsInitialized = useRef(false)
+
+  const [amountPaid, setAmountPaid] = useState("")
+  const [multiplo1, setMultiplo1] = useState<PayMethod>("dinheiro")
+  const [multiplo1Value, setMultiplo1Value] = useState("")
+  const [multiplo2, setMultiplo2] = useState<PayMethod>("pix")
+  const [notes, setNotes] = useState("")
+  const [discountReaisDraft, setDiscountReaisDraft] = useState("")
+  const [discountPercentDraft, setDiscountPercentDraft] = useState("")
 
   useEffect(() => {
     if (open) {
+      if (!paymentFieldsInitialized.current) {
+        paymentFieldsInitialized.current = true
+        setDiscountReaisDraft(
+          discountReais > 0.009 ? String(discountReais).replace(".", ",") : "",
+        )
+        setDiscountPercentDraft(
+          discountPercent > 0.009 ? String(discountPercent).replace(".", ",") : "",
+        )
+        setAmountPaid("")
+        setMultiplo1Value("")
+        setNotes("")
+      }
       setMethod(defaultMethod)
       setUsarCredito(false)
       setSupervisorPin("")
       setSupervisorErr(null)
       setSupervisorBusy(false)
+    } else {
+      paymentFieldsInitialized.current = false
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultMethod])
@@ -449,27 +486,13 @@ function PaymentModal({
     return () => { cancelled = true }
   }, [open])
 
-  const [amountPaid, setAmountPaid] = useState("")
-  const [multiplo1, setMultiplo1] = useState<PayMethod>("dinheiro")
-  const [multiplo1Value, setMultiplo1Value] = useState("")
-  const [multiplo2, setMultiplo2] = useState<PayMethod>("pix")
-  const [notes, setNotes] = useState("")
-  const [discountReaisDraft, setDiscountReaisDraft] = useState("")
-  const [discountPercentDraft, setDiscountPercentDraft] = useState("")
-
-  useEffect(() => {
-    if (!open) return
-    setDiscountReaisDraft(discountReais > 0.009 ? String(discountReais).replace(".", ",") : "")
-    setDiscountPercentDraft(discountPercent > 0.009 ? String(discountPercent).replace(".", ",") : "")
-  }, [open, discountReais, discountPercent])
-
   const descontoManualAtivo = discountAmount > 0.009
   const creditoValeAplicado = usarCredito ? Math.min(customerStoreCredit, total) : 0
   const totalComDesconto = Math.max(0, total - creditoValeAplicado)
 
-  const paid = parseBrl(amountPaid)
+  const paid = parseBrlInput(amountPaid)
   const troco = Math.max(0, paid - totalComDesconto)
-  const m1val = parseBrl(multiplo1Value)
+  const m1val = parseBrlInput(multiplo1Value)
   const m2val = Math.max(0, totalComDesconto - m1val)
 
   const missingCustomer = method === "a_prazo" && !customerName.trim()
@@ -589,19 +612,22 @@ function PaymentModal({
               {discountType === "reais" ? (
                 <Input
                   ref={discountInputRef}
+                  type="text"
                   value={discountReaisDraft}
                   onChange={(e) => {
                     const raw = e.target.value
                     setDiscountReaisDraft(raw)
-                    onDiscountReaisChange(parseBrl(raw))
+                    onDiscountReaisChange(parseBrlInput(raw))
                   }}
                   placeholder="0,00"
                   className="h-10 rounded-xl border-border bg-background text-right text-sm tabular-nums"
                   inputMode="decimal"
+                  autoComplete="off"
                 />
               ) : (
                 <Input
                   ref={discountInputRef}
+                  type="text"
                   value={discountPercentDraft}
                   onChange={(e) => {
                     const raw = e.target.value
@@ -611,6 +637,7 @@ function PaymentModal({
                   placeholder="0"
                   className="h-10 rounded-xl border-border bg-background text-right text-sm tabular-nums"
                   inputMode="decimal"
+                  autoComplete="off"
                 />
               )}
               {discountOverTotal && (
@@ -766,12 +793,14 @@ function PaymentModal({
                   <div>
                     <Label className="mb-1 block text-sm text-muted-foreground">Valor recebido</Label>
                     <Input
+                      type="text"
                       autoFocus={!descontoManualAtivo}
                       value={amountPaid}
                       onChange={(e) => setAmountPaid(e.target.value)}
                       placeholder="R$ 0,00"
                       className="h-12 rounded-xl text-right text-lg font-bold tabular-nums"
                       inputMode="decimal"
+                      autoComplete="off"
                     />
                   </div>
                   {paid > 0 && (
@@ -852,11 +881,13 @@ function PaymentModal({
                         ))}
                       </select>
                       <Input
+                        type="text"
                         value={multiplo1Value}
                         onChange={(e) => setMultiplo1Value(e.target.value)}
                         placeholder="R$ 0,00"
                         className="h-9 rounded-xl text-right text-sm tabular-nums"
                         inputMode="decimal"
+                        autoComplete="off"
                       />
                       {multiplo1Error && (
                         <p className="text-xs text-destructive">Valor maior que o total</p>
