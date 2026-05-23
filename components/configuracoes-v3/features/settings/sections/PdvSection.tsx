@@ -390,15 +390,11 @@ function PdvSectionContent() {
       </div>
 
       <div className="min-w-0 w-full overflow-visible">
-        <div className="mb-4 min-w-0">
-          <h2 className="text-base font-semibold text-foreground">Fluxos principais</h2>
-          <p className="text-sm font-normal text-muted-foreground">
-            O PDV Clássico é um único fluxo: modo balcão, modo rápido e venda completa coexistem no mesmo ecrã. Assistência e Supermercado trocam o layout raiz em `/dashboard/vendas`.
-          </p>
-        </div>
-
-        <div
-          className="grid w-full min-w-0 auto-rows-fr gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+        <div className="mb-6 min-w-0">
+          <h2 className="text-lg font-bold text-foreground tracking-tight">Escolha o Layout do PDV</h2>
+          <p className="text-sm text-muted-foreground">
+            Selecione o fluxo ideal para sua operação. As alterações afeta        <div
+          className="grid w-full min-w-0 auto-rows-fr gap-6 grid-cols-1 lg:grid-cols-2"
           data-pdv-layout-cards={String(FLOWS.length)}
         >
           {FLOWS.map((opt) => {
@@ -407,6 +403,7 @@ function PdvSectionContent() {
             const selectCard = () => {
               if (!controlsDisabled) setDraftFlow(opt.id);
             };
+            const openPdvUrl = opt.id === "next" ? "/dashboard/pdv-next" : "/dashboard/vendas";
             return (
               <div
                 key={opt.id}
@@ -423,27 +420,27 @@ function PdvSectionContent() {
                   }
                 }}
                 className={cn(
-                  "group relative flex h-full w-full min-w-0 max-w-none flex-col rounded-xl p-4 outline-none transition-all duration-200",
+                  "group relative flex h-full w-full min-w-0 max-w-none flex-col rounded-2xl p-5 outline-none transition-all duration-300",
                   "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   controlsDisabled ? "cursor-default" : "cursor-pointer",
                   active
-                    ? "bg-primary/5 ring-2 ring-primary shadow-md dark:bg-primary/10"
-                    : "bg-card ring-1 ring-slate-900/5 shadow-sm hover:ring-primary/40 hover:shadow-card dark:ring-white/10"
+                    ? "bg-primary/5 ring-2 ring-primary shadow-lg dark:bg-primary/10"
+                    : "bg-card ring-1 ring-slate-900/5 shadow-sm hover:ring-primary/45 hover:shadow-xl dark:ring-white/10"
                 )}
               >
-                <div className="relative mb-4 aspect-video w-full overflow-hidden rounded-xl border border-border/40 bg-muted transition-transform duration-500 group-hover:scale-[1.02]">
+                <div className="relative mb-5 aspect-video w-full overflow-hidden rounded-xl border border-border/60 bg-muted transition-transform duration-500 group-hover:scale-[1.01] shadow-inner">
                   <PdvMiniPreview variant={opt.id} activeTheme={opt.id === "next" ? nextCardTheme : undefined} />
                   
                   {opt.id === "next" && (
                     <>
-                      <div className="absolute top-2 left-2 z-10">
-                        <Badge className="bg-emerald-500/95 text-white border-none hover:bg-emerald-500 text-[9px] font-bold uppercase tracking-wide">
+                      <div className="absolute top-3 left-3 z-10">
+                        <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white border-none text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 shadow-sm">
                           Prévia Real
                         </Badge>
                       </div>
-                      <div className="absolute bottom-2 right-2 z-10 flex gap-1 bg-black/60 backdrop-blur-sm p-1 rounded-full border border-white/10">
+                      <div className="absolute bottom-3 right-3 z-10 flex gap-1.5 bg-black/60 backdrop-blur-sm p-1.5 rounded-full border border-white/15 shadow-md">
                         {[
-                          { key: "light", color: "bg-white border-slate-300", label: "Light" },
+                          { key: "light", color: "bg-white border-slate-350", label: "Light" },
                           { key: "soft-ice", color: "bg-[#e2eafc] border-[#b6ccfe]", label: "Soft Ice" },
                           { key: "midnight", color: "bg-[#1e293b] border-blue-900", label: "Midnight" },
                           { key: "black", color: "bg-black border-emerald-500", label: "Black" }
@@ -453,7 +450,7 @@ function PdvSectionContent() {
                             type="button"
                             title={`Visualizar tema ${t.label}`}
                             className={cn(
-                              "h-3 w-3 rounded-full border transition-all duration-200 hover:scale-125",
+                              "h-4 w-4 rounded-full border transition-all duration-200 hover:scale-125",
                               t.color,
                               nextCardTheme === t.key ? "ring-2 ring-emerald-400 scale-110" : "opacity-80"
                             )}
@@ -470,17 +467,20 @@ function PdvSectionContent() {
                   <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-black/5 dark:ring-white/10" />
                 </div>
 
-                <div className="relative mb-4 flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                    <Icon className="h-5 w-5" />
+                <div className="relative mb-5 flex items-start gap-4">
+                  <div className={cn(
+                    "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl transition-colors shadow-sm",
+                    active ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground"
+                  )}>
+                    <Icon className="h-6 w-6" />
                   </div>
-                  <div className="flex-1 min-w-0 pr-12">
-                    <h4 title={opt.name} className="text-[15px] font-semibold leading-tight tracking-tight text-foreground">{opt.name}</h4>
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{opt.description}</p>
+                  <div className="flex-1 min-w-0 pr-16">
+                    <h4 title={opt.name} className="text-base font-bold leading-tight tracking-tight text-foreground">{opt.name}</h4>
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground line-clamp-2">{opt.description}</p>
                   </div>
                   {active && (
                     <div className="absolute right-0 top-0">
-                      <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/10 px-1.5 py-0 text-[10px] uppercase tracking-wide text-primary">
+                      <Badge variant="outline" className="gap-1 border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider text-primary shadow-sm">
                         <Check className="h-3 w-3" />
                         Ativo
                       </Badge>
@@ -488,32 +488,46 @@ function PdvSectionContent() {
                   )}
                 </div>
 
-                <div className="mt-auto flex w-full items-center gap-2">
+                <div className="mt-auto pt-3 border-t border-border/50 flex w-full items-center gap-3">
                   <Button
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="shrink-0"
+                    className="flex-1 h-9 font-medium text-xs border-border/80"
                     title={`Visualizar ${opt.name}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setPreviewFlow(opt.id);
                     }}
                   >
-                    <Eye className="h-4 w-4" />
-                    <span className="hidden sm:inline">Visualizar</span>
+                    <Eye className="h-3.5 w-3.5 mr-1.5" />
+                    Visualizar
                   </Button>
+
+                  <a
+                    href={openPdvUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className={cn(
+                      "inline-flex items-center justify-center h-9 px-3 text-xs font-semibold rounded-md transition-all duration-200 border border-border/80 hover:bg-muted text-foreground flex-1"
+                    )}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                    Abrir PDV
+                  </a>
+
                   {active ? (
-                    <div className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground">
-                      <Check className="h-4 w-4" />
-                      Layout ativo
+                    <div className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 px-3 text-xs font-bold shadow-sm dark:bg-emerald-500/20 dark:text-emerald-400">
+                      <Check className="h-3.5 w-3.5" />
+                      Selecionado
                     </div>
                   ) : (
                     <Button
                       type="button"
                       size="sm"
                       variant="default"
-                      className="flex-1 transition-all duration-200 hover:scale-[1.01]"
+                      className="flex-1 h-9 font-bold text-xs transition-all duration-200 hover:scale-[1.01]"
                       disabled={controlsDisabled}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -683,12 +697,12 @@ function PdvSectionContent() {
           </div>
         ) : null}
 
-        <p className="mt-6 flex gap-2 rounded-lg border border-border bg-card-muted/80 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-          <Info className="mt-0.5 h-4 w-4 shrink-0 text-foreground" aria-hidden />
+        <div className="mt-6 flex items-center gap-2 rounded-lg border border-border bg-card-muted px-3 py-2 text-xs text-muted-foreground">
+          <Info className="h-4 w-4 text-primary shrink-0" aria-hidden />
           <span>
-            Após salvar alterações do PDV, recarregue a tela do PDV para garantir que o novo modo/layout seja aplicado.
+            Lembre-se de recarregar a tela do PDV após salvar para aplicar as novas configurações.
           </span>
-        </p>
+        </div>
 
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="ghost" onClick={handleCancel} disabled={saving || noLoja || !dirty}>
@@ -700,105 +714,63 @@ function PdvSectionContent() {
         </div>
         </div>
 
-      {/* Fluxos integrados — informativos */}
-      <div>
+      {/* Fluxos integrados — compactos */}
+      <div className="pt-4 border-t border-border/60">
         <div className="mb-4">
-          <h2 className="text-base font-semibold text-foreground">Outros fluxos de venda</h2>
-          <p className="text-sm font-normal text-muted-foreground">
-            Integrações que compartilham o motor de vendas, caixa e histórico, sem substituir o layout principal acima.
+          <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Outros fluxos de venda integrados</h3>
+          <p className="text-xs text-muted-foreground">
+            Integrações auxiliares que compartilham o mesmo caixa e motor central.
           </p>
         </div>
 
-        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+        <div className="grid min-w-0 gap-4 grid-cols-1 sm:grid-cols-2">
           {/* PDV WhatsApp */}
-          <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground shadow-sm">
                 <MessageCircle className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-semibold text-foreground">PDV WhatsApp</h4>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-info/30 bg-info/5 text-info">
-                    Integrado
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <span>PDV WhatsApp</span>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 border-info/30 bg-info/5 text-info uppercase font-bold tracking-wide">
+                    WhatsApp HUB
                   </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Registra vendas via comando de voz / texto no WhatsApp HUB. Integrado ao motor central de
-                  vendas e ao caixa.
-                </p>
-              </div>
-            </div>
-            <div className="rounded-lg border border-border bg-surface p-3 space-y-1.5 text-xs text-muted-foreground">
-              <div className="flex items-center justify-between">
-                <span>Persiste no banco</span>
-                <Check className="h-3.5 w-3.5 text-success" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Abre caixa automático</span>
-                <Check className="h-3.5 w-3.5 text-success" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Histórico de vendas</span>
-                <Check className="h-3.5 w-3.5 text-success" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Layout selecionável</span>
-                <span className="text-muted-foreground/60">Não aplicável</span>
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px] md:max-w-xs">Registra vendas por voz/texto no WhatsApp.</p>
               </div>
             </div>
             <a
               href="/dashboard/whatsapp"
-              className="text-[11px] text-primary underline-offset-2 hover:underline flex items-center gap-1"
+              className="shrink-0 text-xs font-semibold text-primary underline-offset-4 hover:underline flex items-center gap-1 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20 transition-colors"
             >
-              <ExternalLink className="h-3 w-3" />
-              Acessar WhatsApp HUB
+              <ExternalLink className="h-3.5 w-3.5" />
+              Acessar
             </a>
           </div>
 
           {/* OS → Venda */}
-          <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-soft">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground shadow-sm">
                 <FileText className="h-5 w-5" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-semibold text-foreground">OS → Venda</h4>
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-warning/30 bg-warning/5 text-warning">
-                    Fluxo próprio
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <span>OS → Venda</span>
+                  <Badge variant="outline" className="text-[9px] px-1 py-0 border-warning/30 bg-warning/5 text-warning uppercase font-bold tracking-wide">
+                    Ordens de Serviço
                   </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-                  Faturamento de Ordens de Serviço gera venda diretamente no banco (via Operações HUB).
-                  Não usa sessão de caixa — é um fluxo de cobrança separado.
-                </p>
-              </div>
-            </div>
-            <div className="rounded-lg border border-border bg-surface p-3 space-y-1.5 text-xs text-muted-foreground">
-              <div className="flex items-center justify-between">
-                <span>Persiste no banco</span>
-                <Check className="h-3.5 w-3.5 text-success" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Histórico de vendas</span>
-                <Check className="h-3.5 w-3.5 text-success" />
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Sessão de caixa</span>
-                <span className="text-muted-foreground/60">Não aplicável</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Cancelamento PDV</span>
-                <span className="text-muted-foreground/60">Via OS HUB</span>
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px] md:max-w-xs">Faturamento direto via Operações HUB.</p>
               </div>
             </div>
             <a
               href="/dashboard/operacoes-v2"
-              className="text-[11px] text-primary underline-offset-2 hover:underline flex items-center gap-1"
+              className="shrink-0 text-xs font-semibold text-primary underline-offset-4 hover:underline flex items-center gap-1 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-lg border border-primary/20 transition-colors"
             >
-              <ExternalLink className="h-3 w-3" />
-              Acessar Operações HUB
+              <ExternalLink className="h-3.5 w-3.5" />
+              Acessar
             </a>
           </div>
         </div>

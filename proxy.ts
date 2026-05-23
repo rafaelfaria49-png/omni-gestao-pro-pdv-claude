@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 import NextAuth from "next-auth"
 import type { Session } from "next-auth"
 import { authConfig } from "./auth.config"
@@ -8,7 +8,6 @@ import {
   verifySubscriptionCookieValue,
 } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
-import { STAFF_ROLE_COOKIE, STAFF_SESSION_COOKIE } from "@/lib/staff-session"
 import { enterpriseDashboardRedirect, enterpriseStoreCookieRedirect } from "@/lib/auth/proxy-enterprise-dashboard"
 
 const { auth } = NextAuth(authConfig)
@@ -18,43 +17,6 @@ const SUBSCRIPTION_SECRET =
 
 const ADMIN_COOKIE = "assistec_admin_session"
 const CONTADOR_COOKIE = "assistec_contador_session"
-const ALWAYS_BLOCKED_FOR_CAIXA_PREFIXES = [
-  "/configuracoes",
-  "/configuracoes-v3",
-  "/dashboard/configuracoes",
-  "/relatorios",
-  "/ia-mestre",
-  "/rede",
-  "/clientes",
-  "/dashboard/clientes",
-  "/dashboard/ia-mestre",
-]
-
-const FINANCEIRO_PREFIXES = ["/financeiro"]
-const ESTOQUE_PREFIXES = ["/estoque", "/dashboard/estoque"]
-const MARKETING_PREFIXES = ["/dashboard/marketing"]
-
-type CaixaPerms = { permitirFinanceiro: boolean; permitirEstoque: boolean; permitirMarketingIA: boolean }
-
-async function getCaixaPerms(request: NextRequest): Promise<CaixaPerms | null> {
-  try {
-    const storeId = String(request.cookies.get("assistec_active_store")?.value || "").trim()
-    if (!storeId) return null
-    const url = new URL(`/api/stores/${encodeURIComponent(storeId)}/settings`, request.nextUrl.origin)
-    const r = await fetch(url, { cache: "no-store", headers: { cookie: request.headers.get("cookie") || "" } })
-    const j = (await r.json().catch(() => null)) as { settings?: any } | null
-    const pc = j?.settings?.printerConfig && typeof j.settings.printerConfig === "object" ? j.settings.printerConfig : null
-    const p = pc ? (pc as any).permissionsCaixa : null
-    return {
-      permitirFinanceiro: p?.permitirFinanceiro === true,
-      permitirEstoque: p?.permitirEstoque === true,
-      permitirMarketingIA: p?.permitirMarketingIA === true,
-    }
-  } catch {
-    return null
-  }
-}
-
 /** Páginas que exigem assinatura ativa (alinha com carregamento crítico no cliente). */
 const CRITICAL_PAGE_PARAMS = new Set([
   "vendas",
@@ -181,40 +143,6 @@ export const proxy = auth(async (req) => {
       u.pathname = "/login-contador"
       u.searchParams.set("next", pathname)
       return NextResponse.redirect(u)
-    }
-  }
-
-  // Bloqueio por role: CAIXA / Vendedor não acessam áreas administrativas
-  const adminPresent = !!String(req.cookies.get(ADMIN_COOKIE)?.value || "").trim()
-  const staffSession = !!String(req.cookies.get(STAFF_SESSION_COOKIE)?.value || "").trim()
-  const staffRole = String(req.cookies.get(STAFF_ROLE_COOKIE)?.value || "").trim().toUpperCase()
-  const isGerente = staffSession && staffRole === "GERENTE"
-  const isCaixa = staffSession && !adminPresent && !isGerente
-  if (isCaixa) {
-    const caixaFallback = () => {
-      const u = req.nextUrl.clone()
-      u.pathname = "/dashboard/vendas"
-      u.search = ""
-      return NextResponse.redirect(u)
-    }
-
-    if (ALWAYS_BLOCKED_FOR_CAIXA_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-      return caixaFallback()
-    }
-
-    const perms = await getCaixaPerms(req)
-    const allowFinanceiro = perms?.permitirFinanceiro === true
-    const allowEstoque = perms?.permitirEstoque === true
-    const allowMarketing = perms?.permitirMarketingIA === true
-
-    if (!allowFinanceiro && FINANCEIRO_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-      return caixaFallback()
-    }
-    if (!allowEstoque && ESTOQUE_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-      return caixaFallback()
-    }
-    if (!allowMarketing && MARKETING_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
-      return caixaFallback()
     }
   }
 

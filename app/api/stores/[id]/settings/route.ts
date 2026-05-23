@@ -1,28 +1,18 @@
 import { NextResponse } from "next/server"
-import { cookies } from "next/headers"
 import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/require-admin"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
-import { STAFF_ROLE_COOKIE, STAFF_SESSION_COOKIE } from "@/lib/staff-session"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 async function canManageStoreSettings(): Promise<boolean> {
-  // 1) Admin explícito (fluxo mais restrito)
+  // 1) NextAuth session ou cookie admin legado
   const adminGate = await requireAdmin()
   if (adminGate.ok) return true
 
-  // 2) Se houver sessão staff, só ADMIN/GERENTE podem alterar configurações
-  const jar = await cookies()
-  const hasStaffSession = !!String(jar.get(STAFF_SESSION_COOKIE)?.value || "").trim()
-  const staffRole = String(jar.get(STAFF_ROLE_COOKIE)?.value || "").trim().toUpperCase()
-  if (hasStaffSession) {
-    return staffRole === "ADMIN" || staffRole === "GERENTE"
-  }
-
-  // 3) Dono da loja (sem sessão staff), autenticado por assinatura válida
+  // 2) Dono da loja sem sessão NextAuth, autenticado por assinatura válida
   const sub = await getVerifiedSubscriptionFromCookies()
   return sub.ok
 }
