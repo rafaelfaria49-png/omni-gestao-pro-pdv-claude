@@ -14,12 +14,19 @@ import {
   Trash2,
   X,
   Zap,
+  ChevronUp,
+  ChevronDown,
+  Settings2,
+  Star,
+  AlertTriangle,
+  Loader2,
+  Check,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -102,8 +109,10 @@ export function PdvSupermercado({
   const router = useRouter()
   const { toast } = useToast()
   const { lojaAtivaId, opsStorageKey } = useLojaAtiva()
-  const { pdvParams } = useStoreSettings()
+  const { pdvParams, blob, save: saveStoreSettings } = useStoreSettings()
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  
+  const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
 
   const lojaKey = lojaAtivaId ?? opsLojaIdFromStorageKey(opsStorageKey)
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
@@ -204,21 +213,23 @@ export function PdvSupermercado({
     [inventory]
   )
 
-  /** Atalhos configurados só aparecem se existirem no estoque real (mesmo id). */
   const quickItems = useMemo(() => {
     const byId = new Map(inventory.map((i) => [i.id, i]))
     const out: PdvCatalogProduct[] = []
-    for (const a of pdvParams.atalhosRapidos || []) {
+    
+    // Filtrar apenas os atalhos ativos
+    const ativos = (pdvParams.atalhosRapidos || []).filter((a) => a.ativo !== false)
+    
+    for (const a of ativos) {
       const inv = byId.get(a.id)
       if (!inv) continue
       out.push(inventoryItemToPdvProduct(inv))
     }
-    // Fallback temporário: se ainda não houver favoritos/atalhos configurados,
-    // usamos os 10 primeiros produtos reais do estoque para não poluir a tela.
-    // (Estrutura pronta para plugar configuração de favoritos futuramente.)
-    if (out.length === 0) return products.slice(0, 10)
-    return out.slice(0, 10)
-  }, [inventory, pdvParams.atalhosRapidos])
+    
+    // Fallback: se não houver atalhos, retorna os 15 primeiros produtos
+    if (out.length === 0) return products.slice(0, 15)
+    return out
+  }, [inventory, pdvParams.atalhosRapidos, products])
 
   const searchTrim = searchTerm.trim()
 
@@ -557,23 +568,40 @@ export function PdvSupermercado({
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-b border-border lg:border-b-0 lg:border-r">
           <div className={cn("shrink-0 bg-background/50 backdrop-blur-xl border-b border-border/50 px-4", isModoRapido ? "py-4" : "py-5")}>
             <div className="flex flex-col gap-3">
-              {!isModoRapido ? (
-                <div className="flex items-center gap-2">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-card text-primary shadow-sm">
-                    <Barcode className="h-6 w-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold leading-none">Busca / Código de barras</div>
-                    <div className="text-xs leading-tight text-foreground/70 dark:text-white/55">
-                      Enter adiciona; quantidade×código com *; ↑↓ destaca sugestão.
+              <div className="flex items-center justify-between">
+                {!isModoRapido ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border bg-card text-primary shadow-sm">
+                      <Barcode className="h-6 w-6" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold leading-none">Busca / Código de barras</div>
+                      <div className="text-xs leading-tight text-foreground/70 dark:text-white/55 mt-1">
+                        Enter adiciona; quantidade×código com *; ↑↓ destaca sugestão.
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : null}
+                ) : (
+                  <div className="text-sm font-bold text-muted-foreground flex items-center gap-1.5">
+                    <Zap className="h-4 w-4 text-amber-500 fill-current" />
+                    Modo Rápido Ativo
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 rounded-xl border-border/50 bg-card/50 px-3 text-xs font-bold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                  onClick={() => setEditAtalhosOpen(true)}
+                >
+                  <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                  Gerenciar Grade
+                </Button>
+              </div>
+
               <div className="relative group">
-                <div className="absolute inset-0 rounded-[2rem] bg-gradient-to-r from-primary/20 to-transparent opacity-0 blur-xl transition-opacity duration-500 group-focus-within:opacity-100" />
-                <Search className="pointer-events-none absolute left-5 top-1/2 h-7 w-7 -translate-y-1/2 text-foreground/40 transition-colors duration-300 group-focus-within:text-primary" />
-                <Input
+                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 to-transparent opacity-0 blur-xl transition-opacity duration-500 group-focus-within:opacity-100" />
+                <Search className="pointer-events-none absolute left-5 top-1/2 h-6 w-6 -translate-y-1/2 text-foreground/40 transition-colors duration-300 group-focus-within:text-primary" />
+                <input
                   ref={productInputRef}
                   autoFocus
                   value={searchTerm}
@@ -609,7 +637,7 @@ export function PdvSupermercado({
                     }
                   }}
                   placeholder="Digite produto, categoria ou escaneie o código…"
-                  className="relative h-20 rounded-[2rem] border-2 border-border/50 bg-card/80 pl-16 pr-6 text-2xl font-black tracking-tight shadow-sm backdrop-blur-md transition-all duration-300 focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/20 focus-visible:shadow-lg focus-visible:shadow-primary/10 placeholder:text-foreground/30"
+                  className="relative h-16 w-full rounded-2xl border border-border/60 bg-card/80 pl-14 pr-6 text-xl font-bold tracking-tight shadow-sm backdrop-blur-md outline-none transition-all duration-300 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:shadow-lg placeholder:text-foreground/30"
                 />
               </div>
             </div>
@@ -634,24 +662,26 @@ export function PdvSupermercado({
                     type="button"
                     data-pdv-suggestion-index={idx}
                     className={cn(
-                      "group relative flex flex-col rounded-[2rem] border border-border/60 bg-card/60 p-5 text-left backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 active:scale-[0.98]",
+                      "group relative flex flex-col rounded-2xl border p-5 text-left transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.98]",
+                      "bg-card text-card-foreground border-border/85 shadow-sm hover:shadow-md hover:border-primary/45",
+                      "dark:bg-card/45 dark:border-border/45 dark:hover:border-primary/35 dark:shadow-none",
                       selectedProduct?.id === p.id ? "ring-2 ring-primary/50" : "",
-                      activeSuggestionIndex === idx ? "ring-4 ring-primary/40 ring-offset-2 ring-offset-background" : "shadow-sm"
+                      activeSuggestionIndex === idx ? "ring-2 ring-primary/60 ring-offset-2 ring-offset-background" : ""
                     )}
                     onClick={() => addToCart(p as Product)}
                   >
                     {/* Fundo sutil com a cor do tema */}
-                    <div className="pointer-events-none absolute inset-0 rounded-[2rem] opacity-0 transition-opacity duration-300 group-hover:opacity-20 z-0" style={{ background: "linear-gradient(135deg, hsl(var(--primary)/0.5) 0%, transparent 100%)" }} />
+                    <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-10 z-0" style={{ background: "linear-gradient(135deg, hsl(var(--primary)/0.15) 0%, transparent 100%)" }} />
                     
                     {/* Glow externo no hover */}
-                    <div className="pointer-events-none absolute inset-0 rounded-[2rem] opacity-0 transition-opacity duration-300 group-hover:opacity-100 z-0" style={{ boxShadow: "0 0 30px 2px hsl(var(--primary) / 0.25)" }} />
+                    <div className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 z-0" style={{ boxShadow: "0 0 20px 1px hsl(var(--primary) / 0.12)" }} />
 
                     <div className="relative z-10 flex flex-1 flex-col justify-between w-full h-full">
                       <div className="line-clamp-2 min-h-[3rem] text-[15px] font-extrabold leading-tight text-foreground">
                         {p.name}
                       </div>
-                      <div className="mt-3 flex items-end justify-between gap-2 border-t border-border/40 pt-3">
-                        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70 line-clamp-1 flex-1">
+                      <div className="mt-3 flex items-end justify-between gap-2 border-t border-border/45 pt-3">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground/80 dark:text-white/60 line-clamp-1 flex-1">
                           {p.category}
                         </div>
                         <div className="text-lg font-black tabular-nums tracking-tight text-primary">
@@ -817,11 +847,11 @@ export function PdvSupermercado({
               ) : null}
               
               {/* Premium Visor */}
-              <div className="relative overflow-hidden rounded-[2rem] border border-border/50 bg-gradient-to-b from-black/80 to-black/95 p-6 shadow-inner dark:from-black/60 dark:to-black/80">
-                <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-primary/20 blur-[50px] pointer-events-none" />
+              <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-gradient-to-b from-muted/50 to-muted/80 p-5 shadow-inner dark:border-border/30 dark:from-black/80 dark:to-black/95">
+                <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-primary/10 blur-[40px] pointer-events-none dark:bg-primary/20" />
                 <div className="relative z-10 flex flex-col">
-                  <span className="text-xs font-black uppercase tracking-widest text-white/50 mb-1">Total a pagar</span>
-                  <span className="text-4xl sm:text-5xl font-black tabular-nums tracking-tighter text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground dark:text-white/50 mb-0.5">Total a pagar</span>
+                  <span className="text-3xl sm:text-4xl font-black tabular-nums tracking-tight text-foreground dark:text-white dark:drop-shadow-[0_0_12px_rgba(255,255,255,0.25)]">
                     R$ {total.toFixed(2)}
                   </span>
                 </div>
@@ -832,33 +862,45 @@ export function PdvSupermercado({
             <div className="mt-5 grid grid-cols-3 gap-3">
               <Button
                 type="button"
-                className="group relative h-16 rounded-[1.5rem] border border-border/30 bg-card/80 text-foreground shadow-sm backdrop-blur-md transition-all hover:-translate-y-1 hover:border-foreground/20 hover:shadow-md hover:bg-foreground/5"
+                className={cn(
+                  "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
+                  "bg-emerald-500/[0.04] border-emerald-500/20 text-emerald-700 hover:bg-emerald-500/[0.08] hover:border-emerald-500/35 hover:shadow-sm",
+                  "dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/15 dark:hover:border-emerald-500/40"
+                )}
                 onClick={() => openPaymentModal("dinheiro")}
               >
                 <div className="flex flex-col items-center gap-1">
-                  <Banknote className="h-5 w-5 text-emerald-500 transition-transform group-hover:scale-110" />
-                  <span className="text-[11px] font-bold uppercase tracking-wider">Dinheiro <span className="opacity-50 ml-0.5">[F2]</span></span>
+                  <Banknote className="h-5 w-5 text-emerald-600 dark:text-emerald-400 transition-transform group-hover:scale-110" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Dinheiro <span className="opacity-50 ml-0.5 text-[9px] font-normal">[F2]</span></span>
                 </div>
               </Button>
               <Button
                 type="button"
-                className="group relative h-16 rounded-[1.5rem] border border-teal-500/30 bg-teal-500/10 text-teal-600 dark:text-teal-400 shadow-sm backdrop-blur-md transition-all hover:-translate-y-1 hover:border-teal-500/50 hover:bg-teal-500/20 hover:shadow-[0_0_20px_rgba(20,184,166,0.3)]"
+                className={cn(
+                  "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
+                  "bg-cyan-500/[0.04] border-cyan-500/20 text-cyan-700 hover:bg-cyan-500/[0.08] hover:border-cyan-500/35 hover:shadow-sm",
+                  "dark:bg-cyan-500/10 dark:border-cyan-500/20 dark:text-cyan-400 dark:hover:bg-cyan-500/15 dark:hover:border-cyan-500/40"
+                )}
                 onClick={() => openPaymentModal("pix")}
               >
                 <div className="flex flex-col items-center gap-1">
-                  <QrCode className="h-5 w-5 transition-transform group-hover:scale-110" />
-                  <span className="text-[11px] font-bold uppercase tracking-wider">PIX <span className="opacity-50 ml-0.5">[F3]</span></span>
+                  <QrCode className="h-5 w-5 text-cyan-600 dark:text-cyan-400 transition-transform group-hover:scale-110" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">PIX <span className="opacity-50 ml-0.5 text-[9px] font-normal">[F3]</span></span>
                 </div>
               </Button>
               <Button
                 type="button"
-                className="group relative h-16 rounded-[1.5rem] border border-primary/30 bg-primary/10 text-primary shadow-sm backdrop-blur-md transition-all hover:-translate-y-1 hover:border-primary/50 hover:bg-primary/20 hover:shadow-[0_0_20px_hsl(var(--primary)/0.3)]"
+                className={cn(
+                  "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
+                  "bg-blue-500/[0.04] border-blue-500/20 text-blue-700 hover:bg-blue-500/[0.08] hover:border-blue-500/35 hover:shadow-sm",
+                  "dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/15 dark:hover:border-blue-500/40"
+                )}
                 onClick={() => openPaymentModal("cartao_debito")}
                 title="Cartão (débito)"
               >
                 <div className="flex flex-col items-center gap-1">
-                  <CreditCard className="h-5 w-5 transition-transform group-hover:scale-110" />
-                  <span className="text-[11px] font-bold uppercase tracking-wider">Cartão <span className="opacity-50 ml-0.5">[F4]</span></span>
+                  <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400 transition-transform group-hover:scale-110" />
+                  <span className="text-[11px] font-bold uppercase tracking-wider">Cartão <span className="opacity-50 ml-0.5 text-[9px] font-normal">[F4]</span></span>
                 </div>
               </Button>
             </div>
@@ -866,11 +908,11 @@ export function PdvSupermercado({
             <Button
               type="button"
               variant="outline"
-              className="mt-3 h-14 w-full rounded-[1.5rem] border border-border/50 bg-background/50 text-sm font-bold uppercase tracking-widest text-foreground/70 backdrop-blur-sm transition-colors hover:bg-foreground/5 hover:text-foreground"
+              className="mt-3 h-12 w-full rounded-2xl border border-border/60 bg-background/40 text-xs font-extrabold uppercase tracking-wider text-foreground/75 backdrop-blur-sm transition-all hover:bg-accent/15 hover:text-foreground"
               onClick={() => openPaymentModal(null)}
               disabled={cart.length === 0}
             >
-              <Zap className="mr-2 h-5 w-5" /> Finalizar (outros)
+              <Zap className="mr-2 h-4 w-4" /> Finalizar (outros)
             </Button>
           </div>
         </PdvPainelLateralTerminal>
@@ -997,6 +1039,33 @@ export function PdvSupermercado({
         scaleBusy={false}
       />
 
+      <EditarAtalhosModal
+        open={editAtalhosOpen}
+        catalog={products}
+        catalogForAdd={products}
+        savedAtalhos={pdvParams.atalhosRapidos || []}
+        onSave={(atalhos) => {
+          void saveStoreSettings({
+            printerConfig: {
+              ...blob,
+              pdvParams: { ...blob?.pdvParams, atalhosRapidos: atalhos },
+            },
+          }).then(() => {
+            toast({
+              title: "Grade atualizada",
+              description: "Os atalhos rápidos foram salvos com sucesso.",
+            })
+          }).catch(() => {
+            toast({
+              title: "Erro ao salvar",
+              description: "Não foi possível sincronizar com o servidor.",
+              variant: "destructive",
+            })
+          })
+        }}
+        onClose={() => setEditAtalhosOpen(false)}
+      />
+
       <Dialog
         open={supervisorDialogOpen}
         onOpenChange={(open) => {
@@ -1082,6 +1151,384 @@ export function PdvSupermercado({
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// ─── Atalhos types + helpers ──────────────────────────────────────────────────
+
+type AtalhoSaved = {
+  id: string
+  nome: string
+  preco: number
+  inventoryId?: string
+  categoria?: string
+  ativo?: boolean
+  favorito?: boolean
+  cor?: string
+  posicao?: number
+}
+
+type AtalhoEntry = {
+  id: string
+  nome: string
+  preco: number
+  categoria: string
+  ativo: boolean
+  favorito: boolean
+  stockAtual: number
+  barcode?: string
+  sku?: string
+}
+
+const MAX_SVC = 12
+const MAX_PRD = 24
+
+const brl = (v: number) => `R$ ${Number(v || 0).toFixed(2)}`
+
+function toAtalhoEntry(a: AtalhoSaved, catalog: Product[]): AtalhoEntry {
+  const live = catalog.find((p) => p.id === a.id)
+  const isService = (a.categoria ?? live?.category ?? "") === "Servicos"
+  return {
+    id: a.id,
+    nome: live?.name ?? a.nome,
+    preco: live?.price ?? a.preco,
+    categoria: a.categoria ?? live?.category ?? "Outros",
+    ativo: a.ativo !== false,
+    favorito: a.favorito ?? false,
+    stockAtual: live?.stock ?? (isService ? 999 : 0),
+    barcode: live?.barcode ?? live?.codigoBarras,
+    sku: live?.sku ?? live?.codigo,
+  }
+}
+
+function fromAtalhoEntry(e: AtalhoEntry): AtalhoSaved {
+  return { id: e.id, nome: e.nome, preco: e.preco, categoria: e.categoria, inventoryId: e.id, ativo: e.ativo, favorito: e.favorito }
+}
+
+// ─── EditarAtalhosModal ───────────────────────────────────────────────────────
+
+function EditarAtalhosModal({
+  open,
+  catalog = [],
+  catalogForAdd = [],
+  savedAtalhos,
+  onSave,
+  onClose,
+}: {
+  open: boolean
+  catalog?: Product[]
+  catalogForAdd?: Product[]
+  savedAtalhos: AtalhoSaved[]
+  onSave: (atalhos: AtalhoSaved[]) => void
+  onClose: () => void
+}) {
+  const [entries, setEntries] = useState<AtalhoEntry[]>([])
+  const [modalTab, setModalTab] = useState<"atalhos" | "adicionar">("atalhos")
+  const [catSearch, setCatSearch] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setEntries(savedAtalhos.map((a) => toAtalhoEntry(a, catalog)))
+    setModalTab("atalhos")
+    setCatSearch("")
+    setIsSaving(false)
+  }, [open, savedAtalhos, catalog])
+
+  const svcEntries = useMemo(
+    () => entries.map((e, i) => ({ ...e, _idx: i })).filter((e) => e.categoria === "Servicos"),
+    [entries],
+  )
+  const prdEntries = useMemo(
+    () => entries.map((e, i) => ({ ...e, _idx: i })).filter((e) => e.categoria !== "Servicos"),
+    [entries],
+  )
+  const svcActive = svcEntries.filter((e) => e.ativo).length
+  const prdActive = prdEntries.filter((e) => e.ativo).length
+  const addedIds = useMemo(() => new Set(entries.map((e) => e.id)), [entries])
+
+  const catSearchLow = catSearch.toLowerCase().trim()
+  const catalogFiltered = useMemo(
+    () =>
+      catSearchLow
+        ? catalogForAdd.filter(
+            (p) =>
+              p.name.toLowerCase().includes(catSearchLow) ||
+              p.category.toLowerCase().includes(catSearchLow) ||
+              (p.sku ?? "").toLowerCase().includes(catSearchLow) ||
+              (p.barcode ?? "").includes(catSearchLow),
+          )
+        : catalogForAdd,
+    [catalogForAdd, catSearchLow],
+  )
+
+  const moveWithinGroup = (idx: number, dir: -1 | 1) => {
+    const isService = entries[idx].categoria === "Servicos"
+    const step = dir < 0 ? -1 : 1
+    let target = -1
+    for (let i = idx + step; i >= 0 && i < entries.length; i += step) {
+      if ((entries[i].categoria === "Servicos") === isService) { target = i; break }
+    }
+    if (target === -1) return
+    setEntries((prev) => {
+      const next = [...prev]
+      ;[next[idx], next[target]] = [next[target], next[idx]]
+      return next
+    })
+  }
+
+  const toggleAtivo = (idx: number) =>
+    setEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, ativo: !e.ativo } : e)))
+
+  const toggleFavorito = (idx: number) =>
+    setEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, favorito: !e.favorito } : e)))
+
+  const removeEntry = (idx: number) =>
+    setEntries((prev) => prev.filter((_, i) => i !== idx))
+
+  const addFromCatalog = (p: Product) => {
+    if (addedIds.has(p.id)) return
+    const isService = p.category === "Servicos"
+    if (isService && svcEntries.length >= MAX_SVC) return
+    if (!isService && prdEntries.length >= MAX_PRD) return
+    setEntries((prev) => [
+      ...prev,
+      { id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false, stockAtual: p.stock, barcode: p.barcode, sku: p.sku ?? p.codigo },
+    ])
+  }
+
+  const handleSave = () => {
+    setIsSaving(true)
+    onSave(entries.map(fromAtalhoEntry))
+    onClose()
+  }
+
+  const renderRow = (e: AtalhoEntry & { _idx: number }, isFirstInGroup: boolean, isLastInGroup: boolean) => {
+    const isService = e.categoria === "Servicos"
+    const outOfStock = !isService && e.stockAtual <= 0
+
+    return (
+      <div
+        key={e.id}
+        className={cn(
+          "flex items-center gap-1.5 rounded-xl border px-2.5 py-2 transition-all",
+          e.ativo ? "border-border bg-background" : "border-border/50 bg-muted/30 opacity-60",
+        )}
+      >
+        {/* Reorder */}
+        <div className="flex shrink-0 flex-col">
+          <button type="button" disabled={isFirstInGroup} onClick={() => moveWithinGroup(e._idx, -1)}
+            className="grid h-5 w-5 place-items-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-20">
+            <ChevronUp className="h-3 w-3" />
+          </button>
+          <button type="button" disabled={isLastInGroup} onClick={() => moveWithinGroup(e._idx, 1)}
+            className="grid h-5 w-5 place-items-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-20">
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
+
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">{e.nome}</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+            <span className="text-[10px] text-muted-foreground">{e.categoria}</span>
+            {e.sku && <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">{e.sku}</span>}
+            {outOfStock && (
+              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-px text-[9px] font-semibold text-amber-600 dark:text-amber-400">
+                sem estoque
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Price */}
+        <span className="shrink-0 text-xs font-bold tabular-nums text-foreground">{brl(e.preco)}</span>
+
+        {/* Favorito */}
+        <button type="button" onClick={() => toggleFavorito(e._idx)} title={e.favorito ? "Remover dos favoritos" : "Favorito"}
+          className={cn("grid h-6 w-6 shrink-0 place-items-center rounded-lg transition",
+            e.favorito ? "text-amber-500 hover:text-amber-600" : "text-muted-foreground hover:text-amber-500")}>
+          <Star className={cn("h-3.5 w-3.5", e.favorito && "fill-current")} />
+        </button>
+
+        {/* Ativo toggle */}
+        <button type="button" onClick={() => toggleAtivo(e._idx)} title={e.ativo ? "Desativar" : "Ativar"}
+          className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", e.ativo ? "bg-primary" : "bg-muted")}>
+          <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+            e.ativo ? "translate-x-4" : "translate-x-0.5")} />
+        </button>
+
+        {/* Remove */}
+        <button type="button" onClick={() => removeEntry(e._idx)}
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-lg text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex max-h-[90vh] max-w-xl flex-col gap-0 overflow-hidden rounded-2xl border-border bg-card p-0">
+        {/* Header — fixo */}
+        <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            <Settings2 className="h-5 w-5 text-primary" />
+            Gerenciar Atalhos Rápidos
+          </DialogTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Configure até {MAX_SVC} serviços e {MAX_PRD} produtos. Reordene, ative/desative e marque favoritos.
+          </p>
+        </DialogHeader>
+
+        {/* Tab nav — fixo */}
+        <div className="flex shrink-0 gap-5 border-b border-border px-6 pt-3">
+          {([
+            { id: "atalhos" as const, label: `Atalhos (${entries.length})` },
+            { id: "adicionar" as const, label: "Adicionar do Catálogo" },
+          ] as const).map((t) => (
+            <button key={t.id} type="button" onClick={() => setModalTab(t.id)}
+              className={cn("pb-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px",
+                modalTab === t.id ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Área de conteúdo — scrollável, ocupa espaço restante */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {modalTab === "atalhos" ? (
+            /* ── Tab: Atalhos ── */
+            <div className="space-y-4 px-6 py-4">
+              {/* Serviços */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Serviços</p>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", svcActive >= MAX_SVC ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-secondary text-secondary-foreground")}>
+                    {svcActive}/{MAX_SVC} ativos
+                  </span>
+                </div>
+                {svcEntries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum serviço. Adicione na aba &ldquo;Adicionar do Catálogo&rdquo;.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {svcEntries.map((e, gi) =>
+                      renderRow(e, gi === 0, gi === svcEntries.length - 1)
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="h-px bg-border my-4" />
+
+              {/* Produtos */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Produtos</p>
+                  <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", prdActive >= MAX_PRD ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-secondary text-secondary-foreground")}>
+                    {prdActive}/{MAX_PRD} ativos
+                  </span>
+                </div>
+                {prdEntries.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhum produto. Adicione na aba &ldquo;Adicionar do Catálogo&rdquo;.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {prdEntries.map((e, gi) =>
+                      renderRow(e, gi === 0, gi === prdEntries.length - 1)
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* ── Tab: Adicionar ── */
+            <div className="flex flex-col">
+              {/* Busca — sticky */}
+              <div className="sticky top-0 z-10 border-b border-border bg-card px-6 py-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    autoFocus
+                    value={catSearch}
+                    onChange={(e) => setCatSearch(e.target.value)}
+                    placeholder="Buscar por nome, categoria, SKU ou código de barras…"
+                    className="h-9 w-full rounded-xl border border-border bg-background pl-9 text-sm outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                  />
+                </div>
+              </div>
+
+              {/* Lista de itens reais */}
+              <div className="space-y-1 px-6 py-3">
+                {catalogForAdd.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-10 text-center">
+                    <AlertTriangle className="h-6 w-6 text-muted-foreground/40" />
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Nenhum produto real encontrado nesta loja.
+                    </p>
+                    <p className="text-xs text-muted-foreground/60">
+                      Cadastre itens em Estoque para adicioná-los como atalhos.
+                    </p>
+                  </div>
+                ) : catalogFiltered.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    Nenhum resultado para &ldquo;{catSearch}&rdquo;.
+                  </p>
+                ) : (
+                  catalogFiltered.map((p) => {
+                    const isAdded = addedIds.has(p.id)
+                    const isService = p.category === "Servicos"
+                    const outOfStock = !isService && p.stock <= 0
+                    const atLimit = isService ? svcEntries.length >= MAX_SVC : prdEntries.length >= MAX_PRD
+                    const disabled = isAdded || atLimit
+
+                    return (
+                      <div key={p.id}
+                        className={cn("flex items-center gap-2 rounded-xl border px-3 py-2 text-sm transition-all",
+                          isAdded ? "border-border/50 bg-muted/20 opacity-60" : "border-border bg-background hover:border-primary/30 hover:bg-muted/40")}>
+                        <div className="min-w-0 flex-1">
+                          <p className={cn("truncate font-medium", isAdded ? "text-muted-foreground" : "text-foreground")}>{p.name}</p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                            <span className="text-[10px] text-muted-foreground">{p.category}</span>
+                            {p.sku && <span className="rounded bg-muted px-1 text-[9px] text-muted-foreground">{p.sku}</span>}
+                            {outOfStock && (
+                              <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-px text-[9px] font-semibold text-amber-600">
+                                sem estoque
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-xs font-bold tabular-nums text-muted-foreground">{brl(p.price)}</span>
+                        {!isService && p.stock < 999 && (
+                          <span className={cn("shrink-0 text-[10px] tabular-nums", outOfStock ? "text-amber-500" : "text-muted-foreground")}>
+                            {p.stock}⬟
+                          </span>
+                        )}
+                        <button type="button" disabled={disabled} onClick={() => addFromCatalog(p)}
+                          className={cn("flex h-7 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-bold transition",
+                            isAdded ? "cursor-default text-muted-foreground"
+                              : atLimit ? "cursor-not-allowed text-muted-foreground opacity-40"
+                                : "bg-primary/10 text-primary hover:bg-primary/20")}>
+                          {isAdded ? <><Check className="h-3 w-3" /> Adicionado</> : <><Plus className="h-3 w-3" /> Adicionar</>}
+                        </button>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer — fixo */}
+        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
+          <Button variant="outline" className="rounded-xl" onClick={onClose}>Cancelar</Button>
+          <Button disabled={isSaving} className="rounded-xl" onClick={handleSave}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+            Salvar Atalhos
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

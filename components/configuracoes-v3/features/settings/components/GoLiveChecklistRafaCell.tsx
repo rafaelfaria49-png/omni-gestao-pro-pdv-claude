@@ -215,7 +215,7 @@ export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSna
       {
         id: "pdv",
         label: "PDV configurado",
-        hint: "Fluxo principal (Clássico, Assistência ou Supermercado) salvo na unidade.",
+        hint: "Fluxo principal (Clássico, Assistência ou Rápido / Grade) salvo na unidade.",
         status: pdvStatus,
         targetSection: "pdv",
         linkLabel: "Ir para PDV",

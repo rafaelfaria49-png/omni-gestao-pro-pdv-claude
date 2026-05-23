@@ -80,9 +80,9 @@ const FLOWS: PdvFlowOption[] = [
   },
   {
     id: "supermercado",
-    name: "PDV Supermercado",
-    description: "Caixa de alto giro no modelo de checkout com visualização em tabela.",
-    whenToUse: "Ideal para mercados, mercearias e faturamentos sequenciais rápidos.",
+    name: "PDV Rápido / Grade",
+    description: "Caixa de alto giro no modelo de grade de produtos rápida com tabela de itens.",
+    whenToUse: "Ideal para lojas de assistência, acessórios, variedades e faturamentos rápidos.",
     icon: Store,
   },
   {
