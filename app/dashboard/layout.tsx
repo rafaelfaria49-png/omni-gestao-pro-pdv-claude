@@ -33,8 +33,13 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
     return <>{children}</>
   }
 
+  // Telas-fixas de PDV (scroll interno próprio, sem scroll de página): apenas o
+  // PDV principal, suas subrotas (ex.: /vendas/venda-completa) e o PDV Next.
+  // Match exato + barra evita capturar rotas irmãs como /dashboard/vendas-arquivo-geral
+  // e /dashboard/vendas-hub, que são páginas com fluxo natural e precisam rolar.
   const isVendas =
-    pathname?.startsWith("/dashboard/vendas") ||
+    pathname === "/dashboard/vendas" ||
+    pathname?.startsWith("/dashboard/vendas/") ||
     pathname?.startsWith("/dashboard/pdv-next")
 
   const shell = (
