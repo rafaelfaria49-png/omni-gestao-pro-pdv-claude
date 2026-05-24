@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { useCaixa } from "./caixa-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { useTerminalAtivo } from "@/lib/pdv-terminal"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useToast } from "@/hooks/use-toast"
 import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
@@ -55,6 +56,7 @@ const RECEIPT_TITLE = "COMPROVANTE DE ABERTURA DE CAIXA"
 export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps) {
   const { abrirCaixa, setSessaoId } = useCaixa()
   const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
+  const { terminal } = useTerminalAtivo(lojaAtivaId)
   const { toast } = useToast()
   const { inventory, setInventory } = useOperationsStore()
 
@@ -105,7 +107,12 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
               "Content-Type": "application/json",
               "x-assistec-loja-id": lojaAtivaId,
             },
-            body: JSON.stringify({ saldoInicial: valor, operador: nomeOp, observacao: obsTrim }),
+            body: JSON.stringify({
+              saldoInicial: valor,
+              operador: nomeOp,
+              observacao: obsTrim,
+              ...(terminal?.id ? { terminalId: terminal.id } : {}),
+            }),
           })
           if (res.ok) {
             const data = (await res.json()) as { sessaoId?: string }

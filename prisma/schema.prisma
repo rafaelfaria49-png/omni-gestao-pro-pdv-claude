@@ -100,6 +100,7 @@ model Store {
   movimentacoesEstoque     MovimentacaoEstoque[]
   creditos                 ClienteCredito[]
   usosCredito              UsoCreditoCliente[]
+  pdvTerminais             PdvTerminal[]
 
   @@index([profile])
   @@map("stores")
@@ -1237,12 +1238,18 @@ model Venda {
   motivoCancelamento   String?             @map("motivoCancelamento")
   contaReceberTituloId String?             @map("contaReceberTituloId")
   contaReceberTitulo   ContaReceberTitulo? @relation(fields: [contaReceberTituloId], references: [id], onDelete: SetNull)
+  /**
+   * Terminal PDV (PDV1, PDV2...) em que a venda foi realizada. Nullable para
+   * retrocompatibilidade; o valor também viaja em `payload.terminalId`.
+   */
+  terminalId           String?             @map("terminalId")
   itens                ItemVenda[]
 
   @@index([storeId])
   @@index([storeId, status])
   @@index([clienteId])
   @@index([contaReceberTituloId])
+  @@index([storeId, terminalId])
   @@map("vendas")
 }
 
@@ -1683,6 +1690,11 @@ model SessaoCaixa {
   status       SessaoCaixaStatus  @default(ABERTA) @map("status")
   abertaEm     DateTime           @default(now()) @map("abertaEm")
   fechadaEm    DateTime?          @map("fechadaEm")
+  /**
+   * Terminal PDV (PDV1, PDV2...) que abriu a sessão. Nullable para retrocompatibilidade:
+   * sessões anteriores ao multi-terminal ficam null ("Terminal Legacy").
+   */
+  terminalId   String?            @map("terminalId")
   /** Snapshot de totais do dia (ledger) no momento do fechamento. */
   payload      Json?              @map("payload") @db.JsonB
   operacoes    CaixaOperacao[]
@@ -1690,6 +1702,7 @@ model SessaoCaixa {
 
   @@index([storeId, status])
   @@index([storeId, abertaEm])
+  @@index([storeId, terminalId, status])
   @@map("sessoes_caixa")
 }
 
@@ -1712,6 +1725,40 @@ model CaixaOperacao {
   @@index([sessaoId])
   @@index([storeId, at])
   @@map("caixa_operacoes")
+}
+
+/**
+ * Terminal PDV de uma loja (modelo supermercado: PDV1, PDV2, PDV3...).
+ * Cada terminal compartilha o mesmo estoque da loja, mas tem caixa/sessão/vendas
+ * próprios. Fase 1: cadastro/seleção. Fase 2 (futuro): lock/heartbeat anti-simultâneo.
+ */
+model PdvTerminal {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /** Código de negócio único por loja: PDV1, PDV2, PDV3... */
+  code      String   @map("code")
+  /** Nome amigável exibido na seleção (ex.: "PDV 1", "Caixa Principal"). */
+  name      String   @default("") @map("name")
+  /** "ACTIVE" | "INACTIVE" — terminal inativo não aparece na seleção por padrão. */
+  status    String   @default("ACTIVE") @map("status")
+  /**
+   * Lock anti-uso-simultâneo (Fase 2). Tudo nullable/backward-compatible.
+   * `lockedByDeviceId` = deviceId do navegador que detém o terminal; `heartbeatAt` =
+   * último sinal de vida (lock expira quando heartbeatAt fica velho — ver
+   * `lib/pdv-terminal-lock.ts`). `lockedByOperador` é só rótulo para exibição.
+   */
+  lockedByDeviceId String?   @map("lockedByDeviceId")
+  lockedByOperador String?   @map("lockedByOperador")
+  lockedAt         DateTime? @map("lockedAt")
+  heartbeatAt      DateTime? @map("heartbeatAt")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@unique([storeId, code])
+  @@index([storeId, status])
+  @@index([storeId, heartbeatAt])
+  @@map("pdv_terminais")
 }
 
 // ─── Omni Agent HUB — comandos auditáveis (Fase 1) ──────────────────────────

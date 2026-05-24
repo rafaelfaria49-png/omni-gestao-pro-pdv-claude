@@ -14,6 +14,8 @@ const schema = z.object({
   saldoInicial: z.number().min(0).default(0),
   operador: z.string().max(120).default(""),
   observacao: z.string().max(500).default(""),
+  /** Terminal PDV (PDV1, PDV2...) que abre o caixa. Opcional p/ retrocompatibilidade. */
+  terminalId: z.string().max(60).optional(),
 })
 
 export async function POST(req: Request) {
@@ -45,22 +47,47 @@ export async function POST(req: Request) {
   if (denied) return denied
 
   const { saldoInicial, observacao } = parsed.data
+  const terminalId = parsed.data.terminalId?.trim() || ""
   const session = await auth()
   const operador =
     parsed.data.operador?.trim() ||
     (session?.user ? getOperatorLabelFromSession(session) : "")
 
+  const baseData = {
+    storeId: lojaId,
+    saldoInicial,
+    operador,
+    observacao,
+    status: "ABERTA" as const,
+  }
+  const select = {
+    id: true,
+    abertaEm: true,
+    storeId: true,
+    operador: true,
+    saldoInicial: true,
+  }
+
   try {
-    const sessao = await prisma.sessaoCaixa.create({
-      data: {
-        storeId: lojaId,
-        saldoInicial,
-        operador,
-        observacao,
-        status: "ABERTA",
-      },
-      select: { id: true, abertaEm: true, storeId: true, operador: true, saldoInicial: true },
-    })
+    let sessao
+    if (terminalId) {
+      try {
+        sessao = await prisma.sessaoCaixa.create({
+          data: { ...baseData, terminalId },
+          select,
+        })
+      } catch (terminalErr) {
+        // A coluna terminalId pode ainda não existir no banco (migration não aplicada).
+        // Retrocompatibilidade: reabre a sessão sem o vínculo de terminal.
+        console.warn(
+          "[ops/caixa/abrir] terminalId não persistido (fallback):",
+          terminalErr instanceof Error ? terminalErr.message : terminalErr,
+        )
+        sessao = await prisma.sessaoCaixa.create({ data: baseData, select })
+      }
+    } else {
+      sessao = await prisma.sessaoCaixa.create({ data: baseData, select })
+    }
     return NextResponse.json({ ok: true, sessaoId: sessao.id, sessao })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

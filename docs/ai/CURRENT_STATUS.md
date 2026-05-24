@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 23 Mai 2026 — Sessão: Goal 9 — PDV Item Avulso via tecla INSERT
+> Última atualização: 23 Mai 2026 — Sessão: PDV Multi-Terminais — Fase 1
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,57 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### PDV Multi-Terminais — Fase 1 (cadastro + seleção) (concluído 23/05/2026)
+
+**Contexto:** base profissional de múltiplos terminais por loja (PDV1, PDV2, PDV3…),
+estilo supermercado, para que dois computadores não abram o mesmo caixa por engano.
+Detalhes em [`docs/ai/PDV_MULTI_TERMINAIS_FASE1_REPORT.md`](./PDV_MULTI_TERMINAIS_FASE1_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `prisma/schema.prisma` | **NOVO** model `PdvTerminal` (`code` PDV1…, `name`, `status` ACTIVE/INACTIVE, `@@unique([storeId, code])`); + colunas nullable `SessaoCaixa.terminalId` e `Venda.terminalId` + índices. 100% aditivo (`db push` aplicado). |
+| `app/actions/terminais.ts` | **NOVO** — `listTerminais` (cria PDV1/2/3 default), `criarTerminal`, `setTerminalStatus`. Scoped por `storeId`; `withPrismaSafe` degrada se a tabela não existir. |
+| `lib/pdv-terminal.ts` | **NOVO** — `deviceId` estável, seleção por loja em localStorage, hook `useTerminalAtivo`. |
+| `components/dashboard/vendas/terminal-selector.tsx` | **NOVO** — tela "Selecionar Terminal": cards, adicionar, ativar/desativar, fallback "Continuar sem terminal". |
+| `app/dashboard/vendas/vendas-page-client.tsx` | Gate: seleciona terminal antes do PDV (com fallback que não bloqueia a operação). |
+| `components/dashboard/caixa/caixa-status-bar.tsx` | Exibe terminal atual (badge) + "Trocar" com caixa fechado. |
+| `components/dashboard/caixa/abertura-caixa-modal.tsx` · `app/api/ops/caixa/abrir/route.ts` | Caixa grava `terminalId` na `SessaoCaixa` (com fallback se a coluna não existir). |
+| `lib/operations-sale-types.ts` · `lib/ops-upsert-venda.ts` · `lib/operations-store.tsx` | Venda carrega `terminalId` em `Venda.payload` (caminho financeiro intacto). |
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK · `npx prisma db push` em sync.
+
+**Fase 2 (pendente, documentada):** lock/heartbeat anti-simultâneo, caixa/venda 100% por
+terminal (coluna `Venda.terminalId` + reconciliação/fechamento por terminal), relatórios
+PDV1/PDV2/PDV3 + consolidado, `localStorage` do caixa por terminal, gate no `pdv-next`,
+limite de terminais por plano.
+
+### Vendas HUB — Correção operacional de vendas (concluído 23/05/2026)
+
+**Contexto:** décima fase — implementar edição segura de vendas com auditoria,
+separar área operacional de relatórios. Detalhes em
+[`docs/ai/VENDAS_HUB_CORRECAO_OPERACIONAL_REPORT.md`](./VENDAS_HUB_CORRECAO_OPERACIONAL_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `app/api/vendas/[id]/corrigir/route.ts` | **NOVO** — endpoint de correção segura: altera forma de pagamento (com PIN supervisor + ajuste `MovimentacaoFinanceira.descricao`), cliente, observação. Valida total imutável, motivo obrigatório, auditoria em `payload.correcoes[]`. |
+| `app/api/vendas/[id]/route.ts` | GET expõe `clienteId`, `observacao` e `correcoes[]` do payload. |
+| `components/dashboard/vendas/vendas-arquivo-geral.tsx` | Header renomeado "Histórico de Vendas" → "Vendas". Botão "Corrigir venda" (Wrench) na tabela, drawer e dropdown mobile. Modal de correção com 3 abas (Pagamento/Cliente/Observação). Seção "Correções" no drawer com histórico before/after. |
+
+**Funcionalidades:**
+- Correção de forma de pagamento (ex.: Dinheiro → PIX) com PIN supervisor
+- Correção de cliente vinculado (nome + FK)
+- Correção de observação
+- Total e itens **nunca alterados** (validação server-side `422 total_mismatch`)
+- Auditoria completa em `Venda.payload.correcoes[]` (before/after, operador, supervisor, motivo)
+- `MovimentacaoFinanceira` ajustada na descrição (valor total preservado)
+- Drawer mostra histórico de correções
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Riscos restantes:** correção de pagamento redistribui 100% do total em uma forma
+(correção parcial de pagamento misto exigiria UI breakdown — fora de escopo);
+validação visual nos 4 temas recomendada.
 
 ### Caixa — Fechamento ERP Premium (estilo Gestão Click) (concluído 23/05/2026)
 

@@ -10,6 +10,7 @@ import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import type { DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import { emitEvent } from "@/lib/events/event-bus"
 import { initAutomationEngineClient } from "@/lib/automation/automation-engine"
 import { toast } from "@/components/ui/use-toast"
@@ -934,6 +935,7 @@ export function OperationsProvider({
         paymentBreakdown: pb,
         cashierId: auditMeta?.cashierId,
         sessaoId: current.caixaSessaoId ?? undefined,
+        terminalId: readSelectedTerminal(opsLojaIdFromStorageKey(storageKey))?.id || undefined,
         discountAuthorizedByAdminId: auditMeta?.discountAuthorizedByAdminId,
         discountReais: auditMeta?.discountReais,
         discountPercent: auditMeta?.discountPercent,

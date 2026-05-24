@@ -108,6 +108,12 @@ export async function GET(
       }),
     ])
 
+    const correcoes = venda.payload && typeof venda.payload === "object"
+      ? (Array.isArray((venda.payload as Record<string, unknown>).correcoes)
+        ? (venda.payload as Record<string, unknown>).correcoes as unknown[]
+        : [])
+      : []
+
     return NextResponse.json({
       ok: true,
       venda: {
@@ -115,6 +121,7 @@ export async function GET(
         dbId: venda.id,
         at: venda.at.toISOString(),
         clienteNome: venda.clienteNome || null,
+        clienteId: venda.clienteId || null,
         clienteCpf: extractCustomerCpf(venda.payload),
         total: venda.total,
         desconto: extractDiscount(venda.payload),
@@ -126,6 +133,10 @@ export async function GET(
         estoqueReposto: !!movEstoqueCancel,
         estornoFinanceiro: !!movFinCancel,
         sessaoId: sessaoIdPayload ?? null,
+        observacao: venda.payload && typeof venda.payload === "object"
+          ? ((venda.payload as Record<string, unknown>).observacao as string | null) ?? null
+          : null,
+        correcoes,
         pagamentos: extractPayments(venda.payload),
         itens: venda.itens.map((it) => ({
           id: it.id,

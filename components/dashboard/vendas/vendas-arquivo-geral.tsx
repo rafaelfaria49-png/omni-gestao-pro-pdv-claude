@@ -6,7 +6,7 @@ import {
   TrendingUp, BarChart3, AlertTriangle,
   Printer, Eye, XCircle, ChevronLeft, ChevronRight,
   CheckCircle, Filter, X, Tag, Clock, DollarSign, UserCheck, RotateCcw,
-  Receipt, Download, MoreHorizontal, Loader2, Calendar,
+  Receipt, Download, MoreHorizontal, Loader2, Calendar, Wrench, ShieldCheck,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -113,6 +113,7 @@ type VendaDetalhe = {
   dbId: string
   at: string
   clienteNome: string | null
+  clienteId: string | null
   clienteCpf: string | null
   total: number
   desconto: number
@@ -124,6 +125,20 @@ type VendaDetalhe = {
   estoqueReposto?: boolean
   estornoFinanceiro?: boolean
   sessaoId: string | null
+  observacao: string | null
+  correcoes: Array<{
+    at: string
+    operador: string
+    motivo: string
+    campos: string[]
+    pagamentoAnterior?: string
+    pagamentoNovo?: string
+    clienteAnterior?: string | null
+    clienteNovo?: string | null
+    observacaoAnterior?: string | null
+    observacaoNova?: string | null
+    supervisorNome?: string
+  }>
   pagamentos: Array<{ label: string; valor: number }>
   itens: Array<{ id: string; nome: string; quantidade: number; precoUnitario: number; lineTotal: number }>
   devolucoes: Array<{
@@ -265,6 +280,18 @@ export function VendasArquivoGeral() {
   const [cancelMotivo, setCancelMotivo] = useState("")
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelConfirmForcar, setCancelConfirmForcar] = useState(false)
+
+  // Correção dialog
+  const [corrigindoVenda, setCorrigindoVenda] = useState<VendaDetalhe | null>(null)
+  const [correcaoMotivo, setCorrecaoMotivo] = useState("")
+  const [correcaoFormaPag, setCorrecaoFormaPag] = useState<string>("") // key da forma selecionada
+  const [correcaoClienteNome, setCorrecaoClienteNome] = useState("")
+  const [correcaoClienteId, setCorrecaoClienteId] = useState<string | null>(null)
+  const [correcaoObservacao, setCorrecaoObservacao] = useState("")
+  const [correcaoTab, setCorrecaoTab] = useState<"pagamento" | "cliente" | "observacao">("pagamento")
+  const [correcaoPin, setCorrecaoPin] = useState("")
+  const [correcaoLoading, setCorrecaoLoading] = useState(false)
+  const [correcaoError, setCorrecaoError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -487,6 +514,74 @@ export function VendasArquivoGeral() {
     setTrocaInitialSale(undefined)
   }, [])
 
+  const startCorrecao = useCallback((v: VendaDetalhe) => {
+    setCorrigindoVenda(v)
+    setCorrecaoMotivo("")
+    setCorrecaoPin("")
+    setCorrecaoError(null)
+    setCorrecaoTab("pagamento")
+    setCorrecaoObservacao(v.observacao ?? "")
+    setCorrecaoClienteNome(v.clienteNome ?? "")
+    setCorrecaoClienteId(v.clienteId ?? null)
+    // Detectar forma de pagamento atual (a principal/mais alta)
+    if (v.pagamentos.length > 0) {
+      const sorted = [...v.pagamentos].sort((a, b) => b.valor - a.valor)
+      const mainLabel = sorted[0].label
+      const labelToKey: Record<string, string> = {
+        "Dinheiro": "dinheiro", "Pix": "pix", "Débito": "cartaoDebito",
+        "Crédito": "cartaoCredito", "Carnê": "carne", "A Prazo": "aPrazo", "Vale/Crédito": "creditoVale",
+      }
+      setCorrecaoFormaPag(labelToKey[mainLabel] ?? "dinheiro")
+    } else {
+      setCorrecaoFormaPag("dinheiro")
+    }
+  }, [])
+
+  const handleCorrigir = useCallback(async () => {
+    if (!corrigindoVenda || !correcaoMotivo.trim()) return
+    setCorrecaoLoading(true)
+    setCorrecaoError(null)
+    try {
+      const body: Record<string, unknown> = { motivo: correcaoMotivo.trim() }
+
+      if (correcaoTab === "pagamento") {
+        // Redistribuir todo o total na forma selecionada
+        const newPb: Record<string, number> = {}
+        newPb[correcaoFormaPag] = corrigindoVenda.total
+        body.novaFormaPagamento = newPb
+        body.supervisorPin = correcaoPin
+      } else if (correcaoTab === "cliente") {
+        body.novoClienteId = correcaoClienteId
+        body.novoClienteNome = correcaoClienteNome.trim() || null
+      } else if (correcaoTab === "observacao") {
+        body.novaObservacao = correcaoObservacao.trim() || null
+      }
+
+      const res = await fetch(`/api/vendas/${encodeURIComponent(corrigindoVenda.id)}/corrigir`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        setCorrecaoError(data.error ?? "Falha ao corrigir venda.")
+        return
+      }
+      toast({ title: "Venda corrigida", description: `${corrigindoVenda.id} atualizada com sucesso.` })
+      setCorrigindoVenda(null)
+      // Refresh detalhe drawer se aberto na mesma venda
+      if (detalhe?.id === corrigindoVenda.id) {
+        await openDetalhe(corrigindoVenda.id)
+      }
+      load()
+    } catch {
+      setCorrecaoError("Falha na conexão.")
+    } finally {
+      setCorrecaoLoading(false)
+    }
+  }, [corrigindoVenda, correcaoMotivo, correcaoTab, correcaoFormaPag, correcaoPin, correcaoClienteId, correcaoClienteNome, correcaoObservacao, storeId, detalhe, openDetalhe, load, toast])
+
   const startCancel = useCallback((vendaId: string) => {
     setCancelandoId(vendaId)
     setCancelMotivo("")
@@ -549,9 +644,9 @@ export function VendasArquivoGeral() {
             <Receipt className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Histórico de Vendas</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Vendas</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Consulte, reimprima, cancele ou registre trocas e devoluções · unidade{" "}
+              Consulte, corrija, reimprima, cancele ou registre trocas e devoluções · unidade{" "}
               <span className="font-mono text-xs">{storeId}</span>
               {remoteLoading && (
                 <span className="inline-flex items-center gap-1 ml-2 text-xs">
@@ -843,6 +938,22 @@ export function VendasArquivoGeral() {
                               <>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                      void (async () => {
+                                        const res = await fetch(`/api/vendas/${encodeURIComponent(v.id)}`, {
+                                          credentials: "include", headers: { "x-assistec-loja-id": storeId },
+                                        })
+                                        const data = await res.json()
+                                        if (data.ok) startCorrecao(data.venda)
+                                      })()
+                                    }}>
+                                      <Wrench className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Corrigir venda</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
                                     <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openTroca(v.id)}>
                                       <RotateCcw className="h-4 w-4" />
                                     </Button>
@@ -880,6 +991,17 @@ export function VendasArquivoGeral() {
                                 </DropdownMenuItem>
                                 {!v.cancelada && (
                                   <>
+                                    <DropdownMenuItem onClick={() => {
+                                      void (async () => {
+                                        const res = await fetch(`/api/vendas/${encodeURIComponent(v.id)}`, {
+                                          credentials: "include", headers: { "x-assistec-loja-id": storeId },
+                                        })
+                                        const data = await res.json()
+                                        if (data.ok) startCorrecao(data.venda)
+                                      })()
+                                    }}>
+                                      <Wrench className="h-4 w-4 mr-2" /> Corrigir venda
+                                    </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => openTroca(v.id)}>
                                       <RotateCcw className="h-4 w-4 mr-2" /> Troca / Devolução
                                     </DropdownMenuItem>
@@ -1136,6 +1258,44 @@ export function VendasArquivoGeral() {
                     </div>
                   </>
                 )}
+
+                {/* Histórico de correções */}
+                {detalhe.correcoes && detalhe.correcoes.length > 0 && (
+                  <>
+                    <Separator className="bg-border" />
+                    <div className="space-y-2">
+                      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck className="h-3 w-3" />
+                        Correções ({detalhe.correcoes.length})
+                      </h3>
+                      {detalhe.correcoes.map((c, i) => (
+                        <div key={i} className="rounded-lg border border-border bg-background/40 p-3 text-sm space-y-1">
+                          <div className="flex justify-between items-start">
+                            <Badge variant="outline" className="text-[10px]">Correção</Badge>
+                            <span className="text-[11px] text-muted-foreground">{fmtDate(c.at)}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{c.operador}{c.supervisorNome ? ` · Supervisor: ${c.supervisorNome}` : ""}</p>
+                          <p className="text-xs text-foreground/80">Motivo: {c.motivo}</p>
+                          {c.campos.includes("formaPagamento") && (
+                            <p className="text-xs text-foreground/70">
+                              Pagamento: <span className="line-through text-muted-foreground">{c.pagamentoAnterior}</span>{" → "}<span className="font-medium">{c.pagamentoNovo}</span>
+                            </p>
+                          )}
+                          {c.campos.includes("cliente") && (
+                            <p className="text-xs text-foreground/70">
+                              Cliente: <span className="line-through text-muted-foreground">{c.clienteAnterior ?? "—"}</span>{" → "}<span className="font-medium">{c.clienteNovo ?? "—"}</span>
+                            </p>
+                          )}
+                          {c.campos.includes("observacao") && (
+                            <p className="text-xs text-foreground/70">
+                              Obs.: <span className="line-through text-muted-foreground">{c.observacaoAnterior ?? "—"}</span>{" → "}<span className="font-medium">{c.observacaoNova ?? "—"}</span>
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </>
             ) : (
               <div className="flex flex-col items-center gap-3 py-12 text-center">
@@ -1160,6 +1320,28 @@ export function VendasArquivoGeral() {
                 {detalhe.status !== "cancelada" && (
                   <Button
                     variant="outline"
+                    className="flex-1 h-10 gap-2 text-sm"
+                    onClick={() => startCorrecao(detalhe)}
+                  >
+                    <Wrench className="h-4 w-4" />
+                    Corrigir venda
+                  </Button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {detalhe.status !== "cancelada" && detalhe.status !== "devolvida" && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 h-10 gap-2 text-sm"
+                    onClick={() => openTroca(detalhe.id)}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Trocar / Devolver
+                  </Button>
+                )}
+                {detalhe.status !== "cancelada" && (
+                  <Button
+                    variant="outline"
                     className="flex-1 h-10 gap-2 text-sm text-destructive border-destructive/30 hover:bg-destructive/5"
                     onClick={() => {
                       setCancelandoId(detalhe.id)
@@ -1168,20 +1350,10 @@ export function VendasArquivoGeral() {
                     }}
                   >
                     <XCircle className="h-4 w-4" />
-                    Cancelar venda
+                    Cancelar
                   </Button>
                 )}
               </div>
-              {detalhe.status !== "cancelada" && detalhe.status !== "devolvida" && (
-                <Button
-                  variant="outline"
-                  className="w-full h-10 gap-2 text-sm"
-                  onClick={() => openTroca(detalhe.id)}
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Trocar / Devolver
-                </Button>
-              )}
             </div>
           )}
         </SheetContent>
@@ -1322,6 +1494,186 @@ export function VendasArquivoGeral() {
               )}
             </Suspense>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Correção de Venda ──────────────────────────────────────────────────── */}
+      <Dialog
+        open={!!corrigindoVenda}
+        onOpenChange={(o) => {
+          if (!o && !correcaoLoading) setCorrigindoVenda(null)
+        }}
+      >
+        <DialogContent className="max-w-lg border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-primary" />
+              Corrigir venda
+              {corrigindoVenda && (
+                <span className="font-mono text-xs font-normal text-muted-foreground">{corrigindoVenda.id}</span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {corrigindoVenda && (
+            <div className="space-y-4">
+              {/* Info banner */}
+              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground flex items-center gap-1.5 mb-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                  Correção segura — itens e total não serão alterados
+                </p>
+                <p>Total: <span className="font-bold text-foreground">{fmtBrl(corrigindoVenda.total)}</span> · {corrigindoVenda.itens.length} {corrigindoVenda.itens.length === 1 ? "item" : "itens"}</p>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-1 border-b border-border">
+                {(["pagamento", "cliente", "observacao"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    className={cn(
+                      "px-3 py-2 text-sm font-medium border-b-2 transition-colors",
+                      correcaoTab === tab
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                    onClick={() => { setCorrecaoTab(tab); setCorrecaoError(null) }}
+                  >
+                    {tab === "pagamento" ? "Pagamento" : tab === "cliente" ? "Cliente" : "Observação"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Tab content */}
+              {correcaoTab === "pagamento" && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Pagamento atual</Label>
+                    <p className="text-sm font-medium text-foreground">
+                      {corrigindoVenda.pagamentos.map((p) => `${p.label} ${fmtBrl(p.valor)}`).join(" + ") || "—"}
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Nova forma de pagamento</Label>
+                    <Select value={correcaoFormaPag} onValueChange={setCorrecaoFormaPag}>
+                      <SelectTrigger className="h-9 text-sm bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="pix">Pix</SelectItem>
+                        <SelectItem value="cartaoDebito">Débito</SelectItem>
+                        <SelectItem value="cartaoCredito">Crédito</SelectItem>
+                        <SelectItem value="carne">Carnê</SelectItem>
+                        <SelectItem value="aPrazo">A Prazo</SelectItem>
+                        <SelectItem value="creditoVale">Vale/Crédito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">
+                      O valor total ({fmtBrl(corrigindoVenda.total)}) será redistribuído na forma selecionada.
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                      <ShieldCheck className="h-3 w-3" /> PIN do supervisor <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={12}
+                      className="h-9 text-sm bg-background font-mono tracking-widest"
+                      placeholder="PIN numérico"
+                      value={correcaoPin}
+                      onChange={(e) => setCorrecaoPin(e.target.value.replace(/\D/g, ""))}
+                      disabled={correcaoLoading}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {correcaoTab === "cliente" && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Cliente atual</Label>
+                    <p className="text-sm font-medium text-foreground">{corrigindoVenda.clienteNome ?? "—"}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Novo nome do cliente</Label>
+                    <Input
+                      className="h-9 text-sm bg-background"
+                      placeholder="Nome do cliente (ou vazio para remover)"
+                      value={correcaoClienteNome}
+                      onChange={(e) => setCorrecaoClienteNome(e.target.value)}
+                      disabled={correcaoLoading}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {correcaoTab === "observacao" && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Observação atual</Label>
+                    <p className="text-sm font-medium text-foreground">{corrigindoVenda.observacao ?? "—"}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Nova observação</Label>
+                    <Textarea
+                      className="min-h-[80px] resize-none bg-background border-border text-sm"
+                      placeholder="Observação (ou vazio para remover)"
+                      value={correcaoObservacao}
+                      onChange={(e) => setCorrecaoObservacao(e.target.value)}
+                      disabled={correcaoLoading}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Motivo — sempre visível */}
+              <div className="space-y-1.5 pt-1 border-t border-border">
+                <Label className="text-xs text-foreground">
+                  Motivo da correção <span className="text-destructive">*</span>
+                </Label>
+                <Textarea
+                  className="min-h-[68px] resize-none bg-background border-border text-sm"
+                  placeholder="Descreva o motivo da correção (obrigatório)…"
+                  value={correcaoMotivo}
+                  onChange={(e) => setCorrecaoMotivo(e.target.value)}
+                  disabled={correcaoLoading}
+                />
+              </div>
+
+              {/* Error */}
+              {correcaoError && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {correcaoError}
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 justify-end pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  disabled={correcaoLoading}
+                  onClick={() => setCorrigindoVenda(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-9 gap-2"
+                  disabled={correcaoLoading || !correcaoMotivo.trim() || (correcaoTab === "pagamento" && !correcaoPin.trim())}
+                  onClick={() => void handleCorrigir()}
+                >
+                  {correcaoLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {correcaoLoading ? "Corrigindo…" : "Confirmar correção"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

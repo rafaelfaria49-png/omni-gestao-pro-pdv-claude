@@ -48,6 +48,8 @@ export interface SaleRecord {
   cashierId?: string
   /** Sessão de caixa ativa no momento da venda (persiste no payload JSON da Venda). */
   sessaoId?: string
+  /** Terminal PDV (PDV1, PDV2...) em que a venda foi feita (persiste no payload JSON da Venda). */
+  terminalId?: string
   /** Auditoria: supervisor/admin que autorizou desconto manual (id local quando disponível). */
   discountAuthorizedByAdminId?: string
   /** Desconto manual no checkout (somente auditoria). */

@@ -9,6 +9,7 @@ import {
   TrendingUp,
   TrendingDown,
   AlertTriangle,
+  Monitor,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,6 +18,8 @@ import { AberturaCaixaModal } from "./abertura-caixa-modal"
 import { FechamentoCaixaModal } from "./fechamento-caixa-modal"
 import { CaixaDashboard } from "./caixa-dashboard"
 import { cn } from "@/lib/utils"
+import { useLojaAtiva } from "@/lib/loja-ativa"
+import { useTerminalAtivo } from "@/lib/pdv-terminal"
 
 interface CaixaStatusBarProps {
   /** Incrementado por comando de voz para abrir o fluxo de abertura de caixa. */
@@ -37,8 +40,17 @@ export function CaixaStatusBar({
   variant = "default",
 }: CaixaStatusBarProps) {
   const { caixa, getSaldoAtual } = useCaixa()
+  const { lojaAtivaId } = useLojaAtiva()
+  const { terminal, clear: clearTerminal } = useTerminalAtivo(lojaAtivaId)
   const [showAbertura, setShowAbertura] = useState(false)
   const [showFechamento, setShowFechamento] = useState(false)
+
+  const terminalPill = terminal ? (
+    <Badge variant="outline" className="shrink-0 text-xs">
+      <Monitor className="mr-1 h-3 w-3" />
+      {terminal.code || terminal.name}
+    </Badge>
+  ) : null
 
   useEffect(() => {
     if (!openAberturaSignal) return
@@ -85,9 +97,19 @@ export function CaixaStatusBar({
                 <Lock className="w-5 h-5 text-amber-500" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="font-semibold text-amber-500">Caixa Fechado</span>
                   <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  {terminalPill}
+                  {terminal && (
+                    <button
+                      type="button"
+                      onClick={() => clearTerminal()}
+                      className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    >
+                      Trocar
+                    </button>
+                  )}
                 </div>
                 <p className="text-sm text-muted-foreground">Abra o caixa para realizar vendas</p>
               </div>
@@ -130,6 +152,7 @@ export function CaixaStatusBar({
                   <Clock className="w-3 h-3 mr-1" />
                   Desde {formatTime(caixa.dataAbertura)}
                 </Badge>
+                {terminalPill}
               </div>
               <p className="text-sm text-muted-foreground">Pronto para vendas</p>
             </div>

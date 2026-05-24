@@ -13,6 +13,12 @@ export type SalePayload = {
   clienteId?: string
   /** Operador/caixa que realizou a venda (extraído de SaleRecord.cashierId). */
   cashierId?: string
+  /**
+   * Terminal PDV (PDV1, PDV2...) em que a venda foi feita. Fase 1: persiste apenas no
+   * `Venda.payload` (este campo) — a coluna `Venda.terminalId` é preparada no schema
+   * para a Fase 2 (filtros/relatórios por terminal via SQL).
+   */
+  terminalId?: string | null
   /** Formas de pagamento — usado para gerar MovimentacaoFinanceira por forma. */
   paymentBreakdown?: Partial<PaymentBreakdownFull>
   lines?: Array<{

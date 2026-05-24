@@ -1,12 +1,15 @@
 "use client"
 
 import { VendasPDV } from "@/components/dashboard/vendas/vendas-pdv"
+import { TerminalSelector } from "@/components/dashboard/vendas/terminal-selector"
 import { useStudioTheme, type StudioThemeMode } from "@/components/theme/ThemeProvider"
 import { LoadingState } from "@/components/ui/states"
 import {
   readOmnigestaoPdvModoPreferencia,
   writeOmnigestaoPdvModoPreferencia,
 } from "@/lib/omnigestao-pdv-modo"
+import { useLojaAtiva } from "@/lib/loja-ativa"
+import { useTerminalAtivo } from "@/lib/pdv-terminal"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useLayoutEffect, useState } from "react"
 
@@ -23,7 +26,10 @@ export function VendasPageClient() {
 
   const [mounted, setMounted] = useState(false)
   const [isNextLayout, setIsNextLayout] = useState(false)
+  const [terminalBypass, setTerminalBypass] = useState(false)
   const { mode } = useStudioTheme()
+  const { lojaAtivaId } = useLojaAtiva()
+  const { terminal, select } = useTerminalAtivo(lojaAtivaId)
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute("data-theme", studioModeToDataTheme(mode))
@@ -62,6 +68,22 @@ export function VendasPageClient() {
 
   if (!mounted) return <LoadingState message="Carregando PDV…" />
   if (isNextLayout) return <LoadingState message="Redirecionando para o PDV Next…" />
+  // Aguarda a loja ativa resolver antes de decidir pelo gate de terminal.
+  if (!lojaAtivaId) return <LoadingState message="Carregando PDV…" />
+
+  // Gate de terminal: solicita seleção antes de abrir o PDV/caixa. Fallback (skip)
+  // garante que a operação não fica bloqueada se os terminais não carregarem.
+  if (!terminal && !terminalBypass) {
+    return (
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto bg-background px-4 py-8 text-foreground">
+        <TerminalSelector
+          storeId={lojaAtivaId}
+          onSelected={(t) => select(t)}
+          onSkip={() => setTerminalBypass(true)}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground transition-colors duration-300 basis-0">
