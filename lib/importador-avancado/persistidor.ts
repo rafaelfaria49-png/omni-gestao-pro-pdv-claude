@@ -18,6 +18,7 @@ import type { Prisma } from "@/generated/prisma"
 import { StatusOrdemServico } from "@/generated/prisma"
 import { upsertContaReceber } from "@/lib/financeiro/services/contas-receber-service"
 import { upsertContaPagar } from "@/lib/financeiro/services/contas-pagar-service"
+import { normalizeSkuForSave } from "@/lib/produto-sku"
 import { normalizeProdutoSku, looksLikeEan, nomePareceDocumento } from "@/lib/produto-sku-normalize"
 
 // ── Utilitários ───────────────────────────────────────────────
@@ -210,15 +211,17 @@ async function persistirProdutos(
       const catSlug = slugCategoria(campos.category || "produto")
 
       // SKU vazio: gera sintético para evitar colisão no unique(storeId, sku)
-      const skuSafe = campos.sku?.trim()
+      const skuRaw = campos.sku?.trim()
         ? campos.sku.trim()
         : `IMP-${catSlug}-${norm(campos.name).slice(0, 20).replace(/\s+/g, "-")}`
+      const skuToSave = normalizeSkuForSave(skuRaw)
 
       // Dedupe forte: encontra produto existente mesmo que outro importador tenha gravado
-      // com prefixo gc-/imp- ou com o EAN no campo barcode. Evita duplicar (gc-123 vs 123).
-      const skuNorm = normalizeProdutoSku(skuSafe)
-      const orMatch: Prisma.ProdutoWhereInput[] = [{ sku: skuSafe }]
-      if (skuNorm && skuNorm !== skuSafe.toLowerCase()) orMatch.push({ sku: skuNorm })
+      // com prefixo gc-/imp- legado ou com o EAN no campo barcode. Evita duplicar (gc-123 vs 123).
+      const skuNorm = normalizeProdutoSku(skuToSave)
+      const orMatch: Prisma.ProdutoWhereInput[] = [{ sku: skuToSave }]
+      if (skuRaw !== skuToSave) orMatch.push({ sku: skuRaw })
+      if (skuNorm && skuNorm !== skuToSave.toLowerCase()) orMatch.push({ sku: skuNorm })
       if (skuNorm) orMatch.push({ sku: `gc-${skuNorm}` })
       if (campos.barcode) orMatch.push({ barcode: campos.barcode })
       if (looksLikeEan(skuNorm)) orMatch.push({ barcode: skuNorm })
@@ -230,7 +233,7 @@ async function persistirProdutos(
 
       const produtoData = {
         storeId,
-        sku: skuSafe,
+        sku: skuToSave,
         name: campos.name,
         category: catSlug,
         precoCusto: campos.cost,
@@ -241,8 +244,9 @@ async function persistirProdutos(
       }
 
       if (existenteProduto) {
-        // Preservação: não zera estoque nem apaga preço/custo/barcode quando o valor
-        // vier vazio/zerado da planilha (regras 7-9 do fix de duplicação).
+        // Produto existente: atualiza só dados cadastrais. NÃO sobrescreve `stock` —
+        // importação comum não pode reverter saldo já vendido. Estoque só muda por
+        // entrada/ajuste/inventário auditado (app/actions/estoque.ts → MovimentacaoEstoque).
         await prisma.produto.update({
           where: { id: existenteProduto.id },
           data: {
@@ -250,12 +254,12 @@ async function persistirProdutos(
             category: produtoData.category,
             precoCusto: produtoData.precoCusto > 0 ? produtoData.precoCusto : undefined,
             price: produtoData.price > 0 ? produtoData.price : undefined,
-            stock: produtoData.stock > 0 ? produtoData.stock : undefined,
             barcode: produtoData.barcode ?? existenteProduto.barcode ?? undefined,
             brand: produtoData.brand || undefined,
           },
         })
       } else {
+        // Produto novo: pode iniciar com o estoque da planilha.
         await prisma.produto.create({ data: produtoData })
       }
 

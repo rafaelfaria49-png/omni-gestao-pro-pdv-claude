@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
+import { normalizeSkuForSave } from "@/lib/produto-sku"
+import { normalizeProdutoSku } from "@/lib/produto-sku-normalize"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
 import { isVencimentoExpired } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
@@ -67,7 +69,8 @@ export async function PUT(req: Request) {
   for (const raw of items) {
     if (!raw || typeof raw !== "object") continue
     const o = raw as Record<string, unknown>
-    const id = typeof o.id === "string" ? o.id.trim() : ""
+    const idRaw = typeof o.id === "string" ? o.id.trim() : ""
+    const id = normalizeSkuForSave(idRaw)
     const name = typeof o.name === "string" ? o.name.trim() : ""
     if (!id || !name) continue
     const category =
@@ -85,38 +88,47 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Nenhum item válido para importar" }, { status: 400 })
   }
 
-  // Modo mesclagem (segurança): não apaga nem sobrescreve itens antigos.
-  // Só cria itens que ainda não existem para esta loja.
+  // Modo mesclagem (segurança): não apaga itens antigos e NÃO sobrescreve o estoque
+  // de produtos já existentes — importação comum não pode reverter saldo vendido.
+  // Estoque só muda por entrada/ajuste/inventário auditado. Produto novo entra com
+  // o estoque inicial da planilha.
   let created = 0
   let updated = 0
 
   for (const it of normalized) {
     // eslint-disable-next-line no-console
     console.log("IMPORT ESTOQUE (merge):", it.name, "->", it.category)
-    const existing = await prisma.produto.findFirst({ where: { storeId, sku: it.id } })
-    await prisma.produto.upsert({
-      where: { storeId_sku: { storeId, sku: it.id } },
-      update: {
-        name: it.name,
-        stock: Math.max(0, Math.floor(it.stock)),
-        precoCusto: it.cost,
-        price: it.price,
-        category: it.category && it.category.length > 0 ? it.category : undefined,
-        storeId,
-        sku: it.id,
-      },
-      create: {
-        storeId,
-        sku: it.id,
-        name: it.name,
-        stock: Math.max(0, Math.floor(it.stock)),
-        precoCusto: it.cost,
-        price: it.price,
-        category: it.category && it.category.length > 0 ? it.category : undefined,
-      },
+    const skuToSave = normalizeSkuForSave(it.id)
+    const skuNorm = normalizeProdutoSku(skuToSave)
+    const orMatch: Prisma.ProdutoWhereInput[] = [{ sku: skuToSave }]
+    if (it.id !== skuToSave) orMatch.push({ sku: it.id })
+    if (skuNorm && skuNorm !== skuToSave.toLowerCase()) orMatch.push({ sku: skuNorm })
+    if (skuNorm) orMatch.push({ sku: `gc-${skuNorm}` })
+
+    const existing = await prisma.produto.findFirst({
+      where: { storeId, OR: orMatch },
+      select: { id: true },
     })
-    if (existing) updated += 1
-    else created += 1
+
+    // Dados cadastrais (sem estoque) — atualizáveis em produto existente.
+    const dadosCadastrais = {
+      name: it.name,
+      precoCusto: it.cost,
+      price: it.price,
+      category: it.category && it.category.length > 0 ? it.category : undefined,
+    }
+
+    if (existing) {
+      // Existente: atualiza só cadastral; preserva o estoque atual.
+      await prisma.produto.update({ where: { id: existing.id }, data: dadosCadastrais })
+      updated += 1
+    } else {
+      // Novo: pode iniciar com o estoque da planilha.
+      await prisma.produto.create({
+        data: { storeId, sku: skuToSave, stock: Math.max(0, Math.floor(it.stock)), ...dadosCadastrais },
+      })
+      created += 1
+    }
   }
 
   return NextResponse.json({
