@@ -214,7 +214,7 @@ export function PaymentModal({
   useEffect(() => {
     if (!isOpen) return
     const pdv = getMaquininhasParaPdvForStore(storeIdForPdv)
-    setCartaoLiberado(pdv.length > 0)
+    setCartaoLiberado(true)
     setMaquininhasAtivasPdv(pdv)
     setMaquininhaPdvId((prev) => {
       if (pdv.length === 0) return ""
@@ -280,15 +280,6 @@ export function PaymentModal({
         })
         return
       }
-      if ((type === "cartao_debito" || type === "cartao_credito") && !cartaoLiberado) {
-        toast({
-          variant: "destructive",
-          title: "Cartão indisponível",
-          description: "Ative uma maquininha em Configurações → Financeiro (cartões).",
-        })
-        return
-      }
-
       setPayments((prev) => {
         const paid = prev.reduce((s, p) => s + p.value, 0)
         const rem = Math.max(0, total - paid)
@@ -324,7 +315,6 @@ export function PaymentModal({
     },
     [
       carneInstallments,
-      cartaoLiberado,
       currentValue,
       customerStoreCredit,
       maquininhaPdvId,
@@ -677,10 +667,9 @@ export function PaymentModal({
                   Crédito em haver disponível: <span className="text-primary font-medium">{formatCurrency(customerStoreCredit)}</span>
                 </p>
               )}
-              {!cartaoLiberado && (
-                <p className="text-xs text-amber-600/90">
-                  Cartão débito/crédito: ative uma maquininha em{" "}
-                  <strong>Configurações → Financeiro (cartões)</strong> (aba Taxas de cartão).
+              {maquininhasAtivasPdv.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Taxas de cartão não configuradas — venda será registrada sem abatimento de taxa.
                 </p>
               )}
               {cartaoLiberado && maquininhasAtivasPdv.length > 1 && (
