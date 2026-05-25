@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react"
-import { Link } from "@tanstack/react-router"
+import { useRouter } from "next/navigation"
 import {
   Zap,
   FileText,
@@ -87,19 +87,31 @@ const STATUS_LABEL: Record<Status, string> = {
 }
 
 export default function VendasHub() {
+  const router = useRouter()
+
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back()
+    } else {
+      router.push("/dashboard")
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] px-4 py-6 md:px-8 md:py-8 flex flex-col">
       <div className="mx-auto w-full max-w-5xl flex-1 flex flex-col">
         {/* Nav superior e Título */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-3 md:gap-4">
-            <Link
-              to="/vendas"
+            <button
+              type="button"
+              onClick={handleBack}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] transition-colors"
               title="Voltar"
+              aria-label="Voltar"
             >
               <ArrowLeft className="h-4 w-4" />
-            </Link>
+            </button>
             <div>
               <h1 className="text-xl md:text-2xl font-bold tracking-tight leading-none text-[hsl(var(--foreground))]">
                 Vendas HUB Central
