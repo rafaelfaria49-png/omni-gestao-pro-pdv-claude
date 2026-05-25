@@ -327,6 +327,218 @@
     --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.4), 0 8px 24px hsl(0 0% 0% / 0.32);
     --shadow-glow: 0 8px 32px hsl(38 75% 50% / 0.35);
   }
+
+  /* ===== TEMA RUBY BLACK (Fundo preto profundo com acentos vermelho RafaCell vibrante) ===== */
+  [data-theme="ruby-black"] {
+    --background: 0 5% 7%;
+    --foreground: 0 10% 96%;
+
+    --card: 0 4% 11%;
+    --card-foreground: 0 10% 96%;
+    --card-muted: 0 4% 9%;
+
+    --popover: 0 4% 11%;
+    --popover-foreground: 0 10% 96%;
+
+    --primary: 0 84% 50%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 0 90% 60%;
+
+    --secondary: 0 4% 10%;
+    --secondary-foreground: 0 10% 96%;
+
+    --muted: 0 4% 10%;
+    --muted-foreground: 0 4% 68%;
+
+    --accent: 0 80% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 56%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 0 8% 18%;
+    --input: 0 4% 10%;
+    --ring: 0 84% 50%;
+
+    --radius: 0.75rem;
+
+    --surface: 0 4% 10%;
+    --surface-elevated: 0 4% 12%;
+    --sidebar-bg: 0 5% 6%;
+    --sidebar-active: 0 84% 15%;
+    --sidebar-active-foreground: 0 84% 75%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(0 84% 50%), hsl(0 80% 60%));
+    --gradient-surface: linear-gradient(180deg, hsl(0 4% 10%), hsl(0 5% 6%));
+    --shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.35), 0 2px 8px hsl(0 0% 0% / 0.25);
+    --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.4), 0 8px 24px hsl(0 0% 0% / 0.32);
+    --shadow-glow: 0 8px 32px hsl(0 84% 50% / 0.35);
+  }
+
+  /* ===== TEMA NEON ICE (Fundo branco/gelo com acentos verde neon suave tech) ===== */
+  [data-theme="neon-ice"] {
+    --background: 145 30% 98%;
+    --foreground: 145 25% 18%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 145 25% 18%;
+    --card-muted: 145 20% 96%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 145 25% 18%;
+
+    --primary: 145 75% 45%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 145 80% 55%;
+
+    --secondary: 145 20% 96%;
+    --secondary-foreground: 145 25% 18%;
+
+    --muted: 145 20% 96%;
+    --muted-foreground: 145 15% 48%;
+
+    --accent: 145 80% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 78% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 145 20% 90%;
+    --input: 145 20% 90%;
+    --ring: 145 75% 45%;
+
+    --radius: 0.75rem;
+
+    --surface: 145 25% 97%;
+    --surface-elevated: 0 0% 100%;
+    --sidebar-bg: 145 28% 96%;
+    --sidebar-active: 145 80% 92%;
+    --sidebar-active-foreground: 145 75% 38%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(145 75% 45%), hsl(145 80% 55%));
+    --gradient-surface: linear-gradient(180deg, hsl(145 30% 98%), hsl(145 25% 97%));
+    --shadow-soft: 0 1px 2px hsl(145 25% 18% / 0.04), 0 2px 8px hsl(145 75% 45% / 0.06);
+    --shadow-card: 0 1px 3px hsl(145 25% 18% / 0.06), 0 4px 16px hsl(145 75% 45% / 0.08);
+    --shadow-glow: 0 8px 32px hsl(145 75% 45% / 0.22);
+  }
+
+  /* ===== TEMA VIOLET ICE (Fundo branco/lilás gelo com acentos roxos suaves) ===== */
+  [data-theme="violet-ice"] {
+    --background: 295 30% 98%;
+    --foreground: 295 25% 18%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 295 25% 18%;
+    --card-muted: 295 20% 96%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 295 25% 18%;
+
+    --primary: 295 70% 52%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 295 75% 62%;
+
+    --secondary: 295 20% 96%;
+    --secondary-foreground: 295 25% 18%;
+
+    --muted: 295 20% 96%;
+    --muted-foreground: 295 15% 48%;
+
+    --accent: 310 75% 58%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 78% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 295 20% 90%;
+    --input: 295 20% 90%;
+    --ring: 295 70% 52%;
+
+    --radius: 0.75rem;
+
+    --surface: 295 25% 97%;
+    --surface-elevated: 0 0% 100%;
+    --sidebar-bg: 295 28% 96%;
+    --sidebar-active: 295 75% 92%;
+    --sidebar-active-foreground: 295 70% 38%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(295 70% 52%), hsl(310 75% 58%));
+    --gradient-surface: linear-gradient(180deg, hsl(295 30% 98%), hsl(295 25% 97%));
+    --shadow-soft: 0 1px 2px hsl(295 25% 18% / 0.04), 0 2px 8px hsl(295 70% 52% / 0.06);
+    --shadow-card: 0 1px 3px hsl(295 25% 18% / 0.06), 0 4px 16px hsl(295 70% 52% / 0.08);
+    --shadow-glow: 0 8px 32px hsl(295 70% 52% / 0.22);
+  }
+
+  /* ===== TEMA COFFEE CREAM (Fundo creme claro com acentos bronze e dourado neon) ===== */
+  [data-theme="coffee-cream"] {
+    --background: 45 25% 97%;
+    --foreground: 35 25% 18%;
+
+    --card: 45 30% 99%;
+    --card-foreground: 35 25% 18%;
+    --card-muted: 45 20% 95%;
+
+    --popover: 45 30% 99%;
+    --popover-foreground: 35 25% 18%;
+
+    --primary: 38 65% 42%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 38 75% 52%;
+
+    --secondary: 45 20% 95%;
+    --secondary-foreground: 35 25% 18%;
+
+    --muted: 45 20% 95%;
+    --muted-foreground: 35 15% 48%;
+
+    --accent: 45 70% 48%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 78% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 45 15% 89%;
+    --input: 45 15% 89%;
+    --ring: 38 65% 42%;
+
+    --radius: 0.75rem;
+
+    --surface: 45 22% 95%;
+    --surface-elevated: 45 30% 99%;
+    --sidebar-bg: 45 25% 94%;
+    --sidebar-active: 38 50% 92%;
+    --sidebar-active-foreground: 38 65% 36%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(38 65% 42%), hsl(45 70% 48%));
+    --gradient-surface: linear-gradient(180deg, hsl(45 25% 97%), hsl(45 22% 95%));
+    --shadow-soft: 0 1px 2px hsl(35 25% 18% / 0.04), 0 2px 8px hsl(38 65% 42% / 0.06);
+    --shadow-card: 0 1px 3px hsl(35 25% 18% / 0.06), 0 4px 16px hsl(38 65% 42% / 0.08);
+    --shadow-glow: 0 8px 32px hsl(38 65% 42% / 0.22);
+  }
 }
 
 @layer base {

@@ -10,8 +10,29 @@ import {
   type ReactNode,
 } from "react"
 
-export type StudioThemeMode = "light" | "soft-ice" | "midnight" | "black" | "classic" | "quantum-violet" | "coffee-gold"
-export type StudioThemeClass = "light" | "soft-ice" | "midnight" | "black-edition" | "quantum-violet" | "coffee-gold"
+export type StudioThemeMode =
+  | "light"
+  | "soft-ice"
+  | "midnight"
+  | "black"
+  | "classic"
+  | "quantum-violet"
+  | "coffee-gold"
+  | "ruby-black"
+  | "neon-ice"
+  | "violet-ice"
+  | "coffee-cream"
+export type StudioThemeClass =
+  | "light"
+  | "soft-ice"
+  | "midnight"
+  | "black-edition"
+  | "quantum-violet"
+  | "coffee-gold"
+  | "ruby-black"
+  | "neon-ice"
+  | "violet-ice"
+  | "coffee-cream"
 
 const STORAGE_KEY = "omni-studio-dual-theme"
 
@@ -27,7 +48,20 @@ function readInitialMode(): StudioThemeMode {
   if (typeof window === "undefined") return "black"
   try {
     const v = String(localStorage.getItem(STORAGE_KEY) || "").trim()
-    if (v === "light" || v === "soft-ice" || v === "midnight" || v === "black" || v === "classic" || v === "quantum-violet" || v === "coffee-gold") return v
+    if (
+      v === "light" ||
+      v === "soft-ice" ||
+      v === "midnight" ||
+      v === "black" ||
+      v === "classic" ||
+      v === "quantum-violet" ||
+      v === "coffee-gold" ||
+      v === "ruby-black" ||
+      v === "neon-ice" ||
+      v === "violet-ice" ||
+      v === "coffee-cream"
+    )
+      return v
     return "black"
   } catch {
     return "black"
@@ -50,7 +84,18 @@ function applyTheme(m: StudioThemeMode, setTheme: (t: string) => void) {
   if (typeof document !== "undefined") {
     const root = document.documentElement
     // Reset classes conhecidas
-    root.classList.remove("light", "soft-ice", "midnight", "black-edition", "quantum-violet", "coffee-gold")
+    root.classList.remove(
+      "light",
+      "soft-ice",
+      "midnight",
+      "black-edition",
+      "quantum-violet",
+      "coffee-gold",
+      "ruby-black",
+      "neon-ice",
+      "violet-ice",
+      "coffee-cream"
+    )
     // Fonte de verdade do shell (usado por CSS utilitário / alinhamento do body)
     root.setAttribute("data-studio-theme", m === "classic" ? "classic" : m)
     // Aplica a classe do tema (Tailwind + vars em globals.css)

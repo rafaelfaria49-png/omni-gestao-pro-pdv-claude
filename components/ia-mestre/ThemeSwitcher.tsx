@@ -5,14 +5,28 @@ import { Moon, Snowflake, Sun, Terminal, Sparkles, Coffee } from "lucide-react"
 import { useTheme } from "@/components/theme/ThemeProvider"
 import { useEffect, useState } from "react"
 
-type Theme = "light" | "soft-ice" | "midnight" | "black-edition" | "quantum-violet" | "coffee-gold"
+type Theme =
+  | "light"
+  | "soft-ice"
+  | "midnight"
+  | "black-edition"
+  | "quantum-violet"
+  | "coffee-gold"
+  | "ruby-black"
+  | "neon-ice"
+  | "violet-ice"
+  | "coffee-cream"
 
 const options: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Light", icon: Sun },
+  { value: "ruby-black", label: "Ruby Black", icon: Moon },
   { value: "soft-ice", label: "Soft Ice", icon: Snowflake },
   { value: "midnight", label: "Midnight", icon: Moon },
+  { value: "neon-ice", label: "Neon Ice", icon: Sun },
   { value: "black-edition", label: "Black", icon: Terminal },
+  { value: "violet-ice", label: "Violet Ice", icon: Sparkles },
   { value: "quantum-violet", label: "Quantum Violet", icon: Sparkles },
+  { value: "coffee-cream", label: "Coffee Cream", icon: Coffee },
   { value: "coffee-gold", label: "Coffee Gold", icon: Coffee },
 ]
 

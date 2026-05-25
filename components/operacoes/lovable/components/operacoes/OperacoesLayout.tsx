@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 // ── Mapeamento bidirecional de temas ────────────────────────────────────────
 
 const GLOBAL_STORAGE_KEY = "omni-studio-dual-theme";
-const GLOBAL_THEME_CLASSES = ["light", "soft-ice", "midnight", "black-edition", "quantum-violet", "coffee-gold"] as const;
+const GLOBAL_THEME_CLASSES = ["light", "soft-ice", "midnight", "black-edition", "quantum-violet", "coffee-gold", "ruby-black", "neon-ice", "violet-ice", "coffee-cream"] as const;
 
 /** Hub → Global OmniGestão */
 const HUB_TO_GLOBAL: Record<HubTheme, string> = {
@@ -19,6 +19,10 @@ const HUB_TO_GLOBAL: Record<HubTheme, string> = {
   black:      "black-edition",
   "quantum-violet": "quantum-violet",
   "coffee-gold": "coffee-gold",
+  "ruby-black": "ruby-black",
+  "neon-ice": "neon-ice",
+  "violet-ice": "violet-ice",
+  "coffee-cream": "coffee-cream",
 };
 
 /** Global OmniGestão → Hub */
@@ -29,6 +33,10 @@ const GLOBAL_TO_HUB: Record<string, HubTheme> = {
   "black-edition":  "black",
   "quantum-violet": "quantum-violet",
   "coffee-gold":    "coffee-gold",
+  "ruby-black":     "ruby-black",
+  "neon-ice":       "neon-ice",
+  "violet-ice":     "violet-ice",
+  "coffee-cream":   "coffee-cream",
 };
 
 /** Lê o tema global salvo e retorna o equivalente para o Hub. */

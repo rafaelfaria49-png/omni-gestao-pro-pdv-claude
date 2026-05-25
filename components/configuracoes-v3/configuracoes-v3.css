@@ -399,6 +399,214 @@ html[data-theme="coffee-gold"] .configuracoes-v3-root .lovable-settings-theme-ti
   color: var(--primary-foreground) !important;
 }
 
+html[data-theme="ruby-black"] .configuracoes-v3-root {
+  --background: oklch(0.12 0.005 0);
+  --foreground: oklch(0.97 0.01 20);
+  --primary: oklch(0.60 0.25 25);
+  --surface: oklch(0.15 0.005 25);
+  --card: oklch(0.16 0.01 25);
+  --border: oklch(0.24 0.02 25);
+  --destructive: oklch(0.55 0.22 25);
+  --success: oklch(0.82 0.22 145);
+
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary-foreground: oklch(0.99 0.005 20);
+  --secondary: color-mix(in oklch, var(--surface) 82%, var(--border) 18%);
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklch, var(--surface) 78%, var(--border) 22%);
+  --muted-foreground: color-mix(in oklch, var(--foreground) 72%, var(--background) 28%);
+  --accent: color-mix(in oklch, var(--primary) 22%, var(--surface) 78%);
+  --accent-foreground: var(--foreground);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.05 0 0);
+  --warning: color-mix(in oklch, var(--success) 52%, var(--destructive) 48%);
+  --warning-foreground: oklch(0.05 0 0);
+  --input: color-mix(in oklch, var(--card) 72%, var(--foreground) 28%);
+  --ring: var(--primary);
+  --surface-elevated: color-mix(in oklch, var(--surface) 88%, var(--foreground) 12%);
+  --card-muted: color-mix(in oklch, var(--card) 85%, var(--border) 15%);
+  --sidebar-bg: var(--background);
+  --sidebar-active: color-mix(in oklch, var(--primary) 32%, transparent);
+  --sidebar-active-foreground: var(--foreground);
+  --primary-glow: color-mix(in oklch, var(--primary) 70%, var(--foreground) 30%);
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in oklch, var(--primary) 65%, var(--foreground) 35%)
+  );
+  --gradient-surface: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--background) 92%, var(--foreground) 8%),
+    var(--background)
+  );
+  --shadow-soft:
+    0 1px 2px color-mix(in oklch, oklch(0 0 0) 35%, transparent),
+    0 2px 8px color-mix(in oklch, oklch(0 0 0) 25%, transparent);
+  --shadow-card:
+    0 1px 3px color-mix(in oklch, oklch(0 0 0) 40%, transparent),
+    0 8px 24px color-mix(in oklch, oklch(0 0 0) 32%, transparent);
+  --shadow-glow: 0 8px 32px color-mix(in oklch, var(--primary) 38%, transparent);
+  --shadow-elegant: 0 16px 48px -12px color-mix(in oklch, var(--primary) 38%, transparent);
+}
+
+html[data-theme="neon-ice"] .configuracoes-v3-root {
+  --background: oklch(0.985 0.006 145);
+  --foreground: oklch(0.24 0.03 145);
+  --primary: oklch(0.70 0.20 145);
+  --surface: oklch(0.97 0.006 145);
+  --card: oklch(1 0 0);
+  --border: oklch(0.92 0.015 145);
+  --destructive: oklch(0.6 0.24 25);
+  --success: oklch(0.58 0.15 150);
+
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary-foreground: oklch(0.20 0.04 145);
+  --secondary: color-mix(in oklch, var(--surface) 90%, var(--border) 10%);
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklch, var(--surface) 86%, var(--border) 14%);
+  --muted-foreground: color-mix(in oklch, var(--foreground) 62%, var(--background) 38%);
+  --accent: color-mix(in oklch, var(--primary) 16%, var(--background) 84%);
+  --accent-foreground: var(--foreground);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.20 0.04 145);
+  --warning: color-mix(in oklch, var(--success) 52%, var(--destructive) 48%);
+  --warning-foreground: var(--foreground);
+  --input: color-mix(in oklch, var(--card) 88%, var(--border) 12%);
+  --ring: var(--primary);
+  --surface-elevated: color-mix(in oklch, var(--surface) 94%, var(--foreground) 6%);
+  --card-muted: color-mix(in oklch, var(--card) 90%, var(--border) 10%);
+  --sidebar-bg: var(--surface);
+  --sidebar-active: color-mix(in oklch, var(--primary) 24%, transparent);
+  --sidebar-active-foreground: var(--foreground);
+  --primary-glow: color-mix(in oklch, var(--primary) 62%, oklch(1 0 0) 38%);
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in oklch, var(--primary) 72%, var(--foreground) 28%)
+  );
+  --gradient-surface: linear-gradient(
+    180deg,
+    var(--background),
+    color-mix(in oklch, var(--surface) 94%, var(--border) 6%)
+  );
+  --shadow-soft:
+    0 1px 2px color-mix(in oklch, var(--foreground) 10%, transparent),
+    0 2px 8px color-mix(in oklch, var(--primary) 8%, transparent);
+  --shadow-card:
+    0 1px 3px color-mix(in oklch, var(--foreground) 12%, transparent),
+    0 4px 16px color-mix(in oklch, var(--primary) 10%, transparent);
+  --shadow-glow: 0 8px 32px color-mix(in oklch, var(--primary) 24%, transparent);
+  --shadow-elegant: 0 14px 40px -12px color-mix(in oklch, var(--primary) 20%, transparent);
+}
+
+html[data-theme="violet-ice"] .configuracoes-v3-root {
+  --background: oklch(0.985 0.006 295);
+  --foreground: oklch(0.24 0.03 295);
+  --primary: oklch(0.60 0.18 295);
+  --surface: oklch(0.97 0.006 295);
+  --card: oklch(1 0 0);
+  --border: oklch(0.92 0.015 295);
+  --destructive: oklch(0.6 0.24 25);
+  --success: oklch(0.58 0.15 150);
+
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary-foreground: oklch(0.99 0.005 295);
+  --secondary: color-mix(in oklch, var(--surface) 90%, var(--border) 10%);
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklch, var(--surface) 86%, var(--border) 14%);
+  --muted-foreground: color-mix(in oklch, var(--foreground) 62%, var(--background) 38%);
+  --accent: color-mix(in oklch, var(--primary) 16%, var(--background) 84%);
+  --accent-foreground: var(--foreground);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.99 0.005 295);
+  --warning: color-mix(in oklch, var(--success) 52%, var(--destructive) 48%);
+  --warning-foreground: var(--foreground);
+  --input: color-mix(in oklch, var(--card) 88%, var(--border) 12%);
+  --ring: var(--primary);
+  --surface-elevated: color-mix(in oklch, var(--surface) 94%, var(--foreground) 6%);
+  --card-muted: color-mix(in oklch, var(--card) 90%, var(--border) 10%);
+  --sidebar-bg: var(--surface);
+  --sidebar-active: color-mix(in oklch, var(--primary) 24%, transparent);
+  --sidebar-active-foreground: var(--foreground);
+  --primary-glow: color-mix(in oklch, var(--primary) 62%, oklch(1 0 0) 38%);
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in oklch, var(--primary) 72%, var(--foreground) 28%)
+  );
+  --gradient-surface: linear-gradient(
+    180deg,
+    var(--background),
+    color-mix(in oklch, var(--surface) 94%, var(--border) 6%)
+  );
+  --shadow-soft:
+    0 1px 2px color-mix(in oklch, var(--foreground) 10%, transparent),
+    0 2px 8px color-mix(in oklch, var(--primary) 8%, transparent);
+  --shadow-card:
+    0 1px 3px color-mix(in oklch, var(--foreground) 12%, transparent),
+    0 4px 16px color-mix(in oklch, var(--primary) 10%, transparent);
+  --shadow-glow: 0 8px 32px color-mix(in oklch, var(--primary) 24%, transparent);
+  --shadow-elegant: 0 14px 40px -12px color-mix(in oklch, var(--primary) 20%, transparent);
+}
+
+html[data-theme="coffee-cream"] .configuracoes-v3-root {
+  --background: oklch(0.98 0.01 60);
+  --foreground: oklch(0.24 0.02 55);
+  --primary: oklch(0.66 0.12 65);
+  --surface: oklch(0.965 0.012 60);
+  --card: oklch(0.99 0.005 60);
+  --border: oklch(0.91 0.02 60);
+  --destructive: oklch(0.6 0.24 25);
+  --success: oklch(0.58 0.15 150);
+
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --secondary: color-mix(in oklch, var(--surface) 90%, var(--border) 10%);
+  --secondary-foreground: var(--foreground);
+  --muted: color-mix(in oklch, var(--surface) 86%, var(--border) 14%);
+  --muted-foreground: color-mix(in oklch, var(--foreground) 62%, var(--background) 38%);
+  --accent: color-mix(in oklch, var(--primary) 16%, var(--background) 84%);
+  --accent-foreground: var(--foreground);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success-foreground: oklch(0.99 0.005 60);
+  --warning: color-mix(in oklch, var(--success) 52%, var(--destructive) 48%);
+  --warning-foreground: var(--foreground);
+  --input: color-mix(in oklch, var(--card) 88%, var(--border) 12%);
+  --ring: var(--primary);
+  --surface-elevated: color-mix(in oklch, var(--surface) 94%, var(--foreground) 6%);
+  --card-muted: color-mix(in oklch, var(--card) 90%, var(--border) 10%);
+  --sidebar-bg: var(--surface);
+  --sidebar-active: color-mix(in oklch, var(--primary) 24%, transparent);
+  --sidebar-active-foreground: var(--foreground);
+  --primary-glow: color-mix(in oklch, var(--primary) 62%, oklch(1 0 0) 38%);
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--primary),
+    color-mix(in oklch, var(--primary) 72%, var(--foreground) 28%)
+  );
+  --gradient-surface: linear-gradient(
+    180deg,
+    var(--background),
+    color-mix(in oklch, var(--surface) 94%, var(--border) 6%)
+  );
+  --shadow-soft:
+    0 1px 2px color-mix(in oklch, var(--foreground) 10%, transparent),
+    0 2px 8px color-mix(in oklch, var(--primary) 8%, transparent);
+  --shadow-card:
+    0 1px 3px color-mix(in oklch, var(--foreground) 12%, transparent),
+    0 4px 16px color-mix(in oklch, var(--primary) 10%, transparent);
+  --shadow-glow: 0 8px 32px color-mix(in oklch, var(--primary) 24%, transparent);
+  --shadow-elegant: 0 14px 40px -12px color-mix(in oklch, var(--primary) 20%, transparent);
+}
+
 .configuracoes-v3-root .bg-gradient-primary {
   background: var(--gradient-primary);
 }

@@ -47,6 +47,34 @@ const THEMES: ThemeOption[] = [
     emoji: "☕",
     swatches: ["30 25% 8%", "38 75% 50%", "60 70% 50%", "40 20% 96%"],
   },
+  {
+    id: "ruby-black",
+    name: "Ruby Black",
+    description: "Fundo preto profundo com vermelho RafaCell.",
+    emoji: "🔴",
+    swatches: ["0 5% 7%", "0 84% 50%", "0 80% 60%", "0 10% 96%"],
+  },
+  {
+    id: "neon-ice",
+    name: "Neon Ice",
+    description: "Branco gelo futurista com verde neon suave.",
+    emoji: "🟢",
+    swatches: ["145 30% 98%", "145 75% 45%", "145 80% 55%", "145 25% 18%"],
+  },
+  {
+    id: "violet-ice",
+    name: "Violet Ice",
+    description: "Lilás gelo premium com roxo suave.",
+    emoji: "🟣",
+    swatches: ["295 30% 98%", "295 70% 52%", "310 75% 58%", "295 25% 18%"],
+  },
+  {
+    id: "coffee-cream",
+    name: "Coffee Cream",
+    description: "Creme e bronze com ouro suave sofisticado.",
+    emoji: "🧉",
+    swatches: ["45 25% 97%", "38 65% 42%", "45 70% 48%", "35 25% 18%"],
+  },
 ];
 
 export function AparenciaSection() {

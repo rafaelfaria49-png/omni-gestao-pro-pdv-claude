@@ -9,7 +9,7 @@ import {
 } from "react";
 import { useTheme as useGlobalTheme } from "@/components/theme/ThemeProvider";
 
-export type ThemeId = "light" | "soft-ice" | "midnight" | "black" | "quantum-violet" | "coffee-gold";
+export type ThemeId = "light" | "soft-ice" | "midnight" | "black" | "quantum-violet" | "coffee-gold" | "ruby-black" | "neon-ice" | "violet-ice" | "coffee-cream";
 
 interface ThemeContextValue {
   theme: ThemeId;

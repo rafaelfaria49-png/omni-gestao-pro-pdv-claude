@@ -3,10 +3,14 @@ import { Sun, Snowflake, Moon, Circle, Sparkles, Coffee } from "lucide-react";
 
 const THEMES = [
   { id: "light", label: "Light", icon: Sun },
+  { id: "ruby-black", label: "Ruby Black", icon: Moon },
   { id: "soft-ice", label: "Soft Ice", icon: Snowflake },
   { id: "midnight", label: "Midnight", icon: Moon },
+  { id: "neon-ice", label: "Neon Ice", icon: Sun },
   { id: "black", label: "Black", icon: Circle },
+  { id: "violet-ice", label: "Violet Ice", icon: Sparkles },
   { id: "quantum-violet", label: "Quantum Violet", icon: Sparkles },
+  { id: "coffee-cream", label: "Coffee Cream", icon: Coffee },
   { id: "coffee-gold", label: "Coffee Gold", icon: Coffee },
 ] as const;
 
