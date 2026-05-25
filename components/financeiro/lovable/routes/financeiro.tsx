@@ -2441,20 +2441,6 @@ function FinanceiroHub() {
 
 function FinanceiroHubInner() {
   const { error } = useFinanceiroReal();
-  const [theme, setTheme] = useState<"light" | "soft-ice" | "midnight" | "black">("light");
-
-  // Herda o tema global (data-theme) sem sobrescrever.
-  useEffect(() => {
-    const get = () => {
-      const v = document.documentElement.getAttribute("data-theme");
-      if (v === "soft-ice" || v === "midnight" || v === "black" || v === "light") return v;
-      return "light";
-    };
-    setTheme(get());
-    const obs = new MutationObserver(() => setTheme(get()));
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => obs.disconnect();
-  }, []);
 
   const tabs = useMemo(
     () =>
@@ -2492,11 +2478,6 @@ function FinanceiroHubInner() {
             <Badge variant="outline" className="w-fit gap-1">
               <Store className="h-3 w-3" /> Multi-loja
             </Badge>
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-              <span className="px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                Tema: <span className="text-foreground">{theme}</span>
-              </span>
-            </div>
           </div>
         </header>
 
