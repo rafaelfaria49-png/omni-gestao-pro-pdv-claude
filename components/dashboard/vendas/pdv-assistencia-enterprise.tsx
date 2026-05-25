@@ -79,6 +79,16 @@ import { TrocasDevolucao } from "./trocas-devolucao"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
+import { VendaEsperaModal } from "./venda-espera-modal"
+import {
+  getHeldSales,
+  saveHeldSale,
+  removeHeldSale,
+  newHoldId,
+  nextHoldLabel,
+  type HeldSale,
+} from "@/lib/pdv-hold"
+import { readSelectedTerminal } from "@/lib/pdv-terminal"
 
 // ─── Cart persistence ─────────────────────────────────────────────────────────
 
@@ -1422,6 +1432,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [discountPercent, setDiscountPercent] = useState(0)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
 
   // ── Customer ──────────────────────────────────────────────────────────────────
   const [customerName, setCustomerName] = useState("")
@@ -1731,7 +1742,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         active instanceof HTMLSelectElement ||
         (active instanceof HTMLElement && active.isContentEditable)
 
-      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen
+      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen
 
       // END — toggle help overlay (always works)
       if (e.key === "End") {
@@ -1845,16 +1856,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           }
           break
         case "F7":
-          if (!isModoRapido) {
-            if (cart.length > 0 && caixa.isOpen) {
-              openPaymentModal("dinheiro")
-              window.setTimeout(() => discountInputRef.current?.focus(), 100)
-            } else {
-              discountInputRef.current?.focus()
-            }
-          } else {
-            toast({ title: "F7 — Desconto/Acréscimo", description: "Disponível no modo padrão." })
-          }
+          setVendaEsperaOpen(true)
           break
         case "F8":
           appendAuditLog({ action: "pdv_troca_aberta", userLabel: cashierId.slice(0, 8), detail: "Painel de trocas/devoluções aberto via F8" })
@@ -2063,6 +2065,68 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
   }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, cart.length])
+
+  // ─── Venda em espera ────────────────────────────────────────────────────────
+
+  const terminalIdForHold = readSelectedTerminal(storeIdKey)?.id ?? "default"
+  const heldSales = getHeldSales(storeIdKey, terminalIdForHold)
+
+  function handleHoldSale() {
+    const held: HeldSale = {
+      id: newHoldId(),
+      label: nextHoldLabel(heldSales),
+      savedAt: new Date().toISOString(),
+      // CartLine.title → HeldCartItem.name ; CartLine.qty → HeldCartItem.quantity
+      items: cart.map((l) => ({
+        lineId: l.lineId,
+        inventoryId: l.inventoryId,
+        name: l.title,
+        price: l.price,
+        quantity: l.qty,
+        isAvulso: l.isAvulso,
+      })),
+      customer: selectedClienteId
+        ? { id: selectedClienteId, name: customerName, cpf: selectedClienteDoc ?? undefined }
+        : null,
+      discountReais,
+      discountPercent,
+      pdvType: "assistencia",
+    }
+    saveHeldSale(storeIdKey, terminalIdForHold, held)
+    setCart([])
+    setCustomerName("")
+    setSelectedClienteId(null)
+    setSelectedClienteDoc(null)
+    setDiscountReais(0)
+    setDiscountPercent(0)
+    toast({ title: "Venda em espera", description: `${held.label} guardada.` })
+  }
+
+  function handleResumeSale(sale: HeldSale) {
+    // HeldCartItem.name → CartLine.title ; HeldCartItem.quantity → CartLine.qty
+    setCart(
+      sale.items.map((i) => ({
+        lineId: i.lineId,
+        inventoryId: i.inventoryId,
+        title: i.name,
+        price: i.price,
+        qty: i.quantity,
+        isAvulso: i.isAvulso,
+      })),
+    )
+    if (sale.customer) {
+      setCustomerName(sale.customer.name)
+      setSelectedClienteId(sale.customer.id)
+      setSelectedClienteDoc(sale.customer.cpf ?? null)
+    }
+    setDiscountReais(sale.discountReais ?? 0)
+    setDiscountPercent(sale.discountPercent ?? 0)
+    removeHeldSale(storeIdKey, terminalIdForHold, sale.id)
+  }
+
+  function handleDiscardHeldSale(id: string) {
+    removeHeldSale(storeIdKey, terminalIdForHold, id)
+  }
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
@@ -2819,6 +2883,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           })
           queueMicrotask(() => inputRef.current?.focus())
         }}
+      />
+
+      <VendaEsperaModal
+        open={vendaEsperaOpen}
+        onOpenChange={setVendaEsperaOpen}
+        heldSales={heldSales}
+        cartEmpty={cart.length === 0}
+        onHold={handleHoldSale}
+        onResume={handleResumeSale}
+        onDiscard={handleDiscardHeldSale}
       />
 
       {/* F8 — Troca / Devolução real (reaproveita o fluxo TrocasDevolucao) */}

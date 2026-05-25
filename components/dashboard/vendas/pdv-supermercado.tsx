@@ -45,6 +45,16 @@ import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
+import { VendaEsperaModal } from "./venda-espera-modal"
+import {
+  getHeldSales,
+  saveHeldSale,
+  removeHeldSale,
+  newHoldId,
+  nextHoldLabel,
+  type HeldSale,
+} from "@/lib/pdv-hold"
+import { readSelectedTerminal } from "@/lib/pdv-terminal"
 
 import type { VendasPDVProps } from "./pdv-classic"
 
@@ -153,6 +163,7 @@ export function PdvSupermercado({
   const [attrProduct, setAttrProduct] = useState<Product | null>(null)
   const [attrSelections, setAttrSelections] = useState<Record<string, string>>({})
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
 
   const hardFocusSearch = useCallback(() => {
     // Hard-focus: o caixa não deve precisar tocar no mouse.
@@ -567,20 +578,71 @@ export function PdvSupermercado({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
-      if (e.key !== "F2" && e.key !== "F3" && e.key !== "F4" && e.key !== "Insert") return
+      if (e.key !== "F2" && e.key !== "F3" && e.key !== "F4" && e.key !== "F7" && e.key !== "Insert") return
       // Quando modal aberto, não interceptar (deixa o modal controlar o teclado)
-      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || showItemAvulsoModal) return
+      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || showItemAvulsoModal || vendaEsperaOpen) return
 
       e.preventDefault()
       e.stopPropagation()
       if (e.key === "Insert") setShowItemAvulsoModal(true)
+      else if (e.key === "F7") setVendaEsperaOpen(true)
       else if (e.key === "F2") openPaymentModal("dinheiro")
       else if (e.key === "F3") openPaymentModal("pix")
       else openPaymentModal("cartao_debito")
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, openPaymentModal])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, vendaEsperaOpen, openPaymentModal])
+
+  const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
+  const heldSales = getHeldSales(lojaKey, terminalIdForHold)
+
+  function handleHoldSale() {
+    const held: HeldSale = {
+      id: newHoldId(),
+      label: nextHoldLabel(heldSales),
+      savedAt: new Date().toISOString(),
+      items: cart.map((i) => ({
+        lineId: i.lineId,
+        inventoryId: i.inventoryId,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+        isAvulso: i.isAvulso,
+        custoUnitario: i.custoUnitario,
+      })),
+      customer: null,
+      discountReais,
+      discountPercent,
+      pdvType: "supermercado",
+    }
+    saveHeldSale(lojaKey, terminalIdForHold, held)
+    setCart([])
+    setDiscountReais(0)
+    setDiscountPercent(0)
+    toast({ title: "Venda em espera", description: `${held.label} guardada.` })
+  }
+
+  function handleResumeSale(sale: HeldSale) {
+    setCart(
+      sale.items.map((i) => ({
+        lineId: i.lineId,
+        inventoryId: i.inventoryId,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+        isAvulso: i.isAvulso,
+        custoUnitario: i.custoUnitario,
+      })),
+    )
+    setDiscountReais(sale.discountReais ?? 0)
+    setDiscountPercent(sale.discountPercent ?? 0)
+    removeHeldSale(lojaKey, terminalIdForHold, sale.id)
+  }
+
+  function handleDiscardHeldSale(id: string) {
+    removeHeldSale(lojaKey, terminalIdForHold, id)
+  }
 
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground">
@@ -994,13 +1056,14 @@ export function PdvSupermercado({
           let carne = 0
           let aPrazo = 0
           let creditoVale = 0
+          let aPrazoConfig: import("@/lib/operations-sale-types").APrazoConfig | undefined
           for (const p of payments) {
             if (p.type === "dinheiro") dinheiro += p.value
             else if (p.type === "pix") pix += p.value
             else if (p.type === "cartao_debito") cartaoDebito += p.value
             else if (p.type === "cartao_credito") cartaoCredito += p.value
             else if (p.type === "carne") carne += p.value
-            else if (p.type === "a_prazo") aPrazo += p.value
+            else if (p.type === "a_prazo") { aPrazo += p.value; if (p.aPrazoConfig) aPrazoConfig = p.aPrazoConfig }
             else if (p.type === "credito_vale") creditoVale += p.value
           }
 
@@ -1023,6 +1086,7 @@ export function PdvSupermercado({
               discountReais: meta?.discountReais ?? discountReais,
               discountPercent: meta?.discountPercent ?? discountPercent,
             },
+            aPrazoConfig,
           })
 
           if (!result.ok) {
@@ -1056,6 +1120,16 @@ export function PdvSupermercado({
         open={showItemAvulsoModal}
         onOpenChange={setShowItemAvulsoModal}
         onConfirm={addItemAvulso}
+      />
+
+      <VendaEsperaModal
+        open={vendaEsperaOpen}
+        onOpenChange={setVendaEsperaOpen}
+        heldSales={heldSales}
+        cartEmpty={cart.length === 0}
+        onHold={handleHoldSale}
+        onResume={handleResumeSale}
+        onDiscard={handleDiscardHeldSale}
       />
 
       <AttrProductDialog

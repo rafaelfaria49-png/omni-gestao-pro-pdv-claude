@@ -104,6 +104,16 @@ import {
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import { productMatchesPdvSearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
+import { VendaEsperaModal } from "./venda-espera-modal"
+import {
+  getHeldSales,
+  saveHeldSale,
+  removeHeldSale,
+  newHoldId,
+  nextHoldLabel,
+  type HeldSale,
+} from "@/lib/pdv-hold"
+import { readSelectedTerminal } from "@/lib/pdv-terminal"
 
 type SaleMode = "balcao" | "completa"
 
@@ -210,6 +220,7 @@ export function PdvClassic({
   const [fechamentoCaixaSignal, setFechamentoCaixaSignal] = useState(0)
   const [showDevolucaoModal, setShowDevolucaoModal] = useState(false)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
   const [operationValue, setOperationValue] = useState("")
   const [operationReason, setOperationReason] = useState("")
   const [cashHistory, setCashHistory] = useState<
@@ -1118,7 +1129,7 @@ export function PdvClassic({
         }
       } else if (e.key === "F7") {
         e.preventDefault()
-        if (cart.length > 0) setIsPaymentModalOpen(true)
+        setVendaEsperaOpen(true)
       } else if (e.key === "F8") {
         e.preventDefault()
         if (cart.length > 0) setCart([])
@@ -1289,6 +1300,8 @@ export function PdvClassic({
           setShellCancelSaleOpen(true)
           break
         case "F7":
+          setVendaEsperaOpen(true)
+          break
         case "F8":
           goBipe()
           break
@@ -1427,6 +1440,71 @@ export function PdvClassic({
     }
     setInstantPayIntent(intent)
     setIsPaymentModalOpen(true)
+  }
+
+  const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
+  const heldSales = getHeldSales(lojaKey, terminalIdForHold)
+
+  function handleHoldSale() {
+    const held: HeldSale = {
+      id: newHoldId(),
+      label: nextHoldLabel(heldSales),
+      savedAt: new Date().toISOString(),
+      items: cart.map((i) => ({
+        lineId: i.lineId,
+        inventoryId: i.inventoryId,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+        isAvulso: i.isAvulso,
+        atributosLabel: i.atributosLabel,
+        vendaPorPeso: i.vendaPorPeso,
+        custoUnitario: i.custoUnitario,
+      })),
+      customer: selectedCustomer
+        ? { id: selectedCustomer.id, name: selectedCustomer.name, cpf: selectedCustomer.cpf, phone: selectedCustomer.phone }
+        : null,
+      discountReais,
+      discountPercent,
+      pdvType: "classic",
+    }
+    saveHeldSale(lojaKey, terminalIdForHold, held)
+    setCart([])
+    setSelectedCustomer(null)
+    setDiscountReais(0)
+    setDiscountPercent(0)
+    toast({ title: "Venda em espera", description: `${held.label} guardada.` })
+  }
+
+  function handleResumeSale(sale: HeldSale) {
+    setCart(
+      sale.items.map((i) => ({
+        lineId: i.lineId,
+        inventoryId: i.inventoryId,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+        isAvulso: i.isAvulso,
+        atributosLabel: i.atributosLabel,
+        vendaPorPeso: i.vendaPorPeso,
+        custoUnitario: i.custoUnitario,
+      })),
+    )
+    if (sale.customer) {
+      setSelectedCustomer({
+        id: sale.customer.id,
+        name: sale.customer.name,
+        cpf: sale.customer.cpf ?? "",
+        phone: sale.customer.phone ?? "",
+      })
+    }
+    setDiscountReais(sale.discountReais ?? 0)
+    setDiscountPercent(sale.discountPercent ?? 0)
+    removeHeldSale(lojaKey, terminalIdForHold, sale.id)
+  }
+
+  function handleDiscardHeldSale(id: string) {
+    removeHeldSale(lojaKey, terminalIdForHold, id)
   }
 
   if (lojaAtivaId && !storePdvGate.ready) {
@@ -2265,6 +2343,16 @@ export function PdvClassic({
         onConfirm={addItemAvulso}
       />
 
+      <VendaEsperaModal
+        open={vendaEsperaOpen}
+        onOpenChange={setVendaEsperaOpen}
+        heldSales={heldSales}
+        cartEmpty={cart.length === 0}
+        onHold={handleHoldSale}
+        onResume={handleResumeSale}
+        onDiscard={handleDiscardHeldSale}
+      />
+
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => {
@@ -2308,13 +2396,14 @@ export function PdvClassic({
           let carne = 0
           let aPrazo = 0
           let creditoVale = 0
+          let aPrazoConfig: import("@/lib/operations-sale-types").APrazoConfig | undefined
           for (const p of payments) {
             if (p.type === "dinheiro") dinheiro += p.value
             else if (p.type === "pix") pix += p.value
             else if (p.type === "cartao_debito") cartaoDebito += p.value
             else if (p.type === "cartao_credito") cartaoCredito += p.value
             else if (p.type === "carne") carne += p.value
-            else if (p.type === "a_prazo") aPrazo += p.value
+            else if (p.type === "a_prazo") { aPrazo += p.value; if (p.aPrazoConfig) aPrazoConfig = p.aPrazoConfig }
             else if (p.type === "credito_vale") creditoVale += p.value
           }
           const result = finalizeSaleTransaction({
@@ -2339,6 +2428,7 @@ export function PdvClassic({
             customerCpf: selectedCustomer?.cpf,
             customerName: selectedCustomer?.name,
             clienteId: selectedCustomer?.id || undefined,
+            aPrazoConfig,
           })
           if (!result.ok) {
             toast({ title: "Falha transacional", description: result.reason })
@@ -2350,6 +2440,7 @@ export function PdvClassic({
               saleId: result.saleId,
               clienteNome: selectedCustomer.name,
               valor: aPrazo,
+              aPrazoConfig,
             })
           }
           appendAuditLog({
