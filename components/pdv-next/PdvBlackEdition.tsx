@@ -24,8 +24,12 @@ import {
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
-import { PaymentModal } from "@/components/dashboard/vendas/payment-modal"
+import { PaymentModal, type PaymentMethod } from "@/components/dashboard/vendas/payment-modal"
+import { useToast } from "@/hooks/use-toast"
 import { PdvBlackShell, type PdvBlackCartRow } from "./PdvBlackShell"
+
+const brlBlack = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
 
 const TURNO_STORAGE_KEY = "@omnigestao:pdv-black-turno"
 const CUPOM_STORAGE_KEY = "@omnigestao:pdv-black-cupom"
@@ -47,8 +51,9 @@ export function PdvBlackEdition() {
   const router = useRouter()
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva()
   const { config } = useConfigEmpresa()
-  const { inventory } = useOperationsStore()
+  const { inventory, finalizeSaleTransaction } = useOperationsStore()
   const { caixa, abrirCaixa, fecharCaixa } = useCaixa()
+  const { toast } = useToast()
 
   // ── Caixa ──────────────────────────────────────────────────────────────────
   const [turno, setTurno] = useState<number>(1)
@@ -105,6 +110,7 @@ export function PdvBlackEdition() {
 
   // ── Cliente ────────────────────────────────────────────────────────────────
   const [customerDisplay, setCustomerDisplay] = useState("Consumidor final")
+  const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null)
   const [clientSearchOpen, setClientSearchOpen] = useState(false)
   const { clientes: clientResults } = useClienteSearch(
     clientSearchOpen ? customerDisplay.replace("Consumidor final", "") : "",
@@ -166,6 +172,7 @@ export function PdvBlackEdition() {
 
       const newRow: PdvBlackCartRow = {
         lineId: newPdvLineId(product.id),
+        inventoryId: product.id,
         code,
         description: product.name,
         unit,
@@ -310,7 +317,45 @@ export function PdvBlackEdition() {
   }, [handleShortcutAction, selectedLineId, removeSelectedLine])
 
   // ── Confirmar pagamento ────────────────────────────────────────────────────
-  const handlePaymentConfirm = useCallback(() => {
+  const handlePaymentConfirm = useCallback((payments: PaymentMethod[]) => {
+    // Persistência REAL alinhada ao core (Black continua GATED por env).
+    // Elimina o "ghost sale": grava Venda + estoque + financeiro via
+    // finalizeSaleTransaction (mesmo motor dos demais PDVs, idempotente + retry).
+    if (!caixa.isOpen) {
+      toast({ variant: "destructive", title: "Caixa fechado", description: "Abra o caixa antes de finalizar a venda." })
+      return
+    }
+    // Só linhas resolvíveis no inventory real (itens do catálogo-base mock não persistem).
+    const saleLines = cartRows
+      .filter((r) => r.inventoryId && inventory.some((i) => i.id === r.inventoryId))
+      .map((r) => ({
+        inventoryId: r.inventoryId as string,
+        quantity: r.qty,
+        unitPrice: r.unitPrice,
+        name: r.description,
+      }))
+    let dinheiro = 0, pix = 0, cartaoDebito = 0, cartaoCredito = 0, carne = 0, aPrazo = 0, creditoVale = 0
+    for (const p of payments) {
+      if (p.type === "dinheiro") dinheiro += p.value
+      else if (p.type === "pix") pix += p.value
+      else if (p.type === "cartao_debito") cartaoDebito += p.value
+      else if (p.type === "cartao_credito") cartaoCredito += p.value
+      else if (p.type === "carne") carne += p.value
+      else if (p.type === "a_prazo") aPrazo += p.value
+      else if (p.type === "credito_vale") creditoVale += p.value
+    }
+    const result = finalizeSaleTransaction({
+      lines: saleLines,
+      total,
+      paymentBreakdown: { dinheiro, pix, cartaoDebito, cartaoCredito, carne, aPrazo, creditoVale },
+      customerName: customerDisplay !== "Consumidor final" ? customerDisplay : undefined,
+      clienteId: selectedClienteId || undefined,
+      auditMeta: { cashierId: operadorNome },
+    })
+    if (!result.ok) {
+      toast({ variant: "destructive", title: "Falha ao registrar venda", description: result.reason })
+      return
+    }
     const nextCupom = cupomNum + 1
     setCupomNum(nextCupom)
     writeCupom(nextCupom)
@@ -318,12 +363,26 @@ export function PdvBlackEdition() {
     setSelectedLineId(null)
     setHighlightLineId(null)
     setCustomerDisplay("Consumidor final")
+    setSelectedClienteId(null)
     setBipeCode("")
     setValorRecebido("")
     setLastAddedItem(null)
     setPaymentOpen(false)
     focusBipe()
-  }, [cupomNum, focusBipe])
+    toast({ title: "Venda registrada", description: `Cupom ${nextCupom} — ${brlBlack(total)}` })
+  }, [
+    caixa.isOpen,
+    cartRows,
+    inventory,
+    total,
+    customerDisplay,
+    selectedClienteId,
+    finalizeSaleTransaction,
+    operadorNome,
+    cupomNum,
+    focusBipe,
+    toast,
+  ])
 
   // ── Troco (depende de total) ───────────────────────────────────────────────
   const trocoFinal = useMemo(() => {
@@ -392,6 +451,8 @@ export function PdvBlackEdition() {
         }}
         clientOptions={clientOptions}
         onPickClient={(label) => {
+          const opt = clientOptions.find((o) => o.label === label)
+          setSelectedClienteId(opt?.id ?? null)
           setCustomerDisplay(label.split(" — ")[0] || label)
           setClientSearchOpen(false)
           focusBipe()

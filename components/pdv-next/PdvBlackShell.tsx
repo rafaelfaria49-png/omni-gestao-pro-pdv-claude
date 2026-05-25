@@ -30,6 +30,8 @@ import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 
 export type PdvBlackCartRow = {
   lineId: string
+  /** Id real do produto (Produto.id) — usado para persistir a venda no core. */
+  inventoryId?: string
   code: string
   description: string
   detail?: string

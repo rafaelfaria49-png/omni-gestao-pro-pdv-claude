@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 24 Mai 2026 — Sessão: Sangria/Suprimento acessível em todos os PDVs
+> Última atualização: 24 Mai 2026 — Sessão: Convergência PDV P0 — Black Edition no core (gated)
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,30 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Convergência PDV — P0: Black Edition no core (gated) (concluído 24/05/2026)
+
+**Contexto:** auditoria de convergência (`docs/ai/PDV_CONVERGENCIA_AUDIT.md`) apontou que o
+**PDV Next/Black era o único fora do núcleo** — `handlePaymentConfirm` só limpava a UI (ghost-sale,
+sem Venda/estoque/financeiro). Os outros 4 PDVs já usam `finalizeSaleTransaction` + `CaixaStatusBar`.
+
+**Correção (mantendo GATED — `NEXT_PUBLIC_OG_EXPERIMENTAL` OFF em produção):**
+
+| Arquivo | Mudança |
+|---|---|
+| `components/pdv-next/PdvBlackShell.tsx` | `PdvBlackCartRow` ganha `inventoryId?` (id real do produto p/ persistir). |
+| `components/pdv-next/PdvBlackEdition.tsx` | `handlePaymentConfirm(payments)` agora **persiste via `finalizeSaleTransaction`** (Venda+estoque+financeiro, idempotente, syncPending, à-prazo na tx) em vez de só resetar a UI. Filtra linhas resolvíveis no inventory real; reduz `payments`→`paymentBreakdown`; guarda `clienteId` selecionado; bloqueia se caixa fechado; toast de sucesso/falha. `addProduct` grava `inventoryId`. |
+
+**Efeito:** o Black deixa de ser ghost-sale **arquiteturalmente** — quando (e se) for liberado,
+já está no mesmo motor dos demais. **Continua hidden/gated** (não liberado em produção). Caixa do
+Black já usava os modais reais de abertura/fechamento (compartilhados).
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK (2ª tentativa — 1ª teve OOM transitório de worker, não-código).
+
+**Pendente da Sprint de Convergência (P1+):** keymap-base compartilhado; remover sangria redundante
+do Clássico; consolidar Venda Completa (2 arquivos); à-prazo uniforme; aposentar keymap `default`;
+caixa localStorage por terminal (Fase 5). Black ainda não usa `CaixaStatusBar` (sem sangria no Black) —
+próximo passo do alinhamento.
 
 ### Sangria/Suprimento acessível em todos os PDVs (concluído 24/05/2026)
 
