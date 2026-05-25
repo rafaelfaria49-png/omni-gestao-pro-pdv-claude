@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { Sun, Snowflake, Moon, Circle } from "lucide-react";
+import { Sun, Snowflake, Moon, Circle, Sparkles, Coffee } from "lucide-react";
 
 const THEMES = [
   { id: "light", label: "Light", icon: Sun },
   { id: "soft-ice", label: "Soft Ice", icon: Snowflake },
   { id: "midnight", label: "Midnight", icon: Moon },
   { id: "black", label: "Black", icon: Circle },
+  { id: "quantum-violet", label: "Quantum Violet", icon: Sparkles },
+  { id: "coffee-gold", label: "Coffee Gold", icon: Coffee },
 ] as const;
 
 type ThemeId = (typeof THEMES)[number]["id"];

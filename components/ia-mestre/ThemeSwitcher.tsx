@@ -1,17 +1,19 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Moon, Snowflake, Sun, Terminal } from "lucide-react"
+import { Moon, Snowflake, Sun, Terminal, Sparkles, Coffee } from "lucide-react"
 import { useTheme } from "@/components/theme/ThemeProvider"
 import { useEffect, useState } from "react"
 
-type Theme = "light" | "soft-ice" | "midnight" | "black-edition"
+type Theme = "light" | "soft-ice" | "midnight" | "black-edition" | "quantum-violet" | "coffee-gold"
 
 const options: { value: Theme; label: string; icon: typeof Sun }[] = [
   { value: "light", label: "Light", icon: Sun },
   { value: "soft-ice", label: "Soft Ice", icon: Snowflake },
   { value: "midnight", label: "Midnight", icon: Moon },
   { value: "black-edition", label: "Black", icon: Terminal },
+  { value: "quantum-violet", label: "Quantum Violet", icon: Sparkles },
+  { value: "coffee-gold", label: "Coffee Gold", icon: Coffee },
 ]
 
 export function ThemeSwitcher() {

@@ -6,6 +6,8 @@
 @custom-variant soft-ice (&:is(.soft-ice *));
 @custom-variant midnight (&:is(.midnight *));
 @custom-variant black-edition (&:is(.black-edition *));
+@custom-variant quantum-violet (&:is(.quantum-violet *));
+@custom-variant coffee-gold (&:is(.coffee-gold *));
 
 /* Escala root controlada por operational-density.css (15px operacional) */
 html {
@@ -261,6 +263,132 @@ body {
   --shadow-card: 0 18px 48px -28px oklch(0 0 0 / 0.9), 0 1px 2px oklch(1 0 0 / 0.04);
   --shadow-elegant: 0 10px 40px -10px oklch(0.82 0.22 145 / 0.3);
   --shadow-glow: 0 0 60px oklch(0.82 0.22 145 / 0.18);
+}
+
+.quantum-violet {
+  /* Tema Premium Quantum Violet (Fundo violeta escuro tridimensional com acentos magenta/pink neon) */
+  --background: oklch(0.14 0.045 295);
+  --foreground: oklch(0.96 0.02 295);
+  --surface: oklch(0.19 0.045 295);
+  --surface-foreground: oklch(0.96 0.02 295);
+  --panel: oklch(0.17 0.045 295);
+  --panel-foreground: oklch(0.96 0.02 295);
+  --card: oklch(0.17 0.045 295);
+  --card-foreground: oklch(0.96 0.02 295);
+  --popover: oklch(0.17 0.045 295);
+  --popover-foreground: oklch(0.96 0.02 295);
+  
+  --primary: oklch(0.65 0.25 310);
+  --primary-foreground: oklch(0.99 0.01 295);
+  --primary-glow: oklch(0.72 0.25 310);
+  
+  --info: oklch(0.72 0.15 235);
+  --success: oklch(0.82 0.22 145);
+  --warning: oklch(0.82 0.16 78);
+  --purple: oklch(0.65 0.25 310);
+  --pink: oklch(0.68 0.24 335);
+  --border-hover: oklch(0.38 0.05 295);
+  
+  --secondary: oklch(0.19 0.045 295);
+  --secondary-foreground: oklch(0.96 0.02 295);
+  --muted: oklch(0.19 0.045 295);
+  --muted-foreground: oklch(0.68 0.04 295);
+  --accent: oklch(0.68 0.24 335);
+  --accent-foreground: oklch(0.99 0.01 295);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  
+  --border: oklch(0.24 0.04 295);
+  --input: oklch(0.19 0.04 295);
+  --ring: oklch(0.65 0.25 310);
+  
+  --chart-1: oklch(0.65 0.25 310);
+  --chart-2: oklch(0.68 0.24 335);
+  --chart-3: oklch(0.82 0.22 145);
+  --chart-4: oklch(0.72 0.15 235);
+  --chart-5: oklch(0.82 0.16 78);
+  
+  --sidebar: oklch(0.14 0.045 295);
+  --sidebar-foreground: oklch(0.96 0.02 295);
+  --sidebar-primary: oklch(0.65 0.25 310);
+  --sidebar-primary-foreground: oklch(0.99 0.01 295);
+  --sidebar-accent: oklch(0.19 0.045 295);
+  --sidebar-accent-foreground: oklch(0.96 0.02 295);
+  --sidebar-border: oklch(0.24 0.04 295);
+  --sidebar-ring: oklch(0.65 0.25 310);
+  
+  --bubble-ai: oklch(0.19 0.045 295);
+  --bubble-ai-foreground: oklch(0.96 0.02 295);
+  --bubble-user: linear-gradient(135deg, oklch(0.65 0.25 310), oklch(0.68 0.24 335));
+  --bubble-user-foreground: oklch(0.99 0.01 295);
+
+  --gradient-primary: linear-gradient(135deg, oklch(0.65 0.25 310), oklch(0.68 0.24 335));
+  --shadow-card: 0 18px 48px -28px oklch(0 0 0 / 0.9), 0 1px 2px oklch(1 0 0 / 0.04);
+  --shadow-elegant: 0 10px 40px -10px oklch(0.65 0.25 310 / 0.3);
+  --shadow-glow: 0 0 60px oklch(0.65 0.25 310 / 0.18);
+}
+
+.coffee-gold {
+  /* Tema Premium Coffee Gold (Fundo café escuro tridimensional com acentos dourados e bronze neon) */
+  --background: oklch(0.14 0.025 50);
+  --foreground: oklch(0.96 0.015 50);
+  --surface: oklch(0.19 0.025 50);
+  --surface-foreground: oklch(0.96 0.015 50);
+  --panel: oklch(0.17 0.025 50);
+  --panel-foreground: oklch(0.96 0.015 50);
+  --card: oklch(0.17 0.025 50);
+  --card-foreground: oklch(0.96 0.015 50);
+  --popover: oklch(0.17 0.025 50);
+  --popover-foreground: oklch(0.96 0.015 50);
+  
+  --primary: oklch(0.78 0.14 75);
+  --primary-foreground: oklch(0.08 0.01 50);
+  --primary-glow: oklch(0.83 0.14 75);
+  
+  --info: oklch(0.72 0.12 235);
+  --success: oklch(0.82 0.20 145);
+  --warning: oklch(0.78 0.14 75);
+  --purple: oklch(0.68 0.18 310);
+  --pink: oklch(0.70 0.18 350);
+  --border-hover: oklch(0.38 0.03 50);
+  
+  --secondary: oklch(0.19 0.025 50);
+  --secondary-foreground: oklch(0.96 0.015 50);
+  --muted: oklch(0.19 0.025 50);
+  --muted-foreground: oklch(0.68 0.02 50);
+  --accent: oklch(0.70 0.18 60);
+  --accent-foreground: oklch(0.08 0.01 50);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  
+  --border: oklch(0.24 0.025 50);
+  --input: oklch(0.19 0.025 50);
+  --ring: oklch(0.78 0.14 75);
+  
+  --chart-1: oklch(0.78 0.14 75);
+  --chart-2: oklch(0.70 0.18 60);
+  --chart-3: oklch(0.82 0.20 145);
+  --chart-4: oklch(0.72 0.12 235);
+  --chart-5: oklch(0.68 0.18 310);
+  
+  --sidebar: oklch(0.14 0.025 50);
+  --sidebar-foreground: oklch(0.96 0.015 50);
+  --sidebar-primary: oklch(0.78 0.14 75);
+  --sidebar-primary-foreground: oklch(0.08 0.01 50);
+  --sidebar-accent: oklch(0.19 0.025 50);
+  --sidebar-accent-foreground: oklch(0.96 0.015 50);
+  --sidebar-border: oklch(0.24 0.025 50);
+  --sidebar-ring: oklch(0.78 0.14 75);
+  
+  --bubble-ai: oklch(0.19 0.025 50);
+  --bubble-ai-foreground: oklch(0.96 0.015 50);
+  --bubble-user: linear-gradient(135deg, oklch(0.78 0.14 75), oklch(0.70 0.18 60));
+  --bubble-user-foreground: oklch(0.08 0.01 50);
+
+  --gradient-primary: linear-gradient(135deg, oklch(0.78 0.14 75), oklch(0.70 0.18 60));
+  --shadow-card: 0 18px 48px -28px oklch(0 0 0 / 0.9), 0 1px 2px oklch(1 0 0 / 0.04);
+  --shadow-elegant: 0 10px 40px -10px oklch(0.78 0.14 75 / 0.3);
+  --shadow-glow: 0 0 60px oklch(0.78 0.14 75 / 0.18);
 }
 
 @theme inline {

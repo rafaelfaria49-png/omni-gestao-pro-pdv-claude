@@ -7,6 +7,8 @@ const themes = [
   { id: "soft-ice", label: "Soft Ice", swatch: "linear-gradient(135deg, oklch(0.984 0.006 240), oklch(0.55 0.18 240))" },
   { id: "midnight", label: "Midnight", swatch: "linear-gradient(135deg, oklch(0.21 0.04 265), oklch(0.72 0.18 230))" },
   { id: "black-edition", label: "Black Edition", swatch: "linear-gradient(135deg, oklch(0.145 0 0), oklch(0.78 0.18 145))" },
+  { id: "quantum-violet", label: "Quantum Violet", swatch: "linear-gradient(135deg, oklch(0.14 0.045 295), oklch(0.65 0.25 310))" },
+  { id: "coffee-gold", label: "Coffee Gold", swatch: "linear-gradient(135deg, oklch(0.14 0.025 50), oklch(0.78 0.14 75))" },
 ] as const;
 
 export function ThemeSwitcher() {

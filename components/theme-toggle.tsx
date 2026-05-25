@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Check, ChevronDown, Moon, Snowflake, Sun, Terminal } from "lucide-react"
+import { Check, ChevronDown, Moon, Snowflake, Sun, Terminal, Sparkles, Coffee } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -22,6 +22,8 @@ const themeOptions: Array<{
   { value: "soft-ice", label: "Soft Ice", icon: Snowflake, swatch: "bg-[oklch(0.9_0.04_220)]" },
   { value: "midnight", label: "Midnight", icon: Moon, swatch: "bg-[oklch(0.76_0.22_235)]" },
   { value: "black", label: "Black", icon: Terminal, swatch: "bg-[oklch(0.82_0.22_145)]" },
+  { value: "quantum-violet", label: "Quantum Violet", icon: Sparkles, swatch: "bg-[oklch(0.65_0.25_310)]" },
+  { value: "coffee-gold", label: "Coffee Gold", icon: Coffee, swatch: "bg-[oklch(0.78_0.14_75)]" },
 ]
 
 export function ThemeToggle() {

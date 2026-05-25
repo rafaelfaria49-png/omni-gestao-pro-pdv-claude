@@ -1,12 +1,14 @@
 import { cn } from "@/lib/utils";
 
-export type HubTheme = "light" | "soft-ice" | "midnight" | "black";
+export type HubTheme = "light" | "soft-ice" | "midnight" | "black" | "quantum-violet" | "coffee-gold";
 
 const themes: { id: HubTheme; label: string; swatch: string }[] = [
   { id: "light", label: "Light", swatch: "bg-background border-border" },
   { id: "soft-ice", label: "Soft Ice", swatch: "bg-muted border-border" },
   { id: "midnight", label: "Midnight", swatch: "bg-card border-border" },
   { id: "black", label: "Black", swatch: "bg-foreground border-border" },
+  { id: "quantum-violet", label: "Quantum Violet", swatch: "bg-[oklch(0.65_0.25_310)] border-border" },
+  { id: "coffee-gold", label: "Coffee Gold", swatch: "bg-[oklch(0.78_0.14_75)] border-border" },
 ];
 
 interface Props {

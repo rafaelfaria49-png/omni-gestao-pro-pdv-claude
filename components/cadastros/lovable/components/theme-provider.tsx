@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-type Theme = "light" | "soft-ice" | "midnight" | "black-edition";
+type Theme = "light" | "soft-ice" | "midnight" | "black-edition" | "quantum-violet" | "coffee-gold";
 
 const ThemeCtx = createContext<{ theme: Theme; setTheme: (t: Theme) => void }>({
   theme: "light",
@@ -8,7 +8,7 @@ const ThemeCtx = createContext<{ theme: Theme; setTheme: (t: Theme) => void }>({
 });
 
 const GLOBAL_KEY = "omni-studio-dual-theme";
-const THEME_CLASSES = ["soft-ice", "midnight", "black-edition"] as const;
+const THEME_CLASSES = ["soft-ice", "midnight", "black-edition", "quantum-violet", "coffee-gold"] as const;
 
 function readGlobalTheme(): Theme {
   if (typeof window === "undefined") return "light";

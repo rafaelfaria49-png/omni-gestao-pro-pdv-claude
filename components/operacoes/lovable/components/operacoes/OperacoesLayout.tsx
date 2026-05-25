@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 // ── Mapeamento bidirecional de temas ────────────────────────────────────────
 
 const GLOBAL_STORAGE_KEY = "omni-studio-dual-theme";
-const GLOBAL_THEME_CLASSES = ["light", "soft-ice", "midnight", "black-edition"] as const;
+const GLOBAL_THEME_CLASSES = ["light", "soft-ice", "midnight", "black-edition", "quantum-violet", "coffee-gold"] as const;
 
 /** Hub → Global OmniGestão */
 const HUB_TO_GLOBAL: Record<HubTheme, string> = {
@@ -17,6 +17,8 @@ const HUB_TO_GLOBAL: Record<HubTheme, string> = {
   "soft-ice": "soft-ice",
   midnight:   "midnight",
   black:      "black-edition",
+  "quantum-violet": "quantum-violet",
+  "coffee-gold": "coffee-gold",
 };
 
 /** Global OmniGestão → Hub */
@@ -25,6 +27,8 @@ const GLOBAL_TO_HUB: Record<string, HubTheme> = {
   "soft-ice":       "soft-ice",
   midnight:         "midnight",
   "black-edition":  "black",
+  "quantum-violet": "quantum-violet",
+  "coffee-gold":    "coffee-gold",
 };
 
 /** Lê o tema global salvo e retorna o equivalente para o Hub. */
