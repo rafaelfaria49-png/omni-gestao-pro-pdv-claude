@@ -163,6 +163,8 @@ export type LockResult = {
   occupied?: boolean
   inactive?: boolean
   degraded?: boolean
+  /** Preenchido quando force=true e havia outro device no lock (auditoria de takeover). */
+  tookOver?: { fromOperador: string | null } | null
   lockedByOperador?: string | null
   heartbeatAt?: string | null
   error?: string

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { auth } from "@/auth"
+import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { z } from "zod"
 
 export const runtime = "nodejs"
@@ -68,6 +70,16 @@ export async function POST(req: Request) {
     const where = force
       ? { id: terminalId, storeId: lojaId }
       : { id: terminalId, storeId: lojaId, lockedByDeviceId: deviceId }
+
+    // Auditoria: captura o estado antes de liberar (só relevante para force unlock).
+    let prevLock: { lockedByDeviceId: string | null; lockedByOperador: string | null } | null = null
+    if (force) {
+      prevLock = await prisma.pdvTerminal.findFirst({
+        where: { id: terminalId, storeId: lojaId },
+        select: { lockedByDeviceId: true, lockedByOperador: true },
+      }) ?? null
+    }
+
     const res = await prisma.pdvTerminal.updateMany({
       where,
       data: {
@@ -77,6 +89,23 @@ export async function POST(req: Request) {
         heartbeatAt: null,
       },
     })
+
+    if (force && res.count > 0 && prevLock?.lockedByDeviceId && prevLock.lockedByDeviceId !== deviceId) {
+      const session = await auth()
+      const liberadoPor = session?.user ? getOperatorLabelFromSession(session) : (deviceId ?? "desconhecido")
+      console.info(
+        "[terminal/unlock] FORCE_UNLOCK",
+        JSON.stringify({
+          terminalId,
+          storeId: lojaId,
+          prevDevice: prevLock.lockedByDeviceId,
+          prevOperador: prevLock.lockedByOperador,
+          liberadoPor,
+          at: new Date().toISOString(),
+        }),
+      )
+    }
+
     return NextResponse.json({ ok: true, released: res.count })
   } catch (e) {
     console.warn(

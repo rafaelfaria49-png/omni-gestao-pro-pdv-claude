@@ -84,6 +84,19 @@ export async function POST(req: Request) {
     const now = new Date()
     const cutoff = new Date(now.getTime() - TERMINAL_LOCK_TTL_MS)
 
+    // Para takeover forçado: captura o estado anterior ANTES de sobrescrever (auditoria).
+    let prevLock: {
+      lockedByDeviceId: string | null
+      lockedByOperador: string | null
+      heartbeatAt: Date | null
+    } | null = null
+    if (force) {
+      prevLock = await prisma.pdvTerminal.findFirst({
+        where: { id: terminalId, storeId: lojaId },
+        select: { lockedByDeviceId: true, lockedByOperador: true, heartbeatAt: true },
+      }) ?? null
+    }
+
     const where = force
       ? { id: terminalId, storeId: lojaId }
       : {
@@ -92,6 +105,7 @@ export async function POST(req: Request) {
           OR: [
             { lockedByDeviceId: null },
             { lockedByDeviceId: deviceId },
+            // heartbeatAt null = terminal legado (pré-Fase 2) sem heartbeat; trata como expirado.
             { heartbeatAt: null },
             { heartbeatAt: { lt: cutoff } },
           ],
@@ -108,9 +122,32 @@ export async function POST(req: Request) {
     })
 
     if (res.count === 1) {
+      // Auditoria de takeover forçado: só quando havia outro device no lock.
+      const isTakeover =
+        force &&
+        !!prevLock?.lockedByDeviceId &&
+        prevLock.lockedByDeviceId !== deviceId
+      if (isTakeover && prevLock) {
+        console.info(
+          "[terminal/lock] TAKEOVER",
+          JSON.stringify({
+            terminalId,
+            storeId: lojaId,
+            prevDevice: prevLock.lockedByDeviceId,
+            prevOperador: prevLock.lockedByOperador,
+            prevHeartbeat: prevLock.heartbeatAt?.toISOString() ?? null,
+            newDevice: deviceId,
+            newOperador: operador || null,
+            at: now.toISOString(),
+          }),
+        )
+      }
       return NextResponse.json({
         ok: true,
         granted: true,
+        tookOver: isTakeover
+          ? { fromOperador: prevLock?.lockedByOperador ?? null }
+          : null,
         lock: {
           lockedByOperador: operador || null,
           lockedAt: now.toISOString(),
