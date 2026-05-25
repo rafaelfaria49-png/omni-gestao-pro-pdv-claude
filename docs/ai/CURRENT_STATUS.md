@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 24 Mai 2026 — Sessão: Convergência PDV P0 — Black Edition no core (gated)
+> Última atualização: 24 Mai 2026 — Sessão: Convergência PDV P1 — keymap-base, sangria única, Black na barra
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,25 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Convergência PDV — P1: keymap-base + sangria única + Black na barra (concluído 24/05/2026)
+
+**Contexto:** continuação da Sprint de Convergência (`docs/ai/PDV_CONVERGENCIA_AUDIT.md`),
+incremental e seguro, sem reescrever PDVs, sem schema/auth/proxy, Black mantido gated.
+
+| # | Arquivo | Mudança |
+|---|---|---|
+| P1.1 keymap-base | `lib/pdv-keymap.ts` (NOVO) + `pdv-classic.tsx` | `PDV_KEYMAP` = fonte única dos atalhos canônicos (referência omni-smart). Ajuda do Clássico (End/F1) passa a renderizar a partir dele (corrige inclusive a inconsistência antiga "F1=ajuda" → F1=pagar). Demais PDVs adotam o mapa incrementalmente (dispatch não reescrito). |
+| P1.2 sangria única | `pdv-classic.tsx` | Removidos os itens **Sangria** e **Reforço (Suprimento)** do menu engrenagem (redundantes). Sangria/suprimento agora **só** na barra compartilhada (`CaixaStatusBar`, sempre visível no topo do Clássico). `openOperation` removido; diálogo `operationType` legado permanece inerte (estado ainda referenciado por guards de teclado). |
+| P1.3 Black na barra | `components/pdv-next/PdvBlackEdition.tsx` | Black renderiza `<CaixaStatusBar variant="pdv" />` → ganha sangria/suprimento + pill de terminal + KPIs + fechamento ERP do core. **Continua gated.** Shell preto mantém seus controles (de-dup visual é follow-up). |
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Riscos/pendências restantes (P2+):** keymap **dispatch** ainda não unificado (3 keydowns
+divergentes — só os dados/ajuda convergiram); diálogo de sangria legado inerte no Clássico
+(referenciado por guards — limpar exige mexer nos guards); Black com 2 superfícies de caixa
+(barra + shell) — unificar visual depois; consolidar Venda Completa (2 arquivos); à-prazo
+uniforme; aposentar keymap `default`; caixa localStorage por terminal (Fase 5).
 
 ### Convergência PDV — P0: Black Edition no core (gated) (concluído 24/05/2026)
 

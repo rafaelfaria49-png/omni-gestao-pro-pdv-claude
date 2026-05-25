@@ -15,6 +15,7 @@ import { useOperationsStore } from "@/lib/operations-store"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { AberturaCaixaModal } from "@/components/dashboard/caixa/abertura-caixa-modal"
 import { FechamentoCaixaModal } from "@/components/dashboard/caixa/fechamento-caixa-modal"
+import { CaixaStatusBar } from "@/components/dashboard/caixa/caixa-status-bar"
 import {
   PDV_PRODUCTS_BASE,
   mergePdvCatalogWithInventory,
@@ -392,6 +393,10 @@ export function PdvBlackEdition() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#000000]">
+      {/* Convergência P1.3: barra de caixa compartilhada (sangria/suprimento +
+          terminal + fechamento ERP) também no Black. Gated/experimental — o shell
+          preto mantém seus controles; visual unificado fica para follow-up. */}
+      <CaixaStatusBar variant="pdv" />
       <PdvBlackShell
         // Caixa
         caixaAberto={caixa.isOpen}

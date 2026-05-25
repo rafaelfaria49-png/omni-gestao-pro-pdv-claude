@@ -66,6 +66,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import { useOperationsStore } from "@/lib/operations-store"
+import { PDV_KEYMAP } from "@/lib/pdv-keymap"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import type { PdvClassicLayoutKind } from "@/lib/store-settings-types"
 import { writePdvClassicLayout } from "@/lib/pdv-classic-layout"
@@ -935,12 +936,9 @@ export function PdvClassic({
     setPendingOnAccount(false)
   }
 
-  const openOperation = (type: "sangria" | "suprimento") => {
-    setShowOperationsMenu(false)
-    setOperationType(type)
-    setOperationValue("")
-    setOperationReason("")
-  }
+  // Sangria/Suprimento agora ficam na barra de caixa compartilhada (CaixaStatusBar).
+  // O diálogo `operationType` permanece (estado referenciado pelos guards de teclado),
+  // porém sem ponto de entrada — convergência: fonte única de sangria/suprimento.
 
   const requestFechamentoCaixa = () => {
     setShowOperationsMenu(false)
@@ -2421,12 +2419,8 @@ export function PdvClassic({
                 Item Avulso
                 <span className="ml-auto text-xs text-muted-foreground">INS</span>
               </Button>
-              <Button variant="outline" className="w-full justify-start border-primary/30 hover:bg-primary/10" onClick={() => openOperation("sangria")}>
-                Sangria
-              </Button>
-              <Button variant="outline" className="w-full justify-start border-primary/30 hover:bg-primary/10" onClick={() => openOperation("suprimento")}>
-                Reforço (Suprimento)
-              </Button>
+              {/* Sangria/Suprimento removidos daqui: agora ficam na barra de caixa
+                  compartilhada (CaixaStatusBar), única em todos os PDVs. */}
               <Button
                 variant="outline"
                 className="w-full justify-start border-primary/30 hover:bg-primary/10"
@@ -2494,22 +2488,8 @@ export function PdvClassic({
             <p className="mt-0.5 text-xs text-muted-foreground">Pressione <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">F1</kbd> ou <kbd className="rounded border border-border bg-muted px-1 py-0.5 font-mono text-xs">End</kbd> a qualquer momento para abrir esta ajuda.</p>
           </div>
           <div className="grid grid-cols-1 gap-1 p-4 sm:grid-cols-2">
-            {[
-              { key: "F1 / End", desc: "Ajuda de atalhos (este painel)" },
-              { key: "F2", desc: uiShell === "omni-smart" ? "Buscar / selecionar cliente" : "Finalizar venda (com itens)" },
-              { key: "F3", desc: uiShell === "omni-smart" ? "Buscar produto / serviço" : "Foco no campo de produto" },
-              { key: "F4", desc: uiShell === "omni-smart" ? "Editar quantidade do item selecionado" : "Quantidade do último item" },
-              { key: "F5", desc: uiShell === "omni-smart" ? "Cancelar item selecionado" : "Foco no campo de cliente" },
-              { key: "F6", desc: uiShell === "omni-smart" ? "Cancelar venda" : "Remover último item" },
-              { key: "F7", desc: uiShell === "omni-smart" ? "—" : "Finalizar / pagamento" },
-              { key: "F8", desc: uiShell === "omni-smart" ? "—" : "Limpar carrinho" },
-              { key: "F9", desc: uiShell === "omni-smart" ? "Contas a receber" : "—" },
-              { key: "Insert", desc: "Item avulso (venda de balcão sem cadastro)" },
-              { key: "F10", desc: uiShell === "omni-smart" ? "Desconto (abre pagamento c/ desconto)" : "Finalizar venda" },
-              { key: "Espaço", desc: "Finalizar venda" },
-              { key: "ESC", desc: "Fechar modal / remover último item (modo rápido)" },
-              { key: "Alt + D / Alt + P", desc: "Pagamento rápido" },
-            ].map(({ key, desc }) => (
+            {/* Atalhos a partir do keymap-base compartilhado (fonte única). */}
+            {PDV_KEYMAP.map(({ key, desc }) => (
               <div key={key} className="flex items-start gap-3 rounded-lg px-3 py-2 hover:bg-muted/50">
                 <kbd className="mt-0.5 shrink-0 rounded border border-border bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">{key}</kbd>
                 <span className="text-sm text-muted-foreground">{desc}</span>
