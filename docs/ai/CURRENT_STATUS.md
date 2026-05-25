@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 23 Mai 2026 — Sessão: PDV Multi-Terminais — Fase 1
+> Última atualização: 24 Mai 2026 — Sessão: Sprint 1.1 — Estabilização do PDV Clássico
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,109 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Sprint 1.1 — Estabilização do PDV Clássico (concluído 24/05/2026)
+
+**Contexto:** homologação operacional revelou bugs no **PDV Clássico** (shell omni-smart)
+que a auditoria estrutural não pegou. Correções cirúrgicas, sem tocar Assistência/Supermercado.
+
+**Mapa de renderização confirmado:** Clássico → `pdv-classic` (shell `pdv-omni-classic-shell`,
+`uiShell="omni-smart"`); Assistência → `pdv-assistencia-enterprise` (early-return em pdv-classic);
+Supermercado → `pdv-supermercado`. O `uiShell="default"` é **legado/sem uso** (VendasPDV usa sempre omni-smart).
+
+| Arquivo | Mudança |
+|---|---|
+| `components/dashboard/vendas/pdv-classic.tsx` | (1) **INSERT/Item Avulso corrigido:** a tecla estava só no handler `default` (desativado no omni-smart) → "feature fantasma". Adicionado `Insert` ao keymap vivo do shell (`down`) → abre o modal. (2) **Busca de cliente ao digitar:** o campo inline "Cliente" só guardava texto; agora alimenta a busca live (`customerSearch`/`useClienteSearch`) e abre o picker. (3) **Loja segura:** passa `storeId` (loja ativa) ao shell. (4) **Keymap consolidado:** comentário marcando o handler `default` como legado + linha `Insert` na ajuda de atalhos. |
+| `components/dashboard/vendas/pdv-omni-classic-shell.tsx` | Cabeçalho do estabelecimento agora **sempre visível** (era `hidden md:flex` → invisível em telas menores) + **badge com o `storeId`** ao lado do nome, para o operador confirmar a unidade antes de vender. |
+
+**storeId/loja ativa — diagnóstico:** o nome exibido e o storeId de gravação vêm da **mesma fonte**
+(`useLojaAtiva`/`opsStorageKey`); não há `loja-1` hardcoded no caminho de escrita. Se o PDV mostra
+loja-1, a venda vai para loja-1 — por isso o badge sempre visível é a salvaguarda. (Causa provável do
+sintoma original: loja de teste criada via script **após** o app carregar a lista → exigia reload do switcher.)
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npx next build --webpack` OK (árvore de rotas completa).
+⚠️ `npm run build` falha localmente por **lock do `prisma generate`** (DLL do Prisma travada pelo
+`npm run dev` em execução) — não é erro de código; o build do Next compila normalmente.
+
+**Não alterado (intacto):** PDV Assistência e Supermercado (INSERT/atalhos já funcionam neles);
+auth/proxy; schema; servidor segue como fonte da verdade.
+
+**Riscos restantes → Sprint 1.2:** desconto sem tecla dedicada no Clássico (só menu CTRL/avançado);
+handler `default` legado permanece (marcado, não removido, para evitar refator grande); propagação
+cross-tab da troca de loja não implementada (reload resolve).
+
+### Sprint 1 — PDV + Caixa confiável (concluído 24/05/2026)
+
+**Contexto:** deixar o fluxo de caixa seguro para uso diário — servidor como fonte
+da verdade; localStorage como cache que **não** pode causar venda perdida, caixa
+falso aberto ou totais divergentes. Mudanças cirúrgicas, sem refatorar.
+
+| Arquivo | Mudança |
+|---|---|
+| `app/dashboard/clientes/ClientesPageClient.tsx` | Link "Iniciar Venda (PDV)" `/dashboard/pdv?clienteId=` (redirect que **descartava a query**) → `/dashboard/vendas?clienteId=` (rota canônica, param preservado). |
+| `components/dashboard/vendas/pdv-classic.tsx` | (1) "Ver contas a receber" `/?page=contas-receber` (legado SPA) → `/dashboard/financeiro/contas-a-receber`. (2) "Nova O.S." `/?page=os` → `/dashboard/operacoes-v2` (rota oficial). (3) **Sangria/suprimento sem sessão deixou de ser silencioso:** quando o caixa está aberto mas sem `sessaoId` confirmado no servidor, agora alerta (antes incrementava o total local e mostrava "registrado com sucesso" sem persistir). |
+| `lib/operations-store.tsx` | **Caixa falso aberto corrigido:** o bootstrap só restaurava sessão (server aberto + local fechado). Agora trata o inverso — server **sem** sessão aberta + local aberto → fecha localmente (fonte de verdade = servidor). Roda só com servidor respondendo (`rCaixa.ok` + inventory/ordens carregados); offline não dispara; vendas `syncPending` preservadas. Cura o "caixa fantasma" após refresh/reload. |
+
+**Fluxo validado (código):** abrir caixa (POST `/api/ops/caixa/abrir` → `sessaoId`) ·
+venda (`venda-persist` idempotente, `syncPending` reenvia em online/foco/30s) ·
+sangria/suprimento (`/api/ops/caixa/operacao` + alerta se sem sessão) · fechar
+(`/api/ops/caixa/fechar` calcula `totalVendasServer` do ledger) · histórico ·
+**refresh/reload** (reconciliação bidirecional com o servidor).
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK (95/95 páginas).
+
+**Riscos restantes → Sprint 1.2:** (a) `abrir` sempre cria nova `SessaoCaixa` (sem
+guard de duplicada — corrigir exige ajuste no modal de abertura); (b) caixa em
+**dois** locais de localStorage (blob ops + snapshot `omnigestao:caixa:` — redundante,
+mas consistente); (c) `totalEntradas/totalSaidas` da barra são runtime local (podem
+divergir do servidor durante o turno — fechamento usa o canônico do servidor); (d) PDV
+não pré-seleciona cliente via `?clienteId=` (param já preservado para uso futuro); (e)
+link "Nova OS" do CRM ainda aponta para `/dashboard/os` (legado).
+
+### Sprint 0 — Blindagem de navegação operacional (concluído 24/05/2026)
+
+**Contexto:** primeira sprint da estabilização operacional — impedir uso operacional
+incorreto antes da operação real, **sem remover código** e preservando rotas para dev.
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/feature-flags.ts` | + `experimentalPdvEnabled` e `roadmapHubsEnabled`, ambos via env `NEXT_PUBLIC_OG_EXPERIMENTAL=1` (default OFF em produção). |
+| `app/dashboard/vendas/vendas-page-client.tsx` | **Armadilha crítica corrigida:** o PDV oficial auto-redirecionava para `/dashboard/pdv-next` (que **não persiste vendas**) quando `localStorage["@omnigestao:pdv-layout"]==="next"`. Agora só redireciona com `experimentalPdvEnabled`; em operação faz **auto-heal** da preferência presa (volta para `classic`). |
+| `app/dashboard/pdv-next/page.tsx` · `app/dashboard/pdv-github-original/page.tsx` | Gate operacional: renderizam `ModuleEmDesenvolvimento` (com link para o PDV oficial) quando `!experimentalPdvEnabled`. Componentes reais preservados (acesso via env em dev). |
+| `components/configuracoes-v3/.../PdvSection.tsx` | Card "PDV Next" oculto da galeria em operação (`visibleFlows`); liberado em dev via env. |
+| `components/painel-inicial/Sidebar.tsx` | Hubs de roadmap (Marketing IA, Marketplace) ocultos do menu via `experimental`/`roadmapHubsEnabled` (mock/não operacional). |
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK (todas as rotas compilam; experimentais seguem registradas, apenas gated).
+
+**Links quebrados identificados (para Sprint 1, não corrigidos aqui):**
+`ClientesPageClient.tsx` usa `/dashboard/pdv?clienteId=` → o redirect de `/dashboard/pdv` **descarta a query** (perde `clienteId`); `pdv-classic.tsx` navega via legado `/?page=os` e `/?page=contas-receber` (quebra potencial dependente da home SPA).
+
+**Pendências (fora do escopo Sprint 0):** páginas Marketplace/Marketing IA seguem
+acessíveis por URL direta (só ocultas do menu); IA Mestre / Omni Agent / Financeiro V2
+**não** foram alterados (decisão do usuário pendente).
+
+### PDV Multi-Terminais — Fase 2 (lock + heartbeat) (concluído 23/05/2026)
+
+**Contexto:** impedir dois computadores no mesmo terminal ao mesmo tempo, via lock
+server-side por terminal + heartbeat, com liberação automática por expiração e
+Assumir/Liberar para admin/gerente. Detalhes em
+[`docs/ai/PDV_MULTI_TERMINAIS_FASE2_LOCK_REPORT.md`](./PDV_MULTI_TERMINAIS_FASE2_LOCK_REPORT.md).
+
+| Arquivo | Mudança |
+|---|---|
+| `prisma/schema.prisma` | `PdvTerminal` + `lockedByDeviceId`/`lockedByOperador`/`lockedAt`/`heartbeatAt` (nullable) + `@@index([storeId, heartbeatAt])`. Aditivo (`db push` aplicado). |
+| `lib/pdv-terminal-lock.ts` | **NOVO** — lógica pura (TTL 120s, heartbeat 30s, `computeLockStatus`) reusada por server e client. |
+| `app/api/ops/terminal/{lock,heartbeat,unlock}/route.ts` | **NOVO** — lock atômico (`updateMany` condicional), heartbeat, unlock próprio/forçado. `force` exige `p.pdv.cancelarVenda` (admin/gerente). Degrada (200) em falha de infra. |
+| `app/actions/terminais.ts` | `listTerminais(storeId, deviceId?)` retorna estado de lock (status/operador/heartbeat/isMine); desativar limpa o lock. |
+| `lib/pdv-terminal.ts` | + `lockTerminal`/`heartbeatTerminal`/`unlockTerminal` + hook `useTerminalHeartbeat` (adquire, bate 30s, detecta perda, libera no unmount/beforeunload). |
+| `components/dashboard/vendas/terminal-selector.tsx` | Lock-aware: Livre/Em uso/Offline/Ocupado/Inativo, bloqueia ocupado, Assumir/Liberar (admin) com confirmação. |
+| `app/dashboard/vendas/vendas-page-client.tsx` | Keeper de heartbeat; bloqueia PDV se perder o lock (painel reassumir/reselecionar); banner de degradação. |
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK (rotas registradas) · `npx prisma db push` em sync.
+
+**Pendências (relatório):** venda não revalida lock no servidor por transação; 2 abas no mesmo
+device = mesmo deviceId (sem BroadcastChannel); `localStorage` do caixa ainda por loja;
+relatórios por terminal e `pdv-next` fora do escopo.
 
 ### PDV Multi-Terminais — Fase 1 (cadastro + seleção) (concluído 23/05/2026)
 

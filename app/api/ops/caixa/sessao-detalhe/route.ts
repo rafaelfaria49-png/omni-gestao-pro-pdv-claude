@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { prisma, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 
@@ -82,10 +82,50 @@ export async function GET(req: Request) {
     const totalVendas = Math.round((movFinAgg._sum.valor ?? 0) * 100) / 100
     const totalVendasCount = movFinAgg._count
 
+    // Vendas reais desta sessão (filtro por terminal — mais preciso que janela temporal).
+    // Quando a sessão tem terminalId, agrega só vendas deste terminal no período.
+    let totalVendasTerminal: number | null = null
+    let totalVendasCountTerminal: number | null = null
+    if (sessao.terminalId) {
+      const agg = await prisma.venda.aggregate({
+        where: {
+          storeId: lojaId,
+          terminalId: sessao.terminalId,
+          status: { not: "cancelada" },
+          at: { gte: sessao.abertaEm, lte: fimPeriodo },
+        },
+        _sum: { total: true },
+        _count: { id: true },
+      })
+      totalVendasTerminal = Math.round((agg._sum.total ?? 0) * 100) / 100
+      totalVendasCountTerminal = agg._count.id
+    }
+
+    // Info do terminal (gracioso se a tabela ainda não existir).
+    const terminal = sessao.terminalId
+      ? await withPrismaSafe(
+          async (db) =>
+            (await db.pdvTerminal.findFirst({
+              where: { id: sessao.terminalId!, storeId: lojaId },
+              select: { id: true, code: true, name: true },
+            })) as { id: string; code: string; name: string } | null,
+          null as { id: string; code: string; name: string } | null,
+        )
+      : null
+
     return NextResponse.json({
       ok: true,
       sessao,
-      totais: { sangrias, suprimentos, totalDevolucoes, totalVendas, totalVendasCount },
+      terminal,
+      totais: {
+        sangrias,
+        suprimentos,
+        totalDevolucoes,
+        totalVendas,
+        totalVendasCount,
+        totalVendasTerminal,
+        totalVendasCountTerminal,
+      },
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)

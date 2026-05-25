@@ -24,7 +24,7 @@ import {
   PanelLeftClose,
   type LucideIcon,
 } from "lucide-react";
-import { financeiroV2Enabled } from "@/lib/feature-flags";
+import { financeiroV2Enabled, roadmapHubsEnabled } from "@/lib/feature-flags";
 import { getEnterprisePermissions, type EnterprisePermissions } from "@/lib/auth/enterprise-permissions";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 
@@ -42,6 +42,8 @@ type Item = {
   sub?: SubItem[];
   /** Se definido, o item só aparece quando a função retorna true. */
   visible?: (p: EnterprisePermissions) => boolean;
+  /** Módulo em roadmap (mock/não operacional): oculto até `roadmapHubsEnabled`. */
+  experimental?: boolean;
 };
 
 function isRouteActive(path: string, to: string): boolean {
@@ -88,6 +90,7 @@ const hubsItems: Item[] = [
     icon: Megaphone,
     badge: "AI",
     visible: (p) => p.hubs.marketingIa,
+    experimental: true,
   },
   { to: "/dashboard/whatsapp", label: "WhatsApp HUB", icon: MessageCircle, visible: (p) => p.hubs.whatsapp },
   { to: "/dashboard/cadastros-v2", label: "Cadastros HUB", icon: Database, visible: (p) => p.hubs.cadastros },
@@ -98,7 +101,7 @@ const hubsItems: Item[] = [
     icon: History,
     visible: (p) => p.hubs.caixaHistorico,
   },
-  { to: "/dashboard/marketplace", label: "Marketplace", icon: Store, visible: (p) => p.hubs.marketplace },
+  { to: "/dashboard/marketplace", label: "Marketplace", icon: Store, visible: (p) => p.hubs.marketplace, experimental: true },
   ...(financeiroV2Enabled
     ? [
         {
@@ -147,8 +150,12 @@ const administrationItems: Item[] = [
 ];
 
 function filterNav(items: Item[], perms: EnterprisePermissions | null): Item[] {
-  if (!perms) return items;
-  return items.filter((i) => (i.visible ? i.visible(perms) : true));
+  return items.filter((i) => {
+    // Módulos em roadmap (mock) ficam ocultos até liberar via env de desenvolvimento.
+    if (i.experimental && !roadmapHubsEnabled) return false;
+    if (!perms) return true;
+    return i.visible ? i.visible(perms) : true;
+  });
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────

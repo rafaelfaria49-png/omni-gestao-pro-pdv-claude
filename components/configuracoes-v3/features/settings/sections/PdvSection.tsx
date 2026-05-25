@@ -28,6 +28,7 @@ import {
   writeOmnigestaoPdvModoPreferencia,
 } from "@/lib/omnigestao-pdv-modo";
 import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
+import { experimentalPdvEnabled } from "@/lib/feature-flags";
 
 /** Mesma chave que `vendas-pdv.tsx` — layout principal no browser: `classic` | `supermercado`. */
 const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout";
@@ -361,6 +362,10 @@ function PdvSectionContent() {
 
   const controlsDisabled = busy || noLoja;
 
+  // PDV Next é experimental (não persiste vendas): ocultar o card da galeria em
+  // operação real. Liberado em dev via env NEXT_PUBLIC_OG_EXPERIMENTAL=1.
+  const visibleFlows = experimentalPdvEnabled ? FLOWS : FLOWS.filter((f) => f.id !== "next");
+
   const previewMeta =
     previewFlow === null
       ? undefined
@@ -420,9 +425,9 @@ function PdvSectionContent() {
         {/* Grid 2x2 Premium */}
         <div
           className="grid w-full min-w-0 auto-rows-fr gap-6 grid-cols-1 lg:grid-cols-2"
-          data-pdv-layout-cards={String(FLOWS.length)}
+          data-pdv-layout-cards={String(visibleFlows.length)}
         >
-          {FLOWS.map((opt) => {
+          {visibleFlows.map((opt) => {
             const active = draftFlow === opt.id;
             const Icon = opt.icon;
             const selectCard = () => {

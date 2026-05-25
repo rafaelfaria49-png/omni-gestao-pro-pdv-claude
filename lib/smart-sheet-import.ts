@@ -214,14 +214,14 @@ export function pickSalePriceUniversal(
 }
 
 /**
- * ID estável: código de barras (789/206) quando existir; senão hash de nome + preço + linha
+ * ID estável: código de barras quando existir; senão hash de nome + preço + linha
  * (evita colapsar várias linhas com o mesmo nome em um único produto).
  */
 export function makeUniversalProductId(barcode: string, name: string, price: number, rowIndex: number): string {
-  if (barcode) return `gc-${barcode}`
+  if (barcode) return barcode
   const key = `${name.trim()}\0${String(price)}\0${rowIndex}`
   const h = createHash("sha256").update(key, "utf8").digest("hex").slice(0, 22)
-  return `gc-np-${h}`
+  return `np-${h}`
 }
 
 /** Garante ids únicos quando o mesmo código de barras aparece em mais de uma linha. */

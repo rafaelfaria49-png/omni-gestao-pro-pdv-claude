@@ -6,7 +6,7 @@ import {
   TrendingUp, BarChart3, AlertTriangle,
   Printer, Eye, XCircle, ChevronLeft, ChevronRight,
   CheckCircle, Filter, X, Tag, Clock, DollarSign, UserCheck, RotateCcw,
-  Receipt, Download, MoreHorizontal, Loader2, Calendar, Wrench, ShieldCheck,
+  Receipt, Download, MoreHorizontal, Loader2, Calendar, Wrench, ShieldCheck, Monitor,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -85,11 +85,20 @@ type VendaItem = {
   total: number
   status: string
   operador: string | null
+  /** FK do terminal PDV (Fase 3). null para vendas legadas (rótulo "Sem terminal"). */
+  terminalId: string | null
   formaPagamento: string
   quantidadeItens: number
   cancelada: boolean
   canceladaEm: string | null
   motivoCancelamento: string | null
+}
+
+type TerminalOption = {
+  id: string
+  code: string
+  name: string
+  status: "ACTIVE" | "INACTIVE"
 }
 
 type Kpis = {
@@ -106,6 +115,7 @@ type ApiResponse = {
   vendas: VendaItem[]
   total: number
   kpis: Kpis
+  terminais?: TerminalOption[]
 }
 
 type VendaDetalhe = {
@@ -125,6 +135,8 @@ type VendaDetalhe = {
   estoqueReposto?: boolean
   estornoFinanceiro?: boolean
   sessaoId: string | null
+  terminalId?: string | null
+  terminal?: { id: string; code: string; name: string } | null
   observacao: string | null
   correcoes: Array<{
     at: string
@@ -224,6 +236,7 @@ function saleRecordToVendaItem(s: SaleRecord): VendaItem {
     total: s.total,
     status: "concluida",
     operador: s.cashierId ?? null,
+    terminalId: s.terminalId ?? null,
     formaPagamento: formas.length > 0 ? formas.join(" + ") : "—",
     quantidadeItens: s.lines.reduce((sum, l) => sum + l.quantity, 0),
     cancelada: false,
@@ -246,6 +259,7 @@ export function VendasArquivoGeral() {
   const [pagamentoFiltro, setPagamentoFiltro] = useState("todos")
   const [operadorFiltro, setOperadorFiltro] = useState("")
   const [operadorInput, setOperadorInput] = useState("")
+  const [terminalFiltro, setTerminalFiltro] = useState("todos") // "todos" | "sem" | <terminalId>
   const [fromDate, setFromDate] = useState("")
   const [toDate, setToDate] = useState("")
   const [page, setPage] = useState(0)
@@ -257,6 +271,11 @@ export function VendasArquivoGeral() {
   const [vendas, setVendas] = useState<VendaItem[]>([])
   const [total, setTotal] = useState(0)
   const [kpis, setKpis] = useState<Kpis>({ totalVendas: 0, faturamento: 0, cancelamentos: 0, devolvidas: 0, concluidas: 0, ticketMedio: 0 })
+  const [terminais, setTerminais] = useState<TerminalOption[]>([])
+  const terminalMap = useMemo(
+    () => new Map(terminais.map((t) => [t.id, t] as const)),
+    [terminais],
+  )
   const [remoteSales, setRemoteSales] = useState<SaleRecord[]>([])
   const [remoteLoading, setRemoteLoading] = useState(false)
 
@@ -305,6 +324,7 @@ export function VendasArquivoGeral() {
         ...(statusFiltro !== "todos" ? { status: statusFiltro } : {}),
         ...(pagamentoFiltro !== "todos" ? { pagamento: pagamentoFiltro } : {}),
         ...(operadorFiltro.trim() ? { operador: operadorFiltro.trim() } : {}),
+        ...(terminalFiltro !== "todos" ? { terminalId: terminalFiltro } : {}),
         ...(fromDate ? { from: new Date(fromDate).toISOString() } : {}),
         ...(toDate ? { to: new Date(toDate + "T23:59:59").toISOString() } : {}),
       })
@@ -318,12 +338,13 @@ export function VendasArquivoGeral() {
       setVendas(data.vendas ?? [])
       setTotal(data.total ?? 0)
       setKpis(data.kpis ?? { totalVendas: 0, faturamento: 0, cancelamentos: 0, devolvidas: 0, concluidas: 0, ticketMedio: 0 })
+      if (Array.isArray(data.terminais)) setTerminais(data.terminais)
     } catch {
       setApiError(true)
     } finally {
       setLoading(false)
     }
-  }, [storeId, page, busca, statusFiltro, pagamentoFiltro, operadorFiltro, fromDate, toDate])
+  }, [storeId, page, busca, statusFiltro, pagamentoFiltro, operadorFiltro, terminalFiltro, fromDate, toDate])
 
   useEffect(() => { load() }, [load])
 
@@ -338,7 +359,7 @@ export function VendasArquivoGeral() {
   }, [operadorInput])
 
   // Reset page on filter change
-  useEffect(() => { setPage(0) }, [statusFiltro, pagamentoFiltro, fromDate, toDate])
+  useEffect(() => { setPage(0) }, [statusFiltro, pagamentoFiltro, terminalFiltro, fromDate, toDate])
 
   useEffect(() => {
     let cancelled = false
@@ -595,6 +616,7 @@ export function VendasArquivoGeral() {
     setBusca("")
     setOperadorFiltro("")
     setOperadorInput("")
+    setTerminalFiltro("todos")
     setFromDate("")
     setToDate("")
   }, [])
@@ -632,7 +654,7 @@ export function VendasArquivoGeral() {
     },
   ]
 
-  const hasActiveFilters = statusFiltro !== "todos" || pagamentoFiltro !== "todos" || busca !== "" || fromDate !== "" || toDate !== "" || operadorFiltro !== ""
+  const hasActiveFilters = statusFiltro !== "todos" || pagamentoFiltro !== "todos" || terminalFiltro !== "todos" || busca !== "" || fromDate !== "" || toDate !== "" || operadorFiltro !== ""
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -731,7 +753,7 @@ export function VendasArquivoGeral() {
           </div>
 
           {showFilters && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5 pt-3 border-t border-border">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6 pt-3 border-t border-border">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1">
                   <Tag className="h-3 w-3" /> Status
@@ -792,8 +814,28 @@ export function VendasArquivoGeral() {
                   onChange={(e) => setOperadorInput(e.target.value)}
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Monitor className="h-3 w-3" /> Terminal
+                </Label>
+                <Select value={terminalFiltro} onValueChange={setTerminalFiltro}>
+                  <SelectTrigger className="h-9 text-sm bg-background">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os terminais</SelectItem>
+                    {terminais.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name || t.code}
+                        {t.status === "INACTIVE" ? " (inativo)" : ""}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="sem">Sem terminal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {hasActiveFilters && (
-                <div className="sm:col-span-2 lg:col-span-5 flex justify-end">
+                <div className="sm:col-span-2 lg:col-span-6 flex justify-end">
                   <Button variant="ghost" size="sm" className="text-muted-foreground gap-1.5 h-8" onClick={clearAllFilters}>
                     <X className="h-3.5 w-3.5" />
                     Limpar filtros
@@ -830,6 +872,7 @@ export function VendasArquivoGeral() {
                   <TableHead className="min-w-[100px] font-semibold text-foreground hidden md:table-cell">Pagamento</TableHead>
                   <TableHead className="min-w-[80px] font-semibold text-foreground hidden lg:table-cell text-center">Itens</TableHead>
                   <TableHead className="min-w-[90px] font-semibold text-foreground hidden xl:table-cell">Operador</TableHead>
+                  <TableHead className="min-w-[90px] font-semibold text-foreground hidden xl:table-cell">Terminal</TableHead>
                   <TableHead className="min-w-[100px] font-semibold text-foreground">Status</TableHead>
                   <TableHead className="min-w-[100px] font-semibold text-foreground text-right">Total</TableHead>
                   <TableHead className="min-w-[180px] font-semibold text-foreground text-right sticky right-0 bg-muted/40 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
@@ -841,14 +884,14 @@ export function VendasArquivoGeral() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell colSpan={9} className="py-3">
+                      <TableCell colSpan={10} className="py-3">
                         <Skeleton className="h-8 w-full" />
                       </TableCell>
                     </TableRow>
                   ))
                 ) : mergedVendas.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="py-16 text-center">
+                    <TableCell colSpan={10} className="py-16 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <BarChart3 className="h-10 w-10 text-muted-foreground/50" />
                         <p className="font-medium text-foreground">
@@ -905,6 +948,16 @@ export function VendasArquivoGeral() {
                           <span className="text-xs text-muted-foreground truncate max-w-[100px] inline-block" title={v.operador ?? ""}>
                             {v.operador ?? "—"}
                           </span>
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell">
+                          {v.terminalId ? (
+                            <Badge variant="outline" className="text-[10px]">
+                              <Monitor className="mr-1 h-3 w-3" />
+                              {terminalMap.get(v.terminalId)?.code || "PDV"}
+                            </Badge>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">Sem terminal</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={cn("text-[10px] font-semibold", statusBadgeClass(v.status))}>
@@ -1110,6 +1163,17 @@ export function VendasArquivoGeral() {
                     <div>
                       <p className="text-xs text-muted-foreground">Operador</p>
                       <p className="font-medium text-foreground">{detalhe.operador ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Terminal</p>
+                      {detalhe.terminal ? (
+                        <p className="font-medium text-foreground">
+                          {detalhe.terminal.name || detalhe.terminal.code}{" "}
+                          <span className="text-xs text-muted-foreground">({detalhe.terminal.code})</span>
+                        </p>
+                      ) : (
+                        <p className="font-medium text-muted-foreground">Sem terminal</p>
+                      )}
                     </div>
                     {detalhe.sessaoId && (
                       <div>

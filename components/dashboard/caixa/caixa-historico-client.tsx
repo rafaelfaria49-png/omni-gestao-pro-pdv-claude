@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Unlock,
   Lock,
@@ -17,6 +17,7 @@ import {
   RotateCcw,
   Search,
   Filter,
+  Monitor,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -78,6 +79,7 @@ interface SessaoDetalhe {
   status: "ABERTA" | "FECHADA"
   abertaEm: string
   fechadaEm: string | null
+  terminalId: string | null
   payload: Record<string, unknown> | null
   operacoes: CaixaOperacao[]
   devolucoes: DevolucaoResumo[]
@@ -92,7 +94,14 @@ interface SessaoItem {
   status: "ABERTA" | "FECHADA"
   abertaEm: string
   fechadaEm: string | null
+  terminalId: string | null
   _count: { operacoes: number }
+}
+
+interface TerminalInfo {
+  id: string
+  code: string
+  name: string
 }
 
 type StatusFilter = "todos" | "ABERTA" | "FECHADA"
@@ -104,9 +113,44 @@ export function CaixaHistoricoClient() {
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detalhe, setDetalhe] = useState<SessaoDetalhe | null>(null)
+  const [detalheTerminal, setDetalheTerminal] = useState<TerminalInfo | null>(null)
+  const [detalheTotaisTerminal, setDetalheTotaisTerminal] = useState<{
+    total: number | null
+    count: number | null
+  } | null>(null)
   const [loadingDetalhe, setLoadingDetalhe] = useState(false)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos")
+  const [terminalFilter, setTerminalFilter] = useState<string>("todos") // "todos" | "sem" | id
   const [search, setSearch] = useState("")
+  const [terminais, setTerminais] = useState<TerminalInfo[]>([])
+  const terminalMap = useMemo(
+    () => new Map(terminais.map((t) => [t.id, t] as const)),
+    [terminais],
+  )
+
+  // Carrega a lista de terminais da loja (gracioso se a tabela não existir).
+  useEffect(() => {
+    if (!lojaAtivaId) return
+    let cancelled = false
+    void (async () => {
+      try {
+        // Reaproveita o histórico de vendas para listar terminais (mesmo endpoint).
+        const res = await fetch(
+          `/api/vendas/historico?storeId=${encodeURIComponent(lojaAtivaId)}&take=1`,
+          { headers: { "x-assistec-loja-id": lojaAtivaId }, cache: "no-store" },
+        )
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as { terminais?: TerminalInfo[] }
+          setTerminais(data.terminais ?? [])
+        }
+      } catch {
+        /* ignore */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [lojaAtivaId])
 
   const fetchSessoes = useCallback(async () => {
     if (!lojaAtivaId) return
@@ -114,6 +158,7 @@ export function CaixaHistoricoClient() {
     try {
       const params = new URLSearchParams({ take: "50" })
       if (statusFilter !== "todos") params.set("status", statusFilter)
+      if (terminalFilter !== "todos") params.set("terminalId", terminalFilter)
       const res = await fetch(`/api/ops/caixa/sessoes?${params}`, {
         headers: { "x-assistec-loja-id": lojaAtivaId },
       })
@@ -124,7 +169,7 @@ export function CaixaHistoricoClient() {
     } finally {
       setLoading(false)
     }
-  }, [lojaAtivaId, statusFilter])
+  }, [lojaAtivaId, statusFilter, terminalFilter])
 
   useEffect(() => {
     fetchSessoes()
@@ -136,6 +181,8 @@ export function CaixaHistoricoClient() {
       if (expandedId === sessaoId) {
         setExpandedId(null)
         setDetalhe(null)
+        setDetalheTerminal(null)
+        setDetalheTotaisTerminal(null)
         return
       }
       setExpandedId(sessaoId)
@@ -146,8 +193,21 @@ export function CaixaHistoricoClient() {
           { headers: { "x-assistec-loja-id": lojaAtivaId } }
         )
         if (res.ok) {
-          const data = (await res.json()) as { sessao: SessaoDetalhe }
+          const data = (await res.json()) as {
+            sessao: SessaoDetalhe
+            terminal?: TerminalInfo | null
+            totais?: { totalVendasTerminal?: number | null; totalVendasCountTerminal?: number | null }
+          }
           setDetalhe(data.sessao ?? null)
+          setDetalheTerminal(data.terminal ?? null)
+          setDetalheTotaisTerminal(
+            data.totais
+              ? {
+                  total: data.totais.totalVendasTerminal ?? null,
+                  count: data.totais.totalVendasCountTerminal ?? null,
+                }
+              : null,
+          )
         }
       } finally {
         setLoadingDetalhe(false)
@@ -210,6 +270,7 @@ export function CaixaHistoricoClient() {
     </head><body>
     <h2>RELATÓRIO DE SESSÃO DE CAIXA</h2>
     <p>Operador: ${s.operador || "—"}</p>
+    <p>Terminal: ${s.terminalId ? terminalMap.get(s.terminalId)?.name || terminalMap.get(s.terminalId)?.code || s.terminalId : "Sem terminal"}</p>
     <p>Abertura: ${fmtDt(s.abertaEm)}</p>
     <p>Fechamento: ${s.fechadaEm ? fmtDt(s.fechadaEm) : "Em aberto"}</p>
     <p>Status: ${s.status}</p>
@@ -264,6 +325,21 @@ export function CaixaHistoricoClient() {
             <SelectItem value="FECHADA">Fechados</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={terminalFilter} onValueChange={setTerminalFilter}>
+          <SelectTrigger className="h-9 w-[180px] border-border bg-secondary">
+            <Monitor className="mr-2 h-4 w-4 text-muted-foreground" />
+            <SelectValue placeholder="Terminal" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os terminais</SelectItem>
+            {terminais.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name || t.code}
+              </SelectItem>
+            ))}
+            <SelectItem value="sem">Sem terminal</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Lista de sessões */}
@@ -308,6 +384,16 @@ export function CaixaHistoricoClient() {
                       <span className="text-sm text-muted-foreground">{s.operador}</span>
                     </div>
                   )}
+                  <div className="flex items-center gap-1.5">
+                    <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+                    {s.terminalId ? (
+                      <span className="text-sm text-muted-foreground">
+                        {terminalMap.get(s.terminalId)?.code || "PDV"}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/70">Sem terminal</span>
+                    )}
+                  </div>
                   <span className="text-sm">
                     <span className="text-muted-foreground">Abertura: </span>
                     <span className="font-medium">{fmt(s.saldoInicial)}</span>
@@ -347,7 +433,12 @@ export function CaixaHistoricoClient() {
                       <Skeleton className="h-4 w-1/3" />
                     </div>
                   ) : detalhe && detalhe.id === s.id ? (
-                    <SessaoDetalheView sessao={detalhe} onImprimir={handleImprimir} />
+                    <SessaoDetalheView
+                      sessao={detalhe}
+                      terminal={detalheTerminal}
+                      totaisTerminal={detalheTotaisTerminal}
+                      onImprimir={handleImprimir}
+                    />
                   ) : null}
                 </div>
               )}
@@ -361,9 +452,13 @@ export function CaixaHistoricoClient() {
 
 function SessaoDetalheView({
   sessao,
+  terminal,
+  totaisTerminal,
   onImprimir,
 }: {
   sessao: SessaoDetalhe
+  terminal: TerminalInfo | null
+  totaisTerminal: { total: number | null; count: number | null } | null
   onImprimir: (s: SessaoDetalhe) => void
 }) {
   const sangrias = sessao.operacoes.filter((o) => o.tipo === "sangria")
@@ -382,6 +477,24 @@ function SessaoDetalheView({
 
   return (
     <div className="space-y-4">
+      {/* Terminal vinculado (ou aviso de sessão legada sem terminal) */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+        {terminal ? (
+          <>
+            <span className="text-muted-foreground">Terminal</span>
+            <Badge variant="outline" className="text-[10px]">
+              {terminal.code}
+              {terminal.name && terminal.name !== terminal.code ? ` · ${terminal.name}` : ""}
+            </Badge>
+          </>
+        ) : (
+          <span className="text-muted-foreground/80">
+            Sessão sem terminal vinculado (anterior ao multi-terminais)
+          </span>
+        )}
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MiniKpi label="Abertura" value={fmt(sessao.saldoInicial)} />
         <MiniKpi label="Saldo Final" value={sessao.saldoFinal != null ? fmt(sessao.saldoFinal) : "—"} />
@@ -398,6 +511,16 @@ function SessaoDetalheView({
           icon={<TrendingUp className="h-3 w-3" />}
         />
       </div>
+
+      {/* Vendas pelo Venda.terminalId (mais preciso que janela temporal) */}
+      {terminal && totaisTerminal && totaisTerminal.total != null && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+          <p className="text-xs text-muted-foreground">
+            Vendas neste terminal ({totaisTerminal.count ?? 0})
+          </p>
+          <p className="text-base font-semibold text-primary">{fmt(totaisTerminal.total)}</p>
+        </div>
+      )}
 
       {diferenca != null && (
         <div

@@ -216,6 +216,9 @@ function ItemsTable({
 
 export type PdvOmniClassicShellProps = {
   storeName: string
+  /** Id da unidade ativa (ex.: "loja-1"). Exibido junto ao nome para o operador
+   * confirmar a loja antes de vender e evitar gravar na unidade errada. */
+  storeId?: string
   cartRows: PdvOmniCartRow[]
   highlightLineId: string | null
   /** Flash curto ao adicionar item (modo rápido). */
@@ -365,11 +368,18 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             <Zap className="h-5 w-5" />
           </div>
           <div className="hidden h-8 w-px md:block bg-border" />
-          <div className="hidden min-w-0 flex-col leading-tight md:flex">
+          <div className="flex min-w-0 flex-col leading-tight">
             <span className="text-[11px] uppercase tracking-wider text-muted-foreground/60">
               Estabelecimento
             </span>
-            <span className="truncate text-sm font-medium text-foreground">{props.storeName}</span>
+            <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <span className="truncate">{props.storeName}</span>
+              {props.storeId ? (
+                <span className="shrink-0 rounded bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  {props.storeId}
+                </span>
+              ) : null}
+            </span>
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">

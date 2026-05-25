@@ -525,6 +525,26 @@ export function OperationsProvider({
                   dataAbertura: new Date(openSessao.abertaEm),
                 },
               }))
+            } else if (!openSessao && localCaixa.isOpen) {
+              // Servidor NÃO tem sessão aberta, mas o estado local diz aberto:
+              // "caixa falso aberto" (ex.: abertura não confirmada no servidor, ou
+              // sessão fechada em outro dispositivo). O servidor é a fonte da verdade —
+              // fecha localmente para o operador não vender sem sessão.
+              // Seguro: este bloco só roda quando o servidor respondeu (rCaixa.ok) e
+              // inventory/ordens carregaram; offline aborta o loadDb antes daqui.
+              // Vendas locais pendentes NÃO são perdidas (continuam em syncPending).
+              setState((prev) => ({
+                ...prev,
+                caixaSessaoId: null,
+                caixa: {
+                  ...prev.caixa,
+                  isOpen: false,
+                  saldoInicial: 0,
+                  dataAbertura: null,
+                  totalEntradas: 0,
+                  totalSaidas: 0,
+                },
+              }))
             }
           }
         } catch {

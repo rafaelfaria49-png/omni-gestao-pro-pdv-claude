@@ -26,12 +26,21 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const status = url.searchParams.get("status") ?? undefined
   const take = Math.min(parseInt(url.searchParams.get("take") ?? "50", 10), 200)
+  // Filtro por terminal: id, "sem" (sessões sem terminal) ou ausente.
+  const terminalIdParam = url.searchParams.get("terminalId")?.trim() ?? ""
+  const terminalWhere =
+    terminalIdParam === "sem"
+      ? { terminalId: null as string | null }
+      : terminalIdParam
+        ? { terminalId: terminalIdParam }
+        : {}
 
   try {
     const sessoes = await prisma.sessaoCaixa.findMany({
       where: {
         storeId: lojaId,
         ...(status === "ABERTA" || status === "FECHADA" ? { status } : {}),
+        ...terminalWhere,
       },
       orderBy: { abertaEm: "desc" },
       take,
@@ -46,6 +55,7 @@ export async function GET(req: Request) {
         status: true,
         abertaEm: true,
         fechadaEm: true,
+        terminalId: true,
         _count: { select: { operacoes: true } },
       },
     })

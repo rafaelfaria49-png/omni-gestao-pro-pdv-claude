@@ -4,12 +4,15 @@ import { VendasPDV } from "@/components/dashboard/vendas/vendas-pdv"
 import { TerminalSelector } from "@/components/dashboard/vendas/terminal-selector"
 import { useStudioTheme, type StudioThemeMode } from "@/components/theme/ThemeProvider"
 import { LoadingState } from "@/components/ui/states"
+import { Button } from "@/components/ui/button"
+import { AlertTriangle, Loader2, Lock, RefreshCw } from "lucide-react"
 import {
   readOmnigestaoPdvModoPreferencia,
   writeOmnigestaoPdvModoPreferencia,
 } from "@/lib/omnigestao-pdv-modo"
+import { experimentalPdvEnabled } from "@/lib/feature-flags"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { useTerminalAtivo } from "@/lib/pdv-terminal"
+import { useTerminalAtivo, useTerminalHeartbeat } from "@/lib/pdv-terminal"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useLayoutEffect, useState } from "react"
 
@@ -29,7 +32,12 @@ export function VendasPageClient() {
   const [terminalBypass, setTerminalBypass] = useState(false)
   const { mode } = useStudioTheme()
   const { lojaAtivaId } = useLojaAtiva()
-  const { terminal, select } = useTerminalAtivo(lojaAtivaId)
+  const { terminal, select, clear } = useTerminalAtivo(lojaAtivaId)
+  const lock = useTerminalHeartbeat({
+    storeId: lojaAtivaId,
+    terminalId: terminal?.id ?? null,
+    enabled: mounted && !isNextLayout && !!lojaAtivaId && !!terminal && !terminalBypass,
+  })
 
   useLayoutEffect(() => {
     document.documentElement.setAttribute("data-theme", studioModeToDataTheme(mode))
@@ -41,9 +49,15 @@ export function VendasPageClient() {
     try {
       const layout = localStorage.getItem("@omnigestao:pdv-layout")
       if (layout === "next") {
-        setIsNextLayout(true)
-        router.replace("/dashboard/pdv-next")
-        return
+        if (experimentalPdvEnabled) {
+          setIsNextLayout(true)
+          router.replace("/dashboard/pdv-next")
+          return
+        }
+        // PDV Next é experimental e não persiste vendas: não redirecionar em
+        // operação real. Auto-heal da preferência presa para o caixa não ficar
+        // refém de uma escolha antiga (segue no PDV oficial).
+        localStorage.setItem("@omnigestao:pdv-layout", "classic")
       }
     } catch {
       /* ignore */
@@ -85,9 +99,77 @@ export function VendasPageClient() {
     )
   }
 
+  // Lock perdido: outro dispositivo assumiu este terminal (ou foi liberado). Bloqueia
+  // abertura/fechamento/venda até reassumir ou escolher outro terminal.
+  if (terminal && !terminalBypass && lock.status === "lost") {
+    return (
+      <div className="flex min-h-0 w-full min-w-0 flex-1 items-center justify-center overflow-y-auto bg-background px-4 py-8 text-foreground">
+        <TerminalLostPanel
+          code={terminal.code}
+          occupiedOperador={lock.occupiedBy?.operador ?? null}
+          onReassumir={() => lock.reacquire(false)}
+          onReselecionar={() => clear()}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-background text-foreground transition-colors duration-300 basis-0">
+      {terminal && !terminalBypass && lock.degraded && (
+        <div className="flex items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          Controle de terminal indisponível — operando sem trava de uso simultâneo.
+        </div>
+      )}
       <VendasPDV isModoRapido={isModoRapido} />
+    </div>
+  )
+}
+
+function TerminalLostPanel({
+  code,
+  occupiedOperador,
+  onReassumir,
+  onReselecionar,
+}: {
+  code: string
+  occupiedOperador: string | null
+  onReassumir: () => Promise<boolean>
+  onReselecionar: () => void
+}) {
+  const [tentando, setTentando] = useState(false)
+  return (
+    <div className="w-full max-w-md rounded-xl border border-destructive/40 bg-card p-6 text-center">
+      <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full border border-destructive/30 bg-destructive/10">
+        <Lock className="h-7 w-7 text-destructive" />
+      </div>
+      <h2 className="text-lg font-bold text-foreground">Controle do {code} perdido</h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        {occupiedOperador
+          ? `Este terminal foi assumido por ${occupiedOperador} em outro dispositivo.`
+          : "Este terminal foi assumido em outro dispositivo ou liberado."}{" "}
+        As operações ficam bloqueadas aqui até você reassumir ou escolher outro terminal.
+      </p>
+      <div className="mt-6 flex flex-col gap-2">
+        <Button
+          disabled={tentando}
+          onClick={() => {
+            setTentando(true)
+            void onReassumir().finally(() => setTentando(false))
+          }}
+        >
+          {tentando ? (
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-1 h-4 w-4" />
+          )}
+          Tentar reassumir
+        </Button>
+        <Button variant="outline" onClick={onReselecionar}>
+          Selecionar outro terminal
+        </Button>
+      </div>
     </div>
   )
 }

@@ -5,17 +5,20 @@
  * Lê storeId do header x-assistec-loja-id, cookie assistec-active-store ou query storeId.
  *
  * Filtros disponíveis:
- *  q         — busca por pedidoId / clienteNome
- *  status    — concluida | cancelada | parcialmente_devolvida | devolvida
- *  pagamento — dinheiro | pix | cartaoDebito | cartaoCredito | carne | aPrazo | creditoVale
- *  operador  — string parcial no campo operador
- *  from      — ISO date início
- *  to        — ISO date fim
- *  take      — máx 200 (padrão 50)
- *  skip      — paginação
+ *  q          — busca por pedidoId / clienteNome
+ *  status     — concluida | cancelada | parcialmente_devolvida | devolvida
+ *  pagamento  — dinheiro | pix | cartaoDebito | cartaoCredito | carne | aPrazo | creditoVale
+ *  operador   — string parcial no campo operador
+ *  terminalId — id do PdvTerminal (ou "sem" p/ vendas legadas/sem terminal selecionado)
+ *  from       — ISO date início
+ *  to         — ISO date fim
+ *  take       — máx 200 (padrão 50)
+ *  skip       — paginação
+ *
+ * Resposta inclui `terminais` (PDVs da loja, para popular dropdown).
  */
 import { NextResponse } from "next/server"
-import { prisma, prismaEnsureConnected } from "@/lib/prisma"
+import { prisma, prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import type { Prisma } from "@/generated/prisma"
@@ -76,6 +79,15 @@ export async function GET(req: Request) {
   try {
     await prismaEnsureConnected()
 
+    // Filtro por terminal: id real, "sem" (sem terminal — null), ou ausente (todos).
+    const terminalIdParam = url.searchParams.get("terminalId")?.trim() ?? ""
+    const terminalFilter: Prisma.VendaWhereInput | null =
+      terminalIdParam === "sem"
+        ? { terminalId: null }
+        : terminalIdParam
+          ? { terminalId: terminalIdParam }
+          : null
+
     const where: Prisma.VendaWhereInput = {
       storeId,
       ...(q
@@ -90,6 +102,7 @@ export async function GET(req: Request) {
       ...(operadorFilter
         ? { operador: { contains: operadorFilter, mode: "insensitive" } }
         : {}),
+      ...(terminalFilter ?? {}),
       ...(fromStr || toStr
         ? {
             at: {
@@ -111,9 +124,12 @@ export async function GET(req: Request) {
       prisma.venda.count({ where }),
     ])
 
-    // KPIs — full store dataset (no search filter, only date range if provided)
+    // KPIs — escopo da loja (com data e filtro de terminal aplicados, sem buscar
+    // por texto/operador/pagamento). Quando o filtro de terminal está ativo, os
+    // KPIs refletem o terminal escolhido; sem filtro, são da loja inteira.
     const kpiWhere: Prisma.VendaWhereInput = {
       storeId,
+      ...(terminalFilter ?? {}),
       ...(fromStr || toStr
         ? {
             at: {
@@ -153,6 +169,7 @@ export async function GET(req: Request) {
       total: r.total,
       status: r.status,
       operador: r.operador || null,
+      terminalId: r.terminalId ?? null,
       formaPagamento: primaryPaymentLabel(r.payload),
       quantidadeItens: r.itens.reduce((acc, it) => acc + it.quantidade, 0),
       cancelada: r.status === "cancelada",
@@ -169,6 +186,21 @@ export async function GET(req: Request) {
       vendas = vendas.filter((v) => paymentMatchesFilter(pedidoMap.get(v.id), pagamentoFilter))
     }
 
+    // Terminais da loja (para popular dropdown) — gracioso se a tabela não existir.
+    const terminais = await withPrismaSafe(
+      async (db) =>
+        ((await db.pdvTerminal.findMany({
+          where: { storeId },
+          select: { id: true, code: true, name: true, status: true },
+        })) as Array<{ id: string; code: string; name: string; status: string }>).map((t) => ({
+          id: t.id,
+          code: t.code,
+          name: t.name,
+          status: t.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
+        })),
+      [] as Array<{ id: string; code: string; name: string; status: string }>,
+    )
+
     return NextResponse.json({
       ok: true,
       vendas,
@@ -181,6 +213,7 @@ export async function GET(req: Request) {
         concluidas,
         ticketMedio,
       },
+      terminais,
     })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -192,6 +225,7 @@ export async function GET(req: Request) {
         vendas: [],
         total: 0,
         kpis: { totalVendas: 0, faturamento: 0, cancelamentos: 0, devolvidas: 0, concluidas: 0, ticketMedio: 0 },
+        terminais: [],
       },
       { status: 503 },
     )

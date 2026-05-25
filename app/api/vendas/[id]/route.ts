@@ -8,7 +8,7 @@
  * - Payload JSON (pagamentos, descontos, cpf)
  */
 import { NextResponse } from "next/server"
-import { prisma, prismaEnsureConnected } from "@/lib/prisma"
+import { prisma, prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 
@@ -114,6 +114,25 @@ export async function GET(
         : [])
       : []
 
+    // Terminal: resolve via FK na coluna `Venda.terminalId` (Fase 3) ou via payload
+    // (vendas da Fase 1/2 antes do backfill da coluna).
+    const terminalIdResolved =
+      venda.terminalId ||
+      (venda.payload && typeof venda.payload === "object"
+        ? ((venda.payload as Record<string, unknown>).terminalId as string | undefined)
+        : undefined) ||
+      null
+    const terminal = terminalIdResolved
+      ? await withPrismaSafe(
+          async (db) =>
+            (await db.pdvTerminal.findFirst({
+              where: { id: terminalIdResolved, storeId },
+              select: { id: true, code: true, name: true },
+            })) as { id: string; code: string; name: string } | null,
+          null as { id: string; code: string; name: string } | null,
+        )
+      : null
+
     return NextResponse.json({
       ok: true,
       venda: {
@@ -133,6 +152,8 @@ export async function GET(
         estoqueReposto: !!movEstoqueCancel,
         estornoFinanceiro: !!movFinCancel,
         sessaoId: sessaoIdPayload ?? null,
+        terminalId: terminalIdResolved,
+        terminal,
         observacao: venda.payload && typeof venda.payload === "object"
           ? ((venda.payload as Record<string, unknown>).observacao as string | null) ?? null
           : null,

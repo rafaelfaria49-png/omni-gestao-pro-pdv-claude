@@ -21,6 +21,7 @@ import { useLojaAtiva } from "@/lib/loja-ativa"
 import { defaultChecklist, horaAtualHHMM } from "@/components/dashboard/os/ordens-servico"
 import { cellToTrimmedString } from "@/lib/import-normalize"
 import { shouldSkipInventoryImportName } from "@/lib/inventory-import-filters"
+import { normalizeSkuForSave } from "@/lib/produto-sku"
 import {
   mapGestaoClickSituacaoOs,
   mapStatusContasPagarImportBlindagem,
@@ -907,7 +908,7 @@ function buildProdutosItemsFromSheetFlexible(sheet: ParsedSheet, mappingOverride
     if (shouldSkipInventoryImportName(name)) continue
     const skuRaw = colSku ? String(r[colSku] ?? "").trim() : ""
     const base = sanitizeId(skuRaw || name)
-    let id = base ? `gc-${base}` : `gc-item-${i + 1}`
+    let id = base ? normalizeSkuForSave(base) : `item-${i + 1}`
     if (seen.has(id)) id = `${id}-${i + 1}`
     seen.add(id)
 

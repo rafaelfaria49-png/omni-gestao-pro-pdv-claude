@@ -1036,6 +1036,20 @@ export function PdvClassic({
               "Falha de rede. Operação aplicada apenas no caixa local — verifique a conexão.",
           })
         })
+    } else {
+      // Sem sessão confirmada no servidor (abertura não registrada): a operação
+      // afeta apenas o caixa local (totalSaidas/totalEntradas já incrementado).
+      // Não pode ser silenciosa — o fechamento usa a sessão do servidor e os
+      // totais divergiriam.
+      toast({
+        variant: "destructive",
+        title:
+          op === "sangria"
+            ? "Sangria só no caixa local"
+            : "Suprimento só no caixa local",
+        description:
+          "Caixa sem sessão confirmada no servidor. Reabra o caixa para registrar sangrias/suprimentos com segurança.",
+      })
     }
     setOperationType(null)
     toast({
@@ -1044,6 +1058,10 @@ export function PdvClassic({
     })
   }
 
+  // ⚠️ LEGADO — keymap do layout `uiShell === "default"`. Em produção o Clássico
+  // roda SEMPRE como `omni-smart` (VendasPDV), portanto este handler NÃO executa.
+  // Não adicione atalhos aqui (vira "feature fantasma"): o keymap operacional vivo
+  // é o `down`/`openShellShortcut` do shell omni-smart, mais abaixo.
   useEffect(() => {
     if (uiShell !== "default") return
     const handler = (e: globalThis.KeyboardEvent) => {
@@ -1291,6 +1309,14 @@ export function PdvClassic({
       if (shellModalBlocking) return
       if (e.key === "Control") ctrlDown = true
       else ctrlDown = false
+      // INSERT — Item Avulso (venda de balcão sem cadastro). Antes só existia no
+      // handler `default` (desativado no shell omni-smart) → era "feature fantasma".
+      // Agora vive no keymap operacional do Clássico, igual a Assistência/Supermercado.
+      if (e.key === "Insert") {
+        e.preventDefault()
+        setShowItemAvulsoModal(true)
+        return
+      }
       if (!fnKeys.has(e.key)) return
       e.preventDefault()
       openShellShortcut(e.key)
@@ -1426,6 +1452,7 @@ export function PdvClassic({
           <PdvOmniClassicShell
               isModoRapido={isModoRapido}
               storeName={storeDisplayName}
+              storeId={lojaAtivaId ?? undefined}
               cartRows={shellCartRows}
               highlightLineId={shellHighlightLineId}
               flashLineId={isModoRapido ? rapidoFlashLineId : null}
@@ -1441,7 +1468,13 @@ export function PdvClassic({
               bipeSuggestions={bipeSuggestions}
               onBipeSuggestionSelect={handleBipeSuggestionSelect}
               customerDisplay={shellCustomerField}
-              onCustomerDisplayChange={(v) => setShellCustomerField(v)}
+              onCustomerDisplayChange={(v) => {
+                // Busca de cliente ao digitar no campo inline (antes só funcionava
+                // via F2): alimenta a mesma busca live do picker e abre o resultado.
+                setShellCustomerField(v)
+                setCustomerSearch(v)
+                if (v.trim().length > 0) setShellClientSearchOpen(true)
+              }}
               nextQtyStr={shellNextQty}
               onNextQtyStrChange={setShellNextQty}
               seller={shellSeller}
@@ -1534,7 +1567,7 @@ export function PdvClassic({
               }}
               onOpenReceivablesModule={() => {
                 setShellReceivablesOpen(false)
-                router.push("/?page=contas-receber")
+                router.push("/dashboard/financeiro/contas-a-receber")
                 focusShellBipe()
               }}
               onAddProductFromSearch={(p) => {
@@ -1875,7 +1908,7 @@ export function PdvClassic({
                 </div>
                 <button
                   type="button"
-                  onClick={() => router.replace("/?page=os")}
+                  onClick={() => router.replace("/dashboard/operacoes-v2")}
                   className="mt-3 flex h-16 w-full items-center justify-between gap-3 rounded-xl border-2 border-primary bg-primary px-4 text-left text-primary-foreground shadow-lg transition-colors hover:bg-primary/90"
                 >
                   <span className="flex min-w-0 items-center gap-2 text-lg font-extrabold tracking-wide">
@@ -2454,6 +2487,7 @@ export function PdvClassic({
               { key: "F7", desc: uiShell === "omni-smart" ? "—" : "Finalizar / pagamento" },
               { key: "F8", desc: uiShell === "omni-smart" ? "—" : "Limpar carrinho" },
               { key: "F9", desc: uiShell === "omni-smart" ? "Contas a receber" : "—" },
+              { key: "Insert", desc: "Item avulso (venda de balcão sem cadastro)" },
               { key: "F10 / Espaço", desc: "Finalizar venda" },
               { key: "ESC", desc: "Fechar modal / remover último item (modo rápido)" },
               { key: "Alt + D / Alt + P", desc: "Pagamento rápido" },

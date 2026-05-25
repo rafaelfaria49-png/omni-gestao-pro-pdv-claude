@@ -1102,7 +1102,7 @@ export default function DashboardClientesPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem asChild>
                               <a
-                                href={`/dashboard/pdv?clienteId=${r.id}`}
+                                href={`/dashboard/vendas?clienteId=${r.id}`}
                                 className="flex w-full items-center px-2 py-1.5 text-sm"
                               >
                                 <DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />

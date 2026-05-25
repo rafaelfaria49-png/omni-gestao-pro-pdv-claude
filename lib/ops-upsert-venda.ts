@@ -72,9 +72,15 @@ export async function upsertVendaInTransaction(
     operadorLabel?.trim() ||
     (typeof sale.cashierId === "string" && sale.cashierId.trim() ? sale.cashierId.trim() : null)
 
+  const terminalId =
+    typeof sale.terminalId === "string" && sale.terminalId.trim() ? sale.terminalId.trim() : null
+
   const lines = Array.isArray(sale.lines) ? sale.lines : []
 
   // ── 1. Upsert Venda ─────────────────────────────────────────────────────────
+  // Multi-Terminais Fase 3: também popula a coluna `Venda.terminalId` (além do payload)
+  // para permitir filtros SQL por terminal nos relatórios. Tudo nullable —
+  // vendas sem terminal selecionado ou anteriores à feature continuam funcionando.
   const v = await tx.venda.upsert({
     where: { pedidoId },
     create: {
@@ -86,6 +92,7 @@ export async function upsertVendaInTransaction(
       clienteNome,
       clienteId,
       operador,
+      ...(terminalId ? { terminalId } : {}),
     },
     update: {
       storeId: lojaId,
@@ -95,6 +102,7 @@ export async function upsertVendaInTransaction(
       clienteNome,
       ...(clienteId ? { clienteId } : {}),
       ...(operador ? { operador } : {}),
+      ...(terminalId ? { terminalId } : {}),
     },
   })
 
