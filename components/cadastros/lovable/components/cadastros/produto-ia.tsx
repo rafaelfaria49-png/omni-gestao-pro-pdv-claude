@@ -1,12 +1,196 @@
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   Sparkles, Link2, Barcode, ImagePlus, Type, Check, Loader2,
   Wand2, Layers, Tag as TagIcon, Store,
   AlertCircle, Image as ImageIcon,
-  Send,
+  Send, Plus, ChevronDown,
 } from "lucide-react";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea } from "./ui-kit";
-import { upsertProduto } from "@/app/actions/cadastros";
+import {
+  listCategorias,
+  listCategoriasMarcasUsadasEmProduto,
+  listMarcas,
+  upsertCategoria,
+  upsertMarca,
+  upsertProduto,
+} from "@/app/actions/cadastros";
+
+/* ── Combobox com autocomplete + "criar novo" (Categoria/Marca) ── */
+/**
+ * Compatível com o legado: trabalha em cima de string (nome).
+ * Não força vínculo por id — apenas grava o nome canônico em Produto.category/brand.
+ */
+function CategoriaMarcaCombobox({
+  value,
+  onChange,
+  options,
+  onCreate,
+  placeholder,
+  loading,
+  inputId,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  options: string[];
+  onCreate: (name: string) => Promise<string | null>;
+  placeholder: string;
+  loading?: boolean;
+  inputId?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const [creating, setCreating] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const normalized = draft.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (!normalized) return options.slice(0, 50);
+    return options
+      .filter((o) => o.toLowerCase().includes(normalized))
+      .slice(0, 50);
+  }, [options, normalized]);
+
+  const hasExact = useMemo(
+    () => options.some((o) => o.trim().toLowerCase() === normalized),
+    [options, normalized]
+  );
+
+  const commit = (next: string) => {
+    const trimmed = next.trim();
+    onChange(trimmed);
+    setDraft(trimmed);
+    setOpen(false);
+  };
+
+  const handleCreate = async () => {
+    const candidate = draft.trim();
+    if (!candidate || creating) return;
+    setCreating(true);
+    try {
+      const canonical = await onCreate(candidate);
+      if (canonical) commit(canonical);
+      else commit(candidate);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="relative">
+        <input
+          ref={inputRef}
+          id={inputId}
+          data-omni-ui-kit="control"
+          value={draft}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            if (!open) setOpen(true);
+          }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => {
+            // Commit do nome digitado (texto livre permitido p/ manter compat com strings legadas)
+            onChange(draft.trim());
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setOpen(false);
+              return;
+            }
+            if (e.key === "Enter") {
+              if (!hasExact && draft.trim()) {
+                e.preventDefault();
+                void handleCreate();
+              } else {
+                e.preventDefault();
+                commit(draft);
+              }
+            }
+            if (e.key === "ArrowDown" && !open) setOpen(true);
+          }}
+          placeholder={placeholder}
+          className="w-full h-10 px-3 pr-9 rounded-lg border border-input bg-background text-foreground outline-none text-sm transition-colors focus:ring-2 focus:ring-ring"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => {
+            setOpen((v) => !v);
+            inputRef.current?.focus();
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 grid h-6 w-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+          aria-label="Abrir lista"
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-border bg-popover text-popover-foreground shadow-lg">
+          {loading ? (
+            <div className="px-3 py-2 text-xs text-muted-foreground">Carregando…</div>
+          ) : (
+            <>
+              {filtered.length === 0 && !draft.trim() ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum cadastro ainda.</div>
+              ) : null}
+              {filtered.map((o) => (
+                <button
+                  key={o}
+                  type="button"
+                  onMouseDown={(e) => {
+                    // mousedown para vencer o onBlur do input
+                    e.preventDefault();
+                    commit(o);
+                  }}
+                  className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent hover:text-accent-foreground ${
+                    o.trim().toLowerCase() === normalized ? "bg-accent/60 text-accent-foreground" : "text-foreground"
+                  }`}
+                >
+                  <span className="truncate">{o}</span>
+                  {o.trim().toLowerCase() === normalized && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+                </button>
+              ))}
+              {draft.trim() && !hasExact && (
+                <button
+                  type="button"
+                  disabled={creating}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    void handleCreate();
+                  }}
+                  className="flex w-full items-center gap-2 border-t border-border bg-primary/5 px-3 py-2 text-left text-sm text-primary hover:bg-primary/10 disabled:opacity-60"
+                >
+                  {creating ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  <span className="truncate">Criar &quot;{draft.trim()}&quot;</span>
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Source = "manual" | "link" | "barcode" | "image";
 
@@ -55,14 +239,92 @@ export function ProductAIModal({
   const nomeRef = useRef<HTMLInputElement | null>(null);
   const skuRef = useRef<HTMLInputElement | null>(null);
   const barrasRef = useRef<HTMLInputElement | null>(null);
-  const categoriaRef = useRef<HTMLInputElement | null>(null);
-  const marcaRef = useRef<HTMLInputElement | null>(null);
   const modeloRef = useRef<HTMLInputElement | null>(null);
   const fornecedorRef = useRef<HTMLInputElement | null>(null);
   const estoqueRef = useRef<HTMLInputElement | null>(null);
   const custoRef = useRef<HTMLInputElement | null>(null);
   const precoRef = useRef<HTMLInputElement | null>(null);
   const garantiaRef = useRef<HTMLInputElement | null>(null);
+
+  // Categoria/Marca: cadastros controlados (dicionário) + texto livre p/ compat.
+  const [categoria, setCategoria] = useState<string>(initial?.categoria ?? "");
+  const [marca, setMarca] = useState<string>(initial?.marca ?? "");
+  const [categoriaOpts, setCategoriaOpts] = useState<string[]>([]);
+  const [marcaOpts, setMarcaOpts] = useState<string[]>([]);
+  const [optsLoading, setOptsLoading] = useState(false);
+
+  // Reseta quando troca de produto em edição (modal reabrindo com outro id).
+  useEffect(() => {
+    setCategoria(initial?.categoria ?? "");
+    setMarca(initial?.marca ?? "");
+  }, [productId, initial?.categoria, initial?.marca]);
+
+  // Carrega dicionário (CategoriaCadastro/MarcaCadastro) + valores legados em uso ao abrir.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setOptsLoading(true);
+    Promise.all([
+      listCategorias(storeId),
+      listMarcas(storeId),
+      listCategoriasMarcasUsadasEmProduto(storeId),
+    ])
+      .then(([cats, brs, usadas]) => {
+        if (cancelled) return;
+        // União case-insensitive: dicionário tem precedência sobre legado para o nome canônico.
+        const mergeUnique = (preferred: string[], fallback: string[]) => {
+          const seen = new Map<string, string>();
+          for (const n of preferred) {
+            const key = n.trim().toLowerCase();
+            if (key && !seen.has(key)) seen.set(key, n.trim());
+          }
+          for (const n of fallback) {
+            const key = n.trim().toLowerCase();
+            if (key && !seen.has(key)) seen.set(key, n.trim());
+          }
+          return Array.from(seen.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+        };
+        const catDic = cats
+          .filter((c) => c.active && (c.type === "produto" || c.type === "geral"))
+          .map((c) => c.name);
+        const brandDic = brs.filter((b) => b.active).map((b) => b.name);
+        setCategoriaOpts(mergeUnique(catDic, usadas.categorias));
+        setMarcaOpts(mergeUnique(brandDic, usadas.marcas));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCategoriaOpts([]);
+        setMarcaOpts([]);
+      })
+      .finally(() => {
+        if (!cancelled) setOptsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, storeId]);
+
+  const createCategoria = async (name: string): Promise<string | null> => {
+    try {
+      const res = await upsertCategoria(storeId, { name, type: "produto", active: true });
+      setCategoriaOpts((prev) => (prev.includes(res.name) ? prev : [...prev, res.name].sort((a, b) => a.localeCompare(b, "pt-BR"))));
+      return res.name;
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar categoria");
+      return null;
+    }
+  };
+
+  const createMarca = async (name: string): Promise<string | null> => {
+    try {
+      const res = await upsertMarca(storeId, { name, type: "", active: true });
+      setMarcaOpts((prev) => (prev.includes(res.name) ? prev : [...prev, res.name].sort((a, b) => a.localeCompare(b, "pt-BR"))));
+      return res.name;
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Não foi possível criar marca");
+      return null;
+    }
+  };
 
   const runAI = () => {
     setRunning(true);
@@ -162,8 +424,26 @@ export function ProductAIModal({
             </Field>
             <Field label="SKU"><Input ref={skuRef} defaultValue={initial?.sku ?? ""} placeholder="SKU-001" /></Field>
             <Field label="Código de barras"><Input ref={barrasRef} defaultValue={initial?.barras ?? ""} placeholder="7891234500011" /></Field>
-            <Field label="Categoria"><Input ref={categoriaRef} defaultValue={initial?.categoria ?? ""} placeholder="Ex.: Telas" /></Field>
-            <Field label="Marca"><Input ref={marcaRef} defaultValue={initial?.marca ?? ""} placeholder="Ex.: Apple" /></Field>
+            <Field label="Categoria">
+              <CategoriaMarcaCombobox
+                value={categoria}
+                onChange={setCategoria}
+                options={categoriaOpts}
+                onCreate={createCategoria}
+                placeholder="Selecione ou crie (ex.: Telas)"
+                loading={optsLoading}
+              />
+            </Field>
+            <Field label="Marca">
+              <CategoriaMarcaCombobox
+                value={marca}
+                onChange={setMarca}
+                options={marcaOpts}
+                onCreate={createMarca}
+                placeholder="Selecione ou crie (ex.: Apple)"
+                loading={optsLoading}
+              />
+            </Field>
             <Field label="Modelo compatível"><Input ref={modeloRef} defaultValue="" placeholder="Ex.: iPhone 11" /></Field>
             <Field label="Fornecedor"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? ""} placeholder="Nome do fornecedor" /></Field>
             <Field label="Estoque atual"><Input ref={estoqueRef} type="number" min={0} step={1} defaultValue={initial?.estoque !== undefined ? String(initial.estoque) : (productId ? "" : "0")} placeholder="0" /></Field>
@@ -272,8 +552,8 @@ export function ProductAIModal({
                     nome: (nomeRef.current?.value ?? "").trim(),
                     sku: (skuRef.current?.value ?? "").trim(),
                     barras: (barrasRef.current?.value ?? "").trim(),
-                    categoria: (categoriaRef.current?.value ?? "").trim(),
-                    marca: (marcaRef.current?.value ?? "").trim(),
+                    categoria: categoria.trim(),
+                    marca: marca.trim(),
                     fornecedor: (fornecedorRef.current?.value ?? "").trim(),
                     estoque,
                     custo: Number.isFinite(custo) ? custo : 0,

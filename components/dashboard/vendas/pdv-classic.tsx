@@ -991,51 +991,57 @@ export function PdvClassic({
       })
     }
     if (lojaAtivaId && sessaoId) {
-      // Falha não pode ser silenciosa: o totalSaidas/totalEntradas já foi
-      // incrementado localmente (adicionarSaida/adicionarEntrada acima). Se o
-      // servidor não confirmar, o caixa local diverge do banco — operador
-      // precisa saber para retentar ou registrar manualmente.
-      void fetch("/api/ops/caixa/operacao", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "x-assistec-loja-id": lojaAtivaId,
-        },
-        body: JSON.stringify({
-          sessaoId,
-          tipo: op,
-          valor: value,
-          motivo: reason,
-          operador: auditUser(),
-        }),
+      // Retry exponencial com idempotência: o totalSaidas/totalEntradas já foi
+      // incrementado localmente. Se o servidor não confirmar, o caixa diverge —
+      // então retentamos. O `localId` faz o servidor deduplicar (sem duplicar a
+      // operação caso uma tentativa anterior tenha gravado mas a resposta se perdido).
+      const localId = `caixaop:${sessaoId}:${op}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
+      const opLabel = op === "sangria" ? "Sangria" : "Suprimento"
+      const body = JSON.stringify({
+        sessaoId,
+        tipo: op,
+        valor: value,
+        motivo: reason,
+        operador: auditUser(),
+        localId,
       })
-        .then((res) => {
-          if (!res.ok) {
-            console.error("[caixa/operacao] HTTP", res.status, op, value)
-            toast({
-              variant: "destructive",
-              title:
-                op === "sangria"
-                  ? "Sangria não confirmada no servidor"
-                  : "Suprimento não confirmado no servidor",
-              description:
-                "Operação aplicada apenas no caixa local. Verifique a conexão antes de fechar o caixa.",
+      void (async () => {
+        const maxAttempts = 4
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            const res = await fetch("/api/ops/caixa/operacao", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
+              body,
             })
+            if (res.ok) return
+            // 4xx (período fechado, sessão inválida, permissão): não adianta retentar.
+            if (res.status >= 400 && res.status < 500) {
+              console.error("[caixa/operacao] HTTP", res.status, op, value)
+              toast({
+                variant: "destructive",
+                title: `${opLabel} não confirmada no servidor`,
+                description: "Operação aplicada apenas no caixa local. Verifique antes de fechar o caixa.",
+              })
+              return
+            }
+            console.warn("[caixa/operacao] HTTP", res.status, "tentativa", attempt)
+          } catch (err: unknown) {
+            console.warn("[caixa/operacao] rede — tentativa", attempt, err)
           }
+          if (attempt < maxAttempts) {
+            await new Promise((r) => setTimeout(r, 400 * 2 ** (attempt - 1)))
+          }
+        }
+        // Todas as tentativas falharam (5xx/rede persistente).
+        toast({
+          variant: "destructive",
+          title: `${opLabel} não confirmada no servidor`,
+          description:
+            "Sem sucesso após várias tentativas. Operação só no caixa local — reenvie antes de fechar o caixa.",
         })
-        .catch((err: unknown) => {
-          console.error("[caixa/operacao] rede", op, value, err)
-          toast({
-            variant: "destructive",
-            title:
-              op === "sangria"
-                ? "Sangria não confirmada no servidor"
-                : "Suprimento não confirmado no servidor",
-            description:
-              "Falha de rede. Operação aplicada apenas no caixa local — verifique a conexão.",
-          })
-        })
+      })()
     } else {
       // Sem sessão confirmada no servidor (abertura não registrada): a operação
       // afeta apenas o caixa local (totalSaidas/totalEntradas já incrementado).
@@ -1291,6 +1297,17 @@ export function PdvClassic({
         case "F9":
           setShellReceivablesOpen(true)
           break
+        case "F10":
+          // Desconto: aplicado no modal de pagamento (campos de desconto no topo).
+          // Tecla dedicada consistente com o PDV Assistência (F10 = Desconto).
+          if (cart.length === 0) {
+            toast({ title: "Nenhum item", description: "Adicione produtos antes de aplicar desconto." })
+            goBipe()
+            return
+          }
+          setInstantPayIntent(null)
+          setIsPaymentModalOpen(true)
+          break
         case "CTRL":
           setShellAdvancedOpen(true)
           break
@@ -1303,7 +1320,7 @@ export function PdvClassic({
 
   useEffect(() => {
     if (uiShell === "default") return
-    const fnKeys = new Set(["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "End"])
+    const fnKeys = new Set(["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "End"])
     let ctrlDown = false
     const down = (e: globalThis.KeyboardEvent) => {
       if (shellModalBlocking) return
@@ -2488,7 +2505,8 @@ export function PdvClassic({
               { key: "F8", desc: uiShell === "omni-smart" ? "—" : "Limpar carrinho" },
               { key: "F9", desc: uiShell === "omni-smart" ? "Contas a receber" : "—" },
               { key: "Insert", desc: "Item avulso (venda de balcão sem cadastro)" },
-              { key: "F10 / Espaço", desc: "Finalizar venda" },
+              { key: "F10", desc: uiShell === "omni-smart" ? "Desconto (abre pagamento c/ desconto)" : "Finalizar venda" },
+              { key: "Espaço", desc: "Finalizar venda" },
               { key: "ESC", desc: "Fechar modal / remover último item (modo rápido)" },
               { key: "Alt + D / Alt + P", desc: "Pagamento rápido" },
             ].map(({ key, desc }) => (

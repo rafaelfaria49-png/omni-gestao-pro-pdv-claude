@@ -21,6 +21,8 @@ const schema = z.object({
   motivo: z.string().trim().min(1, "Motivo obrigatório.").max(500),
   operador: z.string().max(120).default(""),
   payload: z.record(z.unknown()).optional(),
+  /** Id idempotente gerado no cliente — permite retry seguro (sem duplicar a operação). */
+  localId: z.string().max(120).optional(),
 })
 
 export async function POST(req: Request) {
@@ -44,7 +46,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.message }, { status: 422 })
   }
 
-  const { sessaoId, tipo, valor, motivo, operador, payload } = parsed.data
+  const { sessaoId, tipo, valor, motivo, operador, payload, localId } = parsed.data
 
   const permCheck: (p: EnterprisePermissions) => boolean =
     tipo === "devolucao" ? (p) => p.pdv.devolucao : (p) => p.pdv.abrirCaixa
@@ -81,6 +83,23 @@ export async function POST(req: Request) {
       )
     }
 
+    // Idempotência: retry com o mesmo `localId` não cria operação duplicada.
+    // (sem coluna nova — guarda o id no `payload` JSONB existente.)
+    if (localId) {
+      const jaRegistrada = await prisma.caixaOperacao.findFirst({
+        where: { storeId: lojaId, sessaoId, payload: { path: ["localId"], equals: localId } },
+        select: { id: true, tipo: true, valor: true, at: true },
+      })
+      if (jaRegistrada) {
+        return NextResponse.json({ ok: true, operacao: jaRegistrada, deduped: true })
+      }
+    }
+
+    const payloadFinal: Record<string, unknown> = {
+      ...(payload ?? {}),
+      ...(localId ? { localId } : {}),
+    }
+
     const op = await prisma.caixaOperacao.create({
       data: {
         sessaoId,
@@ -89,7 +108,7 @@ export async function POST(req: Request) {
         valor,
         motivo,
         operador: operadorLabel,
-        payload: payload ? (payload as Prisma.InputJsonValue) : undefined,
+        payload: Object.keys(payloadFinal).length ? (payloadFinal as Prisma.InputJsonValue) : undefined,
       },
       select: { id: true, tipo: true, valor: true, at: true },
     })

@@ -324,4 +324,51 @@ export async function upsertVendaInTransaction(
       console.warn("[upsert-venda] credito-sub-debitado", { pedidoId, cpfNorm, creditoValeUsado, restante })
     }
   }
+
+  // ── 6. Título à prazo (Contas a Receber) — DENTRO da transação ───────────────
+  // Antes era criado por um fetch fire-and-forget no cliente
+  // (lib/pdv-append-conta-receber.ts). Agora persiste atômico com a venda: se a
+  // venda comita, o título existe; se reverte, não fica órfão. O `localKey` é o
+  // mesmo usado pelo cliente (`pdv-aprazo-{pedidoId}`) → idempotente e sem
+  // duplicar títulos já criados pelo fluxo anterior.
+  if (aPrazoVal > 0) {
+    const aprazoLocalKey = `pdv-aprazo-${pedidoId}`
+    const venc = new Date(at)
+    venc.setDate(venc.getDate() + 30)
+    const vencStr = venc.toLocaleDateString("pt-BR")
+    const aprazoCliente = clienteNome || "Cliente"
+    const aprazoDesc = `Venda PDV ${pedidoId} — À prazo`
+    const aprazoPayload = {
+      id: aprazoLocalKey,
+      descricao: aprazoDesc,
+      cliente: aprazoCliente,
+      valor: aPrazoVal,
+      vencimento: vencStr,
+      status: "pendente",
+      tipo: "pdv_aprazo",
+      total_value: aPrazoVal,
+      vendas: [{ saleId: pedidoId, total: aPrazoVal }],
+    } as unknown as Prisma.InputJsonValue
+    await tx.contaReceberTitulo.upsert({
+      where: { storeId_localKey: { storeId: lojaId, localKey: aprazoLocalKey } },
+      create: {
+        storeId: lojaId,
+        localKey: aprazoLocalKey,
+        descricao: aprazoDesc,
+        cliente: aprazoCliente,
+        valor: aPrazoVal,
+        vencimento: vencStr,
+        status: "pendente",
+        payload: aprazoPayload,
+      },
+      // `status` fora do update para preservar baixas/pagamentos já feitos em re-sync.
+      update: {
+        descricao: aprazoDesc,
+        cliente: aprazoCliente,
+        valor: aPrazoVal,
+        vencimento: vencStr,
+        payload: aprazoPayload,
+      },
+    })
+  }
 }

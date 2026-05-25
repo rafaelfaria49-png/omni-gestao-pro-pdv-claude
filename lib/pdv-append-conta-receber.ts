@@ -1,12 +1,15 @@
 "use client"
 
-import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import type { ContaReceberRow } from "@/lib/contas-receber-types"
 import { contasReceberStorageKey } from "@/lib/contas-receber-storage"
 
 /**
- * Cria/atualiza um título em Contas a Receber para valor “à prazo” de venda PDV
- * (localStorage + espelho em `/api/ops/contas-receber-persist`).
+ * Cria/atualiza o cache local (localStorage) do título “à prazo” de venda PDV.
+ *
+ * A persistência no banco agora é ATÔMICA dentro da transação de venda
+ * (`lib/ops-upsert-venda.ts`, passo 6, via `venda-persist` com reenvio
+ * `syncPending`). Aqui mantemos apenas o cache que a UI do Financeiro lê do
+ * localStorage + o evento de atualização — sem mais fetch fire-and-forget.
  */
 export function appendContaReceberTituloPdvAprazo(params: {
   lojaId: string
@@ -52,23 +55,8 @@ export function appendContaReceberTituloPdvAprazo(params: {
     return
   }
 
-  void fetch("/api/ops/contas-receber-persist", {
-    method: "POST",
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      [ASSISTEC_LOJA_HEADER]: params.lojaId,
-    },
-    body: JSON.stringify({ rows: [row] }),
-  })
-    .then((res) => {
-      if (!res.ok) {
-        console.error("[contas-receber-persist] HTTP", res.status, params.saleId)
-      }
-    })
-    .catch((err: unknown) => {
-      console.error("[contas-receber-persist] rede", params.saleId, err)
-    })
+  // Persistência no banco é feita atomicamente na transação de venda
+  // (ops-upsert-venda.ts passo 6). Não há mais POST fire-and-forget aqui.
 
   window.dispatchEvent(new Event("assistec-contas-receber-imported"))
 }

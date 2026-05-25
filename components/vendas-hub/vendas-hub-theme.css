@@ -82,3 +82,42 @@
   --pos-action: 142 100% 50%;
   --pos-action-foreground: 0 0% 4%;
 }
+
+[data-vendas-hub-theme-root][data-theme="quantum-violet"] {
+  --background: 275 35% 8%;
+  --foreground: 275 20% 96%;
+  --card: 275 30% 12%;
+  --card-foreground: 275 20% 96%;
+  --border: 275 25% 20%;
+  --input: 275 25% 20%;
+  --primary: 310 85% 60%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 275 25% 14%;
+  --muted-foreground: 275 15% 68%;
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --pos-action: 310 85% 60%;
+  --pos-action-foreground: 0 0% 100%;
+}
+
+[data-vendas-hub-theme-root][data-theme="coffee-gold"] {
+  --background: 30 25% 8%;
+  --foreground: 40 20% 96%;
+  --card: 30 20% 12%;
+  --card-foreground: 40 20% 96%;
+  --border: 30 15% 20%;
+  --input: 30 15% 20%;
+  --primary: 38 75% 50%;
+  --primary-foreground: 30 40% 8%;
+  --muted: 30 15% 14%;
+  --muted-foreground: 40 10% 68%;
+  --success: 142 71% 45%;
+  --success-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --pos-action: 38 75% 50%;
+  --pos-action-foreground: 30 40% 8%;
+}
+

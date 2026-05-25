@@ -385,7 +385,7 @@ export async function listCategorias(storeId: string): Promise<CategoriaCadastro
 export async function upsertCategoria(
   storeId: string,
   input: { id?: string; name: string; type: CategoriaCadastroType; active?: boolean }
-): Promise<{ id: string }> {
+): Promise<{ id: string; name: string }> {
   const name = input.name.trim();
   if (!name) throw new Error("Nome obrigatório");
   const type = input.type || "geral";
@@ -399,12 +399,25 @@ export async function upsertCategoria(
   if (input.id) {
     const existing = await prisma.categoriaCadastro.findFirst({ where: { id: input.id, storeId }, select: { id: true } });
     if (!existing) throw new Error("Categoria não encontrada");
-    const updated = await prisma.categoriaCadastro.update({ where: { id: input.id }, data: common, select: { id: true } });
+    const updated = await prisma.categoriaCadastro.update({ where: { id: input.id }, data: common, select: { id: true, name: true } });
     revalidatePath("/dashboard/cadastros-v2");
     return updated;
   }
 
-  const created = await prisma.categoriaCadastro.create({ data: { ...common, storeId }, select: { id: true } });
+  // Dedup case-insensitive antes de criar: evita duplicatas "Apple" vs "apple".
+  const dup = await prisma.categoriaCadastro.findFirst({
+    where: { storeId, type, name: { equals: name, mode: "insensitive" } },
+    select: { id: true, name: true, active: true },
+  });
+  if (dup) {
+    if (!dup.active) {
+      await prisma.categoriaCadastro.update({ where: { id: dup.id }, data: { active: true } });
+    }
+    revalidatePath("/dashboard/cadastros-v2");
+    return { id: dup.id, name: dup.name };
+  }
+
+  const created = await prisma.categoriaCadastro.create({ data: { ...common, storeId }, select: { id: true, name: true } });
   revalidatePath("/dashboard/cadastros-v2");
   return created;
 }
@@ -433,7 +446,7 @@ export async function listMarcas(storeId: string): Promise<MarcaCadastroDTO[]> {
 export async function upsertMarca(
   storeId: string,
   input: { id?: string; name: string; type?: string; active?: boolean }
-): Promise<{ id: string }> {
+): Promise<{ id: string; name: string }> {
   const name = input.name.trim();
   if (!name) throw new Error("Nome obrigatório");
   const type = (input.type ?? "").trim();
@@ -447,14 +460,62 @@ export async function upsertMarca(
   if (input.id) {
     const existing = await prisma.marcaCadastro.findFirst({ where: { id: input.id, storeId }, select: { id: true } });
     if (!existing) throw new Error("Marca não encontrada");
-    const updated = await prisma.marcaCadastro.update({ where: { id: input.id }, data: common, select: { id: true } });
+    const updated = await prisma.marcaCadastro.update({ where: { id: input.id }, data: common, select: { id: true, name: true } });
     revalidatePath("/dashboard/cadastros-v2");
     return updated;
   }
 
-  const created = await prisma.marcaCadastro.create({ data: { ...common, storeId }, select: { id: true } });
+  // Dedup case-insensitive: reativa marca inativa de mesmo nome em vez de criar duplicata.
+  const dup = await prisma.marcaCadastro.findFirst({
+    where: { storeId, type, name: { equals: name, mode: "insensitive" } },
+    select: { id: true, name: true, active: true },
+  });
+  if (dup) {
+    if (!dup.active) {
+      await prisma.marcaCadastro.update({ where: { id: dup.id }, data: { active: true } });
+    }
+    revalidatePath("/dashboard/cadastros-v2");
+    return { id: dup.id, name: dup.name };
+  }
+
+  const created = await prisma.marcaCadastro.create({ data: { ...common, storeId }, select: { id: true, name: true } });
   revalidatePath("/dashboard/cadastros-v2");
   return created;
+}
+
+/**
+ * Lista valores distintos de categoria/marca **já gravados em produtos** da loja.
+ * Usado para o autocomplete do modal de produto cobrir também strings legadas
+ * (importadores, planilhas) que ainda não estão no dicionário CategoriaCadastro/MarcaCadastro.
+ */
+export async function listCategoriasMarcasUsadasEmProduto(
+  storeId: string
+): Promise<{ categorias: string[]; marcas: string[] }> {
+  try {
+    const [cats, brs] = await Promise.all([
+      prisma.produto.findMany({
+        where: { storeId, category: { not: null } },
+        select: { category: true },
+        distinct: ["category"],
+        take: 2000,
+      }),
+      prisma.produto.findMany({
+        where: { storeId, brand: { not: "" } },
+        select: { brand: true },
+        distinct: ["brand"],
+        take: 2000,
+      }),
+    ]);
+    const categorias = cats
+      .map((c) => (c.category ?? "").trim())
+      .filter((s) => s.length > 0);
+    const marcas = brs
+      .map((b) => (b.brand ?? "").trim())
+      .filter((s) => s.length > 0);
+    return { categorias, marcas };
+  } catch {
+    return { categorias: [], marcas: [] };
+  }
 }
 
 export type TecnicoDTO = {

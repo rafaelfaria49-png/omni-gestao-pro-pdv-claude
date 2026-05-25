@@ -69,6 +69,25 @@ export async function POST(req: Request) {
   }
 
   try {
+    // Guard de duplicidade: se já há sessão ABERTA para a loja (e terminal, se
+    // informado), retorna a existente em vez de criar outra. Idempotência
+    // server-first — evita duas sessões abertas simultâneas para o mesmo caixa.
+    try {
+      const aberta = await prisma.sessaoCaixa.findFirst({
+        where: { storeId: lojaId, status: "ABERTA", ...(terminalId ? { terminalId } : {}) },
+        orderBy: { abertaEm: "desc" },
+        select,
+      })
+      if (aberta) {
+        return NextResponse.json({ ok: true, sessaoId: aberta.id, sessao: aberta, alreadyOpen: true })
+      }
+    } catch (guardErr) {
+      console.warn(
+        "[ops/caixa/abrir] guard duplicidade falhou (segue criando):",
+        guardErr instanceof Error ? guardErr.message : guardErr,
+      )
+    }
+
     let sessao
     if (terminalId) {
       try {

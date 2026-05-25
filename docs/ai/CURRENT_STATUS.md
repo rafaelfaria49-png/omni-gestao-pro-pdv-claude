@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 24 Mai 2026 — Sessão: Sprint 1.1 — Estabilização do PDV Clássico
+> Última atualização: 24 Mai 2026 — Sessão: Sprint 1.2 — Estabilização final de Caixa/PDV
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,25 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Sprint 1.2 — Estabilização final de Caixa/PDV (concluído 24/05/2026)
+
+**Contexto:** 5 itens cirúrgicos recomendados na auditoria (`docs/ai/AUDITORIA_2026-05-24.md`),
+fechando os riscos P0/P1 restantes de caixa. Sem schema/auth/proxy; sem refator.
+
+| # | Arquivo | Mudança |
+|---|---|---|
+| 1 Desconto | `components/dashboard/vendas/pdv-classic.tsx` | Tecla **F10 = Desconto** no keymap vivo (omni-smart) → abre pagamento com campos de desconto (convenção do PDV Assistência). Linha na ajuda de atalhos. |
+| 2 Retry sangria/supr. | `components/dashboard/vendas/pdv-classic.tsx` + `app/api/ops/caixa/operacao/route.ts` | **Retry exponencial** (4 tentativas, 400/800/1600ms) no cliente, com **idempotência por `localId`** no servidor (gravado no `payload` JSONB — sem schema). Retry de 5xx/rede; para em 4xx. Sem duplicar sangria. |
+| 3 Título à prazo | `lib/ops-upsert-venda.ts` + `lib/pdv-append-conta-receber.ts` | `ContaReceberTitulo` à prazo agora criado **dentro da transação de venda** (passo 6), `localKey` `pdv-aprazo-{pedidoId}` (idempotente, sem dup). Removido o POST fire-and-forget do cliente (mantido só o cache localStorage). Persistência passa a herdar o retry `syncPending` do `venda-persist`. |
+| 4 Guard abrir caixa | `app/api/ops/caixa/abrir/route.ts` + `components/dashboard/caixa/abertura-caixa-modal.tsx` | Se já há `SessaoCaixa` ABERTA (loja + terminal), o `abrir` **retorna a existente** (`alreadyOpen:true`) em vez de criar duplicada. Modal adota saldo/sessão do servidor + toast informativo. |
+| 5 Código morto | `components/dashboard/estoque/servicos.tsx` | **Removido** (`Servicos()` sem nenhum import — confirmado; só docs/strings de categoria referenciavam). |
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` **OK** (prisma generate + next build completos, 95/95 páginas).
+
+**Não alterado:** schema Prisma, auth/proxy, PDV Assistência/Supermercado, Marketplace/Omni Agent/Marketing IA/WhatsApp, `local-key.ts`, adapter `os-faturamento`.
+
+**Riscos restantes (Sprint 2+):** desconto continua sendo aplicado no modal de pagamento (F10 abre lá — não há tela de desconto isolada); `Venda.contaReceberTituloId` não é vinculado no fluxo PDV à prazo (cancelamento não estorna o título à prazo automaticamente — paridade mantida); guard de abrir reconcilia saldo no modal mas `totalEntradas/totalSaidas` da barra seguem runtime local; OS legado vs v2, auth staff legado e `pdv-github-original/` seguem para Sprints 2–4.
 
 ### Sprint 1.1 — Estabilização do PDV Clássico (concluído 24/05/2026)
 

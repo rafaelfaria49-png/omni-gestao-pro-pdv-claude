@@ -115,11 +115,26 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
             }),
           })
           if (res.ok) {
-            const data = (await res.json()) as { sessaoId?: string }
+            const data = (await res.json()) as {
+              sessaoId?: string
+              alreadyOpen?: boolean
+              sessao?: { saldoInicial?: number }
+            }
             if (data.sessaoId) {
               sid = data.sessaoId
               setSessaoId(data.sessaoId)
               serverRegistered = true
+              if (data.alreadyOpen) {
+                // Já havia caixa aberto no servidor: adota a sessão e o saldo
+                // existentes (evita duas sessões e divergência de saldo local).
+                const saldoExistente =
+                  typeof data.sessao?.saldoInicial === "number" ? data.sessao.saldoInicial : valor
+                abrirCaixa(saldoExistente)
+                toast({
+                  title: "Caixa já estava aberto",
+                  description: "Recuperamos a sessão atual do servidor — use este caixa.",
+                })
+              }
             }
           } else {
             console.error("[caixa/abrir] server HTTP:", res.status)

@@ -33,6 +33,20 @@ const THEMES: ThemeOption[] = [
     emoji: "🖤",
     swatches: ["0 0% 4%", "142 90% 50%", "152 95% 55%", "140 15% 92%"],
   },
+  {
+    id: "quantum-violet",
+    name: "Quantum Violet",
+    description: "Violeta tridimensional com magenta neon.",
+    emoji: "🔮",
+    swatches: ["275 35% 8%", "310 85% 60%", "335 85% 65%", "275 20% 96%"],
+  },
+  {
+    id: "coffee-gold",
+    name: "Coffee Gold",
+    description: "Café premium com ouro neon.",
+    emoji: "☕",
+    swatches: ["30 25% 8%", "38 75% 50%", "60 70% 50%", "40 20% 96%"],
+  },
 ];
 
 export function AparenciaSection() {

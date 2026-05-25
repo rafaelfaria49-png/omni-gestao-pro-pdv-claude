@@ -68,6 +68,30 @@ const PALETTE: Record<
     accentLine: "hsl(142 60% 14%)",
     gradientBar: "linear-gradient(135deg, hsl(142 90% 50%), hsl(152 95% 55%))",
   },
+  "quantum-violet": {
+    shell: "hsl(275 35% 8%)",
+    sidebar: "hsl(275 40% 7%)",
+    sidebarActive: "hsl(310 60% 20%)",
+    muted: "hsl(275 25% 14%)",
+    bar: "hsl(275 20% 96% / 0.88)",
+    primaryPill: "hsl(310 85% 60%)",
+    card: "hsl(275 30% 12%)",
+    cardBorder: "hsl(275 25% 20%)",
+    accentLine: "hsl(335 85% 65%)",
+    gradientBar: "linear-gradient(135deg, hsl(310 85% 60%), hsl(335 85% 65%))",
+  },
+  "coffee-gold": {
+    shell: "hsl(30 25% 8%)",
+    sidebar: "hsl(30 30% 7%)",
+    sidebarActive: "hsl(38 50% 16%)",
+    muted: "hsl(30 15% 14%)",
+    bar: "hsl(40 20% 96% / 0.88)",
+    primaryPill: "hsl(38 75% 50%)",
+    card: "hsl(30 20% 12%)",
+    cardBorder: "hsl(30 15% 20%)",
+    accentLine: "hsl(60 70% 50%)",
+    gradientBar: "linear-gradient(135deg, hsl(38 75% 50%), hsl(60 70% 50%))",
+  },
 };
 
 export function ThemePreview({ theme }: ThemePreviewProps) {
