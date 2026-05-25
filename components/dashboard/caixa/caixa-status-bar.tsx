@@ -20,6 +20,12 @@ import { CaixaDashboard } from "./caixa-dashboard"
 import { cn } from "@/lib/utils"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useTerminalAtivo } from "@/lib/pdv-terminal"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { useToast } from "@/hooks/use-toast"
+import { appendAuditLog } from "@/lib/audit-log"
+import { registrarOperacaoCaixaServer } from "@/lib/pdv-caixa-operacao"
 
 interface CaixaStatusBarProps {
   /** Incrementado por comando de voz para abrir o fluxo de abertura de caixa. */
@@ -39,11 +45,89 @@ export function CaixaStatusBar({
   onOpenFechamentoSignalConsumed,
   variant = "default",
 }: CaixaStatusBarProps) {
-  const { caixa, getSaldoAtual } = useCaixa()
+  const { caixa, getSaldoAtual, adicionarSaida, adicionarEntrada, sessaoId } = useCaixa()
   const { lojaAtivaId } = useLojaAtiva()
   const { terminal, clear: clearTerminal } = useTerminalAtivo(lojaAtivaId)
+  const { toast } = useToast()
   const [showAbertura, setShowAbertura] = useState(false)
   const [showFechamento, setShowFechamento] = useState(false)
+
+  // Sangria/Suprimento acessível em TODOS os PDVs — a barra é compartilhada
+  // (Clássico, Rápido/Supermercado, Assistência, Venda Completa). Reusa o mesmo
+  // endpoint idempotente com retry (`registrarOperacaoCaixaServer`).
+  const [operationType, setOperationType] = useState<"sangria" | "suprimento" | null>(null)
+  const [opValor, setOpValor] = useState("")
+  const [opMotivo, setOpMotivo] = useState("")
+  const [opSaving, setOpSaving] = useState(false)
+  const opLabel = operationType === "sangria" ? "Sangria" : "Suprimento"
+
+  const closeOp = () => {
+    setOperationType(null)
+    setOpValor("")
+    setOpMotivo("")
+  }
+
+  const confirmOp = async () => {
+    const tipo = operationType
+    if (!tipo) return
+    const valor = parseFloat(opValor.replace(",", ".")) || 0
+    const motivo = opMotivo.trim()
+    if (valor <= 0) {
+      toast({ variant: "destructive", title: "Valor inválido", description: "Informe um valor maior que zero." })
+      return
+    }
+    if (!motivo) {
+      toast({ variant: "destructive", title: "Motivo obrigatório", description: "Descreva o motivo da operação." })
+      return
+    }
+    const label = tipo === "sangria" ? "Sangria" : "Suprimento"
+    setOpSaving(true)
+    // Reflete na barra imediatamente (igual ao fluxo do PDV Clássico).
+    if (tipo === "sangria") adicionarSaida(valor)
+    else adicionarEntrada(valor)
+    appendAuditLog({
+      action: tipo === "sangria" ? "sangria_caixa" : "suprimento_caixa",
+      userLabel: terminal?.code || "Caixa",
+      detail: `R$ ${valor.toFixed(2)} — ${motivo}`,
+    })
+    try {
+      if (lojaAtivaId && sessaoId) {
+        const r = await registrarOperacaoCaixaServer({
+          lojaId: lojaAtivaId,
+          sessaoId,
+          tipo,
+          valor,
+          motivo,
+          operador: terminal?.code || "",
+        })
+        if (r.ok) {
+          toast({
+            title: tipo === "sangria" ? "Sangria registrada" : "Suprimento registrado",
+            description: `R$ ${valor.toFixed(2)} — ${motivo}`,
+          })
+        } else {
+          toast({
+            variant: "destructive",
+            title: `${label} não confirmada no servidor`,
+            description:
+              r.reason === "client_error"
+                ? "Aplicada apenas no caixa local. Verifique antes de fechar o caixa."
+                : "Sem sucesso após várias tentativas. Só no caixa local — reenvie antes de fechar.",
+          })
+        }
+      } else {
+        // Sem sessão confirmada no servidor: não silenciar (mesma regra do Clássico).
+        toast({
+          variant: "destructive",
+          title: `${label} só no caixa local`,
+          description: "Caixa sem sessão confirmada no servidor. Reabra o caixa para registrar com segurança.",
+        })
+      }
+    } finally {
+      setOpSaving(false)
+      closeOp()
+    }
+  }
 
   const terminalPill = terminal ? (
     <Badge variant="outline" className="shrink-0 text-xs">
@@ -191,18 +275,80 @@ export function CaixaStatusBar({
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={() => setShowFechamento(true)}
-            className="border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white shrink-0"
-          >
-            <Lock className="w-4 h-4 mr-2" />
-            Fechar Caixa
-          </Button>
+          <div className="flex flex-wrap items-center justify-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOperationType("sangria")}
+              className="border-red-500/40 text-red-500 hover:bg-red-500 hover:text-white"
+            >
+              <TrendingDown className="w-4 h-4 mr-1.5" />
+              Sangria
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setOperationType("suprimento")}
+              className="border-green-500/40 text-green-600 hover:bg-green-500 hover:text-white dark:text-green-400"
+            >
+              <TrendingUp className="w-4 h-4 mr-1.5" />
+              Suprimento
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowFechamento(true)}
+              className="border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white"
+            >
+              <Lock className="w-4 h-4 mr-2" />
+              Fechar Caixa
+            </Button>
+          </div>
         </div>
       </div>
 
       <FechamentoCaixaModal isOpen={showFechamento} onClose={() => setShowFechamento(false)} />
+
+      {/* Sangria / Suprimento — disponível em todos os PDVs via barra compartilhada */}
+      <Dialog open={operationType !== null} onOpenChange={(open) => { if (!open) closeOp() }}>
+        <DialogContent className="max-w-sm border-border bg-card">
+          <DialogHeader>
+            <DialogTitle>{opLabel} de Caixa</DialogTitle>
+            <DialogDescription>
+              {operationType === "sangria"
+                ? "Retirada de dinheiro do caixa."
+                : "Entrada de dinheiro (reforço) no caixa."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 pt-1">
+            <div className="space-y-1.5">
+              <Label className="text-sm">Valor</Label>
+              <Input
+                inputMode="decimal"
+                placeholder="0,00"
+                value={opValor}
+                onChange={(e) => setOpValor(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Motivo</Label>
+              <Input
+                placeholder={operationType === "sangria" ? "Ex.: retirada para o banco" : "Ex.: troco / reforço"}
+                value={opMotivo}
+                onChange={(e) => setOpMotivo(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={closeOp} disabled={opSaving}>
+                Cancelar
+              </Button>
+              <Button onClick={() => void confirmOp()} disabled={opSaving}>
+                {opSaving ? "Registrando…" : `Confirmar ${opLabel}`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

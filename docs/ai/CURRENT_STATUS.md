@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 24 Mai 2026 — Sessão: Multi-Terminais Fase 3 — Relatórios por terminal
+> Última atualização: 24 Mai 2026 — Sessão: Sangria/Suprimento acessível em todos os PDVs
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,30 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Sangria/Suprimento acessível em todos os PDVs (concluído 24/05/2026)
+
+**Contexto:** homologação multi-terminal revelou que **sangria/suprimento só existia no
+PDV Clássico** (menu engrenagem). No PDV Rápido/Supermercado, Assistência e Venda Completa
+**não havia fluxo de sangria/suprimento** — gap operacional (não era regressão; nunca existiu lá).
+
+**Auditoria:**
+- `pdv-classic.tsx` → tem (menu engrenagem + diálogo + handler com retry/idempotência da Sprint 1.2). ✅
+- `pdv-supermercado.tsx` / `pdv-assistencia-enterprise.tsx` / `pdv-venda-completa-enterprise.tsx` → **não tinham**. ❌
+- Todos renderizam o **`CaixaStatusBar`** compartilhado (que só tinha Abrir/Fechar).
+
+**Correção cirúrgica (sem tocar no Clássico que já funciona):**
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/pdv-caixa-operacao.ts` (NOVO) | Helper `registrarOperacaoCaixaServer` — retry exponencial + idempotência por `localId` (mesmo contrato/endpoint da Sprint 1.2). |
+| `components/dashboard/caixa/caixa-status-bar.tsx` | Botões **Sangria** e **Suprimento** + diálogo (valor/motivo) quando o caixa está aberto. Reflete na barra na hora (`adicionarSaida/Entrada`), persiste via helper, alerta se sem sessão (não silencia). Auditoria via `appendAuditLog`. |
+
+**Efeito:** sangria/suprimento agora acessível em **todos os PDVs** (a barra é compartilhada).
+O Clássico mantém também o menu engrenagem (entrada redundante, inofensiva). Backend financeiro,
+estoque, schema, auth/proxy, temas e o retry do Clássico **inalterados**.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
 
 ### Multi-Terminais Fase 3 — Relatórios por terminal (concluído 24/05/2026)
 
