@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 24 Mai 2026 — Sessão: Sprint 1.2 — Estabilização final de Caixa/PDV
+> Última atualização: 24 Mai 2026 — Sessão: Multi-Terminais Fase 3 — Relatórios por terminal
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,31 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Multi-Terminais Fase 3 — Relatórios por terminal (concluído 24/05/2026)
+
+**Contexto:** organizar relatórios/histórico/fechamento por PDV1/PDV2/PDV3 + consolidado geral.
+Detalhes em [`docs/ai/PDV_MULTI_TERMINAIS_FASE3_RELATORIOS_REPORT.md`](./PDV_MULTI_TERMINAIS_FASE3_RELATORIOS_REPORT.md).
+
+**Descoberta:** a maior parte já estava implementada/commitada (de sessão anterior): filtro por
+terminal + badge + detalhe no **Histórico de Vendas** (`vendas-arquivo-geral.tsx`) e no **Histórico
+de Caixa** (`caixa-historico-client.tsx`); rotas `vendas/historico`, `caixa/sessoes` e
+`caixa/sessao-detalhe` já aceitam `terminalId` (`id`/`"sem"`/todos) e retornam terminal + KPIs.
+
+**Lacuna fechada nesta sessão:**
+
+| Arquivo | Mudança |
+|---|---|
+| `components/dashboard/caixa/fechamento-caixa-modal.tsx` | Terminal agora aparece no **fechamento**: cabeçalho ("Terminal: …"), **comprovante** (copiar/imprimir) e `payload.resumoFechamento` (`terminalId`/`terminalLabel`). Usa `useTerminalAtivo`; "Sem terminal" para sessões legadas. Lógica de fechamento inalterada (por `sessaoId`, totais server-side). |
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Não incluído:** consolidado gerencial dedicado (`/api/ops/caixa/consolidado` + card PDV1×PDV2×PDV3) —
+hoje o consolidado é o filtro "Todos os terminais". Vendas antigas sem `terminalId` = "Sem terminal".
+
+**Fora de escopo / pendente:** `components/vendas-hub/lovable/features/vendas/VendasHub.tsx` tem
+mudança não relacionada (botão Voltar TanStack→Next) **não commitada** — para revisão do usuário.
+Homologação runtime da Sprint 1.2 segue pendente.
 
 ### Sprint 1.2 — Estabilização final de Caixa/PDV (concluído 24/05/2026)
 

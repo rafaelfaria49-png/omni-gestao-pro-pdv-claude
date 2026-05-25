@@ -29,6 +29,7 @@ import { useCaixa } from "./caixa-provider"
 import { ensureLedger, useOperationsStore } from "@/lib/operations-store"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { useTerminalAtivo } from "@/lib/pdv-terminal"
 import { useToast } from "@/hooks/use-toast"
 import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
 import {
@@ -49,6 +50,12 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const { caixa, fecharCaixa, getSaldoAtual, sessaoId } = useCaixa()
   const { dailyLedger, sales } = useOperationsStore()
   const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
+  const { terminal } = useTerminalAtivo(lojaAtivaId)
+  // Terminal ativo do device (mesmo em que o caixa foi aberto) — Fase 3: mostrar
+  // o PDV no comprovante/relatório de fechamento. "Sem terminal" para sessões legadas.
+  const terminalLabel = terminal
+    ? `${terminal.code}${terminal.name && terminal.name !== terminal.code ? ` · ${terminal.name}` : ""}`
+    : "Sem terminal"
   const { toast } = useToast()
 
   const [valorContado, setValorContado] = useState("")
@@ -100,6 +107,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       `Loja: ${userAudit}`,
       `Data: ${new Date().toLocaleString("pt-BR")}`,
       sessaoId ? `Sessão: ${sessaoId}` : "",
+      `Terminal: ${terminalLabel}`,
       operadoresSessao.length ? `Operador(es): ${operadoresSessao.join(", ")}` : "",
       "--- VENDAS POR ORIGEM ---",
       ...resumo.porOrigem.map((o) => `${o.label.padEnd(20)} ${fmt(o.valorBruto)} (${o.qtdItens} itens)`),
@@ -220,6 +228,8 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
               resumoFechamento: resumo,
               saldoDinheiroEsperado,
               operadores: operadoresSessao,
+              terminalId: terminal?.id ?? null,
+              terminalLabel,
             },
           }),
         })
@@ -278,6 +288,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                     ? `Operador: ${operadoresSessao.join(", ")}`
                     : "Operador: —"}
                 </span>
+                <span className="truncate">{`Terminal: ${terminalLabel}`}</span>
               </div>
 
               {/* KPIs operacionais */}
