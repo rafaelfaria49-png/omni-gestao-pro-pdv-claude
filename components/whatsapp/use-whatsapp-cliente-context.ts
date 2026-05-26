@@ -163,10 +163,85 @@ export function filterClienteCandidatesByPhone(
 
 export function resolvePhoneLinkFromCandidates(
   candidates: PhoneMatchCandidate[]
-): { status: PhoneLinkStatus; uniqueMatch: PhoneMatchCandidate | null } {
+): { status: PhoneLinkStatus; uniqueMatch: PhoneMatchCandidate | null }
+{
   if (candidates.length === 0) return { status: "none", uniqueMatch: null }
   if (candidates.length === 1) return { status: "unique", uniqueMatch: candidates[0] }
   return { status: "multiple", uniqueMatch: null }
+}
+
+const MAX_INBOX_PHONE_SCANS = 30
+
+/** Busca candidatos por telefone (mesma regra do painel). Reutilizável na lista do inbox. */
+export async function fetchPhoneLinkCandidates(
+  phoneDigits: string,
+  apiHeaders: Record<string, string>
+): Promise<{
+  status: PhoneLinkStatus
+  uniqueMatch: PhoneMatchCandidate | null
+  candidates: PhoneMatchCandidate[]
+}> {
+  const tokens = buildClientePhoneSearchTokens(phoneDigits)
+  if (tokens.length === 0) {
+    return { status: "too_short", uniqueMatch: null, candidates: [] }
+  }
+
+  const merged = new Map<string, Record<string, unknown>>()
+  for (const token of tokens) {
+    const res = await fetch(
+      `/api/clientes?q=${encodeURIComponent(token)}`,
+      { headers: apiHeaders, cache: "no-store" }
+    )
+    if (!res.ok) continue
+    const data = (await res.json()) as {
+      clientes?: Array<Record<string, unknown>>
+    }
+    for (const c of data.clientes ?? []) {
+      const id = String(c.id ?? "")
+      if (id) merged.set(id, c)
+    }
+  }
+
+  const candidates = filterClienteCandidatesByPhone(phoneDigits, [...merged.values()])
+  const { status, uniqueMatch } = resolvePhoneLinkFromCandidates(candidates)
+  return { status, uniqueMatch, candidates }
+}
+
+/**
+ * Varre conversas sem clienteId e retorna IDs com vínculo único sugerido (por telefone).
+ * Agrupa por telefone para evitar chamadas duplicadas à API.
+ */
+export async function scanSuggestedLinkConversationIds(
+  conversations: Array<{ id: string; clienteId: string | null; contact: { phoneDigits: string } }>,
+  apiHeaders: Record<string, string>
+): Promise<Set<string>> {
+  const suggested = new Set<string>()
+  const byPhone = new Map<string, string[]>()
+
+  for (const c of conversations) {
+    if (c.clienteId) continue
+    const phone = c.contact.phoneDigits
+    if (!phone) continue
+    const list = byPhone.get(phone) ?? []
+    list.push(c.id)
+    byPhone.set(phone, list)
+  }
+
+  let scanned = 0
+  for (const [phone, convIds] of byPhone) {
+    if (scanned >= MAX_INBOX_PHONE_SCANS) break
+    scanned += 1
+    try {
+      const { status } = await fetchPhoneLinkCandidates(phone, apiHeaders)
+      if (status === "unique") {
+        for (const id of convIds) suggested.add(id)
+      }
+    } catch {
+      /* ignora falha pontual */
+    }
+  }
+
+  return suggested
 }
 
 export function useWhatsAppClienteContext(
@@ -239,29 +314,11 @@ export function useWhatsAppClienteContext(
     setPhoneLinkStatus("searching")
 
     try {
-      const merged = new Map<string, Record<string, unknown>>()
-
-      for (const token of tokens) {
-        const res = await fetch(
-          `/api/clientes?q=${encodeURIComponent(token)}`,
-          { headers: apiHeaders, cache: "no-store" }
-        )
-        if (!res.ok) continue
-        const data = (await res.json()) as {
-          clientes?: Array<Record<string, unknown>>
-        }
-        for (const c of data.clientes ?? []) {
-          const id = String(c.id ?? "")
-          if (id) merged.set(id, c)
-        }
-      }
-
-      const strict = filterClienteCandidatesByPhone(
+      const { status, candidates } = await fetchPhoneLinkCandidates(
         phoneDigits,
-        [...merged.values()]
+        apiHeaders
       )
-      setPhoneCandidates(strict)
-      const { status } = resolvePhoneLinkFromCandidates(strict)
+      setPhoneCandidates(candidates)
       setPhoneLinkStatus(status)
     } catch {
       setPhoneCandidates([])

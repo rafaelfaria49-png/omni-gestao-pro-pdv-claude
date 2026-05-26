@@ -28,7 +28,9 @@ import {
   Sparkles,
   Inbox,
   Bot,
+  Link2,
 } from "lucide-react"
+import { scanSuggestedLinkConversationIds } from "@/components/whatsapp/use-whatsapp-cliente-context"
 import {
   AiSignalBadge,
   deriveInsights,
@@ -196,7 +198,17 @@ const INBOX_FILTERS: { id: InboxFilter; label: string; icon: typeof Inbox }[] = 
   { id: "priority", label: "Prioridade", icon: Sparkles },
 ]
 
-function ConvItem({ conv, selected, onClick }: { conv: WaConversation; selected: boolean; onClick: () => void }) {
+function ConvItem({
+  conv,
+  selected,
+  suggestedLink,
+  onClick,
+}: {
+  conv: WaConversation
+  selected: boolean
+  suggestedLink?: boolean
+  onClick: () => void
+}) {
   const topInsight = deriveInsights(conv)[0]
   return (
     <button
@@ -234,14 +246,22 @@ function ConvItem({ conv, selected, onClick }: { conv: WaConversation; selected:
             {conv.clienteId && <UserCheck className="h-3 w-3 text-emerald-500" />}
           </div>
         </div>
-        {(topInsight || (conv.etiquetas && conv.etiquetas.length > 0)) && (
+        {(suggestedLink && !conv.clienteId) ||
+        topInsight ||
+        (conv.etiquetas && conv.etiquetas.length > 0) ? (
           <div className="mt-1.5 flex flex-wrap gap-1">
+            {suggestedLink && !conv.clienteId && (
+              <span className="inline-flex items-center gap-0.5 rounded-full border border-primary/25 bg-primary/8 px-1.5 py-0.5 text-[9px] font-medium text-primary">
+                <Link2 className="h-2.5 w-2.5" />
+                Vínculo sugerido
+              </span>
+            )}
             {topInsight && <AiSignalBadge insight={topInsight} compact />}
             {conv.etiquetas?.slice(0, 2).map((ce) => (
               <EtiquetaChip key={ce.id} etiqueta={ce.etiqueta} />
             ))}
           </div>
-        )}
+        ) : null}
       </div>
     </button>
   )
@@ -807,8 +827,14 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all")
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
   const [linkingCliente, setLinkingCliente] = useState(false)
+  const [unlinkingCliente, setUnlinkingCliente] = useState(false)
   const [linkSuccessMessage, setLinkSuccessMessage] = useState<string | null>(null)
   const [contextRefreshKey, setContextRefreshKey] = useState(0)
+  const [suggestedLinkConvIds, setSuggestedLinkConvIds] = useState<Set<string>>(
+    () => new Set()
+  )
+  const [highlightLinkPanel, setHighlightLinkPanel] = useState(false)
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -888,6 +914,21 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
     } catch { /* silent */ }
   }, [apiHeaders])
 
+  // ── Scan vínculo sugerido (lista) ──
+  useEffect(() => {
+    if (!apiHeaders) {
+      setSuggestedLinkConvIds(new Set())
+      return
+    }
+    let cancelled = false
+    void scanSuggestedLinkConversationIds(conversations, apiHeaders).then((ids) => {
+      if (!cancelled) setSuggestedLinkConvIds(ids)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [conversations, apiHeaders])
+
   // ── Select conversation ──
   const selectConversation = useCallback(async (conv: WaConversation) => {
     if (!apiHeaders) return
@@ -895,6 +936,12 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
     setMessages([])
     setShowAddLabel(false)
     setLinkSuccessMessage(null)
+    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    const showLinkHighlight = !conv.clienteId && suggestedLinkConvIds.has(conv.id)
+    setHighlightLinkPanel(showLinkHighlight)
+    if (showLinkHighlight) {
+      highlightTimerRef.current = setTimeout(() => setHighlightLinkPanel(false), 5000)
+    }
     setAiAnalyzing(true)
     const analyzeTimer = window.setTimeout(() => setAiAnalyzing(false), 900)
     await fetchMessages(conv.id)
@@ -911,7 +958,7 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
       )
     }
     inputRef.current?.focus()
-  }, [apiHeaders, fetchMessages])
+  }, [apiHeaders, fetchMessages, suggestedLinkConvIds])
 
   // ── Send message ──
   const sendMessage = useCallback(async () => {
@@ -991,6 +1038,12 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
           )
         )
         await fetchConversations(true)
+        setSuggestedLinkConvIds((prev) => {
+          const next = new Set(prev)
+          next.delete(selectedId)
+          return next
+        })
+        setHighlightLinkPanel(false)
         setContextRefreshKey((k) => k + 1)
         const msg = "Cliente vinculado à conversa. Dados do CRM atualizados."
         setLinkSuccessMessage(msg)
@@ -1005,6 +1058,56 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
     },
     [apiHeaders, selectedId, fetchConversations]
   )
+
+  const unlinkCliente = useCallback(async (): Promise<boolean> => {
+    if (!selectedId || !apiHeaders) return false
+    if (
+      !window.confirm(
+        "Desvincular o cliente desta conversa? Os dados do CRM deixarão de aparecer aqui até vincular novamente."
+      )
+    ) {
+      return false
+    }
+    setUnlinkingCliente(true)
+    setLinkSuccessMessage(null)
+    try {
+      const res = await fetch(`/api/whatsapp/conversations/${selectedId}`, {
+        method: "PATCH",
+        headers: apiHeaders,
+        body: JSON.stringify({ clienteId: null }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean
+        error?: string
+      }
+      if (!res.ok || !data.ok) {
+        toast.error(
+          typeof data.error === "string"
+            ? data.error
+            : "Não foi possível desvincular o cliente"
+        )
+        return false
+      }
+      setConversations((prev) =>
+        prev.map((c) => (c.id === selectedId ? { ...c, clienteId: null } : c))
+      )
+      await fetchConversations(true)
+      setContextRefreshKey((k) => k + 1)
+      toast.success("Cliente desvinculado desta conversa.")
+      return true
+    } catch {
+      toast.error("Erro de rede ao desvincular cliente")
+      return false
+    } finally {
+      setUnlinkingCliente(false)
+    }
+  }, [apiHeaders, selectedId, fetchConversations])
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current)
+    }
+  }, [])
 
   // ── Auto-scroll ──
   useEffect(() => {
@@ -1242,6 +1345,7 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
                   key={conv.id}
                   conv={conv}
                   selected={conv.id === selectedId}
+                  suggestedLink={suggestedLinkConvIds.has(conv.id)}
                   onClick={() => void selectConversation(conv)}
                 />
               ))
@@ -1438,8 +1542,11 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
           aiAnalyzing={aiAnalyzing}
           apiHeaders={hdr}
           linkingCliente={linkingCliente}
+          unlinkingCliente={unlinkingCliente}
           linkSuccessMessage={linkSuccessMessage}
+          highlightLinkCard={highlightLinkPanel}
           onLinkCliente={linkCliente}
+          onUnlinkCliente={unlinkCliente}
           onApplySuggestion={(text) => {
             setInputText(text)
             inputRef.current?.focus()

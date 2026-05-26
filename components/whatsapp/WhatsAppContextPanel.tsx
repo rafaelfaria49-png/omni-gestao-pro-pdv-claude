@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -14,6 +14,7 @@ import {
   ExternalLink,
   FileText,
   Link2,
+  Link2Off,
   MessageSquare,
   Phone,
   Sparkles,
@@ -112,8 +113,11 @@ export function WhatsAppContextPanel({
   onApplySuggestion,
   onQuickAction,
   onLinkCliente,
+  onUnlinkCliente,
   linkingCliente,
+  unlinkingCliente,
   linkSuccessMessage,
+  highlightLinkCard,
   className,
 }: {
   conv: ContextConversation | null
@@ -123,10 +127,14 @@ export function WhatsAppContextPanel({
   onApplySuggestion?: (text: string) => void
   onQuickAction?: (action: string) => void
   onLinkCliente?: (clienteId: string) => void | Promise<boolean>
+  onUnlinkCliente?: () => void | Promise<boolean>
   linkingCliente?: boolean
+  unlinkingCliente?: boolean
   linkSuccessMessage?: string | null
+  highlightLinkCard?: boolean
   className?: string
 }) {
+  const linkCardRef = useRef<HTMLDivElement>(null)
   const {
     snapshot,
     phoneCandidates,
@@ -163,6 +171,11 @@ export function WhatsAppContextPanel({
     () => (conv ? suggestReply(intent, conv.humanMode) : ""),
     [conv, intent]
   )
+
+  useEffect(() => {
+    if (!highlightLinkCard || !linkCardRef.current) return
+    linkCardRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" })
+  }, [highlightLinkCard, phoneLinkStatus, uniqueMatch?.id])
 
   const timeline = useMemo(() => {
     const msgItems = [...messages].slice(-6).reverse().map((m) => ({
@@ -274,14 +287,16 @@ export function WhatsAppContextPanel({
                   <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
                   {snapshot.name}
                 </span>
-                {clienteHref && (
-                  <Link
-                    href={clienteHref}
-                    className="text-[10px] text-primary hover:underline"
-                  >
-                    Ver cadastro
-                  </Link>
-                )}
+                <div className="flex items-center gap-2">
+                  {clienteHref && (
+                    <Link
+                      href={clienteHref}
+                      className="text-[10px] text-primary hover:underline"
+                    >
+                      Ver cadastro
+                    </Link>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -306,6 +321,19 @@ export function WhatsAppContextPanel({
                   )}
                 </div>
               </div>
+              {onUnlinkCliente && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-full gap-1.5 border-border/70 text-[11px] text-muted-foreground hover:text-foreground"
+                  disabled={unlinkingCliente || linkingCliente}
+                  onClick={() => void onUnlinkCliente()}
+                >
+                  <Link2Off className="h-3.5 w-3.5" />
+                  {unlinkingCliente ? "Desvinculando…" : "Desvincular cliente"}
+                </Button>
+              )}
             </div>
           ) : conv.clienteId && error ? (
             <p className="text-[11px] text-red-500">{error}</p>
@@ -329,7 +357,14 @@ export function WhatsAppContextPanel({
                   <Skeleton className="mt-2 h-10 w-full rounded-lg" />
                 </div>
               ) : phoneLinkStatus === "unique" && uniqueMatch && onLinkCliente ? (
-                <div className="rounded-xl border border-primary/35 bg-primary/5 p-3">
+                <div
+                  ref={linkCardRef}
+                  className={cn(
+                    "rounded-xl border border-primary/35 bg-primary/5 p-3 transition-shadow",
+                    highlightLinkCard &&
+                      "ring-2 ring-primary/60 shadow-md shadow-primary/15 animate-pulse"
+                  )}
+                >
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
                     Auto-vínculo sugerido
                   </p>
