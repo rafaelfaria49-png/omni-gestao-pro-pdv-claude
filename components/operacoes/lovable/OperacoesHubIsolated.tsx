@@ -14,7 +14,7 @@
 
 import { MemoryRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useLojaAtiva } from "@/lib/loja-ativa";
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
+import { UnidadeAtivaRequiredBanner } from "@/components/configuracoes-v3/features/settings/components/UnidadeAtivaRequiredBanner";
 import { OSProvider } from "./store/osStore";
 import OperacoesHubPage from "./pages/OperacoesHub";
 import DashboardOperacional from "./pages/DashboardOperacional";
@@ -29,7 +29,16 @@ import NotFound from "./pages/NotFound";
 
 export function OperacoesHubIsolated() {
   const { lojaAtivaId } = useLojaAtiva();
-  const storeId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID;
+
+  if (!lojaAtivaId?.trim()) {
+    return (
+      <div className="min-w-0 px-4 py-6 sm:px-6 lg:px-8">
+        <UnidadeAtivaRequiredBanner hint="Ordens de serviço e orçamentos são isolados por unidade. Selecione a loja no menu superior." />
+      </div>
+    );
+  }
+
+  const storeId = lojaAtivaId.trim();
 
   return (
     <div className="w-full min-w-0">

@@ -19,7 +19,7 @@ const MODOS: { id: GarantiaOperacionalModo; label: string }[] = [
 ];
 
 export function GarantiaOperacionalCard({ os }: { os: OrdemServico }) {
-  const { refresh } = useOS();
+  const { refresh, storeId } = useOS();
   const [modo, setModo] = useState<GarantiaOperacionalModo>(os.garantiaOperacionalModo ?? "catalogo");
   const [dias, setDias] = useState(String(os.garantiaOperacionalPrazoCustom ?? 60));
   const [manual, setManual] = useState("90");
@@ -40,7 +40,7 @@ export function GarantiaOperacionalCard({ os }: { os: OrdemServico }) {
         toast.error("Informe dias válidos (1–3650).");
         return;
       }
-      await osApi.salvarPreferenciaGarantiaOperacional(os.id, { modo, prazoCustom });
+      await osApi.salvarPreferenciaGarantiaOperacional(storeId, os.id, { modo, prazoCustom });
       await refresh();
       toast.success("Preferência de garantia salva");
     } catch (e) {
@@ -53,7 +53,7 @@ export function GarantiaOperacionalCard({ os }: { os: OrdemServico }) {
   const materializar = async (prazoDias: number) => {
     setSavingMan(true);
     try {
-      await osApi.criarGarantiaOperacionalManual(os.id, { prazoDias });
+      await osApi.criarGarantiaOperacionalManual(storeId, os.id, { prazoDias });
       await refresh();
       toast.success("Garantia registrada no banco");
     } catch (e) {

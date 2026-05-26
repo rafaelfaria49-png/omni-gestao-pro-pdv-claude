@@ -60,6 +60,7 @@ import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator";
 import { registrarAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-financeira-service";
+import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 
 export type OSPrioridade = "baixa" | "media" | "alta" | "critica";
 
@@ -124,8 +125,11 @@ async function requireOperacaoAuth(
   check: (p: EnterprisePermissions) => boolean,
   message: string,
 ): Promise<void> {
+  assertActiveStoreId(storeId, "Operações");
   const session = await auth();
-  if (!session?.user?.id) return;
+  if (!session?.user?.id) {
+    throw new Error("Faça login para acessar o módulo de Operações.");
+  }
   const g = await requireEnterpriseWith(storeId, check, message);
   if (!g.ok) throw new Error(g.error);
 }

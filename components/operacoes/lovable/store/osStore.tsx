@@ -31,7 +31,6 @@ import * as lojasApi from "@/api/lojas";
 import * as vendasApi from "@/api/vendas";
 import * as servicosApi from "@/api/servicos";
 import * as atendimentosApi from "@/api/atendimentos";
-import { DEFAULT_STORE_ID } from "@/data/lojasSeed";
 import { uid } from "@/api/_helpers";
 import { listEquipamentosModelos, listProdutos } from "@/app/actions/cadastros";
 
@@ -99,8 +98,8 @@ interface OSContextValue {
 const OSContext = createContext<OSContextValue | null>(null);
 const DEFAULT_AUTOR = "Você";
 
-export function OSProvider({ children, initialStoreId }: { children: ReactNode; initialStoreId?: string }) {
-  const [storeId, setStoreId] = useState<string>(initialStoreId ?? DEFAULT_STORE_ID);
+export function OSProvider({ children, initialStoreId }: { children: ReactNode; initialStoreId: string }) {
+  const [storeId] = useState<string>(initialStoreId);
   const [ordens, setOrdens] = useState<OrdemServico[]>([]);
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
   const [clientes, setClientes] = useState<ClienteRecord[]>([]);
@@ -153,7 +152,9 @@ export function OSProvider({ children, initialStoreId }: { children: ReactNode; 
   const value = useMemo<OSContextValue>(
     () => ({
       storeId,
-      setStoreId,
+      setStoreId: () => {
+        /* storeId vem de initialStoreId (unidade ativa); não alterar localmente */
+      },
       lojas,
       ordens,
       tecnicos,
@@ -173,17 +174,17 @@ export function OSProvider({ children, initialStoreId }: { children: ReactNode; 
         return novo;
       },
       moveStatus: (osId, status, autor = DEFAULT_AUTOR) => {
-        void osApi.moveStatus(osId, status, autor).then(replaceOS);
+        void osApi.moveStatus(storeId, osId, status, autor).then(replaceOS);
       },
       assignTecnico: (osId, tecnico, autor = DEFAULT_AUTOR) => {
-        void osApi.assignTecnico(osId, tecnico, autor).then(replaceOS);
+        void osApi.assignTecnico(storeId, osId, tecnico, autor).then(replaceOS);
       },
       vincularCliente: (osId, cliente, autor = DEFAULT_AUTOR) => {
-        void osApi.vincularCliente(osId, cliente, autor).then(replaceOS);
+        void osApi.vincularCliente(storeId, osId, cliente, autor).then(replaceOS);
       },
       addObservacao: (osId, conteudo, interna, autor = DEFAULT_AUTOR) => {
         void osApi
-          .addObservacao(osId, {
+          .addObservacao(storeId, osId, {
             id: uid("ob"),
             autor,
             conteudo,
@@ -198,53 +199,52 @@ export function OSProvider({ children, initialStoreId }: { children: ReactNode; 
           typeof a.id === "string" && a.id.length > 0
             ? { ...a, enviadoEm: a.enviadoEm || new Date().toISOString() }
             : { ...(anexo as Omit<Anexo, "id" | "enviadoEm">), id: uid("an"), enviadoEm: new Date().toISOString() };
-        void osApi.addAnexo(osId, full).then(replaceOS);
+        void osApi.addAnexo(storeId, osId, full).then(replaceOS);
       },
       removeAnexo: (osId, anexoId, autor = DEFAULT_AUTOR) => {
-        void osApi.removeAnexo(osId, anexoId, autor).then(replaceOS);
+        void osApi.removeAnexo(storeId, osId, anexoId, autor).then(replaceOS);
       },
       approveOrcamento: (osId, autor = "Cliente") => {
-        void osApi.approveOrcamento(osId, autor).then(replaceOS);
+        void osApi.approveOrcamento(storeId, osId, autor).then(replaceOS);
       },
       rejectOrcamento: (osId, motivo, autor = "Cliente") => {
-        void osApi.rejectOrcamento(osId, autor, motivo).then(replaceOS);
+        void osApi.rejectOrcamento(storeId, osId, autor, motivo).then(replaceOS);
       },
       criarOrcamentoRascunho: (osId, autor = DEFAULT_AUTOR) => {
-        void osApi.criarOrcamentoRascunho(osId, autor).then(replaceOS);
+        void osApi.criarOrcamentoRascunho(storeId, osId, autor).then(replaceOS);
       },
       salvarOrcamento: (osId, orcamento, evento, autor = DEFAULT_AUTOR) => {
-        void osApi.salvarOrcamento(osId, orcamento, autor, evento).then(replaceOS);
+        void osApi.salvarOrcamento(storeId, osId, orcamento, autor, evento).then(replaceOS);
       },
       enviarOrcamentoAoCliente: (osId, autor = DEFAULT_AUTOR) => {
-        void osApi.enviarOrcamentoAoCliente(osId, autor).then(replaceOS);
+        void osApi.enviarOrcamentoAoCliente(storeId, osId, autor).then(replaceOS);
       },
       addEvento: (osId, conteudo, tipo = "mensagem_interna", autor = DEFAULT_AUTOR) => {
-        void osApi.addEvento(osId, conteudo, tipo, autor).then(replaceOS);
+        void osApi.addEvento(storeId, osId, conteudo, tipo, autor).then(replaceOS);
       },
       updateChecklist: (osId, checklist, autor = DEFAULT_AUTOR) => {
-        void osApi.updateChecklist(osId, checklist, autor).then(replaceOS);
+        void osApi.updateChecklist(storeId, osId, checklist, autor).then(replaceOS);
       },
       addPecaFromEstoque: async (osId, peca, autor = DEFAULT_AUTOR) => {
-        const updated = await osApi.addPecaFromEstoque(osId, peca, autor);
+        const updated = await osApi.addPecaFromEstoque(storeId, osId, peca, autor);
         replaceOS(updated);
-        // refresca estoque local para refletir reserva/baixa
         setPecasEstoque(await estoqueApi.listPecas(storeId));
       },
       faturarOS: async (osId, autor = DEFAULT_AUTOR) => {
-        const { os, venda } = await osApi.faturarOS(osId, autor);
+        const { os, venda } = await osApi.faturarOS(storeId, osId, autor);
         replaceOS(os);
         setVendas((prev) => [...prev, venda]);
         setPecasEstoque(await estoqueApi.listPecas(storeId));
         return venda;
       },
-      validateOrcamentoEstoque: (osId) => osApi.validateOrcamentoEstoque(osId),
+      validateOrcamentoEstoque: (osId) => osApi.validateOrcamentoEstoque(storeId, osId),
       gerarCobrancaOS: async (osId, input, autor = DEFAULT_AUTOR) => {
-        const updated = await osApi.gerarCobrancaOS(osId, input, autor);
+        const updated = await osApi.gerarCobrancaOS(storeId, osId, input, autor);
         replaceOS(updated);
         return updated;
       },
       applyHubAcao: async (osId, acao, autor = DEFAULT_AUTOR) => {
-        const updated = await osApi.runOperacaoHubAcao(osId, acao, autor);
+        const updated = await osApi.runOperacaoHubAcao(storeId, osId, acao, autor);
         replaceOS(updated);
         return updated;
       },

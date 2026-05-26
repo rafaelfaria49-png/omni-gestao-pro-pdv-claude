@@ -14,7 +14,7 @@ import { useOS } from "@/store/osStore";
 import { dt } from "@/lib/os/format";
 
 export function RetiradaPanel({ os }: { os: OrdemServico }) {
-  const { refresh } = useOS();
+  const { refresh, storeId } = useOS();
   const r0 = os.retirada;
   const [confirmado, setConfirmado] = useState(Boolean(r0?.confirmado));
   const [retiradoPor, setRetiradoPor] = useState(r0?.retiradoPor ?? "");
@@ -37,7 +37,7 @@ export function RetiradaPanel({ os }: { os: OrdemServico }) {
     }
     setSaving(true);
     try {
-      await osApi.confirmarRetirada(os.id, {
+      await osApi.confirmarRetirada(storeId, os.id, {
         confirmado,
         retiradoPor: retiradoPor.trim() || undefined,
         observacao: observacao.trim() || undefined,

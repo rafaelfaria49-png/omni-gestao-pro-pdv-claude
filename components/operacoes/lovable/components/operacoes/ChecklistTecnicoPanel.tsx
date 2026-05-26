@@ -20,7 +20,7 @@ function mergeDefaults(saved?: ChecklistTecnicoItem[]): ChecklistTecnicoItem[] {
 }
 
 export function ChecklistTecnicoPanel({ os }: { os: OrdemServico }) {
-  const { refresh } = useOS();
+  const { refresh, storeId } = useOS();
   const baseline = useMemo(() => mergeDefaults(os.checklistTecnico), [os.checklistTecnico, os.atualizadoEm, os.id]);
   const [items, setItems] = useState(baseline);
   const [saving, setSaving] = useState(false);
@@ -36,7 +36,7 @@ export function ChecklistTecnicoPanel({ os }: { os: OrdemServico }) {
   const salvar = async () => {
     setSaving(true);
     try {
-      await osApi.salvarChecklistTecnico(os.id, items, "Você");
+      await osApi.salvarChecklistTecnico(storeId, os.id, items, "Você");
       await refresh();
       toast.success("Checklist técnico salvo");
     } catch (e) {

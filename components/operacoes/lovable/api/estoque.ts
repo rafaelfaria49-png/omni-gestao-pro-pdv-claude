@@ -1,15 +1,18 @@
 import { listProdutos } from "@/app/actions/cadastros";
 import { nowIso, uid } from "./_helpers";
 import type { MovimentoEstoque, PecaEstoque } from "@/types/estoque";
+import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 
 // Módulo que move estoque de verdade fica em lib/operacoes/adapters/os-estoque.ts.
 // Aqui apenas expomos o catálogo (Prisma Produto → PecaEstoque) para a UI.
 
-let CURRENT_STORE_ID = "loja-1";
+function requireStoreId(storeId: string): string {
+  assertActiveStoreId(storeId, "Estoque Operações");
+  return storeId.trim();
+}
 
-export async function listPecas(storeId?: string): Promise<PecaEstoque[]> {
-  const sid = storeId ?? CURRENT_STORE_ID;
-  if (storeId) CURRENT_STORE_ID = storeId;
+export async function listPecas(storeId: string): Promise<PecaEstoque[]> {
+  const sid = requireStoreId(storeId);
   const produtos = await listProdutos(sid);
   return produtos
     .filter((p) => p.status !== "Inativo")
@@ -31,8 +34,8 @@ export async function listPecas(storeId?: string): Promise<PecaEstoque[]> {
     }));
 }
 
-export async function getPeca(id: string): Promise<PecaEstoque | undefined> {
-  const list = await listPecas();
+export async function getPeca(storeId: string, id: string): Promise<PecaEstoque | undefined> {
+  const list = await listPecas(storeId);
   return list.find((p) => p.id === id);
 }
 
@@ -40,13 +43,15 @@ export async function getPeca(id: string): Promise<PecaEstoque | undefined> {
 // Estas funções retornam um movimento local para compatibilidade com a UI.
 
 export async function reservarPeca(
+  storeId: string,
   pecaId: string,
   quantidade: number,
   osId: string,
 ): Promise<MovimentoEstoque> {
+  const sid = requireStoreId(storeId);
   return {
     id: uid("mov"),
-    storeId: CURRENT_STORE_ID,
+    storeId: sid,
     pecaId,
     tipo: "reserva",
     quantidade,
@@ -57,14 +62,16 @@ export async function reservarPeca(
 }
 
 export async function baixarPeca(
+  storeId: string,
   pecaId: string,
   quantidade: number,
   origem: "os" | "venda",
   origemId: string,
 ): Promise<MovimentoEstoque> {
+  const sid = requireStoreId(storeId);
   return {
     id: uid("mov"),
-    storeId: CURRENT_STORE_ID,
+    storeId: sid,
     pecaId,
     tipo: "saida",
     quantidade,

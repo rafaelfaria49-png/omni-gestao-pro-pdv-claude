@@ -36,7 +36,7 @@ import {
 import { validateOrcamentoEstoque, type EstoqueOrcamentoIssue } from "@/api/os";
 
 export function OperacaoOsAcaoBar({ os, onDone }: { os: OrdemServico; onDone?: () => void }) {
-  const { applyHubAcao, refresh } = useOS();
+  const { applyHubAcao, refresh, storeId } = useOS();
   const [busy, setBusy] = useState(false);
   const [obsTexto, setObsTexto] = useState("");
   const [obsInterna, setObsInterna] = useState(false);
@@ -90,13 +90,13 @@ export function OperacaoOsAcaoBar({ os, onDone }: { os: OrdemServico; onDone?: (
     if (!confirmEntregaOpen) return;
     let cancelled = false;
     setEntregaEstoque({ loading: true, ok: true, issues: [] });
-    void validateOrcamentoEstoque(os.id).then((r) => {
+    void validateOrcamentoEstoque(storeId, os.id).then((r) => {
       if (!cancelled) setEntregaEstoque({ loading: false, ok: r.ok, issues: r.issues });
     });
     return () => {
       cancelled = true;
     };
-  }, [confirmEntregaOpen, os.id]);
+  }, [confirmEntregaOpen, os.id, storeId]);
 
   return (
     <div className="space-y-4 rounded-xl border border-border bg-card p-4">
