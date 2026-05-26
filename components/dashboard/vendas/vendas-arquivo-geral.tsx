@@ -220,8 +220,7 @@ function statusBadgeClass(s: string): string {
 
 const PAGE_SIZE = 20
 
-function saleRecordToVendaItem(s: SaleRecord): VendaItem {
-  const pb = s.paymentBreakdown
+function paymentBreakdownLabels(pb: SaleRecord["paymentBreakdown"]): string[] {
   const formas: string[] = []
   if (pb.dinheiro > 0) formas.push("Dinheiro")
   if (pb.pix > 0) formas.push("Pix")
@@ -230,6 +229,24 @@ function saleRecordToVendaItem(s: SaleRecord): VendaItem {
   if (pb.carne > 0) formas.push("Carnê")
   if (pb.aPrazo > 0) formas.push("À Prazo")
   if (pb.creditoVale > 0) formas.push("Vale")
+  return formas
+}
+
+function saleRecordToPagamentos(s: SaleRecord): Array<{ label: string; valor: number }> {
+  const pb = s.paymentBreakdown
+  const rows: Array<{ label: string; valor: number }> = []
+  if (pb.dinheiro > 0) rows.push({ label: "Dinheiro", valor: pb.dinheiro })
+  if (pb.pix > 0) rows.push({ label: "Pix", valor: pb.pix })
+  if (pb.cartaoDebito > 0) rows.push({ label: "Débito", valor: pb.cartaoDebito })
+  if (pb.cartaoCredito > 0) rows.push({ label: "Crédito", valor: pb.cartaoCredito })
+  if (pb.carne > 0) rows.push({ label: "Carnê", valor: pb.carne })
+  if (pb.aPrazo > 0) rows.push({ label: "A Prazo", valor: pb.aPrazo })
+  if (pb.creditoVale > 0) rows.push({ label: "Vale/Crédito", valor: pb.creditoVale })
+  return rows
+}
+
+function saleRecordToVendaItem(s: SaleRecord): VendaItem {
+  const formas = paymentBreakdownLabels(s.paymentBreakdown)
   return {
     id: s.id,
     dbId: s.id,
@@ -286,6 +303,8 @@ export function VendasArquivoGeral() {
   const [detalheOpen, setDetalheOpen] = useState(false)
   const [detalheLoading, setDetalheLoading] = useState(false)
   const [detalhe, setDetalhe] = useState<VendaDetalhe | null>(null)
+  /** Venda apenas no operations-store (syncPending) — detalhe local, sem API. */
+  const [detalhePendenteLocal, setDetalhePendenteLocal] = useState<SaleRecord | null>(null)
   const [saldoCredito, setSaldoCredito] = useState<number | null>(null)
 
   // Cupom modal
@@ -424,12 +443,54 @@ export function VendasArquivoGeral() {
     return { mergedVendas: merged, remoteOnlyIds: remoteOnly, pendingSyncIds: pendingSync }
   }, [vendas, remoteSales, opsSales])
 
+  const isVendaPendenteSync = useCallback(
+    (vendaId: string) => pendingSyncIds.has(vendaId),
+    [pendingSyncIds],
+  )
+
+  const getPendingSaleRecord = useCallback(
+    (vendaId: string) => opsSales.find((s) => s.id === vendaId && s.syncPending === true) ?? null,
+    [opsSales],
+  )
+
+  const toastVendaPendenteBloqueada = useCallback(
+    (acao: "cancelar" | "corrigir" | "troca" | "imprimir") => {
+      const desc =
+        acao === "cancelar"
+          ? "Venda pendente não pode ser cancelada até sincronizar com o servidor."
+          : "Esta ação só está disponível após a venda ser confirmada no servidor."
+      toast({
+        title: "Venda pendente de sincronização",
+        description: desc,
+        variant: acao === "cancelar" ? "destructive" : "default",
+      })
+    },
+    [toast],
+  )
+
   // ── Detalhe ──────────────────────────────────────────────────────────────────
   const openDetalhe = useCallback(async (vendaId: string) => {
     setDetalheOpen(true)
+    setSaldoCredito(null)
+
+    if (isVendaPendenteSync(vendaId)) {
+      const local = getPendingSaleRecord(vendaId)
+      setDetalheLoading(false)
+      setDetalhe(null)
+      setDetalhePendenteLocal(local)
+      if (!local) {
+        toast({
+          title: "Venda pendente",
+          description: "Dados locais indisponíveis. Atualize a página ou aguarde a sincronização.",
+          variant: "destructive",
+        })
+      }
+      return
+    }
+
+    setDetalhePendenteLocal(null)
     setDetalheLoading(true)
     setDetalhe(null)
-    setSaldoCredito(null)
     try {
       const res = await fetch(`/api/vendas/${encodeURIComponent(vendaId)}`, {
         credentials: "include",
@@ -463,7 +524,7 @@ export function VendasArquivoGeral() {
     } finally {
       setDetalheLoading(false)
     }
-  }, [storeId, toast])
+  }, [storeId, toast, isVendaPendenteSync, getPendingSaleRecord])
 
   // ── Cupom ────────────────────────────────────────────────────────────────────
   const openCupom = useCallback((d: VendaDetalhe) => {
@@ -491,6 +552,10 @@ export function VendasArquivoGeral() {
   }, [empresaDocumentos])
 
   const openCupomFromRow = useCallback(async (vendaId: string) => {
+    if (isVendaPendenteSync(vendaId)) {
+      toastVendaPendenteBloqueada("imprimir")
+      return
+    }
     try {
       const res = await fetch(`/api/vendas/${encodeURIComponent(vendaId)}`, {
         credentials: "include",
@@ -501,11 +566,18 @@ export function VendasArquivoGeral() {
     } catch {
       toast({ title: "Erro", description: "Não foi possível carregar os dados do cupom.", variant: "destructive" })
     }
-  }, [storeId, openCupom, toast])
+  }, [storeId, openCupom, toast, isVendaPendenteSync, toastVendaPendenteBloqueada])
 
   // ── Cancelamento ─────────────────────────────────────────────────────────────
   const handleCancelar = useCallback(async (forcar = false) => {
     if (!cancelandoId || !cancelMotivo.trim()) return
+    if (isVendaPendenteSync(cancelandoId)) {
+      toastVendaPendenteBloqueada("cancelar")
+      setCancelandoId(null)
+      setCancelMotivo("")
+      setCancelConfirmForcar(false)
+      return
+    }
     setCancelLoading(true)
     try {
       const res = await fetch(`/api/vendas/${encodeURIComponent(cancelandoId)}/cancelar`, {
@@ -544,15 +616,19 @@ export function VendasArquivoGeral() {
     } finally {
       setCancelLoading(false)
     }
-  }, [cancelandoId, cancelMotivo, storeId, detalhe, openDetalhe, load, toast])
+  }, [cancelandoId, cancelMotivo, storeId, detalhe, openDetalhe, load, toast, isVendaPendenteSync, toastVendaPendenteBloqueada])
 
   const openTroca = useCallback(
     (vendaId: string) => {
+      if (isVendaPendenteSync(vendaId)) {
+        toastVendaPendenteBloqueada("troca")
+        return
+      }
       setTrocaSaleId(vendaId)
       setTrocaInitialSale(remoteSales.find((s) => s.id === vendaId))
       setTrocaOpen(true)
     },
-    [remoteSales],
+    [remoteSales, isVendaPendenteSync, toastVendaPendenteBloqueada],
   )
 
   const closeTroca = useCallback(() => {
@@ -630,10 +706,34 @@ export function VendasArquivoGeral() {
   }, [corrigindoVenda, correcaoMotivo, correcaoTab, correcaoFormaPag, correcaoPin, correcaoClienteId, correcaoClienteNome, correcaoObservacao, storeId, detalhe, openDetalhe, load, toast])
 
   const startCancel = useCallback((vendaId: string) => {
+    if (isVendaPendenteSync(vendaId)) {
+      toastVendaPendenteBloqueada("cancelar")
+      return
+    }
     setCancelandoId(vendaId)
     setCancelMotivo("")
     setCancelConfirmForcar(false)
-  }, [])
+  }, [isVendaPendenteSync, toastVendaPendenteBloqueada])
+
+  const startCorrecaoFromRow = useCallback(
+    async (vendaId: string) => {
+      if (isVendaPendenteSync(vendaId)) {
+        toastVendaPendenteBloqueada("corrigir")
+        return
+      }
+      try {
+        const res = await fetch(`/api/vendas/${encodeURIComponent(vendaId)}`, {
+          credentials: "include",
+          headers: { "x-assistec-loja-id": storeId },
+        })
+        const data = await res.json()
+        if (data.ok) startCorrecao(data.venda)
+      } catch {
+        toast({ title: "Erro", description: "Não foi possível carregar a venda para correção.", variant: "destructive" })
+      }
+    },
+    [storeId, isVendaPendenteSync, toastVendaPendenteBloqueada, toast],
+  )
 
   const clearAllFilters = useCallback(() => {
     setStatusFiltro("todos")
@@ -939,6 +1039,7 @@ export function VendasArquivoGeral() {
                 ) : (
                   mergedVendas.map((v) => {
                     const { date, time } = fmtDateParts(v.at)
+                    const isPendenteSync = pendingSyncIds.has(v.id)
                     return (
                       <TableRow
                         key={v.id}
@@ -1010,27 +1111,21 @@ export function VendasArquivoGeral() {
                               </TooltipTrigger>
                               <TooltipContent>Detalhes</TooltipContent>
                             </Tooltip>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openCupomFromRow(v.id)}>
-                                  <Printer className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Imprimir</TooltipContent>
-                            </Tooltip>
-                            {!v.cancelada && (
+                            {!isPendenteSync && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openCupomFromRow(v.id)}>
+                                    <Printer className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Imprimir</TooltipContent>
+                              </Tooltip>
+                            )}
+                            {!v.cancelada && !isPendenteSync && (
                               <>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                                      void (async () => {
-                                        const res = await fetch(`/api/vendas/${encodeURIComponent(v.id)}`, {
-                                          credentials: "include", headers: { "x-assistec-loja-id": storeId },
-                                        })
-                                        const data = await res.json()
-                                        if (data.ok) startCorrecao(data.venda)
-                                      })()
-                                    }}>
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void startCorrecaoFromRow(v.id)}>
                                       <Wrench className="h-4 w-4" />
                                     </Button>
                                   </TooltipTrigger>
@@ -1070,20 +1165,14 @@ export function VendasArquivoGeral() {
                                 <DropdownMenuItem onClick={() => void openDetalhe(v.id)}>
                                   <Eye className="h-4 w-4 mr-2" /> Detalhes
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => void openCupomFromRow(v.id)}>
-                                  <Printer className="h-4 w-4 mr-2" /> Imprimir
-                                </DropdownMenuItem>
-                                {!v.cancelada && (
+                                {!isPendenteSync && (
+                                  <DropdownMenuItem onClick={() => void openCupomFromRow(v.id)}>
+                                    <Printer className="h-4 w-4 mr-2" /> Imprimir
+                                  </DropdownMenuItem>
+                                )}
+                                {!v.cancelada && !isPendenteSync && (
                                   <>
-                                    <DropdownMenuItem onClick={() => {
-                                      void (async () => {
-                                        const res = await fetch(`/api/vendas/${encodeURIComponent(v.id)}`, {
-                                          credentials: "include", headers: { "x-assistec-loja-id": storeId },
-                                        })
-                                        const data = await res.json()
-                                        if (data.ok) startCorrecao(data.venda)
-                                      })()
-                                    }}>
+                                    <DropdownMenuItem onClick={() => void startCorrecaoFromRow(v.id)}>
                                       <Wrench className="h-4 w-4 mr-2" /> Corrigir venda
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => openTroca(v.id)}>
@@ -1126,21 +1215,164 @@ export function VendasArquivoGeral() {
       )}
 
       {/* ── Detalhe Drawer ─────────────────────────────────────────────────────── */}
-      <Sheet open={detalheOpen} onOpenChange={setDetalheOpen}>
+      <Sheet
+        open={detalheOpen}
+        onOpenChange={(open) => {
+          setDetalheOpen(open)
+          if (!open) {
+            setDetalhePendenteLocal(null)
+            setDetalhe(null)
+          }
+        }}
+      >
         <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0 bg-card border-border">
           <SheetHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-border">
             <SheetTitle className="text-lg font-bold text-foreground">
-              {detalhe ? `Venda ${detalhe.id}` : "Detalhes da Venda"}
+              {detalhePendenteLocal
+                ? `Venda ${detalhePendenteLocal.id}`
+                : detalhe
+                  ? `Venda ${detalhe.id}`
+                  : "Detalhes da Venda"}
             </SheetTitle>
-            {detalhe && (
+            {detalhePendenteLocal ? (
+              <SheetDescription className="text-xs text-muted-foreground">
+                {fmtDate(detalhePendenteLocal.at)} · Pendente de sincronização
+              </SheetDescription>
+            ) : detalhe ? (
               <SheetDescription className="text-xs text-muted-foreground">
                 {fmtDate(detalhe.at)} · {detalhe.operador ?? "Operador"} · {statusLabel(detalhe.status)}
               </SheetDescription>
-            )}
+            ) : null}
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-            {detalheLoading ? (
+            {detalhePendenteLocal ? (
+              <>
+                <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-warning">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div className="text-sm space-y-1 min-w-0">
+                    <p className="font-semibold text-foreground">
+                      Venda pendente de sincronização
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Esta venda ainda não foi confirmada no servidor. Os dados abaixo vêm apenas do dispositivo local.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Informações</h3>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Cupom / pedido</p>
+                      <p className="font-mono text-xs font-semibold text-foreground">{detalhePendenteLocal.id}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Data</p>
+                      <p className="font-medium text-foreground">{fmtDate(detalhePendenteLocal.at)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Cliente</p>
+                      <p className="font-medium text-foreground">{detalhePendenteLocal.customerName?.trim() || "—"}</p>
+                    </div>
+                    {detalhePendenteLocal.customerCpf && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">CPF</p>
+                        <p className="font-medium text-foreground">{detalhePendenteLocal.customerCpf}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs text-muted-foreground">Operador</p>
+                      <p className="font-medium text-foreground">{detalhePendenteLocal.cashierId ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Terminal</p>
+                      {detalhePendenteLocal.terminalId ? (
+                        <p className="font-medium text-foreground">
+                          {terminalMap.get(detalhePendenteLocal.terminalId)?.name
+                            || terminalMap.get(detalhePendenteLocal.terminalId)?.code
+                            || detalhePendenteLocal.terminalId}
+                        </p>
+                      ) : (
+                        <p className="font-medium text-muted-foreground">Sem terminal</p>
+                      )}
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-xs text-muted-foreground">Loja</p>
+                      <p className="font-mono text-xs text-foreground">{storeId}</p>
+                    </div>
+                    {detalhePendenteLocal.sessaoId && (
+                      <div className="col-span-2">
+                        <p className="text-xs text-muted-foreground">Sessão caixa</p>
+                        <p className="font-mono text-[11px] text-foreground truncate">{detalhePendenteLocal.sessaoId}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Separator className="bg-border" />
+
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Itens ({detalhePendenteLocal.lines.length})
+                  </h3>
+                  {detalhePendenteLocal.lines.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nenhum item no registro local</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {detalhePendenteLocal.lines.map((it, i) => (
+                        <div key={`${it.inventoryId}-${i}`} className="flex items-center justify-between text-sm py-1">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-foreground truncate">{it.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {it.quantity}x {fmtBrl(it.unitPrice)}
+                            </p>
+                          </div>
+                          <p className="font-semibold text-foreground ml-4 shrink-0">{fmtBrl(it.lineTotal)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <Separator className="bg-border" />
+
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pagamento</h3>
+                  {(() => {
+                    const pagamentos = saleRecordToPagamentos(detalhePendenteLocal)
+                    return pagamentos.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">—</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {pagamentos.map((pg, i) => (
+                          <div key={i} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{pg.label}</span>
+                            <span className="font-medium text-foreground">{fmtBrl(pg.valor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                  <div className="flex justify-between font-bold text-base text-foreground pt-1 border-t border-border">
+                    <span>Total</span>
+                    <span>{fmtBrl(detalhePendenteLocal.total)}</span>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium text-foreground">Próximos passos</p>
+                  <p>
+                    Aguarde a sincronização ou clique em <span className="font-medium text-foreground">Atualizar</span> na lista.
+                    Se continuar pendente, verifique os logs de{" "}
+                    <span className="font-mono text-[10px] text-foreground">/api/ops/venda-persist</span>.
+                  </p>
+                  <p>
+                    Cancelamento, correção, troca/devolução e reimpressão ficam disponíveis após a confirmação no servidor.
+                  </p>
+                </div>
+              </>
+            ) : detalheLoading ? (
               <div className="space-y-3">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Skeleton key={i} className="h-8 w-full" />
@@ -1400,8 +1632,8 @@ export function VendasArquivoGeral() {
             )}
           </div>
 
-          {/* Drawer actions */}
-          {detalhe && !detalheLoading && (
+          {/* Drawer actions — apenas vendas persistidas no servidor */}
+          {detalhe && !detalheLoading && !detalhePendenteLocal && (
             <div className="shrink-0 border-t border-border px-6 py-4 space-y-2">
               <div className="flex gap-2">
                 <Button
