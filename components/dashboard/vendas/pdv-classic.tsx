@@ -165,8 +165,10 @@ export interface VendasPDVProps {
   onVoiceCartSeedConsumed?: () => void
   voiceOpenCaixaSignal?: number
   onVoiceOpenCaixaConsumed?: () => void
-  /** `omni-smart` = caixa Lovable (F1–F9); `default` = tela completa legada (Services). */
-  uiShell?: "default" | "omni-smart"
+  /** Shell visual do PDV. Sempre `omni-smart` em produção (vendas-pdv.tsx).
+   *  Mantido como prop opcional para retrocompatibilidade do contrato; o
+   *  tipo `default` foi removido no Lote 4 (era código morto). */
+  uiShell?: "omni-smart"
   /** Vindo do Vendas HUB (`?modo=rapido`): foco automático no campo de código/produto após o PDV montar. */
   isModoRapido?: boolean
   /** Sub-layout interno do PDV Clássico (mesmo seletor atual). */
@@ -180,7 +182,7 @@ export function PdvClassic({
   onVoiceCartSeedConsumed,
   voiceOpenCaixaSignal = 0,
   onVoiceOpenCaixaConsumed,
-  uiShell = "default",
+  uiShell = "omni-smart",
   isModoRapido = false,
   classicLayoutKind,
 }: VendasPDVProps) {
@@ -516,13 +518,11 @@ export function PdvClassic({
       setCart(next)
       const lastId = next[next.length - 1]!.lineId
       setSelectedCartLineId(lastId)
-      if (uiShell !== "default") {
-        setShellHighlightLineId(lastId)
-        window.setTimeout(() => {
-          setShellHighlightLineId((h) => (h === lastId ? null : h))
-        }, 1400)
-        queueMicrotask(() => shellBipeRef.current?.focus())
-      }
+      setShellHighlightLineId(lastId)
+      window.setTimeout(() => {
+        setShellHighlightLineId((h) => (h === lastId ? null : h))
+      }, 1400)
+      queueMicrotask(() => shellBipeRef.current?.focus())
     }
     const tel = String(os.cliente?.telefone || "").replace(/\D/g, "")
     if (tel.length >= 8) {
@@ -593,27 +593,21 @@ export function PdvClassic({
         setRapidoFlashLineId((h) => (h === lineId ? null : h))
       }, 150)
       setSearchTerm("")
-      if (uiShell !== "default") {
-        setBipeCode("")
-      }
+      setBipeCode("")
       playPdvRapidoItemBeepIfEnabled()
     }
-    if (uiShell !== "default") {
-      setShellHighlightLineId(lineId)
-      window.setTimeout(() => {
-        setShellHighlightLineId((h) => (h === lineId ? null : h))
-      }, 1400)
-      queueMicrotask(() => {
-        shellBipeRef.current?.focus()
-        if (isModoRapido) {
-          window.requestAnimationFrame(() => shellBipeRef.current?.focus())
-        }
-      })
-    } else if (isModoRapido) {
-      queueMicrotask(() => {
-        window.requestAnimationFrame(() => productInputRef.current?.focus())
-      })
-    }
+    setShellHighlightLineId(lineId)
+    window.setTimeout(() => {
+      setShellHighlightLineId((h) => (h === lineId ? null : h))
+    }, 1400)
+    queueMicrotask(() => {
+      shellBipeRef.current?.focus()
+      if (isModoRapido) {
+        window.requestAnimationFrame(() => shellBipeRef.current?.focus())
+      }
+    })
+    // Branch legado `uiShell=default` (que focava productInputRef em modo rápido)
+    // removida no Lote 4. omni-smart usa shellBipeRef como único campo de bipagem.
   }
 
   const addToCart = (product: Product, presetQty?: number) => {
@@ -702,15 +696,12 @@ export function PdvClassic({
       }, 150)
       playPdvRapidoItemBeepIfEnabled()
     }
-    if (uiShell !== "default") {
-      setShellHighlightLineId(lineId)
-      window.setTimeout(() => {
-        setShellHighlightLineId((h) => (h === lineId ? null : h))
-      }, 1400)
-      queueMicrotask(() => shellBipeRef.current?.focus())
-    } else {
-      queueMicrotask(() => productInputRef.current?.focus())
-    }
+    setShellHighlightLineId(lineId)
+    window.setTimeout(() => {
+      setShellHighlightLineId((h) => (h === lineId ? null : h))
+    }, 1400)
+    queueMicrotask(() => shellBipeRef.current?.focus())
+    // Branch legado `uiShell=default` (focava productInputRef) removida no Lote 4.
   }
 
   const handleShellBipeKeyDown = useCallback(
@@ -1001,7 +992,7 @@ export function PdvClassic({
     showOperationsMenu
 
   useEffect(() => {
-    if (!isModoRapido || uiShell === "default") return
+    if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (shellModalBlocking) return
       if (e.key === "Escape" && cart.length > 0) {
@@ -1038,13 +1029,11 @@ export function PdvClassic({
   }, [isModoRapido, uiShell, shellModalBlocking, cart, selectedCartLineId])
 
   const focusShellBipe = useCallback(() => {
-    if (uiShell === "default") return
     queueMicrotask(() => shellBipeRef.current?.focus())
-  }, [uiShell])
+  }, [])
 
   const openShellShortcut = useCallback(
     (key: string) => {
-      if (uiShell === "default") return
       const goBipe = () => focusShellBipe()
       switch (key) {
         case "F1":
@@ -1127,11 +1116,10 @@ export function PdvClassic({
           break
       }
     },
-    [cart.length, focusShellBipe, selectedCartLineId, toast, uiShell]
+    [cart.length, focusShellBipe, selectedCartLineId, toast]
   )
 
   useEffect(() => {
-    if (uiShell === "default") return
     const fnKeys = new Set(["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F12", "End"])
     let ctrlDown = false
     const down = (e: globalThis.KeyboardEvent) => {
@@ -1164,26 +1152,21 @@ export function PdvClassic({
       window.removeEventListener("keydown", down)
       window.removeEventListener("keyup", up)
     }
-  }, [openShellShortcut, shellModalBlocking, uiShell])
+  }, [openShellShortcut, shellModalBlocking])
 
   useEffect(() => {
-    if (uiShell === "default") return
     const t = window.setTimeout(() => shellBipeRef.current?.focus(), 100)
     return () => window.clearTimeout(t)
-  }, [uiShell])
+  }, [])
 
   useEffect(() => {
     if (!isModoRapido) return
     if (!storePdvGate.ready || storePdvGate.block) return
     const t = window.setTimeout(() => {
-      if (uiShell === "omni-smart") {
-        shellBipeRef.current?.focus()
-      } else {
-        productInputRef.current?.focus()
-      }
+      shellBipeRef.current?.focus()
     }, 200)
     return () => window.clearTimeout(t)
-  }, [isModoRapido, uiShell, storePdvGate.ready, storePdvGate.block])
+  }, [isModoRapido, storePdvGate.ready, storePdvGate.block])
 
   useEffect(() => {
     if (!voiceCartSeed?.key) return
@@ -2231,7 +2214,7 @@ export function PdvClassic({
         open={shellReceivablesOpen}
         onOpenChange={(open) => {
           setShellReceivablesOpen(open)
-          if (!open && uiShell !== "default") focusShellBipe()
+          if (!open) focusShellBipe()
         }}
         preselectedCustomerName={selectedCustomer?.name ?? null}
       />
@@ -2243,7 +2226,7 @@ export function PdvClassic({
           setIsPaymentModalOpen(false)
           setInstantPayIntent(null)
           setMultipayMode(false)
-          if (uiShell !== "default") focusShellBipe()
+          focusShellBipe()
         }}
         cartSubtotal={subtotal}
         impostoEstimado={impostoEstimado}
@@ -2381,18 +2364,14 @@ export function PdvClassic({
             title: "Venda finalizada",
             description: `${payments.length} forma(s) de pagamento confirmada(s).`,
           })
-          if (uiShell !== "default") {
-            queueMicrotask(() => {
-              shellBipeRef.current?.focus()
-              if (isModoRapido) {
-                window.requestAnimationFrame(() => shellBipeRef.current?.focus())
-              }
-            })
-          } else if (isModoRapido) {
-            queueMicrotask(() => {
-              window.requestAnimationFrame(() => productInputRef.current?.focus())
-            })
-          }
+          queueMicrotask(() => {
+            shellBipeRef.current?.focus()
+            if (isModoRapido) {
+              window.requestAnimationFrame(() => shellBipeRef.current?.focus())
+            }
+          })
+          // Branch legado `uiShell=default` (focar productInputRef em modo rápido)
+          // removida no Lote 4 — omni-smart é o único shell.
         }}
       />
 
