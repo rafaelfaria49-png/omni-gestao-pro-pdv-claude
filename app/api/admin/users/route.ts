@@ -10,6 +10,11 @@ import {
   isElevatedRole,
   normalizeAllowedStoreIdsForActor,
 } from "@/lib/auth/admin-users-policy"
+import {
+  buildAdminUserCreateChanges,
+  resolveAuditStoreIdForUser,
+} from "@/lib/config-audit/admin-user"
+import { recordConfigAuditFromSession } from "@/lib/config-audit/record"
 import type { Prisma } from "@/generated/prisma"
 
 export const runtime = "nodejs"
@@ -165,6 +170,26 @@ export async function POST(req: Request) {
       }
       return u
     })
+
+    try {
+      const changes = buildAdminUserCreateChanges({
+        name: created.name,
+        email: created.email,
+        role: String(created.role),
+        active: created.active,
+        lojaId: created.lojaId,
+        storeIds: isAdminLike ? [] : storeRows,
+      })
+      if (changes.length > 0) {
+        await recordConfigAuditFromSession(req, session!, {
+          storeId: resolveAuditStoreIdForUser(created.lojaId, isAdminLike ? [] : storeRows),
+          section: "usuarios",
+          changes,
+        })
+      }
+    } catch {
+      /* auditoria não deve bloquear save */
+    }
 
     return NextResponse.json({
       ok: true,

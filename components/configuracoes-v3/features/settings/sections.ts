@@ -12,6 +12,7 @@ import {
   Users,
   ShieldCheck,
   CreditCard,
+  ClipboardList,
 } from "lucide-react";
 
 export type SectionId =
@@ -26,6 +27,7 @@ export type SectionId =
   | "integracoes"
   | "importacao"
   | "usuarios"
+  | "auditoria"
   | "seguranca";
 
 export interface SectionItem {
@@ -55,5 +57,11 @@ export const SETTINGS_SECTIONS: SectionItem[] = [
   { id: "integracoes", label: "Integrações", description: "Conecte serviços externos", icon: Plug },
   { id: "importacao", label: "Importação", description: "Planilhas e dados externos", icon: Upload },
   { id: "usuarios", label: "Usuários e Permissões", description: "Equipe e acessos", icon: Users },
+  {
+    id: "auditoria",
+    label: "Auditoria",
+    description: "Histórico de alterações críticas",
+    icon: ClipboardList,
+  },
   { id: "seguranca", label: "Segurança", description: "Senha e sessões", icon: ShieldCheck },
 ];

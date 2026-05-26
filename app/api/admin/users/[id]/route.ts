@@ -11,6 +11,11 @@ import {
   isElevatedRole,
   normalizeAllowedStoreIdsForActor,
 } from "@/lib/auth/admin-users-policy"
+import {
+  buildAdminUserPatchChanges,
+  resolveAuditStoreIdForUser,
+} from "@/lib/config-audit/admin-user"
+import { recordConfigAuditFromSession } from "@/lib/config-audit/record"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -179,6 +184,37 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         adminUserStores: { select: { storeId: true } },
       },
     })
+
+    try {
+      const beforeSnap = {
+        name: existing.name,
+        email: existing.email,
+        role: String(existing.role),
+        active: existing.active,
+        lojaId: existing.lojaId,
+        storeIds: existing.adminUserStores.map((s) => s.storeId),
+      }
+      const afterSnap = fresh
+        ? {
+            name: fresh.name,
+            email: fresh.email,
+            role: String(fresh.role),
+            active: fresh.active,
+            lojaId: fresh.lojaId,
+            storeIds: fresh.adminUserStores.map((s) => s.storeId),
+          }
+        : beforeSnap
+      const changes = buildAdminUserPatchChanges(beforeSnap, afterSnap, body as Record<string, unknown>)
+      if (changes.length > 0) {
+        await recordConfigAuditFromSession(req, session!, {
+          storeId: resolveAuditStoreIdForUser(afterSnap.lojaId, afterSnap.storeIds),
+          section: "usuarios",
+          changes,
+        })
+      }
+    } catch {
+      /* auditoria não deve bloquear save */
+    }
 
     return NextResponse.json({
       ok: true,

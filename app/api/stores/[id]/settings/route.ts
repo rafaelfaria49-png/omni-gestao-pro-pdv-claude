@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/require-admin"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
+import { buildStoreSettingsAuditChanges } from "@/lib/config-audit/store-settings"
+import { recordConfigAuditChanges } from "@/lib/config-audit/record"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -44,6 +46,8 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       cardFees: unknown
     }>
 
+    const existing = await prisma.storeSettings.findUnique({ where: { storeId: id } })
+
     const settings = await prisma.storeSettings.upsert({
       where: { storeId: id },
       create: {
@@ -68,6 +72,16 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
         ...(body.cardFees !== undefined ? { cardFees: body.cardFees as any } : {}),
       },
     })
+
+    try {
+      const { section, changes } = buildStoreSettingsAuditChanges(existing, settings, body)
+      if (changes.length > 0) {
+        await recordConfigAuditChanges(req, { storeId: id, section, changes })
+      }
+    } catch {
+      /* auditoria não deve bloquear save */
+    }
+
     return NextResponse.json({ ok: true, settings })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao salvar settings"

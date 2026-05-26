@@ -9,6 +9,8 @@ import {
   requireStoresSession,
   type StoreDeleteConfirmBody,
 } from "@/lib/stores-api-access"
+import { diffScalarFields } from "@/lib/config-audit/diff"
+import { recordConfigAuditFromSession } from "@/lib/config-audit/record"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -72,7 +74,10 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
       )
     }
 
-    const existing = await prisma.store.findUnique({ where: { id }, select: { id: true } })
+    const existing = await prisma.store.findUnique({
+      where: { id },
+      select: { id: true, name: true },
+    })
     if (!existing) {
       return NextResponse.json({ ok: false, error: "Unidade não encontrada." }, { status: 404 })
     }
@@ -91,6 +96,23 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     }
 
     await prisma.store.delete({ where: { id } })
+
+    try {
+      await recordConfigAuditFromSession(req, gate.session, {
+        storeId: id,
+        section: "geral",
+        changes: [
+          {
+            field: "store.deleted",
+            oldValue: { id: existing.id, name: existing.name },
+            newValue: null,
+          },
+        ],
+      })
+    } catch {
+      /* auditoria não deve bloquear exclusão */
+    }
+
     return NextResponse.json({ ok: true })
   } catch (e) {
     const code = e && typeof e === "object" && "code" in e ? String((e as { code: string }).code) : ""
@@ -147,6 +169,45 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
         ...(subscriptionPlan ? { subscriptionPlan } : {}),
       },
     })
+
+    try {
+      const changes = diffScalarFields([
+        ...(body.name != null
+          ? [{ key: "store.name", before: existing.name, after: store.name }]
+          : []),
+        ...(body.cnpj != null
+          ? [{ key: "store.cnpj", before: existing.cnpj, after: store.cnpj }]
+          : []),
+        ...(body.phone != null
+          ? [{ key: "store.phone", before: existing.phone, after: store.phone }]
+          : []),
+        ...(body.address !== undefined
+          ? [{ key: "store.address", before: existing.address, after: store.address }]
+          : []),
+        ...(profile
+          ? [{ key: "store.profile", before: existing.profile, after: store.profile }]
+          : []),
+        ...(subscriptionPlan
+          ? [
+              {
+                key: "store.subscriptionPlan",
+                before: existing.subscriptionPlan,
+                after: store.subscriptionPlan,
+              },
+            ]
+          : []),
+      ])
+      if (changes.length > 0) {
+        await recordConfigAuditFromSession(req, gate.session, {
+          storeId: id,
+          section: "geral",
+          changes,
+        })
+      }
+    } catch {
+      /* auditoria não deve bloquear save */
+    }
+
     return NextResponse.json({ ok: true, store })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao salvar unidade"
