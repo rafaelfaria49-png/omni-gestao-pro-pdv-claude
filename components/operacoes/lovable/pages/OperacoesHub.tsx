@@ -99,13 +99,13 @@ const OperacoesHub = () => {
     {
       id: "atendimento-rapido",
       title: "Atendimento rápido",
-      description: "Registre dúvidas e orçamentos sem abrir uma OS completa.",
+      description: "Rascunho local nesta sessão — não persiste no servidor. Para histórico real, use OS.",
       icon: Zap,
-      status: "ativo",
+      status: "neutro",
       primaryValue: atendimentos.length,
-      primaryLabel: "Registros",
-      metrics: [],
-      action: "Atender agora",
+      primaryLabel: "Nesta sessão",
+      metrics: [{ label: "Tipo", value: "Rascunho" }],
+      action: "Registrar rascunho",
       accent: "from-violet-500/10 to-transparent",
     },
     {

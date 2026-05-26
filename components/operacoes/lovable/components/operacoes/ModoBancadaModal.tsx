@@ -38,10 +38,16 @@ export function ModoBancadaModal({ os, open, onOpenChange }: Props) {
 
   const finalizar = () => {
     setRunning(false);
-    moveStatus(os.id, "pronta");
-    if (obs.trim()) addObservacao(os.id, `[Bancada · ${fmt(seconds)}] ${obs}`, true);
-    toast.success("Reparo finalizado e movido para Pronto");
-    onOpenChange(false);
+    void (async () => {
+      try {
+        await moveStatus(os.id, "pronta");
+        if (obs.trim()) addObservacao(os.id, `[Bancada · ${fmt(seconds)}] ${obs}`, true);
+        toast.success("Reparo finalizado e movido para Pronto");
+        onOpenChange(false);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Não foi possível mover a OS para Pronta.");
+      }
+    })();
   };
 
   return (

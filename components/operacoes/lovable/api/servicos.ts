@@ -17,8 +17,9 @@ export async function listServicos(storeId?: string): Promise<CatalogoServico[]>
   }));
 }
 
-export async function upsertServico(servico: CatalogoServico): Promise<CatalogoServico> {
-  // Catálogo de serviços no Operações HUB agora vem do Cadastros HUB.
-  // Escrita/edição do catálogo permanece na tela Cadastros por enquanto.
-  return servico;
+/** Escrita ainda não disponível neste HUB — catálogo vem do Cadastros (read-only aqui). */
+export async function upsertServico(_servico: CatalogoServico): Promise<CatalogoServico> {
+  throw new Error(
+    "Edição de serviços pelo Operações HUB ainda não está disponível. Use Cadastros para alterar o catálogo.",
+  );
 }

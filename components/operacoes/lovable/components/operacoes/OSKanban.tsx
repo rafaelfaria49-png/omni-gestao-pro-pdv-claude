@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { X, ClipboardList, PlusCircle } from "lucide-react";
+import { X, ClipboardList, PlusCircle, Loader2 } from "lucide-react";
 import { slaRestante } from "@/lib/os/format";
 import { useNavigate } from "react-router-dom";
 
@@ -16,6 +16,7 @@ export function OSKanban() {
   const navigate = useNavigate();
   const [dragOver, setDragOver] = useState<OSStatus | null>(null);
   const [, setDraggingId] = useState<string | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   const [fTecnico, setFTecnico] = useState<string>("");
   const [fPrioridade, setFPrioridade] = useState<string>("");
@@ -48,15 +49,18 @@ export function OSKanban() {
     const osId = e.dataTransfer.getData("text/os-id");
     setDragOver(null);
     setDraggingId(null);
-    if (!osId) return;
+    if (!osId || movingId) return;
     const os = ordens.find((o) => o.id === osId);
     if (!os || os.status === status) return;
+    setMovingId(osId);
     void (async () => {
       try {
         await moveStatus(osId, status);
         toast.success(`${os.codigo} movida para ${getOperacaoStatusMeta(status).label}`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Não foi possível mover a OS.");
+      } finally {
+        setMovingId(null);
       }
     })();
   };
@@ -129,7 +133,16 @@ export function OSKanban() {
             <X className="h-3 w-3" /> Limpar filtros
           </Button>
         )}
-        <span className="ml-auto text-xs text-muted-foreground">{filtradas.length} de {ordens.length} OS</span>
+        <span className="ml-auto text-xs text-muted-foreground">
+          {movingId ? (
+            <span className="inline-flex items-center gap-1 text-primary">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Salvando…
+            </span>
+          ) : (
+            `${filtradas.length} de ${ordens.length} OS`
+          )}
+        </span>
       </div>
 
       <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -163,7 +176,12 @@ export function OSKanban() {
                   </div>
                 )}
                 {items.map((os) => (
-                  <OSCard key={os.id} os={os} onDragStart={setDraggingId} />
+                  <OSCard
+                    key={os.id}
+                    os={os}
+                    onDragStart={setDraggingId}
+                    disabled={movingId === os.id}
+                  />
                 ))}
               </div>
             </div>

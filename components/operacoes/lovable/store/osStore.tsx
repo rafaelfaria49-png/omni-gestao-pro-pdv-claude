@@ -66,7 +66,7 @@ interface OSContextValue {
 
   // mutações de OS (assinatura preservada para a UI atual)
   criarOS: (input: Parameters<typeof osApi.criarOS>[0]) => Promise<OrdemServico>;
-  moveStatus: (osId: string, status: OSStatus, autor?: string) => void;
+  moveStatus: (osId: string, status: OSStatus, autor?: string) => Promise<OrdemServico>;
   assignTecnico: (osId: string, tecnico: Tecnico, autor?: string) => void;
   vincularCliente: (osId: string, cliente: Cliente, autor?: string) => void;
   addObservacao: (osId: string, conteudo: string, interna: boolean, autor?: string) => void;
@@ -173,8 +173,10 @@ export function OSProvider({ children, initialStoreId }: { children: ReactNode; 
         setOrdens((prev) => [novo, ...prev]);
         return novo;
       },
-      moveStatus: (osId, status, autor = DEFAULT_AUTOR) => {
-        void osApi.moveStatus(storeId, osId, status, autor).then(replaceOS);
+      moveStatus: async (osId, status, autor = DEFAULT_AUTOR) => {
+        const updated = await osApi.moveStatus(storeId, osId, status, autor);
+        replaceOS(updated);
+        return updated;
       },
       assignTecnico: (osId, tecnico, autor = DEFAULT_AUTOR) => {
         void osApi.assignTecnico(storeId, osId, tecnico, autor).then(replaceOS);

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, Download, FileText, ImageIcon, Lock, Music, Receipt, Upload, Video, X } from "lucide-react";
+import { Camera, Download, FileText, HardDrive, ImageIcon, Lock, Music, Receipt, Upload, Video, X } from "lucide-react";
 import type { Anexo, OrdemServico } from "@/types/os";
 import { useOS } from "@/store/osStore";
 import { Button } from "@/components/ui/button";
@@ -79,7 +79,7 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
         };
         addAnexo(os.id, toPayloadFromCanonical(canonical));
       }
-      toast.success(`${files.length} anexo(s) adicionado(s)`);
+      toast.success(`${files.length} anexo(s) — arquivo neste navegador; metadados na OS`);
     } catch (err) {
       toast.error("Falha ao salvar anexo localmente");
       // best-effort cleanup: nada a fazer sem rastrear ids parciais
@@ -162,6 +162,18 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
         <span className="text-[11px] text-muted-foreground">{os.anexos.length} arquivos</span>
       </div>
 
+      <div
+        role="note"
+        className="mx-4 mt-4 flex gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground"
+      >
+        <HardDrive className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <p>
+          Os <span className="font-medium text-foreground">arquivos ficam neste navegador</span> (IndexedDB).
+          Metadados da lista são salvos na OS no servidor; trocar de dispositivo ou limpar dados do browser pode
+          perder os arquivos.
+        </p>
+      </div>
+
       <input ref={inputRef} type="file" hidden onChange={onFile} />
 
       <div className="grid grid-cols-2 gap-2 p-4 sm:grid-cols-3">
@@ -189,7 +201,8 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
           {anexosCanon.map((a) => {
             const preview = previewById[a.id] ?? null;
             const href = preview ?? a.url;
-            const isPersisted = a.persisted && a.storageProvider !== "legacy-blob";
+            const isLocalFile = a.storageProvider === "local-idb" || a.storageProvider === "legacy-blob";
+            const storageLabel = isLocalFile ? "Arquivo local" : "Metadados na OS";
             return (
             <a
               key={a.id}
@@ -245,7 +258,7 @@ export function AnexosPanel({ os }: { os: OrdemServico }) {
                 <div className="text-[10px] font-medium text-white">{TIPO_LABEL[a.tipo]}</div>
                 <div className="text-[9px] text-white/70">{dt(a.createdAt)}</div>
                 <div className="mt-0.5 text-[9px] text-white/70">
-                  {a.categoria} · {a.tamanho ? `${Math.round(a.tamanho / 1024)} KB` : "—"} · {isPersisted ? "Persistido" : "Sessão atual"}
+                  {a.categoria} · {a.tamanho ? `${Math.round(a.tamanho / 1024)} KB` : "—"} · {storageLabel}
                 </div>
               </div>
             </a>

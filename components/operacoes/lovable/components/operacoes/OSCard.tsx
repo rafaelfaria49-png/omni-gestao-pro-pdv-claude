@@ -1,30 +1,44 @@
 import { Link } from "react-router-dom";
-import { GripVertical, MessageCircle, ShieldCheck, User } from "lucide-react";
+import { GripVertical, Loader2, MessageCircle, ShieldCheck, User } from "lucide-react";
 import type { OrdemServico } from "@/types/os";
 import { ORIGEM_LABEL } from "@/types/os";
 import { PrioridadeBadge, SLABadge } from "./badges";
 import { brl } from "@/lib/os/format";
+import { cn } from "@/lib/utils";
 
 interface Props {
   os: OrdemServico;
   onDragStart: (osId: string) => void;
+  disabled?: boolean;
 }
 
-export function OSCard({ os, onDragStart }: Props) {
+export function OSCard({ os, onDragStart, disabled = false }: Props) {
   const totalOrc = os.orcamento?.total;
   const wppEnviado = os.timeline.some((e) => e.tipo === "orcamento_enviado");
 
   return (
     <Link
       to={`/operacoes/os/${os.id}`}
-      draggable
+      draggable={!disabled}
       onDragStart={(e) => {
+        if (disabled) {
+          e.preventDefault();
+          return;
+        }
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData("text/os-id", os.id);
         onDragStart(os.id);
       }}
-      className="group block cursor-grab rounded-xl border border-border bg-card p-3 transition-all hover:border-primary/40 hover:shadow-[0_6px_20px_-10px_hsl(var(--primary)/0.35)] active:cursor-grabbing"
+      className={cn(
+        "group relative block rounded-xl border border-border bg-card p-3 transition-all hover:border-primary/40 hover:shadow-[0_6px_20px_-10px_hsl(var(--primary)/0.35)]",
+        disabled ? "pointer-events-none opacity-60" : "cursor-grab active:cursor-grabbing",
+      )}
     >
+      {disabled ? (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-background/50">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        </div>
+      ) : null}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <GripVertical className="h-3.5 w-3.5 text-muted-foreground/60" />
