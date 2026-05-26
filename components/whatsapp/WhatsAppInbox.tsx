@@ -805,6 +805,7 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
   const [showAddLabel, setShowAddLabel] = useState(false)
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all")
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
+  const [linkingCliente, setLinkingCliente] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -954,6 +955,28 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
   const onLabelChange = useCallback(async () => {
     await fetchConversations(true)
   }, [fetchConversations])
+
+  const linkCliente = useCallback(
+    async (clienteId: string) => {
+      if (!selectedId || !apiHeaders) return
+      setLinkingCliente(true)
+      try {
+        const res = await fetch(`/api/whatsapp/conversations/${selectedId}`, {
+          method: "PATCH",
+          headers: apiHeaders,
+          body: JSON.stringify({ clienteId }),
+        })
+        if (!res.ok) return
+        setConversations((prev) =>
+          prev.map((c) => (c.id === selectedId ? { ...c, clienteId } : c))
+        )
+        await fetchConversations(true)
+      } finally {
+        setLinkingCliente(false)
+      }
+    },
+    [apiHeaders, selectedId, fetchConversations]
+  )
 
   // ── Auto-scroll ──
   useEffect(() => {
@@ -1384,6 +1407,9 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
           conv={selectedConv}
           messages={messages}
           aiAnalyzing={aiAnalyzing}
+          apiHeaders={hdr}
+          linkingCliente={linkingCliente}
+          onLinkCliente={(id) => void linkCliente(id)}
           onApplySuggestion={(text) => {
             setInputText(text)
             inputRef.current?.focus()

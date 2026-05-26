@@ -45,6 +45,22 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
         data: { unreadCount: Math.max(0, Math.floor(o.unreadCount)) },
       })
     }
+    if ("clienteId" in o) {
+      const raw = o.clienteId
+      const clienteId =
+        raw === null ? null : typeof raw === "string" ? raw.trim() || null : null
+      if (clienteId) {
+        const exists = await prisma.cliente.findFirst({
+          where: { id: clienteId, storeId },
+          select: { id: true },
+        })
+        if (!exists) return badRequest("Cliente não encontrado nesta loja")
+      }
+      await prisma.whatsAppConversation.updateMany({
+        where: { id, storeId },
+        data: { clienteId },
+      })
+    }
 
     const row = await prisma.whatsAppConversation.findFirst({
       where: { id, storeId },

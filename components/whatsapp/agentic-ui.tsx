@@ -83,6 +83,16 @@ export type InsightConversationInput = {
   etiquetas?: { etiqueta: { nome: string } }[]
 }
 
+/** Dados reais do CRM (opcional) — só heurísticas visuais quando ausente. */
+export type ClienteOpsHint = {
+  hasCliente: boolean
+  openOsCount: number
+  lateOsCount: number
+  totalSpent?: number
+  lastVendaTotal?: number
+  lastVendaAt?: string | null
+}
+
 export function detectIntent(preview: string): string | null {
   const t = preview.toLowerCase().trim()
   if (!t) return null
@@ -99,7 +109,10 @@ export function detectIntent(preview: string): string | null {
   return null
 }
 
-export function deriveInsights(conv: InsightConversationInput): WaInsight[] {
+export function deriveInsights(
+  conv: InsightConversationInput,
+  ops?: ClienteOpsHint | null
+): WaInsight[] {
   const preview = (conv.lastMessagePreview ?? "").toLowerCase()
   const insights: WaInsight[] = []
   const push = (id: string, label: string, variant: WaInsightVariant, description?: string) => {
@@ -122,8 +135,18 @@ export function deriveInsights(conv: InsightConversationInput): WaInsight[] {
   if (/cancelar|desistir|reclamação|reclamacao|insatisfeito|péssimo|pessimo/.test(preview))
     push("risk", "Risco de cancelamento", "risk")
 
-  if (/atrasad|atraso|demora/.test(preview))
+  if (ops && ops.lateOsCount > 0)
+    push(
+      "os-late-real",
+      "OS atrasada",
+      "os",
+      `${ops.lateOsCount} OS em aberto há mais de 3 dias`
+    )
+  else if (/atrasad|atraso|demora/.test(preview))
     push("os-late", "OS atrasada", "os")
+
+  if (ops && ops.openOsCount > 0 && !insights.some((i) => i.id === "os-late-real"))
+    push("os-open", "OS em aberto", "os", `${ops.openOsCount} ordem(ns) ativa(s)`)
 
   if (/os\s*[-#]?\d|ordem de serviço|conserto|aparelho pronto/.test(preview))
     push("os-ref", "Menção a OS", "os")
@@ -147,18 +170,58 @@ export function deriveInsights(conv: InsightConversationInput): WaInsight[] {
 
 export function buildAiSummary(
   conv: InsightConversationInput,
-  intent: string | null
+  intent: string | null,
+  ops?: ClienteOpsHint | null
 ): string {
   const parts: string[] = []
   if (intent) parts.push(`Intenção detectada: ${intent}.`)
-  if (conv.clienteId) parts.push("Cliente já cadastrado no sistema.")
-  else parts.push("Contato ainda não vinculado a um cliente.")
+  if (ops?.hasCliente || conv.clienteId) {
+    parts.push("Cliente cadastrado vinculado.")
+    if (ops?.totalSpent != null && ops.totalSpent > 0) {
+      parts.push(
+        `Total gasto (OS concluídas + vendas): ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(ops.totalSpent)}.`
+      )
+    }
+    if (ops?.openOsCount) parts.push(`${ops.openOsCount} OS em aberto.`)
+    if (ops?.lateOsCount) parts.push(`${ops.lateOsCount} OS com possível atraso operacional.`)
+    if (ops?.lastVendaAt && ops.lastVendaTotal != null) {
+      const d = new Date(ops.lastVendaAt)
+      const when = Number.isNaN(d.getTime())
+        ? ops.lastVendaAt
+        : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
+      parts.push(
+        `Última compra: ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(ops.lastVendaTotal)} em ${when}.`
+      )
+    }
+  } else {
+    parts.push("Contato ainda não vinculado a um cliente.")
+  }
   if (conv.humanMode) parts.push("Modo humano ativo — revisar antes de automações.")
   if (conv.unreadCount > 0)
     parts.push(`${conv.unreadCount} mensagem(ns) aguardando leitura.`)
   const preview = conv.lastMessagePreview?.trim()
   if (preview) parts.push(`Última mensagem: “${preview.slice(0, 120)}${preview.length > 120 ? "…" : ""}”.`)
   return parts.join(" ") || "Aguardando mais contexto da conversa."
+}
+
+export function clienteOpsHintFromSnapshot(
+  snapshot: {
+    totalSpent: number
+    openOs: { length: number }
+    lateOs: { length: number }
+    lastVenda: { total: number; at: string } | null
+  } | null,
+  hasClienteId: boolean
+): ClienteOpsHint | null {
+  if (!snapshot && !hasClienteId) return null
+  return {
+    hasCliente: !!snapshot || hasClienteId,
+    openOsCount: snapshot?.openOs.length ?? 0,
+    lateOsCount: snapshot?.lateOs.length ?? 0,
+    totalSpent: snapshot?.totalSpent,
+    lastVendaTotal: snapshot?.lastVenda?.total,
+    lastVendaAt: snapshot?.lastVenda?.at ?? null,
+  }
 }
 
 // ─── UI primitives ───────────────────────────────────────────────────────────
