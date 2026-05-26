@@ -5,13 +5,15 @@ import { TerminalSelector } from "@/components/dashboard/vendas/terminal-selecto
 import { useStudioTheme, type StudioThemeMode } from "@/components/theme/ThemeProvider"
 import { LoadingState } from "@/components/ui/states"
 import { Button } from "@/components/ui/button"
-import { AlertTriangle, Loader2, Lock, RefreshCw } from "lucide-react"
+import { AlertTriangle, Loader2, Lock, RefreshCw, UtensilsCrossed } from "lucide-react"
 import {
   readOmnigestaoPdvModoPreferencia,
   writeOmnigestaoPdvModoPreferencia,
 } from "@/lib/omnigestao-pdv-modo"
 import { experimentalPdvEnabled } from "@/lib/feature-flags"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { useStoreSettings } from "@/lib/store-settings-provider"
+import Link from "next/link"
 import { useTerminalAtivo, useTerminalHeartbeat } from "@/lib/pdv-terminal"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useLayoutEffect, useState } from "react"
@@ -32,6 +34,7 @@ export function VendasPageClient() {
   const [terminalBypass, setTerminalBypass] = useState(false)
   const { mode } = useStudioTheme()
   const { lojaAtivaId } = useLojaAtiva()
+  const { pdvParams, hydrated: settingsHydrated } = useStoreSettings()
   const { terminal, select, clear } = useTerminalAtivo(lojaAtivaId)
   const lock = useTerminalHeartbeat({
     storeId: lojaAtivaId,
@@ -122,6 +125,16 @@ export function VendasPageClient() {
           Controle de terminal indisponível — operando sem trava de uso simultâneo.
         </div>
       )}
+      {settingsHydrated && pdvParams.moduloControleConsumo ? (
+        <div className="flex shrink-0 items-center justify-end border-b border-border bg-background px-3 py-1.5">
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" asChild>
+            <Link href="/dashboard/vendas/mesas">
+              <UtensilsCrossed className="h-3.5 w-3.5" aria-hidden />
+              Mesas
+            </Link>
+          </Button>
+        </div>
+      ) : null}
       <VendasPDV isModoRapido={isModoRapido} />
     </div>
   )

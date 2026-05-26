@@ -73,7 +73,27 @@ const nextConfig = {
     return [
       {
         source: "/dashboard/vendas/config",
-        destination: "/?page=config-pdv",
+        destination: "/dashboard/configuracoes?sec=pdv",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/fluxo-caixa",
+        destination: "/dashboard/financeiro-v2",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/contas-pagar",
+        destination: "/dashboard/financeiro/contas-a-pagar",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/contas-receber",
+        destination: "/dashboard/financeiro/contas-a-receber",
+        permanent: false,
+      },
+      {
+        source: "/clientes",
+        destination: "/dashboard/clientes",
         permanent: false,
       },
     ]

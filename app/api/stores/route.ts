@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/require-admin"
+import { filterStoresForSession, requireStoresSession } from "@/lib/stores-api-access"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -29,9 +30,13 @@ function normalizeStoreId(raw: string): string {
 }
 
 export async function GET() {
+  const gate = await requireStoresSession()
+  if (!gate.ok) return gate.res
+
   try {
     const stores = await prisma.store.findMany({ orderBy: { id: "asc" } })
-    return NextResponse.json({ stores })
+    const scoped = filterStoresForSession(gate.session, stores)
+    return NextResponse.json({ stores: scoped })
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Falha ao listar unidades"
     return NextResponse.json({ stores: [], error: msg }, { status: 500 })
@@ -93,4 +98,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }
-

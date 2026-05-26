@@ -1093,7 +1093,7 @@ export default function DashboardClientesPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem asChild>
                               <a
-                                href={`/dashboard/os?clienteId=${r.id}`}
+                                href={`/dashboard/operacoes-v2?clienteId=${r.id}`}
                                 className="flex w-full items-center px-2 py-1.5 text-sm"
                               >
                                 <FileText className="mr-2 h-4 w-4 text-muted-foreground" />

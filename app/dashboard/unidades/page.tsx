@@ -3,7 +3,7 @@
 import { GestaoUnidadesSaas } from "@/components/dashboard/configuracoes/gestao-unidades-saas"
 
 /**
- * Rota dedicada à gestão de unidades (paridade com a página `/?page=config-multilojas`).
+ * Gestão de unidades da rede (Master Console / multi-loja).
  * A UI (cards, sem seletor em barra) está em `GestaoUnidadesSaas`.
  */
 export default function DashboardUnidadesPage() {

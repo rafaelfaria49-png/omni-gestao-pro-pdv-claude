@@ -20,6 +20,7 @@ type Action = {
   hint: string;
   icon: LucideIcon;
   shortcut: string;
+  href?: string;
   visible?: (p: EnterprisePermissions) => boolean;
 };
 
@@ -41,9 +42,10 @@ const actions: Action[] = [
   },
   {
     label: "Receber",
-    hint: "Baixar conta",
+    hint: "Contas a receber",
     icon: Receipt,
     shortcut: "N R",
+    href: "/dashboard/financeiro/contas-a-receber",
     visible: (p) => p.hubs.financeiro && p.financeiro.view,
   },
   { label: "Cliente", hint: "Cadastrar", icon: UserPlus, shortcut: "N C", visible: (p) => p.hubs.cadastros },
@@ -78,8 +80,10 @@ export function QuickActions() {
         router.push("/dashboard/operacoes-v2");
         return;
       case "Receber":
+        router.push("/dashboard/financeiro/contas-a-receber");
+        return;
       default:
-        toast({ title: label, description: "Em desenvolvimento" });
+        toast({ title: label, description: "Atalho indisponível." });
         return;
     }
   };

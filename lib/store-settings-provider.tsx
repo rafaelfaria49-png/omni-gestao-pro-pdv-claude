@@ -2,12 +2,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import type { StorePdvParams, StoreSettingsApi, StoreSettingsBlob } from "@/lib/store-settings-types"
 import { configPadrao, type CategoriaGarantia, type TermosGarantia } from "@/lib/config-empresa"
 
 type StoreSettingsContextType = {
+  /** ID da unidade ativa; vazio quando nenhuma loja está selecionada (sem fallback silencioso). */
   storeId: string
   hydrated: boolean
   settings: StoreSettingsApi | null
@@ -82,15 +82,17 @@ function mergeTermosGarantia(patch: unknown): TermosGarantia {
 
 export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   const { lojaAtivaId, storesRefreshNonce } = useLojaAtiva()
-  const storeId = useMemo(
-    () => (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
-    [lojaAtivaId]
-  )
+  const storeId = useMemo(() => lojaAtivaId?.trim() ?? "", [lojaAtivaId])
   const [hydrated, setHydrated] = useState(false)
   const [settings, setSettings] = useState<StoreSettingsApi | null>(null)
 
   const refresh = useCallback(async () => {
     setHydrated(false)
+    if (!storeId) {
+      setSettings(null)
+      setHydrated(true)
+      return
+    }
     try {
       const r = await fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
         credentials: "include",
@@ -120,6 +122,9 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
 
   const save = useCallback(
     async (patch: Partial<StoreSettingsApi> & { printerConfig?: unknown }) => {
+      if (!storeId) {
+        throw new Error("Nenhuma unidade ativa selecionada.")
+      }
       await fetch(`/api/stores/${encodeURIComponent(storeId)}/settings`, {
         method: "PUT",
         credentials: "include",
@@ -157,7 +162,7 @@ export function useStoreSettings(): StoreSettingsContextType {
   if (!c) {
     const base = defaultPdvParams()
     return {
-      storeId: LEGACY_PRIMARY_STORE_ID,
+      storeId: "",
       hydrated: false,
       settings: null,
       blob: {},

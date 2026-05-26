@@ -93,7 +93,7 @@ export function TrocasDevolucao({
   const [cupomData, setCupomData] = useState<CupomTrocaData | null>(null)
   const [cupomOpen, setCupomOpen] = useState(false)
 
-  // Prefill via prop `initialSaleId` (Histórico) ou URL: /?page=trocas&sale=VDA-...
+  // Prefill via prop `initialSaleId` (Histórico) ou query `?sale=` em /dashboard/vendas-arquivo-geral
   useEffect(() => {
     const id = (initialSaleId || searchParams.get("sale") || "").trim()
     if (!id) return

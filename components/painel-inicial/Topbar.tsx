@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package, PanelLeftOpen } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
+import { MobileNavSheet } from "@/components/painel-inicial/MobileNavSheet";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions";
@@ -103,6 +104,7 @@ export function Topbar() {
   return (
     <header className="h-14 shrink-0 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-30">
       <div className="h-full flex items-center gap-2 px-4 sm:px-6">
+        <MobileNavSheet />
         {sidebarCollapsed ? (
           <button
             type="button"

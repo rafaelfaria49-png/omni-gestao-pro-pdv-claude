@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { configPadrao } from "@/lib/config-empresa"
+import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
@@ -217,7 +218,10 @@ export function PdvVendaCompletaEnterprise({
 
   // ── Totals ────────────────────────────────────────────────────────────────
   const subtotal = cart.reduce((s, l) => s + l.price * l.qty, 0)
-  const total = Math.max(0, subtotal - discountReais)
+  const { impostoEstimado, total } = useMemo(
+    () => computePdvCartTotals(subtotal, discountReais, pdvParams),
+    [subtotal, discountReais, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
+  )
   const customerStoreCredit = useMemo(
     () => (selectedCliente?.document ? getSaldoCreditoCliente(selectedCliente.document) : 0),
     [selectedCliente, getSaldoCreditoCliente]
@@ -1258,16 +1262,24 @@ export function PdvVendaCompletaEnterprise({
               glow="soft"
             />
 
-            {subtotal !== total && subtotal > 0 && (
+            {(subtotal !== total || impostoEstimado > 0 || discountReais > 0) && subtotal > 0 && (
               <div className="rounded-xl border border-border bg-card px-3 py-2 text-xs">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Subtotal</span>
                   <span className="tabular-nums">{brl(subtotal)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Desconto</span>
-                  <span className="tabular-nums text-amber-500">-{brl(discountReais)}</span>
-                </div>
+                {impostoEstimado > 0 ? (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Imposto estimado</span>
+                    <span className="tabular-nums">{brl(impostoEstimado)}</span>
+                  </div>
+                ) : null}
+                {discountReais > 0 ? (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Desconto</span>
+                    <span className="tabular-nums text-amber-500">-{brl(discountReais)}</span>
+                  </div>
+                ) : null}
               </div>
             )}
 
@@ -1455,6 +1467,7 @@ export function PdvVendaCompletaEnterprise({
         isOpen={isPaymentOpen}
         onClose={() => setIsPaymentOpen(false)}
         cartSubtotal={subtotal}
+        impostoEstimado={impostoEstimado}
         total={total}
         discountReais={discountReais}
         discountPercent={discountPercent}

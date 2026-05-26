@@ -1,29 +1,12 @@
 "use client"
 
-import { usePathname, useRouter } from "next/navigation"
-import { useEffect } from "react"
+import { usePathname } from "next/navigation"
 import { AppOpsProviders } from "@/components/dashboard/app-ops-providers"
 import { FirstAccessWizard } from "@/components/onboarding/first-access-wizard"
 import { AppShell } from "@/components/painel-inicial/AppShell"
 
 export default function DashboardSegmentLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter()
   const pathname = usePathname()
-
-  const goToPage = (page: string) => {
-    if (page === "dashboard") {
-      router.replace("/dashboard")
-      return
-    }
-    router.replace(`/dashboard/${encodeURIComponent(page)}`)
-  }
-
-  useEffect(() => {
-    const p = pathname || ""
-    if (p === "/dashboard/vendas" || p.startsWith("/dashboard/vendas/")) {
-      // no-op: sidebar enterprise não colapsa automaticamente
-    }
-  }, [pathname])
 
   // Rota isolada: PDV GitHub Original renderiza como mini-app standalone,
   // SEM AppShell (sidebar/topbar), SEM AccessGate, SEM AppOpsProviders.
@@ -49,7 +32,7 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
         className={
           isVendas
             ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden basis-0"
-            : "min-h-0 flex-1 overflow-auto pb-24 lg:pb-0"
+            : "min-h-0 flex-1 overflow-auto"
         }
       >
         {children}

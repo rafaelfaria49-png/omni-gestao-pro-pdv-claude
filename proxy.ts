@@ -9,6 +9,11 @@ import {
 } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { enterpriseDashboardRedirect, enterpriseStoreCookieRedirect } from "@/lib/auth/proxy-enterprise-dashboard"
+import {
+  buildLegacyPageRedirectUrl,
+  CRITICAL_LEGACY_PAGES,
+  resolveLegacyPageRedirect,
+} from "@/lib/navigation/legacy-routes"
 
 const { auth } = NextAuth(authConfig)
 
@@ -17,16 +22,6 @@ const SUBSCRIPTION_SECRET =
 
 const ADMIN_COOKIE = "assistec_admin_session"
 const CONTADOR_COOKIE = "assistec_contador_session"
-/** Páginas que exigem assinatura ativa (alinha com carregamento crítico no cliente). */
-const CRITICAL_PAGE_PARAMS = new Set([
-  "vendas",
-  "os",
-  "fluxo-caixa",
-  "contas-pagar",
-  "contas-receber",
-  "relatorios-financeiros",
-  "dashboard-360",
-])
 
 function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/_next")) return true
@@ -103,7 +98,7 @@ export const proxy = auth(async (req) => {
   if (!verified.ok) {
     if (pathname === "/") {
       const pageParam = req.nextUrl.searchParams.get("page")
-      if (pageParam && CRITICAL_PAGE_PARAMS.has(pageParam)) {
+      if (pageParam && CRITICAL_LEGACY_PAGES.has(pageParam)) {
         return redirectPlano()
       }
       return NextResponse.next()
@@ -115,6 +110,19 @@ export const proxy = auth(async (req) => {
   const inactive = verified.status !== "ativa"
   if (expired || inactive) {
     return redirectPlano()
+  }
+
+  if (pathname === "/") {
+    const pageParam = req.nextUrl.searchParams.get("page")
+    const target = pageParam ? resolveLegacyPageRedirect(pageParam) : null
+    if (target) {
+      const dest = buildLegacyPageRedirectUrl(pageParam!, req.nextUrl.searchParams)
+      const u = req.nextUrl.clone()
+      const destUrl = new URL(dest, req.url)
+      u.pathname = destUrl.pathname
+      u.search = destUrl.search
+      return NextResponse.redirect(u)
+    }
   }
 
   if (pathname.startsWith("/dashboard") && session?.user) {

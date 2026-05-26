@@ -20,6 +20,7 @@ import {
 import { useEnterprisePermissions } from "@/lib/auth/use-enterprise-permissions"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import { EnterpriseAccessDenied } from "@/components/enterprise/EnterpriseAccessDenied"
+import { FINANCEIRO_HUB_PATH } from "@/lib/navigation/legacy-routes"
 
 type ReportCard = {
   title: string
@@ -47,7 +48,7 @@ const reports: ReportCard[] = [
   {
     title: "Financeiro",
     description: "Contas a receber, contas a pagar, saldo e fluxo de caixa por unidade.",
-    href: "/dashboard/financeiro",
+    href: FINANCEIRO_HUB_PATH,
     icon: Wallet,
     tone: "text-success",
     bg: "bg-success/10",
@@ -67,7 +68,7 @@ const reports: ReportCard[] = [
   {
     title: "Fluxo de Caixa",
     description: "Entradas e saídas diárias com projeção para os próximos períodos.",
-    href: "/dashboard/relatorios/fluxo-caixa",
+    href: FINANCEIRO_HUB_PATH,
     icon: ArrowUpDown,
     tone: "text-warning",
     bg: "bg-warning/10",

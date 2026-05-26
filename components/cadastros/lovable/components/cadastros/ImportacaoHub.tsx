@@ -29,6 +29,7 @@ import {
 import { Badge, Card, SectionTitle } from "./ui-kit";
 import { AppOpsProviders } from "@/components/dashboard/app-ops-providers";
 import { ImportadorAvancado } from "@/components/dashboard/configuracoes/importador-avancado/ImportadorAvancado";
+import { ImportadorProdutos } from "@/components/dashboard/configuracoes/importador-produtos/ImportadorProdutos";
 import {
   listImportacoesAuditoria,
   type ImportacaoAuditoriaDTO,
@@ -48,10 +49,11 @@ import {
 // honesto quando nenhuma importação foi registrada ainda.
 // ============================================================
 
-type SubTab = "planilhas" | "xml" | "historico";
+type SubTab = "planilhas" | "produtos" | "xml" | "historico";
 
 const SUBTABS: Array<{ id: SubTab; label: string; icon: typeof FileSpreadsheet; hint: string }> = [
   { id: "planilhas", label: "Planilhas", icon: FileSpreadsheet, hint: "CSV · XLSX · ZIP GestaoClick" },
+  { id: "produtos", label: "Produtos (lotes)", icon: Package, hint: "XLS legado · lotes de 500" },
   { id: "xml", label: "XML NF-e", icon: FileCode, hint: "Entrada de mercadoria (preparação)" },
   { id: "historico", label: "Histórico", icon: History, hint: "Lotes e auditoria" },
 ];
@@ -90,6 +92,7 @@ export function ImportacaoHub() {
       </div>
 
       {sub === "planilhas" && <PlanilhasSection />}
+      {sub === "produtos" && <ProdutosLotesSection />}
       {sub === "xml" && <XmlNfeSection />}
       {sub === "historico" && <HistoricoSection />}
     </div>
@@ -281,6 +284,63 @@ function PlanilhasSection() {
             Backups do GestaoClick (ZIP) são detectados automaticamente. Múltiplos arquivos podem ser
             enviados em um único lote.
           </p>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOCO 1.5 — Produtos em lotes (planilhas grandes / XLS legado)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ProdutosLotesSection() {
+  return (
+    <div className="grid w-full min-w-0 gap-6 lg:grid-cols-3">
+      <div className="space-y-6 lg:col-span-2">
+        <Card className="p-5">
+          <SectionTitle
+            title="Importação de produtos — lotes manuais"
+            subtitle="Para planilhas grandes ou exportações antigas (XLS BIFF). Lote de 500 itens, controlado pelo operador."
+            action={<Badge tone="primary">Novo</Badge>}
+          />
+          <AppOpsProviders>
+            <ImportadorProdutos />
+          </AppOpsProviders>
+        </Card>
+      </div>
+
+      <div className="space-y-4">
+        <Card className="p-5">
+          <SectionTitle
+            title="Quando usar este fluxo"
+            subtitle="Diferenças em relação a 'Planilhas'."
+          />
+          <ul className="space-y-2 text-sm text-foreground">
+            <li className="rounded-lg border border-border bg-background px-3 py-2">
+              Planilha com <strong>milhares de produtos</strong> (4k+).
+            </li>
+            <li className="rounded-lg border border-border bg-background px-3 py-2">
+              Relatórios antigos com <strong>linhas de banner</strong> antes do cabeçalho.
+            </li>
+            <li className="rounded-lg border border-border bg-background px-3 py-2">
+              Quer ver <strong>preview honesto</strong> com válidos, duplicados e linhas ruins
+              antes de gravar qualquer coisa.
+            </li>
+            <li className="rounded-lg border border-border bg-background px-3 py-2">
+              Quer <strong>controlar cada lote</strong> — botão por lote, nada automático.
+            </li>
+          </ul>
+        </Card>
+
+        <Card className="p-5">
+          <SectionTitle title="O que NUNCA é alterado" />
+          <ul className="space-y-1.5 text-xs text-muted-foreground">
+            <li>· Estoque de produtos pré-existentes (só ledger auditado muda saldo)</li>
+            <li>· Auth / proxy / schema do banco</li>
+            <li>· Outras lojas — só a unidade ativa</li>
+            <li>· Vendas / OS / financeiro já gravados</li>
+          </ul>
         </Card>
       </div>
     </div>

@@ -28,6 +28,7 @@ import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { configPadrao } from "@/lib/config-empresa"
+import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
@@ -208,7 +209,10 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   // ── Totais ────────────────────────────────────────────────────────────────
   const subtotal = cart.reduce((s, l) => s + l.price * l.qty * (1 - l.discountPct / 100), 0)
   const totalPerLineDiscount = cart.reduce((s, l) => s + l.price * l.qty * (l.discountPct / 100), 0)
-  const total = Math.max(0, subtotal - discountReais)
+  const { impostoEstimado, total } = useMemo(
+    () => computePdvCartTotals(subtotal, discountReais, pdvParams),
+    [subtotal, discountReais, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
+  )
   const customerStoreCredit = useMemo(
     () => (selectedCliente?.document ? getSaldoCreditoCliente(selectedCliente.document) : 0),
     [selectedCliente, getSaldoCreditoCliente],
@@ -1143,6 +1147,12 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                   <div className="flex items-center justify-between text-xs text-amber-500">
                     <span>Desc. global</span>
                     <span className="tabular-nums">−{brl(discountReais)}</span>
+                  </div>
+                )}
+                {impostoEstimado > 0 && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Imposto estimado</span>
+                    <span className="tabular-nums font-medium text-foreground">{brl(impostoEstimado)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t border-border pt-3">

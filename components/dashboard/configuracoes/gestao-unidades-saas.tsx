@@ -262,6 +262,8 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
       const r = await fetch(`/api/stores/${encodeURIComponent(deleteTarget.id)}`, {
         method: "DELETE",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true, storeId: deleteTarget.id }),
       })
       if (!r.ok) {
         const j = (await r.json()) as { error?: string }
