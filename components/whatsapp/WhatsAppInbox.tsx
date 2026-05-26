@@ -25,7 +25,19 @@ import {
   Pencil,
   Trash2,
   Check,
+  Sparkles,
+  Inbox,
+  Bot,
 } from "lucide-react"
+import {
+  AiSignalBadge,
+  deriveInsights,
+  PremiumEmptyState,
+  waChatArea,
+  waHubShell,
+  waSidebar,
+} from "@/components/whatsapp/agentic-ui"
+import { WhatsAppContextPanel } from "@/components/whatsapp/WhatsAppContextPanel"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 
@@ -173,49 +185,60 @@ function EtiquetaChip({ etiqueta, onRemove }: { etiqueta: WaEtiqueta; onRemove?:
 
 // ─── Conversation list item ────────────────────────────────────────────────────
 
+type InboxFilter = "all" | "unread" | "human" | "client" | "priority"
+
+const INBOX_FILTERS: { id: InboxFilter; label: string; icon: typeof Inbox }[] = [
+  { id: "all", label: "Todas", icon: Inbox },
+  { id: "unread", label: "Não lidas", icon: MessageCircle },
+  { id: "human", label: "Humano", icon: User },
+  { id: "client", label: "Cadastrados", icon: UserCheck },
+  { id: "priority", label: "Prioridade", icon: Sparkles },
+]
+
 function ConvItem({ conv, selected, onClick }: { conv: WaConversation; selected: boolean; onClick: () => void }) {
+  const topInsight = deriveInsights(conv)[0]
   return (
     <button
       onClick={onClick}
       className={cn(
-        "w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/60",
-        selected && "bg-muted"
+        "group w-full flex items-start gap-3 px-3 py-3 text-left transition-all duration-200",
+        "hover:bg-muted/50 border-l-2 border-transparent",
+        selected && "border-l-primary bg-primary/5",
+        conv.unreadCount > 0 && !selected && "bg-muted/20"
       )}
     >
       <div className="relative flex-shrink-0 mt-0.5">
         <ContactAvatar contact={conv.contact} size="md" />
         {conv.unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 h-5 min-w-[1.25rem] rounded-full bg-emerald-500 text-[10px] text-white font-bold flex items-center justify-center px-1">
+          <span className="absolute -top-1 -right-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground shadow-sm ring-2 ring-background">
             {conv.unreadCount > 99 ? "99+" : conv.unreadCount}
           </span>
         )}
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-1">
-          <span className={cn("text-sm font-medium truncate", conv.unreadCount > 0 ? "text-foreground" : "text-foreground/80")}>
+          <span className={cn("truncate text-sm font-medium", conv.unreadCount > 0 ? "text-foreground" : "text-foreground/85")}>
             {conv.contact.displayName}
           </span>
-          <span className={cn("text-[11px] flex-shrink-0", conv.unreadCount > 0 ? "text-emerald-500 font-semibold" : "text-muted-foreground")}>
+          <span className={cn("shrink-0 text-[10px]", conv.unreadCount > 0 ? "font-semibold text-primary" : "text-muted-foreground")}>
             {formatTime(conv.lastMessageAt)}
           </span>
         </div>
-        <div className="flex items-center justify-between mt-0.5">
-          <p className={cn("text-xs truncate", conv.unreadCount > 0 ? "text-foreground/70 font-medium" : "text-muted-foreground")}>
+        <div className="mt-0.5 flex items-center justify-between gap-1">
+          <p className={cn("truncate text-xs", conv.unreadCount > 0 ? "font-medium text-foreground/75" : "text-muted-foreground")}>
             {conv.lastMessagePreview || "Sem mensagens"}
           </p>
-          <div className="flex items-center gap-1 flex-shrink-0 ml-1">
+          <div className="ml-1 flex shrink-0 items-center gap-1">
+            {conv.humanMode && <Bot className="h-3 w-3 text-amber-500" />}
             {conv.clienteId && <UserCheck className="h-3 w-3 text-emerald-500" />}
-            {conv.humanMode && <span className="text-[10px] text-amber-500 font-semibold">Human</span>}
           </div>
         </div>
-        {conv.etiquetas && conv.etiquetas.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
-            {conv.etiquetas.slice(0, 3).map((ce) => (
+        {(topInsight || (conv.etiquetas && conv.etiquetas.length > 0)) && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {topInsight && <AiSignalBadge insight={topInsight} compact />}
+            {conv.etiquetas?.slice(0, 2).map((ce) => (
               <EtiquetaChip key={ce.id} etiqueta={ce.etiqueta} />
             ))}
-            {conv.etiquetas.length > 3 && (
-              <span className="text-[10px] text-muted-foreground">+{conv.etiquetas.length - 3}</span>
-            )}
           </div>
         )}
       </div>
@@ -228,17 +251,21 @@ function ConvItem({ conv, selected, onClick }: { conv: WaConversation; selected:
 function MessageBubble({ msg }: { msg: WaMessage }) {
   const out = msg.direction === "outbound"
   return (
-    <div className={cn("flex mb-1", out ? "justify-end" : "justify-start")}>
-      <div className={cn(
-        "max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm",
-        out ? "bg-emerald-600 text-white rounded-br-sm" : "bg-card border border-border text-foreground rounded-bl-sm"
-      )}>
+    <div className={cn("mb-2 flex animate-in fade-in-0 duration-200", out ? "justify-end" : "justify-start")}>
+      <div
+        className={cn(
+          "max-w-[78%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm transition-shadow",
+          out
+            ? "rounded-br-md bg-gradient-to-br from-primary to-primary/85 text-primary-foreground shadow-md shadow-primary/15"
+            : "rounded-bl-md border border-border/70 bg-card/90 text-foreground backdrop-blur-sm"
+        )}
+      >
         <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>
-        <div className={cn("flex items-center gap-1 mt-1", out ? "justify-end" : "justify-start")}>
-          <span className={cn("text-[10px]", out ? "text-emerald-100/80" : "text-muted-foreground")}>
+        <div className={cn("mt-1.5 flex items-center gap-1", out ? "justify-end" : "justify-start")}>
+          <span className={cn("text-[10px]", out ? "text-primary-foreground/75" : "text-muted-foreground")}>
             {formatTime(msg.createdAt)}
           </span>
-          {out && <CheckCheck className="h-3 w-3 text-emerald-200/80" />}
+          {out && <CheckCheck className="h-3 w-3 text-primary-foreground/70" />}
         </div>
       </div>
     </div>
@@ -362,12 +389,12 @@ function QuickReplyModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-md">
+      <div className="glass-card flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-emerald-500" />
+            <Zap className="h-4 w-4 text-primary" />
             <h2 className="text-base font-semibold text-foreground">Respostas Rápidas</h2>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -556,8 +583,8 @@ function EtiquetasModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[80vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-md">
+      <div className="glass-card flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <Tag className="h-4 w-4 text-primary" />
@@ -753,7 +780,7 @@ function EmptyChat() {
 
 // ─── Main inbox ───────────────────────────────────────────────────────────────
 
-export default function WhatsAppInbox() {
+export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean }) {
   const { lojaAtivaId, lojas, storesRefreshNonce } = useLojaAtiva()
   const apiHeaders = useMemo((): Record<string, string> | null => {
     const id = lojaAtivaId?.trim()
@@ -776,6 +803,8 @@ export default function WhatsAppInbox() {
   const [showQRModal, setShowQRModal] = useState(false)
   const [showEtiquetasModal, setShowEtiquetasModal] = useState(false)
   const [showAddLabel, setShowAddLabel] = useState(false)
+  const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all")
+  const [aiAnalyzing, setAiAnalyzing] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -861,7 +890,11 @@ export default function WhatsAppInbox() {
     setSelectedId(conv.id)
     setMessages([])
     setShowAddLabel(false)
+    setAiAnalyzing(true)
+    const analyzeTimer = window.setTimeout(() => setAiAnalyzing(false), 900)
     await fetchMessages(conv.id)
+    window.clearTimeout(analyzeTimer)
+    setAiAnalyzing(false)
     if (conv.unreadCount > 0) {
       await fetch(`/api/whatsapp/conversations/${conv.id}`, {
         method: "PATCH",
@@ -979,7 +1012,13 @@ export default function WhatsAppInbox() {
     )
     const matchesLabel = !labelFilter ||
       c.etiquetas?.some((ce) => ce.etiquetaId === labelFilter)
-    return matchesSearch && matchesLabel
+    const matchesInbox =
+      inboxFilter === "all" ||
+      (inboxFilter === "unread" && c.unreadCount > 0) ||
+      (inboxFilter === "human" && c.humanMode) ||
+      (inboxFilter === "client" && !!c.clienteId) ||
+      (inboxFilter === "priority" && deriveInsights(c).some((i) => i.variant === "priority" || i.variant === "lead"))
+    return matchesSearch && matchesLabel && matchesInbox
   })
 
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
@@ -1023,33 +1062,40 @@ export default function WhatsAppInbox() {
         />
       )}
 
-      <div className="flex h-[calc(100vh-4rem)] overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+      <div
+        className={cn(
+          waHubShell,
+          "flex overflow-hidden",
+          embedded ? "h-[calc(100vh-11rem)] min-h-[420px]" : "h-[calc(100vh-4rem)]"
+        )}
+      >
         {/* ── Sidebar ── */}
-        <aside className="w-80 flex-shrink-0 flex flex-col border-r border-border">
+        <aside className={waSidebar}>
           {/* Header */}
-          <div className="px-4 py-3 border-b border-border">
-            <div className="flex items-center justify-between mb-3">
+          <div className="border-b border-border/60 px-3 py-3">
+            <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-lg bg-emerald-500 flex items-center justify-center">
-                  <MessageCircle className="h-4 w-4 text-white" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary/25 to-violet-500/15">
+                  <MessageCircle className="h-4 w-4 text-primary" />
                 </div>
                 <div>
-                  <h1 className="text-sm font-semibold text-foreground leading-none">WhatsApp</h1>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <h1 className="text-sm font-semibold leading-none text-foreground">Inbox</h1>
+                  <p className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <span className={cn("h-1.5 w-1.5 rounded-full", online ? "bg-emerald-500" : "bg-muted-foreground")} />
                     {online ? "Conectado" : "Sem conexão"}
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
                 {totalUnread > 0 && (
-                  <Badge variant="default" className="bg-emerald-500 hover:bg-emerald-500 text-white text-[10px] px-1.5 py-0 h-4">
+                  <Badge variant="default" className="h-4 px-1.5 py-0 text-[10px]">
                     {totalUnread}
                   </Badge>
                 )}
                 {online ? <Wifi className="h-3.5 w-3.5 text-emerald-500" /> : <WifiOff className="h-3.5 w-3.5 text-muted-foreground" />}
                 <button
                   onClick={() => void fetchConversations()}
-                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   title="Atualizar"
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
@@ -1058,13 +1104,32 @@ export default function WhatsAppInbox() {
             </div>
             {/* Search */}
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar contato ou mensagem…"
-                className="pl-8 h-8 text-xs bg-muted/40 border-border/60"
+                className="h-9 border-border/60 bg-muted/30 pl-8 text-xs focus-visible:ring-primary/40"
               />
+            </div>
+            {/* Inbox filters */}
+            <div className="mt-2 flex gap-1 overflow-x-auto pb-0.5 scrollbar-none">
+              {INBOX_FILTERS.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setInboxFilter(id)}
+                  className={cn(
+                    "flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium transition-all",
+                    inboxFilter === id
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/70"
+                  )}
+                >
+                  <Icon className="h-2.5 w-2.5" />
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -1133,34 +1198,34 @@ export default function WhatsAppInbox() {
           </div>
 
           {/* Sidebar tools */}
-          <div className="px-4 py-2.5 border-t border-border flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 border-t border-border/60 px-3 py-2.5">
             <button
               onClick={() => setShowQRModal(true)}
-              className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="flex flex-1 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title="Respostas rápidas"
             >
-              <Zap className="h-3.5 w-3.5 text-emerald-500" />
-              Respostas rápidas
+              <Zap className="h-3.5 w-3.5 text-primary" />
+              Atalhos
             </button>
             <button
               onClick={() => setShowEtiquetasModal(true)}
-              className="flex-1 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="flex flex-1 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               title="Etiquetas"
             >
               <Tag className="h-3.5 w-3.5 text-primary" />
-              Etiquetas
+              Tags
             </button>
           </div>
         </aside>
 
         {/* ── Chat panel ── */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        <div className={waChatArea}>
           {!selectedConv ? (
             <EmptyChat />
           ) : (
             <>
               {/* Chat header */}
-              <div className="px-4 py-3 border-b border-border flex items-center justify-between gap-3 bg-background/80 backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-card/40 px-4 py-3 backdrop-blur-md">
                 <div className="flex items-center gap-3 min-w-0">
                   <ContactAvatar contact={selectedConv.contact} size="md" />
                   <div className="min-w-0">
@@ -1240,7 +1305,7 @@ export default function WhatsAppInbox() {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-0.5 bg-muted/20">
+              <div className="flex-1 space-y-0.5 overflow-y-auto bg-muted/15 px-4 py-4">
                 {loadingMsgs ? (
                   <div className="space-y-3 pt-2">
                     {[1, 2, 3, 4].map((i) => (
@@ -1262,7 +1327,7 @@ export default function WhatsAppInbox() {
               </div>
 
               {/* Input area */}
-              <div className="px-4 py-3 border-t border-border bg-background">
+              <div className="border-t border-border/60 bg-card/30 px-4 py-3 backdrop-blur-sm">
                 <div className="relative flex items-center gap-2">
                   {/* Quick reply dropdown */}
                   {showQRDropdown && (
@@ -1287,13 +1352,13 @@ export default function WhatsAppInbox() {
                     onKeyDown={handleKeyDown}
                     placeholder="Digite uma mensagem ou / para respostas rápidas…"
                     disabled={sending}
-                    className="flex-1 h-10 text-sm bg-muted/40 border-border/60 focus-visible:ring-emerald-500/50"
+                    className="h-10 flex-1 border-border/60 bg-muted/30 text-sm focus-visible:ring-primary/40"
                   />
                   <Button
                     onClick={() => void sendMessage()}
                     disabled={!inputText.trim() || sending}
                     size="sm"
-                    className="h-10 w-10 p-0 bg-emerald-600 hover:bg-emerald-700 text-white flex-shrink-0"
+                    className="h-10 w-10 shrink-0 p-0"
                   >
                     <Send className="h-4 w-4" />
                   </Button>
@@ -1314,6 +1379,25 @@ export default function WhatsAppInbox() {
             </>
           )}
         </div>
+
+        <WhatsAppContextPanel
+          conv={selectedConv}
+          messages={messages}
+          aiAnalyzing={aiAnalyzing}
+          onApplySuggestion={(text) => {
+            setInputText(text)
+            inputRef.current?.focus()
+          }}
+          onQuickAction={(action) => {
+            if (action === "human" && selectedConv && apiHeaders) {
+              void fetch(`/api/whatsapp/conversations/${selectedConv.id}`, {
+                method: "PATCH",
+                headers: hdr,
+                body: JSON.stringify({ humanMode: true }),
+              }).then(() => void fetchConversations(true))
+            }
+          }}
+        />
       </div>
     </>
   )

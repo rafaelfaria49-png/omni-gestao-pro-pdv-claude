@@ -27,7 +27,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  variables, aiSuggestions, mockContacts,
+  variables, aiSuggestions,
   type Contact, type Automation, type QuickReply, type FunnelStage, type Trigger, type Action,
 } from "./mockData";
 import { useLojaAtiva } from "@/lib/loja-ativa";
@@ -291,10 +291,6 @@ export default function WhatsAppHub() {
           }
         }
 
-        if (mappedContacts.length === 0) {
-          mappedContacts = mockContacts;
-        }
-
         setContacts(mappedContacts);
         if (mappedContacts.length > 0) setSelectedId(mappedContacts[0].id);
 
@@ -331,7 +327,7 @@ export default function WhatsAppHub() {
           setReplies(mapped);
         }
       } catch {
-        setContacts(mockContacts);
+        setContacts([]);
       } finally {
         setDataLoading(false);
       }
@@ -349,7 +345,7 @@ export default function WhatsAppHub() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [osModal, setOsModal] = useState<null | "open" | "status" | "budget">(null);
 
-  const selected = contacts.find((c) => c.id === selectedId) ?? contacts[0] ?? mockContacts[0];
+  const selected = contacts.find((c) => c.id === selectedId) ?? contacts[0];
   const filteredContacts = contacts.filter(
     (c) =>
       c.name.toLowerCase().includes(search.toLowerCase()) &&
@@ -435,8 +431,6 @@ export default function WhatsAppHub() {
       if (c.responsible === "—")
         a.push({ type: "warn", text: `Conversa de ${c.name} sem responsável` });
     });
-    a.push({ type: "info", text: "Orçamento OS-1042 enviado sem resposta há 2h" });
-    a.push({ type: "warn", text: "OS-1038 pronta — aviso ainda não enviado" });
     return a;
   }, [contacts]);
 
@@ -485,15 +479,14 @@ export default function WhatsAppHub() {
         {/* ───────── DASHBOARD ───────── */}
         <TabsContent value="dashboard" className="p-6 m-0">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-            <StatCard icon={MessageSquare} label="Conversas hoje" value="38" hint="+12% vs ontem" />
+            <StatCard icon={MessageSquare} label="Conversas" value={contacts.length} hint={`${totalUnread} não lidas`} />
             <StatCard icon={Clock} label="Em aberto" value={waiting} hint="Aguardando resposta" />
             <StatCard icon={Bot} label="Automações ativas" value={activeAutos} hint={`${automations.length} no total`} />
-            <StatCard icon={CheckCircle2} label="Taxa de resposta" value="94%" hint="Últimos 7 dias" />
-            <StatCard icon={TrendingUp} label="Tempo médio" value="2m 14s" hint="Resposta" />
-            <StatCard icon={FileText} label="OS via WhatsApp" value="12" hint="Mês atual" />
-            <StatCard icon={DollarSign} label="Orçamentos enviados" value="27" />
-            <StatCard icon={CheckCircle2} label="Orçamentos aprovados" value="18" hint="67% conversão" />
-            <StatCard icon={Users} label="Novos contatos" value="9" hint="Hoje" />
+            <StatCard icon={CheckCircle2} label="Modo humano" value={contacts.filter((c) => c.status === "human").length} hint="Conversas" />
+            <StatCard icon={TrendingUp} label="Com mensagens" value={contacts.filter((c) => c.lastMessage).length} hint="Ativas" />
+            <StatCard icon={FileText} label="Com OS (meta)" value={contacts.filter((c) => c.os.length > 0).length} hint="Metadata contato" />
+            <StatCard icon={Users} label="Novo funil" value={contacts.filter((c) => c.stage === "novo").length} hint="Estágio inicial" />
+            <StatCard icon={DollarSign} label="Orçamento pend." value={contacts.filter((c) => c.stage === "aguardando_orcamento").length} />
           </div>
 
           <div className="grid lg:grid-cols-3 gap-4">
@@ -594,6 +587,15 @@ export default function WhatsAppHub() {
 
         {/* ───────── CONVERSAS ───────── */}
         <TabsContent value="conversas" className="m-0">
+          {!selected ? (
+            <div className="flex flex-col items-center justify-center gap-3 p-16 text-center">
+              <MessageSquare className="h-10 w-10 text-muted-foreground/40" />
+              <p className="text-sm font-medium text-foreground">Nenhuma conversa disponível</p>
+              <p className="max-w-sm text-xs text-muted-foreground">
+                Conecte o WhatsApp ou aguarde mensagens de clientes para iniciar o atendimento.
+              </p>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-[300px_1fr_280px]">
             {/* LIST */}
             <div className="border-r flex flex-col bg-background">
@@ -758,6 +760,7 @@ export default function WhatsAppHub() {
               </div>
             </div>
           </div>
+          )}
         </TabsContent>
 
         {/* ───────── AUTOMAÇÕES ───────── */}
