@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 26 Mai 2026 — Sessão: Lote 3 recebimento de contas no PDV (F9 convergente nos 3 PDVs)
+> Última atualização: 26 Mai 2026 — Sessão: Lote 4 limpeza do keymap legado uiShell=default no PDV Clássico
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,40 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+---
+
+### Lote 4 — Limpeza do keymap legado `uiShell=default` (concluído 26/05/2026)
+
+**Contexto:** última pendência do contexto inicial (#7). O `PdvClassic` carregava um caminho legado para `uiShell="default"` (handler de teclado próprio, dialog `operationType` de sangria/suprimento, painel `cashHistory` local, função `saveOperation`). Em produção `vendas-pdv.tsx:117` SEMPRE passa `uiShell="omni-smart"` — então o caminho `default` era **código morto**, e qualquer atalho adicionado ali virava "feature fantasma" (não executava).
+
+**Sangria/suprimento já tinham migrado** para o `CaixaStatusBar` compartilhado (com retry/idempotência via `lib/pdv-caixa-operacao.ts`) em sessão anterior, mas o código antigo nunca foi removido por cautela.
+
+**Auditoria confirmou:**
+- Único consumidor: `app/dashboard/vendas/vendas-pdv.tsx:117` — `<PdvClassic ... uiShell="omni-smart" />` fixo.
+- Outros caminhos (`pdv-github-original/`) já estavam gated por env flag desde a Sprint 0.
+
+| Arquivo | Mudança |
+|---|---|
+| `components/dashboard/vendas/pdv-classic.tsx` (commit `687d92c`) | **Remoção do dead code:** `useEffect` handler legado (~125 linhas), função `saveOperation` (~110 linhas), helper `labelOperacaoCaixa`, states `operationType`/`operationValue`/`operationReason`/`cashHistory`, dialog `operationType` + painel "Histórico financeiro do caixa", ramo `operationType !== null` em `shellModalBlocking`. Imports mortos: `HandCoins`, `useCaixa`, destructuring `adicionarEntrada`/`adicionarSaida`/`sessaoId`. **−307 / +22 linhas**. |
+| `components/dashboard/vendas/pdv-classic.tsx` (commit `2d5a184`) | **Limpeza do tipo + condicionais:** tipo `uiShell?: "default" \| "omni-smart"` → `uiShell?: "omni-smart"`. Default `"default"` → `"omni-smart"`. 12 condicionais defensivas (`if (uiShell !== "default")`, `if (uiShell === "default") return`, etc.) removidas. Deps `uiShell` desnecessárias removidas dos `useEffect`/`useCallback`. **−67 / +46 linhas**. |
+
+**Mantido (omni-smart usa ativamente):**
+- `pdvUiMode` (touch/scanner) + botões correspondentes.
+- Refs `productInputRef`, `customerInputRef`, `quantityInputRef` + inputs.
+- Ternário `{uiShell === "omni-smart" ? (...) : (...)}` no JSX (linhas ~1346-2195). A branch `else` tem ~850 linhas de UI legada e remover exige refator separado. A condição é sempre `true` em runtime; TS aceita.
+
+**Total da limpeza:** **−374 / +68 linhas** (saldo líquido de ~306 linhas removidas).
+
+**Validação:** `npx tsc --noEmit` 0 erros nos arquivos da sessão · `npm run build` OK (todas as 80+ rotas geradas).
+
+**Commits:** `687d92c` (remoção dead code) · `2d5a184` (tipo e condicionais).
+
+**Não alterado:** schema Prisma, auth/proxy, contratos públicos (prop `uiShell` continua opcional aceitando `"omni-smart"`), demais PDVs, CaixaStatusBar e CaixaProvider.
+
+**Riscos restantes:**
+- Ternário JSX `uiShell === "omni-smart" ? (...) : (...)` ainda renderiza a branch `else` no código (mas nunca em runtime). Remover totalmente é refator de ~850 linhas — fica como follow-up. Não é dívida funcional, só código morto visível.
+- `components/pdv-github-original/` mantém cópia antiga do `PdvClassic` (gated por env, sem importação ativa). Não tocado nesta sessão — segue como artefato histórico.
 
 ---
 
