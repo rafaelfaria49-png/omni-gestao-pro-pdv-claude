@@ -164,6 +164,8 @@ interface PaymentModalProps {
    * pagamentos — só descobre a UX nativa do modal para Clássico/Supermercado.
    */
   multipayHint?: boolean
+  /** Impressão térmica do cupom (Config V3 → Impressão). */
+  onPrintCupom?: () => void | Promise<void>
 }
 
 export function PaymentModal({ 
@@ -185,6 +187,7 @@ export function PaymentModal({
   onInstantPayIntentConsumed,
   onCustomerCpfUpdate,
   multipayHint = false,
+  onPrintCupom,
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
   const { pdvParams, storeId: storeIdForPdv } = useStoreSettings()
@@ -1241,7 +1244,15 @@ export function PaymentModal({
                 variant="outline"
                 className="h-14 border-border hover:bg-secondary"
                 disabled={faltaPagar > 0.02}
-                onClick={() => toast({ title: "Cupom pronto para impressão", description: "Envie para a impressora térmica conectada." })}
+                onClick={() => {
+                  if (onPrintCupom) void onPrintCupom()
+                  else
+                    toast({
+                      title: "Impressão indisponível",
+                      description: "Configure impressão em Configurações → PDV.",
+                      variant: "destructive",
+                    })
+                }}
               >
                 <Printer className="w-5 h-5 mr-2" />
                 <div className="text-left">

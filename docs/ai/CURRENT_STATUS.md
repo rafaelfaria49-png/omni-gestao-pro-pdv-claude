@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 26 Mai 2026 — Sessão: Lote 4 limpeza do keymap legado uiShell=default no PDV Clássico
+> Última atualização: 26 Mai 2026 — Sessão: encerramento fase WhatsApp HUB Agentic AI + Omni Agent endurecimento operacional
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,55 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+---
+
+### Encerramento de fase — WhatsApp HUB Agentic AI + Omni Agent endurecido (26/05/2026)
+
+**Contexto:** auditorias finais pós-correções; escopo documental apenas (histórico abaixo preservado).
+
+#### WhatsApp HUB (`/dashboard/whatsapp`)
+
+| Item | Estado |
+|------|--------|
+| Inbox Agentic AI operacional | Conversas/mensagens reais (API + polling); envio via `POST /api/whatsapp/send` (Meta Cloud quando configurada) |
+| CRM real | Painel lateral com cliente vinculado; OS e vendas reais quando há `clienteId` |
+| Vínculo seguro por telefone | `PATCH` conversa + `GET /api/clientes/match-by-phone` (match scoped por loja) |
+| Endpoint match-by-phone | `app/api/clientes/match-by-phone` |
+| Painel lateral | OS/vendas/histórico a partir de cadastro e APIs reais |
+| Análise IA | `POST /api/whatsapp/conversations/[id]/ai-analysis` — LLM server-side (OpenRouter/OpenAI/Gemini) + cache |
+| Sugestão IA | LLM real no card IA; fallback honesto em `lib/whatsapp/ai-local-suggestion.ts` (rótulos «Sugestão local» / heurística explícita) |
+| Auditoria final | Sem P0 bloqueante no fluxo operacional principal — ver relatório |
+| **Status** | **Pronto para piloto operacional** (credenciais Meta + chave LLM no servidor) |
+
+#### Omni Agent HUB (`/dashboard/omni-agent`)
+
+| Item | Estado |
+|------|--------|
+| Endurecimento multi-loja | `assertStoreId` nas Server Actions; UI bloqueia sem unidade ativa (`OmniAgentStoreRequired`) |
+| Auth `handle-event` | `lib/omni-agent/automation-event-guard.ts` — sessão enterprise ou assinatura ops; header = `payload.storeId` |
+| Remoção fallback `loja-1` | Sem `LEGACY_PRIMARY_STORE_ID` no Hub nem em `lib/omni-agent` |
+| Catálogo honesto | `COMMAND_GROUPS_REAL` vs `COMMAND_GROUPS_TRIAGE` (venda/despesa/estoque = triagem, não CRUD) |
+| Canal real persistido | Modal «Novo comando» + feed/inbox com `normalizeOmniAgentCanal` / `canalDisplayLabel` |
+| Eventos OS entregue | `emitOsFinalizadaOmniEvent` em `updateOSStatus` (transição → `entregue`) |
+| Auditoria final | Sem P0 operacionais abertos — ver relatório |
+| **Status** | **Piloto enterprise interno** (regex determinístico; sem LLM autónomo nesta fase) |
+
+#### Pendências restantes (próximas fases — não bloqueiam o encerramento acima)
+
+- Migration futura: coluna `storeId` em `logs_auditoria` (hoje `storeId`/`tenantId` só em `metadata` JSON nas escritas Omni).
+- Emissor server-side para evento `conta_receber_vencida` (cron/job financeiro).
+- Executores reais: venda / despesa / estoque (além de triagem/lembrete).
+- WhatsApp bidirecional no Agent (canal persistido; outbound Meta continua no HUB WhatsApp).
+- LLM governado com tools/JSON schema no Omni Agent.
+- Memória operacional unificada (timeline cliente: PDV + OS + WhatsApp + financeiro).
+
+#### Referências de auditoria
+
+- [`docs/audits/AUDITORIA_FINAL_WHATSAPP_HUB.md`](../audits/AUDITORIA_FINAL_WHATSAPP_HUB.md)
+- [`docs/audits/AUDITORIA_FINAL_OMNI_AGENT_HUB.md`](../audits/AUDITORIA_FINAL_OMNI_AGENT_HUB.md)
+
+**Validação desta atualização doc:** `npx tsc --noEmit` — escopo só markdown; sem alteração de código.
 
 ---
 
