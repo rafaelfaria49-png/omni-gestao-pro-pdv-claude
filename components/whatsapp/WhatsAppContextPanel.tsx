@@ -190,7 +190,15 @@ export function WhatsAppContextPanel({
     [conv, intent]
   )
   const llmSuggestion = aiAnalysis?.sugestaoResposta?.trim() ?? ""
-  const activeSuggestion = aiAvailable && llmSuggestion ? llmSuggestion : localSuggestion
+  const suggestionSource: "llm" | "local" | null = aiLoading
+    ? null
+    : aiAvailable && llmSuggestion
+      ? "llm"
+      : localSuggestion.trim()
+        ? "local"
+        : null
+  const activeSuggestion =
+    suggestionSource === "llm" ? llmSuggestion : suggestionSource === "local" ? localSuggestion : ""
 
   const copySuggestion = async () => {
     const text = activeSuggestion.trim()
@@ -361,10 +369,13 @@ export function WhatsAppContextPanel({
           )}
         </div>
 
-        {activeSuggestion.trim() ? (
+        {aiLoading ? (
+          <p className="text-[11px] text-muted-foreground">Gerando sugestão IA…</p>
+        ) : activeSuggestion.trim() && suggestionSource ? (
           <div className="space-y-1">
             <IaSuggestionCard
               suggestion={activeSuggestion}
+              source={suggestionSource}
               onApply={
                 onApplySuggestion
                   ? () => onApplySuggestion(activeSuggestion)
@@ -394,11 +405,6 @@ export function WhatsAppContextPanel({
                 </Button>
               )}
             </div>
-            {!aiAvailable && (
-              <p className="text-[10px] text-muted-foreground">
-                Sugestão local — revise antes de enviar.
-              </p>
-            )}
           </div>
         ) : null}
 

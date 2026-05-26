@@ -14,6 +14,10 @@ import {
   Wrench,
   type LucideIcon,
 } from "lucide-react"
+import {
+  buildLocalSuggestReply,
+  detectIntentFromPreview,
+} from "@/lib/whatsapp/ai-local-suggestion"
 
 // ─── Layout tokens (theme-aware, no hardcoded white/black) ───────────────────
 
@@ -94,19 +98,7 @@ export type ClienteOpsHint = {
 }
 
 export function detectIntent(preview: string): string | null {
-  const t = preview.toLowerCase().trim()
-  if (!t) return null
-  if (/orçamento|orcamento|preço|preco|quanto custa|valor/.test(t))
-    return "Solicita orçamento"
-  if (/cancelar|desistir|reembolso|devolver/.test(t))
-    return "Risco de desistência"
-  if (/pronto|status|andamento|quando fica/.test(t))
-    return "Consulta status / OS"
-  if (/garantia|defeito|não funciona|nao funciona|problema/.test(t))
-    return "Suporte pós-venda"
-  if (/obrigad|valeu|perfeito/.test(t)) return "Satisfação / encerramento"
-  if (/oi|olá|ola|bom dia|boa tarde/.test(t)) return "Abertura de conversa"
-  return null
+  return detectIntentFromPreview(preview)
 }
 
 export function deriveInsights(
@@ -304,26 +296,41 @@ export function PremiumEmptyState({
 
 export function IaSuggestionCard({
   suggestion,
+  source,
   onApply,
   className,
 }: {
   suggestion: string
+  /** llm = texto do modelo; local = heurística (não fingir LLM) */
+  source?: "llm" | "local"
   onApply?: () => void
   className?: string
 }) {
   if (!suggestion.trim()) return null
+  const isLlm = source === "llm"
   return (
     <div
       className={cn(
-        "rounded-xl border border-violet-500/25 bg-gradient-to-br from-violet-500/10 via-transparent to-primary/5 p-3",
+        "rounded-xl border p-3",
+        isLlm
+          ? "border-violet-500/25 bg-gradient-to-br from-violet-500/10 via-transparent to-primary/5"
+          : "border-border/60 bg-muted/20",
         className
       )}
     >
-      <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-violet-700 dark:text-violet-200">
-        <Sparkles className="h-3.5 w-3.5" />
-        Sugestão IA
+      <div
+        className={cn(
+          "mb-2 flex items-center gap-2 text-xs font-semibold",
+          isLlm ? "text-violet-700 dark:text-violet-200" : "text-muted-foreground"
+        )}
+      >
+        <Sparkles className={cn("h-3.5 w-3.5", isLlm && "text-violet-500")} />
+        {isLlm ? "Sugestão IA real" : "Sugestão local"}
       </div>
       <p className="text-xs leading-relaxed text-foreground/90">{suggestion}</p>
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        Revise antes de enviar — o operador confirma a mensagem.
+      </p>
       {onApply && (
         <button
           type="button"
@@ -427,18 +434,7 @@ export function AlertRow({
   )
 }
 
-/** Sugestão de resposta baseada em intenção (sem backend extra). */
+/** Sugestão local (heurística) — alinhada ao fallback server-side. */
 export function suggestReply(intent: string | null, humanMode: boolean): string {
-  if (humanMode)
-    return "Olá! Estou verificando seu caso com a equipe e retorno em instantes."
-  if (!intent) return "Olá! Como posso ajudar você hoje?"
-  if (intent.includes("orçamento"))
-    return "Claro! Para montar o orçamento, pode me informar o modelo do aparelho e o defeito relatado?"
-  if (intent.includes("status"))
-    return "Vou consultar o status da sua OS e já te retorno com a previsão de entrega."
-  if (intent.includes("Risco"))
-    return "Sinto muito pelo transtorno. Pode me contar o que aconteueu para resolvermos o quanto antes?"
-  if (intent.includes("Suporte"))
-    return "Entendi. Vamos resolver isso — o aparelho apresenta o defeito desde quando?"
-  return "Obrigado pela mensagem! Já estou analisando e retorno em seguida."
+  return buildLocalSuggestReply(intent, humanMode)
 }

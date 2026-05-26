@@ -72,8 +72,15 @@ export async function POST(req: Request) {
     if (!conversationId) return badRequest("conversationId obrigatório.")
 
     if (mode === "ai_suggestion") {
-      const suggestion = await generateAiSuggestion(storeId, conversationId)
-      return json({ ok: true, suggestion })
+      const force = o.force === true
+      const result = await generateAiSuggestion(storeId, conversationId, { force })
+      return json({
+        ok: true,
+        suggestion: result.suggestion,
+        source: result.source,
+        cached: result.cached,
+        reason: result.reason,
+      })
     }
 
     const direction = o.direction === "outbound" ? "outbound" : "inbound"

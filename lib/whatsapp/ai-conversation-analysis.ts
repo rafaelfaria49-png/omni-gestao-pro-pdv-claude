@@ -1,5 +1,6 @@
 import { StatusOrdemServico } from "@/generated/prisma"
 import { llmJsonCompletion } from "@/lib/llm-json"
+import { buildLocalWhatsAppSuggestion } from "@/lib/whatsapp/ai-local-suggestion"
 import { resolveLlmEnv } from "@/lib/resolve-llm-env"
 import { prisma } from "@/lib/prisma"
 
@@ -23,6 +24,16 @@ export type WhatsAppAiAnalysisResult = {
   cached: boolean
   generatedAt: string
   analysis: WhatsAppAiAnalysis | null
+  reason?: string
+}
+
+export type WhatsAppAiSuggestionSource = "llm" | "local"
+
+export type WhatsAppAiSuggestionResult = {
+  ok: true
+  suggestion: string
+  source: WhatsAppAiSuggestionSource
+  cached: boolean
   reason?: string
 }
 
@@ -397,5 +408,35 @@ export async function analyzeWhatsAppConversation(
     const result = unavailableResult("Falha ao gerar análise com o modelo de IA")
     serverCache.set(cacheKey, { at: now, result })
     return result
+  }
+}
+
+/**
+ * Sugestão de resposta para o operador — reutiliza análise LLM em cache quando possível.
+ */
+export async function generateWhatsAppAiSuggestion(
+  storeId: string,
+  conversationId: string,
+  opts?: { force?: boolean }
+): Promise<WhatsAppAiSuggestionResult> {
+  const analysis = await analyzeWhatsAppConversation(storeId, conversationId, opts)
+  const llmText = analysis.analysis?.sugestaoResposta?.trim() ?? ""
+
+  if (analysis.available && llmText) {
+    return {
+      ok: true,
+      suggestion: llmText,
+      source: "llm",
+      cached: analysis.cached,
+    }
+  }
+
+  const local = await buildLocalWhatsAppSuggestion(storeId, conversationId)
+  return {
+    ok: true,
+    suggestion: local,
+    source: "local",
+    cached: false,
+    reason: analysis.reason ?? "IA indisponível — heurística local",
   }
 }

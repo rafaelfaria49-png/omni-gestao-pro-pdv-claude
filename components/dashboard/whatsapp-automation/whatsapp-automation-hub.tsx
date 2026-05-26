@@ -102,6 +102,8 @@ export function WhatsAppAutomationHub() {
   const [simulateInput, setSimulateInput] = useState("Oi, qual o preço da troca de tela?")
   const [simulationOut, setSimulationOut] = useState<string | null>(null)
   const [aiOut, setAiOut] = useState<string | null>(null)
+  const [aiSuggestionSource, setAiSuggestionSource] = useState<"llm" | "local" | null>(null)
+  const [aiSuggestionCached, setAiSuggestionCached] = useState(false)
 
   const [quickReplies, setQuickReplies] = useState<WQuickReply[]>([])
   const [qrShortcut, setQrShortcut] = useState("")
@@ -320,6 +322,8 @@ export function WhatsAppAutomationHub() {
       return
     }
     setAiOut(j.suggestion ?? "")
+    setAiSuggestionSource(j.source === "llm" ? "llm" : j.source === "local" ? "local" : null)
+    setAiSuggestionCached(!!j.cached)
   }
 
   const addQuickReply = async () => {
@@ -608,7 +612,7 @@ export function WhatsAppAutomationHub() {
 
                 <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Sugestão IA (simulada)
+                    Sugestão de resposta
                   </p>
                   <Button
                     type="button"
@@ -620,9 +624,19 @@ export function WhatsAppAutomationHub() {
                     Gerar sugestão pelo contexto
                   </Button>
                   {aiOut ? (
-                    <p className="text-sm rounded-md bg-background border border-border p-2 whitespace-pre-wrap">
-                      {aiOut}
-                    </p>
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-medium text-muted-foreground">
+                        {aiSuggestionSource === "llm"
+                          ? `Sugestão IA real${aiSuggestionCached ? " (cache)" : ""}`
+                          : "Sugestão local (fallback — IA indisponível)"}
+                      </p>
+                      <p className="text-sm rounded-md bg-background border border-border p-2 whitespace-pre-wrap">
+                        {aiOut}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Revise antes de enviar — não há envio automático.
+                      </p>
+                    </div>
                   ) : null}
                 </div>
               </CardContent>
@@ -759,7 +773,7 @@ export function WhatsAppAutomationHub() {
             <CardHeader>
               <CardTitle className="text-base">Preferências de sugestão</CardTitle>
               <CardDescription>
-                Usadas pela função simulada <code>generateAiSuggestion</code> — sem chamada OpenAI/Meta.
+                Tom e prompt usados na análise LLM e na sugestão de resposta (OpenRouter/OpenAI/Gemini no servidor).
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3 max-w-3xl">

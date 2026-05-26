@@ -278,44 +278,8 @@ export async function runAutomationSimulation(
   }
 }
 
-export async function generateAiSuggestion(storeId: string, conversationId: string): Promise<string> {
-  const settings = await prisma.whatsAppAiSetting.findUnique({ where: { storeId } })
-  const maxCtx = Math.max(4, settings?.maxContextMessages ?? 12)
-
-  const convFull = await prisma.whatsAppConversation.findFirst({
-    where: { id: conversationId, storeId },
-    include: {
-      messages: {
-        orderBy: { createdAt: "desc" },
-        take: maxCtx,
-      },
-      contact: true,
-    },
-  })
-
-  if (!convFull) throw new Error("Conversa não encontrada")
-
-  const tone = (settings?.tone ?? "consultivo").trim() || "consultivo"
-  const lastInbound =
-    [...convFull.messages].reverse().find((m) => m.direction === "inbound")?.body ??
-    convFull.lastMessagePreview ??
-    ""
-
-  const lower = lastInbound.toLowerCase()
-  let focus = "seu atendimento"
-  if (/(preço|valor|quanto)/i.test(lower)) focus = "valores e condições de pagamento"
-  else if (/(prazo|quando|demora)/i.test(lower)) focus = "prazos de serviço ou entrega"
-  else if (/(garantia)/i.test(lower)) focus = "garantia e política de troca"
-  else if (/(endereço|onde|local)/i.test(lower)) focus = "localização e horário de atendimento"
-
-  const nome = convFull.contact.displayName?.trim() || "cliente"
-
-  return (
-    `[Sugestão IA — tom ${tone}] Olá, ${nome}! Obrigado por falar conosco.\n` +
-    `Entendi que você quer falar sobre ${focus}. Podemos confirmar o modelo do aparelho ou pedido e já te passamos os próximos passos?\n` +
-    `(Simulação local — sem chamada à Meta/OpenAI.)`
-  )
-}
+export { generateWhatsAppAiSuggestion as generateAiSuggestion } from "@/lib/whatsapp/ai-conversation-analysis"
+export type { WhatsAppAiSuggestionResult } from "@/lib/whatsapp/ai-conversation-analysis"
 
 /** Garante dados mínimos para o hub não abrir vazio. */
 export async function ensureHubSeed(storeId: string): Promise<void> {
