@@ -673,18 +673,19 @@ export function OperationsProvider({
         },
         body: JSON.stringify({ sale }),
       })
-        .then((res) => {
+        .then(async (res) => {
           if (res.ok) {
             setState((prev) => ({
               ...prev,
               sales: prev.sales.map((s) => (s.id === sale.id ? { ...s, syncPending: false } : s)),
             }))
           } else {
-            console.warn("[venda-persist] re-sync HTTP", res.status, sale.id)
+            const body = await res.text().catch(() => "")
+            console.warn("[venda-persist] re-sync HTTP", res.status, sale.id, "lojaId:", lj, "body:", body)
           }
         })
         .catch((err: unknown) => {
-          console.warn("[venda-persist] re-sync rede", sale.id, err)
+          console.warn("[venda-persist] re-sync rede", sale.id, "lojaId:", lj, err)
         })
     }
   }, [storageKey])
@@ -998,7 +999,7 @@ export function OperationsProvider({
           },
           body: JSON.stringify({ sale: saleRow }),
         })
-          .then((res) => {
+          .then(async (res) => {
             if (res.ok) {
               setState((prev) => ({
                 ...prev,
@@ -1007,7 +1008,16 @@ export function OperationsProvider({
                 ),
               }))
             } else {
-              console.error("[venda-persist] HTTP", res.status, saleRow.id)
+              const body = await res.text().catch(() => "")
+              console.error(
+                "[venda-persist] HTTP",
+                res.status,
+                saleRow.id,
+                "lojaId:",
+                lj,
+                "body:",
+                body,
+              )
               toast({
                 variant: "destructive",
                 title: "Venda não confirmada no servidor",
@@ -1016,7 +1026,7 @@ export function OperationsProvider({
             }
           })
           .catch((err: unknown) => {
-            console.error("[venda-persist] rede", saleRow.id, err)
+            console.error("[venda-persist] rede", saleRow.id, "lojaId:", lj, err)
             toast({
               variant: "destructive",
               title: "Venda não confirmada no servidor",
