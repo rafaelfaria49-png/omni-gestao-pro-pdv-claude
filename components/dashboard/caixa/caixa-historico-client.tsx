@@ -226,6 +226,9 @@ export function CaixaHistoricoClient() {
     const payload = s.payload as Record<string, unknown> | null
     const sangrias = s.operacoes.filter((o) => o.tipo === "sangria").reduce((a, o) => a + o.valor, 0)
     const suprimentos = s.operacoes.filter((o) => o.tipo === "suprimento").reduce((a, o) => a + o.valor, 0)
+    const recebimentosCr = s.operacoes
+      .filter((o) => o.tipo === "recebimento_cr")
+      .reduce((a, o) => a + o.valor, 0)
     const totalDev = s.devolucoes.reduce((a, d) => a + d.valorTotal, 0)
 
     // Comprovante ERP: usa o resumoFechamento (por origem + pagamento + totais) quando
@@ -255,7 +258,8 @@ export function CaixaHistoricoClient() {
       <p>Descontos: -${fmt(resumo.descontos)}</p>
       <p>Total líquido: ${fmt(resumo.totalLiquido)}</p>
       <p>Total recebido: ${fmt(resumo.totalRecebido)}</p>
-      <p>Ticket médio: ${fmt(resumo.ticketMedio)}</p>`
+      <p>Ticket médio: ${fmt(resumo.ticketMedio)}</p>
+      ${resumo.qtdRecebimentosContas > 0 ? `<p>Receb. contas: ${fmt(resumo.recebimentosContas)} (${resumo.qtdRecebimentosContas})</p>` : ""}`
     } else if (ledger) {
       secaoVendas = `<hr>
       <p>Dinheiro: ${fmt(ledger.vendasDinheiro ?? 0)}</p>
@@ -280,6 +284,7 @@ export function CaixaHistoricoClient() {
     ${s.saldoContado != null ? `<p>Saldo contado: ${fmt(s.saldoContado)}</p>` : ""}
     <p>Sangrias: ${fmt(sangrias)}</p>
     <p>Suprimentos: ${fmt(suprimentos)}</p>
+    ${recebimentosCr > 0 ? `<p>Receb. contas: ${fmt(recebimentosCr)}</p>` : ""}
     <p>Devoluções: ${fmt(totalDev)}</p>
     ${secaoVendas}
     </body></html>`
@@ -463,8 +468,10 @@ function SessaoDetalheView({
 }) {
   const sangrias = sessao.operacoes.filter((o) => o.tipo === "sangria")
   const suprimentos = sessao.operacoes.filter((o) => o.tipo === "suprimento")
+  const recebimentosCr = sessao.operacoes.filter((o) => o.tipo === "recebimento_cr")
   const totalSangrias = sangrias.reduce((a, o) => a + o.valor, 0)
   const totalSuprimentos = suprimentos.reduce((a, o) => a + o.valor, 0)
+  const totalRecebimentosCr = recebimentosCr.reduce((a, o) => a + o.valor, 0)
   const totalDev = sessao.devolucoes.reduce((a, d) => a + d.valorTotal, 0)
   const payload = sessao.payload as Record<string, unknown> | null
   const ledger = payload?.ledger as Record<string, number> | null
@@ -510,6 +517,14 @@ function SessaoDetalheView({
           color={totalSuprimentos > 0 ? "text-emerald-500" : undefined}
           icon={<TrendingUp className="h-3 w-3" />}
         />
+        {totalRecebimentosCr > 0 && (
+          <MiniKpi
+            label="Receb. contas"
+            value={fmt(totalRecebimentosCr)}
+            color="text-violet-600 dark:text-violet-400"
+            icon={<TrendingUp className="h-3 w-3" />}
+          />
+        )}
       </div>
 
       {/* Vendas pelo Venda.terminalId (mais preciso que janela temporal) */}
@@ -562,6 +577,17 @@ function SessaoDetalheView({
         </div>
       )}
 
+      {resumo && resumo.qtdRecebimentosContas > 0 && (
+        <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2 text-sm">
+          <p className="text-xs text-muted-foreground">
+            Recebimentos de contas no PDV ({resumo.qtdRecebimentosContas})
+          </p>
+          <p className="text-base font-semibold text-violet-600 dark:text-violet-400">
+            {fmt(resumo.recebimentosContas)}
+          </p>
+        </div>
+      )}
+
       {/* Formas de pagamento do ledger */}
       {ledger && (
         <div>
@@ -606,17 +632,25 @@ function SessaoDetalheView({
                     className={
                       op.tipo === "sangria"
                         ? "border-red-500/30 text-red-500"
-                        : "border-emerald-500/30 text-emerald-500"
+                        : op.tipo === "recebimento_cr"
+                          ? "border-violet-500/30 text-violet-600 dark:text-violet-400"
+                          : "border-emerald-500/30 text-emerald-500"
                     }
                   >
-                    {op.tipo}
+                    {op.tipo === "recebimento_cr" ? "Receb. conta" : op.tipo}
                   </Badge>
                   <span className="text-muted-foreground">{op.motivo || "—"}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground">{fmtDt(op.at)}</span>
                   <span
-                    className={`font-semibold ${op.tipo === "sangria" ? "text-red-500" : "text-emerald-500"}`}
+                    className={`font-semibold ${
+                      op.tipo === "sangria"
+                        ? "text-red-500"
+                        : op.tipo === "recebimento_cr"
+                          ? "text-violet-600 dark:text-violet-400"
+                          : "text-emerald-500"
+                    }`}
                   >
                     {op.tipo === "sangria" ? "−" : "+"}
                     {fmt(op.valor)}

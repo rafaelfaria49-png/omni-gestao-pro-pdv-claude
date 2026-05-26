@@ -64,6 +64,10 @@ export async function GET(req: Request) {
     const suprimentos = sessao.operacoes
       .filter((o) => o.tipo === "suprimento")
       .reduce((s, o) => s + o.valor, 0)
+    const recebimentosContas = sessao.operacoes
+      .filter((o) => o.tipo === "recebimento_cr")
+      .reduce((s, o) => s + o.valor, 0)
+    const qtdRecebimentosContas = sessao.operacoes.filter((o) => o.tipo === "recebimento_cr").length
     const totalDevolucoes = sessao.devolucoes.reduce((s, d) => s + d.valorTotal, 0)
 
     // Total de vendas a partir do ledger financeiro (MovimentacaoFinanceira origem="venda").
@@ -120,6 +124,8 @@ export async function GET(req: Request) {
       totais: {
         sangrias,
         suprimentos,
+        recebimentosContas: Math.round(recebimentosContas * 100) / 100,
+        qtdRecebimentosContas,
         totalDevolucoes,
         totalVendas,
         totalVendasCount,

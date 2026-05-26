@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   Lock,
   DollarSign,
@@ -33,8 +33,10 @@ import { useTerminalAtivo } from "@/lib/pdv-terminal"
 import { useToast } from "@/hooks/use-toast"
 import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
 import {
+  aggregateCaixaOperacoes,
   computeFechamentoResumo,
   filterSalesDaSessao,
+  type CaixaOperacaoLinha,
   type FechamentoResumo,
 } from "@/lib/caixa-fechamento-resumo"
 
@@ -61,27 +63,77 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const [valorContado, setValorContado] = useState("")
   const [observacao, setObservacao] = useState("")
   const [salvando, setSalvando] = useState(false)
+  const [sessaoOperacoes, setSessaoOperacoes] = useState<CaixaOperacaoLinha[]>([])
+  const [opsCarregando, setOpsCarregando] = useState(false)
 
   const ledger = ensureLedger(dailyLedger)
   const userAudit = (empresaDocumentos.nomeFantasia || "").trim() || "Loja"
 
-  // Consolidação ERP a partir das vendas reais da sessão (mesma fonte sincronizada
-  // ao banco). sangrias = caixa.totalSaidas; suprimentos = totalEntradas − Σ vendas.
+  // Operações da sessão no servidor (sangria / suprimento / recebimento_cr).
+  useEffect(() => {
+    if (!isOpen || !sessaoId?.trim() || !lojaAtivaId) {
+      setSessaoOperacoes([])
+      return
+    }
+    let cancelled = false
+    setOpsCarregando(true)
+    void fetch(`/api/ops/caixa/sessao-detalhe?sessaoId=${encodeURIComponent(sessaoId)}`, {
+      credentials: "include",
+      headers: { "x-assistec-loja-id": lojaAtivaId },
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .then((j: { sessao?: { operacoes?: CaixaOperacaoLinha[] } }) => {
+        if (cancelled) return
+        const ops = j.sessao?.operacoes
+        setSessaoOperacoes(
+          Array.isArray(ops)
+            ? ops.map((o) => ({ tipo: o.tipo, valor: o.valor, payload: o.payload }))
+            : [],
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setSessaoOperacoes([])
+      })
+      .finally(() => {
+        if (!cancelled) setOpsCarregando(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, sessaoId, lojaAtivaId])
+
   const resumo: FechamentoResumo = useMemo(() => {
     const sessionSales = filterSalesDaSessao(sales, {
       sessaoId,
       dataAbertura: caixa.dataAbertura,
     })
+    const opsAgg = aggregateCaixaOperacoes(sessaoOperacoes)
+    const usarOpsServidor = !!sessaoId?.trim() && !opsCarregando
     const totalLiquidoSessao = sessionSales.reduce((s, v) => s + (v.total ?? 0), 0)
-    const sangrias = caixa.totalSaidas
-    const suprimentos = Math.max(0, caixa.totalEntradas - totalLiquidoSessao)
+    const sangrias = usarOpsServidor ? opsAgg.sangrias : caixa.totalSaidas
+    const suprimentos = usarOpsServidor
+      ? opsAgg.suprimentos
+      : Math.max(0, caixa.totalEntradas - totalLiquidoSessao)
     return computeFechamentoResumo({
       sales: sessionSales,
       sangrias,
       suprimentos,
       saldoInicial: caixa.saldoInicial,
+      recebimentosContas: opsAgg.recebimentosContas,
+      recebimentosContasDinheiro: opsAgg.recebimentosContasDinheiro,
+      qtdRecebimentosContas: opsAgg.qtdRecebimentosContas,
     })
-  }, [sales, sessaoId, caixa.dataAbertura, caixa.totalSaidas, caixa.totalEntradas, caixa.saldoInicial])
+  }, [
+    sales,
+    sessaoId,
+    caixa.dataAbertura,
+    caixa.totalSaidas,
+    caixa.totalEntradas,
+    caixa.saldoInicial,
+    sessaoOperacoes,
+    opsCarregando,
+  ])
 
   // Operadores (terminal) que registraram vendas na sessão — identidade local de auditoria.
   const operadoresSessao = useMemo(() => {
@@ -127,9 +179,18 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       `Total recebido:   ${fmt(resumo.totalRecebido)}`,
       `A prazo (fiado):  ${fmt(resumo.aPrazo)}`,
       `Ticket médio:     ${fmt(resumo.ticketMedio)}`,
+      resumo.qtdRecebimentosContas > 0
+        ? `Receb. contas:    ${fmt(resumo.recebimentosContas)} (${resumo.qtdRecebimentosContas} título(s))`
+        : "",
+      resumo.recebimentosContasDinheiro > 0
+        ? `  CR em dinheiro: ${fmt(resumo.recebimentosContasDinheiro)}`
+        : "",
       "--- CAIXA (GAVETA) ---",
       `Abertura:         ${fmt(resumo.saldoInicial)}`,
       `(+) Dinheiro:     ${fmt(pg.dinheiro)}`,
+      resumo.recebimentosContasDinheiro > 0
+        ? `(+) Receb. CR:    ${fmt(resumo.recebimentosContasDinheiro)}`
+        : "",
       `(+) Suprimentos:  ${fmt(resumo.suprimentos)}`,
       `(-) Sangrias:     ${fmt(resumo.sangrias)}`,
       `= Saldo dinheiro: ${fmt(saldoDinheiroEsperado)}`,
@@ -335,6 +396,43 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                 </CardContent>
               </Card>
 
+              {/* Recebimentos de contas (PDV F5 — não são vendas) */}
+              {resumo.qtdRecebimentosContas > 0 && (
+                <Card className="bg-secondary border-border">
+                  <CardContent className="space-y-2 pt-4 pb-4">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <Wallet className="h-4 w-4 text-violet-500" />
+                      Recebimentos de contas
+                      {opsCarregando ? (
+                        <span className="text-xs font-normal text-muted-foreground">(atualizando…)</span>
+                      ) : null}
+                    </h3>
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">
+                          Títulos recebidos ({resumo.qtdRecebimentosContas})
+                        </span>
+                        <span className="font-medium text-violet-600 dark:text-violet-400">
+                          {fmt(resumo.recebimentosContas)}
+                        </span>
+                      </div>
+                      {resumo.recebimentosContasDinheiro > 0 &&
+                        resumo.recebimentosContasDinheiro < resumo.recebimentosContas && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">Em dinheiro (gaveta)</span>
+                            <span className="font-medium text-foreground">
+                              {fmt(resumo.recebimentosContasDinheiro)}
+                            </span>
+                          </div>
+                        )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Baixas de Contas a Receber no PDV — não entram no total de vendas.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Formas de pagamento */}
               <Card className="bg-secondary border-border">
                 <CardContent className="space-y-2 pt-4 pb-4">
@@ -380,6 +478,14 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                       <span className="text-emerald-500">+ Dinheiro (vendas)</span>
                       <span className="font-medium text-emerald-500">+ {fmt(resumo.porPagamento.dinheiro)}</span>
                     </div>
+                    {resumo.recebimentosContasDinheiro > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-violet-600 dark:text-violet-400">+ Receb. contas (dinheiro)</span>
+                        <span className="font-medium text-violet-600 dark:text-violet-400">
+                          + {fmt(resumo.recebimentosContasDinheiro)}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-emerald-500 flex items-center gap-1.5">
                         <TrendingUp className="h-3.5 w-3.5" />+ Suprimentos

@@ -8,8 +8,9 @@
  *  1. `porOrigem`    — receita bruta por origem (PDV/Balcão, Item Avulso, O.S.).
  *  2. `porPagamento` — soma por forma de pagamento (dinheiro, pix, débito…).
  *  3. consolidação   — subtotal bruto, descontos, líquido, recebido à vista,
- *                      a prazo, sangrias, suprimentos, saldo em dinheiro
- *                      esperado, qtd de vendas, ticket médio.
+ *                      a prazo, sangrias, suprimentos, recebimentos de contas
+ *                      (PDV F5 / `recebimento_cr`), saldo em dinheiro esperado,
+ *                      qtd de vendas, ticket médio.
  *
  * Convenção alinhada ao financeiro já estabilizado:
  *  - `MovimentacaoFinanceira(origem:"venda")` lança apenas o valor à vista
@@ -17,7 +18,9 @@
  *    mesma definição (carnê é tratado como recebimento imediato, igual ao
  *    `upsertVendaInTransaction`).
  *  - O saldo em dinheiro da gaveta considera **somente** dinheiro físico:
- *    `saldoInicial + dinheiro + suprimentos − sangrias`.
+ *    `saldoInicial + dinheiro(vendas) + suprimentos + recebimentos CR em dinheiro − sangrias`.
+ *  - `recebimento_cr` (CaixaOperacao) **não** entra em vendas nem em `porOrigem`/`porPagamento`
+ *    de vendas — evita inflar faturamento. Soma à gaveta conforme forma (dinheiro no físico).
  */
 
 import type { SaleRecord } from "@/lib/operations-sale-types"
@@ -61,12 +64,17 @@ export interface FechamentoResumo {
   aPrazo: number
   sangrias: number
   suprimentos: number
+  /** Σ CaixaOperacao `recebimento_cr` (baixa de título no PDV — não é venda). */
+  recebimentosContas: number
+  /** Parcela de recebimentos CR em dinheiro (impacta gaveta). */
+  recebimentosContasDinheiro: number
+  qtdRecebimentosContas: number
   /** Devoluções/estornos da sessão (informativo). */
   totalDevolucoes: number
   saldoInicial: number
-  /** Caixa físico esperado: saldoInicial + dinheiro + suprimentos − sangrias. */
+  /** Caixa físico esperado: abertura + dinheiro(vendas) + suprimentos + CR(dinheiro) − sangrias. */
   saldoDinheiroEsperado: number
-  /** Saldo total movimentado: saldoInicial + totalLiquido + suprimentos − sangrias (≈ getSaldoAtual). */
+  /** Saldo total movimentado: abertura + recebido(vendas) + suprimentos + CR − sangrias. */
   saldoMovimentadoEsperado: number
   qtdVendas: number
   /** Vendas liquidadas com 2+ formas de pagamento (conceito "múltiplo"). */
@@ -96,6 +104,57 @@ export function classifyLineOrigem(inventoryId: string): OrigemVendaKey {
  * - Quando há `sessaoId`, casa por `sale.sessaoId` (preciso).
  * - Sem `sessaoId` (legado), cai para a janela desde `dataAbertura` (ou o dia atual).
  */
+/** Linha mínima de `CaixaOperacao` para agregação no fechamento. */
+export type CaixaOperacaoLinha = {
+  tipo: string
+  valor: number
+  payload?: unknown
+}
+
+function readFormaPagamentoPayload(payload: unknown): string {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return ""
+  const raw = (payload as Record<string, unknown>).formaPagamento
+  return typeof raw === "string" ? raw.trim().toLowerCase() : ""
+}
+
+/** Agrega sangrias, suprimentos e recebimentos CR a partir das operações da sessão (servidor). */
+export function aggregateCaixaOperacoes(operacoes: CaixaOperacaoLinha[]): {
+  sangrias: number
+  suprimentos: number
+  recebimentosContas: number
+  recebimentosContasDinheiro: number
+  qtdRecebimentosContas: number
+} {
+  let sangrias = 0
+  let suprimentos = 0
+  let recebimentosContas = 0
+  let recebimentosContasDinheiro = 0
+  let qtdRecebimentosContas = 0
+
+  for (const op of operacoes) {
+    const v = round2(Number(op.valor) || 0)
+    if (!(v > 0)) continue
+    const tipo = (op.tipo || "").trim().toLowerCase()
+    if (tipo === "sangria") sangrias += v
+    else if (tipo === "suprimento") suprimentos += v
+    else if (tipo === "recebimento_cr") {
+      recebimentosContas += v
+      qtdRecebimentosContas += 1
+      if (readFormaPagamentoPayload(op.payload) === "dinheiro") {
+        recebimentosContasDinheiro += v
+      }
+    }
+  }
+
+  return {
+    sangrias: round2(sangrias),
+    suprimentos: round2(suprimentos),
+    recebimentosContas: round2(recebimentosContas),
+    recebimentosContasDinheiro: round2(recebimentosContasDinheiro),
+    qtdRecebimentosContas,
+  }
+}
+
 export function filterSalesDaSessao(
   sales: SaleRecord[],
   opts: { sessaoId?: string | null; dataAbertura?: Date | null },
@@ -119,8 +178,20 @@ export function computeFechamentoResumo(input: {
   suprimentos: number
   saldoInicial: number
   totalDevolucoes?: number
+  recebimentosContas?: number
+  recebimentosContasDinheiro?: number
+  qtdRecebimentosContas?: number
 }): FechamentoResumo {
-  const { sales, sangrias, suprimentos, saldoInicial, totalDevolucoes = 0 } = input
+  const {
+    sales,
+    sangrias,
+    suprimentos,
+    saldoInicial,
+    totalDevolucoes = 0,
+    recebimentosContas = 0,
+    recebimentosContasDinheiro = 0,
+    qtdRecebimentosContas = 0,
+  } = input
 
   // Exclui vendas canceladas de TODOS os cálculos financeiros.
   // Vendas canceladas permanecem no array para auditoria/histórico, mas não entram no fechamento.
@@ -198,8 +269,14 @@ export function computeFechamentoResumo(input: {
   const totalRecebido = round2(totalLiquido - aPrazo)
   const qtdVendas = activeSales.length
   const ticketMedio = qtdVendas > 0 ? round2(totalLiquido / qtdVendas) : 0
-  const saldoDinheiroEsperado = round2(saldoInicial + pg.dinheiro + suprimentos - sangrias)
-  const saldoMovimentadoEsperado = round2(saldoInicial + totalLiquido + suprimentos - sangrias)
+  const recCr = round2(recebimentosContas)
+  const recCrDin = round2(recebimentosContasDinheiro)
+  const saldoDinheiroEsperado = round2(
+    saldoInicial + pg.dinheiro + suprimentos + recCrDin - sangrias,
+  )
+  const saldoMovimentadoEsperado = round2(
+    saldoInicial + totalRecebido + suprimentos + recCr - sangrias,
+  )
 
   const porOrigem: ResumoOrigemLinha[] = (Object.keys(origemAcc) as OrigemVendaKey[])
     .map((key) => ({
@@ -220,6 +297,9 @@ export function computeFechamentoResumo(input: {
     aPrazo,
     sangrias: round2(sangrias),
     suprimentos: round2(suprimentos),
+    recebimentosContas: recCr,
+    recebimentosContasDinheiro: recCrDin,
+    qtdRecebimentosContas,
     totalDevolucoes: round2(totalDevolucoes),
     saldoInicial: round2(saldoInicial),
     saldoDinheiroEsperado,
