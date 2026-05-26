@@ -1,11 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import {
-  buildClientePhoneSearchTokens,
-  formatPhoneBrDisplay,
-  phonesAreCompatibleBr,
-} from "@/lib/phone-br"
+import { formatPhoneBrDisplay } from "@/lib/phone-br"
+import type { ClientePhoneMatchStatus } from "@/lib/cliente-phone-match"
 
 export type ClienteOsRow = {
   id: string
@@ -50,7 +47,10 @@ export type PhoneMatchCandidate = {
   phoneDisplay: string
 }
 
-export type PhoneLinkStatus = "idle" | "too_short" | "searching" | "none" | "unique" | "multiple"
+export type PhoneLinkStatus =
+  | "idle"
+  | ClientePhoneMatchStatus
+  | "searching"
 
 const OPEN_OS = new Set(["Aberto", "EmAnalise"])
 const LATE_MS = 3 * 24 * 60 * 60 * 1000
@@ -134,45 +134,30 @@ function mapClientePayload(cliente: Record<string, unknown>): ClienteContextSnap
   }
 }
 
-function mapRawCliente(c: Record<string, unknown>): PhoneMatchCandidate {
-  const phone = String(c.phone ?? "")
+function mapApiCandidate(c: {
+  id: string
+  name: string
+  phone: string
+}): PhoneMatchCandidate {
   return {
-    id: String(c.id ?? ""),
-    name: String(c.name ?? ""),
-    phone,
-    phoneDisplay: formatPhoneBrDisplay(phone) || phone,
+    id: c.id,
+    name: c.name,
+    phone: c.phone,
+    phoneDisplay: formatPhoneBrDisplay(c.phone) || c.phone,
   }
-}
-
-/** Filtra candidatos da API com match estrito (evita falso positivo do `contains`). */
-export function filterClienteCandidatesByPhone(
-  waPhoneDigits: string,
-  raw: Array<Record<string, unknown>>
-): PhoneMatchCandidate[] {
-  const seen = new Set<string>()
-  const out: PhoneMatchCandidate[] = []
-  for (const row of raw) {
-    const c = mapRawCliente(row)
-    if (!c.id || !phonesAreCompatibleBr(waPhoneDigits, c.phone)) continue
-    if (seen.has(c.id)) continue
-    seen.add(c.id)
-    out.push(c)
-  }
-  return out
-}
-
-export function resolvePhoneLinkFromCandidates(
-  candidates: PhoneMatchCandidate[]
-): { status: PhoneLinkStatus; uniqueMatch: PhoneMatchCandidate | null }
-{
-  if (candidates.length === 0) return { status: "none", uniqueMatch: null }
-  if (candidates.length === 1) return { status: "unique", uniqueMatch: candidates[0] }
-  return { status: "multiple", uniqueMatch: null }
 }
 
 const MAX_INBOX_PHONE_SCANS = 30
 
-/** Busca candidatos por telefone (mesma regra do painel). Reutilizável na lista do inbox. */
+type MatchByPhoneResponse = {
+  ok?: boolean
+  status?: ClientePhoneMatchStatus
+  candidates?: Array<{ id: string; name: string; phone: string; email?: string | null }>
+  uniqueMatch?: { id: string; name: string; phone: string; email?: string | null } | null
+  error?: string
+}
+
+/** Uma chamada ao endpoint dedicado — matching seguro no servidor. */
 export async function fetchPhoneLinkCandidates(
   phoneDigits: string,
   apiHeaders: Record<string, string>
@@ -181,29 +166,24 @@ export async function fetchPhoneLinkCandidates(
   uniqueMatch: PhoneMatchCandidate | null
   candidates: PhoneMatchCandidate[]
 }> {
-  const tokens = buildClientePhoneSearchTokens(phoneDigits)
-  if (tokens.length === 0) {
-    return { status: "too_short", uniqueMatch: null, candidates: [] }
+  const res = await fetch(
+    `/api/clientes/match-by-phone?phone=${encodeURIComponent(phoneDigits)}`,
+    { headers: apiHeaders, cache: "no-store" }
+  )
+  const data = (await res.json()) as MatchByPhoneResponse
+
+  if (!res.ok || !data.ok) {
+    return { status: "none", uniqueMatch: null, candidates: [] }
   }
 
-  const merged = new Map<string, Record<string, unknown>>()
-  for (const token of tokens) {
-    const res = await fetch(
-      `/api/clientes?q=${encodeURIComponent(token)}`,
-      { headers: apiHeaders, cache: "no-store" }
-    )
-    if (!res.ok) continue
-    const data = (await res.json()) as {
-      clientes?: Array<Record<string, unknown>>
-    }
-    for (const c of data.clientes ?? []) {
-      const id = String(c.id ?? "")
-      if (id) merged.set(id, c)
-    }
-  }
+  const status = (data.status ?? "none") as PhoneLinkStatus
+  const candidates = (data.candidates ?? []).map(mapApiCandidate)
+  const uniqueMatch = data.uniqueMatch
+    ? mapApiCandidate(data.uniqueMatch)
+    : candidates.length === 1
+      ? candidates[0]
+      : null
 
-  const candidates = filterClienteCandidatesByPhone(phoneDigits, [...merged.values()])
-  const { status, uniqueMatch } = resolvePhoneLinkFromCandidates(candidates)
   return { status, uniqueMatch, candidates }
 }
 
@@ -300,13 +280,6 @@ export function useWhatsAppClienteContext(
 
   const searchByPhone = useCallback(async () => {
     if (!apiHeaders) return
-    const tokens = buildClientePhoneSearchTokens(phoneDigits)
-    if (tokens.length === 0) {
-      setPhoneCandidates([])
-      setPhoneLinkStatus("too_short")
-      setSnapshot(null)
-      return
-    }
 
     setLoading(true)
     setError(null)
