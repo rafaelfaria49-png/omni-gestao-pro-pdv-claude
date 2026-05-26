@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 26 Mai 2026 — Sessão: Lote 2 confiabilidade financeira (FK ContaReceberTitulo + canceladas excluídas do dashboard)
+> Última atualização: 26 Mai 2026 — Sessão: Lote 3 recebimento de contas no PDV (F9 convergente nos 3 PDVs)
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,51 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+---
+
+### Lote 3 — Recebimento de Contas no PDV (F9 convergente nos 3 PDVs) (concluído 26/05/2026)
+
+**Contexto:** pendência #4 do contexto — receber/baixar títulos de Contas a Receber direto do PDV, sem ter que sair para o módulo financeiro. Convergência operacional: mesmo modal, mesmo backend, mesmo atalho nos 3 PDVs.
+
+**Tecla escolhida:** F9 (canônico do `lib/pdv-keymap.ts`). O contexto inicial sugeria F5, mas F5 já é "Cancelar item selecionado" nos PDVs e no keymap canônico. F9 já estava reservado como "Contas a receber" no mapa — agora vira "Recebimento de contas (liquidar / pagamento parcial)" e ganha implementação real.
+
+**Backend reusado (sem novo endpoint):**
+- `GET /api/ops/contas-receber-list` — lista todos os títulos da loja com summary/audit.
+- `POST /api/financeiro/contas-receber/liquidar` — baixa total (gera `MovimentacaoFinanceira` entrada, idempotente).
+- `POST /api/financeiro/contas-receber/pagamento-parcial` — baixa parcial (mantém status pendente, soma no histórico do payload).
+
+| Arquivo | Mudança |
+|---------|---------|
+| `components/dashboard/vendas/pdv-recebimento-modal.tsx` (NOVO ~415 linhas) | Modal compartilhado pelos 3 PDVs. Busca por cliente/descrição/ID; lista títulos abertos (pendente/parcial/atrasado/vencido); KPIs de saldo total; seletor global de forma de pagamento; por título: "Quitar total" e "Baixa parcial" com campo de valor. Pré-filtra pelo nome do cliente selecionado no PDV. Toasts de sucesso/erro. Tokens semânticos (4 temas). |
+| `components/dashboard/vendas/pdv-classic.tsx` | Substitui o dialog antigo do shell ("Ir para Contas a Receber", só atalho de navegação) pelo `PdvRecebimentoModal` real, controlado pelo mesmo state `shellReceivablesOpen` que F9 já dispara. Shell omni-smart mantém callback compatível por enquanto. |
+| `components/dashboard/vendas/pdv-supermercado.tsx` | Adiciona F9 ao guard de atalhos (state `recebimentoOpen`, bloqueio recíproco com outros modais) + renderiza `PdvRecebimentoModal`. Foco volta ao bipe ao fechar. |
+| `components/dashboard/vendas/pdv-assistencia-enterprise.tsx` | Migração crítica: F9 era "limpar carrinho" (colisão pré-existente com o canônico). F9 agora abre Recebimento; **limpar carrinho migra para Ctrl+L** (handler precoce no onKeyDown, respeita `inInput`, mantém o `AlertDialog` de confirmação). `anyModalOpen` considera `recebimentoOpen` para evitar interceptações cruzadas. Pré-filtro usa `customerName` (state local). |
+| `lib/pdv-keymap.ts` | F9 redefinido como "Recebimento de contas (liquidar / pagamento parcial)" + adicionado `Ctrl+L = Limpar carrinho (Assistência)`. Ajuda do Clássico (que lê do mapa) atualiza automática. |
+
+**Convergência confirmada (3 PDVs operacionais):**
+
+| Funcionalidade | Clássico | Supermercado | Assistência |
+|---|---|---|---|
+| F9 = Recebimento de Contas | ✅ | ✅ | ✅ (era limpar carrinho) |
+| Modal `PdvRecebimentoModal` compartilhado | ✅ | ✅ | ✅ |
+| Pré-filtro pelo cliente selecionado | ✅ | — (sem state de cliente) | ✅ |
+| Ctrl+L = Limpar carrinho | — | — | ✅ (novo) |
+
+**Auditoria:** já vem grátis do backend — toda liquidação/parcial gera `LogsAuditoria` (`liquidacao_conta_receber` / `pagamento_parcial_conta_receber`) e `MovimentacaoFinanceira` (entrada com `referenciaId = tituloId`, origem `receber`).
+
+**Validação:** `npx tsc --noEmit` 0 erros nos arquivos da sessão · `npm run build` OK (todas as 80+ rotas geradas).
+
+**Commits:** `c74305e` (modal compartilhado) · `9f01816` (Clássico + Supermercado) · `c900b5d` (Assistência + Ctrl+L).
+
+**Não alterado:** schema Prisma, auth/proxy, serviços `liquidarContaReceber` / `registrarPagamentoParcial` / `cancelContaReceber` (reusados como estão), UI antiga de Contas a Receber em `/dashboard/financeiro/contas-a-receber` (continua intacta para fluxos administrativos avançados).
+
+**Riscos restantes:**
+- O `PdvRecebimentoModal` lista TODOS os títulos da loja e filtra client-side. Loja com >5k títulos pode ficar lenta — paginação server-side é follow-up.
+- "Limpar carrinho" no Assistência via Ctrl+L exige adaptação de muscle memory de quem usava F9. Toast/tooltip não foi adicionado para não poluir.
+- Pré-filtro do Clássico usa o `selectedCustomer.name` (busca por substring no campo `cliente` do título). Se o nome no PDV diferir do gravado no título (ex.: variação de espaço, MAIÚSCULAS), o operador precisa limpar o filtro e buscar manualmente.
+- Forma de pagamento é metadado/auditoria (campo `formaPagamento` no log). A entrada financeira é sempre na carteira default do título (ou nenhuma carteira) — não distribui por método como o caixa do PDV faz. Para isso, próximo passo seria gerar `MovimentacaoFinanceira` separadas por forma.
+- PDV Venda Completa Enterprise (4º PDV, fora dos 3 operacionais) não recebeu F9 nesta sessão.
 
 ---
 
