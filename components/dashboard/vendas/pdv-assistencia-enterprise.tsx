@@ -69,6 +69,7 @@ import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useCaixa } from "../caixa/caixa-provider"
 import { useToast } from "@/hooks/use-toast"
+import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
@@ -400,6 +401,7 @@ function PaymentModal({
   open,
   subtotal,
   total,
+  impostoEstimado = 0,
   discountType,
   discountReais,
   discountPercent,
@@ -418,6 +420,7 @@ function PaymentModal({
   open: boolean
   subtotal: number
   total: number
+  impostoEstimado?: number
   discountType: DiscountType
   discountReais: number
   discountPercent: number
@@ -666,6 +669,12 @@ function PaymentModal({
                   <span className="font-semibold tabular-nums">−{brl(discountAmount)}</span>
                 </div>
               )}
+              {impostoEstimado > 0.009 ? (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Imposto estimado</span>
+                  <span className="font-semibold tabular-nums">{brl(impostoEstimado)}</span>
+                </div>
+              ) : null}
             </div>
 
             <Separator className="bg-border" />
@@ -1607,7 +1616,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   )
   const desconto = discountCalc.amount
   const discountOverTotal = discountCalc.overTotal
-  const total = useMemo(() => Math.max(0, subtotal - desconto), [subtotal, desconto])
+  const { impostoEstimado, total } = useMemo(
+    () => computePdvCartTotals(subtotal, desconto, pdvParams),
+    [subtotal, desconto, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
+  )
 
   const resetDiscountState = useCallback(() => {
     setDiscountType("reais")
@@ -1806,6 +1818,17 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         }
       }
 
+      // INSERT — Item Avulso (venda de balcão sem cadastro). Tratado ANTES do guard
+      // de F_KEYS abaixo: senão o early-return em "Insert ∉ F_KEYS" matava esse
+      // caminho e o `case "Insert"` ficava inalcançável (convergência operacional
+      // com Clássico/Supermercado — todos os 3 PDVs respondem ao INSERT agora).
+      if (e.key === "Insert") {
+        if (inInput || anyModalOpen) return
+        e.preventDefault()
+        setShowItemAvulsoModal(true)
+        return
+      }
+
       const F_KEYS = ["F1","F2","F3","F4","F5","F6","F7","F8","F9","F10","F11","F12"]
       if (!F_KEYS.includes(e.key)) return
       e.preventDefault()
@@ -1885,14 +1908,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           }
           break
         case "F12": openPaymentModal("multiplo"); break
-        case "Insert":
-          // Venda Avulsa de balcão (item não cadastrado). Não baixa estoque —
-          // `isVirtualSaleLine` cobre o prefixo `__avulso__` em todos os pontos.
-          if (!anyModalOpen) {
-            e.preventDefault()
-            setShowItemAvulsoModal(true)
-          }
-          break
+        // INSERT é tratado ANTES do guard F_KEYS acima (caso contrário ficaria
+        // inalcançável). Mantemos o switch só com as F-keys reais.
       }
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
@@ -2735,6 +2752,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   <span className="font-semibold tabular-nums text-destructive">−{brl(desconto)}</span>
                 </div>
               )}
+              {impostoEstimado > 0.009 ? (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Imposto estimado</span>
+                  <span className="font-semibold tabular-nums text-foreground">{brl(impostoEstimado)}</span>
+                </div>
+              ) : null}
               {discountOverTotal && desconto > 0.009 && (
                 <p className="text-xs text-destructive">Desconto acima do subtotal — ajuste antes de finalizar (F7).</p>
               )}
@@ -2797,6 +2820,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         open={paymentOpen}
         subtotal={subtotal}
         total={total}
+        impostoEstimado={impostoEstimado}
         discountType={discountType}
         discountReais={discountReais}
         discountPercent={discountPercent}

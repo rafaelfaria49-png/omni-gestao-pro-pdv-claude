@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 25 Mai 2026 — Sessão: Sprint À Prazo Enterprise — parcelamento no PDV
+> Última atualização: 26 Mai 2026 — Sessão: Convergência operacional PDV (INSERT + Pagamento Múltiplo nos 3 PDVs)
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,118 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+---
+
+### Convergência operacional PDV — INSERT + Pagamento Múltiplo nos 3 PDVs (concluído 26/05/2026)
+
+**Contexto:** homologação do lote 1 revelou divergência operacional no core de entrada/pagamento entre os 3 PDVs:
+- PDV Clássico: INSERT ✅ · Pagamento Múltiplo ❌
+- PDV Rápido (Supermercado): INSERT ✅ · Pagamento Múltiplo ❌
+- PDV Assistência: INSERT ❌ · Pagamento Múltiplo ✅ (modal próprio)
+
+Objetivo: convergir comportamento operacional sem duplicar lógica nem mexer no layout visual de cada PDV.
+
+| Arquivo | Mudança |
+|---|---|
+| `components/dashboard/vendas/payment-modal.tsx` | + prop opcional `multipayHint?: boolean`. Quando `true` ao abrir: ignora `instantPayIntent` (não auto-adiciona forma cheia), foca o campo "Valor a Adicionar" e exibe banner violeta explicando o fluxo de split ("informe o valor parcial → escolha a forma → repita até zerar"). Sem mudar `handleAddPayment` nem o array `payments[]` — só descobre a UX nativa que já existia. |
+| `components/dashboard/vendas/pdv-classic.tsx` | + state `multipayMode`, função `openMultipayModal()`, F12 no `fnKeys` do shell omni-smart + `case "F12"` em `openShellShortcut`. Botão "Misto" renomeado para "Múltiplo" (cor violeta, tooltip explicando F12 e fluxo), chamando `openMultipayModal()`. PaymentModal recebe `multipayHint={multipayMode}` e reseta o flag no `onClose`. |
+| `components/dashboard/vendas/pdv-supermercado.tsx` | + state `multipayMode`, callback `openMultipayModal()`, F12 no guard de `onKeyDown` (capture). Botão "Finalizar (outros)" renomeado para "Múltiplo [F12]" (violeta, ícone `Layers`), chamando `openMultipayModal()`. PaymentModal recebe `multipayHint`. Import `Layers` adicionado. |
+| `components/dashboard/vendas/pdv-assistencia-enterprise.tsx` | **Bug do INSERT corrigido:** o tratamento de `Insert` ficou inalcançável porque o keydown fazia `if (!F_KEYS.includes(e.key)) return` antes de chegar no `switch` (Insert ∉ F_KEYS). Movido para antes do guard, respeitando `inInput` e `anyModalOpen`. Case "Insert" morto do switch removido. PaymentModal próprio (com "multiplo" via F12) **inalterado** — manteve o visual específico do Assistência. |
+| `lib/pdv-keymap.ts` | + `{ key: "F12", desc: "Pagamento múltiplo (split em várias formas)" }`. Ajuda de atalhos do Clássico (que lê do mapa) atualiza automaticamente. |
+
+**Convergência confirmada (3 PDVs operacionais):**
+
+| Funcionalidade | Clássico | Rápido/Supermercado | Assistência |
+|---|---|---|---|
+| INSERT (Item Avulso) | ✅ | ✅ | ✅ (corrigido) |
+| Pagamento Múltiplo (F12) | ✅ (modal compartilhado) | ✅ (modal compartilhado) | ✅ (modal próprio, mantido) |
+| F7 Venda em espera | ✅ | ✅ | ✅ |
+| Atalhos canônicos `PDV_KEYMAP` | ✅ | ✅ (parcial — F2/F3/F4/F7/F12/Insert) | ✅ (parcial — F1-F12/Insert) |
+
+**Modal de pagamento compartilhado:** Clássico + Supermercado usam o mesmo `payment-modal.tsx` (com `multipayHint`). Assistência mantém modal próprio (`PaymentModal` interno) por decisão explícita: "manter layout visual específico de cada PDV" (regra do usuário). Convergência é **comportamental**, não código.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK (todas as rotas geradas).
+
+**Riscos restantes / fora de escopo:**
+- O PDV Assistência continua com PaymentModal próprio (split visual de 2 campos lado a lado, próprio da loja de assistência técnica). Unificar a UX visual exigiria refator maior — fora do escopo "convergência operacional".
+- Dashboard analytics ainda soma canceladas (pendência reportada no contexto da sessão — não tocado aqui).
+- `Venda.contaReceberTituloId` ainda não vinculado no fluxo PDV à prazo (cancelamento não estorna o título automaticamente — paridade mantida).
+- Recebimento de contas no PDV (F5 dedicado) ainda não implementado.
+- Limpeza do keymap legado `default` (handler morto em `pdv-classic.tsx` linhas 1076-1199) segue pendente — marcado como legado por comentário; não removido para evitar reescrita.
+- PDV Venda Completa Enterprise (4º PDV, fora dos 3 operacionais) não recebeu F12; ele já usa o `payment-modal.tsx` compartilhado mas continua sem botão Múltiplo dedicado — pode ser adicionado em sessão futura com a mesma técnica.
+
+---
+
+### Configurações V3 — settings conectadas ao runtime (concluído 26/05/2026)
+
+| Setting | Persistência | Consumer runtime |
+|---------|--------------|------------------|
+| `incluirImpostoEstimadoNoPdv` / `aliquotaImpostoEstimadoPdv` | `printerConfig.pdvParams` (API `/api/stores/[id]/settings`) | PDV Classic, Supermercado, Assistência Enterprise, Venda Completa via `lib/pdv-cart-totals.ts` + `PaymentModal` |
+| `moduloControleConsumo` | idem | `/dashboard/vendas/mesas` + botão **Mesas** no PDV quando ativo |
+| `garantiaPadraoDias` / `validadeOrcamentoDias` | idem | Orçamentos + PDV (já existia) |
+| Centro financeiro V3 (`cardFees`) | API + `localStorage` espelho | PDV maquininhas + Config Financeiro (já existia) |
+
+**Correções:** `StoreSettingsProvider` não usa mais fallback silencioso `loja-1` sem unidade ativa; `save()` falha explícito sem `storeId`. KPIs Financeiro na Config V3 rotulados como cache local. Importação: preferência de modo documentada como por navegador.
+
+**Em breve (UI honesta):** formas de pagamento por toggle (VendasSection), moeda/fuso (GeralSection), relatório mensal por e-mail (FinanceiroSection).
+
+---
+
+### Importador de Produtos em lotes — XLS legado / planilhas grandes (concluído 25/05/2026)
+
+**Contexto:** loja Rafa Brinquedos tem ~4.870 produtos num `.xls` antigo (BIFF) com banner antes do cabeçalho.
+O Importador Avançado existente (`/api/import/advanced`) processa tudo num único request síncrono e o detector
+de cabeçalho do SheetJS pega a primeira linha — ele se confundia com o banner do relatório e marcava o
+domínio como "produtos" sem mapear nome/sku/preço. Precisávamos de fluxo dedicado com preview honesto e
+lotes manuais sem quebrar o importador atual.
+
+**Estratégia:** caminho paralelo dedicado a Produtos, sem tocar em `parser.ts`/`persistidor.ts` do
+importador avançado. Estoque de produto pré-existente **continua intocado** (regra global, ver
+memória `project_import_nao_sobrescreve_estoque`).
+
+| Arquivo | Mudança |
+|---------|---------|
+| `lib/importador-produtos/types.ts` (NOVO) | Tipos `ProdutoNormalizado`, `DeteccaoCabecalho`, `PreviewProdutosResult`, `LoteRequest`, `LoteResult`, `ModoConflito`. |
+| `lib/importador-produtos/normalizar.ts` (NOVO) | Dicionário de aliases por campo canônico (sku/barcode/nome/custo/preco/estoque/categoria), `parseNumeroBr` (R$ 1.234,56), `pareceBanner` (descarta linhas de título/relatório), `pontuarLinhaComoCabecalho`. |
+| `lib/importador-produtos/parser.ts` (NOVO) | Lê buffer xls/xlsx/csv via SheetJS `header:1` (AOA), detecta cabeçalho nas primeiras 20 linhas (score por aliases), normaliza linhas, valida — devolve `{validos, invalidos, cabecalho}`. Suporta CSV/TSV com BOM, separador `;`/`,`/`	`, aspas. `fatiarEmLotes` para chunks. |
+| `lib/importador-produtos/dedupe.ts` (NOVO) | Conta duplicados internos (sku/barcode/nome) e possíveis duplicados no banco via `findMany(in:[...])` em lotes de 500 — sem N+1. |
+| `lib/importador-produtos/persist.ts` (NOVO) | `persistirLoteProdutos(storeId, itens, modoConflito)` — upsert por linha. Dedup forte (sku original + normalizado + `gc-` legado + barcode + EAN como barcode). Modo `atualizar` mantém estoque; modo `pular` não toca. Erro por linha não aborta o lote. |
+| `app/api/import/produtos/preview/route.ts` (NOVO) | `POST` (multipart, 1 arquivo, max 50MB). Auth NextAuth + legacy. `maxDuration: 120s`. Retorna `{cabecalho, totalLinhasLidas, validos, invalidos, duplicadosInternos, possiveisDuplicadosBanco, amostra[20], linhasInvalidas[50], lotes[][], tamanhoLote, totalLotes}`. |
+| `app/api/import/produtos/lote/route.ts` (NOVO) | `POST` (JSON). Recebe `{batchId, loteIndex, totalLotes, modoConflito, itens[≤1000]}`. Persiste via `persistirLoteProdutos` + grava `LogsAuditoria` action `import.produtos.lote(.erro)` por lote (best-effort, sem schema novo). |
+| `components/dashboard/configuracoes/importador-produtos/{ImportadorProdutos,UploadProdutos,PreviewProdutos,LotesProdutos,LogProdutos}.tsx` + `hooks/use-importador-produtos.ts` (NOVOS) | UI Lovable-friendly: upload 1 arquivo → preview (cards de números + cabeçalho mapeado + 20 linhas normalizadas + linhas inválidas) → seletor de conflito (Atualizar/Pular) → progresso real lote a lote → log final detalhado com erros/pulados. Tokens semânticos (4 temas). |
+| `components/cadastros/lovable/components/cadastros/ImportacaoHub.tsx` | + subtab `"Produtos (lotes)"` (ícone `Package`) entre Planilhas e XML, renderizando `<ImportadorProdutos />` dentro do `AppOpsProviders`. Sidebar explica quando usar este fluxo e o que nunca é alterado. Importador Avançado existente **intacto**. |
+
+**Comportamento:**
+- Aceita `.xls` (BIFF antigo), `.xlsx`, `.xlsm`, `.ods`, `.csv`, `.tsv` — sem dep extra (SheetJS já estava em v0.18.5).
+- Cabeçalho é detectado mesmo quando há linhas-banner ("Relatório de produtos", "Loja: …", "Data: …") antes.
+- Lotes de **500** itens fixos. 4.870 itens → ~10 lotes. Cada lote = 1 POST manual.
+- Conflito SKU/barcode: `Atualizar existente` (default — atualiza nome/preço/custo/categoria, **mantém estoque**) ou `Pular existente` (não toca em produtos já cadastrados).
+- Multi-loja: `storeIdFromAssistecRequestForWrite(req)` em ambas as rotas. Sem header `x-assistec-loja-id` = 400.
+- Idempotência: re-rodar o mesmo lote bate no mesmo SKU → "atualizado" ou "pulado", nunca duplica.
+- Linha ruim não derruba o lote — erro fica em `LoteResult.itens[].acao = "erro"` com detalhe.
+- `LogsAuditoria` registra cada lote: batchId, storeId, arquivo, loteIndex/totalLotes, totais, falhas (até 100).
+
+**Como testar:**
+1. Selecionar a unidade da loja em teste (header automático via `useLojaAtiva`).
+2. Cadastros → Importação → aba **"Produtos (lotes)"**.
+3. Arrastar `Relatorio de produtos cadastrados.xls`.
+4. Clicar **"Pré-visualizar"** — esperar ~5-15s. Conferir nos cards: `Linhas lidas ≈ 4.870`, `Válidos > 0`, `Lotes ≈ 10`. Conferir o mapa do cabeçalho (cada coluna deve mostrar `→ Nome`/`→ SKU`/etc.).
+5. (Opcional) Trocar o modo de conflito para "Pular existente" antes do primeiro lote.
+6. Clicar **"Importar próximo lote (1/10)"** — esperar 30-60s, conferir totais acumulados.
+7. Repetir até o último lote. Tela final mostra criados/atualizados/pulados/erros e detalhamento.
+8. Conferir em **Cadastros → Auditoria** ou no painel de logs: aparece 1 entrada por lote (`import.produtos.lote`).
+
+**Validação:** `npx tsc --noEmit` **0 erros** · `npm run build` **OK** (rotas `/api/import/produtos/preview` e `/api/import/produtos/lote` registradas — 1ª tentativa teve OOM transitório de worker do Next, recompilou e finalizou na 2ª como em outras sessões).
+
+**Não alterado (intacto):** `prisma/schema.prisma`, auth/proxy, `app/api/import/advanced/route.ts`, `lib/importador-avancado/*`, qualquer fluxo de PDV/Caixa/Financeiro/OS. Regra "import não sobrescreve estoque" preservada — produto existente nunca tem `stock` atualizado.
+
+**Pendências/limites conhecidos:**
+- Parsing acontece toda vez no servidor (cliente não cacheia o resultado entre reloads do navegador). Refresh durante a importação descarta o preview — não há retomar de lote por enquanto.
+- Sem detector de moeda/locale por coluna: assume PT-BR (`1.234,56`) e cai para US se só houver `.`. Já cobre 99% das planilhas reais.
+- `categoria` é gravada também em `Produto.brand` (mesmo comportamento do importador avançado, para legado).
+- Não há upload múltiplo nesta aba — pensado para 1 arquivo grande por vez. Múltiplos arquivos seguem na aba "Planilhas" original.
+- Estimativa de duração: ~30-60s/lote (Supabase pooler). Para o caso `Relatorio de produtos cadastrados.xls` (4.870 itens), espera-se ~5-10 minutos no total se o operador encadear os lotes.
 
 ### Sprint À Prazo Enterprise — Parcelamento no PDV (concluído 25/05/2026)
 

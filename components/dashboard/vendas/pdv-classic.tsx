@@ -43,6 +43,7 @@ import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useCaixa } from "../caixa/caixa-provider"
 import { configPadrao, useConfigEmpresa } from "@/lib/config-empresa"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { cn } from "@/lib/utils"
@@ -207,6 +208,8 @@ export function PdvClassic({
   const [discountReais, setDiscountReais] = useState<number>(0)
   const [discountPercent, setDiscountPercent] = useState<number>(0)
   const [instantPayIntent, setInstantPayIntent] = useState<PaymentMethodType | null>(null)
+  /** Convergência operacional: abre o modal compartilhado em modo Pagamento Múltiplo (F12 / botão "Múltiplo"). */
+  const [multipayMode, setMultipayMode] = useState(false)
   const [showOperationsMenu, setShowOperationsMenu] = useState(false)
   const [pdvUiMode, setPdvUiMode] = useState<PdvUiMode>("default")
   const [weightDialogOpen, setWeightDialogOpen] = useState(false)
@@ -867,7 +870,10 @@ export function PdvClassic({
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const pctRaw = Math.min(100, Math.max(0, discountPercent || 0))
   const discountTotal = Math.min(+(subtotal * (pctRaw / 100)).toFixed(2) + Math.max(0, discountReais || 0), subtotal)
-  const total = Math.max(0, subtotal - discountTotal)
+  const { impostoEstimado, total } = useMemo(
+    () => computePdvCartTotals(subtotal, discountTotal, pdvParams),
+    [subtotal, discountTotal, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
+  )
 
   const handlePrintReceipt = async () => {
     const nome = (empresaDocumentos.nomeFantasia || "").trim() || configPadrao.empresa.nomeFantasia
@@ -885,7 +891,7 @@ export function PdvClassic({
       receiptFooter: pdvReceiptFooter,
       itens,
       subtotal,
-      taxes: 0,
+      taxes: impostoEstimado,
       discount: discountTotal,
       total,
       dataHora: new Date().toLocaleString("pt-BR"),
@@ -920,6 +926,7 @@ export function PdvClassic({
       ${linhasItens}
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
       <p>Subtotal: ${br.format(subtotal)}</p>
+      ${impostoEstimado > 0 ? `<p>Imposto estimado: ${br.format(impostoEstimado)}</p>` : ""}
       ${discountTotal > 0 ? `<p>Desconto: ${br.format(discountTotal)}</p>` : ""}
       <p style="font-weight:700">Valor final pago: ${br.format(total)}</p>
       ${
@@ -1317,6 +1324,19 @@ export function PdvClassic({
             return
           }
           setInstantPayIntent(null)
+          setMultipayMode(false)
+          setIsPaymentModalOpen(true)
+          break
+        case "F12":
+          // Pagamento Múltiplo (convergência operacional com Assistência). Reusa o
+          // modal compartilhado em modo split — sem implementação paralela.
+          if (cart.length === 0) {
+            toast({ title: "Nenhum item", description: "Adicione produtos antes de finalizar." })
+            goBipe()
+            return
+          }
+          setInstantPayIntent(null)
+          setMultipayMode(true)
           setIsPaymentModalOpen(true)
           break
         case "CTRL":
@@ -1331,7 +1351,7 @@ export function PdvClassic({
 
   useEffect(() => {
     if (uiShell === "default") return
-    const fnKeys = new Set(["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "End"])
+    const fnKeys = new Set(["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F12", "End"])
     let ctrlDown = false
     const down = (e: globalThis.KeyboardEvent) => {
       if (shellModalBlocking) return
@@ -1439,6 +1459,18 @@ export function PdvClassic({
       return
     }
     setInstantPayIntent(intent)
+    setMultipayMode(false)
+    setIsPaymentModalOpen(true)
+  }
+
+  /** Pagamento Múltiplo — convergência operacional com o PDV Assistência (F12). */
+  const openMultipayModal = () => {
+    if (cart.length === 0) {
+      toast({ title: "Nenhum item", description: "Adicione produtos antes de finalizar." })
+      return
+    }
+    setInstantPayIntent(null)
+    setMultipayMode(true)
     setIsPaymentModalOpen(true)
   }
 
@@ -2259,9 +2291,9 @@ export function PdvClassic({
                       <CalendarClock className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
                       <span>À prazo</span>
                     </Button>
-                    <Button type="button" variant="outline" className="flex h-11 flex-col gap-0 border-2 border-border bg-background py-1 text-[10px] font-extrabold leading-none text-foreground hover:bg-muted/50 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md sm:text-xs" onClick={() => openPaymentModal(null)}>
-                      <Layers className="h-4 w-4 shrink-0 text-foreground/55 dark:text-white/55" />
-                      <span>Misto</span>
+                    <Button type="button" variant="outline" title="Pagamento Múltiplo (F12) — informe o valor parcial e escolha a forma; repita até zerar" className="flex h-11 flex-col gap-0 border-2 border-violet-500/40 bg-background py-1 text-[10px] font-extrabold leading-none text-foreground shadow-sm hover:bg-violet-500/10 dark:border-violet-400/50 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-violet-500/15 sm:text-xs" onClick={openMultipayModal}>
+                      <Layers className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+                      <span>Múltiplo</span>
                     </Button>
                   </div>
                   <Button type="button" variant="outline" className="flex h-10 w-full flex-col justify-center gap-0 border-2 border-orange-500/45 bg-background py-0.5 text-xs font-extrabold tracking-tight text-foreground shadow-sm hover:bg-orange-500/10 dark:border-orange-400/50 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-orange-500/15" onClick={() => openPaymentModal("carne")}>
@@ -2278,7 +2310,7 @@ export function PdvClassic({
                 ) : null}
 
                 <div className="shrink-0 space-y-1.5 rounded-lg border-2 border-border bg-muted/80 px-2 py-2.5 sm:px-2.5 dark:border-white/10 dark:bg-black/60 dark:backdrop-blur-md">
-                  {discountTotal > 0 ? (
+                  {discountTotal > 0 || impostoEstimado > 0 ? (
                     <>
                       <p className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground dark:text-white/55">
                         Totais
@@ -2289,12 +2321,22 @@ export function PdvClassic({
                           R$ {subtotal.toFixed(2)}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm font-semibold">
-                        <span className="text-muted-foreground dark:text-white/55">Desconto</span>
-                        <span className="font-extrabold tabular-nums text-foreground dark:text-white">
-                          − R$ {discountTotal.toFixed(2)}
-                        </span>
-                      </div>
+                      {impostoEstimado > 0 ? (
+                        <div className="flex justify-between text-sm font-semibold">
+                          <span className="text-muted-foreground dark:text-white/55">Imposto estimado</span>
+                          <span className="font-extrabold tabular-nums text-foreground dark:text-white">
+                            R$ {impostoEstimado.toFixed(2)}
+                          </span>
+                        </div>
+                      ) : null}
+                      {discountTotal > 0 ? (
+                        <div className="flex justify-between text-sm font-semibold">
+                          <span className="text-muted-foreground dark:text-white/55">Desconto</span>
+                          <span className="font-extrabold tabular-nums text-foreground dark:text-white">
+                            − R$ {discountTotal.toFixed(2)}
+                          </span>
+                        </div>
+                      ) : null}
                     </>
                   ) : null}
                   {saleMode === "completa" && emitirNota ? (
@@ -2306,7 +2348,7 @@ export function PdvClassic({
                   <div
                     className={cn(
                       "flex items-baseline justify-between",
-                      discountTotal > 0 || (saleMode === "completa" && emitirNota)
+                      discountTotal > 0 || impostoEstimado > 0 || (saleMode === "completa" && emitirNota)
                         ? "border-t border-border pt-1.5 dark:border-white/10"
                         : "pt-0"
                     )}
@@ -2358,9 +2400,11 @@ export function PdvClassic({
         onClose={() => {
           setIsPaymentModalOpen(false)
           setInstantPayIntent(null)
+          setMultipayMode(false)
           if (uiShell !== "default") focusShellBipe()
         }}
         cartSubtotal={subtotal}
+        impostoEstimado={impostoEstimado}
         total={total}
         discountReais={discountReais}
         discountPercent={discountPercent}
@@ -2372,6 +2416,7 @@ export function PdvClassic({
         instantPayIntent={instantPayIntent}
         onInstantPayIntentConsumed={() => setInstantPayIntent(null)}
         onCustomerCpfUpdate={updateCustomerCpf}
+        multipayHint={multipayMode}
         cashierId={cashierId}
         onConfirm={(payments, meta) => {
           const saleLines = cart

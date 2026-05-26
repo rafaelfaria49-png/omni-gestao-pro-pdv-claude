@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
-import { 
-  Banknote, 
-  CreditCard, 
-  QrCode, 
-  FileText, 
-  Printer, 
-  FileCheck, 
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import {
+  Banknote,
+  CreditCard,
+  QrCode,
+  FileText,
+  Printer,
+  FileCheck,
   X,
   Plus,
   Minus,
@@ -17,6 +17,7 @@ import {
   Receipt,
   Wallet,
   CalendarClock,
+  Layers,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -125,6 +126,8 @@ interface PaymentModalProps {
   onClose: () => void
   /** Subtotal do carrinho (antes de desconto). */
   cartSubtotal: number
+  /** Imposto estimado incluído no total (Configurações → Vendas). */
+  impostoEstimado?: number
   total: number
   discountReais: number
   discountPercent: number
@@ -145,12 +148,21 @@ interface PaymentModalProps {
   onInstantPayIntentConsumed?: () => void
   /** Persiste CPF/CNPJ no cadastro do cliente (carnê / à prazo). */
   onCustomerCpfUpdate?: (customerId: string, cpf: string) => void
+  /**
+   * Modo Pagamento Múltiplo (convergência operacional): quando `true`, o modal
+   * abre **sem** auto-add e foca o campo "Valor a Adicionar", exibindo um banner
+   * explicando o fluxo de divisão (informe o valor parcial → escolha a forma →
+   * repita até zerar). Não muda nenhuma lógica de `handleAddPayment`/array de
+   * pagamentos — só descobre a UX nativa do modal para Clássico/Supermercado.
+   */
+  multipayHint?: boolean
 }
 
 export function PaymentModal({ 
   isOpen, 
   onClose, 
   cartSubtotal = 0,
+  impostoEstimado = 0,
   total = 450.00,
   discountReais = 0,
   discountPercent = 0,
@@ -164,6 +176,7 @@ export function PaymentModal({
   instantPayIntent = null,
   onInstantPayIntentConsumed,
   onCustomerCpfUpdate,
+  multipayHint = false,
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
   const { lojaAtivaId } = useLojaAtiva()
@@ -172,6 +185,7 @@ export function PaymentModal({
   const [payments, setPayments] = useState<PaymentMethod[]>([])
   const [currentValue, setCurrentValue] = useState("")
   const [selectedType, setSelectedType] = useState<PaymentMethodType | null>(null)
+  const valueInputRef = useRef<HTMLInputElement | null>(null)
   const [carneInstallments, setCarneInstallments] = useState("3")
   const [aPrazoEntradaStr, setAPrazoEntradaStr] = useState("")
   const [aPrazoEntradaType, setAPrazoEntradaType] = useState<PaymentMethodType>("dinheiro")
@@ -349,6 +363,12 @@ export function PaymentModal({
 
   useEffect(() => {
     if (!isOpen || !instantPayIntent) return
+    // Modo Pagamento Múltiplo tem precedência: não auto-adicionar nenhuma forma,
+    // mesmo que um intent residual chegue junto. O foco será para o campo de valor.
+    if (multipayHint) {
+      onInstantPayIntentConsumed?.()
+      return
+    }
     const t = instantPayIntent
     const tid = window.setTimeout(() => {
       try {
@@ -363,7 +383,22 @@ export function PaymentModal({
       }
     }, 0)
     return () => window.clearTimeout(tid)
-  }, [handleAddPayment, instantPayIntent, isOpen, onInstantPayIntentConsumed])
+  }, [handleAddPayment, instantPayIntent, isOpen, multipayHint, onInstantPayIntentConsumed])
+
+  // Modo múltiplo: ao abrir, foca o campo "Valor a Adicionar" para sinalizar o fluxo
+  // (digite o valor parcial → escolha a forma → repita). Banner explica visualmente.
+  useEffect(() => {
+    if (!isOpen || !multipayHint) return
+    const tid = window.setTimeout(() => {
+      try {
+        valueInputRef.current?.focus()
+        valueInputRef.current?.select()
+      } catch {
+        /* ignore */
+      }
+    }, 60)
+    return () => window.clearTimeout(tid)
+  }, [isOpen, multipayHint])
 
   const handleRemovePayment = (id: string) => {
     setPayments(payments.filter(p => p.id !== id))
@@ -526,6 +561,12 @@ export function PaymentModal({
               <span className="text-muted-foreground">Subtotal</span>
               <span className="font-medium">{formatCurrency(cartSubtotal)}</span>
             </div>
+            {impostoEstimado > 0.009 ? (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Imposto estimado</span>
+                <span className="font-medium">{formatCurrency(impostoEstimado)}</span>
+              </div>
+            ) : null}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">Desconto (R$)</Label>
@@ -565,6 +606,24 @@ export function PaymentModal({
             glow="none"
             className="bg-primary/5 border border-primary/25 rounded-2xl py-4 text-center [&_p]:text-2xl [&_p]:font-bold"
           />
+
+          {/* Banner Modo Pagamento Múltiplo (convergência operacional) */}
+          {multipayHint && faltaPagar > 0.009 && (
+            <div className="rounded-xl border-2 border-violet-500/40 bg-violet-500/10 px-4 py-3 dark:bg-violet-500/15">
+              <div className="flex items-start gap-3">
+                <Layers className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-violet-800 dark:text-violet-100">
+                    Pagamento Múltiplo
+                  </p>
+                  <p className="text-xs text-violet-900/80 dark:text-violet-100/80">
+                    Informe o valor parcial no campo abaixo e escolha a forma de pagamento.
+                    Repita até zerar o restante. Para pagar tudo de uma forma, deixe o valor em branco.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {exibirCapturaCpf && selectedCustomer && (
             <Card className="border-amber-500/50 bg-amber-500/10">
@@ -681,6 +740,7 @@ export function PaymentModal({
                 <div className="relative flex-1">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground select-none">R$</span>
                   <Input
+                    ref={valueInputRef}
                     type="text"
                     inputMode="numeric"
                     placeholder={faltaPagar.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

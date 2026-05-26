@@ -20,6 +20,7 @@ export const PDV_KEYMAP: readonly PdvShortcut[] = [
   { key: "F7", desc: "Venda em espera (colocar / retomar)" },
   { key: "F9", desc: "Contas a receber" },
   { key: "F10", desc: "Desconto (abre pagamento com desconto)" },
+  { key: "F12", desc: "Pagamento múltiplo (split em várias formas)" },
   { key: "Insert", desc: "Item avulso (venda de balcão sem cadastro)" },
   { key: "End", desc: "Ajuda de atalhos (este painel)" },
   { key: "Espaço", desc: "Finalizar venda" },

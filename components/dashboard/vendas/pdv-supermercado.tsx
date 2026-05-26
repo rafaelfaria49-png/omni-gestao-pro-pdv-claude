@@ -6,6 +6,7 @@ import {
   Barcode,
   Banknote,
   CreditCard,
+  Layers,
   Minus,
   Plus,
   QrCode,
@@ -34,6 +35,7 @@ import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { useStoreSettings } from "@/lib/store-settings-provider"
+import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { useOperationsStore, type InventoryItem } from "@/lib/operations-store"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
@@ -148,6 +150,8 @@ export function PdvSupermercado({
   const [discountPercent, setDiscountPercent] = useState<number>(0)
   const [instantPayIntent, setInstantPayIntent] = useState<PaymentMethodType | null>(null)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
+  /** Convergência operacional: abre o modal compartilhado em modo Pagamento Múltiplo (F12 / botão "Múltiplo"). */
+  const [multipayMode, setMultipayMode] = useState(false)
   const [adminSessionOk, setAdminSessionOk] = useState(false)
   const [supervisorDialogOpen, setSupervisorDialogOpen] = useState(false)
   const [supervisorPin, setSupervisorPin] = useState("")
@@ -420,7 +424,10 @@ export function PdvSupermercado({
     const reaisPart = Math.max(0, Number(discountReais) || 0)
     return Math.min(pctPart + reaisPart, subtotal)
   }, [discountReais, pctRaw, subtotal])
-  const total = useMemo(() => Math.max(0, subtotal - discountTotal), [discountTotal, subtotal])
+  const { impostoEstimado, total } = useMemo(
+    () => computePdvCartTotals(subtotal, discountTotal, pdvParams),
+    [subtotal, discountTotal, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
+  )
 
   const openPaymentModal = useCallback(
     (intent: PaymentMethodType | null) => {
@@ -430,10 +437,23 @@ export function PdvSupermercado({
         return
       }
       setInstantPayIntent(intent)
+      setMultipayMode(false)
       setIsPaymentModalOpen(true)
     },
     [cart.length, hardFocusSearch, toast]
   )
+
+  /** Pagamento Múltiplo — convergência operacional com PDV Assistência (F12). */
+  const openMultipayModal = useCallback(() => {
+    if (cart.length === 0) {
+      toast({ title: "Carrinho vazio", description: "Adicione itens para finalizar." })
+      hardFocusSearch()
+      return
+    }
+    setInstantPayIntent(null)
+    setMultipayMode(true)
+    setIsPaymentModalOpen(true)
+  }, [cart.length, hardFocusSearch, toast])
 
   const confirmAttrDialog = useCallback(() => {
     if (!attrProduct) return
@@ -578,7 +598,15 @@ export function PdvSupermercado({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
-      if (e.key !== "F2" && e.key !== "F3" && e.key !== "F4" && e.key !== "F7" && e.key !== "Insert") return
+      if (
+        e.key !== "F2" &&
+        e.key !== "F3" &&
+        e.key !== "F4" &&
+        e.key !== "F7" &&
+        e.key !== "F12" &&
+        e.key !== "Insert"
+      )
+        return
       // Quando modal aberto, não interceptar (deixa o modal controlar o teclado)
       if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || showItemAvulsoModal || vendaEsperaOpen) return
 
@@ -588,11 +616,12 @@ export function PdvSupermercado({
       else if (e.key === "F7") setVendaEsperaOpen(true)
       else if (e.key === "F2") openPaymentModal("dinheiro")
       else if (e.key === "F3") openPaymentModal("pix")
-      else openPaymentModal("cartao_debito")
+      else if (e.key === "F4") openPaymentModal("cartao_debito")
+      else if (e.key === "F12") openMultipayModal()
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, vendaEsperaOpen, openPaymentModal])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, vendaEsperaOpen, openPaymentModal, openMultipayModal])
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = getHeldSales(lojaKey, terminalIdForHold)
@@ -935,6 +964,12 @@ export function PdvSupermercado({
                 <span>Subtotal</span>
                 <span className="tabular-nums">R$ {subtotal.toFixed(2)}</span>
               </div>
+              {impostoEstimado > 0 ? (
+                <div className="flex items-center justify-between text-sm font-bold text-muted-foreground">
+                  <span>Imposto estimado</span>
+                  <span className="tabular-nums">R$ {impostoEstimado.toFixed(2)}</span>
+                </div>
+              ) : null}
               {discountTotal > 0 ? (
                 <div className="flex items-center justify-between text-sm font-bold text-destructive">
                   <span>Desconto</span>
@@ -1004,11 +1039,12 @@ export function PdvSupermercado({
             <Button
               type="button"
               variant="outline"
-              className="mt-3 h-12 w-full rounded-2xl border border-border/60 bg-background/40 text-xs font-extrabold uppercase tracking-wider text-foreground/75 backdrop-blur-sm transition-all hover:bg-accent/15 hover:text-foreground"
-              onClick={() => openPaymentModal(null)}
+              title="Pagamento Múltiplo (F12) — informe o valor parcial e escolha a forma; repita até zerar"
+              className="mt-3 h-12 w-full rounded-2xl border border-violet-500/40 bg-violet-500/5 text-xs font-extrabold uppercase tracking-wider text-violet-700 backdrop-blur-sm transition-all hover:bg-violet-500/10 hover:text-violet-700 dark:border-violet-400/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
+              onClick={openMultipayModal}
               disabled={cart.length === 0}
             >
-              <Zap className="mr-2 h-4 w-4" /> Finalizar (outros)
+              <Layers className="mr-2 h-4 w-4" /> Múltiplo <span className="opacity-50 ml-1 text-[9px] font-normal">[F12]</span>
             </Button>
           </div>
         </PdvPainelLateralTerminal>
@@ -1019,9 +1055,11 @@ export function PdvSupermercado({
         onClose={() => {
           setIsPaymentModalOpen(false)
           setInstantPayIntent(null)
+          setMultipayMode(false)
           queueMicrotask(hardFocusSearch)
         }}
         cartSubtotal={subtotal}
+        impostoEstimado={impostoEstimado}
         total={total}
         discountReais={discountReais}
         discountPercent={discountPercent}
@@ -1033,6 +1071,7 @@ export function PdvSupermercado({
         instantPayIntent={instantPayIntent}
         onInstantPayIntentConsumed={() => setInstantPayIntent(null)}
         onCustomerCpfUpdate={() => {}}
+        multipayHint={multipayMode}
         cashierId={cashierId}
         onConfirm={(payments, meta) => {
           const saleLines = cart
