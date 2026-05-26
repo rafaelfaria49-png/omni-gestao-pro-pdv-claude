@@ -1,34 +1,46 @@
 import type { PdvClassicLayoutKind } from "@/lib/store-settings-types"
+import {
+  LEGACY_GLOBAL_PDV_CLASSIC_LAYOUT_KEY,
+  readStoreScopedString,
+  storeScopedKey,
+  STORE_SCOPED_PDV_CLASSIC_LAYOUT_KEY,
+  writeStoreScopedString,
+} from "@/lib/store-scoped-storage"
 
-/** Preferência global no navegador (espelha `StorePdvParams.pdvClassicLayout` após hidratação). */
-export const PDV_CLASSIC_LAYOUT_STORAGE_KEY = "omni-pdv-classic-layout"
+/** @deprecated Prefer {@link STORE_SCOPED_PDV_CLASSIC_LAYOUT_KEY} com storeId. */
+export const PDV_CLASSIC_LAYOUT_STORAGE_KEY = LEGACY_GLOBAL_PDV_CLASSIC_LAYOUT_KEY
 
 export const PDV_CLASSIC_LAYOUT_CHANGED_EVENT = "omni-pdv-classic-layout-changed"
 
-export function readPdvClassicLayout(): PdvClassicLayoutKind {
+export function readPdvClassicLayout(storeId?: string | null): PdvClassicLayoutKind {
   if (typeof window === "undefined") return "lovable"
   try {
-    const v = String(localStorage.getItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY) || "").trim()
-    if (v === "services") return "services"
-    if (v === "venda-completa") return "venda-completa"
+    const raw = readStoreScopedString(
+      STORE_SCOPED_PDV_CLASSIC_LAYOUT_KEY,
+      storeId,
+      LEGACY_GLOBAL_PDV_CLASSIC_LAYOUT_KEY,
+    )
+    if (raw === "services") return "services"
+    if (raw === "venda-completa") return "venda-completa"
     return "lovable"
   } catch {
     return "lovable"
   }
 }
 
-export function writePdvClassicLayout(kind: PdvClassicLayoutKind) {
-  try {
-    localStorage.setItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY, kind)
-  } catch {
-    /* ignore */
-  }
+export function writePdvClassicLayout(kind: PdvClassicLayoutKind, storeId?: string | null) {
+  if (!storeId?.trim()) return
+  writeStoreScopedString(STORE_SCOPED_PDV_CLASSIC_LAYOUT_KEY, storeId, kind)
   if (typeof window !== "undefined") {
     window.dispatchEvent(new Event(PDV_CLASSIC_LAYOUT_CHANGED_EVENT))
   }
 }
 
-/** Disparado após gravar `@omnigestao:pdv-layout` (ex.: Configurações V3); mesma aba não recebe `storage`. */
+export function pdvClassicLayoutStorageEventKey(storeId?: string | null): string | null {
+  return storeScopedKey(STORE_SCOPED_PDV_CLASSIC_LAYOUT_KEY, storeId)
+}
+
+/** Disparado após gravar layout PDV por unidade; mesma aba não recebe `storage`. */
 export const PDV_MAIN_LAYOUT_CHANGED_EVENT = "omnigestao-pdv-main-layout-changed"
 
 export function notifyPdvMainLayoutChanged() {

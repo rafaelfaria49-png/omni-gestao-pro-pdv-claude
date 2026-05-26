@@ -8,6 +8,7 @@ import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa"
 import { OperationsProvider } from "@/lib/operations-store"
 import { FinanceiroProvider } from "@/lib/financeiro-store"
 import { StoreSettingsProvider } from "@/lib/store-settings-provider"
+import { StoreAppearanceSync } from "@/components/dashboard/store-appearance-sync"
 
 function OperationsWithStorageKey({ children }: { children: ReactNode }) {
   const { opsStorageKey } = useLojaAtiva()
@@ -25,6 +26,7 @@ export function AppOpsProviders({ children }: { children: ReactNode }) {
       <LojaAtivaProvider>
         <PerfilLojaProvider>
           <StoreSettingsProvider>
+            <StoreAppearanceSync />
             <FinanceiroProvider>
               <OperationsWithStorageKey>
                 <CaixaProvider>{children}</CaixaProvider>

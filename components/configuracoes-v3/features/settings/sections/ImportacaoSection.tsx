@@ -4,52 +4,34 @@ import { useEffect, useState } from "react";
 import { Check, FileSpreadsheet, Upload, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { AppOpsProviders } from "@/components/dashboard/app-ops-providers";
 import { ImportadorDadosExternos } from "@/components/dashboard/configuracoes/backup-importador/importador-dados-externos";
 import { ImportadorAvancado } from "@/components/dashboard/configuracoes/importador-avancado/ImportadorAvancado";
 import { SectionHeader } from "../components/SectionHeader";
-
-/**
- * Aba "Importação" — Configurações.
- *
- * Switcher de cards com dois modos:
- *
- *  - "universal" (legado, padrão): ImportadorDadosExternos. Um arquivo por
- *    vez, com mapeamento manual de colunas. Recomendado para planilhas
- *    pontuais (modelo fornecido pelo próprio sistema).
- *
- *  - "avancada" (novo, Commit 3): ImportadorAvancado. Múltiplos arquivos
- *    + ZIPs do GestaoClick, com detecção automática de domínio e preview
- *    do cruzamento antes do import.
- *
- * O modo escolhido fica persistido em localStorage, replicando o padrão
- * usado em PdvSection (`@omnigestao:pdv-layout`). Default = "universal"
- * para preservar o comportamento atual de quem já usa o sistema.
- */
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { UnidadeAtivaRequiredBanner } from "../components/UnidadeAtivaRequiredBanner";
+import {
+  LEGACY_GLOBAL_IMPORTACAO_MODO_KEY,
+  readStoreScopedString,
+  STORE_SCOPED_IMPORTACAO_MODO_KEY,
+  writeStoreScopedString,
+} from "@/lib/store-scoped-storage";
 
 type ModoImportacao = "universal" | "avancada";
 
-const STORAGE_KEY = "@omnigestao:importacao-modo";
 const DEFAULT_MODO: ModoImportacao = "universal";
 
-function readModoStorage(): ModoImportacao {
-  if (typeof window === "undefined") return DEFAULT_MODO;
-  try {
-    const raw = String(window.localStorage.getItem(STORAGE_KEY) || "").trim();
-    if (raw === "universal" || raw === "avancada") return raw;
-  } catch {
-    /* ignore */
-  }
+function readModoStorage(storeId: string | null | undefined): ModoImportacao {
+  const raw = readStoreScopedString(
+    STORE_SCOPED_IMPORTACAO_MODO_KEY,
+    storeId,
+    LEGACY_GLOBAL_IMPORTACAO_MODO_KEY,
+  );
+  if (raw === "universal" || raw === "avancada") return raw;
   return DEFAULT_MODO;
 }
 
-function writeModoStorage(modo: ModoImportacao) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, modo);
-  } catch {
-    /* ignore */
-  }
+function writeModoStorage(storeId: string | null | undefined, modo: ModoImportacao) {
+  writeStoreScopedString(STORE_SCOPED_IMPORTACAO_MODO_KEY, storeId, modo);
 }
 
 type CardModo = {
@@ -88,18 +70,27 @@ const CARDS: CardModo[] = [
 ];
 
 export function ImportacaoSection() {
-  // Inicializa com default para evitar hydration mismatch; sincroniza após mount.
+  const { lojaAtivaId } = useLojaAtiva();
+  const storeId = lojaAtivaId?.trim() ?? "";
+  const noLoja = !storeId;
+
   const [modo, setModo] = useState<ModoImportacao>(DEFAULT_MODO);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    setModo(readModoStorage());
+    if (!storeId) {
+      setModo(DEFAULT_MODO);
+      setHydrated(true);
+      return;
+    }
+    setModo(readModoStorage(storeId));
     setHydrated(true);
-  }, []);
+  }, [storeId]);
 
   const selecionar = (next: ModoImportacao) => {
+    if (!storeId) return;
     setModo(next);
-    writeModoStorage(next);
+    writeModoStorage(storeId, next);
   };
 
   return (
@@ -107,10 +98,13 @@ export function ImportacaoSection() {
       <SectionHeader
         icon={<Upload className="h-5 w-5" />}
         title="Importação de Dados"
-        description="Escolha entre o fluxo guiado (um arquivo por vez) ou o cruzamento avançado (vários arquivos e ZIPs em um único lote). A preferência fica salva neste navegador."
+        description="Preferência de modo salva por unidade neste navegador. Os dados importados vão sempre para a loja ativa."
       />
 
-      {/* Switcher de modos — padrão visual do PdvSection */}
+      {noLoja ? (
+        <UnidadeAtivaRequiredBanner hint="Importações exigem unidade ativa — dados nunca cruzam lojas." />
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-2">
         {CARDS.map((card) => {
           const Icon = card.icon;
@@ -162,7 +156,7 @@ export function ImportacaoSection() {
                 type="button"
                 size="sm"
                 variant={active ? "secondary" : "default"}
-                disabled={active}
+                disabled={active || noLoja}
                 onClick={() => selecionar(card.id)}
                 className="w-full"
               >
@@ -173,10 +167,11 @@ export function ImportacaoSection() {
         })}
       </div>
 
-      {/* Conteúdo do modo ativo */}
-      <AppOpsProviders>
-        {modo === "avancada" ? <ImportadorAvancado /> : <ImportadorDadosExternos />}
-      </AppOpsProviders>
+      {!noLoja ? (
+        <div key={storeId}>
+          {modo === "avancada" ? <ImportadorAvancado /> : <ImportadorDadosExternos />}
+        </div>
+      ) : null}
     </div>
   );
 }

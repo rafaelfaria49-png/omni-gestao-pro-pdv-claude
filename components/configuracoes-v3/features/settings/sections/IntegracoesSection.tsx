@@ -5,9 +5,8 @@ import { SectionHeader } from "../components/SectionHeader";
 import { Plug, MessageCircle, Brain, Network, ShoppingBag, CreditCard, Mail, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
-import { ConfigEmpresaProvider } from "@/lib/config-empresa";
-import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
-import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { useStoreSettings } from "@/lib/store-settings-provider";
 import { cn } from "@/components/configuracoes-v3/lib/utils";
 import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
 import type { SectionId } from "../sections";
@@ -87,15 +86,24 @@ function IntegracoesSectionContent() {
       id: "ia",
       nome: "IA (modelos)",
       descricao:
-        "IA Mestre e Marketing IA usam créditos e APIs internas. Modelo preferido pode ser salvo na unidade (printerConfig.aiMestreModel).",
+        "IA Mestre usa créditos reais (API). Modelo da unidade: printerConfig.aiMestreModel (salvo na tela do IA Mestre).",
       icon: Brain,
       uiStatus: aiModel ? "ok" : "neutral",
       statusLabel: aiModel ? truncate(`Modelo: ${aiModel}`, 42) : "Padrão / não definido na unidade",
       actions: [
         { label: "Abrir IA Mestre", href: "/dashboard/ia-mestre", variant: "default" },
-        { label: "Abrir Marketing IA", href: "/dashboard/marketing-ia", variant: "outline" },
         { label: "Comprar créditos", href: "/dashboard/creditos", variant: "outline" },
       ],
+    },
+    {
+      id: "marketing-ia",
+      nome: "Marketing IA",
+      descricao:
+        "Hub de protótipo: posts e contas ficam no localStorage do navegador. Não há persistência multi-loja nem API de publicação.",
+      icon: Brain,
+      uiStatus: "hub",
+      statusLabel: "Protótipo · sem backend de campanhas",
+      actions: [{ label: "Abrir hub (protótipo)", href: "/dashboard/marketing-ia", variant: "outline" }],
     },
     {
       id: "openrouter",
@@ -221,7 +229,7 @@ function StatusBadge({ uiStatus }: { uiStatus: UiStatus }) {
     return (
       <Badge variant="secondary" className="gap-1.5 border border-warning/40 bg-warning/10 text-foreground">
         <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-        Pendente
+        Configurar
       </Badge>
     );
   }
@@ -242,13 +250,5 @@ function StatusBadge({ uiStatus }: { uiStatus: UiStatus }) {
 }
 
 export function IntegracoesSection() {
-  return (
-    <ConfigEmpresaProvider>
-      <LojaAtivaProvider>
-        <StoreSettingsProvider>
-          <IntegracoesSectionContent />
-        </StoreSettingsProvider>
-      </LojaAtivaProvider>
-    </ConfigEmpresaProvider>
-  );
+  return <IntegracoesSectionContent />;
 }

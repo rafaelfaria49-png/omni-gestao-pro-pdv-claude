@@ -11,6 +11,7 @@ import {
   writeOmnigestaoPdvModoPreferencia,
 } from "@/lib/omnigestao-pdv-modo"
 import { experimentalPdvEnabled } from "@/lib/feature-flags"
+import { readPdvMainLayout, writePdvMainLayout } from "@/lib/pdv-layout-storage"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import Link from "next/link"
@@ -47,37 +48,35 @@ export function VendasPageClient() {
   }, [mode])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
+    if (typeof window === "undefined" || !lojaAtivaId?.trim()) return
+    const storeId = lojaAtivaId.trim()
 
     try {
-      const layout = localStorage.getItem("@omnigestao:pdv-layout")
+      const layout = readPdvMainLayout(storeId)
       if (layout === "next") {
         if (experimentalPdvEnabled) {
           setIsNextLayout(true)
           router.replace("/dashboard/pdv-next")
           return
         }
-        // PDV Next é experimental e não persiste vendas: não redirecionar em
-        // operação real. Auto-heal da preferência presa para o caixa não ficar
-        // refém de uma escolha antiga (segue no PDV oficial).
-        localStorage.setItem("@omnigestao:pdv-layout", "classic")
+        writePdvMainLayout(storeId, "classic")
       }
     } catch {
       /* ignore */
     }
 
     if (modo === "rapido") {
-      writeOmnigestaoPdvModoPreferencia("rapido")
+      writeOmnigestaoPdvModoPreferencia("rapido", storeId)
       return
     }
     if (modo === "normal") {
-      writeOmnigestaoPdvModoPreferencia("normal")
+      writeOmnigestaoPdvModoPreferencia("normal", storeId)
       return
     }
-    if (readOmnigestaoPdvModoPreferencia() === "rapido") {
+    if (readOmnigestaoPdvModoPreferencia(storeId) === "rapido") {
       router.replace("/dashboard/vendas?modo=rapido")
     }
-  }, [modo, router])
+  }, [lojaAtivaId, modo, router])
 
   useEffect(() => {
     setMounted(true)

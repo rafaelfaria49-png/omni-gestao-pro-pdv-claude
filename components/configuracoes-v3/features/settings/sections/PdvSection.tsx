@@ -16,13 +16,14 @@ import {
 } from "@/components/configuracoes-v3/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/components/configuracoes-v3/lib/utils";
-import { ConfigEmpresaProvider } from "@/lib/config-empresa";
-import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
-import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { useStoreSettings } from "@/lib/store-settings-provider";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
 import { notifyPdvMainLayoutChanged, writePdvClassicLayout } from "@/lib/pdv-classic-layout";
+import { readPdvMainLayout, writePdvMainLayout } from "@/lib/pdv-layout-storage";
 import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name";
+import { UnidadeAtivaRequiredBanner } from "../components/UnidadeAtivaRequiredBanner";
 import {
   readOmnigestaoPdvModoPreferencia,
   writeOmnigestaoPdvModoPreferencia,
@@ -30,8 +31,7 @@ import {
 import { useConfiguracoesNav } from "@/components/configuracoes-v3/contexts/ConfiguracoesNavContext";
 import { experimentalPdvEnabled } from "@/lib/feature-flags";
 
-/** Mesma chave que `vendas-pdv.tsx` — layout principal no browser: `classic` | `supermercado`. */
-const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout";
+/** Layout principal por unidade — ver `lib/pdv-layout-storage.ts`. */
 
 /**
  * Espelho em `printerConfig` só para compatibilidade com a UI V3 / relatórios.
@@ -102,14 +102,9 @@ const PDV_CARD_TEST_ID: Record<PdvFlowId, string> = {
   next: "pdv-black-edition",
 };
 
-function readLocalPdvMain(): "classic" | "supermercado" | "next" {
-  if (typeof window === "undefined") return "classic";
-  try {
-    const raw = String(localStorage.getItem(PDV_LAYOUT_STORAGE_KEY) || "").trim();
-    if (raw === "supermercado" || raw === "classic" || raw === "next") return raw;
-  } catch {
-    /* ignore */
-  }
+function readLocalPdvMain(storeId: string | null | undefined): "classic" | "supermercado" | "next" {
+  const fromScoped = readPdvMainLayout(storeId)
+  if (fromScoped) return fromScoped
   return "classic";
 }
 
@@ -117,14 +112,17 @@ function isOfficialFlowCard(v: unknown): v is PdvFlowId {
   return v === "classico" || v === "assistencia" || v === "supermercado" || v === "next";
 }
 
-function resolveFlowFromPrinterConfig(printerConfig: Record<string, unknown> | null): PdvFlowId {
+function resolveFlowFromPrinterConfig(
+  printerConfig: Record<string, unknown> | null,
+  storeId: string | null | undefined,
+): PdvFlowId {
   const rawCard = printerConfig?.[V3_PDV_SECTION_CARD_KEY];
   if (rawCard === "ia") return "assistencia";
   if (rawCard === "rapido") return "classico";
   if (isOfficialFlowCard(rawCard)) return rawCard;
 
-  if (readLocalPdvMain() === "supermercado") return "supermercado";
-  if (readLocalPdvMain() === "next") return "next";
+  if (readLocalPdvMain(storeId) === "supermercado") return "supermercado";
+  if (readLocalPdvMain(storeId) === "next") return "next";
 
   const pdvParamsRaw = printerConfig?.pdvParams;
   const pdvParams =
@@ -134,7 +132,11 @@ function resolveFlowFromPrinterConfig(printerConfig: Record<string, unknown> | n
   return "classico";
 }
 
-function resolveClassicModoInicial(printerConfig: Record<string, unknown> | null, flow: PdvFlowId): ClassicModoInicial {
+function resolveClassicModoInicial(
+  printerConfig: Record<string, unknown> | null,
+  flow: PdvFlowId,
+  storeId: string | null | undefined,
+): ClassicModoInicial {
   if (flow !== "classico") return "normal";
 
   const rawCard = printerConfig?.[V3_PDV_SECTION_CARD_KEY];
@@ -143,7 +145,7 @@ function resolveClassicModoInicial(printerConfig: Record<string, unknown> | null
   const mirror = printerConfig?.[V3_PDV_CLASSIC_MODO_KEY];
   if (mirror === "rapido" || mirror === "normal") return mirror;
 
-  return readOmnigestaoPdvModoPreferencia() === "rapido" ? "rapido" : "normal";
+  return readOmnigestaoPdvModoPreferencia(storeId) === "rapido" ? "rapido" : "normal";
 }
 
 function safePrinterRecord(raw: unknown): Record<string, unknown> {
@@ -241,13 +243,13 @@ function PdvSectionContent() {
   const syncFromServer = useCallback(() => {
     const base = safePrinterRecord(settings?.printerConfig);
     setRemotePrinterConfig(base);
-    const flow = resolveFlowFromPrinterConfig(base);
-    const modo = resolveClassicModoInicial(base, flow);
+    const flow = resolveFlowFromPrinterConfig(base, lojaAtivaId);
+    const modo = resolveClassicModoInicial(base, flow, lojaAtivaId);
     setDraftFlow(flow);
     setSavedFlow(flow);
     setDraftClassicModo(modo);
     setSavedClassicModo(modo);
-  }, [settings?.printerConfig]);
+  }, [lojaAtivaId, settings?.printerConfig]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -323,17 +325,20 @@ function PdvSectionContent() {
       }
 
       try {
-        if (typeof window !== "undefined") {
+        if (typeof window !== "undefined" && lojaHeader) {
           if (draftFlow === "supermercado") {
-            localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "supermercado");
-            writeOmnigestaoPdvModoPreferencia("normal");
+            writePdvMainLayout(lojaHeader, "supermercado");
+            writeOmnigestaoPdvModoPreferencia("normal", lojaHeader);
           } else if (draftFlow === "next") {
-            localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "next");
-            writeOmnigestaoPdvModoPreferencia("normal");
+            writePdvMainLayout(lojaHeader, "next");
+            writeOmnigestaoPdvModoPreferencia("normal", lojaHeader);
           } else {
-            localStorage.setItem(PDV_LAYOUT_STORAGE_KEY, "classic");
-            writePdvClassicLayout(draftFlow === "assistencia" ? "services" : "lovable");
-            writeOmnigestaoPdvModoPreferencia(draftFlow === "classico" && draftClassicModo === "rapido" ? "rapido" : "normal");
+            writePdvMainLayout(lojaHeader, "classic");
+            writePdvClassicLayout(draftFlow === "assistencia" ? "services" : "lovable", lojaHeader);
+            writeOmnigestaoPdvModoPreferencia(
+              draftFlow === "classico" && draftClassicModo === "rapido" ? "rapido" : "normal",
+              lojaHeader,
+            );
           }
           notifyPdvMainLayoutChanged();
         }
@@ -421,7 +426,16 @@ function PdvSectionContent() {
         )}
       </div>
 
+      {noLoja ? (
+        <UnidadeAtivaRequiredBanner hint="Layout e modo do PDV são salvos por unidade neste navegador e na API." />
+      ) : null}
+
       <div className="min-w-0 w-full overflow-visible">
+        <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
+          <span className="font-medium text-foreground">Salvar alterações</span> grava o fluxo na unidade.{" "}
+          <span className="font-medium text-foreground">Visualizar</span> e os temas no card são prévia local — use
+          &quot;Usar layout&quot; e salve para persistir.
+        </p>
         {/* Grid 2x2 Premium */}
         <div
           className="grid w-full min-w-0 auto-rows-fr gap-6 grid-cols-1 lg:grid-cols-2"
@@ -853,13 +867,5 @@ function PdvSectionContent() {
 }
 
 export function PdvSection() {
-  return (
-    <ConfigEmpresaProvider>
-      <LojaAtivaProvider>
-        <StoreSettingsProvider>
-          <PdvSectionContent />
-        </StoreSettingsProvider>
-      </LojaAtivaProvider>
-    </ConfigEmpresaProvider>
-  );
+  return <PdvSectionContent />;
 }

@@ -16,9 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/configuracoes-v3/components/ui/select";
-import { ConfigEmpresaProvider } from "@/lib/config-empresa";
-import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
-import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { useStoreSettings } from "@/lib/store-settings-provider";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
 import { GoLiveChecklistRafaCell } from "../components/GoLiveChecklistRafaCell";
@@ -89,9 +88,6 @@ function GeralSectionContent() {
   const [whatsapp, setWhatsapp] = useState("");
   const [whatsappDono, setWhatsappDono] = useState("");
   const [address, setAddress] = useState<AddressForm>(() => emptyAddress());
-
-  const [moeda, setMoeda] = useState("brl");
-  const [fuso, setFuso] = useState("br-sp");
 
   const applySnapshot = useCallback((s: FormSnapshot) => {
     setNomeFantasia(s.nomeFantasia);
@@ -428,37 +424,36 @@ function GeralSectionContent() {
 
       <SettingsCard
         title="Preferências regionais"
-        description="Configuração visual — ainda não salva no sistema."
+        description="Integração futura — moeda e fuso não são persistidos; o sistema usa Real (BRL) e fuso do navegador/servidor."
         headerExtra={<SettingsSoonBadge />}
       >
         <div className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label>Moeda</Label>
-            <Select value={moeda} onValueChange={setMoeda} disabled>
+            <Label>Moeda (somente leitura)</Label>
+            <Select value="brl" disabled>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="brl">Real (R$)</SelectItem>
-                <SelectItem value="usd">Dólar (US$)</SelectItem>
-                <SelectItem value="eur">Euro (€)</SelectItem>
+                <SelectItem value="brl">Real (R$) — padrão operacional</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label>Fuso horário</Label>
-            <Select value={fuso} onValueChange={setFuso} disabled>
+            <Label>Fuso horário (somente leitura)</Label>
+            <Select value="br-sp" disabled>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="br-sp">América/São Paulo (GMT-3)</SelectItem>
-                <SelectItem value="br-mn">América/Manaus (GMT-4)</SelectItem>
-                <SelectItem value="utc">UTC</SelectItem>
+                <SelectItem value="br-sp">América/São Paulo (GMT-3) — padrão sugerido</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Não altere esperando gravar: os selects estão desabilitados até existir campo em Store/StoreSettings.
+        </p>
       </SettingsCard>
       </>
       ) : null}
@@ -475,15 +470,7 @@ function Field({ label, ...rest }: { label: string } & React.ComponentProps<type
   );
 }
 
-/** Mesma pilha de multiloja do dashboard + cache de settings da unidade ativa. */
+/** Usa `AppOpsProviders` do dashboard — sem providers duplicados. */
 export function GeralSection() {
-  return (
-    <ConfigEmpresaProvider>
-      <LojaAtivaProvider>
-        <StoreSettingsProvider>
-          <GeralSectionContent />
-        </StoreSettingsProvider>
-      </LojaAtivaProvider>
-    </ConfigEmpresaProvider>
-  );
+  return <GeralSectionContent />;
 }

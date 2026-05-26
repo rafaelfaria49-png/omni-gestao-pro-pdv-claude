@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import type { StorePdvParams, StoreSettingsApi, StoreSettingsBlob } from "@/lib/store-settings-types"
+import { parseAppearanceFromPrinterConfig, type StoreAppearanceConfig } from "@/lib/store-appearance"
 import { configPadrao, type CategoriaGarantia, type TermosGarantia } from "@/lib/config-empresa"
 
 type StoreSettingsContextType = {
@@ -14,6 +15,7 @@ type StoreSettingsContextType = {
   blob: StoreSettingsBlob
   pdvParams: StorePdvParams
   termosGarantia: TermosGarantia
+  appearance: StoreAppearanceConfig
   getGarantiaById: (id: string) => CategoriaGarantia | undefined
   refresh: () => Promise<void>
   save: (patch: Partial<StoreSettingsApi> & { printerConfig?: unknown }) => Promise<void>
@@ -32,6 +34,7 @@ function parseBlob(printerConfig: unknown): StoreSettingsBlob {
     termosGarantia: safeObj(o.termosGarantia),
     certificadoA1: safeObj(o.certificadoA1),
     aiMestreModel: typeof (o as any).aiMestreModel === "string" ? String((o as any).aiMestreModel).trim() : undefined,
+    appearance: parseAppearanceFromPrinterConfig(printerConfig),
   } as StoreSettingsBlob
 }
 
@@ -109,11 +112,20 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
   }, [storeId])
 
   useEffect(() => {
+    setSettings(null)
+    setHydrated(false)
+  }, [storeId])
+
+  useEffect(() => {
     void refresh()
   }, [refresh, storesRefreshNonce])
 
   const blob = useMemo(() => parseBlob(settings?.printerConfig), [settings?.printerConfig])
   const pdvParams = useMemo(() => mergePdvParams(defaultPdvParams(), blob.pdvParams), [blob.pdvParams])
+  const appearance = useMemo(
+    () => parseAppearanceFromPrinterConfig(settings?.printerConfig),
+    [settings?.printerConfig],
+  )
   const termosGarantia = useMemo(() => mergeTermosGarantia(blob.termosGarantia), [blob.termosGarantia])
   const getGarantiaById = useCallback(
     (id: string) => termosGarantia.categorias.find((c) => c.id === id),
@@ -146,12 +158,13 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       settings,
       blob,
       pdvParams,
+      appearance,
       termosGarantia,
       getGarantiaById,
       refresh,
       save,
     }),
-    [storeId, hydrated, settings, blob, pdvParams, termosGarantia, getGarantiaById, refresh, save]
+    [storeId, hydrated, settings, blob, pdvParams, appearance, termosGarantia, getGarantiaById, refresh, save]
   )
 
   return <StoreSettingsContext.Provider value={value}>{children}</StoreSettingsContext.Provider>
@@ -167,12 +180,14 @@ export function useStoreSettings(): StoreSettingsContextType {
       settings: null,
       blob: {},
       pdvParams: base,
+      appearance: {},
       termosGarantia: { ...configPadrao.termosGarantia, garantiaLegal: GARANTIA_LEGAL_CDC },
       getGarantiaById: () => undefined,
       refresh: async () => {},
-      save: async () => {},
+      save: async () => {
+        throw new Error("StoreSettingsProvider ausente — não é possível salvar configurações.")
+      },
     }
   }
   return c
 }
-

@@ -6,46 +6,56 @@ import { PdvSupermercado } from "./pdv-supermercado"
 import { LoadingState } from "@/components/ui/states"
 import { usePerfilLoja } from "@/lib/perfil-loja-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import type { PdvClassicLayoutKind } from "@/lib/store-settings-types"
 import {
   PDV_CLASSIC_LAYOUT_CHANGED_EVENT,
-  PDV_CLASSIC_LAYOUT_STORAGE_KEY,
   PDV_MAIN_LAYOUT_CHANGED_EVENT,
+  pdvClassicLayoutStorageEventKey,
   readPdvClassicLayout,
+  writePdvClassicLayout,
 } from "@/lib/pdv-classic-layout"
+import {
+  pdvMainLayoutStorageEventKey,
+  readPdvMainLayout,
+  type PdvMainLayout,
+} from "@/lib/pdv-layout-storage"
 
-type PdvLayout = "classic" | "supermercado" | "next"
-
-const PDV_LAYOUT_STORAGE_KEY = "@omnigestao:pdv-layout"
 const RAMO_ATUACAO_STORAGE_PREFIX = "@omnigestao:ramo-atuacao:"
 
 /**
- * Runtime do PDV: `@omnigestao:pdv-layout` (classic vs supermercado), `omni-pdv-classic-layout`
- * (lovable vs services) e hidratação de `pdvParams.pdvClassicLayout`. Modo rápido vem de
- * `omnigestao-pdv-modo` / query `?modo=rapido` em `vendas-page-client`, não de `printerConfig.v3PdvSectionCard`.
+ * Runtime do PDV: layout por unidade (`@omnigestao:pdv-layout::{storeId}`),
+ * classic layout scoped, hidratação de `pdvParams.pdvClassicLayout`.
  */
 
 export function VendasPDV(props: VendasPDVProps) {
-  const [layout, setLayout] = useState<PdvLayout>("classic")
-  const [classicLayout, setClassicLayout] = useState<PdvClassicLayoutKind>(() =>
-    typeof window !== "undefined" ? readPdvClassicLayout() : "lovable"
-  )
+  const [layout, setLayout] = useState<PdvMainLayout>("classic")
+  const [classicLayout, setClassicLayout] = useState<PdvClassicLayoutKind>("lovable")
   const { perfilLoja } = usePerfilLoja()
   const { lojaAtivaId } = useLojaAtiva()
-  const { pdvParams, hydrated } = useStoreSettings()
+  const { pdvParams, hydrated, storeId } = useStoreSettings()
+
+  useEffect(() => {
+    if (!storeId) {
+      setClassicLayout("lovable")
+      return
+    }
+    setClassicLayout(readPdvClassicLayout(storeId))
+  }, [storeId])
 
   useEffect(() => {
     const readLayout = () => {
+      if (!storeId) {
+        setLayout("classic")
+        return
+      }
       try {
-        const raw = String(localStorage.getItem(PDV_LAYOUT_STORAGE_KEY) || "").trim()
-        if (raw === "supermercado" || raw === "classic" || raw === "next") {
-          setLayout(raw)
+        const fromScoped = readPdvMainLayout(storeId)
+        if (fromScoped) {
+          setLayout(fromScoped)
           return
         }
 
-        const storeId = (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID
         const ramoKey = `${RAMO_ATUACAO_STORAGE_PREFIX}${storeId}`
         const ramoRaw = String(localStorage.getItem(ramoKey) || "").trim()
         const inferred =
@@ -62,8 +72,9 @@ export function VendasPDV(props: VendasPDVProps) {
 
     readLayout()
 
+    const scopedLayoutKey = pdvMainLayoutStorageEventKey(storeId)
     const onStorage = (e: StorageEvent) => {
-      if (e.key === PDV_LAYOUT_STORAGE_KEY) readLayout()
+      if (scopedLayoutKey && e.key === scopedLayoutKey) readLayout()
     }
     const onMainLayoutNotify = () => readLayout()
     window.addEventListener("storage", onStorage)
@@ -72,35 +83,34 @@ export function VendasPDV(props: VendasPDVProps) {
       window.removeEventListener("storage", onStorage)
       window.removeEventListener(PDV_MAIN_LAYOUT_CHANGED_EVENT, onMainLayoutNotify)
     }
-  }, [lojaAtivaId, perfilLoja])
+  }, [storeId, perfilLoja])
 
   useEffect(() => {
-    const sync = () => setClassicLayout(readPdvClassicLayout())
+    if (!storeId) return
+    const sync = () => setClassicLayout(readPdvClassicLayout(storeId))
     sync()
     window.addEventListener(PDV_CLASSIC_LAYOUT_CHANGED_EVENT, sync)
+    const scopedClassicKey = pdvClassicLayoutStorageEventKey(storeId)
     const onStorage = (e: StorageEvent) => {
-      if (e.key === PDV_CLASSIC_LAYOUT_STORAGE_KEY) sync()
+      if (scopedClassicKey && e.key === scopedClassicKey) sync()
     }
     window.addEventListener("storage", onStorage)
     return () => {
       window.removeEventListener(PDV_CLASSIC_LAYOUT_CHANGED_EVENT, sync)
       window.removeEventListener("storage", onStorage)
     }
-  }, [])
+  }, [storeId])
 
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated || !storeId) return
     const fromDb = pdvParams.pdvClassicLayout
     if (fromDb === "services" || fromDb === "lovable") {
       setClassicLayout(fromDb)
-      try {
-        localStorage.setItem(PDV_CLASSIC_LAYOUT_STORAGE_KEY, fromDb)
-      } catch {
-        /* ignore */
-      }
+      writePdvClassicLayout(fromDb, storeId)
     }
-  }, [hydrated, pdvParams.pdvClassicLayout])
+  }, [hydrated, pdvParams.pdvClassicLayout, storeId])
 
+  if (!storeId) return <LoadingState message="Selecione uma unidade para abrir o PDV…" />
   if (layout === "next") return <LoadingState message="Redirecionando para o PDV Next…" />
   if (layout === "supermercado") return <PdvSupermercado {...props} />
 

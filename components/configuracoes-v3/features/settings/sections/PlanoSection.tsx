@@ -6,8 +6,7 @@ import { SectionHeader } from "../components/SectionHeader";
 import { SettingsCard } from "../components/SettingsCard";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
-import { ConfigEmpresaProvider } from "@/lib/config-empresa";
-import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
+import { useLojaAtiva } from "@/lib/loja-ativa";
 
 const BILLING_PATH = "/dashboard/billing";
 
@@ -118,11 +117,5 @@ function PlanoSectionContent() {
 }
 
 export function PlanoSection() {
-  return (
-    <ConfigEmpresaProvider>
-      <LojaAtivaProvider>
-        <PlanoSectionContent />
-      </LojaAtivaProvider>
-    </ConfigEmpresaProvider>
-  );
+  return <PlanoSectionContent />;
 }

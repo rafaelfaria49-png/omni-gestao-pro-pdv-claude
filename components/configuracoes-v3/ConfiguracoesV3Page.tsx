@@ -17,12 +17,14 @@ import { IaSection } from "./features/settings/sections/IaSection";
 import { IntegracoesSection } from "./features/settings/sections/IntegracoesSection";
 import { ImportacaoSection } from "./features/settings/sections/ImportacaoSection";
 import { UsuariosSection } from "./features/settings/sections/UsuariosSection";
+import { AuditoriaSection } from "./features/settings/sections/AuditoriaSection";
 import { SegurancaSection } from "./features/settings/sections/SegurancaSection";
 import { Sheet, SheetContent, SheetTrigger } from "./components/ui/sheet";
 import { Button } from "./components/ui/button";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ConfiguracoesNavProvider } from "./contexts/ConfiguracoesNavContext";
 import { Toaster } from "./components/ui/toaster";
+import { useLojaAtiva } from "@/lib/loja-ativa";
 import "./configuracoes-v3.css";
 
 const SECTION_COMPONENTS: Record<SectionId, () => JSX.Element> = {
@@ -37,6 +39,7 @@ const SECTION_COMPONENTS: Record<SectionId, () => JSX.Element> = {
   integracoes: IntegracoesSection,
   importacao: ImportacaoSection,
   usuarios: UsuariosSection,
+  auditoria: AuditoriaSection,
   seguranca: SegurancaSection,
 };
 
@@ -91,6 +94,8 @@ export default function ConfiguracoesV3Page() {
 
   const Active = SECTION_COMPONENTS[active];
   const currentLabel = SETTINGS_SECTIONS.find((s) => s.id === active)?.label ?? "";
+  const { lojaAtivaId } = useLojaAtiva();
+  const storeScopeKey = lojaAtivaId?.trim() || "__sem_unidade__";
 
   return (
     <ThemeProvider>
@@ -126,7 +131,10 @@ export default function ConfiguracoesV3Page() {
             )}
 
             <div className="flex-1 overflow-y-auto">
-              <div className={`mx-auto w-full px-4 py-6 sm:px-8 sm:py-10 animate-fade-in ${active === "pdv" ? "max-w-7xl" : "max-w-5xl"}`} key={active}>
+              <div
+                key={`${active}-${storeScopeKey}`}
+                className={`mx-auto w-full px-4 py-6 sm:px-8 sm:py-10 animate-fade-in ${active === "pdv" ? "max-w-7xl" : "max-w-5xl"}`}
+              >
                 <Active />
               </div>
             </div>

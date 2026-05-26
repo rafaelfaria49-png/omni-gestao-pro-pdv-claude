@@ -3,15 +3,14 @@
  * Multiloja: cada `storeId` tem silo próprio.
  */
 
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
-
 export const STORAGE_KEY_V1 = "centro-financeiro-v1"
 export const STORAGE_KEY_V2 = "centro-financeiro-v2"
 export const STORAGE_KEY_V3 = "centro-financeiro-v3"
 
-/** Chave v3 por unidade (multiloja). */
-export function centroFinanceiroStorageKeyV3(storeId: string): string {
-  const sid = (storeId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID
+/** Chave v3 por unidade (multiloja). Sem storeId → não persiste em localStorage. */
+export function centroFinanceiroStorageKeyV3(storeId: string): string | null {
+  const sid = storeId.trim()
+  if (!sid) return null
   return `${STORAGE_KEY_V3}::${sid}`
 }
 
@@ -255,8 +254,10 @@ export function normalizeCentroV3(raw: unknown): CentroFinanceiroV3 {
 
 export function loadCentroFinanceiroV3ForStore(storeId: string): CentroFinanceiroV3 {
   if (typeof window === "undefined") return defaultCentroFinanceiroV3()
+  const key = centroFinanceiroStorageKeyV3(storeId)
+  if (!key) return defaultCentroFinanceiroV3()
   try {
-    const raw = localStorage.getItem(centroFinanceiroStorageKeyV3(storeId))
+    const raw = localStorage.getItem(key)
     if (!raw) return defaultCentroFinanceiroV3()
     return normalizeCentroV3(JSON.parse(raw))
   } catch {
@@ -266,8 +267,10 @@ export function loadCentroFinanceiroV3ForStore(storeId: string): CentroFinanceir
 
 export function persistCentroFinanceiroV3ForStore(storeId: string, draft: CentroFinanceiroV3): void {
   if (typeof window === "undefined") return
+  const key = centroFinanceiroStorageKeyV3(storeId)
+  if (!key) return
   try {
-    localStorage.setItem(centroFinanceiroStorageKeyV3(storeId), JSON.stringify(draft))
+    localStorage.setItem(key, JSON.stringify(draft))
   } catch {
     /* ignore */
   }

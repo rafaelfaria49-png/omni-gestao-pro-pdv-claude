@@ -6,9 +6,8 @@ import { SettingsCard } from "../components/SettingsCard";
 import { Sparkles, Zap, History, Plus, ExternalLink } from "lucide-react";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
-import { ConfigEmpresaProvider } from "@/lib/config-empresa";
-import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
-import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { useStoreSettings } from "@/lib/store-settings-provider";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { useCreditsHistory } from "@/hooks/useCreditsHistory";
 import { AI_MODELS_MOSAIC } from "@/lib/ai-models-list";
@@ -181,13 +180,5 @@ function IaSectionContent() {
 }
 
 export function IaSection() {
-  return (
-    <ConfigEmpresaProvider>
-      <LojaAtivaProvider>
-        <StoreSettingsProvider>
-          <IaSectionContent />
-        </StoreSettingsProvider>
-      </LojaAtivaProvider>
-    </ConfigEmpresaProvider>
-  );
+  return <IaSectionContent />;
 }
