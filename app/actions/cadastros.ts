@@ -703,9 +703,19 @@ export type ClienteDTO = {
   email: string;
   documento: string;
   cidade: string;
+  uf: string;
+  endereco: string;
+  observacoes: string;
   totalGasto: number;
   ultimaCompra: string;
   tags: string[];
+  /**
+   * `Cliente.tags` cru (JSONB). Pode ser array (modelo legado) ou objeto
+   * estruturado (importador GestaoClick / form `/dashboard/clientes`).
+   * Exposto para que o modal de edição preserve campos não exibidos
+   * (rg, financial, etc.) no round-trip salvar.
+   */
+  tagsRaw: Record<string, unknown> | string[] | null;
   status: "Ativo" | "Inativo";
 };
 
@@ -744,6 +754,65 @@ function safeStringArray(value: unknown): string[] {
   if (!value) return [];
   if (Array.isArray(value)) return value.map((x) => String(x)).filter(Boolean);
   return [];
+}
+
+/**
+ * Extrai os "labels" (tags visíveis) tanto do modelo legado (`tags` é array)
+ * quanto do estruturado (`tags.labels` é array dentro de objeto).
+ */
+function extractClienteLabels(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map((x) => String(x)).filter(Boolean);
+  if (typeof value === "object") {
+    const labels = (value as Record<string, unknown>).labels;
+    if (Array.isArray(labels)) return labels.map((x) => String(x)).filter(Boolean);
+  }
+  return [];
+}
+
+/**
+ * Endereço para exibir/editar. Cobre os dois schemas em uso:
+ * - importador GestaoClick: `tags.logradouro` + `tags.numero`
+ * - form `/dashboard/clientes`: `tags.address.street` + `tags.address.number`
+ */
+function extractClienteEndereco(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const obj = value as Record<string, unknown>;
+  const address =
+    obj.address && typeof obj.address === "object" && !Array.isArray(obj.address)
+      ? (obj.address as Record<string, unknown>)
+      : null;
+  const street = String(address?.street ?? obj.logradouro ?? "").trim();
+  const number = String(address?.number ?? obj.numero ?? "").trim();
+  if (!street) return "";
+  return number ? `${street}, ${number}` : street;
+}
+
+function extractClienteUf(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const obj = value as Record<string, unknown>;
+  const address =
+    obj.address && typeof obj.address === "object" && !Array.isArray(obj.address)
+      ? (obj.address as Record<string, unknown>)
+      : null;
+  return String(address?.state ?? obj.uf ?? "").trim();
+}
+
+function extractClienteObservacoes(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const obj = value as Record<string, unknown>;
+  const operational =
+    obj.operational && typeof obj.operational === "object" && !Array.isArray(obj.operational)
+      ? (obj.operational as Record<string, unknown>)
+      : null;
+  return String(operational?.notes ?? obj.observacoes ?? "").trim();
+}
+
+function safeTagsRaw(value: unknown): Record<string, unknown> | string[] | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value.map((x) => String(x)).filter(Boolean);
+  if (typeof value === "object") return value as Record<string, unknown>;
+  return null;
 }
 
 function fmtDateISO(d: Date | null | undefined): string {
@@ -814,9 +883,13 @@ export async function listClientes(storeId: string): Promise<ClienteDTO[]> {
       email: c.email ?? "",
       documento: c.document || "—",
       cidade: c.city || "—",
+      uf: extractClienteUf(c.tags),
+      endereco: extractClienteEndereco(c.tags),
+      observacoes: extractClienteObservacoes(c.tags),
       totalGasto: totalPorCliente.get(c.id) ?? Number(c.totalSpent ?? 0),
       ultimaCompra: fmtDateISO(c.lastPurchaseAt),
-      tags: safeStringArray(c.tags),
+      tags: extractClienteLabels(c.tags),
+      tagsRaw: safeTagsRaw(c.tags),
       status: c.active ? "Ativo" : "Inativo",
     }));
   } catch (err) {
@@ -834,7 +907,8 @@ export async function createCliente(
     telefone?: string;
     email?: string;
     cidade?: string;
-    tags?: string[];
+    /** Array legado de labels OU objeto estruturado (`{labels, address, ...}`). */
+    tags?: string[] | Record<string, unknown>;
     active?: boolean;
   }
 ): Promise<{ id: string }> {
@@ -851,7 +925,7 @@ export async function createCliente(
         phone: (input.telefone ?? "").trim() || null,
         email: (input.email ?? "").trim() || null,
         city: (input.cidade ?? "").trim(),
-        tags: input.tags ? input.tags : undefined,
+        tags: input.tags ? (input.tags as Prisma.InputJsonValue) : undefined,
         active: input.active ?? true,
       },
       select: { id: true },
@@ -874,7 +948,13 @@ export async function updateCliente(
     telefone: string;
     email: string;
     cidade: string;
-    tags: string[];
+    /**
+     * Aceita o array legado (UI antiga) ou o objeto estruturado
+     * (`{labels, address, operational, ...}`). Os campos não enviados
+     * dentro do objeto são preservados pelo caller — esta camada apenas
+     * persiste o JSON recebido como está.
+     */
+    tags: string[] | Record<string, unknown>;
     active: boolean;
   }>
 ): Promise<void> {
@@ -891,7 +971,7 @@ export async function updateCliente(
         phone: patch.telefone !== undefined ? patch.telefone.trim() || null : undefined,
         email: patch.email !== undefined ? patch.email.trim() || null : undefined,
         city: patch.cidade !== undefined ? patch.cidade.trim() : undefined,
-        tags: patch.tags !== undefined ? patch.tags : undefined,
+        tags: patch.tags !== undefined ? (patch.tags as Prisma.InputJsonValue) : undefined,
         active: patch.active,
       },
     });

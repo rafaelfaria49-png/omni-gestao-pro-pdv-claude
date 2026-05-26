@@ -548,8 +548,11 @@ function ClientesPanel({
   const nomeRef = useRef<HTMLInputElement | null>(null);
   const telRef = useRef<HTMLInputElement | null>(null);
   const emailRef = useRef<HTMLInputElement | null>(null);
+  const enderecoRef = useRef<HTMLInputElement | null>(null);
   const cidadeRef = useRef<HTMLInputElement | null>(null);
+  const ufRef = useRef<HTMLInputElement | null>(null);
   const tagsRef = useRef<HTMLInputElement | null>(null);
+  const observacoesRef = useRef<HTMLTextAreaElement | null>(null);
   const statusRef = useRef<HTMLSelectElement | null>(null);
 
   useEffect(() => {
@@ -627,7 +630,6 @@ function ClientesPanel({
                 <tr key={c.id} className="hover:bg-accent/40">
                   <td className="px-4 py-3">
                     <div className="font-medium text-foreground">{c.nome}</div>
-                    <div className="text-xs text-muted-foreground">{c.id}</div>
                   </td>
                   <td className="px-4 py-3"><Badge tone={c.tipo === "PJ" ? "info" : "default"}>{c.tipo}</Badge></td>
                   <td className="px-4 py-3 text-foreground">{c.telefone}</td>
@@ -730,11 +732,11 @@ function ClientesPanel({
           </Field>
           <Field label="Telefone / WhatsApp"><Input ref={telRef} defaultValue={editing?.telefone === "—" ? "" : editing?.telefone ?? ""} placeholder="(11) 9 0000-0000" /></Field>
           <Field label="Email"><Input ref={emailRef} defaultValue={editing?.email ?? ""} placeholder="email@exemplo.com" /></Field>
-          <Field label="Endereço" span={2}><Input placeholder="Rua, número, bairro" /></Field>
+          <Field label="Endereço" span={2}><Input ref={enderecoRef} defaultValue={editing?.endereco ?? ""} placeholder="Rua, número, bairro" /></Field>
           <Field label="Cidade"><Input ref={cidadeRef} defaultValue={editing?.cidade === "—" ? "" : editing?.cidade ?? ""} placeholder="São Paulo/SP" /></Field>
-          <Field label="UF"><Input placeholder="SP" /></Field>
+          <Field label="UF"><Input ref={ufRef} defaultValue={editing?.uf ?? ""} placeholder="SP" /></Field>
           <Field label="Tags" span={2}><Input ref={tagsRef} defaultValue={editing?.tags?.join(", ") ?? ""} placeholder="VIP, Recorrente, B2B…" /></Field>
-          <Field label="Observações" span={2}><Textarea rows={3} placeholder="Notas internas" /></Field>
+          <Field label="Observações" span={2}><Textarea ref={observacoesRef} rows={3} defaultValue={editing?.observacoes ?? ""} placeholder="Notas internas" /></Field>
           <Field label="Status">
             <Select ref={statusRef} defaultValue={editing?.status ?? "Ativo"}>
               <option>Ativo</option>
@@ -762,32 +764,64 @@ function ClientesPanel({
             onClick={() => {
               startSaving(async () => {
                 try {
-                  const tagsRaw = (tagsRef.current?.value ?? "").trim();
-                  const tags = tagsRaw ? tagsRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
-                  const payload = {
+                  const tagsInput = (tagsRef.current?.value ?? "").trim();
+                  const labels = tagsInput ? tagsInput.split(",").map((s) => s.trim()).filter(Boolean) : [];
+                  const endereco = (enderecoRef.current?.value ?? "").trim();
+                  const uf = (ufRef.current?.value ?? "").trim();
+                  const observacoes = (observacoesRef.current?.value ?? "").trim();
+
+                  const basePayload = {
                     nome: (nomeRef.current?.value ?? "").trim(),
                     tipo: tipoSelecionado,
                     documento: docValue.trim(),
                     telefone: (telRef.current?.value ?? "").trim(),
                     email: (emailRef.current?.value ?? "").trim(),
                     cidade: (cidadeRef.current?.value ?? "").trim(),
-                    tags,
                     active: (statusRef.current?.value ?? "Ativo") !== "Inativo",
-                  } as const;
+                  };
 
                   if (editing) {
+                    // Preserva chaves não exibidas (rg, financial, importer's gcCodigo etc.)
+                    // mesclando sobre o tagsRaw do registro. Salvar sem alterar não pode
+                    // apagar dados que o modal nem mostra.
+                    const previous: Record<string, unknown> =
+                      editing.tagsRaw && typeof editing.tagsRaw === "object" && !Array.isArray(editing.tagsRaw)
+                        ? { ...(editing.tagsRaw as Record<string, unknown>) }
+                        : {};
+                    const prevAddress =
+                      previous.address && typeof previous.address === "object" && !Array.isArray(previous.address)
+                        ? { ...(previous.address as Record<string, unknown>) }
+                        : {};
+                    const prevOperational =
+                      previous.operational && typeof previous.operational === "object" && !Array.isArray(previous.operational)
+                        ? { ...(previous.operational as Record<string, unknown>) }
+                        : {};
+                    const mergedTags: Record<string, unknown> = {
+                      ...previous,
+                      labels,
+                      address: { ...prevAddress, street: endereco, state: uf },
+                      operational: { ...prevOperational, notes: observacoes },
+                    };
+
                     await updateCliente(storeId, editing.id, {
-                      nome: payload.nome,
-                      tipo: payload.tipo,
-                      documento: payload.documento,
-                      telefone: payload.telefone,
-                      email: payload.email,
-                      cidade: payload.cidade,
-                      tags: payload.tags,
-                      active: payload.active,
+                      ...basePayload,
+                      tags: mergedTags,
                     });
                   } else {
-                    await createCliente(storeId, payload);
+                    // Criação manual: schema enxuto. Só persiste endereço/uf/observações
+                    // quando o operador realmente preencheu — evita gravar objeto vazio.
+                    const tagsForCreate =
+                      endereco || uf || observacoes
+                        ? {
+                            labels,
+                            address: { street: endereco, state: uf },
+                            operational: { notes: observacoes },
+                          }
+                        : labels;
+                    await createCliente(storeId, {
+                      ...basePayload,
+                      tags: tagsForCreate,
+                    });
                   }
                   await refresh();
                   setEditing(null);
