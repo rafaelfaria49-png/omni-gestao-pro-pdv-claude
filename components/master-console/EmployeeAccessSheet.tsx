@@ -86,9 +86,15 @@ export function EmployeeAccessSheet({ member, open, onOpenChange }: EmployeeAcce
             </div>
             <p>
               Permissões detalhadas por módulo e PIN de turno PDV por colaborador ainda não estão disponíveis neste
-              painel. Utilize{" "}
-              <span className="font-medium text-foreground">Configurações → Utilizadores</span> para editar papel,
-              unidades e estado da conta.
+              painel — somente leitura aqui. Utilize{" "}
+              <Link
+                href="/dashboard/configuracoes?sec=usuarios"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+                onClick={() => onOpenChange(false)}
+              >
+                Configurações → Utilizadores
+              </Link>{" "}
+              para editar papel, unidades e estado da conta.
             </p>
           </div>
 

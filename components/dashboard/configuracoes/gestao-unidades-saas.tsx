@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { cn } from "@/lib/utils"
 
 type StoreProfile = "ASSISTENCIA" | "VARIEDADES" | "SUPERMERCADO"
@@ -92,7 +91,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
   const [deleting, setDeleting] = useState(false)
 
   // The first store (sorted by id asc from API) is the account's principal store
-  const primaryStoreId = useMemo(() => stores[0]?.id ?? LEGACY_PRIMARY_STORE_ID, [stores])
+  const primaryStoreId = useMemo(() => stores[0]?.id ?? "", [stores])
 
   const selected = useMemo(() => stores.find((s) => s.id === selectedId) ?? null, [stores, selectedId])
 
@@ -137,7 +136,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
     try {
       const list = await fetchStoresWithRetry()
       setStores(list)
-      const first = list[0]?.id || LEGACY_PRIMARY_STORE_ID
+      const first = list[0]?.id ?? ""
       setSelectedId((prev) => (list.some((s) => s.id === prev) ? prev : first))
     } catch {
       setApiError(true)
@@ -153,7 +152,7 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
     fetchStoresWithRetry(ac.signal)
       .then((list) => {
         setStores(list)
-        const first = list[0]?.id || LEGACY_PRIMARY_STORE_ID
+        const first = list[0]?.id ?? ""
         setSelectedId((prev) => (list.some((s) => s.id === prev) ? prev : first))
       })
       .catch((e) => {
@@ -265,8 +264,8 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirm: true, storeId: deleteTarget.id }),
       })
-      if (!r.ok) {
-        const j = (await r.json()) as { error?: string }
+      const j = (await r.json()) as { ok?: boolean; error?: string }
+      if (!r.ok || j.ok !== true) {
         throw new Error(j.error || "Falha ao excluir unidade")
       }
       setDeleteTarget(null)

@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { getPermissionsFromSession } from "@/lib/auth/enterprise-permissions";
 import { isElevatedRole } from "@/lib/auth/admin-users-policy";
 import { useToast } from "@/hooks/use-toast";
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
 
 const MasterConsolePage = () => {
   const { data: session, status } = useSession();
@@ -23,10 +22,12 @@ const MasterConsolePage = () => {
   const [apiError, setApiError] = useState(false);
   const [selectedId, setSelectedId] = useState<string>("");
   const [userCount, setUserCount] = useState<number | null>(null);
+  const [usersLoading, setUsersLoading] = useState(false);
 
   const perms = useMemo(() => getPermissionsFromSession(session ?? null), [session]);
   const canAccess = perms.admin.masterConsole;
   const canManageStores = isElevatedRole(session?.user?.role ?? "");
+  const canManageUsers = canManageStores && perms.admin.configuracoes;
 
   const loadStores = useCallback(async () => {
     setLoading(true);
@@ -59,19 +60,23 @@ const MasterConsolePage = () => {
       setStores(mapped);
       setSelectedId((prev) => (mapped.find((s) => s.id === prev) ? prev : (mapped[0]?.id ?? "")));
 
-      if (canManageStores) {
+      if (canManageUsers) {
+        setUsersLoading(true);
         try {
           const ur = await fetch("/api/admin/users", { credentials: "include", cache: "no-store" });
-          if (ur.ok) {
-            const uj = (await ur.json()) as { users?: unknown[] };
-            setUserCount(Array.isArray(uj.users) ? uj.users.length : 0);
+          const uj = (await ur.json().catch(() => ({}))) as { ok?: boolean; users?: unknown[] };
+          if (ur.ok && Array.isArray(uj.users)) {
+            setUserCount(uj.users.length);
           } else {
             setUserCount(null);
           }
         } catch {
           setUserCount(null);
+        } finally {
+          setUsersLoading(false);
         }
       } else {
+        setUsersLoading(false);
         setUserCount(null);
       }
     } catch {
@@ -79,7 +84,7 @@ const MasterConsolePage = () => {
     } finally {
       setLoading(false);
     }
-  }, [canManageStores]);
+  }, [canManageUsers]);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -98,8 +103,8 @@ const MasterConsolePage = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ confirm: true, storeId: id }),
       });
-      const payload = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || payload.ok !== true) {
         throw new Error(payload.error || `Falha ao excluir (HTTP ${res.status})`);
       }
       await loadStores();
@@ -117,6 +122,9 @@ const MasterConsolePage = () => {
     },
     [toast],
   );
+
+  /** Primeira unidade da lista (API ordena por id asc) — alinhado ao servidor `resolvePrimaryStoreId`. */
+  const primaryStoreId = useMemo(() => stores[0]?.id ?? "", [stores]);
 
   const selected = stores.find((s) => s.id === selectedId);
 
@@ -181,13 +189,25 @@ const MasterConsolePage = () => {
         />
         <KpiCard
           label="Colaboradores"
-          value={userCount === null ? "—" : String(userCount)}
+          value={usersLoading ? "…" : userCount === null ? "—" : String(userCount)}
           icon={Users}
           tone="purple"
-          pending={userCount === null}
-          trend={userCount === null ? undefined : `${userCount} conta${userCount === 1 ? "" : "s"} no painel`}
+          pending={!usersLoading && userCount === null}
+          pendingHint={canManageUsers ? "Sem dados" : "Sem permissão"}
+          trend={
+            usersLoading || userCount === null
+              ? undefined
+              : `${userCount} conta${userCount === 1 ? "" : "s"} no painel`
+          }
         />
-        <KpiCard label="Faturamento Global" value="—" icon={Wallet} tone="success" highlight pending />
+        <KpiCard
+          label="Faturamento Global"
+          value="—"
+          icon={Wallet}
+          tone="success"
+          pending
+          pendingHint="Sem dados"
+        />
       </div>
 
       {stores.length === 0 ? (
@@ -219,10 +239,16 @@ const MasterConsolePage = () => {
             onDelete={canManageStores ? handleDelete : undefined}
             onDeleteError={onDeleteError}
             canManage={canManageStores}
-            primaryStoreId={LEGACY_PRIMARY_STORE_ID}
+            primaryStoreId={primaryStoreId}
           />
           {selected && (
-            <TeamPanel key={selected.id} store={selected} activity={[]} canManageTeam={canManageStores} />
+            <TeamPanel
+              key={selected.id}
+              store={selected}
+              activity={[]}
+              canManageTeam={canManageStores}
+              canResetPassword={canManageUsers}
+            />
           )}
         </div>
       )}

@@ -16,6 +16,7 @@ import {
   ExternalLink,
   RefreshCw,
   AlertTriangle,
+  Copy,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -28,16 +29,33 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { Store } from "./StoreList";
 import { EmployeeAccessSheet } from "./EmployeeAccessSheet";
 import { ActivityLog, type ActivityEntry } from "./ActivityLog";
-import { mapAdminUserToPanelMember, type PanelTeamMember } from "@/lib/master-console-team";
+import {
+  generateAdminTempPassword,
+  mapAdminUserToPanelMember,
+  type PanelTeamMember,
+} from "@/lib/master-console-team";
 
 interface TeamPanelProps {
   store: Store;
   activity: ActivityEntry[];
   canManageTeam?: boolean;
+  /** PATCH /api/admin/users/[id] com nova senha (Config → Utilizadores). */
+  canResetPassword?: boolean;
 }
 
 function roleVisual(role: string): { className: string; icon: typeof Crown } {
@@ -54,12 +72,21 @@ function roleVisual(role: string): { className: string; icon: typeof Crown } {
   return { className: "bg-muted text-muted-foreground border-border", icon: UserCog };
 }
 
-export function TeamPanel({ store, activity, canManageTeam = false }: TeamPanelProps) {
+export function TeamPanel({
+  store,
+  activity,
+  canManageTeam = false,
+  canResetPassword = false,
+}: TeamPanelProps) {
+  const { toast } = useToast();
   const [team, setTeam] = useState<PanelTeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<PanelTeamMember | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [resetTarget, setResetTarget] = useState<PanelTeamMember | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [issuedTempPassword, setIssuedTempPassword] = useState<string | null>(null);
 
   const loadTeam = useCallback(async () => {
     setLoading(true);
@@ -94,6 +121,39 @@ export function TeamPanel({ store, activity, canManageTeam = false }: TeamPanelP
     setSelectedMember(member);
     setSheetOpen(true);
   }
+
+  const confirmResetPassword = useCallback(async () => {
+    if (!resetTarget) return;
+    setResetting(true);
+    setIssuedTempPassword(null);
+    const temp = generateAdminTempPassword();
+    try {
+      const r = await fetch(`/api/admin/users/${encodeURIComponent(resetTarget.id)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: temp }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!r.ok || j.ok !== true) {
+        throw new Error(j.error || `Falha ao redefinir senha (HTTP ${r.status})`);
+      }
+      setIssuedTempPassword(temp);
+      toast({
+        title: "Senha redefinida",
+        description: "Copie a senha temporária abaixo e entregue ao colaborador em canal seguro.",
+      });
+    } catch (e) {
+      toast({
+        variant: "destructive",
+        title: "Não foi possível redefinir a senha",
+        description: e instanceof Error ? e.message : "Erro inesperado",
+      });
+      setResetTarget(null);
+    } finally {
+      setResetting(false);
+    }
+  }, [resetTarget, toast]);
 
   return (
     <>
@@ -249,11 +309,24 @@ export function TeamPanel({ store, activity, canManageTeam = false }: TeamPanelP
                                   Editar em Utilizadores
                                 </Link>
                               </DropdownMenuItem>
-                              <DropdownMenuItem disabled className="rounded-lg text-sm font-medium opacity-60">
-                                <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
-                                Resetar senha
-                                <span className="ml-auto text-[10px] text-muted-foreground">Em breve</span>
-                              </DropdownMenuItem>
+                              {canResetPassword ? (
+                                <DropdownMenuItem
+                                  className="rounded-lg text-sm font-medium cursor-pointer"
+                                  onClick={() => {
+                                    setIssuedTempPassword(null);
+                                    setResetTarget(member);
+                                  }}
+                                >
+                                  <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
+                                  Redefinir senha
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem disabled className="rounded-lg text-sm font-medium opacity-60">
+                                  <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
+                                  Redefinir senha
+                                  <span className="ml-auto text-[10px] text-muted-foreground">Sem permissão</span>
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem disabled className="rounded-lg text-sm font-medium text-muted-foreground opacity-60">
                                 <UserMinus className="mr-2 h-4 w-4" />
@@ -291,6 +364,93 @@ export function TeamPanel({ store, activity, canManageTeam = false }: TeamPanelP
         </Tabs>
       </aside>
       <EmployeeAccessSheet member={selectedMember} open={sheetOpen} onOpenChange={setSheetOpen} />
+
+      <AlertDialog
+        open={resetTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setResetTarget(null);
+            setIssuedTempPassword(null);
+          }
+        }}
+      >
+        <AlertDialogContent className="border-border bg-card sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {issuedTempPassword ? "Senha temporária gerada" : "Redefinir senha?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 pt-1 text-sm text-muted-foreground">
+                {resetTarget && !issuedTempPassword ? (
+                  <>
+                    <p>
+                      Será gerada uma senha temporária para{" "}
+                      <span className="font-medium text-foreground">{resetTarget.name}</span> (
+                      {resetTarget.email}). A alteração grava no NextAuth (
+                      <code className="rounded bg-muted px-1 text-xs">admin_users</code>).
+                    </p>
+                    <p className="text-xs">O colaborador deve trocar a senha no próximo acesso.</p>
+                  </>
+                ) : null}
+                {issuedTempPassword ? (
+                  <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    <p className="text-xs font-medium text-foreground">Senha temporária (copie agora)</p>
+                    <p className="mt-1 break-all font-mono text-sm text-foreground">{issuedTempPassword}</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 gap-1.5"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(issuedTempPassword).then(
+                          () => toast({ title: "Copiado" }),
+                          () =>
+                            toast({
+                              variant: "destructive",
+                              title: "Não foi possível copiar",
+                            }),
+                        );
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copiar
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            {issuedTempPassword ? (
+              <AlertDialogAction
+                className="rounded-xl"
+                onClick={() => {
+                  setResetTarget(null);
+                  setIssuedTempPassword(null);
+                }}
+              >
+                Fechar
+              </AlertDialogAction>
+            ) : (
+              <>
+                <AlertDialogCancel className="rounded-xl" disabled={resetting}>
+                  Cancelar
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  className="rounded-xl"
+                  disabled={resetting}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    void confirmResetPassword();
+                  }}
+                >
+                  {resetting ? "Gerando…" : "Confirmar"}
+                </AlertDialogAction>
+              </>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

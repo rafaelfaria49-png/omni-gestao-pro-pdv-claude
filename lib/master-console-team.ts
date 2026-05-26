@@ -25,6 +25,17 @@ export function panelMemberInitials(name: string): string {
   return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
 }
 
+/** Senha temporária para reset via PATCH /api/admin/users/[id] (mesmo alfabeto do servidor). */
+export function generateAdminTempPassword(): string {
+  const alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  const len = 12;
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  let s = "";
+  for (let i = 0; i < len; i++) s += alphabet[bytes[i]! % alphabet.length];
+  return s;
+}
+
 export function mapAdminUserToPanelMember(u: {
   id: string;
   name: string;

@@ -5,13 +5,11 @@ import Link from "next/link";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingsCard } from "../components/SettingsCard";
 import { SettingsCardSkeleton } from "../components/SettingsCardSkeleton";
-import { SettingsSoonBadge } from "../components/SettingsSoonBadge";
+import { SettingsFutureBlock } from "../components/SettingsFutureBlock";
 import { Wallet, FileText, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { Input } from "@/components/configuracoes-v3/components/ui/input";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
-import { Switch } from "@/components/configuracoes-v3/components/ui/switch";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
-import { AppOpsProviders } from "@/components/dashboard/app-ops-providers";
 import { FINANCEIRO_HUB_PATH } from "@/lib/navigation/legacy-routes";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useFinanceiro } from "@/lib/financeiro-store";
@@ -253,9 +251,19 @@ function FinanceiroSectionContent() {
               tone="destructive"
             />
           </div>
-          <Button variant="outline" className="mt-4 w-full" asChild>
-            <Link href={FINANCEIRO_HUB_PATH}>Ver lançamentos</Link>
-          </Button>
+          <div className="mt-4 flex flex-col gap-2">
+            <Button variant="outline" className="w-full" asChild>
+              <Link href={FINANCEIRO_HUB_PATH}>Abrir módulo Financeiro</Link>
+            </Button>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Button variant="ghost" size="sm" className="w-full text-xs" asChild>
+                <Link href="/dashboard/financeiro/contas-a-receber">Contas a receber</Link>
+              </Button>
+              <Button variant="ghost" size="sm" className="w-full text-xs" asChild>
+                <Link href="/dashboard/financeiro/contas-a-pagar">Contas a pagar</Link>
+              </Button>
+            </div>
+          </div>
         </SettingsCard>
       </div>
 
@@ -270,27 +278,12 @@ function FinanceiroSectionContent() {
       </>
       )}
 
-      <SettingsCard
-        title="Relatórios"
-        description="Exportações periódicas automáticas."
-        headerExtra={<SettingsSoonBadge />}
-      >
-        <div className="flex items-center justify-between rounded-lg border border-dashed border-border bg-card-muted/60 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-sm font-medium text-foreground">Relatório mensal por email</p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Envio automático por e-mail ainda não está disponível nesta versão.
-              </p>
-            </div>
-          </div>
-          <Switch checked={false} disabled aria-readonly />
-        </div>
+      <SettingsCard title="Relatórios" description="Integração futura — sem agendamento nem envio automático nesta versão.">
+        <SettingsFutureBlock
+          icon={FileText}
+          title="Relatório mensal por e-mail"
+          description="Não há API nem fila de envio configurada. Quando existir, o toggle e o agendamento serão gravados por unidade."
+        />
       </SettingsCard>
     </div>
   );
@@ -321,9 +314,5 @@ function StatTile({
 }
 
 export function FinanceiroSection() {
-  return (
-    <AppOpsProviders>
-      <FinanceiroSectionContent />
-    </AppOpsProviders>
-  );
+  return <FinanceiroSectionContent />;
 }

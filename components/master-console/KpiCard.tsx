@@ -1,4 +1,5 @@
 import { LucideIcon, TrendingUp } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface KpiCardProps {
@@ -11,6 +12,8 @@ interface KpiCardProps {
   compact?: boolean;
   /** Valor ainda não disponível na API — exibe estado honesto. */
   pending?: boolean;
+  /** Rótulo do badge quando `pending` (padrão: Sem dados). */
+  pendingHint?: string;
 }
 
 const toneMap = {
@@ -19,7 +22,17 @@ const toneMap = {
   success: { bg: "bg-success/10", text: "text-success", ring: "ring-success/20" },
 };
 
-export function KpiCard({ label, value, trend, icon: Icon, tone, highlight, compact, pending }: KpiCardProps) {
+export function KpiCard({
+  label,
+  value,
+  trend,
+  icon: Icon,
+  tone,
+  highlight,
+  compact,
+  pending,
+  pendingHint = "Sem dados",
+}: KpiCardProps) {
   const t = toneMap[tone];
   return (
     <div className={cn("group relative min-w-0 overflow-hidden rounded-2xl border border-border bg-card shadow-card transition-smooth hover:-translate-y-0.5 hover:shadow-glow", compact ? "p-4" : "p-5")}>
@@ -30,13 +43,18 @@ export function KpiCard({ label, value, trend, icon: Icon, tone, highlight, comp
             className={cn(
               compact ? "text-2xl" : "text-3xl",
               "font-bold tracking-tight",
-              pending ? "text-muted-foreground" : highlight ? "text-success" : "text-foreground",
+              pending ? "text-muted-foreground" : highlight && !pending ? "text-success" : "text-foreground",
             )}
           >
             {value}
           </p>
           {pending ? (
-            <p className="text-xs text-muted-foreground">Indicador em integração</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="font-normal text-[10px]">
+                {pendingHint}
+              </Badge>
+              <p className="text-xs text-muted-foreground">Sem API agregada neste painel</p>
+            </div>
           ) : trend ? (
             <div className="flex items-center gap-1 text-xs font-medium text-success">
               <TrendingUp className="h-3 w-3 shrink-0" />
