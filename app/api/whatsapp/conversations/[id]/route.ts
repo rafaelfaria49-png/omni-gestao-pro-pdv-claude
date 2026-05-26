@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { phonesAreCompatibleBr } from "@/lib/phone-br"
 import { assignConversation, markConversationAsHuman } from "@/lib/whatsapp/whatsapp-service"
 
 export const runtime = "nodejs"
@@ -50,11 +51,26 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
       const clienteId =
         raw === null ? null : typeof raw === "string" ? raw.trim() || null : null
       if (clienteId) {
-        const exists = await prisma.cliente.findFirst({
+        const cliente = await prisma.cliente.findFirst({
           where: { id: clienteId, storeId },
-          select: { id: true },
+          select: { id: true, phone: true },
         })
-        if (!exists) return badRequest("Cliente não encontrado nesta loja")
+        if (!cliente) return badRequest("Cliente não encontrado nesta loja")
+
+        const convRow = await prisma.whatsAppConversation.findFirst({
+          where: { id, storeId },
+          include: { contact: { select: { phoneDigits: true } } },
+        })
+        const waPhone = convRow?.contact?.phoneDigits ?? ""
+        if (
+          waPhone &&
+          cliente.phone &&
+          !phonesAreCompatibleBr(waPhone, cliente.phone)
+        ) {
+          return badRequest(
+            "Telefone do cliente não corresponde ao contato WhatsApp desta conversa"
+          )
+        }
       }
       await prisma.whatsAppConversation.updateMany({
         where: { id, storeId },

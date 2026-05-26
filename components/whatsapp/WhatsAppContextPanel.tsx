@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import {
   Activity,
+  AlertCircle,
   Clock,
   DollarSign,
   ExternalLink,
@@ -17,6 +18,7 @@ import {
   Phone,
   Sparkles,
   UserCheck,
+  UserPlus,
   Zap,
 } from "lucide-react"
 import {
@@ -111,6 +113,7 @@ export function WhatsAppContextPanel({
   onQuickAction,
   onLinkCliente,
   linkingCliente,
+  linkSuccessMessage,
   className,
 }: {
   conv: ContextConversation | null
@@ -119,16 +122,25 @@ export function WhatsAppContextPanel({
   apiHeaders: Record<string, string> | null
   onApplySuggestion?: (text: string) => void
   onQuickAction?: (action: string) => void
-  onLinkCliente?: (clienteId: string) => void | Promise<void>
+  onLinkCliente?: (clienteId: string) => void | Promise<boolean>
   linkingCliente?: boolean
+  linkSuccessMessage?: string | null
   className?: string
 }) {
-  const { snapshot, phoneMatches, loading, error, refresh } =
-    useWhatsAppClienteContext(
-      conv?.clienteId,
-      conv?.contact.phoneDigits ?? "",
-      apiHeaders
-    )
+  const {
+    snapshot,
+    phoneCandidates,
+    phoneLinkStatus,
+    uniqueMatch,
+    waPhoneDisplay,
+    loading,
+    error,
+    refresh,
+  } = useWhatsAppClienteContext(
+    conv?.clienteId,
+    conv?.contact.phoneDigits ?? "",
+    apiHeaders
+  )
 
   const opsHint = useMemo(
     () => clienteOpsHintFromSnapshot(snapshot, !!conv?.clienteId),
@@ -298,53 +310,112 @@ export function WhatsAppContextPanel({
           ) : conv.clienteId && error ? (
             <p className="text-[11px] text-red-500">{error}</p>
           ) : !conv.clienteId ? (
-            <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 p-3">
-              <p className="text-[11px] text-muted-foreground">
-                Contato não vinculado ao cadastro. Vincule para ver OS, vendas e totais reais.
-              </p>
-              {phoneMatches.length === 1 && onLinkCliente && (
-                <Button
-                  type="button"
-                  size="sm"
-                  className="mt-2 h-8 w-full gap-1.5 text-xs"
-                  disabled={linkingCliente}
-                  onClick={() => void onLinkCliente(phoneMatches[0].id)}
-                >
-                  <Link2 className="h-3.5 w-3.5" />
-                  Vincular {phoneMatches[0].name}
-                </Button>
+            <div className="space-y-2">
+              {linkSuccessMessage && (
+                <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-2 text-[11px] text-emerald-700 dark:text-emerald-300">
+                  {linkSuccessMessage}
+                </p>
               )}
-              {phoneMatches.length > 1 && (
-                <div className="mt-2 space-y-1">
-                  <p className="text-[10px] font-medium text-muted-foreground">
-                    Possíveis clientes pelo telefone:
+
+              {phoneLinkStatus === "too_short" ? (
+                <p className="rounded-xl border border-dashed border-border/70 bg-muted/20 p-3 text-[11px] text-muted-foreground">
+                  Telefone do contato incompleto para busca segura. Cadastre o cliente manualmente.
+                </p>
+              ) : phoneLinkStatus === "searching" || loading ? (
+                <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 p-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    Buscando cliente na loja ativa pelo telefone…
                   </p>
-                  {phoneMatches.map((c) => (
+                  <Skeleton className="mt-2 h-10 w-full rounded-lg" />
+                </div>
+              ) : phoneLinkStatus === "unique" && uniqueMatch && onLinkCliente ? (
+                <div className="rounded-xl border border-primary/35 bg-primary/5 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-primary">
+                    Auto-vínculo sugerido
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Um cliente compatível com{" "}
+                    <span className="font-medium text-foreground">{waPhoneDisplay}</span>.
+                    Confirme — não vinculamos sem sua ação.
+                  </p>
+                  <div className="mt-2 rounded-lg border border-border/60 bg-card/60 px-2.5 py-2">
+                    <p className="text-sm font-semibold text-foreground">{uniqueMatch.name}</p>
+                    <p className="text-[11px] text-muted-foreground">{uniqueMatch.phoneDisplay}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="mt-2 h-9 w-full gap-1.5 text-xs"
+                    disabled={linkingCliente}
+                    onClick={() => void onLinkCliente(uniqueMatch.id)}
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Vincular agora
+                  </Button>
+                </div>
+              ) : phoneLinkStatus === "multiple" && phoneCandidates.length > 0 ? (
+                <div className="rounded-xl border border-dashed border-amber-500/30 bg-amber-500/5 p-3">
+                  <p className="flex items-center gap-1 text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                    <AlertCircle className="h-3 w-3" />
+                    Vários clientes compatíveis
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Escolha o cadastro correto para {waPhoneDisplay}:
+                  </p>
+                  <div className="mt-2 max-h-36 space-y-1 overflow-y-auto">
+                    {phoneCandidates.map((c) => (
+                      <Button
+                        key={c.id}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-auto min-h-8 w-full flex-col items-start gap-0 py-1.5 text-left text-[11px]"
+                        disabled={linkingCliente}
+                        onClick={() => void onLinkCliente?.(c.id)}
+                      >
+                        <span className="font-medium">{c.name}</span>
+                        <span className="text-muted-foreground">{c.phoneDisplay}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : phoneLinkStatus === "none" ? (
+                <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 p-3">
+                  <p className="text-[11px] text-muted-foreground">
+                    Nenhum cliente cadastrado com telefone compatível{" "}
+                    {waPhoneDisplay ? `(${waPhoneDisplay})` : ""} nesta loja.
+                  </p>
+                  <div className="mt-2 flex flex-col gap-1.5">
                     <Button
-                      key={c.id}
+                      type="button"
+                      variant="default"
+                      size="sm"
+                      className="h-8 w-full gap-1.5 text-[11px]"
+                      asChild
+                    >
+                      <Link href="/dashboard/clientes">
+                        <UserPlus className="h-3.5 w-3.5" />
+                        Cadastrar novo cliente
+                      </Link>
+                    </Button>
+                    <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="h-8 w-full justify-start text-[11px]"
-                      disabled={linkingCliente}
-                      onClick={() => void onLinkCliente?.(c.id)}
+                      className="h-8 w-full text-[11px]"
+                      asChild
                     >
-                      <Link2 className="mr-1 h-3 w-3" />
-                      {c.name}
+                      <Link href="/dashboard/clientes">
+                        Buscar no cadastro
+                        {waPhoneDisplay ? ` · ${waPhoneDisplay}` : ""}
+                      </Link>
                     </Button>
-                  ))}
+                  </div>
                 </div>
-              )}
-              {phoneMatches.length === 0 && !loading && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 h-8 w-full text-[11px]"
-                  asChild
-                >
-                  <Link href="/dashboard/clientes">Cadastrar / buscar cliente</Link>
-                </Button>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">
+                  Contato não vinculado. Aguardando busca…
+                </p>
               )}
             </div>
           ) : (

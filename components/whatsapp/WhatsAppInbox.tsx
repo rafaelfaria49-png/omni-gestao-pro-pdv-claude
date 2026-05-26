@@ -40,6 +40,7 @@ import {
 import { WhatsAppContextPanel } from "@/components/whatsapp/WhatsAppContextPanel"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
+import { toast } from "sonner"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -806,6 +807,8 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all")
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
   const [linkingCliente, setLinkingCliente] = useState(false)
+  const [linkSuccessMessage, setLinkSuccessMessage] = useState<string | null>(null)
+  const [contextRefreshKey, setContextRefreshKey] = useState(0)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -891,6 +894,7 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
     setSelectedId(conv.id)
     setMessages([])
     setShowAddLabel(false)
+    setLinkSuccessMessage(null)
     setAiAnalyzing(true)
     const analyzeTimer = window.setTimeout(() => setAiAnalyzing(false), 900)
     await fetchMessages(conv.id)
@@ -957,20 +961,44 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
   }, [fetchConversations])
 
   const linkCliente = useCallback(
-    async (clienteId: string) => {
-      if (!selectedId || !apiHeaders) return
+    async (clienteId: string): Promise<boolean> => {
+      if (!selectedId || !apiHeaders) return false
       setLinkingCliente(true)
+      setLinkSuccessMessage(null)
       try {
         const res = await fetch(`/api/whatsapp/conversations/${selectedId}`, {
           method: "PATCH",
           headers: apiHeaders,
           body: JSON.stringify({ clienteId }),
         })
-        if (!res.ok) return
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          error?: string
+          conversation?: { clienteId?: string | null }
+        }
+        if (!res.ok || !data.ok) {
+          toast.error(
+            typeof data.error === "string"
+              ? data.error
+              : "Não foi possível vincular o cliente"
+          )
+          return false
+        }
+        const linkedId = data.conversation?.clienteId ?? clienteId
         setConversations((prev) =>
-          prev.map((c) => (c.id === selectedId ? { ...c, clienteId } : c))
+          prev.map((c) =>
+            c.id === selectedId ? { ...c, clienteId: linkedId } : c
+          )
         )
         await fetchConversations(true)
+        setContextRefreshKey((k) => k + 1)
+        const msg = "Cliente vinculado à conversa. Dados do CRM atualizados."
+        setLinkSuccessMessage(msg)
+        toast.success(msg)
+        return true
+      } catch {
+        toast.error("Erro de rede ao vincular cliente")
+        return false
       } finally {
         setLinkingCliente(false)
       }
@@ -1404,12 +1432,14 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
         </div>
 
         <WhatsAppContextPanel
+          key={`${selectedConv?.id ?? "none"}-${contextRefreshKey}`}
           conv={selectedConv}
           messages={messages}
           aiAnalyzing={aiAnalyzing}
           apiHeaders={hdr}
           linkingCliente={linkingCliente}
-          onLinkCliente={(id) => void linkCliente(id)}
+          linkSuccessMessage={linkSuccessMessage}
+          onLinkCliente={linkCliente}
           onApplySuggestion={(text) => {
             setInputText(text)
             inputRef.current?.focus()
