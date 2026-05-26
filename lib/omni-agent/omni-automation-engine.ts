@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import type { EventPayload, SystemEvent } from "@/lib/events/event-bus"
+import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
 import { interpretOmniAgentCommand } from "@/lib/omni-agent/interpret"
 import {
   omniAutomationTriggerKeysForEvent,
@@ -81,13 +82,18 @@ async function logOmniAutomation(params: {
   message: string
   metadata?: Record<string, unknown>
 }) {
+  const sid = params.storeId.trim()
+  if (!sid) return
   try {
     await prisma.logsAuditoria.create({
       data: {
         action: params.action,
         userLabel: "Omni Agent — automações",
         detail: params.message.slice(0, 4000),
-        metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
+        metadata: omniAgentAuditMetadata(sid, {
+          level: params.level,
+          ...(params.metadata ?? {}),
+        }),
         source: "omni_agent_automation",
       },
     })
@@ -125,7 +131,7 @@ export async function handleOmniAgentSystemEvents(event: SystemEvent, payload: E
         level: "warn",
         action: "OMNI_AUTOMATION_EMPTY_TEMPLATE",
         message: `Automação "${a.name}" (${a.id}) gerou texto vazio.`,
-        metadata: { event, automationId: a.id } as Record<string, unknown>,
+        metadata: { event, automationId: a.id },
       })
       continue
     }
@@ -166,7 +172,7 @@ export async function handleOmniAgentSystemEvents(event: SystemEvent, payload: E
         level: "info",
         action: "OMNI_AUTOMATION_INBOX",
         message: `Automação "${a.name}" criou comando ${cmd.id} (PENDENTE).`,
-        metadata: { event, automationId: a.id, commandId: cmd.id } as Record<string, unknown>,
+        metadata: { event, automationId: a.id, commandId: cmd.id },
       })
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -175,7 +181,7 @@ export async function handleOmniAgentSystemEvents(event: SystemEvent, payload: E
         level: "error",
         action: "OMNI_AUTOMATION_ERROR",
         message: `Falha na automação "${a.name}": ${msg}`,
-        metadata: { event, automationId: a.id } as Record<string, unknown>,
+        metadata: { event, automationId: a.id },
       })
     }
   }

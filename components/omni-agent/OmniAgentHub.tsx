@@ -21,7 +21,6 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useLojaAtiva } from "@/lib/loja-ativa";
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
 import { interpretOmniAgentCommand } from "@/lib/omni-agent/interpret";
 import { listClientes, type ClienteDTO } from "@/app/actions/cadastros";
 import {
@@ -106,9 +105,26 @@ function beep() {
 }
 
 /* ============================================================ */
+function OmniAgentStoreRequired({ storesLoaded }: { storesLoaded: boolean }) {
+  return (
+    <Card className="mx-auto max-w-lg border-dashed p-10 text-center space-y-3">
+      <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
+      <h2 className="text-lg font-semibold">Unidade não selecionada</h2>
+      <p className="text-sm text-muted-foreground">
+        Selecione a loja no cabeçalho do dashboard antes de enviar comandos ao Omni Agent.
+        O pipeline não usa fallback automático para outra unidade.
+      </p>
+      {!storesLoaded && (
+        <p className="text-xs text-muted-foreground">A carregar lista de unidades…</p>
+      )}
+    </Card>
+  );
+}
+
 export default function OmniAgentHub() {
-  const { lojaAtivaId } = useLojaAtiva();
-  const storeId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID;
+  const { lojaAtivaId, storesLoaded } = useLojaAtiva();
+  const storeId = (lojaAtivaId ?? "").trim();
+  const storeReady = storeId.length > 0;
   const [tab, setTab] = useState<TabId>("overview");
   const [agentOnline, setAgentOnline] = useLS<boolean>("omni-agent-online", true);
   const [compact, setCompact] = useLS<boolean>("omni-compact", false);
@@ -132,9 +148,10 @@ export default function OmniAgentHub() {
         ]);
         setFeedRows(rows.map(dtoToHubFeedRow));
         setHubStats(stats)
-      } catch {
+      } catch (e) {
         setFeedRows([])
         setHubStats(null)
+        toast.error(e instanceof Error ? e.message : "Falha ao carregar dados do Agent")
       }
     }, [storeId])
 
@@ -197,6 +214,10 @@ export default function OmniAgentHub() {
   }
 
   async function simulate() {
+    if (!storeReady) {
+      toast.error("Selecione uma unidade no cabeçalho do dashboard.")
+      return
+    }
     const t = RANDOM_CMDS[Math.floor(Math.random() * RANDOM_CMDS.length)];
     try {
       await submitOmniAgentCommand({ storeId, comandoOriginal: t, mode: "run" });
@@ -227,6 +248,12 @@ export default function OmniAgentHub() {
       />
 
       <div className={cn("mx-auto w-full max-w-7xl px-4", compact ? "pb-12" : "pb-16")}>
+        {!storeReady ? (
+          <div className="mt-10">
+            <OmniAgentStoreRequired storesLoaded={storesLoaded} />
+          </div>
+        ) : (
+          <>
         <Tabs current={tab} onChange={(t) => { setTab(t); if (t === "inbox" || t === "whatsapp") setWaUnread(0); }} pendingCount={pendingCount} waUnread={waUnread} />
 
         <div className="mt-6 min-w-0 animate-fade-in" key={tab}>
@@ -306,10 +333,12 @@ export default function OmniAgentHub() {
           )}
           {tab === "settings" && <SettingsTab audit={audit} logAudit={logAudit} />}
         </div>
+          </>
+        )}
       </div>
 
       <NewCommandModal
-        open={newCmdOpen} onClose={() => setNewCmdOpen(false)}
+        open={newCmdOpen && storeReady} onClose={() => setNewCmdOpen(false)}
         storeId={storeId}
         onSendInbox={async (t) => {
           try {
@@ -491,7 +520,7 @@ function Header({
           <Badge variant="outline" className="gap-1 hidden sm:inline-flex">
             <Clock className="h-3 w-3" /> {clock}
           </Badge>
-          <Badge variant="outline" className="hidden md:inline-flex text-[10px]">Fase 2 · real</Badge>
+          <Badge variant="outline" className="hidden md:inline-flex text-[10px]">Pipeline Prisma · real</Badge>
 
           <div className="relative">
             <Button variant="outline" size="sm" className="relative h-8 w-8 p-0" onClick={() => setBellOpen(o => !o)}>
@@ -549,7 +578,13 @@ function Header({
           <Button variant="outline" size="sm" className="h-8 gap-1.5 hidden sm:inline-flex" onClick={onSimulate}>
             <Play className="h-3.5 w-3.5" /> Simular
           </Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 hidden sm:inline-flex" onClick={() => setAgentOnline(!agentOnline)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 hidden sm:inline-flex"
+            title="Preferência local — não bloqueia o pipeline no servidor"
+            onClick={() => setAgentOnline(!agentOnline)}
+          >
             <Power className="h-3.5 w-3.5" /> {agentOnline ? "Pausar" : "Ativar"}
           </Button>
           <Button size="sm" className="h-8 gap-1.5" onClick={onNewCmd}>
@@ -626,10 +661,10 @@ function Stat({ icon: Icon, label, value, hint, loading, accent }: any) {
 function OnboardingChecklist() {
   const [done, setDone] = useLS<Record<string, boolean>>("omni-onboarding", {});
   const items = [
-    { id: "wa", label: "Conectar WhatsApp" },
-    { id: "cmd", label: "Criar primeiro comando" },
-    { id: "approve", label: "Aprovar primeira ação" },
-    { id: "auto", label: "Configurar uma automação" },
+    { id: "wa", label: "Conectar WhatsApp (manual)" },
+    { id: "cmd", label: "Criar primeiro comando (manual)" },
+    { id: "approve", label: "Aprovar primeira ação (manual)" },
+    { id: "auto", label: "Configurar automação (manual)" },
   ];
   const completed = items.filter(i => done[i.id]).length;
   if (completed === items.length) return null;
@@ -638,7 +673,7 @@ function OnboardingChecklist() {
       <div className="flex items-center justify-between mb-2">
         <div>
           <h3 className="font-semibold">Comece em 4 passos</h3>
-          <p className="text-xs text-muted-foreground">{completed}/{items.length} concluídos</p>
+          <p className="text-xs text-muted-foreground">{completed}/{items.length} marcados (só neste navegador)</p>
         </div>
         <Progress value={(completed / items.length) * 100} className="w-32" />
       </div>
@@ -659,6 +694,39 @@ function OnboardingChecklist() {
 }
 
 /* ---------- Overview ---------- */
+
+type OverviewSuggestion = { id: string; icon: typeof Inbox; title: string; hint: string };
+
+function buildOverviewSuggestions(stats: OmniAgentHubStatsDTO | null): OverviewSuggestion[] {
+  if (!stats) return [];
+  const items: OverviewSuggestion[] = [];
+  const pend = stats.pending + stats.awaitingConfirmation;
+  if (pend > 0) {
+    items.push({
+      id: "s-inbox",
+      icon: Inbox,
+      title: "Revisar pendências na Inbox IA",
+      hint: `${pend} comando(s) aguardando (${stats.pending} pendente · ${stats.awaitingConfirmation} confirmação)`,
+    });
+  }
+  if (stats.error > 0) {
+    items.push({
+      id: "s-errors",
+      icon: XCircle,
+      title: "Analisar comandos com erro",
+      hint: `${stats.error} registro(s) com status ERRO — ver filtro na Inbox`,
+    });
+  }
+  if (stats.todayCount > 0 && stats.accuracyPercent != null && stats.accuracyPercent < 70) {
+    items.push({
+      id: "s-accuracy",
+      icon: BarChart3,
+      title: "Taxa de execução baixa hoje",
+      hint: `Acerto ${stats.accuracyPercent}% (executados / executados+erros) — revise frases ou confirmações`,
+    });
+  }
+  return items;
+}
 
 function OverviewTab({
   stats,
@@ -685,11 +753,11 @@ function OverviewTab({
   onlineSince: number;
   agentOnline: boolean;
 }) {
-  const [suggestions, setSuggestions] = useState([
-    { id: "s1", icon: Inbox, title: "Revisar pendências de aprovação", hint: "4 itens aguardando aprovação na Inbox IA" },
-    { id: "s2", icon: Package, title: "Conferir estoque baixo", hint: "Películas e cabos abaixo do mínimo" },
-    { id: "s3", icon: Wallet, title: "Cobrar clientes vencidos", hint: "3 clientes com pagamento em atraso" },
-  ]);
+  const [suggestions, setSuggestions] = useState<OverviewSuggestion[]>([]);
+
+  useEffect(() => {
+    setSuggestions(buildOverviewSuggestions(stats));
+  }, [stats]);
 
   const uptimeMin = Math.floor((now - onlineSince) / 60000);
   const uptimeStr = agentOnline ? `${Math.floor(uptimeMin / 60)}h ${uptimeMin % 60}min` : "—";
@@ -872,7 +940,11 @@ function OverviewTab({
       )}
 
       <Card>
-        <div className="mb-3 flex items-center gap-2"><Lightbulb className="h-4 w-4 text-primary" /><h3 className="font-semibold">Próximas ações sugeridas pela IA</h3></div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <Lightbulb className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold">Sugestões operacionais</h3>
+          <Badge variant="outline" className="text-[10px]">Dados reais (Inbox / stats)</Badge>
+        </div>
         <div className="grid gap-2 md:grid-cols-3">
           {suggestions.map(s => {
             const I = s.icon;
@@ -908,7 +980,13 @@ function OverviewTab({
               </div>
             );
           })}
-          {suggestions.length === 0 && <div className="text-sm text-muted-foreground md:col-span-3">Nenhuma sugestão pendente.</div>}
+          {suggestions.length === 0 && (
+            <div className="text-sm text-muted-foreground md:col-span-3">
+              {stats
+                ? "Nenhuma pendência ou alerta com base nos comandos desta unidade. Use «Novo» ou «Simular» para testar o pipeline."
+                : "Carregando estatísticas…"}
+            </div>
+          )}
         </div>
       </Card>
 
@@ -1290,26 +1368,56 @@ function WhatsAppTab({
 }
 
 /* ---------- Commands ---------- */
-type CmdDef = { name: string; example: string; result: string };
-const COMMAND_GROUPS: { cat: string; items: CmdDef[] }[] = [
-  { cat: "Omni Agent — núcleo real (interpretação determinística)", items: [
-    { name: "Abrir OS (confirmação)", example: "abrir OS para João", result: "Cria OS após confirmar na Inbox" },
-    { name: "Consultar caixa", example: "consultar caixa", result: "Sessão aberta + saldo inicial" },
-    { name: "Buscar cliente", example: "buscar cliente Rafael", result: "Lista clientes do cadastro" },
-    { name: "Buscar produto", example: "buscar produto película", result: "Lista produtos" },
-    { name: "Lembrete (confirmação)", example: "criar lembrete de cobrança", result: "Regista em auditoria após confirmar" },
-    { name: "Financeiro hoje", example: "mostrar financeiro hoje", result: "Resumo via serviço de relatórios" },
-  ]},
-  { cat: "Financeiro", items: [
-    { name: "Registrar despesa", example: "gastei R$ 120 em combustível no dinheiro", result: "Cria despesa categorizada" },
-    { name: "Criar conta a receber", example: "João vai pagar R$ 280 sexta-feira", result: "Cria recebimento previsto" },
-  ]},
-  { cat: "Vendas", items: [{ name: "Registrar venda", example: "vendi película por R$ 40 no Pix", result: "Registra venda" }] },
-  { cat: "OS", items: [{ name: "Abrir OS", example: "cliente João trouxe iPhone 12 sem áudio", result: "Cria pré-OS" }] },
-  { cat: "Estoque", items: [{ name: "Entrada de estoque", example: "comprei 10 capas por R$ 8 cada", result: "Adiciona entrada" }] },
-  { cat: "Clientes", items: [{ name: "Cadastrar cliente", example: "cadastrar cliente Pedro 9999-9999", result: "Cria cliente" }] },
-  { cat: "Lembretes", items: [{ name: "Criar cobrança", example: "lembrar de cobrar Maria amanhã", result: "Cria lembrete" }] },
+type CmdAvailability = "real" | "triage";
+type CmdDef = { name: string; example: string; result: string; availability: CmdAvailability };
+
+const COMMAND_GROUPS_REAL: { cat: string; items: CmdDef[] }[] = [
+  {
+    cat: "Executável hoje (confirmação quando indicado)",
+    items: [
+      { name: "Abrir OS", example: "abrir OS para João", result: "Cria OS após confirmar na Inbox", availability: "real" },
+      { name: "Consultar caixa", example: "consultar caixa", result: "Sessão aberta + saldo inicial", availability: "real" },
+      { name: "Buscar cliente", example: "buscar cliente Rafael", result: "Lista clientes do cadastro", availability: "real" },
+      { name: "Buscar produto", example: "buscar produto película", result: "Lista produtos", availability: "real" },
+      { name: "Lembrete / auditoria", example: "criar lembrete de cobrança", result: "Registo em logs_auditoria após confirmar", availability: "real" },
+      { name: "Financeiro hoje", example: "mostrar financeiro hoje", result: "Resumo via serviço de relatórios (leitura)", availability: "real" },
+    ],
+  },
 ];
+
+const COMMAND_GROUPS_TRIAGE: { cat: string; items: CmdDef[] }[] = [
+  {
+    cat: "Triagem na Inbox (sem execução automática de venda/despesa/estoque)",
+    items: [
+      {
+        name: "Registrar despesa (triagem)",
+        example: "gastei R$ 120 em combustível no dinheiro",
+        result: "Vira lembrete operacional — não lança despesa no financeiro",
+        availability: "triage",
+      },
+      {
+        name: "Registrar venda (triagem)",
+        example: "vendi película por R$ 40 no Pix",
+        result: "Vira lembrete operacional — não registra venda no PDV",
+        availability: "triage",
+      },
+      {
+        name: "Entrada estoque (triagem)",
+        example: "entrada de 10 películas no estoque",
+        result: "Vira lembrete operacional — não movimenta estoque",
+        availability: "triage",
+      },
+      {
+        name: "Lembrete livre",
+        example: "lembrar de cobrar Maria amanhã",
+        result: "Auditoria após confirmar na Inbox",
+        availability: "triage",
+      },
+    ],
+  },
+];
+
+const COMMAND_GROUPS = [...COMMAND_GROUPS_REAL, ...COMMAND_GROUPS_TRIAGE];
 
 function CommandsTab({ storeId, onAfterPipeline }: { storeId: string; onAfterPipeline: () => Promise<void> }) {
   const [favs, setFavs] = useLS<string[]>("omni-favs", []);
@@ -1431,8 +1539,13 @@ function CommandsTab({ storeId, onAfterPipeline }: { storeId: string; onAfterPip
                 <div key={k} className="rounded-lg border border-border p-3 space-y-2 transition-colors hover:bg-accent/40">
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm font-medium flex items-center gap-2">
+                      <div className="text-sm font-medium flex items-center gap-2 flex-wrap">
                         {it.name}
+                        {it.availability === "real" ? (
+                          <Badge variant="default" className="text-[10px]">Executável</Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-[10px]">Triagem</Badge>
+                        )}
                         {fav && <Star className="h-3 w-3 fill-primary text-primary" />}
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">&quot;{it.example}&quot;</div>
@@ -2397,14 +2510,24 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
+      <Card className="lg:col-span-2 border-primary/20 bg-primary/5">
+        <h3 className="mb-2 text-sm font-semibold">O que afeta o pipeline real (servidor)</h3>
+        <ul className="list-disc pl-5 text-xs text-muted-foreground space-y-1">
+          <li><span className="text-foreground">Inbox IA</span>, botão <span className="text-foreground">Novo</span>, <span className="text-foreground">Simular</span> → Server Actions + Prisma (<span className="font-mono">OmniAgentCommand</span>)</li>
+          <li>Confirmação de OS e triagens → obrigatória no servidor (não depende dos toggles abaixo)</li>
+          <li>Automações ativas → event bus → comando PENDENTE na Inbox (sem execução automática)</li>
+          <li>Permissões efetivas → papel NextAuth + <span className="font-mono">INTENT_MODULE</span></li>
+        </ul>
+      </Card>
       <Card className="lg:col-span-2 border-dashed">
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <Badge variant="secondary">localStorage</Badge>
           <span className="text-sm font-medium">Preferências apenas neste navegador</span>
         </div>
         <p className="text-xs text-muted-foreground">
-          As secções abaixo gravam na chave <span className="font-mono text-foreground">omni-settings</span> (e similares). Não
-          substituem políticas no servidor nem o motor Prisma do Omni Agent.
+          Canal padrão, autonomia, permissões demo, personalidade e horário gravam em{" "}
+          <span className="font-mono text-foreground">omni-settings</span>. O interruptor{" "}
+          <span className="font-medium text-foreground">Online/Pausar</span> no topo também é local — não suspende comandos no servidor.
         </p>
       </Card>
       <Card>
@@ -2431,8 +2554,13 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
             ),
           )}
         </div>
-        <div className="mt-4 flex items-center justify-between"><Label>Aprovação automática</Label>
-          <Switch checked={s.autoApprove} onCheckedChange={(v) => setS({ ...s, autoApprove: v })} /></div>
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <Label>Aprovação automática</Label>
+            <p className="text-[10px] text-muted-foreground">Preferência local — o servidor sempre exige confirmação para OS e triagens.</p>
+          </div>
+          <Switch checked={s.autoApprove} onCheckedChange={(v) => setS({ ...s, autoApprove: v })} />
+        </div>
         <div className="mt-4">
           <Label className="mb-2 block">Autonomia</Label>
           <div className="flex gap-2">
@@ -2444,7 +2572,10 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold">Permissões (demo local)</h3>
+        <h3 className="mb-3 font-semibold">Permissões (demo local — não afeta o pipeline)</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          As permissões reais vêm do papel NextAuth e de <span className="font-mono text-foreground">INTENT_MODULE</span> no servidor.
+        </p>
         <div className="space-y-2">
           {Object.entries(s.perms).map(([k, v]) => (
             <div key={k} className="flex items-center justify-between rounded-md border border-border p-2">
@@ -2456,7 +2587,7 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold">Personalidade do agente (demo local)</h3>
+        <h3 className="mb-3 font-semibold">Personalidade do agente (demo local — sem LLM)</h3>
         <div className="space-y-3">
           <div><Label>Nome</Label><Input value={s.agentName} onChange={(e) => setS({ ...s, agentName: e.target.value })} /></div>
           <div>

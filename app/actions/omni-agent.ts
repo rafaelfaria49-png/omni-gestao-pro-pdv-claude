@@ -8,6 +8,7 @@ import { executeOmniAgentIntent } from "@/lib/omni-agent/executor"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { ensureDefaultOmniAgentAutomations } from "@/lib/omni-agent/omni-automation-engine"
+import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
 import { isOmniAgentAutomationTriggerKey, type OmniAgentAutomationTriggerKey } from "@/lib/omni-agent/omni-automation-triggers"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { OmniAgentCommandStatus } from "@/generated/prisma"
@@ -21,14 +22,22 @@ function assertOmniAgentModule(intent: OmniAgentInterpretacao["intent"], perms: 
   return null
 }
 
+function assertStoreId(storeId: string): string {
+  const sid = storeId.trim()
+  if (!sid) throw new Error("Unidade ativa obrigatória para o Omni Agent HUB.")
+  return sid
+}
+
 async function logExec(storeId: string, commandId: string, ok: boolean, detail: string) {
+  const sid = storeId.trim()
+  if (!sid) return
   try {
     await prisma.logsAuditoria.create({
       data: {
         action: ok ? "OMNI_AGENT_EXEC_OK" : "OMNI_AGENT_EXEC_ERRO",
         userLabel: "Omni Agent HUB",
         detail: detail.slice(0, 4000),
-        metadata: JSON.stringify({ storeId, commandId }),
+        metadata: omniAgentAuditMetadata(sid, { commandId }),
         source: "omni_agent",
       },
     })
@@ -74,11 +83,12 @@ function toDto(row: {
 }
 
 export async function listOmniAgentCommands(storeId: string, take = 80): Promise<OmniAgentCommandDTO[]> {
-  const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  const sid = assertStoreId(storeId)
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
 
   const rows = await prisma.omniAgentCommand.findMany({
-    where: { storeId },
+    where: { storeId: sid },
     orderBy: { createdAt: "desc" },
     take: Math.min(take, 200),
   })
@@ -138,7 +148,7 @@ export type SubmitOmniAgentCommandInput = {
 }
 
 export async function submitOmniAgentCommand(input: SubmitOmniAgentCommandInput): Promise<OmniAgentCommandDTO> {
-  const storeId = input.storeId.trim()
+  const storeId = assertStoreId(input.storeId)
   const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
 
@@ -220,11 +230,12 @@ export async function confirmOmniAgentCommand(
   storeId: string,
   opts?: { clienteId?: string },
 ): Promise<OmniAgentCommandDTO> {
-  const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  const sid = assertStoreId(storeId)
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
 
   const row = await prisma.omniAgentCommand.findFirst({
-    where: { id: commandId, storeId },
+    where: { id: commandId, storeId: sid },
   })
   if (!row) throw new Error("Comando não encontrado.")
   if (row.status !== "PENDENTE" && row.status !== "AGUARDANDO_CONFIRMACAO") {
@@ -242,11 +253,11 @@ export async function confirmOmniAgentCommand(
         executadoEm: new Date(),
       },
     })
-    await logExec(storeId, commandId, false, modErr)
+    await logExec(sid, commandId, false, modErr)
     return toDto(upd)
   }
 
-  const exec = await executeOmniAgentIntent(storeId, interp, { clienteId: opts?.clienteId })
+  const exec = await executeOmniAgentIntent(sid, interp, { clienteId: opts?.clienteId })
   const ambiguous = !exec.ok && "ambiguousClientes" in exec && exec.ambiguousClientes
   if (ambiguous) {
     const upd = await prisma.omniAgentCommand.update({
@@ -270,15 +281,16 @@ export async function confirmOmniAgentCommand(
       executadoEm: new Date(),
     },
   })
-  await logExec(storeId, commandId, ok, ok ? `OK: ${exec.actionLabel}` : String((exec as { error?: string }).error ?? "erro"))
+  await logExec(sid, commandId, ok, ok ? `OK: ${exec.actionLabel}` : String((exec as { error?: string }).error ?? "erro"))
   return toDto(upd)
 }
 
 export async function rejectOmniAgentCommand(commandId: string, storeId: string): Promise<OmniAgentCommandDTO> {
-  const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  const sid = assertStoreId(storeId)
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
 
-  const row = await prisma.omniAgentCommand.findFirst({ where: { id: commandId, storeId } })
+  const row = await prisma.omniAgentCommand.findFirst({ where: { id: commandId, storeId: sid } })
   if (!row) throw new Error("Comando não encontrado.")
   if (row.status !== "PENDENTE" && row.status !== "AGUARDANDO_CONFIRMACAO") {
     throw new Error("Somente pendentes podem ser recusados.")
@@ -291,7 +303,7 @@ export async function rejectOmniAgentCommand(commandId: string, storeId: string)
       executadoEm: new Date(),
     },
   })
-  await logExec(storeId, commandId, false, "Recusado pelo utilizador.")
+  await logExec(sid, commandId, false, "Recusado pelo utilizador.")
   return toDto(upd)
 }
 

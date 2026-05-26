@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
 import type { EventPayload, SystemEvent } from "@/lib/events/event-bus"
 import { subscribeAllEvents } from "@/lib/events/event-bus"
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { handleOmniAgentSystemEvents } from "@/lib/omni-agent/omni-automation-engine"
 import { sendWhatsAppMessage, ensureDefaultEventAutomations } from "@/lib/whatsapp/whatsapp-service"
 
@@ -194,11 +195,19 @@ export function initAutomationEngineClient(): void {
   if (clientStarted) return
   clientStarted = true
   subscribeAllEvents((event, payload) => {
+    const storeId = (payload.storeId || "").trim()
+    if (!storeId) {
+      console.warn("[automation-engine] evento ignorado: payload.storeId ausente", event)
+      return
+    }
     void fetch("/api/automation/handle-event", {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event, payload }),
+      headers: {
+        "Content-Type": "application/json",
+        [ASSISTEC_LOJA_HEADER]: storeId,
+      },
+      body: JSON.stringify({ event, payload: { ...payload, storeId } }),
     }).catch((e) => console.error("[automation-engine] fetch failed:", e))
   })
 }

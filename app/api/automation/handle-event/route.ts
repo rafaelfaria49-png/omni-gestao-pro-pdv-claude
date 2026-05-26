@@ -2,12 +2,18 @@
  * POST /api/automation/handle-event
  *
  * Ponte server-side para eventos disparados pelo PDV no browser.
- * O Prisma Client roda apenas em Node.js; por isso `initAutomationEngineClient`
- * faz fetch para este endpoint em vez de chamar `handleEvent` diretamente.
+ * Exige sessão (ou assinatura ops legada), header de loja e correspondência com payload.storeId.
  */
 import { NextRequest, NextResponse } from "next/server"
 import { handleEvent } from "@/lib/automation/automation-engine"
-import type { SystemEvent, EventPayload } from "@/lib/events/event-bus"
+import type { SystemEvent } from "@/lib/events/event-bus"
+import {
+  guardAutomationHandleEventPost,
+  type AutomationHandleEventBody,
+} from "@/lib/omni-agent/automation-event-guard"
+
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
 
 const VALID_EVENTS = new Set<SystemEvent>([
   "venda_criada",
@@ -21,21 +27,18 @@ const VALID_EVENTS = new Set<SystemEvent>([
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as { event?: unknown; payload?: unknown }
-
-    const event = body.event as SystemEvent | undefined
-    const payload = body.payload as EventPayload | undefined
-
-    if (!event || !VALID_EVENTS.has(event)) {
-      return NextResponse.json({ ok: false, error: "evento inválido" }, { status: 400 })
+    let body: AutomationHandleEventBody
+    try {
+      body = (await req.json()) as AutomationHandleEventBody
+    } catch {
+      return NextResponse.json({ ok: false, error: "JSON inválido" }, { status: 400 })
     }
 
-    if (!payload || typeof payload !== "object" || typeof payload.storeId !== "string") {
-      return NextResponse.json({ ok: false, error: "payload inválido" }, { status: 400 })
-    }
+    const guarded = await guardAutomationHandleEventPost(req, body, VALID_EVENTS)
+    if (!guarded.ok) return guarded.response
 
-    await handleEvent(event, payload)
-    return NextResponse.json({ ok: true, event })
+    await handleEvent(guarded.event, guarded.payload)
+    return NextResponse.json({ ok: true, event: guarded.event })
   } catch (e) {
     console.error("[api/automation/handle-event]", e)
     return NextResponse.json({ ok: false, error: "internal error" }, { status: 500 })

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { createOS } from "@/app/actions/operacoes"
 import { listClientes, listProdutos } from "@/app/actions/cadastros"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
 import type { OmniAgentInterpretacao, OmniAgentExecutorResult } from "./types"
 import type { EventoTimeline, OrdemServico } from "@/types/os"
 import { CHECKLIST_PADRAO } from "@/types/os"
@@ -183,12 +184,16 @@ export async function executeOmniAgentIntent(
     if (intent === "REMINDER_CREATE") {
       const titulo = (fields.titulo ?? fields.detalhe ?? "Lembrete").slice(0, 200)
       const detalhe = (fields.detalhe ?? titulo).slice(0, 2000)
+      const sid = storeId.trim()
+      if (!sid) {
+        return { ok: false, actionLabel: interp.action, error: "Unidade ativa obrigatória." }
+      }
       await prisma.logsAuditoria.create({
         data: {
           action: "OMNI_AGENT_LEMBRETE",
           userLabel: "Omni Agent HUB",
           detail: titulo,
-          metadata: JSON.stringify({ storeId, detalhe, source: "omni_agent_fase1" }),
+          metadata: omniAgentAuditMetadata(sid, { detalhe, source: "omni_agent_fase1" }),
           source: "omni_agent",
         },
       })
