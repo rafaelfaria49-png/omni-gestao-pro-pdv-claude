@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 24 Mai 2026 — Sessão: Convergência PDV P1 — keymap-base, sangria única, Black na barra
+> Última atualização: 25 Mai 2026 — Sessão: Sprint À Prazo Enterprise — parcelamento no PDV
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,26 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+### Sprint À Prazo Enterprise — Parcelamento no PDV (concluído 25/05/2026)
+
+**Contexto:** fluxo de venda à prazo era simplista demais — sem entrada, sem parcelas, sem vencimento configurável. Saldo à prazo entrava erroneamente no caixa físico.
+
+| Arquivo | Mudança |
+|---------|---------|
+| `lib/operations-sale-types.ts` | Novo tipo `APrazoConfig { parcelas, primeiroVencimento, intervalDias }`. Adicionado em `SaleRecord`. |
+| `lib/operations-store.tsx` | Novo campo `vendasAPrazo` no `DailyLedger`. `totalEntradas` do caixa agora **exclui** `pb.aPrazo` (receita futura, não caixa físico). `vendasCarne` separado de `vendasAPrazo`. `finalizeSaleTransaction` aceita `aPrazoConfig?`. |
+| `lib/ops-upsert-venda.ts` | `aPrazoConfig?` em `SalePayload`. Step 6 cria **um `ContaReceberTitulo` por parcela** com `localKey pdv-aprazo-{pedidoId}-{n}` (idempotente). |
+| `components/dashboard/vendas/payment-modal.tsx` | Botão "À prazo" abre bloco de config (como carnê): entrada opcional + forma da entrada + parcelas 1-24 + primeiro vencimento + resumo das parcelas + badges Entrada/Financiado. `PaymentMethod` ganha `aPrazoConfig?`. |
+| `lib/pdv-append-conta-receber.ts` | Cria N entradas no localStorage (uma por parcela). |
+| `lib/whatsapp-daily-server.ts` | `vendasAPrazo: 0` nos objetos `DailyLedger` literais. |
+| PDVs: `pdv-classic`, `pdv-supermercado`, `pdv-venda-completa-enterprise`, `PdvBlackEdition` | Extraem `aPrazoConfig` do array `payments` e passam para `finalizeSaleTransaction`. |
+
+**Casos cobertos:** à prazo puro, dinheiro+prazo, pix+prazo, crédito+prazo, qualquer entrada+saldo a prazo.
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK.
+
+**Riscos/pendências:** `venda-completa-enterprise.tsx` (formulário próprio, não usa PaymentModal) continua com à prazo simples (1 parcela/30 dias) — requer refatoração maior para adotar o bloco de config; à-prazo no PDV Assistência (modal próprio) fora do escopo; relatório de fechamento caixa não exibe `vendasAPrazo` ainda (campo disponível, display é follow-up).
 
 ### Convergência PDV — P1: keymap-base + sangria única + Black na barra (concluído 24/05/2026)
 

@@ -88,6 +88,8 @@ export interface PaymentMethod {
   /** Maquininha usada no caixa (cartão débito/crédito). */
   maquininhaId?: string
   maquininhaNome?: string
+  /** Config de parcelamento para à prazo (parcelas, primeiro vencimento, intervalo). */
+  aPrazoConfig?: { parcelas: number; primeiroVencimento: string; intervalDias: number }
 }
 
 /** Ajusta valores lançados para que a soma bata com `total` (ex.: troco em dinheiro). */
@@ -171,6 +173,10 @@ export function PaymentModal({
   const [currentValue, setCurrentValue] = useState("")
   const [selectedType, setSelectedType] = useState<PaymentMethodType | null>(null)
   const [carneInstallments, setCarneInstallments] = useState("3")
+  const [aPrazoEntradaStr, setAPrazoEntradaStr] = useState("")
+  const [aPrazoEntradaType, setAPrazoEntradaType] = useState<PaymentMethodType>("dinheiro")
+  const [aPrazoParcelas, setAPrazoParcelas] = useState("1")
+  const [aPrazoPrimeiroVencDate, setAPrazoPrimeiroVencDate] = useState("") // YYYY-MM-DD
   const [showMerchantPanel, setShowMerchantPanel] = useState(false)
   const [cpfDraft, setCpfDraft] = useState("")
   const [cartaoLiberado, setCartaoLiberado] = useState(true)
@@ -211,6 +217,17 @@ export function PaymentModal({
     const p = Number(discountPercent) || 0
     return r > 0.009 || p > 0.009
   }, [discountPercent, discountReais])
+
+  // ── Computações à prazo ──────────────────────────────────────────────────────
+  const aPrazoBundleTotal = Math.min(
+    parseMoneyString(currentValue) > 0 ? parseMoneyString(currentValue) : faltaPagar,
+    faltaPagar,
+  )
+  const aPrazoEntradaVal = Math.max(0, Math.min(parseMoneyString(aPrazoEntradaStr), aPrazoBundleTotal - 0.01))
+  const aPrazoSaldoVal = Math.round((aPrazoBundleTotal - aPrazoEntradaVal) * 100) / 100
+  const aPrazoParcelasN = Math.max(1, parseInt(aPrazoParcelas, 10) || 1)
+  const aPrazoParcelaBase = Math.round((aPrazoSaldoVal / aPrazoParcelasN) * 100) / 100
+
   useEffect(() => {
     if (!isOpen) return
     const pdv = getMaquininhasParaPdvForStore(storeIdForPdv)
@@ -234,6 +251,10 @@ export function PaymentModal({
       setSupervisorErr(null)
       setSupervisorBusy(false)
       setAuthorizedAdmin(null)
+      setAPrazoEntradaStr("")
+      setAPrazoEntradaType("dinheiro")
+      setAPrazoParcelas("1")
+      setAPrazoPrimeiroVencDate("")
     }
   }, [isOpen])
 
@@ -331,9 +352,9 @@ export function PaymentModal({
     const t = instantPayIntent
     const tid = window.setTimeout(() => {
       try {
-        if (t === "carne") {
-          /** Carnê: abre o fluxo de parcelamento (não lança valor automaticamente). */
-          setSelectedType("carne")
+        if (t === "carne" || t === "a_prazo") {
+          /** Carnê / à prazo: abre o fluxo de configuração. */
+          setSelectedType(t)
         } else {
           handleAddPayment(t)
         }
@@ -399,6 +420,54 @@ export function PaymentModal({
     win.print()
   }
 
+  const handleConfirmarAPrazo = useCallback(() => {
+    if (!selectedCustomer) {
+      toast.error("⚠️ Selecione um cliente para venda à prazo.")
+      return
+    }
+    if (!documentoClienteValido(cpfEfetivo)) {
+      toast({ variant: "destructive", title: "CPF/CNPJ obrigatório", description: "Informe e salve o documento do cliente para faturamento à prazo." })
+      return
+    }
+    if (aPrazoSaldoVal <= 0.009) {
+      toast({ variant: "destructive", title: "Saldo inválido", description: "O saldo a prazo deve ser maior que zero." })
+      return
+    }
+
+    const primeiroVenc = aPrazoPrimeiroVencDate
+      ? (() => { const [y, m, d] = aPrazoPrimeiroVencDate.split("-"); return `${d}/${m}/${y}` })()
+      : (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toLocaleDateString("pt-BR") })()
+
+    const toAdd: PaymentMethod[] = []
+    if (aPrazoEntradaVal > 0.009) {
+      toAdd.push({
+        id: `${Date.now()}-entrada`,
+        type: aPrazoEntradaType,
+        value: aPrazoEntradaVal,
+      })
+    }
+    toAdd.push({
+      id: `${Date.now()}-aprazo`,
+      type: "a_prazo",
+      value: aPrazoSaldoVal,
+      aPrazoConfig: { parcelas: aPrazoParcelasN, primeiroVencimento: primeiroVenc, intervalDias: 30 },
+    })
+
+    setPayments((prev) => [...prev, ...toAdd])
+    setCurrentValue("")
+    setSelectedType(null)
+    setAPrazoEntradaStr("")
+  }, [
+    selectedCustomer,
+    cpfEfetivo,
+    aPrazoSaldoVal,
+    aPrazoEntradaVal,
+    aPrazoEntradaType,
+    aPrazoParcelasN,
+    aPrazoPrimeiroVencDate,
+    toast,
+  ])
+
   const getPaymentIcon = (type: string) => {
     switch (type) {
       case "dinheiro": return <Banknote className="w-4 h-4" />
@@ -426,7 +495,9 @@ export function PaymentModal({
       case "carne":
         return "Carnê"
       case "a_prazo":
-        return "À prazo"
+        return payment.aPrazoConfig && payment.aPrazoConfig.parcelas > 1
+          ? `À prazo ${payment.aPrazoConfig.parcelas}x`
+          : "À prazo"
       case "credito_vale":
         return "Crédito/Vale"
       default:
@@ -774,8 +845,8 @@ export function PaymentModal({
                   type="button"
                   title={
                     !selectedCustomer
-                      ? "Clique para ver o aviso: selecione o cliente na tela do PDV para à prazo"
-                      : "Gera título em Contas a Receber ao confirmar a venda"
+                      ? "Selecione o cliente no PDV para liberar venda à prazo"
+                      : "Configura parcelas e vencimento — gera título em Contas a Receber"
                   }
                   onClick={() => {
                     if (!selectedCustomer) {
@@ -783,7 +854,10 @@ export function PaymentModal({
                       return
                     }
                     setSelectedType("a_prazo")
-                    handleAddPayment("a_prazo")
+                    if (!aPrazoPrimeiroVencDate) {
+                      const d = new Date(); d.setDate(d.getDate() + 30)
+                      setAPrazoPrimeiroVencDate(d.toISOString().split("T")[0])
+                    }
                   }}
                   className={cn(
                     "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors",
@@ -831,6 +905,133 @@ export function PaymentModal({
                 </button>
               </div>
             </div>
+          )}
+
+          {/* Módulo À Prazo */}
+          {selectedType === "a_prazo" && faltaPagar > 0 && (
+            <Card className="border-violet-500/50 bg-violet-500/5">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CalendarClock className="w-5 h-5 text-violet-500" />
+                  Configurar À Prazo
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Total à prazo</Label>
+                    <div className="h-10 px-3 flex items-center bg-secondary rounded-md border border-border">
+                      <span className="font-semibold">{formatCurrency(aPrazoBundleTotal)}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Parcelas do saldo</Label>
+                    <Select value={aPrazoParcelas} onValueChange={setAPrazoParcelas}>
+                      <SelectTrigger className="bg-secondary border-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1,2,3,4,5,6,7,8,9,10,11,12].map((n) => (
+                          <SelectItem key={n} value={n.toString()}>
+                            {n}x de {formatCurrency(Math.round((aPrazoSaldoVal / n) * 100) / 100)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Entrada (opcional)</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground select-none">R$</span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="0,00"
+                        value={aPrazoEntradaStr}
+                        onChange={(e) => setAPrazoEntradaStr(formatMoneyInput(e.target.value))}
+                        className="pl-12 h-10 bg-secondary border-border"
+                      />
+                    </div>
+                    <Select value={aPrazoEntradaType} onValueChange={(v) => setAPrazoEntradaType(v as PaymentMethodType)}>
+                      <SelectTrigger className="w-32 bg-secondary border-border shrink-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                        <SelectItem value="pix">Pix</SelectItem>
+                        <SelectItem value="cartao_debito">Débito</SelectItem>
+                        <SelectItem value="cartao_credito">Crédito</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm">Primeiro vencimento</Label>
+                    <Input
+                      type="date"
+                      value={aPrazoPrimeiroVencDate}
+                      onChange={(e) => setAPrazoPrimeiroVencDate(e.target.value)}
+                      className="h-10 bg-secondary border-border"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Saldo financiado</Label>
+                    <div className="h-10 px-3 flex items-center bg-violet-500/10 rounded-md border border-violet-500/30">
+                      <span className="font-bold text-violet-700 dark:text-violet-300">{formatCurrency(aPrazoSaldoVal)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {aPrazoSaldoVal > 0.009 && aPrazoPrimeiroVencDate && (
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    {Array.from({ length: aPrazoParcelasN }, (_, i) => {
+                      const [y, m, d] = aPrazoPrimeiroVencDate.split("-")
+                      const vd = new Date(Number(y), Number(m) - 1, Number(d))
+                      vd.setDate(vd.getDate() + i * 30)
+                      const valorP = i === aPrazoParcelasN - 1
+                        ? Math.round((aPrazoSaldoVal - aPrazoParcelaBase * (aPrazoParcelasN - 1)) * 100) / 100
+                        : aPrazoParcelaBase
+                      return (
+                        <p key={i + 1}>
+                          {i + 1}/{aPrazoParcelasN} — {formatCurrency(valorP)} — vence em{" "}
+                          {vd.toLocaleDateString("pt-BR")}
+                        </p>
+                      )
+                    })}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  {aPrazoEntradaVal > 0.009 && (
+                    <Badge className="bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15">
+                      Entrada {formatCurrency(aPrazoEntradaVal)}
+                    </Badge>
+                  )}
+                  <Badge className="bg-violet-500/15 border border-violet-500/40 text-violet-700 dark:text-violet-300 hover:bg-violet-500/15">
+                    Financiado {formatCurrency(aPrazoSaldoVal)}{aPrazoParcelasN > 1 ? ` em ${aPrazoParcelasN}x` : ""}
+                  </Badge>
+                </div>
+
+                <Button
+                  className="w-full bg-violet-600 hover:bg-violet-500 text-white font-bold"
+                  disabled={aPrazoSaldoVal <= 0.009 || !documentoClienteValido(cpfEfetivo)}
+                  onClick={handleConfirmarAPrazo}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Confirmar À Prazo{aPrazoParcelasN > 1 ? ` ${aPrazoParcelasN}x` : ""}
+                </Button>
+                {!documentoClienteValido(cpfEfetivo) && (
+                  <p className="text-xs text-destructive text-center">
+                    Informe e salve o CPF/CNPJ do cliente para continuar.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* Módulo Carnê */}

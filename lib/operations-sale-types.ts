@@ -1,5 +1,11 @@
 /** Tipos compartilhados entre PDV (client) e rotas `/api/ops/vendas-*` (server). */
 
+export interface APrazoConfig {
+  parcelas: number           // 1-24, default 1
+  primeiroVencimento: string // DD/MM/YYYY
+  intervalDias: number       // default 30
+}
+
 export interface PaymentBreakdownFull {
   dinheiro: number
   pix: number
@@ -37,6 +43,8 @@ export interface SaleRecord {
   at: string
   lines: SaleLineRecord[]
   total: number
+  /** Status da venda conforme coluna `Venda.status` no banco. Ausente = legado (tratar como concluida). */
+  status?: "concluida" | "cancelada" | "parcialmente_devolvida" | "devolvida"
   /** Total de descontos aplicados na venda (quando persistido pelo PDV). */
   discountTotal?: number
   customerCpf?: string
@@ -56,6 +64,8 @@ export interface SaleRecord {
   discountReais?: number
   /** Desconto manual no checkout (somente auditoria). */
   discountPercent?: number
+  /** Configuração de parcelamento para venda à prazo. */
+  aPrazoConfig?: APrazoConfig
   /** true = venda gravada localmente mas ainda não confirmada no Prisma. */
   syncPending?: boolean
 }

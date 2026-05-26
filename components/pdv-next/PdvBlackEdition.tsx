@@ -27,6 +27,7 @@ import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PaymentModal, type PaymentMethod } from "@/components/dashboard/vendas/payment-modal"
 import { useToast } from "@/hooks/use-toast"
+import { reducePaymentsToBreakdown } from "@/lib/pdv-payments"
 import { PdvBlackShell, type PdvBlackCartRow } from "./PdvBlackShell"
 
 const brlBlack = (v: number) =>
@@ -335,23 +336,15 @@ export function PdvBlackEdition() {
         unitPrice: r.unitPrice,
         name: r.description,
       }))
-    let dinheiro = 0, pix = 0, cartaoDebito = 0, cartaoCredito = 0, carne = 0, aPrazo = 0, creditoVale = 0
-    for (const p of payments) {
-      if (p.type === "dinheiro") dinheiro += p.value
-      else if (p.type === "pix") pix += p.value
-      else if (p.type === "cartao_debito") cartaoDebito += p.value
-      else if (p.type === "cartao_credito") cartaoCredito += p.value
-      else if (p.type === "carne") carne += p.value
-      else if (p.type === "a_prazo") aPrazo += p.value
-      else if (p.type === "credito_vale") creditoVale += p.value
-    }
+    const aPrazoPayment = payments.find((p) => p.type === "a_prazo")
     const result = finalizeSaleTransaction({
       lines: saleLines,
       total,
-      paymentBreakdown: { dinheiro, pix, cartaoDebito, cartaoCredito, carne, aPrazo, creditoVale },
+      paymentBreakdown: reducePaymentsToBreakdown(payments),
       customerName: customerDisplay !== "Consumidor final" ? customerDisplay : undefined,
       clienteId: selectedClienteId || undefined,
       auditMeta: { cashierId: operadorNome },
+      aPrazoConfig: aPrazoPayment?.aPrazoConfig,
     })
     if (!result.ok) {
       toast({ variant: "destructive", title: "Falha ao registrar venda", description: result.reason })

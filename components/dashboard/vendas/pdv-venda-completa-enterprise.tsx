@@ -449,6 +449,7 @@ export function PdvVendaCompletaEnterprise({
       carne = 0,
       aPrazo = 0,
       creditoVale = 0
+    let aPrazoConfig: import("@/lib/operations-sale-types").APrazoConfig | undefined
 
     for (const p of payments) {
       if (p.type === "dinheiro") dinheiro += p.value
@@ -456,7 +457,7 @@ export function PdvVendaCompletaEnterprise({
       else if (p.type === "cartao_debito") cartaoDebito += p.value
       else if (p.type === "cartao_credito") cartaoCredito += p.value
       else if (p.type === "carne") carne += p.value
-      else if (p.type === "a_prazo") aPrazo += p.value
+      else if (p.type === "a_prazo") { aPrazo += p.value; if (p.aPrazoConfig) aPrazoConfig = p.aPrazoConfig }
       else if (p.type === "credito_vale") creditoVale += p.value
     }
 
@@ -481,6 +482,7 @@ export function PdvVendaCompletaEnterprise({
       customerCpf: selectedCliente?.document ?? undefined,
       customerName: selectedCliente?.name,
       clienteId: selectedCliente?.id || undefined,
+      aPrazoConfig,
     })
 
     if (!result.ok) {
@@ -488,13 +490,14 @@ export function PdvVendaCompletaEnterprise({
       return
     }
 
-    // aPrazo → Contas a Receber
+    // aPrazo → Contas a Receber (localStorage cache)
     if (aPrazo > 0.02 && selectedCliente) {
       appendContaReceberTituloPdvAprazo({
         lojaId: storeId,
         saleId: result.saleId,
         clienteNome: selectedCliente.name,
         valor: aPrazo,
+        aPrazoConfig,
       })
     }
 

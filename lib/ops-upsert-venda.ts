@@ -21,6 +21,12 @@ export type SalePayload = {
   terminalId?: string | null
   /** Formas de pagamento — usado para gerar MovimentacaoFinanceira por forma. */
   paymentBreakdown?: Partial<PaymentBreakdownFull>
+  /** Configuração de parcelamento para venda à prazo. */
+  aPrazoConfig?: {
+    parcelas?: number
+    primeiroVencimento?: string // DD/MM/YYYY
+    intervalDias?: number
+  }
   lines?: Array<{
     inventoryId?: string
     name?: string
@@ -325,50 +331,79 @@ export async function upsertVendaInTransaction(
     }
   }
 
-  // ── 6. Título à prazo (Contas a Receber) — DENTRO da transação ───────────────
-  // Antes era criado por um fetch fire-and-forget no cliente
-  // (lib/pdv-append-conta-receber.ts). Agora persiste atômico com a venda: se a
-  // venda comita, o título existe; se reverte, não fica órfão. O `localKey` é o
-  // mesmo usado pelo cliente (`pdv-aprazo-{pedidoId}`) → idempotente e sem
-  // duplicar títulos já criados pelo fluxo anterior.
+  // ── 6. Título(s) à prazo (Contas a Receber) — DENTRO da transação ───────────
+  // Cria um ContaReceberTitulo por parcela. Se não há config de parcelamento,
+  // cria título único com vencimento em 30 dias (comportamento anterior).
+  // localKey por parcela (`pdv-aprazo-{pedidoId}` ou `pdv-aprazo-{pedidoId}-{n}`)
+  // garante idempotência em retries.
   if (aPrazoVal > 0) {
-    const aprazoLocalKey = `pdv-aprazo-${pedidoId}`
-    const venc = new Date(at)
-    venc.setDate(venc.getDate() + 30)
-    const vencStr = venc.toLocaleDateString("pt-BR")
+    const cfg = sale.aPrazoConfig
+    const parcelas = Math.max(1, Math.min(24, Number(cfg?.parcelas) || 1))
+    const intervalDias = Math.max(1, Number(cfg?.intervalDias) || 30)
     const aprazoCliente = clienteNome || "Cliente"
-    const aprazoDesc = `Venda PDV ${pedidoId} — À prazo`
-    const aprazoPayload = {
-      id: aprazoLocalKey,
-      descricao: aprazoDesc,
-      cliente: aprazoCliente,
-      valor: aPrazoVal,
-      vencimento: vencStr,
-      status: "pendente",
-      tipo: "pdv_aprazo",
-      total_value: aPrazoVal,
-      vendas: [{ saleId: pedidoId, total: aPrazoVal }],
-    } as unknown as Prisma.InputJsonValue
-    await tx.contaReceberTitulo.upsert({
-      where: { storeId_localKey: { storeId: lojaId, localKey: aprazoLocalKey } },
-      create: {
-        storeId: lojaId,
-        localKey: aprazoLocalKey,
+
+    // Resolve primeiro vencimento (DD/MM/YYYY → Date)
+    let primeiroVenc: Date
+    if (cfg?.primeiroVencimento) {
+      const parts = cfg.primeiroVencimento.split("/")
+      if (parts.length === 3) {
+        const d = new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]))
+        primeiroVenc = isNaN(d.getTime()) ? new Date(at.getTime() + intervalDias * 86_400_000) : d
+      } else {
+        primeiroVenc = new Date(at.getTime() + intervalDias * 86_400_000)
+      }
+    } else {
+      primeiroVenc = new Date(at.getTime() + intervalDias * 86_400_000)
+    }
+
+    const valorBase = arredonda2(aPrazoVal / parcelas)
+    for (let n = 1; n <= parcelas; n++) {
+      // Última parcela absorve arredondamento
+      const valorParcela = n === parcelas ? arredonda2(aPrazoVal - valorBase * (parcelas - 1)) : valorBase
+      const aprazoLocalKey = parcelas === 1 ? `pdv-aprazo-${pedidoId}` : `pdv-aprazo-${pedidoId}-${n}`
+      const vencDate = new Date(primeiroVenc)
+      vencDate.setDate(vencDate.getDate() + (n - 1) * intervalDias)
+      const vencStr = vencDate.toLocaleDateString("pt-BR")
+      const aprazoDesc =
+        parcelas === 1
+          ? `Venda PDV ${pedidoId} — À prazo`
+          : `Venda PDV ${pedidoId} — À prazo ${n}/${parcelas}`
+
+      const aprazoPayload = {
+        id: aprazoLocalKey,
         descricao: aprazoDesc,
         cliente: aprazoCliente,
-        valor: aPrazoVal,
+        valor: valorParcela,
         vencimento: vencStr,
         status: "pendente",
-        payload: aprazoPayload,
-      },
-      // `status` fora do update para preservar baixas/pagamentos já feitos em re-sync.
-      update: {
-        descricao: aprazoDesc,
-        cliente: aprazoCliente,
-        valor: aPrazoVal,
-        vencimento: vencStr,
-        payload: aprazoPayload,
-      },
-    })
+        tipo: "pdv_aprazo",
+        total_value: aPrazoVal,
+        numeroParcela: n,
+        totalParcelas: parcelas,
+        vendas: [{ saleId: pedidoId, total: aPrazoVal }],
+      } as unknown as Prisma.InputJsonValue
+
+      await tx.contaReceberTitulo.upsert({
+        where: { storeId_localKey: { storeId: lojaId, localKey: aprazoLocalKey } },
+        create: {
+          storeId: lojaId,
+          localKey: aprazoLocalKey,
+          descricao: aprazoDesc,
+          cliente: aprazoCliente,
+          valor: valorParcela,
+          vencimento: vencStr,
+          status: "pendente",
+          payload: aprazoPayload,
+        },
+        // `status` fora do update para preservar baixas/pagamentos já feitos em re-sync.
+        update: {
+          descricao: aprazoDesc,
+          cliente: aprazoCliente,
+          valor: valorParcela,
+          vencimento: vencStr,
+          payload: aprazoPayload,
+        },
+      })
+    }
   }
 }

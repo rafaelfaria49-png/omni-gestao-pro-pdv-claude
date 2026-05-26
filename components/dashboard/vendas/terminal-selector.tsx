@@ -153,7 +153,13 @@ export function TerminalSelector({
     try {
       const r = await lockTerminal(storeId, t.id, { force: true })
       if ((r.ok && r.granted) || r.degraded) {
-        toast({ title: "Terminal assumido", description: `${t.name} agora é deste dispositivo.` })
+        const fromOp = r.tookOver?.fromOperador
+        toast({
+          title: "Terminal assumido",
+          description: fromOp
+            ? `${t.name} assumido de ${fromOp}. Operação registrada.`
+            : `${t.name} agora é deste dispositivo.`,
+        })
         onSelected({ id: t.id, code: t.code, name: t.name })
         return
       }
@@ -424,7 +430,7 @@ export function TerminalSelector({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirm?.kind === "assumir"
-                ? `O ${confirm?.terminal.name} está em uso por ${confirm?.terminal.lock.lockedByOperador || "outro dispositivo"}. Assumir vai desconectar o outro operador deste terminal.`
+                ? `O ${confirm?.terminal.name} está em uso por ${confirm?.terminal.lock.lockedByOperador || "outro dispositivo"}. Assumir vai desconectar o outro operador imediatamente. Esta ação é registrada nos logs do sistema.`
                 : `Liberar o ${confirm?.terminal.name} vai remover o controle do dispositivo atual. Use apenas se o terminal travou ou foi abandonado.`}
             </AlertDialogDescription>
           </AlertDialogHeader>

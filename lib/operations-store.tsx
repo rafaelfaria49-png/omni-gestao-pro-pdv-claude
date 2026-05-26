@@ -8,14 +8,14 @@ import { OPS_KEY_LEGACY } from "@/lib/loja-ativa"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
-import type { DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
+import type { APrazoConfig, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import { emitEvent } from "@/lib/events/event-bus"
 import { initAutomationEngineClient } from "@/lib/automation/automation-engine"
 import { toast } from "@/components/ui/use-toast"
 
-export type { DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
+export type { APrazoConfig, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
 /** Variação de produto (tamanho, cor, sabor, etc.) */
 export type ProdutoAtributoDef = {
@@ -60,6 +60,8 @@ export interface CaixaState {
 export interface DailyLedger {
   date: string
   vendasDinheiro: number
+  /** Valor faturado à prazo (Contas a Receber) — excluído do caixa físico. */
+  vendasAPrazo: number
   vendasPix: number
   vendasCartaoDebito: number
   vendasCartaoCredito: number
@@ -82,6 +84,7 @@ function emptyLedger(): DailyLedger {
     vendasCartaoDebito: 0,
     vendasCartaoCredito: 0,
     vendasCarne: 0,
+    vendasAPrazo: 0,
     vendasCreditoVale: 0,
     totalVendas: 0,
     osAbertas: 0,
@@ -101,6 +104,7 @@ export function ensureLedger(ledger: DailyLedger | undefined): DailyLedger {
     vendasCartaoDebito: (ledger.vendasCartaoDebito ?? 0) + oldC,
     vendasCartaoCredito: ledger.vendasCartaoCredito ?? 0,
     vendasCarne: ledger.vendasCarne ?? 0,
+    vendasAPrazo: ledger.vendasAPrazo ?? 0,
     vendasCreditoVale: ledger.vendasCreditoVale ?? 0,
     totalVendas: ledger.totalVendas ?? 0,
     osAbertas: ledger.osAbertas ?? 0,
@@ -232,6 +236,7 @@ interface OperationsContextType {
       discountReais?: number
       discountPercent?: number
     }
+    aPrazoConfig?: APrazoConfig
   }) => { ok: true; saleId: string } | { ok: false; reason: string }
   registrarDevolucao: (input: {
     saleId: string
@@ -816,6 +821,7 @@ export function OperationsProvider({
       openCaixaIfClosed,
       saldoInicialAoAbrir,
       auditMeta,
+      aPrazoConfig,
     }) => {
       const current = stateRef.current
       const next: OpsState = {
@@ -900,14 +906,16 @@ export function OperationsProvider({
         item.stock -= line.quantity
       }
 
-      next.caixa.totalEntradas += total
+      // Apenas receita imediata entra no caixa físico; saldo à prazo vai para Contas a Receber.
+      next.caixa.totalEntradas += total - pb.aPrazo
 
       next.dailyLedger.totalVendas += total
       next.dailyLedger.vendasDinheiro += pb.dinheiro
       next.dailyLedger.vendasPix += pb.pix
       next.dailyLedger.vendasCartaoDebito += pb.cartaoDebito
       next.dailyLedger.vendasCartaoCredito += pb.cartaoCredito
-      next.dailyLedger.vendasCarne += pb.carne + pb.aPrazo
+      next.dailyLedger.vendasCarne += pb.carne
+      next.dailyLedger.vendasAPrazo = (next.dailyLedger.vendasAPrazo ?? 0) + pb.aPrazo
       next.dailyLedger.vendasCreditoVale += pb.creditoVale
 
       const saleId = nextSaleId(next.sales)
@@ -959,6 +967,7 @@ export function OperationsProvider({
         discountAuthorizedByAdminId: auditMeta?.discountAuthorizedByAdminId,
         discountReais: auditMeta?.discountReais,
         discountPercent: auditMeta?.discountPercent,
+        ...(aPrazoConfig ? { aPrazoConfig } : {}),
         syncPending: true,
       })
 

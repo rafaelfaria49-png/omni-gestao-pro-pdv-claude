@@ -122,6 +122,10 @@ export function computeFechamentoResumo(input: {
 }): FechamentoResumo {
   const { sales, sangrias, suprimentos, saldoInicial, totalDevolucoes = 0 } = input
 
+  // Exclui vendas canceladas de TODOS os cálculos financeiros.
+  // Vendas canceladas permanecem no array para auditoria/histórico, mas não entram no fechamento.
+  const activeSales = sales.filter((s) => s.status !== "cancelada")
+
   const origemAcc: Record<OrigemVendaKey, { valorBruto: number; qtdItens: number }> = {
     pdv: { valorBruto: 0, qtdItens: 0 },
     avulso: { valorBruto: 0, qtdItens: 0 },
@@ -142,7 +146,7 @@ export function computeFechamentoResumo(input: {
   let totalLiquido = 0
   let qtdVendasMultiplas = 0
 
-  for (const sale of sales) {
+  for (const sale of activeSales) {
     for (const line of sale.lines ?? []) {
       const key = classifyLineOrigem(line.inventoryId)
       const lineTotal =
@@ -192,7 +196,7 @@ export function computeFechamentoResumo(input: {
   const descontos = round2(Math.max(0, subtotalBruto - totalLiquido))
   const aPrazo = pg.aPrazo
   const totalRecebido = round2(totalLiquido - aPrazo)
-  const qtdVendas = sales.length
+  const qtdVendas = activeSales.length
   const ticketMedio = qtdVendas > 0 ? round2(totalLiquido / qtdVendas) : 0
   const saldoDinheiroEsperado = round2(saldoInicial + pg.dinheiro + suprimentos - sangrias)
   const saldoMovimentadoEsperado = round2(saldoInicial + totalLiquido + suprimentos - sangrias)

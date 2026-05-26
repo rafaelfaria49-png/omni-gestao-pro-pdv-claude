@@ -22,6 +22,7 @@ function saleFromDbRow(r: {
   total: number
   at: Date
   clienteNome: string | null
+  status: string
   payload: unknown
   itens: Array<{
     inventoryId: string | null
@@ -31,11 +32,13 @@ function saleFromDbRow(r: {
     lineTotal: number
   }>
 }): SaleRecord {
+  const dbStatus = r.status as SaleRecord["status"] | undefined
   const p = r.payload
   if (p && typeof p === "object") {
     const o = p as Partial<SaleRecord>
     if (typeof o.id === "string" && o.id === r.pedidoId && Array.isArray(o.lines)) {
-      return o as SaleRecord
+      // Sempre sobrescreve status com o valor autoritativo do banco (o payload pode estar desatualizado).
+      return { ...(o as SaleRecord), status: dbStatus }
     }
   }
 
@@ -53,6 +56,7 @@ function saleFromDbRow(r: {
     at: r.at.toISOString(),
     lines,
     total: r.total,
+    status: dbStatus,
     customerName: r.clienteNome ?? undefined,
     paymentBreakdown: zeroPb,
   }
@@ -81,6 +85,7 @@ export async function GET(req: Request) {
         total: r.total,
         at: r.at,
         clienteNome: r.clienteNome,
+        status: r.status,
         payload: r.payload,
         itens: r.itens,
       })
