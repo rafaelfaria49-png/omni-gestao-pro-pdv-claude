@@ -24,7 +24,6 @@ import {
   BookUser,
   Keyboard,
   Settings,
-  HandCoins,
   ClipboardList,
   ScanLine,
   LayoutGrid,
@@ -41,7 +40,7 @@ import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
-import { useCaixa } from "../caixa/caixa-provider"
+// useCaixa removido no Lote 4 — sangria/suprimento vivem no CaixaStatusBar.
 import { configPadrao, useConfigEmpresa } from "@/lib/config-empresa"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
@@ -193,7 +192,9 @@ export function PdvClassic({
   const { mode: studioThemeMode } = useStudioTheme()
   const classicStudio = studioThemeMode === "classic"
   const lojaKey = lojaAtivaId ?? opsLojaIdFromStorageKey(opsStorageKey)
-  const { adicionarEntrada, adicionarSaida, sessaoId } = useCaixa()
+  // Caixa: apenas leitura do CaixaStatusBar/CaixaProvider via outros consumers.
+  // `useCaixa()` legado (adicionarEntrada/Saida/sessaoId) só era usado pelo
+  // `saveOperation` removido — fluxo migrado para o CaixaStatusBar compartilhado.
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente, ordens } = useOperationsStore()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { toast } = useToast()
@@ -223,16 +224,10 @@ export function PdvClassic({
   const [attrDialogOpen, setAttrDialogOpen] = useState(false)
   const [attrProduct, setAttrProduct] = useState<Product | null>(null)
   const [attrSelections, setAttrSelections] = useState<Record<string, string>>({})
-  const [operationType, setOperationType] = useState<"sangria" | "suprimento" | null>(null)
   const [fechamentoCaixaSignal, setFechamentoCaixaSignal] = useState(0)
   const [showDevolucaoModal, setShowDevolucaoModal] = useState(false)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
-  const [operationValue, setOperationValue] = useState("")
-  const [operationReason, setOperationReason] = useState("")
-  const [cashHistory, setCashHistory] = useState<
-    Array<{ id: string; type: string; value: number; reason: string; at: string }>
-  >([])
   const customerInputRef = useRef<HTMLInputElement>(null)
   const productInputRef = useRef<HTMLInputElement>(null)
   const quantityInputRef = useRef<HTMLInputElement>(null)
@@ -969,256 +964,28 @@ export function PdvClassic({
     setPendingOnAccount(false)
   }
 
-  // Sangria/Suprimento agora ficam na barra de caixa compartilhada (CaixaStatusBar).
-  // O diálogo `operationType` permanece (estado referenciado pelos guards de teclado),
-  // porém sem ponto de entrada — convergência: fonte única de sangria/suprimento.
+  // Sangria/Suprimento ficam na barra de caixa compartilhada (CaixaStatusBar).
+  // Não há mais dialog `operationType` neste arquivo — fonte única de sangria/suprimento.
 
   const requestFechamentoCaixa = () => {
     setShowOperationsMenu(false)
     setFechamentoCaixaSignal((n) => n + 1)
   }
 
-  const labelOperacaoCaixa = (t: string) =>
-    t === "sangria" ? "Sangria" : t === "suprimento" ? "Suprimento" : t
-
-  const saveOperation = () => {
-    if (!operationType) return
-    const value = parseFloat(operationValue) || 0
-    if (value <= 0) return
-    const reason = operationReason.trim()
-    if (!reason) {
-      toast({
-        title: "Motivo obrigatório",
-        description: "Informe o motivo da sangria ou do suprimento.",
-        variant: "destructive",
-      })
-      return
-    }
-    const op = operationType
-    setCashHistory((prev) => [
-      {
-        id: `${Date.now()}`,
-        type: op,
-        value,
-        reason,
-        at: new Date().toLocaleString("pt-BR"),
-      },
-      ...prev,
-    ])
-    if (op === "sangria") {
-      adicionarSaida(value)
-      appendAuditLog({
-        action: "sangria_caixa",
-        userLabel: auditUser(),
-        detail: `R$ ${value.toFixed(2)} — ${reason}`,
-      })
-    }
-    if (op === "suprimento") {
-      adicionarEntrada(value)
-      appendAuditLog({
-        action: "suprimento_caixa",
-        userLabel: auditUser(),
-        detail: `R$ ${value.toFixed(2)} — ${reason}`,
-      })
-    }
-    if (lojaAtivaId && sessaoId) {
-      // Retry exponencial com idempotência: o totalSaidas/totalEntradas já foi
-      // incrementado localmente. Se o servidor não confirmar, o caixa diverge —
-      // então retentamos. O `localId` faz o servidor deduplicar (sem duplicar a
-      // operação caso uma tentativa anterior tenha gravado mas a resposta se perdido).
-      const localId = `caixaop:${sessaoId}:${op}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
-      const opLabel = op === "sangria" ? "Sangria" : "Suprimento"
-      const body = JSON.stringify({
-        sessaoId,
-        tipo: op,
-        valor: value,
-        motivo: reason,
-        operador: auditUser(),
-        localId,
-      })
-      void (async () => {
-        const maxAttempts = 4
-        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-          try {
-            const res = await fetch("/api/ops/caixa/operacao", {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
-              body,
-            })
-            if (res.ok) return
-            // 4xx (período fechado, sessão inválida, permissão): não adianta retentar.
-            if (res.status >= 400 && res.status < 500) {
-              console.error("[caixa/operacao] HTTP", res.status, op, value)
-              toast({
-                variant: "destructive",
-                title: `${opLabel} não confirmada no servidor`,
-                description: "Operação aplicada apenas no caixa local. Verifique antes de fechar o caixa.",
-              })
-              return
-            }
-            console.warn("[caixa/operacao] HTTP", res.status, "tentativa", attempt)
-          } catch (err: unknown) {
-            console.warn("[caixa/operacao] rede — tentativa", attempt, err)
-          }
-          if (attempt < maxAttempts) {
-            await new Promise((r) => setTimeout(r, 400 * 2 ** (attempt - 1)))
-          }
-        }
-        // Todas as tentativas falharam (5xx/rede persistente).
-        toast({
-          variant: "destructive",
-          title: `${opLabel} não confirmada no servidor`,
-          description:
-            "Sem sucesso após várias tentativas. Operação só no caixa local — reenvie antes de fechar o caixa.",
-        })
-      })()
-    } else {
-      // Sem sessão confirmada no servidor (abertura não registrada): a operação
-      // afeta apenas o caixa local (totalSaidas/totalEntradas já incrementado).
-      // Não pode ser silenciosa — o fechamento usa a sessão do servidor e os
-      // totais divergiriam.
-      toast({
-        variant: "destructive",
-        title:
-          op === "sangria"
-            ? "Sangria só no caixa local"
-            : "Suprimento só no caixa local",
-        description:
-          "Caixa sem sessão confirmada no servidor. Reabra o caixa para registrar sangrias/suprimentos com segurança.",
-      })
-    }
-    setOperationType(null)
-    toast({
-      title: op === "sangria" ? "Sangria gerada" : "Reforço registrado",
-      description: `Valor de R$ ${value.toFixed(2)} registrado com sucesso.`,
-    })
-  }
-
-  // ⚠️ LEGADO — keymap do layout `uiShell === "default"`. Em produção o Clássico
-  // roda SEMPRE como `omni-smart` (VendasPDV), portanto este handler NÃO executa.
-  // Não adicione atalhos aqui (vira "feature fantasma"): o keymap operacional vivo
-  // é o `down`/`openShellShortcut` do shell omni-smart, mais abaixo.
-  useEffect(() => {
-    if (uiShell !== "default") return
-    const handler = (e: globalThis.KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
-      const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
-      if (e.key === "F1") {
-        e.preventDefault()
-        setShowKeyboardHelp(true)
-      } else if (e.key === "End") {
-        e.preventDefault()
-        setShowKeyboardHelp(true)
-      } else if (e.key === "F2") {
-        e.preventDefault()
-        if (cart.length > 0) {
-          setInstantPayIntent(null)
-          setIsPaymentModalOpen(true)
-        }
-      } else if (e.key === "F3") {
-        e.preventDefault()
-        productInputRef.current?.focus()
-      } else if (e.key === "F4") {
-        e.preventDefault()
-        if (cart.length > 0) {
-          queueMicrotask(() => {
-            const el = quantityInputRef.current
-            if (!el) return
-            el.focus()
-            const len = String(el.value ?? "").length
-            try {
-              el.setSelectionRange(len, len)
-            } catch {
-              /* input type number em alguns browsers */
-            }
-          })
-        } else {
-          productInputRef.current?.focus()
-        }
-      } else if (e.key === "F5") {
-        e.preventDefault()
-        customerInputRef.current?.focus()
-      } else if (e.key === "F6") {
-        e.preventDefault()
-        if (cart.length > 0) {
-          setCart((prev) => {
-            const next = prev.slice(0, -1)
-            const last = next[next.length - 1]
-            queueMicrotask(() => setSelectedCartLineId(last ? last.lineId : null))
-            return next
-          })
-        }
-      } else if (e.key === "F7") {
-        e.preventDefault()
-        setVendaEsperaOpen(true)
-      } else if (e.key === "F8") {
-        e.preventDefault()
-        if (cart.length > 0) setCart([])
-      } else if (e.key === "Insert") {
-        // Venda Avulsa — herda do PDV legado. Não exige caixa aberto neste
-        // ponto: o gate continua no `finalizeSaleTransaction`/`payment-modal`.
-        e.preventDefault()
-        if (!isPaymentModalOpen && !attrDialogOpen && !weightDialogOpen && !operationType) {
-          setShowItemAvulsoModal(true)
-        }
-      } else if (e.altKey && (e.key === "d" || e.key === "D")) {
-        e.preventDefault()
-        if (cart.length > 0) setIsPaymentModalOpen(true)
-      } else if (e.altKey && (e.key === "p" || e.key === "P")) {
-        e.preventDefault()
-        if (cart.length > 0) {
-          setInstantPayIntent(null)
-          setIsPaymentModalOpen(true)
-        }
-      } else if (e.key === "F10") {
-        e.preventDefault()
-        if (cart.length > 0) setIsPaymentModalOpen(true)
-      } else if (e.code === "Space" && !typing) {
-        e.preventDefault()
-        if (cart.length > 0) setIsPaymentModalOpen(true)
-      } else if (e.key === "Escape") {
-        if (
-          isModoRapido &&
-          cart.length > 0 &&
-          !typing &&
-          !isPaymentModalOpen &&
-          !attrDialogOpen &&
-          !weightDialogOpen &&
-          !operationType &&
-          !showKeyboardHelp &&
-          !showOperationsMenu
-        ) {
-          e.preventDefault()
-          setCart((prev) => {
-            const next = prev.slice(0, -1)
-            const last = next[next.length - 1]
-            queueMicrotask(() => setSelectedCartLineId(last ? last.lineId : null))
-            return next
-          })
-          queueMicrotask(() => productInputRef.current?.focus())
-          return
-        }
-        e.preventDefault()
-        setShowKeyboardHelp(false)
-        setShowOperationsMenu(false)
-        setOperationType(null)
-        setIsPaymentModalOpen(false)
-      }
-    }
-    window.addEventListener("keydown", handler)
-    return () => window.removeEventListener("keydown", handler)
-  }, [
-    cart.length,
-    uiShell,
-    isModoRapido,
-    isPaymentModalOpen,
-    attrDialogOpen,
-    weightDialogOpen,
-    operationType,
-    showKeyboardHelp,
-    showOperationsMenu,
-  ])
+  // ─── Lote 4: REMOÇÃO LEGADA ─────────────────────────────────────────────────
+  // Removidos nesta sessão:
+  //  1. função `saveOperation` (sangria/suprimento via dialog local) — sem ponto
+  //     de entrada. Sangria/suprimento vivem agora no CaixaStatusBar compartilhado
+  //     (com retry/idempotência via `lib/pdv-caixa-operacao.ts`).
+  //  2. helper `labelOperacaoCaixa` — só era usado pelo painel cashHistory.
+  //  3. `useEffect` keymap do `uiShell === "default"` — em produção o PDV Clássico
+  //     SEMPRE roda como `omni-smart` (ver vendas-pdv.tsx:117). O handler nunca
+  //     executava (early-return) e era "feature fantasma" para qualquer atalho
+  //     que alguém adicionasse aqui. O keymap operacional vivo é o `down`/
+  //     `openShellShortcut` do shell omni-smart, logo abaixo.
+  //  4. states `operationType`, `operationValue`, `operationReason`, `cashHistory`.
+  //  5. dialog `operationType` + painel "Histórico financeiro do caixa".
+  // Para o histórico completo do que foi removido, ver `git log` antes do Lote 4.
 
   const shellModalBlocking =
     isPaymentModalOpen ||
@@ -1230,7 +997,6 @@ export function PdvClassic({
     shellReceivablesOpen ||
     attrDialogOpen ||
     weightDialogOpen ||
-    operationType !== null ||
     showKeyboardHelp ||
     showOperationsMenu
 
@@ -2739,59 +2505,8 @@ export function PdvClassic({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={operationType !== null} onOpenChange={(open) => !open && setOperationType(null)}>
-        <DialogContent className="max-w-md border-border bg-card">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <HandCoins className="h-5 w-5 text-primary" />
-              Registrar {operationType === "suprimento" ? "Reforço (suprimento)" : "Sangria"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>Valor</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={operationValue}
-                onChange={(e) => setOperationValue(e.target.value)}
-                className="border-border bg-secondary"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Motivo (obrigatório)</Label>
-              <Input
-                value={operationReason}
-                onChange={(e) => setOperationReason(e.target.value)}
-                className="border-border bg-secondary"
-                placeholder="Ex.: Troco para troco, compra de troco..."
-              />
-            </div>
-            <Button onClick={saveOperation} className="w-full bg-primary hover:bg-primary/90">
-              Salvar no histórico financeiro
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {cashHistory.length > 0 && (
-        <div className="max-h-36 shrink-0 overflow-y-auto overflow-x-hidden border-t border-border bg-background px-1 py-2">
-          <p className="mb-2 text-sm font-semibold text-foreground">Histórico financeiro do caixa</p>
-          <div className="space-y-1.5">
-            {cashHistory.slice(0, 6).map((h) => (
-              <div
-                key={h.id}
-                className="flex justify-between gap-2 rounded-md border border-border bg-background px-2 py-1.5 text-sm"
-              >
-                <span className="min-w-0 flex-1 break-words text-left">
-                  {labelOperacaoCaixa(h.type)} — {h.reason}
-                </span>
-                <span className="font-medium tabular-nums">R$ {h.value.toFixed(2)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Lote 4: dialog `operationType` + painel `cashHistory` REMOVIDOS.
+          Sangria/suprimento e histórico vêm do CaixaStatusBar compartilhado. */}
     </div>
   )
 }
