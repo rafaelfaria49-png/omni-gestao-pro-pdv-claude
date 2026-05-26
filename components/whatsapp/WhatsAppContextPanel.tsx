@@ -10,6 +10,7 @@ import {
   Activity,
   AlertCircle,
   Clock,
+  Copy,
   DollarSign,
   ExternalLink,
   FileText,
@@ -17,6 +18,7 @@ import {
   Link2Off,
   MessageSquare,
   Phone,
+  RefreshCw,
   Sparkles,
   UserCheck,
   UserPlus,
@@ -40,6 +42,7 @@ import {
   formatMoney,
   useWhatsAppClienteContext,
 } from "./use-whatsapp-cliente-context"
+import { useWhatsAppAiAnalysis } from "./use-whatsapp-ai-analysis"
 import { cn } from "@/lib/utils"
 
 export type ContextContact = {
@@ -105,10 +108,16 @@ function osStatusClass(status: string): string {
   return "bg-blue-500/10 text-blue-600 dark:text-blue-400"
 }
 
+function prioridadeClass(p: string): string {
+  if (p === "urgente") return "bg-red-500/15 text-red-700 dark:text-red-300"
+  if (p === "alta") return "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+  if (p === "media") return "bg-sky-500/15 text-sky-700 dark:text-sky-300"
+  return "bg-muted text-muted-foreground"
+}
+
 export function WhatsAppContextPanel({
   conv,
   messages,
-  aiAnalyzing,
   apiHeaders,
   onApplySuggestion,
   onQuickAction,
@@ -122,7 +131,6 @@ export function WhatsAppContextPanel({
 }: {
   conv: ContextConversation | null
   messages: TimelineMessage[]
-  aiAnalyzing?: boolean
   apiHeaders: Record<string, string> | null
   onApplySuggestion?: (text: string) => void
   onQuickAction?: (action: string) => void
@@ -155,6 +163,16 @@ export function WhatsAppContextPanel({
     [snapshot, conv?.clienteId]
   )
 
+  const {
+    loading: aiLoading,
+    available: aiAvailable,
+    analysis: aiAnalysis,
+    cached: aiCached,
+    reason: aiReason,
+    error: aiError,
+    refresh: refreshAi,
+  } = useWhatsAppAiAnalysis(conv?.id ?? null, apiHeaders)
+
   const intent = useMemo(
     () => (conv ? detectIntent(conv.lastMessagePreview) : null),
     [conv]
@@ -167,10 +185,22 @@ export function WhatsAppContextPanel({
     () => (conv ? buildAiSummary(conv, intent, opsHint) : ""),
     [conv, intent, opsHint]
   )
-  const suggestion = useMemo(
+  const localSuggestion = useMemo(
     () => (conv ? suggestReply(intent, conv.humanMode) : ""),
     [conv, intent]
   )
+  const llmSuggestion = aiAnalysis?.sugestaoResposta?.trim() ?? ""
+  const activeSuggestion = aiAvailable && llmSuggestion ? llmSuggestion : localSuggestion
+
+  const copySuggestion = async () => {
+    const text = activeSuggestion.trim()
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      /* ignore */
+    }
+  }
 
   useEffect(() => {
     if (!highlightLinkCard || !linkCardRef.current) return
@@ -240,8 +270,6 @@ export function WhatsAppContextPanel({
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
-        {aiAnalyzing ? <AiAnalyzingPulse /> : null}
-
         {insights.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {insights.map((ins) => (
@@ -250,24 +278,129 @@ export function WhatsAppContextPanel({
           </div>
         )}
 
-        <div className="rounded-xl border border-border/60 bg-card/50 p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-foreground">
-            <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-            Resumo IA
+        <div className="rounded-xl border border-violet-500/25 bg-card/50 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+              Resumo IA
+              {aiAvailable && aiCached && (
+                <span className="text-[9px] font-normal text-muted-foreground">(cache)</span>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1 px-2 text-[10px]"
+              disabled={aiLoading}
+              onClick={() => void refreshAi()}
+            >
+              <RefreshCw className={cn("h-3 w-3", aiLoading && "animate-spin")} />
+              Atualizar análise
+            </Button>
           </div>
-          <p className="text-[11px] leading-relaxed text-muted-foreground">{summary}</p>
-          {intent && (
-            <p className="mt-2 text-[11px]">
-              <span className="text-muted-foreground">Intenção: </span>
-              <span className="font-medium text-primary">{intent}</span>
-            </p>
+
+          {aiLoading ? (
+            <AiAnalyzingPulse className="mt-1" />
+          ) : aiAvailable && aiAnalysis ? (
+            <div className="space-y-2 text-[11px]">
+              <p className="leading-relaxed text-foreground/90">{aiAnalysis.resumoOperacional}</p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge variant="outline" className="h-5 text-[9px]">
+                  {aiAnalysis.intencao}
+                </Badge>
+                <span
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[9px] font-semibold capitalize",
+                    prioridadeClass(aiAnalysis.prioridade)
+                  )}
+                >
+                  {aiAnalysis.prioridade}
+                </span>
+                <span className="text-muted-foreground">
+                  Tom: {aiAnalysis.tomEmocional}
+                </span>
+              </div>
+              {aiAnalysis.risco && aiAnalysis.risco !== "nenhum relevante" && (
+                <p>
+                  <span className="text-muted-foreground">Risco: </span>
+                  {aiAnalysis.risco}
+                </p>
+              )}
+              {aiAnalysis.oportunidade && (
+                <p>
+                  <span className="text-muted-foreground">Oportunidade: </span>
+                  {aiAnalysis.oportunidade}
+                </p>
+              )}
+              <p>
+                <span className="text-muted-foreground">Próxima ação: </span>
+                {aiAnalysis.proximaMelhorAcao}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Confiança {aiAnalysis.confianca}% — {aiAnalysis.motivo}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                Análise IA indisponível
+                {aiReason || aiError ? ` — ${aiError ?? aiReason}` : ""}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Apoio local (heurística, não é LLM):
+              </p>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">{summary}</p>
+              {intent && (
+                <p className="text-[11px]">
+                  <span className="text-muted-foreground">Intenção local: </span>
+                  <span className="font-medium text-primary">{intent}</span>
+                </p>
+              )}
+            </div>
           )}
         </div>
 
-        <IaSuggestionCard
-          suggestion={suggestion}
-          onApply={onApplySuggestion ? () => onApplySuggestion(suggestion) : undefined}
-        />
+        {activeSuggestion.trim() ? (
+          <div className="space-y-1">
+            <IaSuggestionCard
+              suggestion={activeSuggestion}
+              onApply={
+                onApplySuggestion
+                  ? () => onApplySuggestion(activeSuggestion)
+                  : undefined
+              }
+            />
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 gap-1 text-[10px]"
+                onClick={() => void copySuggestion()}
+              >
+                <Copy className="h-3 w-3" />
+                Copiar sugestão
+              </Button>
+              {onApplySuggestion && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 text-[10px]"
+                  onClick={() => onApplySuggestion(activeSuggestion)}
+                >
+                  Usar como resposta
+                </Button>
+              )}
+            </div>
+            {!aiAvailable && (
+              <p className="text-[10px] text-muted-foreground">
+                Sugestão local — revise antes de enviar.
+              </p>
+            )}
+          </div>
+        ) : null}
 
         {/* ── CRM real ── */}
         <div className="space-y-2">

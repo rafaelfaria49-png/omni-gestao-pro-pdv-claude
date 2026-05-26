@@ -825,7 +825,6 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
   const [showEtiquetasModal, setShowEtiquetasModal] = useState(false)
   const [showAddLabel, setShowAddLabel] = useState(false)
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all")
-  const [aiAnalyzing, setAiAnalyzing] = useState(false)
   const [linkingCliente, setLinkingCliente] = useState(false)
   const [unlinkingCliente, setUnlinkingCliente] = useState(false)
   const [linkSuccessMessage, setLinkSuccessMessage] = useState<string | null>(null)
@@ -942,11 +941,7 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
     if (showLinkHighlight) {
       highlightTimerRef.current = setTimeout(() => setHighlightLinkPanel(false), 5000)
     }
-    setAiAnalyzing(true)
-    const analyzeTimer = window.setTimeout(() => setAiAnalyzing(false), 900)
     await fetchMessages(conv.id)
-    window.clearTimeout(analyzeTimer)
-    setAiAnalyzing(false)
     if (conv.unreadCount > 0) {
       await fetch(`/api/whatsapp/conversations/${conv.id}`, {
         method: "PATCH",
@@ -1539,7 +1534,6 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
           key={`${selectedConv?.id ?? "none"}-${contextRefreshKey}`}
           conv={selectedConv}
           messages={messages}
-          aiAnalyzing={aiAnalyzing}
           apiHeaders={hdr}
           linkingCliente={linkingCliente}
           unlinkingCliente={unlinkingCliente}
