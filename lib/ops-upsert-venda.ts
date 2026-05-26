@@ -357,6 +357,10 @@ export async function upsertVendaInTransaction(
     }
 
     const valorBase = arredonda2(aPrazoVal / parcelas)
+    // Captura o id do primeiro título (n=1) para vincular em Venda.contaReceberTituloId.
+    // O cancelamento da venda varre TODOS os títulos via `localKey startsWith pdv-aprazo-${pedidoId}`,
+    // então o vínculo singular aqui é apenas indicação rápida para UI/relatórios.
+    let firstTituloId: string | null = null
     for (let n = 1; n <= parcelas; n++) {
       // Última parcela absorve arredondamento
       const valorParcela = n === parcelas ? arredonda2(aPrazoVal - valorBase * (parcelas - 1)) : valorBase
@@ -383,7 +387,7 @@ export async function upsertVendaInTransaction(
         vendas: [{ saleId: pedidoId, total: aPrazoVal }],
       } as unknown as Prisma.InputJsonValue
 
-      await tx.contaReceberTitulo.upsert({
+      const upserted = await tx.contaReceberTitulo.upsert({
         where: { storeId_localKey: { storeId: lojaId, localKey: aprazoLocalKey } },
         create: {
           storeId: lojaId,
@@ -403,6 +407,16 @@ export async function upsertVendaInTransaction(
           vencimento: vencStr,
           payload: aprazoPayload,
         },
+        select: { id: true },
+      })
+      if (n === 1) firstTituloId = upserted.id
+    }
+
+    // Vincula a FK na venda (idempotente — re-sync aponta para o mesmo id pelo localKey único).
+    if (firstTituloId) {
+      await tx.venda.update({
+        where: { id: v.id },
+        data: { contaReceberTituloId: firstTituloId },
       })
     }
   }

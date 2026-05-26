@@ -267,31 +267,43 @@ export async function POST(
       }
     })
 
-    // 4. Estorno do título à prazo (Contas a Receber), quando houver — lógica existente.
+    // 4. Estorno do(s) título(s) à prazo (Contas a Receber) — N parcelas suportadas.
+    // Varre TODOS os títulos via `localKey LIKE 'pdv-aprazo-${pedidoId}%'` em vez de
+    // depender só da FK singular `Venda.contaReceberTituloId` (que aponta para o
+    // primeiro título). Cobre venda 1 parcela e N parcelas com o mesmo código.
     // Mantido fora da transação por reaproveitar o recálculo de saldo de carteira.
     let estornoReceber = false
-    if (venda.contaReceberTituloId) {
-      try {
-        const res = await estornarMovimentacaoPorReferencia(
+    let titulosCancelados = 0
+    try {
+      const titulosAprazo = await prisma.contaReceberTitulo.findMany({
+        where: {
           storeId,
-          venda.contaReceberTituloId,
-          "receber"
-        )
-        estornoReceber = res.ok && res.action === "created"
-      } catch (e) {
-        console.error("[vendas/cancelar] estorno financeiro (a prazo) falhou:", e)
+          localKey: { startsWith: `pdv-aprazo-${pedidoId}` },
+        },
+        select: { id: true, localKey: true },
+      })
+      for (const titulo of titulosAprazo) {
+        try {
+          const res = await estornarMovimentacaoPorReferencia(storeId, titulo.id, "receber")
+          if (res.ok && res.action === "created") estornoReceber = true
+        } catch (e) {
+          console.error("[vendas/cancelar] estorno financeiro (a prazo) falhou:", titulo.localKey, e)
+        }
+        // Marca o título como cancelado se ainda não estiver pago (best-effort).
+        try {
+          await cancelContaReceber({
+            storeId,
+            id: titulo.id,
+            motivo: motivo.trim(),
+            userLabel: operadorCancelamento,
+          })
+          titulosCancelados += 1
+        } catch (e) {
+          console.error("[vendas/cancelar] cancelContaReceber falhou:", titulo.localKey, e)
+        }
       }
-      // Marca o título como cancelado se ainda não estiver pago (best-effort).
-      try {
-        await cancelContaReceber({
-          storeId,
-          id: venda.contaReceberTituloId,
-          motivo: motivo.trim(),
-          userLabel: operadorCancelamento,
-        })
-      } catch (e) {
-        console.error("[vendas/cancelar] cancelContaReceber falhou:", e)
-      }
+    } catch (e) {
+      console.error("[vendas/cancelar] busca de títulos à prazo falhou:", e)
     }
 
     return NextResponse.json({
@@ -304,6 +316,7 @@ export async function POST(
       estoqueReposto: estoqueRepostoCount,
       estornoVenda: estornoVendaRealizado,
       estornoFinanceiro: estornoReceber || estornoVendaRealizado,
+      titulosAprazoCancelados: titulosCancelados,
       devolucoesMantidas: devolucoes.length,
     })
   } catch (e) {
