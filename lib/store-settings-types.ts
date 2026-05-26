@@ -1,4 +1,5 @@
 import type { TermosGarantia } from "@/lib/config-empresa"
+import type { FormaPagamentoConfig } from "@/lib/pdv-formas-pagamento"
 import type { PdvImpressaoConfig } from "@/lib/pdv-impressao-config"
 
 export type CertificadoA1Status = "Inativo" | "Pendente" | "Ativo" | "Expirado"
@@ -23,6 +24,8 @@ export type StorePdvParams = {
   moduloControleConsumo: boolean
   /** Preferência por unidade (persistida em `printerConfig.pdvParams`). */
   pdvClassicLayout?: PdvClassicLayoutKind
+  /** Formas de pagamento ativas e regras por unidade (PDV runtime). */
+  formasPagamento?: FormaPagamentoConfig[]
 }
 
 /**

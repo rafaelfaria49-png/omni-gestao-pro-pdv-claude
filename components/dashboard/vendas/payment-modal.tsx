@@ -43,10 +43,18 @@ import { useToast } from "@/hooks/use-toast"
 import { PdvVisorTotal } from "./painel-total"
 import type { MaquininhaConfig } from "@/lib/centro-financeiro"
 import { getMaquininhasParaPdvForStore } from "@/lib/centro-financeiro"
-import { useLojaAtiva } from "@/lib/loja-ativa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { normalizeDocDigits } from "@/lib/cpf"
 import { cn } from "@/lib/utils"
+import { useStoreSettings } from "@/lib/store-settings-provider"
+import {
+  findFormaByPaymentType,
+  getFormasForPaymentModal,
+  getFormaPagamentoIcon,
+  formaPagamentoOutlineClasses,
+  toPaymentMethodType,
+  type FormaPagamentoConfig,
+  type FormaPagamentoConfigId,
+} from "@/lib/pdv-formas-pagamento"
 
 function formatMoneyInput(value: string): string {
   const clean = value.replace(/\D/g, "")
@@ -179,8 +187,7 @@ export function PaymentModal({
   multipayHint = false,
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
-  const { lojaAtivaId } = useLojaAtiva()
-  const storeIdForPdv = (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID
+  const { pdvParams, storeId: storeIdForPdv } = useStoreSettings()
   const { toast } = useToast()
   const [payments, setPayments] = useState<PaymentMethod[]>([])
   const [currentValue, setCurrentValue] = useState("")
@@ -211,6 +218,56 @@ export function PaymentModal({
   }, [isOpen, selectedCustomer?.id, selectedCustomer?.cpf])
 
   const cpfEfetivo = cpfDraft.trim() || selectedCustomer?.cpf?.trim() || ""
+
+  const formasPagamento = pdvParams.formasPagamento ?? []
+  const formasModal = useMemo(() => {
+    const list = getFormasForPaymentModal(formasPagamento)
+    return multipayHint ? list.filter((f) => f.permitirNoMultiplo) : list
+  }, [formasPagamento, multipayHint])
+
+  const resolveFormaForType = useCallback(
+    (type: PaymentMethodType, preferId?: FormaPagamentoConfigId) =>
+      findFormaByPaymentType(formasPagamento, type, preferId),
+    [formasPagamento],
+  )
+
+  const guardFormaRules = useCallback(
+    (forma: FormaPagamentoConfig | undefined, type: PaymentMethodType): boolean => {
+      const exigirCliente =
+        forma?.exigirCliente ??
+        (type === "a_prazo" || type === "carne")
+      if (exigirCliente && !selectedCustomer) {
+        toast({
+          variant: "destructive",
+          title: "Cliente obrigatório",
+          description:
+            type === "a_prazo"
+              ? "⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo."
+              : "Selecione o cliente para esta forma de pagamento.",
+        })
+        return false
+      }
+      const exigirCpf = forma?.exigirCpf ?? (type === "a_prazo" || type === "carne")
+      if (exigirCpf && selectedCustomer && !documentoClienteValido(cpfEfetivo)) {
+        toast({
+          variant: "destructive",
+          title: "CPF/CNPJ obrigatório",
+          description: "Informe e salve o CPF ou CNPJ do cliente para carnê, boleto ou faturamento à prazo.",
+        })
+        return false
+      }
+      if (forma?.exigirAutorizacao && !adminSessionOk) {
+        toast({
+          variant: "destructive",
+          title: "Autorização necessária",
+          description: "Informe a senha do supervisor para usar esta forma de pagamento.",
+        })
+        return false
+      }
+      return true
+    },
+    [adminSessionOk, cpfEfetivo, selectedCustomer, toast],
+  )
   const fluxoPrazoOuCarne =
     !!selectedCustomer &&
     (selectedType === "carne" ||
@@ -294,7 +351,9 @@ export function PaymentModal({
   }, [isOpen])
 
   const handleAddPayment = useCallback(
-    (type: PaymentMethodType) => {
+    (type: PaymentMethodType, preferFormaId?: FormaPagamentoConfigId) => {
+      const forma = resolveFormaForType(type, preferFormaId)
+      if (!guardFormaRules(forma, type)) return
       if (type === "a_prazo" && !selectedCustomer) {
         toast.error("⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo.")
         return
@@ -327,8 +386,11 @@ export function PaymentModal({
         const parsed = parseMoneyString(currentValue)
         const parsedOk = Number.isFinite(parsed) && parsed > 0
         const base = parsedOk ? parsed : max
-        const value =
-          type === "dinheiro" ? base : Math.min(base, max)
+        let value = type === "dinheiro" ? base : Math.min(base, max)
+        const permitirTroco = forma?.permitirTroco ?? type === "dinheiro"
+        if (type === "dinheiro" && !permitirTroco) {
+          value = Math.min(value, rem)
+        }
         if (value <= 0) return prev
 
         const maq =
@@ -352,8 +414,10 @@ export function PaymentModal({
       carneInstallments,
       currentValue,
       customerStoreCredit,
+      guardFormaRules,
       maquininhaPdvId,
       maquininhasAtivasPdv,
+      resolveFormaForType,
       selectedCustomer,
       cpfEfetivo,
       toast,
@@ -821,148 +885,65 @@ export function PaymentModal({
                 </div>
               )}
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedType("dinheiro")
-                    handleAddPayment("dinheiro")
-                  }}
-                  className={cn(
-                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors",
-                    selectedType === "dinheiro"
-                      ? "border-emerald-500 bg-emerald-500/10 dark:border-emerald-400/70 dark:bg-emerald-500/20"
-                      : "border-border dark:border-white/10 dark:hover:border-emerald-400/45"
-                  )}
-                >
-                  <Banknote className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                  <span className="leading-none">Dinheiro</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedType("pix")
-                    handleAddPayment("pix")
-                  }}
-                  className={cn(
-                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors",
-                    selectedType === "pix"
-                      ? "border-teal-500 bg-teal-500/10 dark:border-teal-400/70 dark:bg-teal-500/20"
-                      : "border-border dark:border-white/10 dark:hover:border-teal-400/45"
-                  )}
-                >
-                  <QrCode className="h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
-                  <span className="leading-none">Pix</span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={!cartaoLiberado}
-                  title={
-                    !cartaoLiberado
+                {formasModal.map((forma) => {
+                  const runtime = toPaymentMethodType(forma.id)
+                  if (!runtime) return null
+                  const Icon = getFormaPagamentoIcon(forma.icon)
+                  const isSelected = selectedType === runtime
+                  const isCartao = runtime === "cartao_debito" || runtime === "cartao_credito"
+                  const exigirCliente = forma.exigirCliente ?? (runtime === "a_prazo" || runtime === "carne")
+                  const disabled =
+                    (isCartao && !cartaoLiberado) ||
+                    (runtime === "credito_vale" && customerStoreCredit <= 0) ||
+                    (exigirCliente && !selectedCustomer) ||
+                    (forma.exigirAutorizacao && !adminSessionOk)
+                  const title =
+                    isCartao && !cartaoLiberado
                       ? "Ative pelo menos uma maquininha em Configurações → Financeiro (cartões)"
-                      : undefined
-                  }
-                  onClick={() => {
-                    setSelectedType("cartao_debito")
-                    handleAddPayment("cartao_debito")
-                  }}
-                  className={cn(
-                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
-                    selectedType === "cartao_debito"
-                      ? "border-slate-500 bg-slate-500/10 dark:border-slate-400/70 dark:bg-slate-500/20"
-                      : "border-border dark:border-white/10 dark:hover:border-slate-400/45"
-                  )}
-                >
-                  <CreditCard className="h-5 w-5 shrink-0 text-slate-600 dark:text-slate-300" />
-                  <span className="leading-none">Débito</span>
-                </button>
+                      : runtime === "a_prazo" && !selectedCustomer
+                        ? "Selecione o cliente no PDV para liberar venda à prazo"
+                        : runtime === "carne" && !selectedCustomer
+                          ? "Selecione o cliente no PDV para carnê ou boleto"
+                          : forma.exigirAutorizacao && !adminSessionOk
+                            ? "Exige autorização do supervisor"
+                            : runtime === "a_prazo"
+                              ? "Configura parcelas e vencimento — gera título em Contas a Receber"
+                              : undefined
 
-                <button
-                  type="button"
-                  disabled={!cartaoLiberado}
-                  title={
-                    !cartaoLiberado
-                      ? "Ative pelo menos uma maquininha em Configurações → Financeiro (cartões)"
-                      : undefined
-                  }
-                  onClick={() => {
-                    setSelectedType("cartao_credito")
-                    handleAddPayment("cartao_credito")
-                  }}
-                  className={cn(
-                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
-                    selectedType === "cartao_credito"
-                      ? "border-blue-500 bg-blue-500/10 dark:border-blue-400/70 dark:bg-blue-500/20"
-                      : "border-border dark:border-white/10 dark:hover:border-blue-400/45"
-                  )}
-                >
-                  <CreditCard className="h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
-                  <span className="leading-none">Crédito</span>
-                </button>
-
-                <button
-                  type="button"
-                  title={
-                    !selectedCustomer
-                      ? "Selecione o cliente no PDV para liberar venda à prazo"
-                      : "Configura parcelas e vencimento — gera título em Contas a Receber"
-                  }
-                  onClick={() => {
-                    if (!selectedCustomer) {
-                      toast.error("⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo.")
-                      return
-                    }
-                    setSelectedType("a_prazo")
-                    if (!aPrazoPrimeiroVencDate) {
-                      const d = new Date(); d.setDate(d.getDate() + 30)
-                      setAPrazoPrimeiroVencDate(d.toISOString().split("T")[0])
-                    }
-                  }}
-                  className={cn(
-                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors",
-                    selectedType === "a_prazo"
-                      ? "border-violet-500 bg-violet-500/10 dark:border-violet-400/70 dark:bg-violet-500/20"
-                      : "border-border dark:border-white/10 dark:hover:border-violet-400/45"
-                  )}
-                >
-                  <CalendarClock className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
-                  <span className="leading-none">À prazo</span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={!selectedCustomer || customerStoreCredit <= 0}
-                  onClick={() => {
-                    setSelectedType("credito_vale")
-                    handleAddPayment("credito_vale")
-                  }}
-                  className={cn(
-                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
-                    selectedType === "credito_vale"
-                      ? "border-amber-500 bg-amber-500/10 dark:border-amber-400/70 dark:bg-amber-500/20"
-                      : "border-border dark:border-white/10 dark:hover:border-amber-400/45"
-                  )}
-                >
-                  <Wallet className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-                  <span className="leading-none">Créd./Vale</span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={!selectedCustomer}
-                  title={!selectedCustomer ? "Selecione o cliente no PDV para carnê ou boleto" : undefined}
-                  onClick={() => setSelectedType("carne")}
-                  className={cn(
-                    "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
-                    selectedType === "carne"
-                      ? "border-orange-500 bg-orange-500/10 dark:border-orange-400/70 dark:bg-orange-500/20"
-                      : "border-border dark:border-white/10 dark:hover:border-orange-400/45"
-                  )}
-                >
-                  <FileText className="h-5 w-5 shrink-0 text-orange-600 dark:text-orange-400" />
-                  <span className="leading-none">Carnê</span>
-                </button>
+                  return (
+                    <button
+                      key={forma.id}
+                      type="button"
+                      disabled={disabled}
+                      title={title}
+                      onClick={() => {
+                        if (!guardFormaRules(forma, runtime)) return
+                        if (runtime === "a_prazo") {
+                          setSelectedType("a_prazo")
+                          if (!aPrazoPrimeiroVencDate) {
+                            const d = new Date()
+                            d.setDate(d.getDate() + 30)
+                            setAPrazoPrimeiroVencDate(d.toISOString().split("T")[0])
+                          }
+                          return
+                        }
+                        if (runtime === "carne") {
+                          setSelectedType("carne")
+                          return
+                        }
+                        setSelectedType(runtime)
+                        handleAddPayment(runtime, forma.id)
+                      }}
+                      className={cn(
+                        "h-[4.5rem] flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 text-xs font-semibold text-foreground bg-background hover:bg-muted/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                        formaPagamentoOutlineClasses(forma.cor, isSelected),
+                      )}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <span className="leading-none text-center">{forma.shortLabel}</span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -1265,7 +1246,7 @@ export function PaymentModal({
                 <Printer className="w-5 h-5 mr-2" />
                 <div className="text-left">
                   <p className="text-sm font-semibold">Imprimir Cupom</p>
-                  <p className="text-xs text-muted-foreground">Térmica 80mm</p>
+                  <p className="text-xs text-muted-foreground">Térmica (config da unidade)</p>
                 </div>
               </Button>
               

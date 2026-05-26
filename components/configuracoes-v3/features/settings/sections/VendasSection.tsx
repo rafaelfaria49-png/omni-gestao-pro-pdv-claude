@@ -3,27 +3,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingsCard } from "../components/SettingsCard";
-import { SettingsSoonBadge } from "../components/SettingsSoonBadge";
-import {
-  Banknote,
-  CreditCard,
-  Landmark,
-  NotebookPen,
-  QrCode,
-  ShoppingCart,
-  type LucideIcon,
-} from "lucide-react";
-import { Switch } from "@/components/configuracoes-v3/components/ui/switch";
+import { ShoppingCart } from "lucide-react";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { Input } from "@/components/configuracoes-v3/components/ui/input";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
-import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
-import { ConfigEmpresaProvider, configPadrao } from "@/lib/config-empresa";
-import { LojaAtivaProvider, useLojaAtiva } from "@/lib/loja-ativa";
-import { StoreSettingsProvider, useStoreSettings } from "@/lib/store-settings-provider";
+import { Switch } from "@/components/configuracoes-v3/components/ui/switch";
+import { configPadrao } from "@/lib/config-empresa";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { useStoreSettings } from "@/lib/store-settings-provider";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { useToast } from "@/components/configuracoes-v3/hooks/use-toast";
 import type { StorePdvParams } from "@/lib/store-settings-types";
+import {
+  defaultFormasPagamento,
+  formasPagamentoEqual,
+  normalizeFormasPagamento,
+  type FormaPagamentoConfig,
+} from "@/lib/pdv-formas-pagamento";
+import { FormasPagamentoSettings } from "./FormasPagamentoSettings";
 
 type VendasForm = {
   garantiaPadraoDias: number;
@@ -31,32 +28,8 @@ type VendasForm = {
   incluirImpostoEstimadoNoPdv: boolean;
   aliquotaImpostoEstimadoPdv: number;
   moduloControleConsumo: boolean;
+  formasPagamento: FormaPagamentoConfig[];
 };
-
-/** Somente UI — sem campo em printerConfig/API neste projeto. */
-type FormasPagamentoVisual = {
-  dinheiro: boolean;
-  cartaoCredito: boolean;
-  cartaoDebito: boolean;
-  pix: boolean;
-  fiado: boolean;
-};
-
-const FORMAS_PAGAMENTO_PADRAO: FormasPagamentoVisual = {
-  dinheiro: true,
-  cartaoCredito: true,
-  cartaoDebito: true,
-  pix: true,
-  fiado: true,
-};
-
-const FORMAS_PAGAMENTO_ITENS: { key: keyof FormasPagamentoVisual; label: string; icon: LucideIcon }[] = [
-  { key: "dinheiro", label: "Dinheiro", icon: Banknote },
-  { key: "cartaoCredito", label: "Cartão crédito", icon: CreditCard },
-  { key: "cartaoDebito", label: "Cartão débito", icon: Landmark },
-  { key: "pix", label: "PIX", icon: QrCode },
-  { key: "fiado", label: "Fiado", icon: NotebookPen },
-];
 
 function safePrinter(raw: unknown): Record<string, unknown> {
   return raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {};
@@ -71,6 +44,7 @@ function formFromPdvParams(p: StorePdvParams): VendasForm {
     incluirImpostoEstimadoNoPdv: !!p.incluirImpostoEstimadoNoPdv,
     aliquotaImpostoEstimadoPdv: Math.max(0, Number(p.aliquotaImpostoEstimadoPdv) || 0),
     moduloControleConsumo: !!p.moduloControleConsumo,
+    formasPagamento: normalizeFormasPagamento(p.formasPagamento ?? defaultFormasPagamento()),
   };
 }
 
@@ -80,7 +54,8 @@ function formsEqual(a: VendasForm, b: VendasForm): boolean {
     a.validadeOrcamentoDias === b.validadeOrcamentoDias &&
     a.incluirImpostoEstimadoNoPdv === b.incluirImpostoEstimadoNoPdv &&
     a.aliquotaImpostoEstimadoPdv === b.aliquotaImpostoEstimadoPdv &&
-    a.moduloControleConsumo === b.moduloControleConsumo
+    a.moduloControleConsumo === b.moduloControleConsumo &&
+    formasPagamentoEqual(a.formasPagamento, b.formasPagamento)
   );
 }
 
@@ -156,6 +131,7 @@ function VendasSectionContent() {
         incluirImpostoEstimadoNoPdv: form.incluirImpostoEstimadoNoPdv,
         aliquotaImpostoEstimadoPdv,
         moduloControleConsumo: form.moduloControleConsumo,
+        formasPagamento: normalizeFormasPagamento(form.formasPagamento),
       };
 
       const nextPrinter: Record<string, unknown> = {
@@ -184,6 +160,7 @@ function VendasSectionContent() {
         incluirImpostoEstimadoNoPdv: form.incluirImpostoEstimadoNoPdv,
         aliquotaImpostoEstimadoPdv,
         moduloControleConsumo: form.moduloControleConsumo,
+        formasPagamento: normalizeFormasPagamento(form.formasPagamento),
       };
       setForm(saved);
       setSnapshot(saved);
@@ -211,7 +188,7 @@ function VendasSectionContent() {
       <SectionHeader
         icon={<ShoppingCart className="h-5 w-5" />}
         title="Vendas"
-        description="Prazos de orçamento, impostos no total do PDV e módulo de mesas — por unidade ativa."
+        description="Formas de pagamento, prazos de orçamento, impostos no PDV e módulo de mesas — gravados em printerConfig.pdvParams por unidade."
       />
 
       {noLoja ? (
@@ -223,29 +200,13 @@ function VendasSectionContent() {
 
       <SettingsCard
         title="Formas de pagamento"
-        description="Pré-visualização das opções no PDV. A ativação por forma de pagamento será conectada ao backend numa fase posterior."
-        headerExtra={<SettingsSoonBadge />}
+        description="Ative, ordene e configure regras das formas exibidas nos PDVs desta unidade."
       >
-        <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
-          Os interruptores abaixo são apenas ilustrativos. Dinheiro, cartões, PIX e fiado continuam disponíveis conforme
-          o fluxo atual do PDV até esta configuração ser integrada.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {FORMAS_PAGAMENTO_ITENS.map(({ key, label, icon: Icon }) => (
-            <div
-              key={key}
-              className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-border bg-card-muted/40 px-4 py-3.5 opacity-90"
-            >
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  <Icon className="h-5 w-5" aria-hidden />
-                </div>
-                <Label className="text-base font-medium leading-snug text-muted-foreground">{label}</Label>
-              </div>
-              <Switch checked={FORMAS_PAGAMENTO_PADRAO[key]} disabled aria-readonly />
-            </div>
-          ))}
-        </div>
+        <FormasPagamentoSettings
+          value={form.formasPagamento}
+          onChange={(formasPagamento) => setForm((prev) => ({ ...prev, formasPagamento }))}
+          disabled={controlsDisabled}
+        />
       </SettingsCard>
 
       <SettingsCard
@@ -368,13 +329,5 @@ function ToggleRow({
 }
 
 export function VendasSection() {
-  return (
-    <ConfigEmpresaProvider>
-      <LojaAtivaProvider>
-        <StoreSettingsProvider>
-          <VendasSectionContent />
-        </StoreSettingsProvider>
-      </LojaAtivaProvider>
-    </ConfigEmpresaProvider>
-  );
+  return <VendasSectionContent />;
 }

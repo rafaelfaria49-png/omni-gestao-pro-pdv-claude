@@ -9,6 +9,7 @@ import {
   parseImpressaoFromPrinterConfig,
   type PdvImpressaoConfig,
 } from "@/lib/pdv-impressao-config"
+import { defaultFormasPagamento, normalizeFormasPagamento } from "@/lib/pdv-formas-pagamento"
 import { parseAppearanceFromPrinterConfig, type StoreAppearanceConfig } from "@/lib/store-appearance"
 import { configPadrao, type CategoriaGarantia, type TermosGarantia } from "@/lib/config-empresa"
 
@@ -58,6 +59,7 @@ function defaultPdvParams(): StorePdvParams {
     aliquotaImpostoEstimadoPdv: Number(configPadrao.pdv.aliquotaImpostoEstimadoPdv) || 0,
     moduloControleConsumo: !!configPadrao.pdv.moduloControleConsumo,
     pdvClassicLayout: "lovable",
+    formasPagamento: defaultFormasPagamento(),
   }
 }
 
@@ -73,6 +75,9 @@ function mergePdvParams(base: StorePdvParams, patch: Partial<StorePdvParams> | u
     pdvClassicLayout: layout,
     atalhosRapidos: Array.isArray(p.atalhosRapidos) ? p.atalhosRapidos : base.atalhosRapidos,
     categoriasOcultasNoPdv: Array.isArray(p.categoriasOcultasNoPdv) ? p.categoriasOcultasNoPdv : base.categoriasOcultasNoPdv,
+    formasPagamento: normalizeFormasPagamento(
+      Array.isArray(p.formasPagamento) ? p.formasPagamento : base.formasPagamento,
+    ),
   }
 }
 
