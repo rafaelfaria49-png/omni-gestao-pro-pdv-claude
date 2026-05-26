@@ -205,13 +205,17 @@ export function ConfiguracoesIaView() {
   return (
     <IaMestreSubPageShell
       title="Configurações"
-      subtitle="Preferências do agente, modelo e privacidade"
+      subtitle="Preferências neste navegador (localStorage) — modelo do chat vem do seletor na conversa e do plano no servidor"
       actions={
         <Button type="button" className="h-9 gap-1.5 rounded-xl" onClick={saveAll}>
           Salvar configurações
         </Button>
       }
     >
+      <p className="mb-4 max-w-5xl rounded-xl border border-border bg-muted/20 px-4 py-3 text-[12px] leading-relaxed text-muted-foreground">
+        Salvar aqui não grava no servidor. Créditos e histórico desta tela são demonstração local; saldo real do usuário
+        está em Configurações V3 → IA e Créditos ou em /dashboard/creditos.
+      </p>
       <Tabs defaultValue="geral" className="w-full max-w-5xl">
         <TabsList className="mb-4 flex h-auto min-h-9 w-full flex-wrap justify-start gap-1 bg-muted/60 p-1">
           <TabsTrigger value="geral" className="text-[12px]">

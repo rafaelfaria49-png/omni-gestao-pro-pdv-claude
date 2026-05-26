@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { orchestrateCommand, type PlanoAssinatura } from "@/services/ai-orchestrator"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
-import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
+import { storeIdFromIaMestreWrite } from "@/lib/ia-mestre/api-guard"
+import { prepareIaMestreTurn, saveIaMestreAssistantTurn } from "@/lib/ia-mestre/persist-turn"
 import { composeMestreUserMessage, type StockSummaryRow } from "@/services/ai-mestre-reply"
 import { pickMestreModel } from "@/lib/ai-model-policy"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
@@ -36,6 +37,12 @@ type Body = {
   lojaId?: string
   /** Modelo sugerido pelo cliente (ex.: Gemini Flash no básico; GPT/Claude no premium). */
   model?: string
+  /** Thread persistida (opcional na primeira mensagem). */
+  conversationId?: string
+  /** Idempotência por turno — obrigatório para persistência. */
+  clientMessageId?: string
+  /** Texto exibido ao usuário (sem prefixo de brand voice). */
+  userMessage?: string
 }
 
 async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number): Promise<Response> {
@@ -53,12 +60,18 @@ async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: num
   }
 }
 
-function lojaIdFromRequest(req: Request, body: Body): string {
-  const h = req.headers.get(ASSISTEC_LOJA_HEADER)?.trim()
-  if (h) return h
-  const b = typeof body.lojaId === "string" ? body.lojaId.trim() : ""
-  if (b) return b
-  return storeIdFromAssistecRequestForRead(req)
+function persistencePayload(p: {
+  conversationId: string
+  clientMessageId: string
+  userMessageId: string
+  assistantMessageId: string
+}) {
+  return {
+    conversationId: p.conversationId,
+    clientMessageId: p.clientMessageId,
+    userMessageId: p.userMessageId,
+    assistantMessageId: p.assistantMessageId,
+  }
 }
 
 function normalizeMessages(ms: ClientMessage[] | undefined): Array<{ role: "user" | "assistant"; content: string }> {
@@ -258,7 +271,28 @@ export async function POST(req: Request) {
   const command = lastUserText(body)
   if (!command) return NextResponse.json({ error: "command obrigatório" }, { status: 400 })
 
-  const lojaId = lojaIdFromRequest(req, body)
+  const lojaId = storeIdFromIaMestreWrite(req) ?? ""
+  if (!lojaId) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Selecione uma unidade ativa e envie o header x-assistec-loja-id.",
+      },
+      { status: 403 },
+    )
+  }
+
+  const clientMessageId = typeof body.clientMessageId === "string" ? body.clientMessageId.trim() : ""
+  if (!clientMessageId) {
+    return NextResponse.json({ ok: false, error: "clientMessageId obrigatório" }, { status: 400 })
+  }
+
+  const userDisplay =
+    typeof body.userMessage === "string" && body.userMessage.trim()
+      ? body.userMessage.trim()
+      : command
+
+  const brandVoice = !!body.brandVoice
 
   // Em desenvolvimento, libera a rota para testar OpenAI/DALL-E sem depender de assinatura/créditos locais.
   let plano: PlanoAssinatura | string =
@@ -300,6 +334,39 @@ export async function POST(req: Request) {
   }
   const model = pickMestreModel({ plano, requestedModel: body.model, storedModel })
 
+  const prepared = await prepareIaMestreTurn({
+    storeId: lojaId,
+    conversationId: body.conversationId,
+    clientMessageId,
+    userContent: userDisplay,
+    model,
+    brandVoice,
+  })
+  if (!prepared.ok) {
+    return NextResponse.json({ ok: false, error: prepared.error }, { status: prepared.status })
+  }
+
+  const { conversationId, userMessageId, history } = prepared
+
+  if (prepared.cached) {
+    const cached = prepared.cached
+    const isImage = cached.type === "image"
+    return NextResponse.json({
+      ok: true,
+      type: isImage ? "image" : "text",
+      data: isImage ? { imageUrl: cached.imageUrl, message: cached.message } : { message: cached.message },
+      message: cached.message,
+      ...(isImage && cached.imageUrl ? { tool: { type: "image", url: cached.imageUrl } } : {}),
+      persistence: persistencePayload({
+        conversationId,
+        clientMessageId,
+        userMessageId,
+        assistantMessageId: cached.assistantMessageId,
+      }),
+      duplicate: true,
+    })
+  }
+
   let stockRows: StockSummaryRow[] = []
   try {
     const rows = await prisma.produto.findMany({
@@ -323,9 +390,6 @@ export async function POST(req: Request) {
   if (!result.ok) {
     return NextResponse.json(result)
   }
-
-  const brandVoice = !!body.brandVoice
-  const history = normalizeMessages(body.messages)
 
   // Tool Calling (imagem): determinístico (IA Mestre decide automaticamente)
   const intent = detectIntent(command)
@@ -351,13 +415,28 @@ export async function POST(req: Request) {
         imageUrl = String(j.imageUrl || "").trim()
         if (!imageUrl) throw new Error("A geração retornou sem URL.")
       }
+      const assistantContent = "Imagem gerada com sucesso."
+      const saved = await saveIaMestreAssistantTurn({
+        storeId: lojaId,
+        conversationId,
+        clientMessageId,
+        content: assistantContent,
+        type: "image",
+        imageUrl,
+      })
       return NextResponse.json({
         ...result,
         type: "image",
-        data: { imageUrl },
-        message: "Imagem gerada pela IA Mestre.",
+        data: { imageUrl, message: assistantContent },
+        message: assistantContent,
         tool: { type: "image", url: imageUrl },
         integration: { llmConfigured: true, backend: "openai", stockRowsLoaded: stockRows.length > 0, toolUsed: "dalle3" },
+        persistence: persistencePayload({
+          conversationId,
+          clientMessageId,
+          userMessageId,
+          assistantMessageId: saved.assistantMessageId,
+        }),
       })
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Falha ao gerar imagem."
@@ -407,11 +486,25 @@ export async function POST(req: Request) {
     meta = { llmConfigured: false, backend: null, stockRowsLoaded: stockRows.length > 0 }
   }
 
+  const saved = await saveIaMestreAssistantTurn({
+    storeId: lojaId,
+    conversationId,
+    clientMessageId,
+    content: message,
+    type: "text",
+  })
+
   return NextResponse.json({
     ...result,
     type: "text",
     data: { message },
     message,
     integration: meta,
+    persistence: persistencePayload({
+      conversationId,
+      clientMessageId,
+      userMessageId,
+      assistantMessageId: saved.assistantMessageId,
+    }),
   })
 }

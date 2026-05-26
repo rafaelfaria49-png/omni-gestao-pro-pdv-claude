@@ -261,10 +261,10 @@ export function MeusProjetosView() {
     <>
       <IaMestreSubPageShell
         title="Meus Projetos"
-        subtitle="Organize conversas por projeto"
+        subtitle="Rascunhos salvos só neste navegador — sem thread nem mensagens no servidor"
         badge={
           <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            <FolderKanban className="h-3 w-3" /> {items.length} projetos
+            <FolderKanban className="h-3 w-3" /> {items.length} rascunhos locais
           </span>
         }
         actions={
@@ -274,6 +274,10 @@ export function MeusProjetosView() {
         }
       >
         <div className="mx-auto w-full max-w-6xl space-y-4">
+          <p className="rounded-xl border border-border bg-muted/20 px-4 py-3 text-[12px] leading-relaxed text-muted-foreground">
+            &quot;Abrir&quot; só coloca um rótulo no chat — não carrega mensagens do projeto. Persistência de projetos e
+            conversas virá em uma próxima fase.
+          </p>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="flex flex-wrap gap-2">
               {FILTERS.map((f) => (
@@ -347,11 +351,11 @@ export function MeusProjetosView() {
                   <p className="mt-2 line-clamp-2 text-[12px] leading-relaxed text-muted-foreground">{p.description}</p>
                   <p className="mt-2 text-[11px] text-muted-foreground">Criado em {fmt(p.createdAt)}</p>
                   <p className="mt-2 line-clamp-2 border-t border-border/60 pt-2 text-[11px] italic text-muted-foreground">
-                    Última mensagem: {p.lastMessage}
+                    Texto de exemplo (não é histórico real): {p.lastMessage}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button type="button" size="sm" className="h-8 rounded-lg text-[12px]" asChild>
-                      <Link href={`/dashboard/ia-mestre?projeto=${encodeURIComponent(p.title)}`}>Abrir</Link>
+                      <Link href={`/dashboard/ia-mestre?projeto=${encodeURIComponent(p.title)}`}>Abrir no chat</Link>
                     </Button>
                     <Button
                       type="button"

@@ -9,65 +9,83 @@ import {
   MessageSquare,
   Settings,
   Sparkles,
-  Trash2,
   Wand2,
   Zap,
 } from "lucide-react"
 import Link from "next/link"
-import { useEffect, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
+import { useUserCredits } from "@/hooks/useUserCredits"
+import { useIaMestreChat } from "@/components/ia-mestre/IaMestreChatContext"
+import { cn } from "@/lib/utils"
 
 type NavId = "projects" | "templates" | "images" | "train" | "settings"
 
 const NAV: { id: NavId; label: string; icon: typeof Bot; badge?: string; href?: string }[] = [
-  { id: "projects", label: "Meus Projetos", icon: FolderKanban, badge: "12", href: "/dashboard/ia-mestre/projetos" },
+  {
+    id: "projects",
+    label: "Meus Projetos",
+    icon: FolderKanban,
+    badge: "Local",
+    href: "/dashboard/ia-mestre/projetos",
+  },
   { id: "templates", label: "Templates Mágicos", icon: Wand2 },
-  { id: "images", label: "Gerador de Imagens", icon: ImagePlus, badge: "Novo", href: "/dashboard/ia-mestre/gerador-imagens" },
-  { id: "train", label: "Treinar IA", icon: GraduationCap, href: "/dashboard/ia-mestre/treinar" },
+  {
+    id: "images",
+    label: "Gerador de Imagens",
+    icon: ImagePlus,
+    badge: "Em breve",
+    href: "/dashboard/ia-mestre/gerador-imagens",
+  },
+  {
+    id: "train",
+    label: "Treinar IA",
+    icon: GraduationCap,
+    badge: "Local",
+    href: "/dashboard/ia-mestre/treinar",
+  },
   { id: "settings", label: "Configurações", icon: Settings, href: "/dashboard/ia-mestre/configuracoes" },
 ]
 
-const RECENT_CHATS = [
-  "Relatório Mensal",
-  "Campanha Dia das Mães",
-  "Dúvida Estoque",
-  "Promo iPhone 15",
-  "Script WhatsApp",
-  "Análise Concorrência",
-  "Treino atendimento",
-]
-
-const LS_CONFIG = "ia-mestre-config-v1"
+function fmtRelative(iso: string) {
+  try {
+    const d = new Date(iso)
+    const diff = Date.now() - d.getTime()
+    if (diff < 86_400_000) {
+      return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    }
+    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
+  } catch {
+    return ""
+  }
+}
 
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [creditsUsed, setCreditsUsed] = useState(2405)
-  const [creditsTotal, setCreditsTotal] = useState(5000)
-
-  useEffect(() => {
-    function syncCredits(e?: StorageEvent) {
-      if (e && e.key !== LS_CONFIG) return
-      try {
-        const raw = e?.newValue ?? localStorage.getItem(LS_CONFIG)
-        if (!raw) return
-        const p = JSON.parse(raw) as { creditsUsed?: number; creditsTotal?: number }
-        if (typeof p.creditsUsed === "number") setCreditsUsed(p.creditsUsed)
-        if (typeof p.creditsTotal === "number") setCreditsTotal(p.creditsTotal)
-      } catch { /* ignore */ }
-    }
-    syncCredits()
-    window.addEventListener("storage", syncCredits)
-    return () => window.removeEventListener("storage", syncCredits)
-  }, [])
-
-  const pct = creditsTotal > 0 ? Math.round((creditsUsed / creditsTotal) * 100) : 0
+  const { credits, loading: creditsLoading, error: creditsError } = useUserCredits()
+  const {
+    conversations,
+    listLoading,
+    listError,
+    storeRequiredError,
+    activeConversationId,
+    setActiveConversationId,
+  } = useIaMestreChat()
 
   const openTemplates = () => {
     if (pathname === "/dashboard/ia-mestre") {
       window.dispatchEvent(new Event("ia-mestre-open-templates"))
     } else {
       router.push("/dashboard/ia-mestre?templates=1")
+    }
+  }
+
+  const openConversation = (id: string) => {
+    setActiveConversationId(id)
+    if (pathname !== "/dashboard/ia-mestre") {
+      router.push(`/dashboard/ia-mestre?c=${encodeURIComponent(id)}`)
+    } else {
+      window.dispatchEvent(new CustomEvent("ia-mestre-open-conversation", { detail: { id } }))
     }
   }
 
@@ -80,7 +98,7 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-[250px] flex-none flex-col border-r border-border bg-panel/80 backdrop-blur-xl">
       <div className="flex items-center gap-3 px-5 py-5">
-        <Link href="/dashboard/ia-mestre" className="shrink-0">
+        <Link href="/dashboard/ia-mestre" className="shrink-0" onClick={() => setActiveConversationId(null)}>
           <motion.div
             initial={{ scale: 0.6, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -94,12 +112,16 @@ export function Sidebar() {
             />
           </motion.div>
         </Link>
-        <div className="leading-tight">
-          <Link href="/dashboard/ia-mestre" className="block font-display text-base font-bold tracking-tight">
+        <div className="min-w-0 leading-tight">
+          <Link
+            href="/dashboard/ia-mestre"
+            className="block font-display text-base font-bold tracking-tight"
+            onClick={() => setActiveConversationId(null)}
+          >
             IA Mestre
           </Link>
           <p className="flex items-center gap-1 text-[12px] text-muted-foreground">
-            <Sparkles className="h-2.5 w-2.5" /> RafaCell · Pro
+            <Sparkles className="h-2.5 w-2.5 shrink-0" /> Assistente ERP
           </p>
         </div>
       </div>
@@ -167,64 +189,98 @@ export function Sidebar() {
 
         <div className="mt-5 border-t border-border/60 pt-4">
           <div className="flex items-center justify-between px-2 pb-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Chats Recentes</p>
-            <span className="text-[11px] font-medium text-muted-foreground/70">{RECENT_CHATS.length}</span>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Conversas</p>
+            {!listLoading ? (
+              <span className="text-[11px] font-medium text-muted-foreground/70">{conversations.length}</span>
+            ) : null}
           </div>
-          <ul className="space-y-0.5">
-            {RECENT_CHATS.map((chat) => (
-              <li key={chat}>
-                <div className="group/chat flex w-full items-center gap-1">
-                  <Link
-                    href="/dashboard/ia-mestre"
-                    className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium text-muted-foreground transition hover:bg-muted hover:text-foreground"
-                  >
-                    <MessageSquare className="h-3.5 w-3.5 flex-none opacity-60" />
-                    <span className="flex-1 truncate">{chat}</span>
-                  </Link>
-                  <button
-                    type="button"
-                    className="flex h-8 w-8 flex-none items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover/chat:opacity-100"
-                    aria-label={`Remover ${chat}`}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {storeRequiredError ? (
+            <p className="rounded-lg border border-border/80 bg-muted/20 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground">
+              {storeRequiredError}
+            </p>
+          ) : listLoading ? (
+            <p className="px-2 py-2 text-[12px] text-muted-foreground">Carregando conversas…</p>
+          ) : listError ? (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+              {listError}
+            </p>
+          ) : conversations.length === 0 ? (
+            <p className="px-2 py-2 text-[12px] leading-relaxed text-muted-foreground">
+              Nenhuma conversa salva nesta unidade. Envie a primeira mensagem no chat.
+            </p>
+          ) : (
+            <ul className="space-y-0.5">
+              {conversations.map((chat) => {
+                const selected = activeConversationId === chat.id
+                return (
+                  <li key={chat.id}>
+                    <button
+                      type="button"
+                      onClick={() => openConversation(chat.id)}
+                      className={cn(
+                        "flex w-full min-w-0 items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition",
+                        selected
+                          ? "bg-gradient-primary text-primary-foreground shadow-elegant"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 flex-none opacity-70" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate">{chat.title || "Nova conversa"}</span>
+                        {chat.preview ? (
+                          <span
+                            className={cn(
+                              "mt-0.5 block truncate text-[10px] font-normal",
+                              selected ? "text-primary-foreground/80" : "text-muted-foreground",
+                            )}
+                          >
+                            {chat.preview}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span
+                        className={cn(
+                          "shrink-0 text-[10px] tabular-nums",
+                          selected ? "text-primary-foreground/80" : "text-muted-foreground/70",
+                        )}
+                      >
+                        {fmtRelative(chat.updatedAt)}
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
       </nav>
 
       <div className="m-3 mt-2 rounded-2xl border border-border bg-card p-4 shadow-elegant">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
-              <Zap className="h-3.5 w-3.5 text-primary-foreground" />
-            </span>
-            <span className="text-xs font-semibold">Créditos</span>
-          </div>
-          <span className="text-[10px] font-medium text-muted-foreground">{pct}%</span>
-        </div>
-        <div className="mb-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
-            className="h-full rounded-full bg-gradient-primary"
-          />
-        </div>
-        <div className="flex items-baseline justify-between text-[11px] text-muted-foreground">
-          <span>
-            <span className="font-semibold text-foreground">{creditsUsed.toLocaleString("pt-BR")}</span> / {creditsTotal.toLocaleString("pt-BR")}
+        <div className="mb-2 flex items-center gap-2">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
+            <Zap className="h-3.5 w-3.5 text-primary-foreground" />
           </span>
-          <button
-            className="inline-flex h-7 items-center gap-1.5 rounded-full bg-gradient-primary px-3 text-[12px] font-semibold text-primary-foreground shadow-elegant transition hover:opacity-90 hover:shadow-glow"
-            type="button"
-          >
-            <Zap className="h-3.5 w-3.5" />
-            Upgrade
-          </button>
+          <span className="text-xs font-semibold">Créditos (usuário)</span>
         </div>
+        {creditsLoading ? (
+          <p className="text-[11px] text-muted-foreground">Carregando saldo…</p>
+        ) : creditsError ? (
+          <p className="text-[11px] text-muted-foreground">{creditsError}</p>
+        ) : (
+          <p className="text-xl font-semibold tabular-nums text-foreground">
+            {(credits ?? 0).toLocaleString("pt-BR")}
+          </p>
+        )}
+        <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+          Débito automático no chat ainda não está ativo. Saldo real em Configurações → IA e Créditos.
+        </p>
+        <Link
+          href="/dashboard/creditos"
+          className="mt-3 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-full border border-border bg-background/80 text-[12px] font-semibold text-foreground transition hover:bg-muted"
+        >
+          <Zap className="h-3.5 w-3.5" />
+          Ver créditos
+        </Link>
       </div>
     </aside>
   )

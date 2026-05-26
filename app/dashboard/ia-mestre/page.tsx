@@ -13,12 +13,22 @@ import {
   ShoppingBag,
   Sparkles,
   TrendingDown,
-  User,
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
 import { RightPanel } from "@/components/ia-mestre/RightPanel";
-import { ModelSelect, type ModelId } from "@/components/ia-mestre/ModelSelect";
+import {
+  DEFAULT_IA_MESTRE_MODEL,
+  ModelSelect,
+  type ModelId,
+} from "@/components/ia-mestre/ModelSelect";
+import {
+  IA_MESTRE_IMAGE_CREDITS_NOTE,
+  IA_MESTRE_IMAGE_SUCCESS_NOTE,
+} from "@/components/ia-mestre/ia-mestre-honesty";
+import { useIaMestreChat } from "@/components/ia-mestre/IaMestreChatContext";
+import { iaMestreStoreHeaders } from "@/lib/ia-mestre/client-fetch";
+import { IA_MESTRE_UI_MODEL_IDS } from "@/components/ia-mestre/ModelSelect";
 import { IdentitySwitch } from "@/components/ia-mestre/IdentitySwitch";
 import { ChatMessage, type ChatMsg } from "@/components/ia-mestre/ChatMessage";
 import { ChatInput } from "@/components/ia-mestre/ChatInput";
@@ -27,9 +37,6 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { interpretAiApiError } from "@/lib/handleAiApiError";
-import { notifyCreditBalanceUpdated } from "@/lib/creditsEvents";
-import { getCreditCost } from "@/src/lib/ai/credit-costs";
-import { useUserCredits } from "@/hooks/useUserCredits";
 import {
   Sheet,
   SheetContent,
@@ -39,28 +46,11 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-const INITIAL_MESSAGES: ChatMsg[] = [
-  {
-    id: "1",
-    role: "ai",
-    content:
-      "Olá, Rafael! 👋 As vendas da RafaCell subiram 18% essa semana. Quer que eu monte uma campanha de WhatsApp pra fechar o mês com chave de ouro?",
-  },
-  {
-    id: "2",
-    role: "user",
-    content: "Cria uma logo nova pra minha assistência, algo moderno e tecnológico.",
-  },
-  {
-    id: "3",
-    role: "ai",
-    content:
-      "Aqui está a logo moderna que você pediu para a RafaCell! Curtiu o conceito? Posso gerar variações em outras cores.",
-    image: {
-      url: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=800&auto=format&fit=crop",
-      tool: "Gerado com DALL·E 3",
-    },
-  },
+const EMPTY_STATE_SUGGESTIONS = [
+  "Monte um relatório de vendas da semana com passos práticos",
+  "Crie uma mensagem de WhatsApp para reativar clientes inativos",
+  "Sugira promoção para produtos com estoque parado na loja",
+  "Escreva um roteiro curto de atendimento para assistência técnica",
 ];
 
 type TemplateCategoryId = "vendas" | "estoque" | "financeiro";
@@ -196,15 +186,27 @@ function toBackendModel(m: ModelId): string {
   return m;
 }
 
+function isUiModelId(value: string): value is ModelId {
+  return (IA_MESTRE_UI_MODEL_IDS as readonly string[]).includes(value);
+}
+
 function Shell() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const { credits } = useUserCredits();
-  const [model, setModel] = useState<ModelId>("openai/gpt-5.5-pro");
+  const {
+    lojaAtivaId,
+    storeRequiredError,
+    activeConversationId,
+    setActiveConversationId,
+    notifyConversationsRefresh,
+  } = useIaMestreChat();
+  const [model, setModel] = useState<ModelId>(DEFAULT_IA_MESTRE_MODEL);
   const [identityOn, setIdentityOn] = useState(true);
-  const [messages, setMessages] = useState<ChatMsg[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [typing, setTyping] = useState(false);
+  const [loadingConversation, setLoadingConversation] = useState(false);
+  const [loadConversationError, setLoadConversationError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [pendingImageRequest, setPendingImageRequest] = useState<string | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -242,27 +244,101 @@ function Shell() {
     return () => window.removeEventListener("ia-mestre-open-templates", onOpen);
   }, []);
 
+  const loadConversation = useCallback(
+    async (conversationId: string) => {
+      const headers = iaMestreStoreHeaders(lojaAtivaId);
+      if (!headers) {
+        setLoadConversationError(storeRequiredError || "Selecione uma unidade ativa.");
+        return;
+      }
+      setLoadingConversation(true);
+      setLoadConversationError(null);
+      try {
+        const res = await fetch(`/api/ia-mestre/conversations/${encodeURIComponent(conversationId)}`, {
+          method: "GET",
+          headers,
+          credentials: "include",
+          cache: "no-store",
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          ok?: boolean
+          error?: string
+          conversation?: { model?: string; brandVoiceEnabled?: boolean }
+          messages?: ChatMsg[]
+        };
+        if (!res.ok) {
+          throw new Error(String(data.error || `HTTP ${res.status}`));
+        }
+        const storedModel = String(data.conversation?.model || "").trim();
+        if (storedModel && isUiModelId(storedModel)) {
+          setModel(storedModel);
+        }
+        if (typeof data.conversation?.brandVoiceEnabled === "boolean") {
+          setIdentityOn(data.conversation.brandVoiceEnabled);
+        }
+        setMessages(Array.isArray(data.messages) ? data.messages : []);
+        setActiveConversationId(conversationId);
+        setProjectBanner(null);
+        setDocTitle("");
+        setDocContent("");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Erro ao carregar conversa";
+        setLoadConversationError(msg);
+        setMessages([]);
+        toast({ title: "Não foi possível abrir a conversa", description: msg, variant: "destructive" });
+      } finally {
+        setLoadingConversation(false);
+      }
+    },
+    [lojaAtivaId, setActiveConversationId, storeRequiredError, toast],
+  );
+
   useEffect(() => {
     const openTemplates = searchParams.get("templates") === "1";
     const projeto = searchParams.get("projeto");
-    if (!openTemplates && !projeto) return;
+    const conversationParam = searchParams.get("c");
     if (openTemplates) setTemplatesOpen(true);
     if (projeto) {
       try {
         setProjectBanner(decodeURIComponent(projeto));
         toast({
-          title: "Projeto aberto",
-          description: `Continuando a conversa: ${decodeURIComponent(projeto)}`,
+          title: "Rótulo de projeto (local)",
+          description: `Referência visual: ${decodeURIComponent(projeto)}. Mensagens não são carregadas do projeto — só rascunho no navegador.`,
         });
       } catch {
         setProjectBanner(projeto);
       }
     }
-    router.replace("/dashboard/ia-mestre", { scroll: false });
-  }, [searchParams, router, toast]);
+    if (conversationParam?.trim()) {
+      void loadConversation(conversationParam.trim());
+    }
+    if (openTemplates || projeto || conversationParam) {
+      router.replace("/dashboard/ia-mestre", { scroll: false });
+    }
+  }, [searchParams, router, toast, loadConversation]);
+
+  useEffect(() => {
+    const onOpenConversation = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+      if (id?.trim()) void loadConversation(id.trim());
+    };
+    window.addEventListener("ia-mestre-open-conversation", onOpenConversation);
+    return () => window.removeEventListener("ia-mestre-open-conversation", onOpenConversation);
+  }, [loadConversation]);
 
   const sendToApi = async (text: string) => {
-    const userMsg: ChatMsg = { id: crypto.randomUUID(), role: "user", content: text };
+    const headers = iaMestreStoreHeaders(lojaAtivaId);
+    if (!headers) {
+      toast({
+        title: "Unidade não selecionada",
+        description: storeRequiredError || "Selecione uma loja ativa no painel antes de enviar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const clientMessageId = crypto.randomUUID();
+    const userMsg: ChatMsg = { id: clientMessageId, role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
     setTyping(true);
     try {
@@ -270,11 +346,18 @@ function Shell() {
         ? "Use o Brand Voice da empresa (tom premium, claro e direto). Entregue um resultado pronto para colar.\n\n"
         : "";
       const command = `${prefix}${text}`;
-      const snapshot = [...messages, userMsg].map((m) => ({ role: m.role === "ai" ? "assistant" : "user", content: m.content }));
       const res = await fetch("/api/ai/orchestrate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command, model: toBackendModel(model), brandVoice: identityOn, messages: snapshot }),
+        headers,
+        credentials: "include",
+        body: JSON.stringify({
+          command,
+          userMessage: text,
+          model: toBackendModel(model),
+          brandVoice: identityOn,
+          conversationId: activeConversationId,
+          clientMessageId,
+        }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         type?: "text" | "image"
@@ -282,8 +365,15 @@ function Shell() {
         message?: string
         error?: string
         tool?: { type?: string; url?: string }
+        persistence?: {
+          conversationId?: string
+          userMessageId?: string
+          assistantMessageId?: string
+          clientMessageId?: string
+        }
       };
       if (!res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== clientMessageId));
         const info = interpretAiApiError({
           status: res.status,
           message: String(data.error || data.message || "").trim(),
@@ -310,17 +400,27 @@ function Shell() {
         });
         return;
       }
+      const persistence = data.persistence;
+      const userId = persistence?.userMessageId || clientMessageId;
+      const assistantId = persistence?.assistantMessageId || crypto.randomUUID();
+      if (persistence?.conversationId) {
+        setActiveConversationId(persistence.conversationId);
+      }
+      setMessages((prev) =>
+        prev.map((m) => (m.id === clientMessageId ? { ...m, id: userId } : m)),
+      );
+
       const isImage = data.type === "image" || data.tool?.type === "image";
       const imageUrl = String(data?.data?.imageUrl || data?.tool?.url || "").trim();
       const reply: ChatMsg = {
-        id: crypto.randomUUID(),
+        id: assistantId,
         role: "ai",
         content: isImage
           ? "Imagem gerada com sucesso."
           : String(data?.data?.message || data.message || "").trim() || "Ok.",
         type: isImage ? "image" : "text",
         imageUrl: isImage ? imageUrl : undefined,
-        ...(isImage && imageUrl ? { image: { url: imageUrl, tool: "Gerado com DALL·E 3" } } : {}),
+        ...(isImage && imageUrl ? { image: { url: imageUrl, tool: "API de imagem (servidor)" } } : {}),
       };
       setMessages((prev) => [...prev, reply]);
       if (!isImage && shouldAutoPopulateDocument(reply.content)) {
@@ -328,18 +428,14 @@ function Shell() {
         setDocContent(reply.content);
       }
       if (isImage) {
-        const cost = getCreditCost("image");
-        const next =
-          typeof credits === "number" && Number.isFinite(credits)
-            ? Math.max(0, credits - cost)
-            : null;
         toast({
-          title: "Imagem gerada com sucesso",
-          description: `${cost} créditos foram consumidos${next !== null ? ` • Saldo atual: ${next.toLocaleString("pt-BR")}` : ""}.`,
+          title: "Imagem gerada",
+          description: IA_MESTRE_IMAGE_SUCCESS_NOTE,
         });
-        notifyCreditBalanceUpdated();
       }
+      notifyConversationsRefresh();
     } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== clientMessageId));
       toast({
         title: "Falha ao enviar",
         description: e instanceof Error ? e.message : "Erro inesperado",
@@ -360,6 +456,19 @@ function Shell() {
     await sendToApi(text);
   };
 
+  const startNewConversation = () => {
+    setActiveConversationId(null);
+    setMessages([]);
+    setDraft("");
+    setPendingImageRequest(null);
+    setProjectBanner(null);
+    setDocTitle("");
+    setDocContent("");
+    setLoadConversationError(null);
+  };
+
+  const showEmptyState = messages.length === 0 && !typing && !loadingConversation;
+
   return (
     <>
       <div className="flex min-w-0 flex-1">
@@ -370,7 +479,11 @@ function Shell() {
             <IdentitySwitch checked={identityOn} onCheckedChange={setIdentityOn} />
           </div>
           <div className="flex items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/60 px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition hover:text-foreground">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface/60 px-3 py-1.5 text-[13px] font-medium text-muted-foreground transition hover:text-foreground"
+              onClick={startNewConversation}
+            >
               <Plus className="h-3.5 w-3.5" /> Nova conversa
             </button>
           </div>
@@ -379,7 +492,10 @@ function Shell() {
         {projectBanner ? (
           <div className="flex flex-none flex-wrap items-center gap-2 border-b border-border bg-muted/30 px-5 py-2 text-[12px] backdrop-blur-md">
             <FolderKanban className="h-4 w-4 shrink-0 text-primary" />
-            <span className="font-medium text-foreground">Projeto: {projectBanner}</span>
+            <span className="font-medium text-foreground">
+              Rótulo local: {projectBanner}
+              <span className="ml-1 font-normal text-muted-foreground">(sem thread persistida)</span>
+            </span>
             <button
               type="button"
               className="ml-auto rounded-lg border border-border bg-background/80 px-2 py-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
@@ -392,41 +508,25 @@ function Shell() {
 
         <div className="flex flex-none items-center gap-2 border-b border-border/40 bg-surface/30 px-5 py-2 text-[11px] text-muted-foreground backdrop-blur-md">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span>Conversa #2487 · Contexto da loja {identityOn ? "ATIVO" : "desligado"}</span>
+          <span>
+            {activeConversationId
+              ? `Conversa salva · tom da loja ${identityOn ? "ligado" : "desligado"}`
+              : `Nova conversa · tom da loja ${identityOn ? "ligado" : "desligado"}`}
+            {storeRequiredError ? ` · ${storeRequiredError}` : ""}
+          </span>
           <span
-            className="ml-auto inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[11px] font-medium"
-            style={{
-              border: "0.5px solid",
-              borderColor:
-                model !== "openai/gpt-5.5-pro"
-                  ? "color-mix(in oklab, var(--color-primary) 45%, transparent)"
-                  : identityOn
-                    ? "color-mix(in oklab, var(--color-primary) 55%, transparent)"
-                    : "color-mix(in oklab, var(--color-primary) 55%, transparent)",
-              color:
-                model !== "openai/gpt-5.5-pro"
-                  ? "var(--color-primary)"
-                  : identityOn
-                    ? "color-mix(in oklab, var(--color-primary) 85%, var(--color-foreground))"
-                    : "color-mix(in oklab, var(--color-primary) 85%, var(--color-foreground))",
-              background: "color-mix(in oklab, var(--color-background) 60%, transparent)",
-            }}
+            className="ml-auto inline-flex max-w-[45%] items-center gap-1 truncate rounded-full border border-border bg-background/60 px-2 py-[3px] text-[11px] font-medium text-muted-foreground"
             title={model}
           >
-            {model !== "openai/gpt-5.5-pro" ? (
-              <>
-                <Bot className="h-3.5 w-3.5" />
-                <span>{model.split("/")[1] || model}</span>
-              </>
-            ) : identityOn ? (
+            {model === DEFAULT_IA_MESTRE_MODEL ? (
               <>
                 <span aria-hidden>⚡</span>
-                <span>auto-mestre</span>
+                <span className="truncate">modelo auto</span>
               </>
             ) : (
               <>
-                <User className="h-3.5 w-3.5" />
-                <span>manual</span>
+                <Bot className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{model.split("/").slice(1).join("/") || model}</span>
               </>
             )}
           </span>
@@ -434,6 +534,41 @@ function Shell() {
 
         <main className="scroll-elegant flex-1 overflow-y-auto overflow-x-hidden px-8 py-6">
           <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+            {showEmptyState ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/15 px-6 py-14 text-center">
+                <MessageCircle className="mb-4 h-10 w-10 text-muted-foreground" />
+                <h2 className="font-display text-lg font-semibold text-foreground">Nenhuma conversa ainda</h2>
+                <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">
+                  Envie uma mensagem abaixo ou escolha uma sugestão. As conversas são salvas por unidade
+                  (loja ativa) no servidor.
+                </p>
+                <div className="mt-6 flex w-full max-w-lg flex-col gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Sugestões para começar
+                  </p>
+                  {EMPTY_STATE_SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setDraft(s)}
+                      className="rounded-xl border border-border bg-background/60 px-4 py-3 text-left text-[13px] text-foreground transition hover:border-primary/40 hover:bg-muted/40"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {loadingConversation ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+                <p className="text-[13px] font-medium">Carregando conversa…</p>
+              </div>
+            ) : null}
+            {loadConversationError && !loadingConversation ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[13px] text-destructive">
+                {loadConversationError}
+              </div>
+            ) : null}
             <AnimatePresence initial={false}>
               {messages.map((m, i) => (
                 <ChatMessage key={m.id} msg={m} index={i} />
@@ -467,9 +602,7 @@ function Shell() {
                 <div className="mt-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-foreground">
                   {pendingImageRequest}
                 </div>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Essa ação vai consumir {getCreditCost("image")} créditos
-                </div>
+                <div className="mt-2 text-xs text-muted-foreground">{IA_MESTRE_IMAGE_CREDITS_NOTE}</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     type="button"
@@ -495,11 +628,14 @@ function Shell() {
                 </div>
               </div>
             ) : isImageIntentDraft ? (
-              <div className="mb-2 text-xs text-muted-foreground">
-                Essa ação vai consumir {getCreditCost("image")} créditos
-              </div>
+              <div className="mb-2 text-xs text-muted-foreground">{IA_MESTRE_IMAGE_CREDITS_NOTE}</div>
             ) : null}
-            <ChatInput onSend={handleSend} disabled={typing || !!pendingImageRequest} value={draft} onValueChange={setDraft} />
+            <ChatInput
+              onSend={handleSend}
+              disabled={typing || !!pendingImageRequest || loadingConversation || !!storeRequiredError}
+              value={draft}
+              onValueChange={setDraft}
+            />
             <p className="mt-2 text-center text-[12px] text-muted-foreground/80">
               IA Mestre pode cometer erros. Sempre confirme dados financeiros importantes.
             </p>

@@ -108,7 +108,7 @@ export function TreinarIaView() {
   const save = useCallback(() => {
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(state))
-      toast({ title: "IA atualizada com sucesso!" })
+      toast({ title: "Rascunho salvo neste navegador", description: "Não afeta respostas do LLM no servidor." })
     } catch {
       toast({ title: "Erro ao salvar", variant: "destructive" })
     }
@@ -134,10 +134,10 @@ export function TreinarIaView() {
   return (
     <IaMestreSubPageShell
       title="Treinar IA"
-      subtitle="Ensine a IA sobre seu negócio"
+      subtitle="Rascunho local — não altera o modelo nem o prompt do servidor"
       badge={
         <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-          <GraduationCap className="h-3 w-3" /> Mock
+          <GraduationCap className="h-3 w-3" /> Só neste navegador
         </span>
       }
       actions={
@@ -147,6 +147,12 @@ export function TreinarIaView() {
       }
     >
       <div className="mx-auto w-full max-w-4xl space-y-8">
+        <p className="rounded-xl border border-border bg-muted/20 px-4 py-3 text-[12px] leading-relaxed text-muted-foreground">
+          Os dados salvos aqui ficam em <strong className="font-medium text-foreground">localStorage</strong> e não são
+          enviados ao chat (/api/ai/orchestrate). O interruptor &quot;Identidade da
+          Loja&quot; no chat aplica apenas um prefixo de tom — não este formulário. Treinamento real da loja virá em uma
+          próxima fase.
+        </p>
         <section className="rounded-2xl border border-border bg-card/60 p-5 shadow-elegant backdrop-blur-md">
           <h2 className="mb-4 flex items-center gap-2 text-[13px] font-semibold text-foreground">
             <Sparkles className="h-4 w-4 text-primary" /> Identidade da loja
@@ -301,7 +307,12 @@ export function TreinarIaView() {
                   size="sm"
                   variant="secondary"
                   className="mt-2 h-8 text-[12px]"
-                  onClick={() => toast({ title: "Salvo (local)", description: CANNED_LABELS[key] })}
+                  onClick={() =>
+                    toast({
+                      title: "Rascunho local",
+                      description: `${CANNED_LABELS[key]} — não enviado ao servidor.`,
+                    })
+                  }
                 >
                   Salvar
                 </Button>
@@ -311,7 +322,7 @@ export function TreinarIaView() {
         </section>
 
         <section className="rounded-2xl border border-border bg-card/60 p-5 shadow-elegant backdrop-blur-md">
-          <h2 className="mb-4 text-[13px] font-semibold">Testar treinamento</h2>
+          <h2 className="mb-4 text-[13px] font-semibold">Simular resposta (local)</h2>
           <Label className="text-[11px]">Como a IA responderia a...</Label>
           <Textarea
             value={simQ}
