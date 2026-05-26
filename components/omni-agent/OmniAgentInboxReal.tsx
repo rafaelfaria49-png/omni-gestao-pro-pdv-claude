@@ -113,7 +113,9 @@ export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange, onComma
         row.status === "EXECUTADO"
           ? row.interpretacao.intent === "EXPENSE_CREATE"
             ? "Despesa lançada no financeiro."
-            : "Executado"
+            : row.interpretacao.intent === "RECEIVABLE_CREATE"
+              ? "Recebimento registrado no financeiro."
+              : "Executado"
           : row.status === "AGUARDANDO_CONFIRMACAO"
             ? "Escolha o cliente"
             : "Concluído com aviso",
@@ -316,6 +318,39 @@ export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange, onComma
                         </Button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {i.interpretacao.intent === "RECEIVABLE_CREATE" && (
+                  <div className="mt-3 rounded-lg border border-emerald-500/25 bg-emerald-500/5 px-3 py-3 text-xs">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                      Pré-visualização — entrada financeira
+                    </div>
+                    <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                      {Number(i.interpretacao.fields.valor || 0).toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                    </div>
+                    <div className="mt-0.5 font-medium text-foreground">
+                      {i.interpretacao.fields.descricao || "—"}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {i.interpretacao.fields.pagador ? (
+                        <Badge variant="outline" className="text-[10px]">
+                          Pagador: {i.interpretacao.fields.pagador}
+                        </Badge>
+                      ) : null}
+                      {i.interpretacao.fields.formaPagamento ? (
+                        <Badge variant="outline" className="text-[10px]">
+                          {i.interpretacao.fields.formaPagamento}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                      Ao confirmar, será criada uma movimentação real (tipo entrada) nesta unidade. Não
+                      registra venda no PDV nem Conta a Receber.
+                    </p>
                   </div>
                 )}
 

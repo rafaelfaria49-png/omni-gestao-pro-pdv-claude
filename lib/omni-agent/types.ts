@@ -6,6 +6,7 @@ export type OmniAgentIntentKind =
   | "PRODUCT_SEARCH"
   | "REMINDER_CREATE"
   | "EXPENSE_CREATE"
+  | "RECEIVABLE_CREATE"
   | "CASHBOX_QUERY"
   | "FINANCE_SUMMARY"
   | "UNKNOWN"
@@ -31,6 +32,7 @@ export const INTENT_MODULE: Record<OmniAgentIntentKind, OmniAgentModuleGate | nu
   PRODUCT_SEARCH: (p) => p.workspace.omniAgent && p.hubs.cadastros,
   REMINDER_CREATE: (p) => p.workspace.omniAgent,
   EXPENSE_CREATE: (p) => p.workspace.omniAgent && p.hubs.financeiro && p.financeiro.edit,
+  RECEIVABLE_CREATE: (p) => p.workspace.omniAgent && p.hubs.financeiro && p.financeiro.edit,
   CASHBOX_QUERY: (p) => p.workspace.omniAgent && p.hubs.caixaHistorico,
   FINANCE_SUMMARY: (p) => p.workspace.omniAgent && p.hubs.financeiro && p.financeiro.view,
   UNKNOWN: null,

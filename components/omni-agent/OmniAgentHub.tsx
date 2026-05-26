@@ -1418,6 +1418,12 @@ const COMMAND_GROUPS_REAL: { cat: string; items: CmdDef[] }[] = [
         result: "Movimentação financeira (saída) após confirmar na Inbox",
         availability: "real",
       },
+      {
+        name: "Registrar recebimento",
+        example: "recebi 200 de João no pix",
+        result: "Movimentação financeira (entrada) após confirmar na Inbox",
+        availability: "real",
+      },
     ],
   },
 ];

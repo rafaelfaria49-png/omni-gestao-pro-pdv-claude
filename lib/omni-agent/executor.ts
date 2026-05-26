@@ -2,7 +2,10 @@ import { prisma } from "@/lib/prisma"
 import { createOS } from "@/app/actions/operacoes"
 import { listClientes, listProdutos } from "@/app/actions/cadastros"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
-import { createMovimentacaoSaidaFromOmniAgent } from "@/lib/financeiro/services/movimentacoes-service"
+import {
+  createMovimentacaoEntradaFromOmniAgent,
+  createMovimentacaoSaidaFromOmniAgent,
+} from "@/lib/financeiro/services/movimentacoes-service"
 import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
 import type { OmniAgentInterpretacao, OmniAgentExecutorResult } from "./types"
 import type { EventoTimeline, OrdemServico } from "@/types/os"
@@ -251,6 +254,85 @@ export async function executeOmniAgentIntent(
           descricao,
           categoria: categoria || undefined,
           tipo: "saida",
+          origem: "omni_agent",
+          idempotentReplay: mov.action === "skipped_idempotent",
+        },
+      }
+    }
+
+    if (intent === "RECEIVABLE_CREATE") {
+      const commandId = (opts?.commandId ?? "").trim()
+      if (!commandId) {
+        return {
+          ok: false,
+          actionLabel: interp.action,
+          error: "ID do comando obrigatório para lançar recebimento (confirme pela Inbox).",
+        }
+      }
+      const valor = Number.parseFloat(String(fields.valor ?? "").replace(",", "."))
+      if (!Number.isFinite(valor) || valor <= 0) {
+        return { ok: false, actionLabel: interp.action, error: "Valor do recebimento inválido." }
+      }
+      const descricao = String(fields.descricao ?? "").trim() || "Recebimento avulso"
+      const pagador = String(fields.pagador ?? "").trim()
+      const formaPagamento = String(fields.formaPagamento ?? "").trim()
+
+      const mov = await createMovimentacaoEntradaFromOmniAgent({
+        storeId,
+        commandId,
+        valor,
+        descricao,
+        pagador: pagador || undefined,
+        formaPagamento: formaPagamento || undefined,
+      })
+
+      if (!mov.ok) {
+        return { ok: false, actionLabel: interp.action, error: mov.reason }
+      }
+
+      const movimentacaoId =
+        mov.action === "created"
+          ? mov.movimentacao.id
+          : (
+              await prisma.movimentacaoFinanceira.findFirst({
+                where: {
+                  storeId,
+                  referenciaId: commandId,
+                  tipo: "entrada",
+                  origem: "omni_agent",
+                },
+                select: { id: true },
+              })
+            )?.id
+
+      await prisma.logsAuditoria.create({
+        data: {
+          action: "OMNI_AGENT_RECEBIMENTO",
+          userLabel: "Omni Agent HUB",
+          detail: `Recebimento R$ ${valor.toFixed(2)} — ${descricao}`.slice(0, 4000),
+          metadata: omniAgentAuditMetadata(storeId, {
+            commandId,
+            movimentacaoId,
+            valor,
+            descricao,
+            pagador: pagador || null,
+            formaPagamento: formaPagamento || null,
+            idempotent: mov.action === "skipped_idempotent",
+          }),
+          source: "omni_agent",
+        },
+      })
+
+      return {
+        ok: true,
+        actionLabel: interp.action,
+        payload: {
+          movimentacaoId,
+          valor,
+          descricao,
+          pagador: pagador || undefined,
+          formaPagamento: formaPagamento || undefined,
+          tipo: "entrada",
           origem: "omni_agent",
           idempotentReplay: mov.action === "skipped_idempotent",
         },

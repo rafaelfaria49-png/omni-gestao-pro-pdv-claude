@@ -418,3 +418,49 @@ export async function createMovimentacaoSaidaFromOmniAgent(input: {
 
   return { ok: true, action: "created", movimentacao }
 }
+
+/**
+ * Entrada manual via Omni Agent HUB — idempotente por comando confirmado.
+ * Chave: (storeId, referenciaId=commandId, tipo=entrada, origem=omni_agent).
+ */
+export async function createMovimentacaoEntradaFromOmniAgent(input: {
+  storeId: string
+  commandId: string
+  valor: number
+  descricao: string
+  pagador?: string
+  formaPagamento?: string
+}): Promise<MovimentacaoResult> {
+  const storeId = assertStoreId(input.storeId)
+  const referenciaId = safeStr(input.commandId)
+  if (!referenciaId) return { ok: false, reason: "commandId_obrigatorio" }
+
+  const valorMoney = safeMoney(input.valor)
+  if (!(valorMoney > 0)) return { ok: false, reason: "valor_invalido" }
+
+  const origem = "omni_agent"
+  if (await existeMovimentacao(storeId, referenciaId, "entrada", origem)) {
+    return { ok: true, action: "skipped_idempotent" }
+  }
+
+  const pagador = safeStr(input.pagador)
+  const forma = safeStr(input.formaPagamento)
+  const base = safeStr(input.descricao) || "Recebimento avulso"
+  let descricao = `Recebimento — ${base}`
+  if (pagador) descricao += ` (${pagador})`
+  if (forma) descricao += ` [${forma}]`
+
+  const movimentacao = await prisma.movimentacaoFinanceira.create({
+    data: {
+      storeId,
+      tipo: "entrada",
+      valor: valorMoney,
+      descricao: descricao.slice(0, 500),
+      origem,
+      referenciaId,
+      carteiraId: null,
+    },
+  })
+
+  return { ok: true, action: "created", movimentacao }
+}

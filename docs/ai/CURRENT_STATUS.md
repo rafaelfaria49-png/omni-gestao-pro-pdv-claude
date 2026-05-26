@@ -40,7 +40,8 @@
 | Endurecimento multi-loja | `assertStoreId` nas Server Actions; UI bloqueia sem unidade ativa (`OmniAgentStoreRequired`) |
 | Auth `handle-event` | `lib/omni-agent/automation-event-guard.ts` — sessão enterprise ou assinatura ops; header = `payload.storeId` |
 | Remoção fallback `loja-1` | Sem `LEGACY_PRIMARY_STORE_ID` no Hub nem em `lib/omni-agent` |
-| Catálogo honesto | `COMMAND_GROUPS_REAL` vs `COMMAND_GROUPS_TRIAGE` (venda/despesa/estoque = triagem, não CRUD) |
+| Catálogo honesto | `COMMAND_GROUPS_REAL` vs `COMMAND_GROUPS_TRIAGE` (venda/estoque = triagem; despesa/recebimento avulso = movimentação real após confirmar) |
+| Executores financeiros reais | `EXPENSE_CREATE` → `MovimentacaoFinanceira` saída; `RECEIVABLE_CREATE` → entrada (`origem: omni_agent`, idempotência por `commandId`) |
 | Canal real persistido | Modal «Novo comando» + feed/inbox com `normalizeOmniAgentCanal` / `canalDisplayLabel` |
 | Eventos OS entregue | `emitOsFinalizadaOmniEvent` em `updateOSStatus` (transição → `entregue`) |
 | Auditoria final | Sem P0 operacionais abertos — ver relatório |
@@ -50,7 +51,7 @@
 
 - Migration futura: coluna `storeId` em `logs_auditoria` (hoje `storeId`/`tenantId` só em `metadata` JSON nas escritas Omni).
 - Emissor server-side para evento `conta_receber_vencida` (cron/job financeiro).
-- Executores reais: venda / despesa / estoque (além de triagem/lembrete).
+- Executores reais: venda / estoque (além de triagem/lembrete); despesa e recebimento avulso já persistem em `MovimentacaoFinanceira`.
 - WhatsApp bidirecional no Agent (canal persistido; outbound Meta continua no HUB WhatsApp).
 - LLM governado com tools/JSON schema no Omni Agent.
 - Memória operacional unificada (timeline cliente: PDV + OS + WhatsApp + financeiro).

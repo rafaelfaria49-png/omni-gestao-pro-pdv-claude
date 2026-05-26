@@ -51,6 +51,7 @@ export function intentDisplayLabel(intent: OmniAgentIntentKind): string {
     case "FINANCE_SUMMARY":
       return "Financeiro"
     case "EXPENSE_CREATE":
+    case "RECEIVABLE_CREATE":
       return "Financeiro"
     case "UNKNOWN":
     default:
@@ -80,12 +81,19 @@ function badgeKindForStatus(status: OmniAgentCommandStatus): HubFeedBadgeKind {
   return "error"
 }
 
+function feedCategoryLabel(dto: OmniAgentCommandDTO): string {
+  if (dto.status === "EXECUTADO" && dto.interpretacao.intent === "RECEIVABLE_CREATE") {
+    return "Recebimento registrado"
+  }
+  return dto.interpretacao.action
+}
+
 export function dtoToHubFeedRow(dto: OmniAgentCommandDTO): HubFeedRow {
   const created = new Date(dto.createdAt)
   return {
     id: dto.id,
     text: dto.comandoOriginal,
-    category: dto.interpretacao.action,
+    category: feedCategoryLabel(dto),
     module: intentDisplayLabel(dto.interpretacao.intent),
     statusLabel: prismaStatusLabelPt(dto.status),
     badgeKind: badgeKindForStatus(dto.status),

@@ -1,5 +1,9 @@
 import type { OmniAgentInterpretacao, OmniAgentIntentKind } from "./types"
 import { buildExpenseInterpretation, parseExpenseFromCommand } from "@/lib/omni-agent/interpret-expense"
+import {
+  buildReceivableInterpretation,
+  parseReceivableFromCommand,
+} from "@/lib/omni-agent/interpret-receivable"
 
 function extractClienteNome(text: string): string {
   const t = text.trim()
@@ -90,6 +94,11 @@ export function interpretOmniAgentCommand(text: string): OmniAgentInterpretacao 
     return buildExpenseInterpretation(raw, expense)
   }
 
+  const receivable = parseReceivableFromCommand(raw)
+  if (receivable) {
+    return buildReceivableInterpretation(raw, receivable)
+  }
+
   /** Venda/entrada estoque ainda sem executor dedicado — fila de confirmação + auditoria após confirmar. */
   if (
     /\bvendi\b/.test(t) ||
@@ -169,5 +178,10 @@ export function interpretOmniAgentCommand(text: string): OmniAgentInterpretacao 
 }
 
 export function intentRequiresConfirmation(intent: OmniAgentIntentKind): boolean {
-  return intent === "OS_OPEN" || intent === "REMINDER_CREATE" || intent === "EXPENSE_CREATE"
+  return (
+    intent === "OS_OPEN" ||
+    intent === "REMINDER_CREATE" ||
+    intent === "EXPENSE_CREATE" ||
+    intent === "RECEIVABLE_CREATE"
+  )
 }
