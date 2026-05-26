@@ -521,6 +521,7 @@ export async function ensureDefaultEventAutomations(storeId: string): Promise<vo
   }
 }
 
+/** Registro interno no histórico Prisma — não chama Meta Cloud API. */
 export async function sendWhatsAppMessage(input: {
   storeId: string
   contactId?: string

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
+import { enrichWhatsAppAutomationRow } from "@/lib/whatsapp/automation-delivery"
 import type { Prisma } from "@/generated/prisma"
 
 export const runtime = "nodejs"
@@ -17,8 +18,9 @@ function badRequest(message: string) {
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) return badRequest("Unidade obrigatória: header x-assistec-loja-id ou query storeId.")
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     const { id } = await ctx.params
     let body: unknown
@@ -46,7 +48,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (Object.keys(data).length === 0) {
       const automation = await prisma.whatsAppAutomation.findFirst({ where: { id, storeId } })
       if (!automation) return json({ error: "Automação não encontrada" }, { status: 404 })
-      return json({ ok: true, automation })
+      return json({ ok: true, automation: enrichWhatsAppAutomationRow(automation) })
     }
 
     const row = await prisma.whatsAppAutomation.updateMany({
@@ -56,7 +58,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     if (row.count === 0) return json({ error: "Automação não encontrada" }, { status: 404 })
 
     const automation = await prisma.whatsAppAutomation.findFirst({ where: { id, storeId } })
-    return json({ ok: true, automation })
+    return json({ ok: true, automation: automation ? enrichWhatsAppAutomationRow(automation) : null })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return json({ error: msg }, { status: 400 })

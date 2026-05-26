@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { analyzeWhatsAppConversation } from "@/lib/whatsapp/ai-conversation-analysis"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,10 +16,9 @@ function badRequest(message: string) {
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) {
-      return badRequest("Unidade obrigatória: header x-assistec-loja-id ou query storeId.")
-    }
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     const { id: conversationId } = await ctx.params
     if (!conversationId?.trim()) return badRequest("ID da conversa inválido")

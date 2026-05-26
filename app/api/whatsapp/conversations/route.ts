@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { guardWhatsAppApiRead, guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
 import {
   createConversation,
   createOrUpdateContact,
@@ -21,7 +21,9 @@ function badRequest(message: string) {
 
 export async function GET(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForRead(req)
+    const guard = await guardWhatsAppApiRead(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
     console.info("[whatsapp/conversations:GET] storeId=%s", storeId)
     await ensureHubSeed(storeId)
 
@@ -58,8 +60,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) return badRequest("Unidade obrigatória: header x-assistec-loja-id ou query storeId.")
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     let body: unknown
     try {

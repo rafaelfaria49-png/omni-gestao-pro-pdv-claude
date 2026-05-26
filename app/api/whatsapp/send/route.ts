@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
 import {
   sendCloudApiMediaAndRecord,
   sendCloudApiTemplateAndRecord,
@@ -17,10 +17,9 @@ function json(data: unknown, init?: ResponseInit) {
 
 export async function POST(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) {
-      return json({ ok: false, error: "Unidade obrigatória: header x-assistec-loja-id ou query storeId." }, { status: 400 })
-    }
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     let body: unknown
     try {

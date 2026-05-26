@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
+import { auth } from "@/auth"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
 import { isVencimentoExpired } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
 import { sendDailyClosingToPhone } from "@/lib/whatsapp-daily-server"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
-import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
+import { resolveActiveStoreId } from "@/lib/operacoes/assert-active-store"
+import { storeIdFromWhatsAppApiRead } from "@/lib/whatsapp/whatsapp-api-guard"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -14,6 +16,18 @@ export const maxDuration = 60
  * Usado pelo painel (credenciais) ou por automações internas.
  */
 export async function POST(request: Request) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "Autenticação obrigatória." },
+        { status: 401 }
+      )
+    }
+  } catch {
+    return NextResponse.json({ error: "Autenticação obrigatória." }, { status: 401 })
+  }
+
   const sub = await getVerifiedSubscriptionFromCookies()
   if (!sub.ok) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 })
@@ -40,8 +54,17 @@ export async function POST(request: Request) {
   }
 
   const empresaNome = (body.empresaNome ?? APP_DISPLAY_NAME).trim() || APP_DISPLAY_NAME
-  const storeId =
-    typeof body.storeId === "string" && body.storeId.trim() ? body.storeId.trim() : storeIdFromAssistecRequestForRead(request)
+  const storeId = resolveActiveStoreId(
+    typeof body.storeId === "string" && body.storeId.trim()
+      ? body.storeId.trim()
+      : storeIdFromWhatsAppApiRead(request)
+  )
+  if (!storeId) {
+    return NextResponse.json(
+      { error: "Unidade obrigatória: selecione uma loja ativa." },
+      { status: 403 }
+    )
+  }
   const r = await sendDailyClosingToPhone({ phoneDigits: phone, empresaNome, storeId })
 
   if (!r.ok) {

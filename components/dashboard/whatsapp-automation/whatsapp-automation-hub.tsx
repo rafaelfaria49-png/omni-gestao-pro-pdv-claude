@@ -706,6 +706,11 @@ export function WhatsAppAutomationHub() {
                   <CardTitle className="text-base">{a.name}</CardTitle>
                   <CardDescription className="font-mono text-xs">
                     {a.triggerType} · prioridade {a.priority}
+                    {a.triggerType === "system_event"
+                      ? " · registro interno (sem envio Meta)"
+                      : a.triggerType === "keyword"
+                        ? " · simulação (sem envio Meta)"
+                        : ""}
                   </CardDescription>
                 </div>
                 <Button
@@ -758,7 +763,7 @@ export function WhatsAppAutomationHub() {
                   </div>
                   <p className="text-[11px] text-muted-foreground">
                     Somente dígitos, com DDI (ex: <span className="font-mono">5511999990001</span>).
-                    Mensagens simuladas serão enviadas a este número.
+                    Automações de evento registram histórico interno neste contato — não enviam WhatsApp Meta ao cliente.
                   </p>
                 </div>
                 {/* Visualização JSON das ações e condições */}

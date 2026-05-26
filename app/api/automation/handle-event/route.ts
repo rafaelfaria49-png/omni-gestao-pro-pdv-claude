@@ -11,6 +11,7 @@ import {
   guardAutomationHandleEventPost,
   type AutomationHandleEventBody,
 } from "@/lib/omni-agent/automation-event-guard"
+import { WHATSAPP_SYSTEM_EVENT_DELIVERY } from "@/lib/whatsapp/automation-delivery"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -38,7 +39,13 @@ export async function POST(req: NextRequest) {
     if (!guarded.ok) return guarded.response
 
     await handleEvent(guarded.event, guarded.payload)
-    return NextResponse.json({ ok: true, event: guarded.event })
+    return NextResponse.json({
+      ok: true,
+      event: guarded.event,
+      whatsappDelivery: WHATSAPP_SYSTEM_EVENT_DELIVERY.mode,
+      sendsMeta: WHATSAPP_SYSTEM_EVENT_DELIVERY.sendsMeta,
+      note: WHATSAPP_SYSTEM_EVENT_DELIVERY.description,
+    })
   } catch (e) {
     console.error("[api/automation/handle-event]", e)
     return NextResponse.json({ ok: false, error: "internal error" }, { status: 500 })

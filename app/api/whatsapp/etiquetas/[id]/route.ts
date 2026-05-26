@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,8 +16,9 @@ function badRequest(message: string) {
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) return badRequest("Unidade obrigatória.")
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     const { id } = await ctx.params
     let body: unknown
@@ -52,8 +53,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) return badRequest("Unidade obrigatória.")
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     const { id } = await ctx.params
     const count = await prisma.whatsAppEtiqueta.deleteMany({ where: { id, storeId } })

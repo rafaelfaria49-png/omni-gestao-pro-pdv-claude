@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { guardWhatsAppApiRead, guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
+import { enrichWhatsAppAutomationRow, WHATSAPP_SYSTEM_EVENT_DELIVERY } from "@/lib/whatsapp/automation-delivery"
 import { ensureHubSeed } from "@/lib/whatsapp/whatsapp-service"
 import type { Prisma } from "@/generated/prisma"
 
@@ -18,14 +19,20 @@ function badRequest(message: string) {
 
 export async function GET(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForRead(req)
+    const guard = await guardWhatsAppApiRead(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
     await ensureHubSeed(storeId)
 
     const rows = await prisma.whatsAppAutomation.findMany({
       where: { storeId },
       orderBy: [{ priority: "desc" }, { name: "asc" }],
     })
-    return json({ ok: true, automations: rows })
+    return json({
+      ok: true,
+      automations: rows.map(enrichWhatsAppAutomationRow),
+      systemEventDeliveryNote: WHATSAPP_SYSTEM_EVENT_DELIVERY.description,
+    })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return json({ error: msg }, { status: 500 })
@@ -34,8 +41,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) return badRequest("Unidade obrigatória: header x-assistec-loja-id ou query storeId.")
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     let body: unknown
     try {
@@ -74,7 +82,7 @@ export async function POST(req: Request) {
         actions,
       },
     })
-    return json({ ok: true, automation: row })
+    return json({ ok: true, automation: enrichWhatsAppAutomationRow(row) })
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     return json({ error: msg }, { status: 400 })

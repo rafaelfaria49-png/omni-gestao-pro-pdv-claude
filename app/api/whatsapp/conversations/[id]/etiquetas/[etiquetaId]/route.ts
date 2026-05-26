@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,10 +16,17 @@ export async function DELETE(
   ctx: { params: Promise<{ id: string; etiquetaId: string }> }
 ) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) return json({ error: "Unidade obrigatória." }, { status: 400 })
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     const { id: conversationId, etiquetaId } = await ctx.params
+
+    const conv = await prisma.whatsAppConversation.findFirst({
+      where: { id: conversationId, storeId },
+      select: { id: true },
+    })
+    if (!conv) return json({ error: "Conversa não encontrada." }, { status: 404 })
 
     const count = await prisma.whatsAppConversacaoEtiqueta.deleteMany({
       where: { conversationId, etiquetaId },

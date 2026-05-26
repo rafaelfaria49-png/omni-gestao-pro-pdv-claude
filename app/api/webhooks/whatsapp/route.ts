@@ -16,9 +16,9 @@ import { resolveWhatsAppWebhookVerifyToken } from "@/lib/whatsapp-meta-handshake
 import {
   isMetaCloudIngressBody,
   META_WEBHOOK_MAX_BODY_BYTES,
-  verifyMetaXHubSignature256,
 } from "@/lib/whatsapp-meta-webhook-signature"
 import { processMetaWhatsAppWebhookPayload } from "@/lib/whatsapp-meta-cloud-webhook"
+import { evaluateMetaWebhookSignature } from "@/lib/whatsapp/webhook-hmac-policy"
 
 // ─── Declarações INLINE obrigatórias (não podem vir de re-export) ─────────────
 export const runtime    = "nodejs"
@@ -228,43 +228,46 @@ export async function POST(request: Request) {
   }
 
   // ── Verificação de assinatura ────────────────────────────────────────────────
-  const appSecret = (
-    process.env.WHATSAPP_APP_SECRET?.trim() ??
-    process.env.META_APP_SECRET?.trim() ??
-    ""
-  )
   const sigHeader = request.headers.get("x-hub-signature-256")
+  const sigPolicy = evaluateMetaWebhookSignature(raw, sigHeader)
 
-  let sigPassed = true // sem segredo configurado = bypass
-  if (appSecret) {
-    sigPassed = verifyMetaXHubSignature256(raw, sigHeader, appSecret)
-    console.info("[whatsapp-webhook:POST:SIG_CHECK] ok=%s hasSig=%s", sigPassed, !!sigHeader)
+  if (!sigPolicy.ok) {
+    console.error("[whatsapp-webhook:POST:MISCONFIGURED]", sigPolicy.message)
+    return new Response(sigPolicy.message, {
+      status: sigPolicy.status,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+    })
+  }
 
-    if (!sigPassed) {
-      // ⚠ Log explícito de falha de assinatura — visível nos logs Vercel
-      console.warn("[whatsapp-webhook:SIGNATURE_FAIL]", JSON.stringify({
-        hasSig:        !!sigHeader,
-        sigPrefix:     sigHeader?.slice(0, 25) ?? null,
-        hasAppSecret:  true,
-        hint:          "Verificar WHATSAPP_APP_SECRET na Vercel vs App Secret no Meta Business Manager",
-      }))
-      after(async () => {
-        try {
-          await prisma.logsAuditoria.create({
-            data: {
-              action:    "whatsapp_meta_webhook_bad_signature",
-              userLabel: "meta",
-              detail:    "X-Hub-Signature-256 inválida — payload NÃO salvo. Verificar WHATSAPP_APP_SECRET.",
-              source:    "webhook",
-            },
-          })
-        } catch { /* best-effort */ }
-      })
-      // ← Retorna 200 para Meta não reenviar; NÃO processa/salva
-      return NextResponse.json({ ok: true }, { status: 200 })
-    }
-  } else {
-    console.warn("[whatsapp-webhook:POST:NO_APP_SECRET] WHATSAPP_APP_SECRET vazio — assinatura NÃO verificada, processando assim mesmo")
+  const sigPassed = sigPolicy.verified
+  console.info(
+    "[whatsapp-webhook:POST:SIG_CHECK] ok=%s hasSig=%s devBypass=%s",
+    sigPassed,
+    !!sigHeader,
+    sigPolicy.devBypass
+  )
+
+  if (!sigPassed) {
+    console.warn("[whatsapp-webhook:SIGNATURE_FAIL]", JSON.stringify({
+      hasSig:       !!sigHeader,
+      sigPrefix:    sigHeader?.slice(0, 25) ?? null,
+      devBypass:    sigPolicy.devBypass,
+      hint:         "Verificar WHATSAPP_APP_SECRET na Vercel vs App Secret no Meta Business Manager",
+    }))
+    after(async () => {
+      try {
+        await prisma.logsAuditoria.create({
+          data: {
+            action:    "whatsapp_meta_webhook_bad_signature",
+            userLabel: "meta",
+            detail:    "X-Hub-Signature-256 inválida — payload NÃO salvo. Verificar WHATSAPP_APP_SECRET.",
+            source:    "webhook",
+          },
+        })
+      } catch { /* best-effort */ }
+    })
+    // ← Retorna 200 para Meta não reenviar; NÃO processa/salva
+    return NextResponse.json({ ok: true }, { status: 200 })
   }
 
   // ── Processar payload em background ──────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { guardWhatsAppApiRead, guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
 import {
   addMessage,
   generateAiSuggestion,
@@ -22,7 +22,9 @@ function badRequest(message: string) {
 
 export async function GET(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForRead(req)
+    const guard = await guardWhatsAppApiRead(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
     const url = new URL(req.url)
     const conversationId = (url.searchParams.get("conversationId") ?? "").trim()
     if (!conversationId) return badRequest("conversationId obrigatório na query.")
@@ -46,8 +48,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) return badRequest("Unidade obrigatória: header x-assistec-loja-id ou query storeId.")
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     let body: unknown
     try {
@@ -65,7 +68,13 @@ export async function POST(req: Request) {
       const automationId =
         typeof o.automationId === "string" && o.automationId.trim() ? o.automationId.trim() : undefined
       const sim = await runAutomationSimulation(storeId, automationId, text || "(vazio)")
-      return json({ ok: true, simulation: sim })
+      return json({
+        ok: true,
+        simulation: sim,
+        deliveryMode: "simulation_only",
+        sendsMeta: false,
+        note: "Simulação de palavra-chave — não envia mensagem via Meta Cloud API.",
+      })
     }
 
     const conversationId = typeof o.conversationId === "string" ? o.conversationId.trim() : ""

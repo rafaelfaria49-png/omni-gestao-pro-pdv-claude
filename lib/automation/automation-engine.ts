@@ -5,6 +5,7 @@ import { subscribeAllEvents } from "@/lib/events/event-bus"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { handleOmniAgentSystemEvents } from "@/lib/omni-agent/omni-automation-engine"
 import { sendWhatsAppMessage, ensureDefaultEventAutomations } from "@/lib/whatsapp/whatsapp-service"
+import { WHATSAPP_SYSTEM_EVENT_DELIVERY } from "@/lib/whatsapp/automation-delivery"
 
 type AutomationConditions = {
   event?: SystemEvent
@@ -155,8 +156,8 @@ export async function handleEvent(event: SystemEvent, payload: EventPayload): Pr
         storeId,
         automationId: a.id,
         level: "info",
-        action: "automation_sent_simulated",
-        message: `Automação "${a.name}" gerou mensagem outbound (simulada). Destino: +${effectivePhone || effectiveContactId}`,
+        action: "automation_internal_record",
+        message: `Automação "${a.name}" registrou mensagem interna (${WHATSAPP_SYSTEM_EVENT_DELIVERY.label}). Destino histórico: +${effectivePhone || effectiveContactId}. Não enviado via Meta.`,
         payload: {
           event,
           entityId: payload.entityId ?? null,
@@ -164,6 +165,8 @@ export async function handleEvent(event: SystemEvent, payload: EventPayload): Pr
           messageId: res.messageId,
           recipientPhone: effectivePhone || null,
           usedTargetPhone: isSystemEvent && !!targetPhone,
+          deliveryMode: WHATSAPP_SYSTEM_EVENT_DELIVERY.mode,
+          sendsMeta: false,
         } as Prisma.InputJsonValue,
       })
     } catch (e) {

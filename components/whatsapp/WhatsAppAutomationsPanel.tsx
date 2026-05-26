@@ -17,6 +17,8 @@ type Automation = {
   action: string
   lastRun: string
   runs: number
+  deliveryLabel?: string
+  sendsMeta?: boolean
 }
 
 const TRIGGER_LABELS: Record<string, string> = {
@@ -71,6 +73,9 @@ export function WhatsAppAutomationsPanel({
             action: String(acts.type ?? "send_message"),
             lastRun: String(acts.lastRun ?? "—"),
             runs: typeof acts.runs === "number" ? acts.runs : 0,
+            deliveryLabel:
+              typeof a.deliveryLabel === "string" ? a.deliveryLabel : undefined,
+            sendsMeta: a.sendsMeta === true,
           }
         })
         setAutomations(mapped)
@@ -145,6 +150,8 @@ export function WhatsAppAutomationsPanel({
           <h2 className="text-lg font-semibold text-foreground">Automações</h2>
           <p className="text-sm text-muted-foreground">
             {automations.filter((a) => a.enabled).length} ativas de {automations.length}
+            {" · "}
+            Automações de evento registram histórico interno — não enviam WhatsApp Meta ao cliente.
           </p>
         </div>
         <Button variant="outline" size="sm" asChild>
@@ -169,6 +176,11 @@ export function WhatsAppAutomationsPanel({
                 <Badge variant="secondary" className="text-[10px]">
                   {ACTION_LABELS[a.action] ?? a.action}
                 </Badge>
+                {a.deliveryLabel ? (
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-700 dark:text-amber-300">
+                    {a.deliveryLabel}
+                  </Badge>
+                ) : null}
               </div>
               {a.description && (
                 <p className="mt-1 text-sm text-muted-foreground">{a.description}</p>

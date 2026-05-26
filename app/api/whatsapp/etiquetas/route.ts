@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { guardWhatsAppApiRead, guardWhatsAppApiWrite } from "@/lib/whatsapp/whatsapp-api-guard"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,7 +16,9 @@ function badRequest(message: string) {
 
 export async function GET(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForRead(req)
+    const guard = await guardWhatsAppApiRead(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
     const rows = await prisma.whatsAppEtiqueta.findMany({
       where: { storeId },
       orderBy: { nome: "asc" },
@@ -30,8 +32,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const storeId = storeIdFromAssistecRequestForWrite(req)
-    if (!storeId) return badRequest("Unidade obrigatória: header x-assistec-loja-id.")
+    const guard = await guardWhatsAppApiWrite(req)
+    if (!guard.ok) return guard.response
+    const storeId = guard.storeId
 
     let body: unknown
     try { body = await req.json() } catch { return badRequest("JSON inválido") }
