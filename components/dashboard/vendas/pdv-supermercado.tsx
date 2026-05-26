@@ -36,6 +36,13 @@ import { useLojaAtiva } from "@/lib/loja-ativa"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
+import {
+  getActiveFormasPagamento,
+  getFormaMultiplo,
+  getFormaPagamentoIcon,
+  formaPagamentoSupermercadoQuickClasses,
+  toPaymentMethodType,
+} from "@/lib/pdv-formas-pagamento"
 import { useOperationsStore, type InventoryItem } from "@/lib/operations-store"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
@@ -47,6 +54,7 @@ import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
+import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { VendaEsperaModal } from "./venda-espera-modal"
 import {
   getHeldSales,
@@ -168,6 +176,7 @@ export function PdvSupermercado({
   const [attrSelections, setAttrSelections] = useState<Record<string, string>>({})
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
+  const [recebimentoOpen, setRecebimentoOpen] = useState(false)
 
   const hardFocusSearch = useCallback(() => {
     // Hard-focus: o caixa não deve precisar tocar no mouse.
@@ -429,6 +438,18 @@ export function PdvSupermercado({
     [subtotal, discountTotal, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
   )
 
+  const formasSupermercado = useMemo(() => {
+    const all = getActiveFormasPagamento(pdvParams.formasPagamento ?? [])
+    const quick = all.filter((f) => {
+      const runtime = toPaymentMethodType(f.id)
+      return runtime && f.id !== "multiplo" && runtime !== "a_prazo" && runtime !== "carne"
+    })
+    return {
+      quick: quick.slice(0, 3),
+      multiplo: getFormaMultiplo(pdvParams.formasPagamento ?? []),
+    }
+  }, [pdvParams.formasPagamento])
+
   const openPaymentModal = useCallback(
     (intent: PaymentMethodType | null) => {
       if (cart.length === 0) {
@@ -603,25 +624,33 @@ export function PdvSupermercado({
         e.key !== "F3" &&
         e.key !== "F4" &&
         e.key !== "F7" &&
+        e.key !== "F9" &&
         e.key !== "F12" &&
         e.key !== "Insert"
       )
         return
       // Quando modal aberto, não interceptar (deixa o modal controlar o teclado)
-      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || showItemAvulsoModal || vendaEsperaOpen) return
+      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || showItemAvulsoModal || vendaEsperaOpen || recebimentoOpen) return
 
       e.preventDefault()
       e.stopPropagation()
       if (e.key === "Insert") setShowItemAvulsoModal(true)
       else if (e.key === "F7") setVendaEsperaOpen(true)
-      else if (e.key === "F2") openPaymentModal("dinheiro")
-      else if (e.key === "F3") openPaymentModal("pix")
-      else if (e.key === "F4") openPaymentModal("cartao_debito")
-      else if (e.key === "F12") openMultipayModal()
+      else if (e.key === "F9") setRecebimentoOpen(true)
+      else if (e.key === "F2") {
+        const r = toPaymentMethodType(formasSupermercado.quick[0]?.id ?? "dinheiro")
+        if (r) openPaymentModal(r)
+      } else if (e.key === "F3") {
+        const r = toPaymentMethodType(formasSupermercado.quick[1]?.id ?? "pix")
+        if (r) openPaymentModal(r)
+      } else if (e.key === "F4") {
+        const r = toPaymentMethodType(formasSupermercado.quick[2]?.id ?? "cartao_debito")
+        if (r) openPaymentModal(r)
+      } else if (e.key === "F12" && formasSupermercado.multiplo) openMultipayModal()
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, vendaEsperaOpen, openPaymentModal, openMultipayModal])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, openPaymentModal, openMultipayModal, formasSupermercado])
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = getHeldSales(lojaKey, terminalIdForHold)
@@ -991,61 +1020,53 @@ export function PdvSupermercado({
 
             {/* Botoes SaaS Premium */}
             <div className="mt-5 grid grid-cols-3 gap-3">
-              <Button
-                type="button"
-                className={cn(
-                  "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
-                  "bg-emerald-500/[0.04] border-emerald-500/20 text-emerald-700 hover:bg-emerald-500/[0.08] hover:border-emerald-500/35 hover:shadow-sm",
-                  "dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400 dark:hover:bg-emerald-500/15 dark:hover:border-emerald-500/40"
-                )}
-                onClick={() => openPaymentModal("dinheiro")}
-              >
-                <div className="flex flex-col items-center gap-1">
-                  <Banknote className="h-5 w-5 text-emerald-600 dark:text-emerald-400 transition-transform group-hover:scale-110" />
-                  <span className="text-[11px] font-bold uppercase tracking-wider">Dinheiro <span className="opacity-50 ml-0.5 text-[9px] font-normal">[F2]</span></span>
-                </div>
-              </Button>
-              <Button
-                type="button"
-                className={cn(
-                  "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
-                  "bg-cyan-500/[0.04] border-cyan-500/20 text-cyan-700 hover:bg-cyan-500/[0.08] hover:border-cyan-500/35 hover:shadow-sm",
-                  "dark:bg-cyan-500/10 dark:border-cyan-500/20 dark:text-cyan-400 dark:hover:bg-cyan-500/15 dark:hover:border-cyan-500/40"
-                )}
-                onClick={() => openPaymentModal("pix")}
-              >
-                <div className="flex flex-col items-center gap-1">
-                  <QrCode className="h-5 w-5 text-cyan-600 dark:text-cyan-400 transition-transform group-hover:scale-110" />
-                  <span className="text-[11px] font-bold uppercase tracking-wider">PIX <span className="opacity-50 ml-0.5 text-[9px] font-normal">[F3]</span></span>
-                </div>
-              </Button>
-              <Button
-                type="button"
-                className={cn(
-                  "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
-                  "bg-blue-500/[0.04] border-blue-500/20 text-blue-700 hover:bg-blue-500/[0.08] hover:border-blue-500/35 hover:shadow-sm",
-                  "dark:bg-blue-500/10 dark:border-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/15 dark:hover:border-blue-500/40"
-                )}
-                onClick={() => openPaymentModal("cartao_debito")}
-                title="Cartão (débito)"
-              >
-                <div className="flex flex-col items-center gap-1">
-                  <CreditCard className="h-5 w-5 text-blue-600 dark:text-blue-400 transition-transform group-hover:scale-110" />
-                  <span className="text-[11px] font-bold uppercase tracking-wider">Cartão <span className="opacity-50 ml-0.5 text-[9px] font-normal">[F4]</span></span>
-                </div>
-              </Button>
+              {formasSupermercado.quick.map((forma, idx) => {
+                const runtime = toPaymentMethodType(forma.id)
+                if (!runtime) return null
+                const Icon = getFormaPagamentoIcon(forma.icon)
+                const hotkey = forma.hotkey ?? (idx === 0 ? "F2" : idx === 1 ? "F3" : idx === 2 ? "F4" : undefined)
+                return (
+                  <Button
+                    key={forma.id}
+                    type="button"
+                    className={cn(
+                      "group relative h-16 rounded-2xl border shadow-sm backdrop-blur-md transition-all hover:-translate-y-0.5",
+                      formaPagamentoSupermercadoQuickClasses(forma.cor),
+                    )}
+                    onClick={() => openPaymentModal(runtime)}
+                    title={forma.label}
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      <Icon className="h-5 w-5 transition-transform group-hover:scale-110" />
+                      <span className="text-[11px] font-bold uppercase tracking-wider">
+                        {forma.shortLabel}
+                        {hotkey ? (
+                          <span className="ml-0.5 text-[9px] font-normal opacity-50">[{hotkey}]</span>
+                        ) : null}
+                      </span>
+                    </div>
+                  </Button>
+                )
+              })}
             </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              title="Pagamento Múltiplo (F12) — informe o valor parcial e escolha a forma; repita até zerar"
-              className="mt-3 h-12 w-full rounded-2xl border border-violet-500/40 bg-violet-500/5 text-xs font-extrabold uppercase tracking-wider text-violet-700 backdrop-blur-sm transition-all hover:bg-violet-500/10 hover:text-violet-700 dark:border-violet-400/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
-              onClick={openMultipayModal}
-              disabled={cart.length === 0}
-            >
-              <Layers className="mr-2 h-4 w-4" /> Múltiplo <span className="opacity-50 ml-1 text-[9px] font-normal">[F12]</span>
-            </Button>
+            {formasSupermercado.multiplo ? (
+              <Button
+                type="button"
+                variant="outline"
+                title="Pagamento Múltiplo (F12) — informe o valor parcial e escolha a forma; repita até zerar"
+                className="mt-3 h-12 w-full rounded-2xl border border-violet-500/40 bg-violet-500/5 text-xs font-extrabold uppercase tracking-wider text-violet-700 backdrop-blur-sm transition-all hover:bg-violet-500/10 hover:text-violet-700 dark:border-violet-400/40 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/15"
+                onClick={openMultipayModal}
+                disabled={cart.length === 0}
+              >
+                {(() => {
+                  const Icon = getFormaPagamentoIcon(formasSupermercado.multiplo.icon)
+                  return <Icon className="mr-2 h-4 w-4" />
+                })()}
+                {formasSupermercado.multiplo.shortLabel}{" "}
+                <span className="ml-1 text-[9px] font-normal opacity-50">[F12]</span>
+              </Button>
+            ) : null}
           </div>
         </PdvPainelLateralTerminal>
       </div>
@@ -1159,6 +1180,15 @@ export function PdvSupermercado({
         open={showItemAvulsoModal}
         onOpenChange={setShowItemAvulsoModal}
         onConfirm={addItemAvulso}
+      />
+
+      <PdvRecebimentoModal
+        open={recebimentoOpen}
+        onOpenChange={(open) => {
+          setRecebimentoOpen(open)
+          if (!open) queueMicrotask(hardFocusSearch)
+        }}
+        preselectedCustomerName={null}
       />
 
       <VendaEsperaModal

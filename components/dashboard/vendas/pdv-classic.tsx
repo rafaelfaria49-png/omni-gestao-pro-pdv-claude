@@ -37,6 +37,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
+import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
@@ -44,6 +45,14 @@ import { useCaixa } from "../caixa/caixa-provider"
 import { configPadrao, useConfigEmpresa } from "@/lib/config-empresa"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
+import {
+  findFormaByPaymentType,
+  getActiveFormasPagamento,
+  getFormaMultiplo,
+  getFormaPagamentoIcon,
+  formaPagamentoOutlineClasses,
+  toPaymentMethodType,
+} from "@/lib/pdv-formas-pagamento"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { cn } from "@/lib/utils"
@@ -56,13 +65,8 @@ function formatBrDocDisplay(digitsRaw: string): string {
     return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`
   return digitsRaw.trim()
 }
-import { buildPdvReceiptEscPos } from "@/lib/escpos"
-import {
-  sendEscPosViaProxy,
-  downloadEscPosFile,
-  openThermalHtmlPrint,
-  escapeHtml,
-} from "@/lib/thermal-print"
+import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
+import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
@@ -185,7 +189,7 @@ export function PdvClassic({
   const { config } = useConfigEmpresa()
   const { empresaDocumentos, getEnderecoDocumentos, lojaAtivaId, opsStorageKey, storesRefreshNonce } =
     useLojaAtiva()
-  const { pdvParams } = useStoreSettings()
+  const { pdvParams, impressaoConfig, settings, storeId } = useStoreSettings()
   const { mode: studioThemeMode } = useStudioTheme()
   const classicStudio = studioThemeMode === "classic"
   const lojaKey = lojaAtivaId ?? opsLojaIdFromStorageKey(opsStorageKey)
@@ -276,6 +280,7 @@ export function PdvClassic({
   })
   /** Rodapé do cupom por unidade (StoreSettings). */
   const [pdvReceiptFooter, setPdvReceiptFooter] = useState("")
+  const [storeLogoUrl, setStoreLogoUrl] = useState("")
 
   useEffect(() => {
     const id = (lojaAtivaId || "").trim()
@@ -296,14 +301,16 @@ export function PdvClassic({
           }),
         ])
         const jStore = (await rs.json().catch(() => null)) as
-          | { store?: { name?: string | null } | null }
+          | { store?: { name?: string | null; logoUrl?: string | null } | null }
           | null
         const jSet = (await rset.json().catch(() => null)) as
           | { settings?: { receiptFooter?: string | null } | null }
           | null
         if (cancelled) return
         const name = String(jStore?.store?.name ?? "").trim()
-        setPdvReceiptFooter(String(jSet?.settings?.receiptFooter ?? "").trim())
+        const footerCol = String(jSet?.settings?.receiptFooter ?? "").trim()
+        setPdvReceiptFooter(footerCol)
+        setStoreLogoUrl(String(jStore?.store?.logoUrl ?? "").trim())
         const block = !jStore?.store || name.length === 0
         setStorePdvGate({ ready: true, block })
       } catch {
@@ -875,69 +882,77 @@ export function PdvClassic({
     [subtotal, discountTotal, pdvParams.incluirImpostoEstimadoNoPdv, pdvParams.aliquotaImpostoEstimadoPdv],
   )
 
-  const handlePrintReceipt = async () => {
+  const formasPagamentoClassic = useMemo(() => {
+    const all = getActiveFormasPagamento(pdvParams.formasPagamento ?? [])
+    return {
+      grid: all.filter((f) => f.id !== "carne" && f.id !== "boleto" && f.id !== "multiplo"),
+      parcelado: all.filter((f) => f.id === "carne" || f.id === "boleto"),
+      multiplo: getFormaMultiplo(pdvParams.formasPagamento ?? []),
+    }
+  }, [pdvParams.formasPagamento])
+
+  const buildReceiptPrintPayload = useCallback(() => {
     const nome = (empresaDocumentos.nomeFantasia || "").trim() || configPadrao.empresa.nomeFantasia
     const cnpj = (empresaDocumentos.cnpj || "").trim() || configPadrao.empresa.cnpj
-    const itens = cart.map((i) => ({
-      name: i.name,
-      quantity: i.quantity,
-      unitPrice: i.price,
-      lineTotal: i.price * i.quantity,
-    }))
-    const bytes = buildPdvReceiptEscPos({
-      nomeFantasia: nome,
+    const footer = resolveCupomRodape(impressaoConfig, pdvReceiptFooter || settings?.receiptFooter)
+    return {
+      nome,
       cnpj,
-      enderecoLinha: getEnderecoDocumentos(),
-      receiptFooter: pdvReceiptFooter,
-      itens,
-      subtotal,
-      taxes: impostoEstimado,
-      discount: discountTotal,
-      total,
-      dataHora: new Date().toLocaleString("pt-BR"),
-    })
+      footer,
+      itens: cart.map((i) => ({
+        name: i.name,
+        quantity: i.quantity,
+        unitPrice: i.price,
+        lineTotal: i.price * i.quantity,
+      })),
+    }
+  }, [
+    cart,
+    empresaDocumentos.cnpj,
+    empresaDocumentos.nomeFantasia,
+    impressaoConfig,
+    pdvReceiptFooter,
+    settings?.receiptFooter,
+  ])
 
-    const result = await sendEscPosViaProxy(bytes)
+  const handlePrintReceipt = async () => {
+    if (cart.length === 0) {
+      toast({ title: "Carrinho vazio", description: "Adicione itens antes de imprimir.", variant: "destructive" })
+      return
+    }
+    const p = buildReceiptPrintPayload()
+    const result = await printPdvSaleReceipt({
+      config: impressaoConfig,
+      receiptFooter: p.footer,
+      logoUrl: storeLogoUrl,
+      input: {
+        nomeFantasia: p.nome,
+        cnpj: p.cnpj,
+        enderecoLinha: getEnderecoDocumentos(),
+        receiptFooter: p.footer,
+        itens: p.itens,
+        subtotal,
+        taxes: impostoEstimado,
+        discount: discountTotal,
+        total,
+        dataHora: new Date().toLocaleString("pt-BR"),
+      },
+    })
     if (result.ok) {
       toast({
-        title: "Cupom ESC/POS enviado",
-        description: "Dados enviados por TCP (API /api/print/raw → THERMAL_PRINT_HOST:THERMAL_PRINT_PORT).",
+        title: result.via === "proxy" ? "Cupom enviado" : "Cupom preparado",
+        description:
+          result.via === "proxy"
+            ? `Impressora ${impressaoConfig.impressoraHost.trim() || "padrão do servidor"} · ${impressaoConfig.viasCupom} via(s).`
+            : "Impressão HTML ou arquivo .bin gerado (fallback web).",
       })
       return
     }
-
     toast({
-      title: "Impressora raw indisponível",
-      description: `${result.error} — baixamos o .bin e abrimos impressão HTML 80mm.`,
+      title: "Falha na impressão",
+      description: result.error || "Não foi possível enviar o cupom.",
       variant: "destructive",
     })
-    downloadEscPosFile(bytes, "recibo-pdv.bin")
-
-    const br = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
-    const linhasItens = cart
-      .map((i) => `<p>${escapeHtml(String(i.quantity))}x ${escapeHtml(i.name)} — ${br.format(i.price * i.quantity)}</p>`)
-      .join("")
-    openThermalHtmlPrint(
-      `
-      <div style="text-align:center;font-weight:700;margin-bottom:6px">${escapeHtml(nome)}</div>
-      <div style="text-align:center;font-size:11px;margin-bottom:4px">CNPJ ${escapeHtml(cnpj)}</div>
-      <div style="font-size:10px;margin-bottom:8px">${escapeHtml(getEnderecoDocumentos())}</div>
-      <div style="border-top:1px dashed #000;margin:6px 0"></div>
-      ${linhasItens}
-      <div style="border-top:1px dashed #000;margin:6px 0"></div>
-      <p>Subtotal: ${br.format(subtotal)}</p>
-      ${impostoEstimado > 0 ? `<p>Imposto estimado: ${br.format(impostoEstimado)}</p>` : ""}
-      ${discountTotal > 0 ? `<p>Desconto: ${br.format(discountTotal)}</p>` : ""}
-      <p style="font-weight:700">Valor final pago: ${br.format(total)}</p>
-      ${
-        pdvReceiptFooter.trim()
-          ? `<div style="font-size:10px;margin-top:8px;white-space:pre-wrap">${escapeHtml(pdvReceiptFooter.trim())}</div>`
-          : ""
-      }
-      <p style="font-size:10px;margin-top:8px">${escapeHtml(new Date().toLocaleString("pt-BR"))}</p>
-    `,
-      "Recibo PDV"
-    )
   }
 
   const handlePendOnAccount = () => {
@@ -1441,6 +1456,21 @@ export function PdvClassic({
   }, [voiceCartSeed, onVoiceCartSeedConsumed, toast])
 
   const openPaymentModal = (intent: PaymentMethodType | null) => {
+    if (intent) {
+      const forma = findFormaByPaymentType(pdvParams.formasPagamento ?? [], intent)
+      const exigirCliente = forma?.exigirCliente ?? (intent === "a_prazo" || intent === "carne")
+      if (exigirCliente && !selectedCustomer) {
+        toast({
+          variant: "destructive",
+          title: "Cliente obrigatório",
+          description:
+            intent === "a_prazo"
+              ? "⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo."
+              : "Selecione o cliente para carnê parcelado ou boleto.",
+        })
+        return
+      }
+    }
     if (intent === "a_prazo" && !selectedCustomer) {
       toast({
         variant: "destructive",
@@ -1685,13 +1715,13 @@ export function PdvClassic({
                 setShellAdvancedOpen(false)
                 setShowDevolucaoModal(true)
               }}
-              receivablesOpen={shellReceivablesOpen}
-              onReceivablesOpenChange={(open) => {
-                setShellReceivablesOpen(open)
-                if (!open) focusShellBipe()
+              receivablesOpen={false}
+              onReceivablesOpenChange={() => {
+                /* Dialog antigo do shell ("Ir para Contas a Receber") foi
+                 * substituído pelo <PdvRecebimentoModal /> abaixo. O estado
+                 * `shellReceivablesOpen` controla o novo modal diretamente. */
               }}
               onOpenReceivablesModule={() => {
-                setShellReceivablesOpen(false)
                 router.push("/dashboard/financeiro/contas-a-receber")
                 focusShellBipe()
               }}
@@ -1735,7 +1765,7 @@ export function PdvClassic({
                           <span>Venda Balcao (Rapida)</span>
                         </button>
                         <button
-                          onClick={() => writePdvClassicLayout("venda-completa")}
+                          onClick={() => writePdvClassicLayout("venda-completa", storeId)}
                           className="flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-base font-semibold transition-all sm:flex-none text-foreground/70 hover:text-foreground hover:bg-primary/10"
                         >
                           <FileText className="h-5 w-5" />
@@ -2271,35 +2301,71 @@ export function PdvClassic({
                 <div className="shrink-0 space-y-1">
                   <p className="text-xs font-bold text-foreground dark:text-white/65">Forma de pagamento</p>
                   <div className="grid grid-cols-3 gap-1.5">
-                    <Button type="button" variant="outline" className="flex h-11 flex-col gap-0 border-2 border-emerald-500/40 bg-background py-1 text-[10px] font-extrabold leading-none text-foreground shadow-sm hover:bg-emerald-500/10 dark:border-emerald-400/50 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-emerald-500/15 sm:text-xs" onClick={() => openPaymentModal("dinheiro")}>
-                      <Banknote className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                      <span>Dinheiro</span>
-                    </Button>
-                    <Button type="button" variant="outline" className="flex h-11 flex-col gap-0 border-2 border-teal-500/40 bg-background py-1 text-[10px] font-extrabold leading-none text-foreground shadow-sm hover:bg-teal-500/10 dark:border-teal-400/50 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-teal-500/15 sm:text-xs" onClick={() => openPaymentModal("pix")}>
-                      <QrCode className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
-                      <span>PIX</span>
-                    </Button>
-                    <Button type="button" variant="outline" className="flex h-11 flex-col gap-0 border-2 border-slate-500/40 bg-background py-1 text-[10px] font-extrabold leading-none text-foreground shadow-sm hover:bg-slate-500/10 dark:border-slate-400/50 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-slate-500/15 sm:text-xs" onClick={() => openPaymentModal("cartao_debito")}>
-                      <CreditCard className="h-4 w-4 shrink-0 text-slate-600 dark:text-slate-300" />
-                      <span>Débito</span>
-                    </Button>
-                    <Button type="button" variant="outline" className="flex h-11 flex-col gap-0 border-2 border-blue-500/40 bg-background py-1 text-[10px] font-extrabold leading-none text-foreground shadow-sm hover:bg-blue-500/10 dark:border-blue-400/50 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-blue-500/15 sm:text-xs" onClick={() => openPaymentModal("cartao_credito")}>
-                      <CreditCard className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-                      <span>Crédito</span>
-                    </Button>
-                    <Button type="button" variant="outline" title={!selectedCustomer ? "Clique para ver o aviso: é necessário selecionar o cliente para venda à prazo" : "Faturar à prazo em Contas a Receber"} className="flex h-11 flex-col gap-0 border-2 border-violet-500/40 bg-background py-1 text-[10px] font-extrabold leading-none text-foreground shadow-sm hover:bg-violet-500/10 dark:border-violet-400/50 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-violet-500/15 sm:text-xs" onClick={() => openPaymentModal("a_prazo")}>
-                      <CalendarClock className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
-                      <span>À prazo</span>
-                    </Button>
-                    <Button type="button" variant="outline" title="Pagamento Múltiplo (F12) — informe o valor parcial e escolha a forma; repita até zerar" className="flex h-11 flex-col gap-0 border-2 border-violet-500/40 bg-background py-1 text-[10px] font-extrabold leading-none text-foreground shadow-sm hover:bg-violet-500/10 dark:border-violet-400/50 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-violet-500/15 sm:text-xs" onClick={openMultipayModal}>
-                      <Layers className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
-                      <span>Múltiplo</span>
-                    </Button>
+                    {formasPagamentoClassic.grid.map((forma) => {
+                      const runtime = toPaymentMethodType(forma.id)
+                      if (!runtime) return null
+                      const Icon = getFormaPagamentoIcon(forma.icon)
+                      const exigirCliente = forma.exigirCliente ?? (runtime === "a_prazo" || runtime === "carne")
+                      return (
+                        <Button
+                          key={forma.id}
+                          type="button"
+                          variant="outline"
+                          title={
+                            exigirCliente && !selectedCustomer
+                              ? "Selecione o cliente para usar esta forma"
+                              : forma.label
+                          }
+                          className={cn(
+                            "flex h-11 flex-col gap-0 py-1 text-[10px] font-extrabold leading-none text-foreground sm:text-xs",
+                            formaPagamentoOutlineClasses(forma.cor),
+                          )}
+                          onClick={() => openPaymentModal(runtime)}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <span>{forma.shortLabel}</span>
+                        </Button>
+                      )
+                    })}
+                    {formasPagamentoClassic.multiplo ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        title="Pagamento Múltiplo (F12) — informe o valor parcial e escolha a forma; repita até zerar"
+                        className={cn(
+                          "flex h-11 flex-col gap-0 py-1 text-[10px] font-extrabold leading-none text-foreground sm:text-xs",
+                          formaPagamentoOutlineClasses(formasPagamentoClassic.multiplo.cor),
+                        )}
+                        onClick={openMultipayModal}
+                      >
+                        {(() => {
+                          const Icon = getFormaPagamentoIcon(formasPagamentoClassic.multiplo.icon)
+                          return <Icon className="h-4 w-4 shrink-0" />
+                        })()}
+                        <span>{formasPagamentoClassic.multiplo.shortLabel}</span>
+                      </Button>
+                    ) : null}
                   </div>
-                  <Button type="button" variant="outline" className="flex h-10 w-full flex-col justify-center gap-0 border-2 border-orange-500/45 bg-background py-0.5 text-xs font-extrabold tracking-tight text-foreground shadow-sm hover:bg-orange-500/10 dark:border-orange-400/50 dark:bg-black/60 dark:backdrop-blur-md dark:hover:bg-orange-500/15" onClick={() => openPaymentModal("carne")}>
-                    <FileText className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" />
-                    Carnê / Parcelado
-                  </Button>
+                  {formasPagamentoClassic.parcelado.map((forma) => {
+                    const runtime = toPaymentMethodType(forma.id)
+                    if (!runtime) return null
+                    const Icon = getFormaPagamentoIcon(forma.icon)
+                    return (
+                      <Button
+                        key={forma.id}
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "mt-1.5 flex h-10 w-full flex-col justify-center gap-0 py-0.5 text-xs font-extrabold tracking-tight text-foreground",
+                          formaPagamentoOutlineClasses(forma.cor),
+                        )}
+                        onClick={() => openPaymentModal(runtime)}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        {forma.label}
+                      </Button>
+                    )
+                  })}
                 </div>
 
                 {selectedCustomer ? (
@@ -2395,8 +2461,18 @@ export function PdvClassic({
         onDiscard={handleDiscardHeldSale}
       />
 
+      <PdvRecebimentoModal
+        open={shellReceivablesOpen}
+        onOpenChange={(open) => {
+          setShellReceivablesOpen(open)
+          if (!open && uiShell !== "default") focusShellBipe()
+        }}
+        preselectedCustomerName={selectedCustomer?.name ?? null}
+      />
+
       <PaymentModal
         isOpen={isPaymentModalOpen}
+        onPrintCupom={() => void handlePrintReceipt()}
         onClose={() => {
           setIsPaymentModalOpen(false)
           setInstantPayIntent(null)
@@ -2478,6 +2554,26 @@ export function PdvClassic({
           if (!result.ok) {
             toast({ title: "Falha transacional", description: result.reason })
             return
+          }
+          if (impressaoConfig.imprimirAutomatico && saleLines.length > 0) {
+            const p = buildReceiptPrintPayload()
+            void printPdvSaleReceipt({
+              config: impressaoConfig,
+              receiptFooter: p.footer,
+              logoUrl: storeLogoUrl,
+              input: {
+                nomeFantasia: p.nome,
+                cnpj: p.cnpj,
+                enderecoLinha: getEnderecoDocumentos(),
+                receiptFooter: p.footer,
+                itens: p.itens,
+                subtotal,
+                taxes: impostoEstimado,
+                discount: discountTotal,
+                total,
+                dataHora: new Date().toLocaleString("pt-BR"),
+              },
+            })
           }
           if (aPrazo > 0.02 && selectedCustomer) {
             appendContaReceberTituloPdvAprazo({
