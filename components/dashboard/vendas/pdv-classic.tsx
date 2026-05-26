@@ -37,6 +37,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
+import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
@@ -191,6 +192,7 @@ export function PdvClassic({
   const { empresaDocumentos, getEnderecoDocumentos, lojaAtivaId, opsStorageKey, storesRefreshNonce } =
     useLojaAtiva()
   const { pdvParams, impressaoConfig, settings, storeId } = useStoreSettings()
+  const { caixa, sessaoId } = useCaixa()
   const { mode: studioThemeMode } = useStudioTheme()
   const classicStudio = studioThemeMode === "classic"
   const lojaKey = lojaAtivaId ?? opsLojaIdFromStorageKey(opsStorageKey)
@@ -1062,17 +1064,19 @@ export function PdvClassic({
           }
           setShellQtyEditOpen(true)
           break
-        case "F5":
-          if (!selectedCartLineId) {
-            toast({ title: "Selecione um item", description: "Clique em um item da lista para cancelá-lo." })
+        case "F5": {
+          if (!caixa.isOpen || !sessaoId?.trim()) {
+            toast({
+              variant: "destructive",
+              title: "Caixa fechado",
+              description: "Abra o caixa antes de receber contas.",
+            })
             goBipe()
             return
           }
-          setCart((prev) => prev.filter((i) => i.lineId !== selectedCartLineId))
-          setSelectedCartLineId(null)
-          setShellInfo("Item cancelado.")
-          goBipe()
+          setShellReceivablesOpen(true)
           break
+        }
         case "F6":
           setShellCancelSaleOpen(true)
           break
@@ -1083,6 +1087,16 @@ export function PdvClassic({
           goBipe()
           break
         case "F9":
+          // Alias legado — mesmo fluxo do F5 (Receber conta).
+          if (!caixa.isOpen || !sessaoId?.trim()) {
+            toast({
+              variant: "destructive",
+              title: "Caixa fechado",
+              description: "Abra o caixa antes de receber contas.",
+            })
+            goBipe()
+            return
+          }
           setShellReceivablesOpen(true)
           break
         case "F10":
@@ -1116,7 +1130,7 @@ export function PdvClassic({
           break
       }
     },
-    [cart.length, focusShellBipe, selectedCartLineId, toast]
+    [cart.length, focusShellBipe, selectedCartLineId, toast, caixa.isOpen, sessaoId]
   )
 
   useEffect(() => {
@@ -1124,6 +1138,31 @@ export function PdvClassic({
     let ctrlDown = false
     const down = (e: globalThis.KeyboardEvent) => {
       if (shellModalBlocking) return
+      if (e.key === "Delete" && cart.length > 0) {
+        const active = document.activeElement
+        const inInput =
+          active instanceof HTMLInputElement ||
+          active instanceof HTMLTextAreaElement ||
+          active instanceof HTMLSelectElement
+        if (!inInput) {
+          e.preventDefault()
+          if (selectedCartLineId) {
+            setCart((prev) => prev.filter((i) => i.lineId !== selectedCartLineId))
+            setSelectedCartLineId(null)
+            setShellInfo("Item cancelado.")
+          } else {
+            setCart((prev) => {
+              const next = prev.slice(0, -1)
+              const last = next[next.length - 1]
+              queueMicrotask(() => setSelectedCartLineId(last?.lineId ?? null))
+              return next
+            })
+            setShellInfo("Último item removido.")
+          }
+          focusShellBipe()
+          return
+        }
+      }
       if (e.key === "Control") ctrlDown = true
       else ctrlDown = false
       // INSERT — Item Avulso (venda de balcão sem cadastro). Antes só existia no
@@ -1152,7 +1191,7 @@ export function PdvClassic({
       window.removeEventListener("keydown", down)
       window.removeEventListener("keyup", up)
     }
-  }, [openShellShortcut, shellModalBlocking])
+  }, [openShellShortcut, shellModalBlocking, cart, selectedCartLineId, focusShellBipe])
 
   useEffect(() => {
     const t = window.setTimeout(() => shellBipeRef.current?.focus(), 100)
@@ -2217,6 +2256,10 @@ export function PdvClassic({
           if (!open) focusShellBipe()
         }}
         preselectedCustomerName={selectedCustomer?.name ?? null}
+        formasPagamento={pdvParams.formasPagamento ?? []}
+        impressaoConfig={impressaoConfig}
+        lojaNome={(empresaDocumentos.nomeFantasia || configPadrao.empresa.nomeFantasia || "").trim() || undefined}
+        hotkeyLabel="F5"
       />
 
       <PaymentModal

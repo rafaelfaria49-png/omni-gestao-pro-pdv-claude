@@ -91,11 +91,11 @@ const shortcuts = [
   { key: "F2", label: "Cliente" },
   { key: "F3", label: "Produto" },
   { key: "F4", label: "Alt. Qtd" },
-  { key: "F5", label: "Cancelar Item" },
+  { key: "F5", label: "Receber Conta", tone: "accent" as const },
   { key: "F6", label: "Cancelar Venda", tone: "destructive" as const },
   { key: "F7", label: "Voltar ao Bipe" },
   { key: "F8", label: "Voltar ao Bipe" },
-  { key: "F9", label: "Contas a Receber" },
+  { key: "F9", label: "Receber Conta" },
   { key: "CTRL", label: "Funções Avançadas" },
 ]
 

@@ -135,7 +135,7 @@ export function PdvSupermercado({
   const router = useRouter()
   const { toast } = useToast()
   const { lojaAtivaId, opsStorageKey } = useLojaAtiva()
-  const { pdvParams, blob, save: saveStoreSettings } = useStoreSettings()
+  const { pdvParams, blob, save: saveStoreSettings, impressaoConfig } = useStoreSettings()
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
@@ -1189,6 +1189,9 @@ export function PdvSupermercado({
           if (!open) queueMicrotask(hardFocusSearch)
         }}
         preselectedCustomerName={null}
+        formasPagamento={pdvParams.formasPagamento ?? []}
+        impressaoConfig={impressaoConfig}
+        hotkeyLabel="F9"
       />
 
       <VendaEsperaModal

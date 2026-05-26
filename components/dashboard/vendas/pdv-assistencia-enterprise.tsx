@@ -1321,7 +1321,7 @@ function EditarAtalhosModal({
 
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
-  const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated } = useStoreSettings()
+  const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig } = useStoreSettings()
   const { lojaAtivaId } = useLojaAtiva()
   const shortcutsKey = useMemo(
     () => SHORTCUTS_STORAGE_KEY((lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID),
@@ -2925,6 +2925,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           if (!open) queueMicrotask(() => inputRef.current?.focus())
         }}
         preselectedCustomerName={customerName?.trim() || null}
+        formasPagamento={pdvParams.formasPagamento ?? []}
+        impressaoConfig={impressaoConfig}
+        hotkeyLabel="F9"
       />
 
       {/* F8 — Troca / Devolução real (reaproveita o fluxo TrocasDevolucao) */}
