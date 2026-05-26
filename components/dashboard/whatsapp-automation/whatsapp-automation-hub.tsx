@@ -23,8 +23,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 type WContact = {
   id: string
@@ -89,7 +89,7 @@ function headersJson(lojaId: string): HeadersInit {
 
 export function WhatsAppAutomationHub() {
   const { lojaAtivaId } = useLojaAtiva()
-  const lojaId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID
+  const lojaId = lojaAtivaId?.trim() ?? ""
   const { toast } = useToast()
 
   const [loading, setLoading] = useState(true)
@@ -181,6 +181,12 @@ export function WhatsAppAutomationHub() {
   }, [lojaId])
 
   useEffect(() => {
+    if (!lojaId) {
+      setLoading(false)
+      setConversations([])
+      setSelectedId(null)
+      return
+    }
     let cancelled = false
     ;(async () => {
       setLoading(true)
@@ -448,6 +454,20 @@ export function WhatsAppAutomationHub() {
     toast({ title: "Texto aplicado", description: "Colado no campo de mensagem (rascunho)." })
   }
 
+  if (!lojaId) {
+    return (
+      <div className="glass-card rounded-xl p-8 text-center">
+        <p className="text-sm font-medium text-foreground">Nenhuma unidade ativa</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Selecione uma loja no menu superior para usar as ferramentas admin do WhatsApp.
+        </p>
+        <Button asChild variant="outline" size="sm" className="mt-4">
+          <Link href="/dashboard/whatsapp">Ir para o HUB operacional</Link>
+        </Button>
+      </div>
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-muted-foreground py-12 justify-center">
@@ -462,16 +482,19 @@ export function WhatsAppAutomationHub() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Automação
+            Ferramentas admin · legado
           </p>
           <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-foreground flex items-center gap-2">
             <MessageCircle className="h-7 w-7 text-green-600" />
-            WhatsApp HUB
+            WhatsApp — admin
           </h1>
           <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
-            Conversas, respostas rápidas e automações persistem no Postgres por unidade (
-            <span className="font-mono text-xs">{lojaId}</span>). Nenhuma mensagem é enviada à Meta nesta
-            versão.
+            Rascunhos locais, simulações e configurações por unidade (
+            <span className="font-mono text-xs">{lojaId}</span>).{" "}
+            <Link href="/dashboard/whatsapp" className="text-primary underline-offset-2 hover:underline">
+              HUB operacional
+            </Link>{" "}
+            envia via Meta Cloud API.
           </p>
         </div>
       </div>

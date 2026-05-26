@@ -54,7 +54,7 @@ function IntegracoesSectionContent() {
       id: "whatsapp",
       nome: "WhatsApp",
       descricao:
-        "Número da loja para orçamentos e mensagens. Webhook: GET (handshake Meta com WHATSAPP_VERIFY_TOKEN) e POST — payloads gravados em log; Evolution legado opcional com WHATSAPP_WEBHOOK_LEGACY_AI=true. Painel: WhatsApp HUB.",
+        "Número da loja para orçamentos e mensagens. Atendimento real: HUB operacional (/dashboard/whatsapp). Ferramentas admin legadas em /dashboard/whatsapp-automation (sem envio Meta).",
       icon: MessageCircle,
       uiStatus: wa ? "ok" : noLoja || !hydrated ? "neutral" : "warn",
       statusLabel:
@@ -65,7 +65,8 @@ function IntegracoesSectionContent() {
             : "Não configurado",
       actions: [
         { label: "Configurar em Geral", section: "geral", variant: "default" },
-        { label: "WhatsApp HUB", href: "/dashboard/whatsapp-automation", variant: "outline" },
+        { label: "HUB operacional", href: "/dashboard/whatsapp", variant: "default" },
+        { label: "Ferramentas admin (legado)", href: "/dashboard/whatsapp-automation", variant: "outline" },
       ],
     },
     {

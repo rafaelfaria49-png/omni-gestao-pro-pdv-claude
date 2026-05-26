@@ -452,4 +452,32 @@ fc6bcf1 feat(whatsapp): destacar vinculo sugerido e permitir desvincular cliente
 
 ---
 
+## 19. Remediação P1 UX/convergência (26/05/2026)
+
+### P1 resolvidos ou mitigados
+
+| # | Item | Remediação | Status |
+|---|------|------------|--------|
+| 1 | Send falha sem toast | `WhatsAppInbox.tsx` — `toast.error` com mensagens 401/403/rede; sem bubble otimista em falha | ✅ Corrigido |
+| 2 | Três hubs divergentes | Integrações → HUB operacional; automation page banner legado; links e labels honestos; Lovable marcado protótipo | ✅ Mitigado |
+| 3 | Seed demo em produção | `ensureHubSeed` — contato/conversa demo só fora de produção (`isProductionRuntime`) | ✅ Corrigido |
+| 4 | Badges “Sinais IA” ambíguos | `WhatsAppInsightsPanel` → “Sinais heurísticos”; `AiSignalBadge` com `kind` e tooltip explícito | ✅ Corrigido |
+| 5 | Lovable/automation `loja-1` | Empty state sem loja; removido `LEGACY_PRIMARY_STORE_ID` na UI | ✅ Corrigido |
+| 6 | Automações internas vs Meta | Labels reforçados em painéis + copy automation hub (P0 parcial, reforço P1) | ✅ Reforçado |
+
+### P2 restantes
+
+1. Botão MoreVertical sem menu no inbox  
+2. Editar automação desabilitado (“Em breve”)  
+3. `confirm()` nativo em exclusão QR/etiqueta  
+4. Kit Lovable morto (~54 arquivos) — ainda no repo, rotulado  
+5. Polling 5s (custo/latência)  
+6. Scan vínculo sugerido limitado (~30 conversas)  
+7. Deep link só busca — sem pré-preencher cadastro  
+8. Unificar código dos três hubs (redirect/copy feito; merge de código pendente)  
+9. Auto-link webhook menos strict que match API  
+10. Fallback `loja-1` em APIs não-WhatsApp (`lib/store-id-from-request.ts`)
+
+---
+
 *Auditoria estática; comportamento com credenciais Meta/OpenRouter em runtime de produção não foi exercitado nesta sessão.*

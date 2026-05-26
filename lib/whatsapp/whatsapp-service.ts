@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import type { Prisma } from "@/generated/prisma"
+import { isProductionRuntime } from "@/lib/whatsapp/webhook-hmac-policy"
 import {
   assertValidWhatsAppRecipientDigits,
   firstOutboundWamid,
@@ -371,6 +372,11 @@ export async function ensureHubSeed(storeId: string): Promise<void> {
     }
 
     if (!(await tx.whatsAppConversation.findFirst({ where: { storeId }, select: { id: true } }))) {
+      if (isProductionRuntime()) {
+        // Produção: não injeta contato/conversa demo fictícios.
+        return
+      }
+
       const c1 = await tx.whatsAppContact.create({
         data: {
           storeId,

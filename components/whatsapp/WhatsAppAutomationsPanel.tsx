@@ -133,10 +133,10 @@ export function WhatsAppAutomationsPanel({
       <PremiumEmptyState
         icon={Zap}
         title="Nenhuma automação configurada"
-        description="Crie fluxos no hub de automação ou aguarde o seed da loja."
+        description="Crie fluxos no HUB operacional (aba Automações) ou aguarde templates da loja."
         action={
           <Button variant="outline" size="sm" asChild>
-            <Link href="/dashboard/whatsapp-automation">Abrir hub de automação</Link>
+            <Link href="/dashboard/whatsapp">Abrir HUB operacional</Link>
           </Button>
         }
       />
@@ -155,7 +155,7 @@ export function WhatsAppAutomationsPanel({
           </p>
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link href="/dashboard/whatsapp-automation">Fluxos avançados</Link>
+          <Link href="/dashboard/whatsapp-automation">Ferramentas admin (legado)</Link>
         </Button>
       </div>
 

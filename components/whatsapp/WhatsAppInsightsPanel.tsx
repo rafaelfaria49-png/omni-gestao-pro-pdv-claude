@@ -90,7 +90,7 @@ export function WhatsAppInsightsPanel({
         <HubStatCard icon={Clock} label="Não lidas" value={stats.unread} hint="Mensagens pendentes" trend={stats.unread > 0 ? "up" : "neutral"} />
         <HubStatCard icon={Bot} label="Modo humano" value={stats.human} hint="Requer atenção" />
         <HubStatCard icon={UserCheck} label="Cadastrados" value={stats.registered} hint="Vinculados ao CRM" />
-        <HubStatCard icon={TrendingUp} label="Sinais IA" value={stats.withInsights} hint="Insights detectados" />
+        <HubStatCard icon={TrendingUp} label="Sinais heurísticos" value={stats.withInsights} hint="Regras sobre dados reais — não é LLM" />
         <HubStatCard icon={Users} label="Taxa vínculo" value={stats.total ? `${Math.round((stats.registered / stats.total) * 100)}%` : "—"} hint="Clientes vs contatos" />
       </div>
 

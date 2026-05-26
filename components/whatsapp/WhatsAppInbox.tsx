@@ -980,7 +980,16 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({})) as { error?: string }
+        const msg =
+          typeof err.error === "string" && err.error.trim()
+            ? err.error
+            : res.status === 401
+              ? "Sessão expirada. Faça login novamente."
+              : res.status === 403
+                ? "Selecione uma unidade ativa para enviar mensagens."
+                : "Não foi possível enviar a mensagem. Tente novamente."
         console.error("[WhatsAppInbox] send error:", err)
+        toast.error(msg)
         setInputText(text)
         return
       }
@@ -1002,6 +1011,9 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
         )
       )
       setTimeout(() => fetchMessages(selectedId, true), 1200)
+    } catch {
+      toast.error("Erro de rede ao enviar mensagem. Verifique sua conexão.")
+      setInputText(text)
     } finally {
       setSending(false)
       inputRef.current?.focus()

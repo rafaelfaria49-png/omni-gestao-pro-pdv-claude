@@ -32,7 +32,7 @@ import {
 } from "./mockData";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
+import Link from "next/link";
 
 // ───────── helpers ─────────
 const THEMES = [
@@ -213,11 +213,11 @@ function applyHubTheme(t: ThemeId) {
 
 export default function WhatsAppHub() {
   const { lojaAtivaId } = useLojaAtiva();
-  const storeHeader = useMemo(
-    () => (lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
-    [lojaAtivaId]
+  const storeHeader = lojaAtivaId?.trim() ?? "";
+  const apiHeaders = useMemo(
+    () => (storeHeader ? { [ASSISTEC_LOJA_HEADER]: storeHeader } : null),
+    [storeHeader]
   );
-  const apiHeaders = useMemo(() => ({ [ASSISTEC_LOJA_HEADER]: storeHeader }), [storeHeader]);
 
   // theme — lê do sistema global primeiro, depois do storage local do hub
   const [theme, setThemeState] = useState<ThemeId>("light");
@@ -246,13 +246,21 @@ export default function WhatsAppHub() {
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
+    if (!apiHeaders) {
+      setDataLoading(false);
+      setContacts([]);
+      setAutomations([]);
+      setReplies([]);
+      return;
+    }
     async function loadData() {
+      const hdr = apiHeaders!
       setDataLoading(true);
       try {
         const [convRes, aRes, qRes] = await Promise.all([
-          fetch("/api/whatsapp/conversations?includeMessages=1", { headers: apiHeaders }),
-          fetch("/api/whatsapp/automations", { headers: apiHeaders }),
-          fetch("/api/whatsapp/quick-replies", { headers: apiHeaders }),
+          fetch("/api/whatsapp/conversations?includeMessages=1", { headers: hdr, credentials: "include" }),
+          fetch("/api/whatsapp/automations", { headers: hdr, credentials: "include" }),
+          fetch("/api/whatsapp/quick-replies", { headers: hdr, credentials: "include" }),
         ]);
         const [convJson, aJson, qJson] = await Promise.all([convRes.json(), aRes.json(), qRes.json()]);
 
@@ -261,7 +269,7 @@ export default function WhatsAppHub() {
         if (convJson.ok && Array.isArray(convJson.conversations) && convJson.conversations.length > 0) {
           mappedContacts = mapConversationsToContacts(convJson.conversations as Record<string, unknown>[]);
         } else {
-          const cRes = await fetch("/api/whatsapp/contacts", { headers: apiHeaders });
+          const cRes = await fetch("/api/whatsapp/contacts", { headers: hdr, credentials: "include" });
           const cJson = await cRes.json();
           if (cJson.ok && Array.isArray(cJson.contacts) && cJson.contacts.length > 0) {
             mappedContacts = (cJson.contacts as Record<string, unknown>[]).map((c) => {
@@ -355,7 +363,7 @@ export default function WhatsAppHub() {
 
   const sendMessage = useCallback(async (text?: string) => {
     const t = (text ?? draft).trim();
-    if (!t) return;
+    if (!t || !apiHeaders) return;
     const convId = selected?.conversationId;
     if (convId) {
       try {
@@ -409,6 +417,7 @@ export default function WhatsAppHub() {
   }, [apiHeaders, draft, selected?.conversationId, selectedId]);
 
   const applyAiSuggestion = useCallback(async () => {
+    if (!apiHeaders) return;
     const convId = selected?.conversationId;
     if (!convId) {
       toast.info("Selecione uma conversa da API para gerar sugestão IA");
@@ -470,17 +479,38 @@ export default function WhatsAppHub() {
     return a;
   }, [contacts]);
 
+  if (!storeHeader) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-muted/20 p-10 text-center">
+        <Badge variant="outline">Protótipo Lovable · legado</Badge>
+        <p className="text-sm text-muted-foreground max-w-md">
+          Selecione uma unidade ativa no menu superior ou use o HUB operacional para atendimento real com envio Meta.
+        </p>
+        <Button asChild size="sm">
+          <Link href="/dashboard/whatsapp">Abrir HUB operacional</Link>
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col w-full bg-background text-foreground">
+      <div className="border-b border-amber-500/30 bg-amber-500/5 px-6 py-2 text-center text-[11px] text-muted-foreground">
+        Protótipo legado — preferir{" "}
+        <Link href="/dashboard/whatsapp" className="font-medium text-primary underline-offset-2 hover:underline">
+          HUB operacional
+        </Link>{" "}
+        para inbox, CRM e envio Meta.
+      </div>
       {/* HEADER */}
       <div className="px-6 py-4 border-b bg-background">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <MessageSquare className="h-6 w-6 text-primary" />
-              WhatsApp Automação HUB
+              WhatsApp — protótipo Lovable
             </h1>
-            <p className="text-sm text-muted-foreground">Atendimento, automações, OS e IA</p>
+            <p className="text-sm text-muted-foreground">UI legada · simulações e tabs experimentais</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <ThemeSelector theme={theme} setTheme={setTheme} />
@@ -985,10 +1015,12 @@ export default function WhatsAppHub() {
                   <Button variant="ghost" size="icon" onClick={() => setEditingReply({ ...r })}><Edit className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={() => { navigator.clipboard.writeText(r.message); toast.success("Copiado"); }}><Copy className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" onClick={async () => {
+                    if (!apiHeaders) return;
                     try {
                       const res = await fetch(`/api/whatsapp/quick-replies/${r.id}`, {
                         method: "DELETE",
                         headers: apiHeaders,
+                        credentials: "include",
                       });
                       const j = (await res.json()) as { ok?: boolean; error?: string };
                       if (!j.ok) throw new Error(j.error ?? "Falha ao excluir");

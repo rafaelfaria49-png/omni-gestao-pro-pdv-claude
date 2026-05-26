@@ -222,13 +222,24 @@ export function AiSignalBadge({
   insight,
   compact,
   className,
+  kind = "heuristic",
 }: {
   insight: WaInsight
   compact?: boolean
   className?: string
+  /** Origem do sinal — inbox usa heurística sobre dados reais (não LLM). */
+  kind?: "heuristic" | "llm" | "local" | "simulation"
 }) {
   const meta = VARIANT_META[insight.variant]
   const Icon = meta.icon
+  const kindLabel =
+    kind === "llm"
+      ? "IA real"
+      : kind === "local"
+        ? "Sugestão local"
+        : kind === "simulation"
+          ? "Simulação interna"
+          : "Heurística"
   return (
     <span
       className={cn(
@@ -237,9 +248,12 @@ export function AiSignalBadge({
         meta.className,
         className
       )}
-      title={insight.description}
+      title={`${kindLabel}${insight.description ? ` — ${insight.description}` : ""}`}
     >
       <Icon className={compact ? "h-2.5 w-2.5" : "h-3 w-3"} />
+      {!compact && kind !== "heuristic" ? (
+        <span className="opacity-80">{kindLabel} ·</span>
+      ) : null}
       {insight.label}
     </span>
   )
