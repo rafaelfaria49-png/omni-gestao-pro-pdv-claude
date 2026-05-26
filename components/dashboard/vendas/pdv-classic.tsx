@@ -85,7 +85,6 @@ import {
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
-import { PdvAssistenciaEnterprise } from "./pdv-assistencia-enterprise"
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
 import { PDV_IMPORT_COMANDA_KEY, type PdvImportComandaPayload } from "@/lib/pdv-comanda-bridge"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
@@ -255,22 +254,6 @@ export function PdvClassic({
   const [lastSaleTotal, setLastSaleTotal] = useState<number | null>(null)
   const [shellCustomerField, setShellCustomerField] = useState("CONSUMIDOR")
   const [customerCreditFetched, setCustomerCreditFetched] = useState<number | null>(null)
-
-  const resolvedClassicLayout: PdvClassicLayoutKind =
-    classicLayoutKind === "services" || classicLayoutKind === "lovable"
-      ? classicLayoutKind
-      : pdvParams.pdvClassicLayout === "services" || pdvParams.pdvClassicLayout === "lovable"
-        ? pdvParams.pdvClassicLayout
-        : "lovable"
-
-  // Modo "services" (assistência): encaixa no slot do AppShell sem margens negativas (evitam recorte com overflow-hidden do <main>).
-  if (resolvedClassicLayout === "services") {
-    return (
-      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
-        <PdvAssistenciaEnterprise isModoRapido={isModoRapido} />
-      </div>
-    )
-  }
 
   /** Bloqueio do PDV até cadastrar Nome Fantasia (Store.name) da unidade no banco. */
   const [storePdvGate, setStorePdvGate] = useState<{ ready: boolean; block: boolean }>({

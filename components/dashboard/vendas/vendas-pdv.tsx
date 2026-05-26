@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { PdvClassic, type VendasPDVProps } from "./pdv-classic"
+import { PdvAssistenciaEnterprise } from "./pdv-assistencia-enterprise"
 import { PdvSupermercado } from "./pdv-supermercado"
 import { LoadingState } from "@/components/ui/states"
 import { usePerfilLoja } from "@/lib/perfil-loja-provider"
@@ -113,6 +114,21 @@ export function VendasPDV(props: VendasPDVProps) {
   if (!storeId) return <LoadingState message="Selecione uma unidade para abrir o PDV…" />
   if (layout === "next") return <LoadingState message="Redirecionando para o PDV Next…" />
   if (layout === "supermercado") return <PdvSupermercado {...props} />
+
+  const resolvedClassicLayout: PdvClassicLayoutKind =
+    classicLayout === "services" || classicLayout === "lovable"
+      ? classicLayout
+      : pdvParams.pdvClassicLayout === "services" || pdvParams.pdvClassicLayout === "lovable"
+        ? pdvParams.pdvClassicLayout
+        : "lovable"
+
+  if (resolvedClassicLayout === "services") {
+    return (
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+        <PdvAssistenciaEnterprise isModoRapido={props.isModoRapido ?? false} />
+      </div>
+    )
+  }
 
   return <PdvClassic {...props} uiShell="omni-smart" classicLayoutKind={classicLayout} />
 }
