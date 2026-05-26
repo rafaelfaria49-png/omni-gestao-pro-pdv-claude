@@ -89,7 +89,12 @@ export async function GET(req: Request) {
       vendaItens7d,
     ] = await Promise.all([
       prisma.venda.aggregate({
-        where: { storeId, at: { gte: todayStart, lt: tomorrowStart } },
+        where: {
+          storeId,
+          at: { gte: todayStart, lt: tomorrowStart },
+          // Exclui canceladas/devolvidas do faturamento (alinhado ao filtro do gráfico de categorias).
+          status: { notIn: ["cancelada", "devolvida"] },
+        },
         _sum: { total: true },
       }),
       prisma.ordemServico.count({
@@ -103,13 +108,21 @@ export async function GET(req: Request) {
         _sum: { valor: true },
       }),
       prisma.venda.findMany({
-        where: { storeId, at: { gte: sevenDaysStart, lt: tomorrowStart } },
+        where: {
+          storeId,
+          at: { gte: sevenDaysStart, lt: tomorrowStart },
+          status: { notIn: ["cancelada", "devolvida"] },
+        },
         select: { total: true, at: true },
         orderBy: { at: "asc" },
         take: 2000,
       }),
       prisma.venda.findMany({
-        where: { storeId },
+        where: {
+          storeId,
+          // "Últimas movimentações" não deve listar vendas canceladas como atividade legítima.
+          status: { notIn: ["cancelada", "devolvida"] },
+        },
         select: { id: true, pedidoId: true, total: true, at: true, clienteNome: true },
         orderBy: { at: "desc" },
         take: 5,
