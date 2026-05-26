@@ -707,9 +707,15 @@ export function WhatsAppContextPanel({
             {[
               { id: "os", label: "Ver OS", icon: FileText, disabled: !osHref },
               { id: "status", label: "Operações", icon: Activity, disabled: !osHref },
-              { id: "quote", label: "Orçamento", icon: MessageSquare, disabled: false },
+              {
+                id: "quote",
+                label: "Orçamento",
+                icon: MessageSquare,
+                disabled: true,
+                soon: true,
+              },
               { id: "human", label: "Modo humano", icon: UserCheck, disabled: false },
-            ].map(({ id, label, icon: Icon, disabled }) => (
+            ].map(({ id, label, icon: Icon, disabled, soon }) => (
               <Button
                 key={id}
                 type="button"
@@ -723,8 +729,16 @@ export function WhatsAppContextPanel({
                   else onQuickAction?.(id)
                 }}
               >
-                <Icon className="h-3 w-3 text-primary" />
-                {label}
+                <Icon className="h-3 w-3 text-primary shrink-0" />
+                <span className="truncate">{label}</span>
+                {soon ? (
+                  <Badge
+                    variant="secondary"
+                    className="ml-auto shrink-0 px-1 py-0 text-[9px] font-normal"
+                  >
+                    Em breve
+                  </Badge>
+                ) : null}
               </Button>
             ))}
           </div>

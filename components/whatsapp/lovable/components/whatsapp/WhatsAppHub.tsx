@@ -27,7 +27,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  variables, aiSuggestions,
+  variables,
   type Contact, type Automation, type QuickReply, type FunnelStage, type Trigger, type Action,
 } from "./mockData";
 import { useLojaAtiva } from "@/lib/loja-ativa";
@@ -337,6 +337,7 @@ export default function WhatsAppHub() {
   const [search, setSearch] = useState("");
   const [convFilter, setConvFilter] = useState<"all" | "auto" | "human" | "waiting">("all");
   const [draft, setDraft] = useState("");
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
   const [tab, setTab] = useState("dashboard");
 
   // modals
@@ -406,6 +407,41 @@ export default function WhatsAppHub() {
     );
     setDraft("");
   }, [apiHeaders, draft, selected?.conversationId, selectedId]);
+
+  const applyAiSuggestion = useCallback(async () => {
+    const convId = selected?.conversationId;
+    if (!convId) {
+      toast.info("Selecione uma conversa da API para gerar sugestão IA");
+      return;
+    }
+    setAiSuggestLoading(true);
+    try {
+      const res = await fetch("/api/whatsapp/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...apiHeaders },
+        body: JSON.stringify({ mode: "ai_suggestion", conversationId: convId }),
+      });
+      const j = (await res.json()) as {
+        suggestion?: string
+        source?: string
+        error?: string
+      };
+      if (!res.ok || !j.suggestion) {
+        toast.error(typeof j.error === "string" ? j.error : "IA indisponível");
+        return;
+      }
+      setDraft(j.suggestion);
+      if (j.source === "llm") {
+        toast.success("Sugestão IA real — revise antes de enviar");
+      } else {
+        toast.info("Sugestão local (fallback — IA indisponível no servidor)");
+      }
+    } catch {
+      toast.error("Erro ao buscar sugestão");
+    } finally {
+      setAiSuggestLoading(false);
+    }
+  }, [apiHeaders, selected?.conversationId]);
 
   const moveStage = (id: string, dir: 1 | -1) => {
     setContacts((prev) =>
@@ -704,11 +740,17 @@ export default function WhatsAppHub() {
                 <Button variant="ghost" size="icon" onClick={() => toast.info("Anexar (em breve)")}>
                   <Paperclip className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={() => {
-                  const s = aiSuggestions[Math.floor(Math.random()*aiSuggestions.length)];
-                  setDraft(s.ai);
-                  toast.success("Sugestão da IA aplicada");
-                }}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title={
+                    selected?.conversationId
+                      ? "Sugestão IA (LLM ou fallback local)"
+                      : "Requer conversa vinculada à API"
+                  }
+                  disabled={!selected?.conversationId || aiSuggestLoading}
+                  onClick={() => void applyAiSuggestion()}
+                >
                   <Wand2 className="h-4 w-4 text-primary" />
                 </Button>
                 <Input
@@ -907,21 +949,12 @@ export default function WhatsAppHub() {
             </Card>
 
             <Card className="p-6 lg:col-span-2 bg-card text-card-foreground">
-              <h3 className="font-semibold mb-3">Exemplos de sugestão da IA</h3>
-              <div className="space-y-3">
-                {aiSuggestions.map((s, i) => (
-                  <div key={i} className="border rounded-md p-3 space-y-2">
-                    <div className="flex items-start gap-2">
-                      <User className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                      <span className="text-sm"><b>Cliente:</b> {s.client}</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <Sparkles className="h-4 w-4 mt-0.5 text-primary" />
-                      <span className="text-sm"><b>IA sugere:</b> {s.ai}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <h3 className="font-semibold mb-2">Sugestão de resposta no chat</h3>
+              <p className="text-sm text-muted-foreground">
+                Use o botão <Wand2 className="inline h-3.5 w-3.5 text-primary" /> na conversa: o servidor
+                gera sugestão via LLM quando a API está configurada, ou aplica fallback local com aviso
+                honesto quando a IA estiver indisponível. Não há exemplos fictícios nesta tela.
+              </p>
             </Card>
           </div>
         </TabsContent>

@@ -436,7 +436,11 @@ export function WhatsAppAutomationHub() {
       return
     }
     setAiSettings(j.aiSettings)
-    toast({ title: "Configuração IA", description: "Preferências salvas para sugestões simuladas." })
+    toast({
+      title: "Configuração IA",
+      description:
+        "Preferências salvas. Sugestões usam LLM quando configurado; fallback local quando indisponível.",
+    })
   }
 
   const applyQuickReplyToDraft = (body: string) => {
@@ -484,7 +488,7 @@ export function WhatsAppAutomationHub() {
             <Sparkles className="h-4 w-4" /> Automações
           </TabsTrigger>
           <TabsTrigger value="ai" className="gap-1">
-            <Bot className="h-4 w-4" /> IA (simulada)
+            <Bot className="h-4 w-4" /> IA & sugestões
           </TabsTrigger>
         </TabsList>
 

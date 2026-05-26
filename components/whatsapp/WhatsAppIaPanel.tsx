@@ -94,7 +94,9 @@ export function WhatsAppIaPanel({
           Painel IA operacional
         </h2>
         <p className="text-sm text-muted-foreground">
-          Configurações reais da loja — sugestões no inbox usam heurísticas locais até integração completa.
+          Configurações reais da loja. No painel da conversa e nas sugestões de resposta, o servidor usa
+          LLM (OpenRouter/OpenAI/Gemini) quando há chave de API configurada. Se a IA estiver indisponível,
+          o sistema aplica fallback local honesto — sem fingir análise por LLM.
         </p>
       </div>
 
@@ -177,12 +179,12 @@ export function WhatsAppIaPanel({
         <h3 className="mb-3 text-sm font-semibold">Recursos visuais no inbox</h3>
         <ul className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
           {[
-            "IA analisando — ao abrir conversa",
-            "Sugestão IA — baseada na intenção detectada",
+            "Resumo IA — LLM no painel quando API configurada",
+            "Sugestão de resposta — LLM real ou fallback local (rótulo explícito)",
+            "Sinais no inbox — heurística sobre dados reais (não é LLM)",
             "Cliente prioritário — não lidas + etiquetas",
             "Possível venda / Lead quente — palavras-chave",
             "Risco de cancelamento — tom da mensagem",
-            "OS atrasada — menções no preview",
           ].map((item) => (
             <li key={item} className="flex items-center gap-2">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" />
