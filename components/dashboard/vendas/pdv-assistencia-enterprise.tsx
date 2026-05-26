@@ -71,6 +71,12 @@ import { useCaixa } from "../caixa/caixa-provider"
 import { useToast } from "@/hooks/use-toast"
 import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { useStoreSettings } from "@/lib/store-settings-provider"
+import {
+  buildAssistenciaPayMethods,
+  defaultFormasPagamento,
+  findFormaById,
+  type AssistenciaPayMethodRuntime,
+} from "@/lib/pdv-formas-pagamento"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { appendAuditLog } from "@/lib/audit-log"
@@ -78,6 +84,7 @@ import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
+import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { VendaEsperaModal } from "./venda-espera-modal"
@@ -178,65 +185,7 @@ type CartLine = {
 
 type PayMethod = "dinheiro" | "pix" | "credito" | "debito" | "a_prazo" | "multiplo"
 
-const PAY_METHODS: {
-  id: PayMethod
-  label: string
-  shortLabel: string
-  Icon: React.ElementType
-  color: string
-  hotkey?: string
-}[] = [
-  {
-    id: "dinheiro",
-    label: "Dinheiro",
-    shortLabel: "Dinheiro",
-    Icon: Banknote,
-    // emerald-600 base — no hover dark, go brighter; glow controlado
-    color: "bg-emerald-600 hover:bg-emerald-500 shadow-[0_4px_12px_-2px_rgba(5,150,105,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(5,150,105,0.62)]",
-    hotkey: "F1",
-  },
-  {
-    id: "pix",
-    label: "PIX",
-    shortLabel: "PIX",
-    Icon: QrCode,
-    // teal — sem token equivalente; mesma estrutura de glow
-    color: "bg-teal-600 hover:bg-teal-500 shadow-[0_4px_12px_-2px_rgba(13,148,136,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(13,148,136,0.62)]",
-  },
-  {
-    id: "credito",
-    label: "Cartão Crédito",
-    shortLabel: "Crédito",
-    Icon: CreditCard,
-    // blue-600 → token bg-info seria oklch(0.72 0.15 235) mas variação de tema; usar escala fixa para contraste garantido
-    color: "bg-blue-600 hover:bg-blue-500 shadow-[0_4px_12px_-2px_rgba(37,99,235,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(37,99,235,0.62)]",
-  },
-  {
-    id: "debito",
-    label: "Cartão Débito",
-    shortLabel: "Débito",
-    Icon: CreditCard,
-    // indigo — sem token equivalente
-    color: "bg-indigo-600 hover:bg-indigo-500 shadow-[0_4px_12px_-2px_rgba(79,70,229,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(79,70,229,0.62)]",
-  },
-  {
-    id: "a_prazo",
-    label: "A Prazo (Fiado)",
-    shortLabel: "A Prazo",
-    Icon: CalendarClock,
-    // amber-600 → token bg-warning varia entre temas; usar escala fixa
-    color: "bg-amber-600 hover:bg-amber-500 shadow-[0_4px_12px_-2px_rgba(217,119,6,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(217,119,6,0.62)]",
-  },
-  {
-    id: "multiplo",
-    label: "Pgto. Múltiplo",
-    shortLabel: "Múltiplo",
-    Icon: Layers,
-    // violet-600 → token bg-purple disponível mas lightness varia; escala fixa garante white-text contrast
-    color: "bg-violet-600 hover:bg-violet-500 shadow-[0_4px_12px_-2px_rgba(124,58,237,0.45)] hover:shadow-[0_4px_18px_-2px_rgba(124,58,237,0.62)]",
-    hotkey: "F12",
-  },
-]
+const DEFAULT_PAY_METHODS = buildAssistenciaPayMethods(defaultFormasPagamento())
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -414,6 +363,7 @@ function PaymentModal({
   customerName,
   customerStoreCredit = 0,
   defaultMethod = "dinheiro",
+  payMethods = DEFAULT_PAY_METHODS,
   onConfirm,
   onClose,
 }: {
@@ -433,6 +383,7 @@ function PaymentModal({
   customerName: string
   customerStoreCredit?: number
   defaultMethod?: PayMethod
+  payMethods?: AssistenciaPayMethodRuntime[]
   onConfirm: (
     method: PayMethod,
     notes: string,
@@ -544,8 +495,8 @@ function PaymentModal({
     if (totalComDesconto <= 0.001) {
       // Pago 100% com crédito
     } else if (method === "multiplo") {
-      const m1 = PAY_METHODS.find((p) => p.id === multiplo1)!
-      const m2 = PAY_METHODS.find((p) => p.id === multiplo2)!
+      const m1 = payMethods.find((p) => p.id === multiplo1)!
+      const m2 = payMethods.find((p) => p.id === multiplo2)!
       notesLines.push(
         `Múltiplo: ${m1.label} ${brl(m1val)} + ${m2.label} ${brl(m2val)}`,
       )
@@ -789,7 +740,7 @@ function PaymentModal({
                   Forma de Pagamento
                 </Label>
                 <div className="grid grid-cols-3 gap-2">
-                  {PAY_METHODS.map((m) => (
+                  {payMethods.map((m) => (
                     <button
                       key={m.id}
                       type="button"
@@ -895,7 +846,7 @@ function PaymentModal({
                         onChange={(e) => setMultiplo1(e.target.value as PayMethod)}
                         className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
                       >
-                        {PAY_METHODS.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
+                        {payMethods.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.label}
                           </option>
@@ -921,7 +872,7 @@ function PaymentModal({
                         onChange={(e) => setMultiplo2(e.target.value as PayMethod)}
                         className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
                       >
-                        {PAY_METHODS.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
+                        {payMethods.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
                           <option key={m.id} value={m.id}>
                             {m.label}
                           </option>
@@ -1441,6 +1392,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [discountPercent, setDiscountPercent] = useState(0)
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  const [recebimentoOpen, setRecebimentoOpen] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
 
   // ── Customer ──────────────────────────────────────────────────────────────────
@@ -1468,6 +1420,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   }, [selectedClienteDoc, selectedClienteId, storeIdKey])
 
   const customerCredit = customerCreditFetched ?? (selectedClienteDoc ? getSaldoCreditoCliente(selectedClienteDoc) : 0)
+
+  const payMethods = useMemo(
+    () => buildAssistenciaPayMethods(pdvParams.formasPagamento ?? defaultFormasPagamento()),
+    [pdvParams.formasPagamento],
+  )
 
   // ── Modals ───────────────────────────────────────────────────────────────────
   const [paymentOpen, setPaymentOpen] = useState(false)
@@ -1704,6 +1661,19 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Global keyboard shortcuts ─────────────────────────────────────────────────
   const openPaymentModal = (method: PayMethod) => {
+    if (!payMethods.some((p) => p.id === method)) return
+    const runtimeBtn = payMethods.find((p) => p.id === method)
+    const configForma = runtimeBtn
+      ? findFormaById(pdvParams.formasPagamento ?? defaultFormasPagamento(), runtimeBtn.configId)
+      : undefined
+    if (configForma?.exigirCliente && !selectedClienteId) {
+      toast({
+        variant: "destructive",
+        title: "Cliente obrigatório",
+        description: "Selecione o cliente antes de usar esta forma de pagamento.",
+      })
+      return
+    }
     if (cart.length === 0) return
     if (discountOverTotal) {
       toast({
@@ -1745,7 +1715,26 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.repeat || e.metaKey || e.altKey) return
+      if (e.repeat || e.metaKey) return
+      // Ctrl+L — Limpar carrinho (migrado de F9 para liberar F9 = Recebimento de Contas,
+      // alinhando ao keymap canônico do projeto). Cobre o muscle memory do operador
+      // do Assistência sem colidir com o atalho canônico.
+      if (e.ctrlKey && (e.key === "l" || e.key === "L")) {
+        const target = e.target as HTMLElement | null
+        const isInput =
+          target instanceof HTMLInputElement ||
+          target instanceof HTMLTextAreaElement ||
+          (target instanceof HTMLElement && target.isContentEditable)
+        if (isInput) return
+        if (cart.length > 0) {
+          e.preventDefault()
+          e.stopPropagation()
+          setClearConfirmOpen(true)
+        }
+        return
+      }
+      if (e.altKey) return
+      if (e.ctrlKey) return
 
       const active = document.activeElement
       const inInput =
@@ -1754,7 +1743,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         active instanceof HTMLSelectElement ||
         (active instanceof HTMLElement && active.isContentEditable)
 
-      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen
+      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen
 
       // END — toggle help overlay (always works)
       if (e.key === "End") {
@@ -1837,7 +1826,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       if (anyModalOpen && e.key !== "F2" && e.key !== "F3") return
 
       switch (e.key) {
-        case "F1":  openPaymentModal("dinheiro"); break
+        case "F1": {
+          const m = payMethods.find((p) => p.id === "dinheiro") ?? payMethods[0]
+          if (m) openPaymentModal(m.id)
+          break
+        }
         case "F2":  setClientePickerOpen((o) => !o); break
         case "F3":  inputRef.current?.focus(); break
         case "F4":
@@ -1886,7 +1879,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           setTrocasOpen(true)
           break
         case "F9":
-          if (cart.length > 0) setClearConfirmOpen(true)
+          // Convergência operacional com Clássico/Supermercado e keymap canônico:
+          // F9 abre o Recebimento de Contas a Receber. "Limpar carrinho" migrou para Ctrl+L.
+          setRecebimentoOpen(true)
           break
         case "F10":
           if (!isModoRapido) {
@@ -1907,7 +1902,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             void document.exitFullscreen().catch(() => {})
           }
           break
-        case "F12": openPaymentModal("multiplo"); break
+        case "F12":
+          if (payMethods.some((p) => p.id === "multiplo")) openPaymentModal("multiplo")
+          break
         // INSERT é tratado ANTES do guard F_KEYS acima (caso contrário ficaria
         // inalcançável). Mantemos o switch só com as F-keys reais.
       }
@@ -1915,7 +1912,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen])
+  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct) => {
@@ -2780,7 +2777,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
             {/* Payment buttons — 3×2 grid */}
             <div className="grid grid-cols-3 gap-2">
-              {PAY_METHODS.map((m) => (
+              {payMethods.map((m) => (
               <Button
                   key={m.id}
                 type="button"
@@ -2837,6 +2834,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         customerName={customerName}
         customerStoreCredit={customerCredit}
         defaultMethod={paymentInitMethod}
+        payMethods={payMethods}
         onConfirm={handlePaymentConfirm}
         onClose={() => closePaymentModal(true)}
       />
@@ -2917,6 +2915,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         onHold={handleHoldSale}
         onResume={handleResumeSale}
         onDiscard={handleDiscardHeldSale}
+      />
+
+      {/* F9 — Recebimento de Contas a Receber (convergência operacional) */}
+      <PdvRecebimentoModal
+        open={recebimentoOpen}
+        onOpenChange={(open) => {
+          setRecebimentoOpen(open)
+          if (!open) queueMicrotask(() => inputRef.current?.focus())
+        }}
+        preselectedCustomerName={customerName?.trim() || null}
       />
 
       {/* F8 — Troca / Devolução real (reaproveita o fluxo TrocasDevolucao) */}
