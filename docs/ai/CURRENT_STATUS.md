@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 26 Mai 2026 — Sessão: Convergência operacional PDV (INSERT + Pagamento Múltiplo nos 3 PDVs)
+> Última atualização: 26 Mai 2026 — Sessão: Lote 2 confiabilidade financeira (FK ContaReceberTitulo + canceladas excluídas do dashboard)
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -12,6 +12,36 @@
 ---
 
 ## ✅ Concluído e Funcionando
+
+---
+
+### Lote 2 — Confiabilidade financeira (FK à prazo + dashboard sem canceladas) (concluído 26/05/2026)
+
+**Contexto:** continuação da estabilização operacional. Dois gaps de confiabilidade financeira:
+- (#5) Cancelar venda PDV à prazo **não estornava** o(s) título(s) em Contas a Receber (operador precisava cancelar manualmente).
+- (#6) Painel inicial (dashboard elite) **inflava o faturamento** somando vendas canceladas.
+
+| Arquivo | Mudança |
+|---------|---------|
+| `lib/ops-upsert-venda.ts` | Passo 6 (criação de `ContaReceberTitulo` para à prazo) agora captura o `id` do **primeiro** título criado (n=1) via `select: { id: true }` e grava em `Venda.contaReceberTituloId` via `tx.venda.update`. Antes, o campo ficava sempre `null` porque os títulos eram upsertados pelo `localKey` mas a FK nunca era populada na venda. Idempotente — re-sync da mesma venda re-aponta para o mesmo id. |
+| `app/api/vendas/[id]/cancelar/route.ts` | Bloco "4. Estorno do título à prazo" substituído: deixa de depender só da FK singular e varre **TODOS** os títulos via `localKey: { startsWith: 'pdv-aprazo-${pedidoId}' }`. Para cada um, chama `estornarMovimentacaoPorReferencia` (origem `receber`) e `cancelContaReceber`. Cobre vendas de 1 parcela e até N parcelas (até 24) com o mesmo código. Resposta JSON ganha `titulosAprazoCancelados` para visibilidade. Idempotente (estorno por `referenciaId` + cancelContaReceber tem guard contra já-pago). |
+| `app/api/dashboard/elite/route.ts` | 3 queries que somavam canceladas/devolvidas recebem `status: { notIn: ["cancelada", "devolvida"] }`: `faturamentoHojeAgg` (KPI "Faturamento de hoje"), `vendas7d` (gráfico de 7 dias), `lastVendas` (lista "Últimas movimentações"). Alinhado ao filtro que já existia em `vendaItens7d` (gráfico de categorias) e nas demais rotas do projeto (`historico`, `sessao-detalhe`, `clientes`, `cadastros`). |
+
+**Efeito operacional:**
+- Cancelar venda PDV à prazo agora estorna automaticamente o(s) título(s) e a(s) movimentação(ões) de Contas a Receber. Sem mais "venda cancelada mas título ativo".
+- Painel inicial agora bate com o relatório de Histórico de Vendas (que já filtrava canceladas). Operador para de ver KPI inflado quando há cancelamentos do dia.
+
+**Validação:** `npx tsc --noEmit` 0 erros nos arquivos da sessão · `npm run build` OK (todas as 80+ rotas geradas).
+
+**Commits:** `b7a4872` (FK + cancelar varre parcelas) · `2bb4bfb` (dashboard exclui canceladas).
+
+**Não alterado:** schema Prisma (FK `contaReceberTituloId` + índice já existiam — só não eram populados), auth/proxy, lógica de cancelamento de movimentações financeiras (`cancelContaReceber` / `estornarMovimentacaoPorReferencia` reusadas como estão), outras queries de venda (todas já filtravam `cancelada` corretamente).
+
+**Riscos restantes:**
+- O cancelamento varre `localKey LIKE 'pdv-aprazo-${pedidoId}%'`. Se um título à prazo for **renomeado** manualmente em Contas a Receber (alterando `localKey`), ele não será mais alcançado pelo cancelamento automático. UI atual não permite renomear, mas vale documentar.
+- `Venda.contaReceberTituloId` aponta para a **primeira** parcela. Se o usuário esperar "ver todos os títulos a partir da venda", a UI precisa varrer por `localKey` (mesma técnica usada no cancelamento). Não há essa UI hoje — apenas a indicação singular.
+- Vendas à prazo antigas (anteriores ao commit `b7a4872`) que não têm a FK populada **continuam recuperáveis** no cancelamento via varredura por `localKey`. Não precisa backfill.
+- Painel `dashboard/elite` é o único corrigido. Outros painéis menos críticos (se houver no Hub Financeiro V2 mock) podem ter o mesmo padrão — não auditados nesta sessão.
 
 ---
 
@@ -61,12 +91,21 @@ Objetivo: convergir comportamento operacional sem duplicar lógica nem mexer no 
 |---------|--------------|------------------|
 | `incluirImpostoEstimadoNoPdv` / `aliquotaImpostoEstimadoPdv` | `printerConfig.pdvParams` (API `/api/stores/[id]/settings`) | PDV Classic, Supermercado, Assistência Enterprise, Venda Completa via `lib/pdv-cart-totals.ts` + `PaymentModal` |
 | `moduloControleConsumo` | idem | `/dashboard/vendas/mesas` + botão **Mesas** no PDV quando ativo |
+| `formasPagamento[]` | idem | Config V3 → Vendas → Formas de pagamento; runtime: `lib/pdv-formas-pagamento.ts` → PDV Classic, Supermercado (`payment-modal`), Assistência (botões + modal interno). Ativar/desativar, ordem, ícone/cor, exigir cliente/CPF/autorização, troco, múltiplo |
 | `garantiaPadraoDias` / `validadeOrcamentoDias` | idem | Orçamentos + PDV (já existia) |
 | Centro financeiro V3 (`cardFees`) | API + `localStorage` espelho | PDV maquininhas + Config Financeiro (já existia) |
 
-**Correções:** `StoreSettingsProvider` não usa mais fallback silencioso `loja-1` sem unidade ativa; `save()` falha explícito sem `storeId`. KPIs Financeiro na Config V3 rotulados como cache local. Importação: preferência de modo documentada como por navegador.
+**Correções:** `StoreSettingsProvider` não usa mais fallback silencioso `loja-1` sem unidade ativa; `save()` falha explícito sem `storeId`; settings zerados ao trocar unidade (sem flash da loja anterior). KPIs Financeiro na Config V3 rotulados como cache local.
 
-**Em breve (UI honesta):** formas de pagamento por toggle (VendasSection), moeda/fuso (GeralSection), relatório mensal por e-mail (FinanceiroSection).
+**Isolamento multi-loja Config V3 (26/05/2026):** providers duplicados removidos das seções (usa `AppOpsProviders` do dashboard); remount da seção ativa ao trocar unidade (`key={sec}-{storeId}`). Preferências de navegador scoped por unidade: `lib/store-scoped-storage.ts` (PDV layout/modo, importação modo, classic layout). Tema por unidade em `printerConfig.appearance.studioTheme` + `StoreAppearanceSync` no dashboard. Centro financeiro sem fallback `loja-1`. Banner `UnidadeAtivaRequiredBanner` nas seções que exigem loja. Importação: modo `@omnigestao:importacao-modo::{storeId}`.
+
+**Em breve (UI honesta):** moeda/fuso (GeralSection), relatório mensal por e-mail (FinanceiroSection).
+
+**UX Config V3 — auditoria honesta (26/05/2026):** toggles/forms só gravam via API real (`/api/stores`, `/api/admin/users`, `printerConfig`). Futuro explícito: moeda/fuso (Geral), relatório e-mail (Financeiro), prévia global (Aparência), 2FA/sessões (Segurança), Marketing IA hub (Integrações). KPIs Financeiro = cache localStorage. Importação: modo só no navegador. Detalhe: `docs/audits/AUDITORIA_CONFIG_V3_UX.md`.
+
+**Impressão PDV (26/05/2026):** `printerConfig.impressao` por unidade (host/porta TCP, bobina 58/80mm, gaveta, auto-print, comprovante simplificado/completo, logo HTML, rodapé, vias, flags OS/crediário). UI em Config V3 → PDV → Impressão operacional. Runtime: `lib/pdv-print-runtime.ts` + `useStoreSettings().impressaoConfig` no PDV Classic, PaymentModal, OS térmica e recibos de crediário.
+
+**Central de Auditoria (26/05/2026):** aba `?sec=auditoria` — histórico read-only de alterações críticas. Persistência em `LogsAuditoria` (`source=configuracoes-v3`, `action=config:{area}`) com metadata JSON (usuário, loja, seção, campo, antes/depois, IP/UA quando via servidor). Gravação automática em `PUT /api/stores/[id]/settings`, `PUT /api/stores/[id]`, `POST/PATCH /api/admin/users`. API: `GET/POST /api/config-audit` (acesso `admin.configuracoes`).
 
 ---
 
