@@ -21,7 +21,8 @@ O **Omni Agent HUB** é a central de IA operacional do OmniGestão Pro: comandos
 ### Fase 3 (substituir mocks visuais)
 
 - **WhatsApp Agent**: sem conversas fictícias; estado Cloud API via env (`getOmniAgentWhatsAppCloudStatus`); simulação chama `submitOmniAgentCommand` com `canal: "whatsapp"`. Lista Meta/HUB aponta para o WhatsApp HUB real.
-- **Automações**: modelos `OmniAgentAutomation` + `OmniAgentAutomationRun`; UI lista/cria/edita/ativa/remove; disparo via `handleEvent` → `handleOmniAgentSystemEvents` cria `OmniAgentCommand` **PENDENTE** (Inbox). Gatilhos: `venda_finalizada`, `os_entregue` (mapeado de `os_finalizada`), `conta_receber_vencida` (evento na API; emissor financeiro ainda futuro).
+- **Automações**: modelos `OmniAgentAutomation` + `OmniAgentAutomationRun`; UI lista/cria/edita/ativa/remove; disparo via `handleEvent` → `handleOmniAgentSystemEvents` cria `OmniAgentCommand` **PENDENTE** (Inbox). Gatilhos: `venda_finalizada` (PDV), `os_entregue` ← `os_finalizada` emitido em `updateOSStatus` (Operações V2 Server Actions; API legada PATCH desativada). **`conta_receber_vencida`**: evento na API, **sem emissor automático** (vencimento é derivado na leitura — sem cron nesta fase).
+- **Canal no comando**: `texto_interno` | `whatsapp` | `voz` persistido em `OmniAgentCommand.canal` (modal Novo comando); `voz` não altera interpretador — fallback seguro para `texto_interno` se valor inválido.
 - **Memória Cliente**: `listClientes` (cadastro real); timeline IA declarada como não ativa; notas locais etiquetadas (`localStorage`).
 - **Relatórios IA**: KPIs/gráfico mock removidos; `getOmniAgentReportsSnapshot` (stats Prisma, contagens por intenção, resumo financeiro quando permitido); pergunta envia comando real (`texto_interno` + `run`).
 - **Configurações**: bloco explícito “localStorage”; voz desativada com badge; teste de config mostra `interpretOmniAgentCommand`; export com descarga JSON.

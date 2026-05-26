@@ -23,6 +23,19 @@ export type HubFeedRow = {
   dto: OmniAgentCommandDTO
 }
 
+/** Rótulo de UI para `OmniAgentCommand.canal`. */
+export function canalDisplayLabel(canal: string): string {
+  switch (canal) {
+    case "whatsapp":
+      return "WhatsApp"
+    case "voz":
+      return "Voz"
+    case "texto_interno":
+    default:
+      return "Texto interno"
+  }
+}
+
 export function intentDisplayLabel(intent: OmniAgentIntentKind): string {
   switch (intent) {
     case "OS_OPEN":

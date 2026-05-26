@@ -46,7 +46,8 @@ import {
   OMNI_AGENT_TRIGGER_LABELS,
   type OmniAgentAutomationTriggerKey,
 } from "@/lib/omni-agent/omni-automation-triggers";
-import { dtoToBellItem, dtoToHubFeedRow, type HubFeedRow } from "@/lib/omni-agent/hub-display";
+import { canalDisplayLabel, dtoToBellItem, dtoToHubFeedRow, type HubFeedRow } from "@/lib/omni-agent/hub-display";
+import { normalizeOmniAgentCanal, type OmniAgentCanal } from "@/lib/omni-agent/canal";
 import { OmniAgentInboxReal } from "@/components/omni-agent/OmniAgentInboxReal";
 
 const TABS = [
@@ -340,19 +341,19 @@ export default function OmniAgentHub() {
       <NewCommandModal
         open={newCmdOpen && storeReady} onClose={() => setNewCmdOpen(false)}
         storeId={storeId}
-        onSendInbox={async (t) => {
+        onSendInbox={async (t, canal) => {
           try {
-            await submitOmniAgentCommand({ storeId, comandoOriginal: t, mode: "inbox" });
-            logAudit(`Inbox real: ${t}`);
+            await submitOmniAgentCommand({ storeId, canal, comandoOriginal: t, mode: "inbox" });
+            logAudit(`Inbox real (${canalDisplayLabel(canal)}): ${t}`);
             toast.success("Comando registado (pendente)");
             await refreshHubData();
           } catch (e) {
             toast.error(e instanceof Error ? e.message : "Falha ao registar");
           }
         }}
-        onExecute={async (t) => {
+        onExecute={async (t, canal) => {
           try {
-            const row = await submitOmniAgentCommand({ storeId, comandoOriginal: t, mode: "run" });
+            const row = await submitOmniAgentCommand({ storeId, canal, comandoOriginal: t, mode: "run" });
             logAudit(`Pipeline real: ${t} → ${row.status}`);
             toast.success(
               row.status === "EXECUTADO"
@@ -384,6 +385,7 @@ export default function OmniAgentHub() {
               <Row k="Status" v={details.statusLabel} />
               <Row k="Confiança" v={`${(details.confidence * 100).toFixed(0)}%`} />
               <Row k="Horário" v={details.time} />
+              <Row k="Canal" v={canalDisplayLabel(details.dto.canal)} />
               <Row k="ID" v={details.id} />
             </div>
           )}
@@ -1013,6 +1015,9 @@ function OverviewTab({
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{c.text}</div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                  <Badge variant="outline" className="text-[10px] font-normal">
+                    {canalDisplayLabel(c.dto.canal)}
+                  </Badge>
                   <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">{c.intent}</span>
                   <span>·</span>
                   <span>{c.module}</span>
@@ -1048,13 +1053,19 @@ function OverviewTab({
   );
 }
 
+function modalChannelToOmniCanal(channel: "texto" | "whatsapp" | "voz"): OmniAgentCanal {
+  return normalizeOmniAgentCanal(
+    channel === "whatsapp" ? "whatsapp" : channel === "voz" ? "voz" : "texto_interno",
+  );
+}
+
 /* ---------- New Command Modal ---------- */
 function NewCommandModal({ open, onClose, storeId, onSendInbox, onExecute }: {
   open: boolean;
   onClose: () => void;
   storeId: string;
-  onSendInbox: (t: string) => void | Promise<void>;
-  onExecute: (t: string) => void | Promise<void>;
+  onSendInbox: (t: string, canal: OmniAgentCanal) => void | Promise<void>;
+  onExecute: (t: string, canal: OmniAgentCanal) => void | Promise<void>;
 }) {
   const [channel, setChannel] = useState<"texto" | "whatsapp" | "voz">("texto");
   const [text, setText] = useState("");
@@ -1072,9 +1083,29 @@ function NewCommandModal({ open, onClose, storeId, onSendInbox, onExecute }: {
           <div>
             <Label className="mb-1 block">Canal</Label>
             <div className="flex flex-wrap gap-2">
-              {([["texto", "Texto interno"], ["whatsapp", "WhatsApp mock"], ["voz", "Voz mock"]] as const).map(([v, l]) => (
-                <Button key={v} size="sm" variant={channel === v ? "default" : "outline"} onClick={() => setChannel(v)}>{l}</Button>
-              ))}
+              {([["texto", "Texto interno"], ["whatsapp", "WhatsApp"], ["voz", "Voz"]] as const).map(([v, l]) =>
+                v === "voz" ? (
+                  <span key={v} className="inline-flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant={channel === v ? "default" : "outline"}
+                      onClick={() => setChannel(v)}
+                    >
+                      {l}
+                    </Button>
+                    <Badge variant="outline" className="text-[10px]">Persistido; execução igual a texto</Badge>
+                  </span>
+                ) : (
+                  <Button
+                    key={v}
+                    size="sm"
+                    variant={channel === v ? "default" : "outline"}
+                    onClick={() => setChannel(v)}
+                  >
+                    {l}
+                  </Button>
+                ),
+              )}
             </div>
           </div>
           <div><Label className="mb-1 block">Comando</Label>
@@ -1117,12 +1148,12 @@ function NewCommandModal({ open, onClose, storeId, onSendInbox, onExecute }: {
           <Button variant="ghost" onClick={() => { reset(); onClose(); }}>Cancelar</Button>
           <Button variant="outline" onClick={async () => {
             if (!text.trim()) return toast.error("Digite");
-            await onSendInbox(text.trim());
+            await onSendInbox(text.trim(), modalChannelToOmniCanal(channel));
             reset(); onClose();
           }}><Inbox /> Inbox</Button>
           <Button onClick={async () => {
             if (!text.trim()) return toast.error("Digite");
-            await onExecute(text.trim());
+            await onExecute(text.trim(), modalChannelToOmniCanal(channel));
             reset(); onClose();
           }}><Play /> Executar</Button>
         </DialogFooter>
@@ -1496,6 +1527,7 @@ function CommandsTab({ storeId, onAfterPipeline }: { storeId: string; onAfterPip
               <div key={row.id} className="rounded-lg border border-border bg-background/40 p-2 text-xs">
                 <div className="font-medium truncate">{row.comandoOriginal}</div>
                 <div className="mt-1 flex flex-wrap gap-2 text-muted-foreground">
+                  <Badge variant="outline" className="text-[10px]">{canalDisplayLabel(row.canal)}</Badge>
                   <Badge variant="outline">{row.interpretacao.intent}</Badge>
                   <span>{Math.round(row.interpretacao.confidence * 100)}%</span>
                   <span>· {new Date(row.createdAt).toLocaleString("pt-BR")}</span>
@@ -1651,16 +1683,17 @@ function AutomationsTab({
         </div>
         <p className="text-xs text-muted-foreground">
           Gatilhos ligados a eventos de domínio (<code className="text-foreground">venda_finalizada</code>,{" "}
-          <code className="text-foreground">os_finalizada</code> → OS entregue,{" "}
-          <code className="text-foreground">conta_receber_vencida</code> quando existir emissor). Cada disparo cria um
-          comando na <span className="font-medium text-foreground">Inbox IA</span> (PENDENTE) — sem execução automática
-          perigosa. Variáveis no modelo: <code className="text-foreground">{"{{entityId}}"}</code>,{" "}
+          <code className="text-foreground">os_finalizada</code> → OS entregue via Server Actions Operações V2). Cada
+          disparo cria um comando na <span className="font-medium text-foreground">Inbox IA</span> (PENDENTE) — sem
+          execução automática perigosa. Variáveis no modelo: <code className="text-foreground">{"{{entityId}}"}</code>,{" "}
           <code className="text-foreground">{"{{status}}"}</code>, campos do payload da venda/OS.
         </p>
         <p className="text-xs text-muted-foreground">
-          O evento <code className="text-foreground">conta_receber_vencida</code> está definido na API, mas{" "}
-          <span className="font-medium">ainda não há emissor</span> no fluxo financeiro — pode criar a regra e ativará
-          quando o projeto ligar o disparo.
+          <code className="text-foreground">conta_receber_vencida</code> —{" "}
+          <Badge variant="secondary" className="align-middle text-[10px]">sem emissor automático</Badge>{" "}
+          O financeiro calcula títulos vencidos na leitura (data de vencimento + saldo aberto), mas não há rotina
+          agendada nem hook de persistência que emita este evento. Pode criar a regra Omni; só disparará após implementar
+          emissor (cron/job — fora do escopo atual).
         </p>
       </Card>
 

@@ -36,6 +36,7 @@ import {
   normalizeOperacaoStatus,
   prismaStatusToOperacaoStatus,
 } from "@/components/operacoes/lovable/utils/os-status";
+import { emitOsFinalizadaOmniEvent } from "@/lib/omni-agent/domain-events";
 import {
   assertOperacaoStatusTransition,
   type OperacaoTransitionOptions,
@@ -356,6 +357,19 @@ export async function updateOSStatus(
     } catch {
       // Não quebra transição de status se persistência de garantia falhar.
     }
+  }
+
+  // Automações Omni Agent: OS entregue (API legada PATCH está desativada — fonte única aqui).
+  if (currentEff !== "entregue" && effective === "entregue") {
+    const phoneDigits = String(next.cliente?.telefone ?? next.cliente?.whatsapp ?? "").replace(/\D/g, "")
+    const orcTotal = next.orcamento?.total
+    const valorTotal =
+      typeof orcTotal === "number" && Number.isFinite(orcTotal) ? orcTotal : undefined
+    void emitOsFinalizadaOmniEvent(storeId, osId, {
+      status: effective,
+      phoneDigits,
+      valorTotal,
+    })
   }
 
   revalidatePath("/dashboard/operacoes-v2");

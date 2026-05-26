@@ -9,11 +9,13 @@ import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { ensureDefaultOmniAgentAutomations } from "@/lib/omni-agent/omni-automation-engine"
 import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
+import { normalizeOmniAgentCanal } from "@/lib/omni-agent/canal"
 import { isOmniAgentAutomationTriggerKey, type OmniAgentAutomationTriggerKey } from "@/lib/omni-agent/omni-automation-triggers"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { OmniAgentCommandStatus } from "@/generated/prisma"
 
-export type OmniAgentCanal = "texto_interno" | "whatsapp" | "voz"
+export type { OmniAgentCanal } from "@/lib/omni-agent/canal"
+import type { OmniAgentCanal } from "@/lib/omni-agent/canal"
 
 function assertOmniAgentModule(intent: OmniAgentInterpretacao["intent"], perms: EnterprisePermissions): string | null {
   const gate = INTENT_MODULE[intent]
@@ -170,7 +172,7 @@ export async function submitOmniAgentCommand(input: SubmitOmniAgentCommandInput)
     return toDto(row)
   }
 
-  const canal = input.canal ?? "texto_interno"
+  const canal = normalizeOmniAgentCanal(input.canal)
   const texto = input.comandoOriginal.trim()
 
   if (input.mode === "inbox") {

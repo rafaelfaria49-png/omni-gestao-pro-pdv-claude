@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import type { OmniAgentCommandDTO } from "@/app/actions/omni-agent"
+import { canalDisplayLabel } from "@/lib/omni-agent/hub-display"
 import {
   confirmOmniAgentCommand,
   listOmniAgentCommands,
@@ -250,6 +251,9 @@ export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange, onComma
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1.5 text-xs">
+                      <Badge variant="outline" className="text-[10px]">
+                        {canalDisplayLabel(i.canal)}
+                      </Badge>
                       <Badge variant="outline" className="font-mono text-[10px]">
                         {i.interpretacao.intent}
                       </Badge>
