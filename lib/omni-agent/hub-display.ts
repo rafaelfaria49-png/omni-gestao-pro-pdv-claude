@@ -50,6 +50,8 @@ export function intentDisplayLabel(intent: OmniAgentIntentKind): string {
       return "Caixa"
     case "FINANCE_SUMMARY":
       return "Financeiro"
+    case "EXPENSE_CREATE":
+      return "Financeiro"
     case "UNKNOWN":
     default:
       return "Geral"

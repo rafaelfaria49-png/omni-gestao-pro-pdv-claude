@@ -1,4 +1,5 @@
 import type { OmniAgentInterpretacao, OmniAgentIntentKind } from "./types"
+import { buildExpenseInterpretation, parseExpenseFromCommand } from "@/lib/omni-agent/interpret-expense"
 
 function extractClienteNome(text: string): string {
   const t = text.trim()
@@ -84,18 +85,22 @@ export function interpretOmniAgentCommand(text: string): OmniAgentInterpretacao 
     }
   }
 
-  /** Venda/despesa/entrada ainda sem executor dedicado — fila de confirmação + auditoria após confirmar. */
+  const expense = parseExpenseFromCommand(raw)
+  if (expense) {
+    return buildExpenseInterpretation(raw, expense)
+  }
+
+  /** Venda/entrada estoque ainda sem executor dedicado — fila de confirmação + auditoria após confirmar. */
   if (
     /\bvendi\b/.test(t) ||
     /\bregist(rar)?\s+venda\b/i.test(raw) ||
-    /\bgastei\b/.test(t) ||
     (/\bentrada\s+de\b/.test(t) &&
       (/\bestoque\b/.test(t) || /\bpel[ií]cul|\bcapa\b|\bpe[çc]as?\b|\bunidades?\b/i.test(raw)))
   ) {
     return {
       intent: "REMINDER_CREATE",
-      action: "Triagem operacional (venda, despesa ou estoque)",
-      confidence: /\bvendi\b/.test(t) ? 0.84 : /\bgastei\b/.test(t) ? 0.82 : 0.78,
+      action: "Triagem operacional (venda ou estoque)",
+      confidence: /\bvendi\b/.test(t) ? 0.84 : 0.78,
       fields: { titulo: raw.slice(0, 120), detalhe: raw },
       requiresConfirmation: true,
     }
@@ -164,5 +169,5 @@ export function interpretOmniAgentCommand(text: string): OmniAgentInterpretacao 
 }
 
 export function intentRequiresConfirmation(intent: OmniAgentIntentKind): boolean {
-  return intent === "OS_OPEN" || intent === "REMINDER_CREATE"
+  return intent === "OS_OPEN" || intent === "REMINDER_CREATE" || intent === "EXPENSE_CREATE"
 }

@@ -259,7 +259,10 @@ export async function confirmOmniAgentCommand(
     return toDto(upd)
   }
 
-  const exec = await executeOmniAgentIntent(sid, interp, { clienteId: opts?.clienteId })
+  const exec = await executeOmniAgentIntent(sid, interp, {
+    clienteId: opts?.clienteId,
+    commandId,
+  })
   const ambiguous = !exec.ok && "ambiguousClientes" in exec && exec.ambiguousClientes
   if (ambiguous) {
     const upd = await prisma.omniAgentCommand.update({

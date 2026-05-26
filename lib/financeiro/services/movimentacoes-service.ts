@@ -376,3 +376,45 @@ export async function estornarMovimentacaoPorReferencia(
   }
   return { ok: true, action: "created", movimentacao }
 }
+
+/**
+ * Saída manual via Omni Agent HUB — idempotente por comando confirmado.
+ * Chave: (storeId, referenciaId=commandId, tipo=saida, origem=omni_agent).
+ */
+export async function createMovimentacaoSaidaFromOmniAgent(input: {
+  storeId: string
+  commandId: string
+  valor: number
+  descricao: string
+  categoria?: string
+}): Promise<MovimentacaoResult> {
+  const storeId = assertStoreId(input.storeId)
+  const referenciaId = safeStr(input.commandId)
+  if (!referenciaId) return { ok: false, reason: "commandId_obrigatorio" }
+
+  const valorMoney = safeMoney(input.valor)
+  if (!(valorMoney > 0)) return { ok: false, reason: "valor_invalido" }
+
+  const origem = "omni_agent"
+  if (await existeMovimentacao(storeId, referenciaId, "saida", origem)) {
+    return { ok: true, action: "skipped_idempotent" }
+  }
+
+  const cat = safeStr(input.categoria)
+  const base = safeStr(input.descricao) || "Despesa"
+  const descricao = cat ? `Despesa — ${base} (${cat})` : `Despesa — ${base}`
+
+  const movimentacao = await prisma.movimentacaoFinanceira.create({
+    data: {
+      storeId,
+      tipo: "saida",
+      valor: valorMoney,
+      descricao: descricao.slice(0, 500),
+      origem,
+      referenciaId,
+      carteiraId: null,
+    },
+  })
+
+  return { ok: true, action: "created", movimentacao }
+}

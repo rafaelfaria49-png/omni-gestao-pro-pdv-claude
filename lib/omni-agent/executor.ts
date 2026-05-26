@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { createOS } from "@/app/actions/operacoes"
 import { listClientes, listProdutos } from "@/app/actions/cadastros"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
+import { createMovimentacaoSaidaFromOmniAgent } from "@/lib/financeiro/services/movimentacoes-service"
 import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
 import type { OmniAgentInterpretacao, OmniAgentExecutorResult } from "./types"
 import type { EventoTimeline, OrdemServico } from "@/types/os"
@@ -106,7 +107,7 @@ export type OmniAgentExecutorWideResult = OmniAgentExecutorResult | { ok: false;
 export async function executeOmniAgentIntent(
   storeId: string,
   interp: OmniAgentInterpretacao,
-  opts?: { clienteId?: string },
+  opts?: { clienteId?: string; commandId?: string },
 ): Promise<OmniAgentExecutorWideResult> {
   const { intent, fields } = interp
 
@@ -177,6 +178,81 @@ export async function executeOmniAgentIntent(
           indicadores: resumo.indicadores,
           topReceitas: resumo.topReceitas.slice(0, 5),
           topDespesas: resumo.topDespesas.slice(0, 5),
+        },
+      }
+    }
+
+    if (intent === "EXPENSE_CREATE") {
+      const commandId = (opts?.commandId ?? "").trim()
+      if (!commandId) {
+        return {
+          ok: false,
+          actionLabel: interp.action,
+          error: "ID do comando obrigatório para lançar despesa (confirme pela Inbox).",
+        }
+      }
+      const valor = Number.parseFloat(String(fields.valor ?? "").replace(",", "."))
+      if (!Number.isFinite(valor) || valor <= 0) {
+        return { ok: false, actionLabel: interp.action, error: "Valor da despesa inválido." }
+      }
+      const descricao = String(fields.descricao ?? "").trim() || "Despesa"
+      const categoria = String(fields.categoria ?? "").trim()
+
+      const mov = await createMovimentacaoSaidaFromOmniAgent({
+        storeId,
+        commandId,
+        valor,
+        descricao,
+        categoria: categoria || undefined,
+      })
+
+      if (!mov.ok) {
+        return { ok: false, actionLabel: interp.action, error: mov.reason }
+      }
+
+      const movimentacaoId =
+        mov.action === "created"
+          ? mov.movimentacao.id
+          : (
+              await prisma.movimentacaoFinanceira.findFirst({
+                where: {
+                  storeId,
+                  referenciaId: commandId,
+                  tipo: "saida",
+                  origem: "omni_agent",
+                },
+                select: { id: true, valor: true, descricao: true },
+              })
+            )?.id
+
+      await prisma.logsAuditoria.create({
+        data: {
+          action: "OMNI_AGENT_DESPESA",
+          userLabel: "Omni Agent HUB",
+          detail: `Despesa R$ ${valor.toFixed(2)} — ${descricao}`.slice(0, 4000),
+          metadata: omniAgentAuditMetadata(storeId, {
+            commandId,
+            movimentacaoId,
+            valor,
+            descricao,
+            categoria: categoria || null,
+            idempotent: mov.action === "skipped_idempotent",
+          }),
+          source: "omni_agent",
+        },
+      })
+
+      return {
+        ok: true,
+        actionLabel: interp.action,
+        payload: {
+          movimentacaoId,
+          valor,
+          descricao,
+          categoria: categoria || undefined,
+          tipo: "saida",
+          origem: "omni_agent",
+          idempotentReplay: mov.action === "skipped_idempotent",
         },
       }
     }

@@ -1412,20 +1412,20 @@ const COMMAND_GROUPS_REAL: { cat: string; items: CmdDef[] }[] = [
       { name: "Buscar produto", example: "buscar produto película", result: "Lista produtos", availability: "real" },
       { name: "Lembrete / auditoria", example: "criar lembrete de cobrança", result: "Registo em logs_auditoria após confirmar", availability: "real" },
       { name: "Financeiro hoje", example: "mostrar financeiro hoje", result: "Resumo via serviço de relatórios (leitura)", availability: "real" },
+      {
+        name: "Registrar despesa",
+        example: "gastei 120 reais com película",
+        result: "Movimentação financeira (saída) após confirmar na Inbox",
+        availability: "real",
+      },
     ],
   },
 ];
 
 const COMMAND_GROUPS_TRIAGE: { cat: string; items: CmdDef[] }[] = [
   {
-    cat: "Triagem na Inbox (sem execução automática de venda/despesa/estoque)",
+    cat: "Triagem na Inbox (sem execução automática de venda/estoque)",
     items: [
-      {
-        name: "Registrar despesa (triagem)",
-        example: "gastei R$ 120 em combustível no dinheiro",
-        result: "Vira lembrete operacional — não lança despesa no financeiro",
-        availability: "triage",
-      },
       {
         name: "Registrar venda (triagem)",
         example: "vendi película por R$ 40 no Pix",

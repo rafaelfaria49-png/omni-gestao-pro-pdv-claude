@@ -111,7 +111,9 @@ export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange, onComma
       logAudit(`Omni Agent executado: ${id}`)
       toast.success(
         row.status === "EXECUTADO"
-          ? "Executado"
+          ? row.interpretacao.intent === "EXPENSE_CREATE"
+            ? "Despesa lançada no financeiro."
+            : "Executado"
           : row.status === "AGUARDANDO_CONFIRMACAO"
             ? "Escolha o cliente"
             : "Concluído com aviso",
@@ -314,6 +316,32 @@ export function OmniAgentInboxReal({ storeId, logAudit, onPendingChange, onComma
                         </Button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {i.interpretacao.intent === "EXPENSE_CREATE" && (
+                  <div className="mt-3 rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-3 text-xs">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-destructive">
+                      Pré-visualização — saída financeira
+                    </div>
+                    <div className="mt-1 text-lg font-semibold tabular-nums text-foreground">
+                      {Number(i.interpretacao.fields.valor || 0).toLocaleString("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      })}
+                    </div>
+                    <div className="mt-0.5 font-medium text-foreground">
+                      {i.interpretacao.fields.descricao || "—"}
+                    </div>
+                    {i.interpretacao.fields.categoria ? (
+                      <Badge variant="outline" className="mt-2 text-[10px]">
+                        {i.interpretacao.fields.categoria}
+                      </Badge>
+                    ) : null}
+                    <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+                      Ao confirmar, será criada uma movimentação real (tipo saída) nesta unidade. Sem
+                      autoexecução.
+                    </p>
                   </div>
                 )}
 
