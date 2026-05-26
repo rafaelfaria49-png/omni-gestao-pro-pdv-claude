@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { resolveLojaIdParaConsultaClientes } from "@/lib/clientes-loja-resolve"
 import { useLojaAtiva } from "@/lib/loja-ativa"
@@ -206,6 +207,7 @@ async function deleteCliente(lojaId: string, id: string): Promise<void> {
 }
 
 export default function DashboardClientesPage() {
+  const searchParams = useSearchParams()
   const { lojaAtivaId } = useLojaAtiva()
   const lojaHeader = useMemo(() => resolveLojaIdParaConsultaClientes(lojaAtivaId), [lojaAtivaId])
   const { toast } = useToast()
@@ -276,6 +278,14 @@ export default function DashboardClientesPage() {
 
   // Modal de Exclusão
   const [deleteTarget, setDeleteTarget] = useState<ClienteRow | null>(null)
+
+  const qFromUrl = searchParams.get("q")?.trim() ?? ""
+
+  useEffect(() => {
+    if (!qFromUrl) return
+    setSearch(qFromUrl)
+    setQuery(qFromUrl)
+  }, [qFromUrl])
 
   // Carregar dados
   useEffect(() => {

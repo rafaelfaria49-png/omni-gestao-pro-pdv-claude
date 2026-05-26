@@ -32,6 +32,15 @@ import {
 } from "lucide-react"
 import { scanSuggestedLinkConversationIds } from "@/components/whatsapp/use-whatsapp-cliente-context"
 import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   AiSignalBadge,
   deriveInsights,
   PremiumEmptyState,
@@ -188,11 +197,12 @@ function EtiquetaChip({ etiqueta, onRemove }: { etiqueta: WaEtiqueta; onRemove?:
 
 // ─── Conversation list item ────────────────────────────────────────────────────
 
-type InboxFilter = "all" | "unread" | "human" | "client" | "priority"
+type InboxFilter = "all" | "unread" | "human" | "client" | "priority" | "suggested"
 
 const INBOX_FILTERS: { id: InboxFilter; label: string; icon: typeof Inbox }[] = [
   { id: "all", label: "Todas", icon: Inbox },
   { id: "unread", label: "Não lidas", icon: MessageCircle },
+  { id: "suggested", label: "Vínculo sugerido", icon: Link2 },
   { id: "human", label: "Humano", icon: User },
   { id: "client", label: "Cadastrados", icon: UserCheck },
   { id: "priority", label: "Prioridade", icon: Sparkles },
@@ -827,6 +837,7 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
   const [inboxFilter, setInboxFilter] = useState<InboxFilter>("all")
   const [linkingCliente, setLinkingCliente] = useState(false)
   const [unlinkingCliente, setUnlinkingCliente] = useState(false)
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false)
   const [linkSuccessMessage, setLinkSuccessMessage] = useState<string | null>(null)
   const [contextRefreshKey, setContextRefreshKey] = useState(0)
   const [suggestedLinkConvIds, setSuggestedLinkConvIds] = useState<Set<string>>(
@@ -1054,15 +1065,8 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
     [apiHeaders, selectedId, fetchConversations]
   )
 
-  const unlinkCliente = useCallback(async (): Promise<boolean> => {
+  const performUnlinkCliente = useCallback(async (): Promise<boolean> => {
     if (!selectedId || !apiHeaders) return false
-    if (
-      !window.confirm(
-        "Desvincular o cliente desta conversa? Os dados do CRM deixarão de aparecer aqui até vincular novamente."
-      )
-    ) {
-      return false
-    }
     setUnlinkingCliente(true)
     setLinkSuccessMessage(null)
     try {
@@ -1097,6 +1101,16 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
       setUnlinkingCliente(false)
     }
   }, [apiHeaders, selectedId, fetchConversations])
+
+  const requestUnlinkCliente = useCallback(() => {
+    if (!selectedConv?.clienteId) return
+    setUnlinkConfirmOpen(true)
+  }, [selectedConv?.clienteId])
+
+  const confirmUnlinkCliente = useCallback(async () => {
+    const ok = await performUnlinkCliente()
+    if (ok) setUnlinkConfirmOpen(false)
+  }, [performUnlinkCliente])
 
   useEffect(() => {
     return () => {
@@ -1164,9 +1178,13 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
     const matchesInbox =
       inboxFilter === "all" ||
       (inboxFilter === "unread" && c.unreadCount > 0) ||
+      (inboxFilter === "suggested" &&
+        !c.clienteId &&
+        suggestedLinkConvIds.has(c.id)) ||
       (inboxFilter === "human" && c.humanMode) ||
       (inboxFilter === "client" && !!c.clienteId) ||
-      (inboxFilter === "priority" && deriveInsights(c).some((i) => i.variant === "priority" || i.variant === "lead"))
+      (inboxFilter === "priority" &&
+        deriveInsights(c).some((i) => i.variant === "priority" || i.variant === "lead"))
     return matchesSearch && matchesLabel && matchesInbox
   })
 
@@ -1210,6 +1228,31 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
           apiHeaders={hdr}
         />
       )}
+
+      <AlertDialog open={unlinkConfirmOpen} onOpenChange={setUnlinkConfirmOpen}>
+        <AlertDialogContent className="border-border bg-card">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">
+              Desvincular cliente?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              O cliente deixará de aparecer nesta conversa até você vincular novamente.
+              As mensagens do WhatsApp não são apagadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={unlinkingCliente}>Cancelar</AlertDialogCancel>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={unlinkingCliente}
+              onClick={() => void confirmUnlinkCliente()}
+            >
+              {unlinkingCliente ? "Desvinculando…" : "Desvincular"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div
         className={cn(
@@ -1540,7 +1583,7 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
           linkSuccessMessage={linkSuccessMessage}
           highlightLinkCard={highlightLinkPanel}
           onLinkCliente={linkCliente}
-          onUnlinkCliente={unlinkCliente}
+          onUnlinkCliente={requestUnlinkCliente}
           onApplySuggestion={(text) => {
             setInputText(text)
             inputRef.current?.focus()

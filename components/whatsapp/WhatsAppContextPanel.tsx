@@ -43,6 +43,7 @@ import {
   useWhatsAppClienteContext,
 } from "./use-whatsapp-cliente-context"
 import { useWhatsAppAiAnalysis } from "./use-whatsapp-ai-analysis"
+import { clientesDashboardHref } from "@/lib/whatsapp/clientes-dashboard-link"
 import { cn } from "@/lib/utils"
 
 export type ContextContact = {
@@ -255,9 +256,10 @@ export function WhatsAppContextPanel({
     )
   }
 
-  const clienteHref = snapshot?.id
-    ? `/dashboard/clientes`
-    : null
+  const clientesBuscaHref = clientesDashboardHref(
+    snapshot?.phone?.trim() || conv.contact.phoneDigits
+  )
+  const clienteHref = snapshot?.id ? clientesBuscaHref : null
   const osHref = snapshot?.id
     ? `/dashboard/operacoes-v2?clienteId=${encodeURIComponent(snapshot.id)}`
     : null
@@ -567,7 +569,7 @@ export function WhatsAppContextPanel({
                       className="h-8 w-full gap-1.5 text-[11px]"
                       asChild
                     >
-                      <Link href="/dashboard/clientes">
+                      <Link href={clientesBuscaHref}>
                         <UserPlus className="h-3.5 w-3.5" />
                         Cadastrar novo cliente
                       </Link>
@@ -579,7 +581,7 @@ export function WhatsAppContextPanel({
                       className="h-8 w-full text-[11px]"
                       asChild
                     >
-                      <Link href="/dashboard/clientes">
+                      <Link href={clientesBuscaHref}>
                         Buscar no cadastro
                         {waPhoneDisplay ? ` · ${waPhoneDisplay}` : ""}
                       </Link>
