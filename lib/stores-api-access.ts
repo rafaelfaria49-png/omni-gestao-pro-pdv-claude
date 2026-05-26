@@ -12,7 +12,10 @@ export async function requireStoresSession(): Promise<
 > {
   const session = await auth()
   if (!session?.user?.id) {
-    return { ok: false, res: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
+    return {
+      ok: false,
+      res: NextResponse.json({ ok: false, error: "Não autorizado. Faça login." }, { status: 401 }),
+    }
   }
   return { ok: true, session }
 }
@@ -26,7 +29,10 @@ export function filterStoresForSession<T extends { id: string }>(session: Sessio
 
 export function denyIfNoStoreAccess(session: Session, storeId: string): NextResponse | null {
   if (!canAccessStore(session, storeId)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 })
+    return NextResponse.json(
+      { ok: false, error: "Sem permissão para esta unidade." },
+      { status: 403 },
+    )
   }
   return null
 }
@@ -51,6 +57,27 @@ export async function isProtectedPrimaryStore(storeId: string): Promise<boolean>
 export type StoreDeleteConfirmBody = {
   confirm?: boolean
   storeId?: string
+}
+
+export type StoreOperationalLinkCounts = {
+  clientes: number
+  os: number
+  produtos: number
+  tecnicos: number
+  hasLinks: boolean
+}
+
+/** Contagens usadas para bloquear exclusão de unidade com dados operacionais (evita cascade). */
+export async function countStoreOperationalLinks(storeId: string): Promise<StoreOperationalLinkCounts> {
+  const id = storeId.trim()
+  const [clientes, os, produtos, tecnicos] = await Promise.all([
+    prisma.cliente.count({ where: { storeId: id } }),
+    prisma.ordemServico.count({ where: { storeId: id } }),
+    prisma.produto.count({ where: { storeId: id } }),
+    prisma.tecnico.count({ where: { storeId: id } }),
+  ])
+  const hasLinks = clientes > 0 || os > 0 || produtos > 0 || tecnicos > 0
+  return { clientes, os, produtos, tecnicos, hasLinks }
 }
 
 export function parseStoreDeleteConfirm(body: StoreDeleteConfirmBody, pathStoreId: string): NextResponse | null {

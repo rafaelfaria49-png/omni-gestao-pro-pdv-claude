@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/require-admin"
 import {
+  countStoreOperationalLinks,
   denyIfNoStoreAccess,
   isProtectedPrimaryStore,
   parseStoreDeleteConfirm,
@@ -76,9 +77,32 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
       return NextResponse.json({ ok: false, error: "Unidade não encontrada." }, { status: 404 })
     }
 
+    const links = await countStoreOperationalLinks(id)
+    if (links.hasLinks) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "Esta unidade possui dados vinculados (clientes, OS, produtos ou técnicos) e não pode ser excluída.",
+          ...links,
+        },
+        { status: 409 },
+      )
+    }
+
     await prisma.store.delete({ where: { id } })
     return NextResponse.json({ ok: true })
   } catch (e) {
+    const code = e && typeof e === "object" && "code" in e ? String((e as { code: string }).code) : ""
+    if (code === "P2003") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Não foi possível excluir: existem registros dependentes nesta unidade.",
+        },
+        { status: 409 },
+      )
+    }
     const msg = e instanceof Error ? e.message : "Falha ao excluir unidade"
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
@@ -102,6 +126,11 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       profile: StoreProfileInput
       subscriptionPlan: SubscriptionPlanInput
     }>
+
+    const existing = await prisma.store.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ ok: false, error: "Unidade não encontrada." }, { status: 404 })
+    }
 
     const profile = body.profile != null ? parseProfile(body.profile) : undefined
     const subscriptionPlan = body.subscriptionPlan != null ? parseSubscriptionPlan(body.subscriptionPlan) : undefined
