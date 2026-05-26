@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingsCard } from "../components/SettingsCard";
+import { SettingsSoonBadge } from "../components/SettingsSoonBadge";
 import {
   Banknote,
   CreditCard,
@@ -223,13 +224,8 @@ function VendasSectionContent() {
       <SettingsCard
         title="Formas de pagamento"
         description="Pré-visualização das opções no PDV. A ativação por forma de pagamento será conectada ao backend numa fase posterior."
+        headerExtra={<SettingsSoonBadge />}
       >
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="font-normal">
-            Em breve
-          </Badge>
-          <span className="text-xs text-muted-foreground">Não persiste ainda</span>
-        </div>
         <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
           Os interruptores abaixo são apenas ilustrativos. Dinheiro, cartões, PIX e fiado continuam disponíveis conforme
           o fluxo atual do PDV até esta configuração ser integrada.
@@ -320,6 +316,11 @@ function VendasSectionContent() {
       >
         <ToggleRow
           label="Ativar módulo de mesas / consumo"
+          hint={
+            form.moduloControleConsumo
+              ? "Disponível em /dashboard/vendas/mesas e pelo botão Mesas no PDV."
+              : "Quando ativo, o atalho Mesas aparece no PDV desta unidade."
+          }
           checked={form.moduloControleConsumo}
           onCheckedChange={(v) => updateForm("moduloControleConsumo", v)}
           disabled={controlsDisabled}

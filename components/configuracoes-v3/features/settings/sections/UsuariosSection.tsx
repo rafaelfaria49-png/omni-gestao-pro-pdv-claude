@@ -9,7 +9,6 @@ import {
   Users,
   Plus,
   Shield,
-  ExternalLink,
   Pencil,
   UserX,
   Loader2,
@@ -30,6 +29,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/configuracoes-v3/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/configuracoes-v3/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -133,6 +142,8 @@ export function UsuariosSection() {
   const [formPassword, setFormPassword] = useState("");
   const [formStoreIds, setFormStoreIds] = useState<Set<string>>(new Set());
   const [hintPassword, setHintPassword] = useState<string | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<AdminUserRow | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
 
   const load = useCallback(async () => {
     if (!canManage) {
@@ -300,12 +311,10 @@ export function UsuariosSection() {
     }
   };
 
-  const deactivate = async (r: AdminUserRow) => {
-    if (r.id === session?.user?.id) {
-      toast({ title: "Operação inválida", description: "Não pode desativar a sua própria sessão.", variant: "destructive" });
-      return;
-    }
-    if (!confirm(`Desativar a conta de ${r.name || r.email}?`)) return;
+  const confirmDeactivate = async () => {
+    const r = deactivateTarget;
+    if (!r) return;
+    setDeactivating(true);
     try {
       const res = await fetch(`/api/admin/users/${encodeURIComponent(r.id)}`, {
         method: "PATCH",
@@ -316,6 +325,7 @@ export function UsuariosSection() {
       const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
       if (!res.ok) throw new Error(j.error || "Falha ao desativar");
       toast({ title: "Conta desativada" });
+      setDeactivateTarget(null);
       await load();
     } catch (e) {
       toast({
@@ -323,7 +333,17 @@ export function UsuariosSection() {
         description: e instanceof Error ? e.message : "Falha ao desativar",
         variant: "destructive",
       });
+    } finally {
+      setDeactivating(false);
     }
+  };
+
+  const requestDeactivate = (r: AdminUserRow) => {
+    if (r.id === session?.user?.id) {
+      toast({ title: "Operação inválida", description: "Não pode desativar a sua própria sessão.", variant: "destructive" });
+      return;
+    }
+    setDeactivateTarget(r);
   };
 
   const copyHint = async () => {
@@ -373,18 +393,10 @@ export function UsuariosSection() {
         title="Utilizadores e permissões"
         description="Gerir contas de acesso ao painel, papéis e unidades por utilizador."
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" asChild>
-              <Link href="/dashboard/master-console">
-                Master Console
-                <ExternalLink className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button type="button" onClick={openCreate}>
-              <Plus className="mr-2 h-4 w-4" />
-              Adicionar utilizador
-            </Button>
-          </div>
+          <Button type="button" onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            Adicionar utilizador
+          </Button>
         }
       />
 
@@ -496,7 +508,7 @@ export function UsuariosSection() {
                             size="icon"
                             className="text-destructive hover:text-destructive"
                             title="Desativar"
-                            onClick={() => void deactivate(r)}
+                            onClick={() => requestDeactivate(r)}
                           >
                             <UserX className="h-4 w-4" />
                           </Button>
@@ -509,7 +521,7 @@ export function UsuariosSection() {
                             title="Reativar"
                             onClick={() => void activate(r)}
                           >
-                            <UserCheck className="h-4 w-4 text-emerald-600" />
+                            <UserCheck className="h-4 w-4 text-success" />
                           </Button>
                         )}
                       </div>
@@ -611,6 +623,44 @@ export function UsuariosSection() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={deactivateTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !deactivating) setDeactivateTarget(null);
+        }}
+      >
+        <AlertDialogContent className="border-border bg-background sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar utilizador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deactivateTarget
+                ? `A conta de ${deactivateTarget.name || deactivateTarget.email} deixará de iniciar sessão no painel. Pode reativar depois na mesma lista.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deactivating}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deactivating}
+              onClick={(e) => {
+                e.preventDefault();
+                void confirmDeactivate();
+              }}
+            >
+              {deactivating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  A desativar…
+                </>
+              ) : (
+                "Desativar"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

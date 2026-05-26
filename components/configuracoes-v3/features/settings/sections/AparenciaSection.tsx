@@ -1,4 +1,5 @@
 import { SectionHeader } from "../components/SectionHeader";
+import { SettingsSoonBadge } from "../components/SettingsSoonBadge";
 import { ThemeCard, ThemeOption } from "../components/ThemeCard";
 import { useTheme } from "../../../contexts/ThemeContext";
 import { Palette, Eye, RotateCcw } from "lucide-react";
@@ -88,9 +89,10 @@ export function AparenciaSection() {
         description="Defina o tema visual do sistema. As cores se aplicam imediatamente."
         actions={
           <>
-            <Button type="button" variant="outline" disabled>
-              <Eye className="mr-2 h-4 w-4" />
-              Em breve
+            <Button type="button" variant="outline" disabled className="gap-2">
+              <Eye className="h-4 w-4" />
+              Pré-visualização global
+              <SettingsSoonBadge />
             </Button>
             <Button variant="ghost" onClick={resetTheme}>
               <RotateCcw className="mr-2 h-4 w-4" />

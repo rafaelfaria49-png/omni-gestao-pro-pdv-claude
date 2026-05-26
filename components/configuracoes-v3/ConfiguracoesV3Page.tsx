@@ -116,9 +116,11 @@ export default function ConfiguracoesV3Page() {
                     <SettingsSidebar active={active} onChange={handleChange} />
                   </SheetContent>
                 </Sheet>
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-xs text-muted-foreground">Configurações</p>
-                  <h1 className="text-2xl font-semibold leading-[1.3] tracking-normal text-foreground">{currentLabel}</h1>
+                  <h1 className="truncate text-xl font-semibold leading-tight tracking-normal text-foreground sm:text-2xl">
+                    {currentLabel}
+                  </h1>
                 </div>
               </header>
             )}

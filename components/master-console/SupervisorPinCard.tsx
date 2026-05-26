@@ -5,6 +5,7 @@ import { KeyRound, ShieldAlert, ShieldCheck, Loader2, Eye, EyeOff } from "lucide
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
 
 type Status =
@@ -153,8 +154,10 @@ export function SupervisorPinCard() {
       </header>
 
       {status.state === "loading" && (
-        <div className="mt-5 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Consultando status…
+        <div className="mt-5 space-y-3" aria-busy="true">
+          <Skeleton className="h-14 w-full rounded-lg" />
+          <Skeleton className="h-14 w-full rounded-lg" />
+          <Skeleton className="h-10 w-48" />
         </div>
       )}
 
@@ -165,7 +168,7 @@ export function SupervisorPinCard() {
       )}
 
       {status.state === "missing" && (
-        <div className="mt-5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-300">
+        <div className="mt-5 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground">
           <p className="font-medium">Nenhum supervisor configurado.</p>
           <p className="mt-1 text-xs text-muted-foreground">
             Rode no servidor:{" "}
@@ -196,15 +199,15 @@ export function SupervisorPinCard() {
               <div className="mt-1 flex items-center gap-1.5 font-medium">
                 {status.isDefault ? (
                   <>
-                    <ShieldAlert className="h-4 w-4 text-amber-500" />
-                    <span className="text-amber-700 dark:text-amber-300">
+                    <ShieldAlert className="h-4 w-4 text-warning" />
+                    <span className="text-warning-foreground">
                       Padrão inicial
                     </span>
                   </>
                 ) : (
                   <>
-                    <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                    <span className="text-emerald-700 dark:text-emerald-300">
+                    <ShieldCheck className="h-4 w-4 text-success" />
+                    <span className="text-success">
                       Personalizado
                     </span>
                   </>
@@ -214,8 +217,8 @@ export function SupervisorPinCard() {
           </div>
 
           {status.isDefault && (
-            <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-              <p className="font-medium text-amber-700 dark:text-amber-300">
+            <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
+              <p className="font-medium text-warning-foreground">
                 Altere o PIN padrão após a primeira configuração.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">

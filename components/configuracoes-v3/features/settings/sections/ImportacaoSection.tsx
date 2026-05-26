@@ -107,7 +107,7 @@ export function ImportacaoSection() {
       <SectionHeader
         icon={<Upload className="h-5 w-5" />}
         title="Importação de Dados"
-        description="Escolha entre o fluxo guiado (um arquivo por vez) ou o cruzamento avançado (vários arquivos e ZIPs em um único lote)."
+        description="Escolha entre o fluxo guiado (um arquivo por vez) ou o cruzamento avançado (vários arquivos e ZIPs em um único lote). A preferência fica salva neste navegador."
       />
 
       {/* Switcher de modos — padrão visual do PdvSection */}

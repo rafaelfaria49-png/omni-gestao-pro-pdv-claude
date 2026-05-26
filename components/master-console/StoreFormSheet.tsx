@@ -1,50 +1,40 @@
-import { useForm } from "react-hook-form";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Form, FormField, FormItem, FormLabel, FormControl } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 
+/** Legado — não montado no Master Console. CRUD real em /dashboard/unidades. */
 interface StoreFormSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
-  store?: any;
 }
 
-export function StoreFormSheet({ open, onOpenChange, mode, store }: StoreFormSheetProps) {
-  const form = useForm({
-    defaultValues: store || { name: "", cnpj: "", manager: "", city: "" }
-  });
-
+export function StoreFormSheet({ open, onOpenChange, mode }: StoreFormSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-[450px] overflow-y-auto">
         <SheetHeader className="mb-6">
-          <SheetTitle>{mode === "create" ? "Nova Unidade" : "Editar Unidade"}</SheetTitle>
-          <SheetDescription>Cadastre ou altere os dados da filial na sua rede.</SheetDescription>
+          <SheetTitle>{mode === "create" ? "Nova unidade" : "Editar unidade"}</SheetTitle>
+          <SheetDescription>
+            <Badge variant="secondary" className="mb-2 font-normal">
+              Use Gestão da Rede
+            </Badge>
+            <span className="block text-sm text-muted-foreground">
+              Criação e edição de filiais persistem em Gestão da Rede, não neste formulário.
+            </span>
+          </SheetDescription>
         </SheetHeader>
-        
-        <Form {...form}>
-          <form className="space-y-4">
-            <FormField name="name" render={({ field }) => (
-              <FormItem><FormLabel>Nome da Loja</FormLabel><FormControl><Input placeholder="Ex: Matriz Centro" {...field} /></FormControl></FormItem>
-            )} />
-            <FormField name="cnpj" render={({ field }) => (
-              <FormItem><FormLabel>CNPJ</FormLabel><FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl></FormItem>
-            )} />
-            <FormField name="manager" render={({ field }) => (
-              <FormItem><FormLabel>Gerente Responsável</FormLabel><FormControl><Input placeholder="Nome do gerente" {...field} /></FormControl></FormItem>
-            )} />
-            <FormField name="city" render={({ field }) => (
-              <FormItem><FormLabel>Cidade / Estado</FormLabel><FormControl><Input placeholder="Ex: São Paulo - SP" {...field} /></FormControl></FormItem>
-            )} />
-            
-            <div className="pt-6 flex gap-3">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" className="flex-1 bg-primary text-primary-foreground hover:opacity-90">Salvar Alterações</Button>
-            </div>
-          </form>
-        </Form>
+        <Button className="w-full" asChild>
+          <Link href="/dashboard/unidades" onClick={() => onOpenChange(false)}>
+            Abrir Gestão da Rede
+            <ExternalLink className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
+        <Button type="button" variant="ghost" className="mt-3 w-full" onClick={() => onOpenChange(false)}>
+          Fechar
+        </Button>
       </SheetContent>
     </Sheet>
   );

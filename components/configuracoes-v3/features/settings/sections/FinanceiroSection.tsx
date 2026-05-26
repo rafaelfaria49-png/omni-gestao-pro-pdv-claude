@@ -4,13 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingsCard } from "../components/SettingsCard";
+import { SettingsCardSkeleton } from "../components/SettingsCardSkeleton";
+import { SettingsSoonBadge } from "../components/SettingsSoonBadge";
 import { Wallet, FileText, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { Input } from "@/components/configuracoes-v3/components/ui/input";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { Switch } from "@/components/configuracoes-v3/components/ui/switch";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
-import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
 import { AppOpsProviders } from "@/components/dashboard/app-ops-providers";
+import { FINANCEIRO_HUB_PATH } from "@/lib/navigation/legacy-routes";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useFinanceiro } from "@/lib/financeiro-store";
 import type { ContaPagarItem } from "@/lib/financeiro-types";
@@ -175,12 +177,19 @@ function FinanceiroSectionContent() {
       />
 
       {noLoja ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           Nenhuma unidade ativa. Abra a seção <span className="font-medium text-foreground">Lojas</span> e selecione
           uma unidade para carregar e gravar o centro financeiro.
         </p>
       ) : null}
 
+      {!hydrated ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <SettingsCardSkeleton rows={4} />
+          <SettingsCardSkeleton rows={3} />
+        </div>
+      ) : (
+      <>
       <div className="grid gap-6 lg:grid-cols-2">
         <SettingsCard
           title="Metas de faturamento"
@@ -226,7 +235,10 @@ function FinanceiroSectionContent() {
           </div>
         </SettingsCard>
 
-        <SettingsCard title="Contas a pagar e a receber" description="Dados locais do módulo Financeiro (carteiras).">
+        <SettingsCard title="Contas a pagar e a receber" description="Resumo do cache local do Financeiro neste navegador — não substitui o hub Financeiro em produção.">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Valores lidos de `localStorage` por unidade. Para lançamentos oficiais, use o módulo Financeiro.
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <StatTile
               icon={<ArrowUpCircle className="h-5 w-5" />}
@@ -242,7 +254,7 @@ function FinanceiroSectionContent() {
             />
           </div>
           <Button variant="outline" className="mt-4 w-full" asChild>
-            <Link href="/dashboard/fluxo-caixa">Ver lançamentos</Link>
+            <Link href={FINANCEIRO_HUB_PATH}>Ver lançamentos</Link>
           </Button>
         </SettingsCard>
       </div>
@@ -255,8 +267,14 @@ function FinanceiroSectionContent() {
           {saving ? "Salvando…" : "Salvar alterações"}
         </Button>
       </div>
+      </>
+      )}
 
-      <SettingsCard title="Relatórios" description="Exportações periódicas automáticas.">
+      <SettingsCard
+        title="Relatórios"
+        description="Exportações periódicas automáticas."
+        headerExtra={<SettingsSoonBadge />}
+      >
         <div className="flex items-center justify-between rounded-lg border border-dashed border-border bg-card-muted/60 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -265,9 +283,6 @@ function FinanceiroSectionContent() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm font-medium text-foreground">Relatório mensal por email</p>
-                <Badge variant="secondary" className="font-normal">
-                  Em breve
-                </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
                 Envio automático por e-mail ainda não está disponível nesta versão.

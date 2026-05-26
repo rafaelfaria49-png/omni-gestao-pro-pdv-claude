@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SETTINGS_SECTIONS, SectionId } from "../sections";
 import { cn } from "../../../lib/utils";
-import { Sparkles } from "lucide-react";
+import { Sparkles, CreditCard } from "lucide-react";
 
 interface SettingsSidebarProps {
   active: SectionId;
@@ -58,10 +58,13 @@ export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
       </nav>
 
       <div className="border-t border-border p-4">
-        <div className="rounded-lg bg-gradient-primary p-3 text-primary-foreground shadow-glow">
-          <p className="text-xs font-semibold">Plano Pro</p>
-          <p className="mt-0.5 text-[11px] opacity-90">Até 5 lojas e IA ilimitada</p>
-        </div>
+        <Link
+          href="/dashboard/billing"
+          className="flex items-center gap-2.5 rounded-lg border border-border bg-card-muted px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+        >
+          <CreditCard className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 truncate">Plano e assinatura</span>
+        </Link>
       </div>
     </aside>
   );

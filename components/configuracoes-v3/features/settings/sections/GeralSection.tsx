@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Settings } from "lucide-react";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingsCard } from "../components/SettingsCard";
+import { SettingsCardSkeleton } from "../components/SettingsCardSkeleton";
+import { SettingsSoonBadge } from "../components/SettingsSoonBadge";
 import { Input } from "@/components/configuracoes-v3/components/ui/input";
 import { Label } from "@/components/configuracoes-v3/components/ui/label";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
@@ -300,12 +302,27 @@ function GeralSectionContent() {
       />
 
       {noLoja ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           Nenhuma unidade ativa. Abra a seção <span className="font-medium text-foreground">Lojas</span> e selecione
           uma unidade para editar os dados gerais.
         </p>
       ) : null}
 
+      {loadState === "loading" ? (
+        <>
+          <SettingsCardSkeleton rows={4} />
+          <SettingsCardSkeleton rows={2} />
+        </>
+      ) : null}
+
+      {loadState === "error" ? (
+        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          Não foi possível carregar os dados da unidade. Recarregue a página ou troque a unidade ativa.
+        </p>
+      ) : null}
+
+      {loadState !== "loading" && loadState !== "error" ? (
+      <>
       <SettingsCard
         title="Dados da empresa"
         description="Aparecem em recibos, notas e relatórios."
@@ -412,6 +429,7 @@ function GeralSectionContent() {
       <SettingsCard
         title="Preferências regionais"
         description="Configuração visual — ainda não salva no sistema."
+        headerExtra={<SettingsSoonBadge />}
       >
         <div className="grid gap-6 sm:grid-cols-2">
           <div className="space-y-1.5">
@@ -442,6 +460,8 @@ function GeralSectionContent() {
           </div>
         </div>
       </SettingsCard>
+      </>
+      ) : null}
     </div>
   );
 }

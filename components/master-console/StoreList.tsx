@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import {
   Plus, Store as StoreIcon, MapPin, User, CheckCircle2,
-  MoreHorizontal, Pencil, PauseCircle, Trash2, ShieldCheck,
+  MoreHorizontal, Pencil, PauseCircle, Trash2, ShieldCheck, ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +16,8 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
-import { StoreFormSheet } from './StoreFormSheet';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export interface Store {
   id: string;
@@ -31,57 +33,58 @@ interface StoreListProps {
   selectedId: string;
   onSelect: (id: string) => void;
   onDelete?: (id: string) => Promise<void>;
+  onDeleteError?: (message: string) => void;
+  canManage?: boolean;
+  primaryStoreId?: string;
 }
 
-export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListProps) {
-  const [formOpen, setFormOpen] = useState(false);
-  const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
-  const [formStore, setFormStore] = useState<Store | null>(null);
+export function StoreList({
+  stores,
+  selectedId,
+  onSelect,
+  onDelete,
+  onDeleteError,
+  canManage = false,
+  primaryStoreId: primaryStoreIdProp,
+}: StoreListProps) {
   const [deleteTarget, setDeleteTarget] = useState<Store | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  // First store in the sorted list is the account principal — cannot be deleted
-  const primaryStoreId = stores[0]?.id ?? '';
-
-  function openCreate() {
-    setFormMode('create');
-    setFormStore(null);
-    setFormOpen(true);
-  }
-
-  function openEdit(store: Store) {
-    setFormMode('edit');
-    setFormStore(store);
-    setFormOpen(true);
-  }
+  const primaryStoreId = primaryStoreIdProp ?? stores[0]?.id ?? '';
 
   async function confirmDelete() {
     if (!deleteTarget || !onDelete) return;
+    if (deleteConfirmText.trim() !== deleteTarget.id) return;
     setDeleting(true);
     try {
       await onDelete(deleteTarget.id);
+      setDeleteTarget(null);
+      setDeleteConfirmText('');
+    } catch (e) {
+      onDeleteError?.(e instanceof Error ? e.message : 'Falha ao excluir unidade');
     } finally {
       setDeleting(false);
-      setDeleteTarget(null);
     }
   }
 
   return (
     <>
       <section className="rounded-2xl border border-border bg-card shadow-card">
-        <header className="flex items-center justify-between border-b border-border px-6 py-4">
-          <div>
+        <header className="flex items-center justify-between gap-3 border-b border-border px-6 py-4">
+          <div className="min-w-0">
             <h2 className="text-lg font-bold tracking-tight">Mapa de Lojas</h2>
             <p className="text-xs text-muted-foreground">Selecione uma filial para gerenciar</p>
           </div>
-          <Button
-            size="sm"
-            onClick={openCreate}
-            className="rounded-xl font-semibold shadow-elegant transition-smooth hover:shadow-glow"
-          >
-            <Plus className="mr-1.5 h-4 w-4" />
-            Adicionar Nova Filial
-          </Button>
+          {canManage ? (
+            <Button size="sm" asChild className="shrink-0 rounded-xl font-semibold shadow-elegant transition-smooth hover:shadow-glow">
+              <Link href="/dashboard/unidades">
+                <Plus className="mr-1.5 h-4 w-4" />
+                Gerir unidades
+                <ExternalLink className="ml-1.5 h-3.5 w-3.5 opacity-70" />
+              </Link>
+            </Button>
+          ) : null}
         </header>
 
         {stores.length === 0 ? (
@@ -90,15 +93,19 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
               <StoreIcon className="h-6 w-6 text-primary/70" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">Nenhuma filial adicional cadastrada</p>
-              <p className="text-xs text-muted-foreground max-w-[260px]">
-                Sua loja principal já está ativa. Adicione novas unidades quando quiser gerenciar outras lojas.
+              <p className="text-sm font-semibold text-foreground">Nenhuma filial cadastrada</p>
+              <p className="max-w-[260px] text-xs text-muted-foreground">
+                Crie e edite unidades na gestão da rede — dados persistidos via API.
               </p>
             </div>
-            <Button size="sm" variant="outline" onClick={openCreate} className="rounded-xl">
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Adicionar nova filial
-            </Button>
+            {canManage ? (
+              <Button size="sm" variant="outline" asChild className="rounded-xl">
+                <Link href="/dashboard/unidades">
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Abrir Gestão da Rede
+                </Link>
+              </Button>
+            ) : null}
           </div>
         ) : (
           <ul className="divide-y divide-border">
@@ -108,6 +115,7 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
               return (
                 <li key={store.id} className="group/row relative">
                   <button
+                    type="button"
                     onClick={() => onSelect(store.id)}
                     className={cn(
                       'group flex w-full items-center gap-4 px-6 py-4 pr-14 text-left transition-smooth',
@@ -125,7 +133,7 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
                       <StoreIcon className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex flex-wrap items-center gap-2">
                         <h3 className="truncate text-sm font-semibold text-foreground">{store.name}</h3>
                         <Badge
                           variant="secondary"
@@ -137,7 +145,7 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
                         {isPrincipal && (
                           <Badge
                             variant="outline"
-                            className="gap-1 border-amber-500/40 bg-amber-500/10 px-2 py-0 text-[10px] font-semibold text-amber-800 dark:text-amber-200"
+                            className="gap-1 border-warning/40 bg-warning/10 px-2 py-0 text-[10px] font-semibold text-warning-foreground"
                           >
                             <ShieldCheck className="h-3 w-3" />
                             Principal
@@ -160,10 +168,12 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
                     )} />
                   </button>
 
+                  {canManage ? (
                   <div className="absolute right-4 top-1/2 -translate-y-1/2">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                         <button
+                          type="button"
                           className="rounded-lg p-1.5 text-muted-foreground opacity-0 transition-smooth hover:bg-muted hover:text-foreground group-hover/row:opacity-100 data-[state=open]:opacity-100 data-[state=open]:bg-muted"
                           aria-label="Ações da loja"
                         >
@@ -171,18 +181,18 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-52 rounded-xl border-border bg-popover shadow-card">
-                        <DropdownMenuItem
-                          onClick={() => openEdit(store)}
-                          className="rounded-lg text-sm font-medium"
-                        >
-                          <Pencil className="mr-2 h-4 w-4 text-info" />
-                          Editar Dados
+                        <DropdownMenuItem asChild className="rounded-lg text-sm font-medium cursor-pointer">
+                          <Link href="/dashboard/unidades">
+                            <Pencil className="mr-2 h-4 w-4 text-info" />
+                            Editar em Gestão da Rede
+                          </Link>
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="rounded-lg text-sm font-medium">
-                          <PauseCircle className="mr-2 h-4 w-4 text-warning" />
-                          Pausar Filial
+                        <DropdownMenuItem disabled className="rounded-lg text-sm font-medium opacity-60">
+                          <PauseCircle className="mr-2 h-4 w-4 text-muted-foreground" />
+                          Pausar filial
+                          <span className="ml-auto text-[10px] text-muted-foreground">Em breve</span>
                         </DropdownMenuItem>
-                        {!isPrincipal && (
+                        {!isPrincipal && onDelete ? (
                           <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -193,7 +203,7 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
                               Excluir
                             </DropdownMenuItem>
                           </>
-                        )}
+                        ) : null}
                         {isPrincipal && (
                           <>
                             <DropdownMenuSeparator />
@@ -206,6 +216,7 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
+                  ) : null}
                 </li>
               );
             })}
@@ -213,12 +224,14 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
         )}
       </section>
 
-      <StoreFormSheet open={formOpen} onOpenChange={setFormOpen} mode={formMode} store={formStore} />
-
-      {/* ── Premium delete confirmation modal ── */}
       <AlertDialog
         open={deleteTarget !== null}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteConfirmText('');
+          }
+        }}
       >
         <AlertDialogContent className="border-border bg-card text-foreground shadow-card sm:max-w-md">
           <AlertDialogHeader>
@@ -237,6 +250,22 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
                     </div>
                   </div>
                 )}
+                {deleteTarget && (
+                  <div className="space-y-2 pt-1">
+                    <Label htmlFor="mc-delete-confirm" className="text-xs text-muted-foreground">
+                      Digite <span className="font-mono font-semibold text-foreground">{deleteTarget.id}</span> para confirmar
+                    </Label>
+                    <Input
+                      id="mc-delete-confirm"
+                      value={deleteConfirmText}
+                      onChange={(e) => setDeleteConfirmText(e.target.value)}
+                      placeholder={deleteTarget.id}
+                      disabled={deleting}
+                      className="font-mono text-sm"
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -246,10 +275,10 @@ export function StoreList({ stores, selectedId, onSelect, onDelete }: StoreListP
             </AlertDialogCancel>
             <AlertDialogAction
               className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={deleting}
+              disabled={deleting || deleteConfirmText.trim() !== (deleteTarget?.id ?? '')}
               onClick={(e) => { e.preventDefault(); void confirmDelete(); }}
             >
-              Excluir unidade
+              {deleting ? 'Excluindo…' : 'Excluir unidade'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
