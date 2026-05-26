@@ -55,6 +55,18 @@ function hasVendasParamsInPrinter(printerConfig: unknown): boolean {
   return Number.isFinite(g) && g >= 1 && Number.isFinite(v) && v >= 1;
 }
 
+function hasImpressaoConfig(printerConfig: unknown): boolean {
+  const imp = safePrinterRecord(printerConfig).impressao;
+  if (!imp || typeof imp !== "object") return false;
+  const o = imp as Record<string, unknown>;
+  return (
+    String(o.impressoraHost ?? "").trim().length > 0 ||
+    o.imprimirAutomatico === true ||
+    o.abrirGaveta === true ||
+    String(o.rodapeCupom ?? "").trim().length > 0
+  );
+}
+
 function hasFinanceiroBasico(cardFees: unknown): boolean {
   if (!cardFees || typeof cardFees !== "object") return false;
   const c = cardFees as Record<string, unknown>;
@@ -173,6 +185,11 @@ export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSna
     else if (hasVendasParamsInPrinter(settings?.printerConfig)) vendasStatus = "done";
     else vendasStatus = "review";
 
+    let impressaoStatus: ItemStatus = "review";
+    if (!storeId) impressaoStatus = "pending";
+    else if (!hydrated) impressaoStatus = "review";
+    else if (hasImpressaoConfig(settings?.printerConfig)) impressaoStatus = "done";
+
     let finStatus: ItemStatus = "pending";
     if (!storeId) finStatus = "pending";
     else if (!hydrated) finStatus = "review";
@@ -223,10 +240,18 @@ export function GoLiveChecklistRafaCell({ empresa }: { empresa: GoLiveEmpresaSna
       {
         id: "vendas",
         label: "Vendas e orçamentos configurados",
-        hint: "Garantia padrão e validade de orçamento gravados em printerConfig.",
+        hint: "Garantia, validade, formas de pagamento e flags de PDV em printerConfig.pdvParams.",
         status: vendasStatus,
         targetSection: "vendas",
         linkLabel: "Ir para Vendas",
+      },
+      {
+        id: "impressao",
+        label: "Impressão PDV (opcional)",
+        hint: "Host da impressora, auto-print ou rodapé em printerConfig.impressao — revise se usar cupom térmico.",
+        status: impressaoStatus,
+        targetSection: "pdv",
+        linkLabel: "Ir para PDV",
       },
       {
         id: "usuarios",

@@ -2,7 +2,8 @@
 
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingsCard } from "../components/SettingsCard";
-import { ShieldCheck, KeyRound, Info } from "lucide-react";
+import { ShieldCheck, KeyRound, Info, Lock } from "lucide-react";
+import { SettingsFutureBlock } from "../components/SettingsFutureBlock";
 import { Button } from "@/components/configuracoes-v3/components/ui/button";
 import { Badge } from "@/components/configuracoes-v3/components/ui/badge";
 import { useSession, signOut } from "next-auth/react";
@@ -102,11 +103,12 @@ export function SegurancaSection() {
         </ul>
       </SettingsCard>
 
-      <SettingsCard title="Recursos não implementados">
-        <p className="text-sm text-muted-foreground">
-          Alteração de senha tradicional, autenticação em dois fatores, histórico de acessos com IP e encerrar outras
-          sessões: <span className="font-medium text-foreground">em breve / fora do escopo atual</span>.
-        </p>
+      <SettingsCard title="Recursos não implementados" description="Sem formulários que simulam gravação.">
+        <SettingsFutureBlock
+          icon={Lock}
+          title="Alterar senha, 2FA e sessões ativas"
+          description="Não há endpoints nem UI funcional nesta aba. Use Utilizadores (admin) ou encerre a sessão acima."
+        />
       </SettingsCard>
     </div>
   );
