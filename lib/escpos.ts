@@ -60,6 +60,27 @@ export function escposCutFull(): Uint8Array {
   return new Uint8Array([GS, 0x56, 0x00])
 }
 
+/** Abre gaveta de dinheiro (pin 2, pulse padrão Epson). */
+export function escposDrawerKick(): Uint8Array {
+  return new Uint8Array([ESC, 0x70, 0x00, 0x78, 0xf0])
+}
+
+export type EscposBuildOptions = {
+  modo?: "simplificado" | "completo"
+  maxChars?: number
+}
+
+function sepLine(maxChars: number): string {
+  const n = Math.max(16, Math.min(48, maxChars))
+  return "-".repeat(n)
+}
+
+function truncateField(s: string, max: number): string {
+  const t = s.trim()
+  if (t.length <= max) return t
+  return `${t.slice(0, Math.max(0, max - 1))}…`
+}
+
 const SEP = "--------------------------------"
 
 export type PdvReceiptInput = {
@@ -76,30 +97,40 @@ export type PdvReceiptInput = {
   dataHora: string
 }
 
-export function buildPdvReceiptEscPos(input: PdvReceiptInput): Uint8Array {
+export function buildPdvReceiptEscPos(
+  input: PdvReceiptInput,
+  opts?: EscposBuildOptions,
+): Uint8Array {
   const br = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
   const parts: Uint8Array[] = []
+  const maxChars = opts?.maxChars ?? 48
+  const sep = sepLine(maxChars)
+  const simplificado = opts?.modo === "simplificado"
 
   parts.push(escposInit())
   parts.push(escposAlign(1))
   parts.push(escposBold(true))
-  parts.push(line(input.nomeFantasia))
+  parts.push(line(truncateField(input.nomeFantasia, maxChars)))
   parts.push(escposBold(false))
-  parts.push(line(`CNPJ: ${input.cnpj}`))
+  parts.push(line(truncateField(`CNPJ: ${input.cnpj}`, maxChars)))
   if (input.enderecoLinha?.trim()) {
-    parts.push(line(input.enderecoLinha.trim()))
+    parts.push(line(truncateField(input.enderecoLinha.trim(), maxChars)))
   }
-  parts.push(line(input.dataHora))
-  parts.push(line(SEP))
+  parts.push(line(truncateField(input.dataHora, maxChars)))
+  parts.push(line(sep))
   parts.push(escposAlign(0))
 
-  for (const it of input.itens) {
-    const titulo = `${it.quantity}x ${it.name}`.slice(0, 40)
-    parts.push(line(titulo))
-    parts.push(line(`   ${br.format(it.lineTotal)}`))
+  if (simplificado) {
+    parts.push(line(`${input.itens.length} item(ns)`))
+  } else {
+    for (const it of input.itens) {
+      const titulo = truncateField(`${it.quantity}x ${it.name}`, maxChars)
+      parts.push(line(titulo))
+      parts.push(line(`   ${br.format(it.lineTotal)}`))
+    }
   }
 
-  parts.push(line(SEP))
+  parts.push(line(sep))
   parts.push(line(`Subtotal: ${br.format(input.subtotal)}`))
   if (input.taxes > 0) parts.push(line(`Impostos (estimado): ${br.format(input.taxes)}`))
   if (input.discount > 0) parts.push(line(`Desconto: ${br.format(input.discount)}`))
@@ -141,10 +172,12 @@ export type OsTicketInput = {
   labelGarantia?: string
 }
 
-export function buildOsTicketEscPos(input: OsTicketInput): Uint8Array {
+export function buildOsTicketEscPos(input: OsTicketInput, opts?: EscposBuildOptions): Uint8Array {
   const br = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
   const { os } = input
   const total = os.valorServico + os.valorPecas
+  const maxChars = opts?.maxChars ?? 48
+  const sep = sepLine(maxChars)
   const parts: Uint8Array[] = []
 
   parts.push(escposInit())
@@ -157,24 +190,24 @@ export function buildOsTicketEscPos(input: OsTicketInput): Uint8Array {
   if (input.enderecoLinha?.trim()) {
     parts.push(line(input.enderecoLinha.trim()))
   }
-  parts.push(line(SEP))
+  parts.push(line(sep))
   parts.push(escposAlign(0))
   parts.push(escposBold(true))
-  parts.push(line(os.numero))
+  parts.push(line(truncateField(os.numero, maxChars)))
   parts.push(escposBold(false))
   parts.push(line(`Data: ${os.dataEntrada} ${os.horaEntrada}`))
   parts.push(line(`Cliente: ${os.cliente.nome}`))
   if (os.cliente.telefone?.trim()) {
     parts.push(line(`Tel: ${os.cliente.telefone}`))
   }
-  parts.push(line(SEP))
+  parts.push(line(sep))
   parts.push(line(`Aparelho: ${os.aparelho.marca} ${os.aparelho.modelo}`))
   if (os.aparelho.cor?.trim()) parts.push(line(`Cor: ${os.aparelho.cor}`))
   parts.push(line(`Defeito: ${os.defeito.slice(0, 120)}`))
   if (os.solucao?.trim()) {
     parts.push(line(`Solucao: ${os.solucao.slice(0, 120)}`))
   }
-  parts.push(line(SEP))
+  parts.push(line(sep))
   parts.push(line(`Servico: ${br.format(os.valorServico)}`))
   parts.push(line(`Pecas: ${br.format(os.valorPecas)}`))
   parts.push(escposBold(true))

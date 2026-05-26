@@ -71,13 +71,8 @@ import {
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { appendAuditLog } from "@/lib/audit-log"
-import { buildOsTicketEscPos } from "@/lib/escpos"
-import {
-  sendEscPosViaProxy,
-  downloadEscPosFile,
-  openThermalHtmlPrint,
-  escapeHtml,
-} from "@/lib/thermal-print"
+import { printOsThermalTicket } from "@/lib/pdv-print-runtime"
+import { escapeHtml } from "@/lib/thermal-print"
 import { useOperationsStore } from "@/lib/operations-store"
 import { playVoiceBeep } from "@/lib/voice-beep"
 import {
@@ -364,7 +359,7 @@ export function OrdensServico({
   const { config } = useConfigEmpresa()
   const { mostraTecnicoLaudoOs } = usePerfilLoja()
   const { empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
-  const { termosGarantia, getGarantiaById } = useStoreSettings()
+  const { termosGarantia, getGarantiaById, impressaoConfig } = useStoreSettings()
   const { incrementOsAbertasDia } = useOperationsStore()
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
@@ -581,45 +576,28 @@ export function OrdensServico({
 
     if (type === "termica") {
       const g = getGarantiaById(os.termoGarantia)
-      const bytes = buildOsTicketEscPos({
-        os,
-        nomeFantasia: nomeEmpresaRodape,
-        cnpj: cnpjRodape,
-        enderecoLinha: getEnderecoDocumentos(),
-        labelGarantia: g ? `${g.servico}` : undefined,
+      const result = await printOsThermalTicket({
+        config: impressaoConfig,
+        input: {
+          os,
+          nomeFantasia: nomeEmpresaRodape,
+          cnpj: cnpjRodape,
+          enderecoLinha: getEnderecoDocumentos(),
+          labelGarantia: g ? `${g.servico}` : undefined,
+        },
       })
-      const result = await sendEscPosViaProxy(bytes)
       if (result.ok) {
         toast({
-          title: "Cupom ESC/POS enviado",
-          description: "Dados enviados por TCP para a impressora (raw 9100). Ajuste THERMAL_PRINT_HOST no servidor.",
+          title: "OS enviada à impressora",
+          description: "Cupom térmico conforme configurações da unidade.",
         })
         return
       }
       toast({
-        title: "Impressora raw indisponível",
-        description: `${result.error} — baixamos o .bin e abrimos impressão HTML 80mm.`,
+        title: "Impressão de OS indisponível",
+        description: result.error || "Ative em Configurações → PDV → Impressão operacional.",
         variant: "destructive",
       })
-      downloadEscPosFile(bytes, `os-${os.numero.replace(/[^\w-]+/g, "_")}.bin`)
-      const br = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
-      openThermalHtmlPrint(
-        `
-        <div style="text-align:center;font-weight:700">ORDEM DE SERVIÇO</div>
-        <div style="text-align:center;font-size:11px;margin:4px 0">${escapeHtml(nomeEmpresaRodape)}</div>
-        <div style="text-align:center;font-size:10px">CNPJ ${escapeHtml(cnpjRodape)}</div>
-        <div style="text-align:center;font-size:9px;margin-bottom:6px">${escapeHtml(getEnderecoDocumentos())}</div>
-        <div style="border-top:1px dashed #000;margin:6px 0"></div>
-        <p style="font-weight:700">${escapeHtml(asText(os?.numero))}</p>
-        <p>${escapeHtml(asText(os?.dataEntrada))} ${escapeHtml(asText(os?.horaEntrada))}</p>
-        <p>${escapeHtml(asText(os?.cliente?.nome))}</p>
-        <p>${escapeHtml(asText(os?.aparelho?.marca))} ${escapeHtml(asText(os?.aparelho?.modelo))}</p>
-        <p>${escapeHtml(asText(os?.defeito))}</p>
-        <div style="border-top:1px dashed #000;margin:6px 0"></div>
-        <p>Total: ${br.format(os.valorServico + os.valorPecas)}</p>
-      `,
-        `OS ${asText(os?.numero)}`
-      )
       return
     }
 

@@ -1,4 +1,5 @@
 import type { TermosGarantia } from "@/lib/config-empresa"
+import type { PdvImpressaoConfig } from "@/lib/pdv-impressao-config"
 
 export type CertificadoA1Status = "Inativo" | "Pendente" | "Ativo" | "Expirado"
 
@@ -34,6 +35,7 @@ export type StoreSettingsBlob = {
   certificadoA1?: Partial<CertificadoA1Meta>
   /** Preferência de modelo da IA Mestre (apenas plano ouro). */
   aiMestreModel?: string
+  impressao?: Partial<PdvImpressaoConfig>
 }
 
 export type StoreSettingsApi = {

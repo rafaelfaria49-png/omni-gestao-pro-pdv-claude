@@ -18,12 +18,28 @@ export type SendEscPosResult =
  * POST /api/print/raw com corpo JSON { data: base64 }.
  * O servidor envia por TCP (padrão 127.0.0.1:9100) ou THERMAL_PRINT_HTTP_URL se configurado.
  */
-export async function sendEscPosViaProxy(bytes: Uint8Array): Promise<SendEscPosResult> {
+export type ThermalPrintTarget = {
+  host?: string
+  port?: number
+}
+
+export async function sendEscPosViaProxy(
+  bytes: Uint8Array,
+  target?: ThermalPrintTarget,
+): Promise<SendEscPosResult> {
   try {
+    const body: { data: string; host?: string; port?: number } = {
+      data: uint8ToBase64(bytes),
+    }
+    const host = target?.host?.trim()
+    if (host) {
+      body.host = host
+      if (target?.port) body.port = target.port
+    }
     const res = await fetch("/api/print/raw", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: uint8ToBase64(bytes) }),
+      body: JSON.stringify(body),
     })
     const j = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
     if (!res.ok || !j.ok) {
@@ -50,16 +66,22 @@ export function downloadEscPosFile(bytes: Uint8Array, filename = "cupom-escpos.b
  * HTML 80mm para impressão pelo navegador: margens zeradas em @page.
  * Aviso: cabeçalho/rodapé (data, URL) dependem da opção "Cabeçalhos e rodapés" do diálogo de impressão.
  */
-export function openThermalHtmlPrint(htmlBodyInner: string, title = "Cupom") {
+export function openThermalHtmlPrint(
+  htmlBodyInner: string,
+  title = "Cupom",
+  opts?: { bobina?: "58mm" | "80mm" },
+) {
   const w = window.open("", "_blank")
   if (!w) return
+  const bobina = opts?.bobina === "58mm" ? "58mm" : "80mm"
+  const wrapWidth = bobina === "58mm" ? "52mm" : "72mm"
   const doc = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
 <title>${escapeHtml(title)}</title>
 <style>
-  @page { size: 80mm auto; margin: 0; }
+  @page { size: ${bobina} auto; margin: 0; }
   html, body {
     margin: 0;
     padding: 0;
@@ -70,13 +92,13 @@ export function openThermalHtmlPrint(htmlBodyInner: string, title = "Cupom") {
   }
   .wrap {
     box-sizing: border-box;
-    width: 72mm;
+    width: ${wrapWidth};
     max-width: 100%;
     margin: 0 auto;
     padding: 2mm 3mm 4mm;
   }
   @media print {
-    @page { size: 80mm auto; margin: 0; }
+    @page { size: ${bobina} auto; margin: 0; }
     html, body { background: #fff; }
     .no-print { display: none !important; }
   }

@@ -220,13 +220,24 @@ function ensurePrintMount(): HTMLDivElement {
  * Imprime apenas o recibo: usa `data-printing-recibo` + CSS global @media print
  * para ocultar layout do app (sidebar, header, etc.).
  */
-export function imprimirReciboPagamento(payload: ReciboPagamentoPayload): void {
+export type ImprimirReciboOpts = {
+  bobina?: "58mm" | "80mm"
+}
+
+export function imprimirReciboPagamento(
+  payload: ReciboPagamentoPayload,
+  opts?: ImprimirReciboOpts,
+): void {
   if (typeof document === "undefined") return
+  const pageSize = opts?.bobina === "58mm" ? "58mm" : "80mm"
+  const pageCss = `
+@media print { @page { size: ${pageSize} auto; margin: 0; } }
+`
   /** Montagem e `print()` fora do mesmo tick da baixa — evita travar a UI antes do loading sumir. */
   window.setTimeout(() => {
     const mount = ensurePrintMount()
     const inner = buildReciboPagamentoInnerHtml(payload)
-    mount.innerHTML = `<div class="recibo-print-root"><style>${RECIBO_THERMAL_CSS}</style>${inner}</div>`
+    mount.innerHTML = `<div class="recibo-print-root"><style>${pageCss}${RECIBO_THERMAL_CSS}</style>${inner}</div>`
 
     document.documentElement.setAttribute("data-printing-recibo", "true")
 

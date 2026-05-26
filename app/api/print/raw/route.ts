@@ -39,8 +39,21 @@ function sendTcp(host: string, port: number, data: Buffer): Promise<void> {
   })
 }
 
+function sanitizePrintHost(raw: unknown): string | null {
+  const h = String(raw ?? "").trim()
+  if (!h || h.length > 253) return null
+  if (/[\s/\\]/.test(h)) return null
+  return h
+}
+
+function sanitizePrintPort(raw: unknown, fallback: number): number {
+  const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10)
+  if (!Number.isFinite(n) || n < 1 || n > 65535) return fallback
+  return n
+}
+
 export async function POST(req: Request) {
-  let body: { data?: string }
+  let body: { data?: string; host?: string; port?: number }
   try {
     body = await req.json()
   } catch {
@@ -58,6 +71,10 @@ export async function POST(req: Request) {
   }
 
   const httpBridge = process.env.THERMAL_PRINT_HTTP_URL?.trim()
+  const envHost = process.env.THERMAL_PRINT_HOST || "127.0.0.1"
+  const envPort = parseInt(process.env.THERMAL_PRINT_PORT || "9100", 10)
+  const host = sanitizePrintHost(body.host) || envHost
+  const port = sanitizePrintHost(body.host) ? sanitizePrintPort(body.port, 9100) : sanitizePrintPort(body.port, envPort)
 
   try {
     if (httpBridge) {
@@ -77,8 +94,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true })
     }
 
-    const host = process.env.THERMAL_PRINT_HOST || "127.0.0.1"
-    const port = parseInt(process.env.THERMAL_PRINT_PORT || "9100", 10)
     if (Number.isNaN(port) || port < 1) {
       return NextResponse.json({ ok: false, error: "THERMAL_PRINT_PORT inválido" }, { status: 500 })
     }

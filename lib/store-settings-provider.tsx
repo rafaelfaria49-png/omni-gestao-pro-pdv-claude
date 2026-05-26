@@ -4,6 +4,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import type { StorePdvParams, StoreSettingsApi, StoreSettingsBlob } from "@/lib/store-settings-types"
+import {
+  defaultPdvImpressaoConfig,
+  parseImpressaoFromPrinterConfig,
+  type PdvImpressaoConfig,
+} from "@/lib/pdv-impressao-config"
 import { parseAppearanceFromPrinterConfig, type StoreAppearanceConfig } from "@/lib/store-appearance"
 import { configPadrao, type CategoriaGarantia, type TermosGarantia } from "@/lib/config-empresa"
 
@@ -14,6 +19,7 @@ type StoreSettingsContextType = {
   settings: StoreSettingsApi | null
   blob: StoreSettingsBlob
   pdvParams: StorePdvParams
+  impressaoConfig: PdvImpressaoConfig
   termosGarantia: TermosGarantia
   appearance: StoreAppearanceConfig
   getGarantiaById: (id: string) => CategoriaGarantia | undefined
@@ -122,6 +128,10 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
 
   const blob = useMemo(() => parseBlob(settings?.printerConfig), [settings?.printerConfig])
   const pdvParams = useMemo(() => mergePdvParams(defaultPdvParams(), blob.pdvParams), [blob.pdvParams])
+  const impressaoConfig = useMemo(
+    () => parseImpressaoFromPrinterConfig(settings?.printerConfig),
+    [settings?.printerConfig],
+  )
   const appearance = useMemo(
     () => parseAppearanceFromPrinterConfig(settings?.printerConfig),
     [settings?.printerConfig],
@@ -158,13 +168,14 @@ export function StoreSettingsProvider({ children }: { children: ReactNode }) {
       settings,
       blob,
       pdvParams,
+      impressaoConfig,
       appearance,
       termosGarantia,
       getGarantiaById,
       refresh,
       save,
     }),
-    [storeId, hydrated, settings, blob, pdvParams, appearance, termosGarantia, getGarantiaById, refresh, save]
+    [storeId, hydrated, settings, blob, pdvParams, impressaoConfig, appearance, termosGarantia, getGarantiaById, refresh, save]
   )
 
   return <StoreSettingsContext.Provider value={value}>{children}</StoreSettingsContext.Provider>
@@ -180,6 +191,7 @@ export function useStoreSettings(): StoreSettingsContextType {
       settings: null,
       blob: {},
       pdvParams: base,
+      impressaoConfig: defaultPdvImpressaoConfig(),
       appearance: {},
       termosGarantia: { ...configPadrao.termosGarantia, garantiaLegal: GARANTIA_LEGAL_CDC },
       getGarantiaById: () => undefined,

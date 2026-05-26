@@ -60,6 +60,8 @@ import { useLojaAtiva } from "@/lib/loja-ativa"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { useFinanceiro } from "@/lib/financeiro-store"
+import { useStoreSettings } from "@/lib/store-settings-provider"
+import { crediarioPrintAllowed } from "@/lib/pdv-print-runtime"
 import { contasReceberLegacyImportKey, contasReceberStorageKey } from "@/lib/contas-receber-storage"
 import type { ContaReceberRow } from "@/lib/contas-receber-types"
 export type { ContaReceberRow } from "@/lib/contas-receber-types"
@@ -494,6 +496,7 @@ const alertDialogOmniClass =
 
 export function ContasReceber() {
   const { lojaAtivaId, opsStorageKey } = useLojaAtiva()
+  const { impressaoConfig } = useStoreSettings()
   const { toast } = useToast()
   const router = useRouter()
   const { carteiras, setMovimentos, movimentos } = useFinanceiro()
@@ -912,22 +915,33 @@ export function ContasReceber() {
       /** Valor deste recebimento (abatimento parcial: não usar `conta.valor`, que é saldo remanescente). */
       valorPagoDestaOperacao?: number
     ) => {
+      if (!crediarioPrintAllowed(impressaoConfig)) {
+        toast({
+          title: "Impressão de crediário desativada",
+          description: "Ative em Configurações → PDV → Impressão operacional.",
+          variant: "destructive",
+        })
+        return
+      }
       const saldo = calcSaldoDevedorClienteTodaLoja(listaContas, conta.cliente)
       const vp =
         valorPagoDestaOperacao != null && Number.isFinite(valorPagoDestaOperacao)
           ? Math.round(valorPagoDestaOperacao * 100) / 100
           : conta.valor
-      imprimirReciboPagamento({
-        lojaNome: RECIBO_LOJA_NOME_PADRAO,
-        cliente: conta.cliente,
-        descricaoTitulo: conta.descricao,
-        valorPago: vp,
-        dataPagamento,
-        formaPagamento: forma,
-        saldoDevedorAtual: saldo,
-      })
+      imprimirReciboPagamento(
+        {
+          lojaNome: RECIBO_LOJA_NOME_PADRAO,
+          cliente: conta.cliente,
+          descricaoTitulo: conta.descricao,
+          valorPago: vp,
+          dataPagamento,
+          formaPagamento: forma,
+          saldoDevedorAtual: saldo,
+        },
+        { bobina: impressaoConfig.bobinaTamanho },
+      )
     },
-    []
+    [impressaoConfig, toast],
   )
 
   type AplicarRecebimentoResult = {

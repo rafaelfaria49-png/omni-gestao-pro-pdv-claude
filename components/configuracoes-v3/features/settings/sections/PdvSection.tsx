@@ -24,6 +24,7 @@ import { notifyPdvMainLayoutChanged, writePdvClassicLayout } from "@/lib/pdv-cla
 import { readPdvMainLayout, writePdvMainLayout } from "@/lib/pdv-layout-storage";
 import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name";
 import { UnidadeAtivaRequiredBanner } from "../components/UnidadeAtivaRequiredBanner";
+import { ImpressaoPdvSettingsCard } from "./ImpressaoPdvSettingsCard";
 import {
   readOmnigestaoPdvModoPreferencia,
   writeOmnigestaoPdvModoPreferencia,
@@ -810,6 +811,10 @@ function PdvSectionContent() {
             </Button>
           </div>
         )}
+      </div>
+
+      <div className="pt-6 border-t border-border/40 mt-8">
+        <ImpressaoPdvSettingsCard />
       </div>
 
       {/* Outros Fluxos Integrados — Mini-cards horizontais */}
