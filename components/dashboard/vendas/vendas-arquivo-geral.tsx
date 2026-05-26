@@ -74,6 +74,8 @@ import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { useToast } from "@/hooks/use-toast"
 import type { SaleRecord } from "@/lib/operations-sale-types"
+import { useOperationsStore } from "@/lib/operations-store"
+import { subscribeEvent } from "@/lib/events/event-bus"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -250,6 +252,7 @@ function saleRecordToVendaItem(s: SaleRecord): VendaItem {
 export function VendasArquivoGeral() {
   const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   const storeId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID
+  const { sales: opsSales } = useOperationsStore()
   const { toast } = useToast()
 
   // Filters
@@ -346,7 +349,30 @@ export function VendasArquivoGeral() {
     }
   }, [storeId, page, busca, statusFiltro, pagamentoFiltro, operadorFiltro, terminalFiltro, fromDate, toDate])
 
+  const fetchRemoteSales = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/ops/vendas-list?lojaId=${encodeURIComponent(storeId)}`,
+        { credentials: "include", headers: { "x-assistec-loja-id": storeId } },
+      )
+      if (res.ok) {
+        const data = (await res.json()) as { sales?: SaleRecord[] }
+        setRemoteSales(data.sales ?? [])
+      }
+    } catch (err: unknown) {
+      console.warn("[vendas-arquivo] falha ao carregar do servidor:", err)
+    }
+  }, [storeId])
+
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    return subscribeEvent("venda_finalizada", (payload) => {
+      if (payload.storeId !== storeId) return
+      void load()
+      void fetchRemoteSales()
+    })
+  }, [storeId, load, fetchRemoteSales])
 
   useEffect(() => {
     const t = setTimeout(() => { setPage(0); setBusca(buscaInput) }, 400)
@@ -364,39 +390,39 @@ export function VendasArquivoGeral() {
   useEffect(() => {
     let cancelled = false
     setRemoteLoading(true)
-    async function fetchRemote() {
-      try {
-        const res = await fetch(
-          `/api/ops/vendas-list?lojaId=${encodeURIComponent(storeId)}`,
-          { credentials: "include", headers: { "x-assistec-loja-id": storeId } },
-        )
-        if (!cancelled && res.ok) {
-          const data = (await res.json()) as { sales?: SaleRecord[] }
-          if (!cancelled) setRemoteSales(data.sales ?? [])
-        }
-      } catch (err: unknown) {
-        if (!cancelled) console.warn("[vendas-arquivo] falha ao carregar do servidor:", err)
-      } finally {
-        if (!cancelled) setRemoteLoading(false)
-      }
-    }
-    void fetchRemote()
+    void fetchRemoteSales().finally(() => {
+      if (!cancelled) setRemoteLoading(false)
+    })
     return () => { cancelled = true }
-  }, [storeId])
+  }, [fetchRemoteSales])
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
-  const { mergedVendas, remoteOnlyIds } = useMemo(() => {
-    const localIds = new Set(vendas.map((v) => v.id))
-    const onlyIds = new Set<string>()
-    const extra = remoteSales
-      .filter((s) => s.id && !localIds.has(s.id))
-      .map((s) => { onlyIds.add(s.id); return saleRecordToVendaItem(s) })
-    const merged = [...vendas, ...extra].sort(
+  const { mergedVendas, remoteOnlyIds, pendingSyncIds } = useMemo(() => {
+    const historicoIds = new Set(vendas.map((v) => v.id))
+    const remoteOnly = new Set<string>()
+    const pendingSync = new Set<string>()
+
+    const extraRemote = remoteSales
+      .filter((s) => s.id && !historicoIds.has(s.id))
+      .map((s) => {
+        remoteOnly.add(s.id)
+        return saleRecordToVendaItem(s)
+      })
+
+    const knownIds = new Set([...historicoIds, ...remoteOnly])
+    const extraLocal = opsSales
+      .filter((s) => s.id && !knownIds.has(s.id))
+      .map((s) => {
+        if (s.syncPending) pendingSync.add(s.id)
+        return saleRecordToVendaItem(s)
+      })
+
+    const merged = [...vendas, ...extraRemote, ...extraLocal].sort(
       (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
     )
-    return { mergedVendas: merged, remoteOnlyIds: onlyIds }
-  }, [vendas, remoteSales])
+    return { mergedVendas: merged, remoteOnlyIds: remoteOnly, pendingSyncIds: pendingSync }
+  }, [vendas, remoteSales, opsSales])
 
   // ── Detalhe ──────────────────────────────────────────────────────────────────
   const openDetalhe = useCallback(async (vendaId: string) => {
@@ -928,7 +954,12 @@ export function VendasArquivoGeral() {
                         <TableCell>
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-mono text-xs font-semibold text-foreground">{v.id}</span>
-                            {remoteOnlyIds.has(v.id) && (
+                            {pendingSyncIds.has(v.id) && (
+                              <Badge variant="outline" className="border-warning/30 bg-warning/10 text-[9px] px-1 py-0 text-warning">
+                                Pendente
+                              </Badge>
+                            )}
+                            {remoteOnlyIds.has(v.id) && !pendingSyncIds.has(v.id) && (
                               <Badge variant="secondary" className="text-[9px] px-1 py-0">Sync</Badge>
                             )}
                           </div>
