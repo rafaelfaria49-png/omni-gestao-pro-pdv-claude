@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 26 Mai 2026 — Sessão: encerramento fase WhatsApp HUB Agentic AI + Omni Agent endurecimento operacional
+> Última atualização: 26 Mai 2026 — Sessão: Lote 5 PDV Clássico (remoção do else branch JSX morto)
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -64,6 +64,29 @@
 
 ---
 
+### Lote 5 — Remoção do else branch JSX do PDV Clássico (concluído 26/05/2026)
+
+**Contexto:** follow-up direto do Lote 4. Quando `uiShell` foi colapsado para o literal `"omni-smart"`, o ternário `{uiShell === "omni-smart" ? (...) : (...)}` em `pdv-classic.tsx` passou a ter o ramo `else` permanentemente inalcançável em runtime. Eram **~710 linhas de UI legada** (toggle balcão/completa, busca de cliente inline, grid de produtos client-side, painel do carrinho lateral antigo, totais e botão "Finalizar venda" legado) já reimplementadas dentro do `PdvOmniClassicShell`. Mantê-las era código morto puro — risco zero de runtime, mas confunde leitura, deixa "feature fantasma" e infla o arquivo.
+
+| Arquivo | Mudança |
+|---|---|
+| `components/dashboard/vendas/pdv-classic.tsx` (commit `f9cf0d1`) | **Substituição cirúrgica do ternário inteiro** pelo conteúdo do branch ativo (`<div className="..."><CaixaStatusBar /><PdvOmniClassicShell />`). Zero mudanças em handlers, estados ou imports. **−713 / +0 linhas** (2518 → 1805). |
+
+**Mantido (vestígios benignos da prop `uiShell`):**
+- Tipo `uiShell?: "omni-smart"` (linha ~171) — contrato público.
+- Default `uiShell = "omni-smart"` (linha ~185) — assinatura do componente.
+- Dependency arrays e comentários históricos referenciam `uiShell` em ~4 lugares. Limpeza cosmética para um próximo passe (não há condicional executável dependendo dela).
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK (todas as 80+ rotas geradas).
+
+**Commit:** `f9cf0d1` (refactor PDV — else branch removido).
+
+**Não alterado:** schema Prisma, auth/proxy, demais PDVs (Supermercado, Assistência, Venda Completa Enterprise, Black Edition), `PdvOmniClassicShell`, modais compartilhados, `CaixaStatusBar`/`CaixaProvider`. Outras sessões paralelas (WhatsApp, ia-mestre, omni-agent, credits) **não foram tocadas** neste lote — commit isolou apenas `pdv-classic.tsx`.
+
+**Riscos restantes:** nenhum funcional. Vestígios da prop `uiShell` (tipo + default + comentários) podem ser podados num passe cosmético futuro.
+
+---
+
 ### Lote 4 — Limpeza do keymap legado `uiShell=default` (concluído 26/05/2026)
 
 **Contexto:** última pendência do contexto inicial (#7). O `PdvClassic` carregava um caminho legado para `uiShell="default"` (handler de teclado próprio, dialog `operationType` de sangria/suprimento, painel `cashHistory` local, função `saveOperation`). Em produção `vendas-pdv.tsx:117` SEMPRE passa `uiShell="omni-smart"` — então o caminho `default` era **código morto**, e qualquer atalho adicionado ali virava "feature fantasma" (não executava).
@@ -82,7 +105,7 @@
 **Mantido (omni-smart usa ativamente):**
 - `pdvUiMode` (touch/scanner) + botões correspondentes.
 - Refs `productInputRef`, `customerInputRef`, `quantityInputRef` + inputs.
-- Ternário `{uiShell === "omni-smart" ? (...) : (...)}` no JSX (linhas ~1346-2195). A branch `else` tem ~850 linhas de UI legada e remover exige refator separado. A condição é sempre `true` em runtime; TS aceita.
+- ~~Ternário `{uiShell === "omni-smart" ? (...) : (...)}` no JSX~~ — **removido no Lote 5** (commit `f9cf0d1`, −713 linhas).
 
 **Total da limpeza:** **−374 / +68 linhas** (saldo líquido de ~306 linhas removidas).
 
@@ -93,7 +116,7 @@
 **Não alterado:** schema Prisma, auth/proxy, contratos públicos (prop `uiShell` continua opcional aceitando `"omni-smart"`), demais PDVs, CaixaStatusBar e CaixaProvider.
 
 **Riscos restantes:**
-- Ternário JSX `uiShell === "omni-smart" ? (...) : (...)` ainda renderiza a branch `else` no código (mas nunca em runtime). Remover totalmente é refator de ~850 linhas — fica como follow-up. Não é dívida funcional, só código morto visível.
+- ~~Ternário JSX `uiShell === "omni-smart" ? (...) : (...)` ainda renderiza a branch `else` no código~~ — **resolvido no Lote 5** (commit `f9cf0d1`).
 - `components/pdv-github-original/` mantém cópia antiga do `PdvClassic` (gated por env, sem importação ativa). Não tocado nesta sessão — segue como artefato histórico.
 
 ---
