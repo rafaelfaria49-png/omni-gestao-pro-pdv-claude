@@ -21,11 +21,11 @@ export async function registrarOperacaoCaixaServer(params: {
   tipo: CaixaOperacaoTipo
   valor: number
   motivo: string
+  localId: string
   operador?: string
   maxAttempts?: number
 }): Promise<RegistrarOperacaoResult> {
-  const { lojaId, sessaoId, tipo, valor, motivo, operador = "", maxAttempts = 4 } = params
-  const localId = `caixaop:${sessaoId}:${tipo}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
+  const { lojaId, sessaoId, tipo, valor, motivo, localId, operador = "", maxAttempts = 4 } = params
   const body = JSON.stringify({ sessaoId, tipo, valor, motivo, operador, localId })
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {

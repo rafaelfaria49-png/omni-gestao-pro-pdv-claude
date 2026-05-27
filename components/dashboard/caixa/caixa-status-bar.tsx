@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { appendAuditLog } from "@/lib/audit-log"
-import { registrarOperacaoCaixaServer } from "@/lib/pdv-caixa-operacao"
+import { useOperationsStore } from "@/lib/operations-store"
 
 interface CaixaStatusBarProps {
   /** Incrementado por comando de voz para abrir o fluxo de abertura de caixa. */
@@ -45,7 +45,8 @@ export function CaixaStatusBar({
   onOpenFechamentoSignalConsumed,
   variant = "default",
 }: CaixaStatusBarProps) {
-  const { caixa, getSaldoAtual, adicionarSaida, adicionarEntrada, sessaoId } = useCaixa()
+  const { caixa, getSaldoAtual, sessaoId } = useCaixa()
+  const { registrarOperacaoCaixa } = useOperationsStore()
   const { lojaAtivaId } = useLojaAtiva()
   const { terminal, clear: clearTerminal } = useTerminalAtivo(lojaAtivaId)
   const { toast } = useToast()
@@ -82,9 +83,6 @@ export function CaixaStatusBar({
     }
     const label = tipo === "sangria" ? "Sangria" : "Suprimento"
     setOpSaving(true)
-    // Reflete na barra imediatamente (igual ao fluxo do PDV Clássico).
-    if (tipo === "sangria") adicionarSaida(valor)
-    else adicionarEntrada(valor)
     appendAuditLog({
       action: tipo === "sangria" ? "sangria_caixa" : "suprimento_caixa",
       userLabel: terminal?.code || "Caixa",
@@ -92,12 +90,13 @@ export function CaixaStatusBar({
     })
     try {
       if (lojaAtivaId && sessaoId) {
-        const r = await registrarOperacaoCaixaServer({
-          lojaId: lojaAtivaId,
+        const localId = `caixaop:${sessaoId}:${tipo}:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`
+        const r = await registrarOperacaoCaixa({
           sessaoId,
           tipo,
           valor,
           motivo,
+          localId,
           operador: terminal?.code || "",
         })
         if (r.ok) {

@@ -8,14 +8,15 @@ import { OPS_KEY_LEGACY } from "@/lib/loja-ativa"
 import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
-import type { APrazoConfig, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
+import type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import { emitEvent } from "@/lib/events/event-bus"
 import { initAutomationEngineClient } from "@/lib/automation/automation-engine"
+import { registrarOperacaoCaixaServer } from "@/lib/pdv-caixa-operacao"
 import { toast } from "@/components/ui/use-toast"
 
-export type { APrazoConfig, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
+export type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
 /** Variação de produto (tamanho, cor, sabor, etc.) */
 export type ProdutoAtributoDef = {
@@ -142,6 +143,38 @@ function mergeSalesById(local: SaleRecord[], remote: SaleRecord[]): SaleRecord[]
   return [...local, ...extra].sort((a, b) => a.at.localeCompare(b.at))
 }
 
+function mergeCustomerCredits(
+  local: Record<string, { nome: string; saldo: number }>,
+  remote: Record<string, { nome: string; saldo: number }>,
+  pendingDevs: DevolucaoRecord[],
+  pendingSales: SaleRecord[]
+): Record<string, { nome: string; saldo: number }> {
+  const merged = { ...local, ...remote }
+  for (const k of Object.keys(merged)) {
+    const remoteClient = remote[k]
+    let saldo = remoteClient ? remoteClient.saldo : 0
+    const nome = remoteClient ? remoteClient.nome : (local[k]?.nome ?? "Cliente")
+
+    for (const dev of pendingDevs) {
+      if (dev.syncPending && dev.customerCpf === k && dev.mode === "vale_credito") {
+        saldo += dev.creditIssued
+      }
+    }
+
+    for (const sale of pendingSales) {
+      if (sale.syncPending && sale.customerCpf === k && sale.paymentBreakdown?.creditoVale > 0) {
+        saldo -= sale.paymentBreakdown.creditoVale
+      }
+    }
+
+    merged[k] = {
+      nome,
+      saldo: Math.max(0, Math.round(saldo * 100) / 100)
+    }
+  }
+  return merged
+}
+
 function nextDevolucaoId(list: DevolucaoRecord[]): string {
   const year = new Date().getFullYear()
   let max = 0
@@ -161,6 +194,7 @@ type OpsState = {
   dailyLedger: DailyLedger
   sales: SaleRecord[]
   devolucoes: DevolucaoRecord[]
+  pendingCaixaOperations: CaixaOperacaoRecord[]
   orcamentos: Orcamento[]
   /** chave = CPF/CNPJ só dígitos */
   customerCredits: Record<string, { nome: string; saldo: number }>
@@ -184,6 +218,7 @@ const defaultState: OpsState = {
   dailyLedger: emptyLedger(),
   sales: [],
   devolucoes: [],
+  pendingCaixaOperations: [],
   orcamentos: [],
   customerCredits: {},
   caixaSessaoId: null,
@@ -197,6 +232,7 @@ interface OperationsContextType {
   dailyLedger: DailyLedger
   sales: SaleRecord[]
   devolucoes: DevolucaoRecord[]
+  pendingCaixaOperations: CaixaOperacaoRecord[]
   orcamentos: Orcamento[]
   customerCredits: Record<string, { nome: string; saldo: number }>
   setOrdens: React.Dispatch<React.SetStateAction<OrdemServico[]>>
@@ -244,7 +280,20 @@ interface OperationsContextType {
     mode: "vale_credito" | "somente_estoque"
     customerCpf: string
     customerName: string
+    sessaoId?: string
+    tipo?: "vale_credito" | "somente_estoque" | "troca" | "devolucao"
+    motivo?: string
+    observacao?: string
+    payload?: any
   }) => { ok: true; devolucaoId: string; creditIssued: number } | { ok: false; reason: string }
+  registrarOperacaoCaixa: (input: {
+    sessaoId: string
+    tipo: "sangria" | "suprimento"
+    valor: number
+    motivo: string
+    localId: string
+    operador?: string
+  }) => Promise<{ ok: true; deduped?: boolean } | { ok: false; reason: string }>
 }
 
 const OperationsContext = createContext<OperationsContextType | null>(null)
@@ -266,6 +315,7 @@ function parseLocalRest(raw: string, prev: OpsState): Partial<OpsState> | null {
           : prev.caixaSessaoId,
       sales: Array.isArray(parsed.sales) ? parsed.sales : prev.sales,
       devolucoes: Array.isArray(parsed.devolucoes) ? parsed.devolucoes : prev.devolucoes,
+      pendingCaixaOperations: Array.isArray(parsed.pendingCaixaOperations) ? parsed.pendingCaixaOperations : prev.pendingCaixaOperations,
       customerCredits:
         parsed.customerCredits && typeof parsed.customerCredits === "object"
           ? parsed.customerCredits
@@ -346,6 +396,7 @@ function toPersistedRest(state: OpsState): Omit<OpsState, "inventory" | "ordens"
     dailyLedger: state.dailyLedger,
     sales: state.sales,
     devolucoes: state.devolucoes,
+    pendingCaixaOperations: state.pendingCaixaOperations,
     orcamentos: state.orcamentos,
     customerCredits: state.customerCredits,
   }
@@ -496,12 +547,36 @@ export function OperationsProvider({
         }
 
         if (!cancelled) {
-          setState((prev) => ({
-            ...prev,
-            inventory: items,
-            ordens,
-            sales: mergeSalesById(prev.sales, remoteSales),
-          }))
+          setState((prev) => {
+            const adjustedItems = items.map((i) => ({ ...i }))
+            // Deduct pending offline sales
+            const pendingSales = prev.sales.filter((s) => s.syncPending === true)
+            for (const sale of pendingSales) {
+              for (const line of sale.lines) {
+                if (isVirtualSaleLine(line.inventoryId)) continue
+                const item = adjustedItems.find((i) => i.id === line.inventoryId)
+                if (item) {
+                  item.stock = Math.max(0, item.stock - line.quantity)
+                }
+              }
+            }
+            // Add back pending offline returns
+            const pendingDevs = prev.devolucoes.filter((d) => d.syncPending === true)
+            for (const dev of pendingDevs) {
+              for (const line of dev.lines) {
+                const item = adjustedItems.find((i) => i.id === line.inventoryId)
+                if (item) {
+                  item.stock += line.quantity
+                }
+              }
+            }
+            return {
+              ...prev,
+              inventory: adjustedItems,
+              ordens,
+              sales: mergeSalesById(prev.sales, remoteSales),
+            }
+          })
         }
 
         // Reconcilia sessão de caixa com o servidor (best-effort).
@@ -572,7 +647,12 @@ export function OperationsProvider({
             if (Object.keys(dbCreditos).length > 0) {
               setState((prev) => ({
                 ...prev,
-                customerCredits: { ...prev.customerCredits, ...dbCreditos },
+                customerCredits: mergeCustomerCredits(
+                  prev.customerCredits,
+                  dbCreditos,
+                  prev.devolucoes,
+                  prev.sales
+                ),
               }))
             }
           }
@@ -690,21 +770,114 @@ export function OperationsProvider({
     }
   }, [storageKey])
 
-  // Recupera vendas pendentes ao montar/abrir o PDV (bootstrap).
+  const flushPendingDevolucoes = useCallback(() => {
+    const pending = stateRef.current.devolucoes.filter((d) => d.syncPending === true)
+    if (pending.length === 0) return
+    const lj = opsLojaIdFromStorageKey(storageKey)
+    for (const dev of pending) {
+      const itensServidor = dev.lines.map((it) => {
+        const sale = stateRef.current.sales.find((s) => s.id === dev.saleId)
+        const saleLine = sale?.lines.find((l) => l.inventoryId === it.inventoryId)
+        const valorUnitario = saleLine ? (saleLine.lineTotal / saleLine.quantity) : 0
+        return {
+          inventoryId: it.inventoryId,
+          nome: it.name,
+          quantidade: it.quantity,
+          valorUnitario,
+          valorTotal: it.valor,
+        }
+      })
+
+      fetch("/api/ops/devolucao", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": lj,
+        },
+        body: JSON.stringify({
+          localId: dev.id,
+          vendaLocalId: dev.saleId,
+          sessaoId: dev.sessaoId || undefined,
+          tipo: dev.tipo || dev.mode,
+          valorTotal: dev.lines.reduce((sum, l) => sum + l.valor, 0),
+          creditoEmitido: dev.creditIssued,
+          clienteNome: dev.customerName,
+          clienteDoc: dev.customerCpf,
+          operador: "",
+          motivo: dev.motivo || "",
+          observacao: dev.observacao || "",
+          itens: itensServidor,
+          payload: dev.payload || { saleId: dev.saleId, linhas: dev.lines.map(l => ({ inventoryId: l.inventoryId, quantity: l.quantity })), modo: dev.tipo || dev.mode, motivo: dev.motivo || "" },
+        }),
+      })
+        .then(async (res) => {
+          if (res.ok) {
+            setState((prev) => ({
+              ...prev,
+              devolucoes: prev.devolucoes.map((d) => (d.id === dev.id ? { ...d, syncPending: false } : d)),
+            }))
+          } else {
+            const body = await res.text().catch(() => "")
+            console.warn("[devolucao-persist] re-sync HTTP", res.status, dev.id, "lojaId:", lj, "body:", body)
+          }
+        })
+        .catch((err: unknown) => {
+          console.warn("[devolucao-persist] re-sync rede", dev.id, "lojaId:", lj, err)
+        })
+    }
+  }, [storageKey])
+
+  const flushPendingCaixaOperations = useCallback(() => {
+    const pending = stateRef.current.pendingCaixaOperations?.filter((op) => op.syncPending === true) ?? []
+    if (pending.length === 0) return
+    const lj = opsLojaIdFromStorageKey(storageKey)
+    for (const op of pending) {
+      void registrarOperacaoCaixaServer({
+        lojaId: lj,
+        sessaoId: op.sessaoId,
+        tipo: op.tipo,
+        valor: op.valor,
+        motivo: op.motivo,
+        localId: op.id,
+        operador: op.operador,
+        maxAttempts: 1,
+      })
+        .then((res) => {
+          if (res.ok) {
+            setState((prev) => ({
+              ...prev,
+              pendingCaixaOperations: prev.pendingCaixaOperations.map((o) =>
+                o.id === op.id ? { ...o, syncPending: false } : o
+              ),
+            }))
+          } else {
+            console.warn("[caixa-persist] re-sync HTTP", res.reason, op.id)
+          }
+        })
+        .catch((err: unknown) => {
+          console.warn("[caixa-persist] re-sync rede", op.id, err)
+        })
+    }
+  }, [storageKey])
+
+  // Recupera pendências ao montar/abrir o PDV (bootstrap).
   useEffect(() => {
     if (!opsDbReady) return
     flushPendingSales()
-  }, [opsDbReady, flushPendingSales])
+    flushPendingDevolucoes()
+    flushPendingCaixaOperations()
+  }, [opsDbReady, flushPendingSales, flushPendingDevolucoes, flushPendingCaixaOperations])
 
-  // Rede de segurança em sessão: re-tenta vendas pendentes quando a conexão volta,
-  // quando a aba reganha foco e periodicamente. `venda-persist` é idempotente
-  // (upsert por pedidoId + guards de estoque/financeiro), então reenviar a mesma
-  // venda não duplica movimentações — apenas garante que nenhuma venda se perca.
+  // Rede de segurança em sessão: re-tenta pendências quando a conexão volta,
+  // quando a aba reganha foco e periodicamente.
   useEffect(() => {
     if (!opsDbReady) return
     const onWake = () => {
       if (typeof navigator !== "undefined" && navigator.onLine === false) return
       flushPendingSales()
+      flushPendingDevolucoes()
+      flushPendingCaixaOperations()
     }
     const onVisible = () => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") onWake()
@@ -717,7 +890,7 @@ export function OperationsProvider({
       document.removeEventListener("visibilitychange", onVisible)
       window.clearInterval(interval)
     }
-  }, [opsDbReady, flushPendingSales])
+  }, [opsDbReady, flushPendingSales, flushPendingDevolucoes, flushPendingCaixaOperations])
 
   const setOrdens: OperationsContextType["setOrdens"] = useCallback((updater) => {
     setState((prev) => ({
@@ -833,6 +1006,7 @@ export function OperationsProvider({
         dailyLedger: ensureLedger(current.dailyLedger),
         sales: [...current.sales],
         devolucoes: [...current.devolucoes],
+        pendingCaixaOperations: [...current.pendingCaixaOperations],
         orcamentos: [...current.orcamentos],
         customerCredits: { ...current.customerCredits },
       }
@@ -1040,7 +1214,7 @@ export function OperationsProvider({
   )
 
   const registrarDevolucao = useCallback<OperationsContextType["registrarDevolucao"]>((input) => {
-    const { saleId, lines, mode, customerCpf, customerName } = input
+    const { saleId, lines, mode, customerCpf, customerName, sessaoId, tipo, motivo, observacao, payload } = input
     const k = normalizeDocDigits(customerCpf)
     if (!k) return { ok: false, reason: "CPF/CNPJ do cliente obrigatório." }
 
@@ -1114,11 +1288,131 @@ export function OperationsProvider({
       lines: outLines,
       mode,
       creditIssued: mode === "vale_credito" ? creditIssued : 0,
+      syncPending: true,
+      sessaoId: sessaoId || undefined,
+      tipo: tipo || mode,
+      motivo: motivo || "",
+      observacao: observacao || "",
+      payload,
     })
 
     setState(next)
+
+    const devRow = next.devolucoes[next.devolucoes.length - 1]
+    if (devRow) {
+      const lj = opsLojaIdFromStorageKey(storageKey)
+      const itensServidor = devRow.lines.map((it) => {
+        const sale = next.sales.find((s) => s.id === devRow.saleId)
+        const saleLine = sale?.lines.find((l) => l.inventoryId === it.inventoryId)
+        const valorUnitario = saleLine ? (saleLine.lineTotal / saleLine.quantity) : 0
+        return {
+          inventoryId: it.inventoryId,
+          nome: it.name,
+          quantidade: it.quantity,
+          valorUnitario,
+          valorTotal: it.valor,
+        }
+      })
+
+      void fetch("/api/ops/devolucao", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": lj,
+        },
+        body: JSON.stringify({
+          localId: devRow.id,
+          vendaLocalId: devRow.saleId,
+          sessaoId: devRow.sessaoId || undefined,
+          tipo: devRow.tipo || devRow.mode,
+          valorTotal: devRow.lines.reduce((sum, l) => sum + l.valor, 0),
+          creditoEmitido: devRow.creditIssued,
+          clienteNome: devRow.customerName,
+          clienteDoc: devRow.customerCpf,
+          operador: "",
+          motivo: devRow.motivo || "",
+          observacao: devRow.observacao || "",
+          itens: itensServidor,
+          payload: devRow.payload || { saleId: devRow.saleId, linhas: devRow.lines.map(l => ({ inventoryId: l.inventoryId, quantity: l.quantity })), modo: devRow.tipo || devRow.mode, motivo: devRow.motivo || "" },
+        }),
+      })
+        .then(async (res) => {
+          if (res.ok) {
+            setState((prev) => ({
+              ...prev,
+              devolucoes: prev.devolucoes.map((d) => (d.id === devolucaoId ? { ...d, syncPending: false } : d)),
+            }))
+          } else {
+            const body = await res.text().catch(() => "")
+            console.error("[devolucao-persist] HTTP", res.status, devRow.id, "lojaId:", lj, "body:", body)
+          }
+        })
+        .catch((err: unknown) => {
+          console.error("[devolucao-persist] rede", devRow.id, "lojaId:", lj, err)
+        })
+    }
+
     return { ok: true, devolucaoId, creditIssued: mode === "vale_credito" ? creditIssued : 0 }
-  }, [])
+  }, [storageKey])
+
+  const registrarOperacaoCaixa = useCallback<OperationsContextType["registrarOperacaoCaixa"]>(
+    async ({ sessaoId, tipo, valor, motivo, localId, operador }) => {
+      const prev = stateRef.current
+      const next: OpsState = {
+        ...prev,
+        caixa: { ...prev.caixa },
+        pendingCaixaOperations: [...(prev.pendingCaixaOperations ?? [])],
+      }
+
+      if (tipo === "sangria") {
+        next.caixa.totalSaidas += valor
+      } else {
+        next.caixa.totalEntradas += valor
+      }
+
+      next.pendingCaixaOperations.push({
+        id: localId,
+        at: new Date().toISOString(),
+        sessaoId,
+        tipo,
+        valor,
+        motivo,
+        operador,
+        syncPending: true,
+      })
+
+      setState(next)
+
+      const lj = opsLojaIdFromStorageKey(storageKey)
+      try {
+        const r = await registrarOperacaoCaixaServer({
+          lojaId: lj,
+          sessaoId,
+          tipo,
+          valor,
+          motivo,
+          localId,
+          operador,
+          maxAttempts: 4,
+        })
+        if (r.ok) {
+          setState((prev) => ({
+            ...prev,
+            pendingCaixaOperations: prev.pendingCaixaOperations.map((o) =>
+              o.id === localId ? { ...o, syncPending: false } : o
+            ),
+          }))
+          return { ok: true, deduped: r.deduped }
+        } else {
+          return { ok: false, reason: r.reason }
+        }
+      } catch (err) {
+        return { ok: false, reason: "network" }
+      }
+    },
+    [storageKey]
+  )
 
   const value = useMemo<OperationsContextType>(
     () => ({
@@ -1129,6 +1423,7 @@ export function OperationsProvider({
       dailyLedger: state.dailyLedger,
       sales: state.sales,
       devolucoes: state.devolucoes,
+      pendingCaixaOperations: state.pendingCaixaOperations,
       orcamentos: state.orcamentos,
       customerCredits: state.customerCredits,
       setOrdens,
@@ -1144,6 +1439,7 @@ export function OperationsProvider({
       getSaldoCreditoCliente,
       finalizeSaleTransaction,
       registrarDevolucao,
+      registrarOperacaoCaixa,
     }),
     [
       state,
@@ -1160,6 +1456,7 @@ export function OperationsProvider({
       getSaldoCreditoCliente,
       finalizeSaleTransaction,
       registrarDevolucao,
+      registrarOperacaoCaixa,
     ]
   )
 

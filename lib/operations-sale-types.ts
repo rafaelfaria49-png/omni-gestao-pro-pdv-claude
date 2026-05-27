@@ -79,4 +79,24 @@ export interface DevolucaoRecord {
   lines: { inventoryId: string; name: string; quantity: number; valor: number }[]
   mode: "vale_credito" | "somente_estoque"
   creditIssued: number
+  /** true = devolução gravada localmente mas ainda não confirmada no servidor. */
+  syncPending?: boolean
+  /** Sessão de caixa ativa no momento da devolução. */
+  sessaoId?: string
+  /** Tipo detalhado de devolução para a API. */
+  tipo?: "vale_credito" | "somente_estoque" | "troca" | "devolucao"
+  motivo?: string
+  observacao?: string
+  payload?: any
+}
+
+export interface CaixaOperacaoRecord {
+  id: string // localId
+  at: string // timestamp
+  sessaoId: string
+  tipo: "sangria" | "suprimento"
+  valor: number
+  motivo: string
+  operador?: string
+  syncPending?: boolean
 }

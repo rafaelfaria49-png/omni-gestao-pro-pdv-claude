@@ -371,8 +371,48 @@ export function TrocasDevolucao({
       return
     }
 
+    const predictedNovaVendaId = (() => {
+      const year = new Date().getFullYear()
+      let max = 0
+      for (const s of sales) {
+        const m = s.id.match(/^VDA-(\d{4})-(\d+)$/)
+        if (m && parseInt(m[1], 10) === year) max = Math.max(max, parseInt(m[2], 10))
+      }
+      return `VDA-${year}-${String(max + 1).padStart(4, "0")}`
+    })()
+
+    const excessoDinheiro = creditoRestante > 0 && excessHandling === "dinheiro" ? creditoRestante : 0
+    const creditoFinal = Math.max(0, creditoRestante - excessoDinheiro)
+    const usaVale = valePassivelAbatimento
+    const diff = Math.round((totalNovaCompra - usaVale) * 100) / 100
+
+    const payload = {
+      saleId: sale.id,
+      linhas: lines,
+      modo: "troca_imediata",
+      vendaOriginalId: sale.id,
+      novaVendaId: predictedNovaVendaId,
+      valorDevolvido,
+      totalNovaCompra,
+      diferencaPaga: diff > 0 ? diff : 0,
+      diferencaForma: diff > 0 ? diffPayMethod : null,
+      creditoRestante: creditoFinal,
+      excessoDinheiro,
+      motivo: motivo.trim(),
+    }
+
     // Step 1 — devolução com modo "vale_credito" (gera saldo local de `valorDevolvido`)
-    const dev = registrarDevolucao({ saleId: sale.id, lines, mode: "vale_credito", customerCpf: cpf, customerName: nome })
+    const dev = registrarDevolucao({
+      saleId: sale.id,
+      lines,
+      mode: "vale_credito",
+      customerCpf: cpf,
+      customerName: nome,
+      sessaoId: sessaoId ?? undefined,
+      tipo: "troca",
+      motivo: motivo.trim(),
+      payload,
+    })
     if (!dev.ok) {
       toast({ title: "Devolução não registrada", description: dev.reason, variant: "destructive" })
       return
@@ -380,8 +420,6 @@ export function TrocasDevolucao({
     const creditEmitido = dev.creditIssued
 
     // Step 2 — nova venda abatendo o vale recém-emitido
-    const usaVale = valePassivelAbatimento
-    const diff = Math.round((totalNovaCompra - usaVale) * 100) / 100
     const pb = { dinheiro: 0, pix: 0, cartaoDebito: 0, cartaoCredito: 0, carne: 0, aPrazo: 0, creditoVale: usaVale }
     if (diff > 0) {
       if (diffPayMethod === "dinheiro") pb.dinheiro = diff
@@ -408,57 +446,7 @@ export function TrocasDevolucao({
       return
     }
 
-    // Persiste a devolução no servidor com metadata `troca_imediata`
-    if (lojaAtivaId) {
-      const itensServidor = lines.map((req) => {
-        const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
-        const valorUnitario = sl ? sl.lineTotal / sl.quantity : 0
-        return {
-          inventoryId: req.inventoryId,
-          nome: sl?.name ?? "",
-          quantidade: req.quantity,
-          valorUnitario,
-          valorTotal: Math.round(valorUnitario * req.quantity * 100) / 100,
-        }
-      })
-      const excessoDinheiro = creditoRestante > 0 && excessHandling === "dinheiro" ? creditoRestante : 0
-      const creditoFinal = Math.max(0, creditoRestante - excessoDinheiro)
-      fetch("/api/ops/devolucao", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
-        body: JSON.stringify({
-          localId: dev.devolucaoId,
-          vendaLocalId: sale.id,
-          sessaoId: sessaoId ?? undefined,
-          tipo: "troca",
-          valorTotal: valorDevolvido,
-          creditoEmitido: creditEmitido,
-          clienteNome: nome,
-          clienteDoc: cpf,
-          operador: nomeLoja,
-          motivo: motivo.trim(),
-          itens: itensServidor,
-          payload: {
-            saleId: sale.id,
-            linhas: lines,
-            modo: "troca_imediata",
-            vendaOriginalId: sale.id,
-            novaVendaId: novaVenda.saleId,
-            valorDevolvido,
-            totalNovaCompra,
-            diferencaPaga: diff > 0 ? diff : 0,
-            diferencaForma: diff > 0 ? diffPayMethod : null,
-            creditoRestante: creditoFinal,
-            excessoDinheiro,
-            motivo: motivo.trim(),
-          },
-        }),
-      })
-        .then((res) => {
-          if (res.ok) onRegistered?.()
-        })
-        .catch(() => {/* non-blocking */})
-    }
+    onRegistered?.()
 
     // Excesso em dinheiro: debita o vale local pelo valor a devolver
     // (o customerCredits ainda guarda `creditoRestante` da devolução; o operador entrega o $ ao cliente)
@@ -579,6 +567,10 @@ export function TrocasDevolucao({
       mode: localMode,
       customerCpf: cpf,
       customerName: nome,
+      sessaoId: sessaoId ?? undefined,
+      tipo: mode,
+      motivo: motivo.trim(),
+      payload: { saleId: sale.id, linhas: lines, modo: mode, motivo: motivo.trim() },
     })
     if (!r.ok) {
       toast({ title: "Devolução não registrada", description: r.reason, variant: "destructive" })
@@ -591,48 +583,7 @@ export function TrocasDevolucao({
       detail: `${r.devolucaoId} | venda ${sale.id} | modo ${mode} | crédito ${r.creditIssued.toFixed(2)}${motivo.trim() ? ` | motivo ${motivo.trim()}` : ""}`,
     })
 
-    // Persistir devolução no servidor — fire-and-forget, não bloqueia o fluxo local
-    if (lojaAtivaId) {
-      const itensServidor = lines.map((req) => {
-        const sl = sale.lines.find((l) => l.inventoryId === req.inventoryId)
-        const valorUnitario = sl ? sl.lineTotal / sl.quantity : 0
-        return {
-          inventoryId: req.inventoryId,
-          nome: sl?.name ?? "",
-          quantidade: req.quantity,
-          valorUnitario,
-          valorTotal: Math.round(valorUnitario * req.quantity * 100) / 100,
-        }
-      })
-      const valorTotalDev = itensServidor.reduce((s, i) => s + i.valorTotal, 0)
-
-      fetch("/api/ops/devolucao", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-assistec-loja-id": lojaAtivaId,
-        },
-        body: JSON.stringify({
-          localId: r.devolucaoId,
-          vendaLocalId: sale.id,
-          sessaoId: sessaoId ?? undefined,
-          tipo: mode,
-          valorTotal: valorTotalDev,
-          creditoEmitido: r.creditIssued,
-          clienteNome: nome,
-          clienteDoc: cpf,
-          operador: nomeLoja,
-          motivo: motivo.trim(),
-          itens: itensServidor,
-          payload: { saleId: sale.id, linhas: lines, modo: mode, motivo: motivo.trim() },
-        }),
-      })
-        .then((res) => {
-          // Servidor confirmou: estoque real devolvido + status da venda atualizado.
-          if (res.ok) onRegistered?.()
-        })
-        .catch(() => {/* non-blocking */})
-    }
+    onRegistered?.()
 
     setLastDevolucao({
       id: r.devolucaoId,
