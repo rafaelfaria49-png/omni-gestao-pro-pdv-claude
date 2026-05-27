@@ -7,6 +7,7 @@ import {
   Printer, Eye, XCircle, ChevronLeft, ChevronRight,
   CheckCircle, Filter, X, Tag, Clock, DollarSign, UserCheck, RotateCcw,
   Receipt, Download, MoreHorizontal, Loader2, Calendar, Wrench, ShieldCheck, Monitor,
+  Send, Trash2, ListChecks,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RoadmapPreviewDialog } from "@/components/ui/roadmap-preview-dialog"
@@ -270,7 +271,12 @@ function saleRecordToVendaItem(s: SaleRecord): VendaItem {
 export function VendasArquivoGeral() {
   const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   const storeId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID
-  const { sales: opsSales } = useOperationsStore()
+  const {
+    sales: opsSales,
+    retrySyncSale,
+    discardLocalPendingSale,
+    bulkDiscardLocalPendingSales,
+  } = useOperationsStore()
   const { toast } = useToast()
   
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -329,6 +335,13 @@ export function VendasArquivoGeral() {
   const [cancelMotivo, setCancelMotivo] = useState("")
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelConfirmForcar, setCancelConfirmForcar] = useState(false)
+
+  // Reenvio / descarte de vendas locais pendentes (limpeza LOCAL, não cancela no servidor)
+  const [reenviandoId, setReenviandoId] = useState<string | null>(null)
+  const [descartandoLocalId, setDescartandoLocalId] = useState<string | null>(null)
+  const [descartandoLocalLoading, setDescartandoLocalLoading] = useState(false)
+  const [bulkLimparOpen, setBulkLimparOpen] = useState(false)
+  const [bulkLimparLoading, setBulkLimparLoading] = useState(false)
 
   // Correção dialog
   const [corrigindoVenda, setCorrigindoVenda] = useState<VendaDetalhe | null>(null)
@@ -475,6 +488,97 @@ export function VendasArquivoGeral() {
     },
     [toast],
   )
+
+  // ── Pendentes locais: reenviar / descartar (LOCAL) / limpeza em lote ─────────
+  const handleReenviarSync = useCallback(
+    async (vendaId: string) => {
+      if (!isVendaPendenteSync(vendaId)) {
+        toast({
+          title: "Venda não pendente",
+          description: "Esta venda não precisa de reenvio.",
+        })
+        return
+      }
+      setReenviandoId(vendaId)
+      const res = await retrySyncSale(vendaId)
+      setReenviandoId(null)
+      if (res.ok) {
+        toast({
+          title: "Venda sincronizada",
+          description: `${vendaId} foi confirmada no servidor.`,
+        })
+        void fetchRemoteSales()
+        load()
+      } else {
+        toast({
+          title: `Falha ao reenviar ${vendaId}`,
+          description: res.reason.slice(0, 220),
+          variant: "destructive",
+        })
+      }
+    },
+    [retrySyncSale, fetchRemoteSales, load, toast, isVendaPendenteSync],
+  )
+
+  const handleConfirmDescarteLocal = useCallback(async () => {
+    if (!descartandoLocalId) return
+    setDescartandoLocalLoading(true)
+    const id = descartandoLocalId
+    const res = await discardLocalPendingSale(id)
+    setDescartandoLocalLoading(false)
+    setDescartandoLocalId(null)
+    // Detalhe local aberto desta venda — fechar para evitar referência stale.
+    setDetalhePendenteLocal((cur) => (cur?.id === id ? null : cur))
+    if (!res.ok) {
+      toast({
+        title: `Descarte local não concluído (${id})`,
+        description: res.reason.slice(0, 220),
+        variant: "destructive",
+      })
+      return
+    }
+    if (res.mode === "discarded") {
+      toast({
+        title: "Venda local descartada",
+        description: `${id} não existia no servidor — removida apenas do dispositivo. Estoque/financeiro intactos.`,
+      })
+    } else {
+      toast({
+        title: "Venda existia no servidor",
+        description: `${id} foi reconciliada como sincronizada. Nada descartado.`,
+      })
+      void fetchRemoteSales()
+      load()
+    }
+  }, [descartandoLocalId, discardLocalPendingSale, fetchRemoteSales, load, toast])
+
+  const handleConfirmBulkLimpar = useCallback(async () => {
+    setBulkLimparLoading(true)
+    const res = await bulkDiscardLocalPendingSales()
+    setBulkLimparLoading(false)
+    setBulkLimparOpen(false)
+    if (!res.ok) {
+      toast({
+        title: "Limpeza não concluída",
+        description: "Tente novamente em instantes.",
+        variant: "destructive",
+      })
+      return
+    }
+    const partes = [
+      `${res.discarded} descartada${res.discarded !== 1 ? "s" : ""}`,
+      `${res.reconciled} sincronizada${res.reconciled !== 1 ? "s" : ""}`,
+    ]
+    if (res.conflicts > 0) partes.push(`${res.conflicts} conflito${res.conflicts !== 1 ? "s" : ""}`)
+    toast({
+      title: `Limpeza local concluída (${res.total} pendentes)`,
+      description: `${partes.join(" · ")}. Apenas estado local foi alterado.`,
+    })
+    if (res.reconciled > 0) {
+      void fetchRemoteSales()
+      load()
+    }
+  }, [bulkDiscardLocalPendingSales, fetchRemoteSales, load, toast])
 
   // ── Detalhe ──────────────────────────────────────────────────────────────────
   const openDetalhe = useCallback(async (vendaId: string) => {
@@ -817,6 +921,26 @@ export function VendasArquivoGeral() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {pendingSyncIds.size > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 border-warning/40 text-warning hover:bg-warning/10"
+                  onClick={() => setBulkLimparOpen(true)}
+                  disabled={bulkLimparLoading}
+                >
+                  <ListChecks className="h-4 w-4" />
+                  Limpar pendentes locais
+                  <Badge variant="outline" className="border-warning/30 bg-warning/15 text-[9px] px-1 py-0 text-warning">
+                    {pendingSyncIds.size}
+                  </Badge>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Verifica no servidor e descarta apenas as órfãs locais (não cancela vendas reais)</TooltipContent>
+            </Tooltip>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -1012,7 +1136,7 @@ export function VendasArquivoGeral() {
                   <TableHead className="min-w-[90px] font-semibold text-foreground hidden xl:table-cell">Operador</TableHead>
                   <TableHead className="min-w-[90px] font-semibold text-foreground hidden xl:table-cell">Terminal</TableHead>
                   <TableHead className="min-w-[100px] font-semibold text-foreground">Status</TableHead>
-                  <TableHead className="min-w-[100px] font-semibold text-foreground text-right">Total</TableHead>
+                  <TableHead className="min-w-[140px] font-semibold text-foreground text-right whitespace-nowrap pr-4">Total</TableHead>
                   <TableHead className="min-w-[180px] font-semibold text-foreground text-right sticky right-0 bg-muted/40 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                     Ações
                   </TableHead>
@@ -1143,7 +1267,7 @@ export function VendasArquivoGeral() {
                             {statusLabel(v.status)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right whitespace-nowrap pr-4">
                           <span className={cn("font-bold tabular-nums", v.cancelada && "line-through text-muted-foreground")}>
                             {fmtBrl(v.total)}
                           </span>
@@ -1167,6 +1291,43 @@ export function VendasArquivoGeral() {
                                 </TooltipTrigger>
                                 <TooltipContent>Imprimir</TooltipContent>
                               </Tooltip>
+                            )}
+                            {isPendenteSync && (
+                              <>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-warning hover:text-warning hover:bg-warning/10"
+                                      onClick={() => void handleReenviarSync(v.id)}
+                                      disabled={reenviandoId === v.id}
+                                    >
+                                      {reenviandoId === v.id ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Send className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Reenviar sincronização</TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => setDescartandoLocalId(v.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Descartar venda local (verifica no servidor antes)</TooltipContent>
+                                </Tooltip>
+                              </>
                             )}
                             {!v.cancelada && !isPendenteSync && (
                               <>
@@ -1216,6 +1377,19 @@ export function VendasArquivoGeral() {
                                   <DropdownMenuItem onClick={() => void openCupomFromRow(v.id)}>
                                     <Printer className="h-4 w-4 mr-2" /> Imprimir
                                   </DropdownMenuItem>
+                                )}
+                                {isPendenteSync && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => void handleReenviarSync(v.id)}>
+                                      <Send className="h-4 w-4 mr-2" /> Reenviar sincronização
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => setDescartandoLocalId(v.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" /> Descartar venda local
+                                    </DropdownMenuItem>
+                                  </>
                                 )}
                                 {!v.cancelada && !isPendenteSync && (
                                   <>
@@ -1410,13 +1584,41 @@ export function VendasArquivoGeral() {
                 <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1">
                   <p className="font-medium text-foreground">Próximos passos</p>
                   <p>
-                    Aguarde a sincronização ou clique em <span className="font-medium text-foreground">Atualizar</span> na lista.
-                    Se continuar pendente, verifique os logs de{" "}
-                    <span className="font-mono text-[10px] text-foreground">/api/ops/venda-persist</span>.
+                    Clique em <span className="font-medium text-foreground">Reenviar sincronização</span> para tentar gravar
+                    de novo no servidor. Se a venda nunca chegou no banco (operador, rede ou validação) e você quer apenas
+                    limpar o registro local, use <span className="font-medium text-foreground">Descartar venda local</span>.
                   </p>
                   <p>
-                    Cancelamento, correção, troca/devolução e reimpressão ficam disponíveis após a confirmação no servidor.
+                    <span className="font-medium text-foreground">Importante:</span> descartar é limpeza LOCAL — o sistema
+                    verifica no servidor antes. Se a venda já tiver sido gravada no banco, o descarte é bloqueado e ela é
+                    reconciliada como sincronizada. Estoque, financeiro e caixa de vendas não persistidas permanecem intactos.
                   </p>
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 gap-2 text-sm border-warning/40 text-warning hover:bg-warning/10"
+                    onClick={() => void handleReenviarSync(detalhePendenteLocal.id)}
+                    disabled={reenviandoId === detalhePendenteLocal.id}
+                  >
+                    {reenviandoId === detalhePendenteLocal.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    Reenviar sincronização
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 gap-2 text-sm text-destructive border-destructive/30 hover:bg-destructive/5"
+                    onClick={() => setDescartandoLocalId(detalhePendenteLocal.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Descartar venda local
+                  </Button>
                 </div>
               </>
             ) : detalheLoading ? (
@@ -1816,6 +2018,119 @@ export function VendasArquivoGeral() {
             >
               {cancelLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {cancelLoading ? "Cancelando…" : cancelConfirmForcar ? "Confirmar mesmo assim" : "Confirmar cancelamento"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Descarte de venda local pendente (individual) ─────────────────────── */}
+      <AlertDialog
+        open={!!descartandoLocalId}
+        onOpenChange={(o) => {
+          if (!o && !descartandoLocalLoading) setDescartandoLocalId(null)
+        }}
+      >
+        <AlertDialogContent className="border-border bg-card max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-warning/10 text-warning">
+                {descartandoLocalLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-5 w-5" />
+                )}
+              </span>
+              <div className="min-w-0 space-y-1">
+                <AlertDialogTitle className="text-foreground text-left">
+                  Descartar venda local pendente
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-muted-foreground text-left">
+                  Esta é uma limpeza <span className="font-medium text-foreground">LOCAL</span>. O sistema irá verificar
+                  no servidor antes — se a venda <span className="font-mono text-xs">{descartandoLocalId ?? ""}</span> já
+                  estiver gravada no banco, o descarte é bloqueado e ela é reconciliada como sincronizada.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1.5">
+            <p className="font-medium text-foreground flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+              Garantias
+            </p>
+            <p>· Nunca apaga venda confirmada no servidor.</p>
+            <p>· Não altera estoque, financeiro ou caixa.</p>
+            <p>· Apenas remove o registro local deste dispositivo.</p>
+          </div>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="border-border" disabled={descartandoLocalLoading}>
+              Voltar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-warning text-warning-foreground hover:bg-warning/90 gap-2"
+              disabled={descartandoLocalLoading}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmDescarteLocal()
+              }}
+            >
+              {descartandoLocalLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {descartandoLocalLoading ? "Verificando…" : "Confirmar descarte local"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Limpeza em lote de pendentes locais (administrativa) ──────────────── */}
+      <AlertDialog
+        open={bulkLimparOpen}
+        onOpenChange={(o) => {
+          if (!o && !bulkLimparLoading) setBulkLimparOpen(false)
+        }}
+      >
+        <AlertDialogContent className="border-border bg-card max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-warning/10 text-warning">
+                {bulkLimparLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <ListChecks className="h-5 w-5" />
+                )}
+              </span>
+              <div className="min-w-0 space-y-1">
+                <AlertDialogTitle className="text-foreground text-left">
+                  Limpar pendentes locais ({pendingSyncIds.size})
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-muted-foreground text-left">
+                  Ação administrativa. Para CADA venda pendente, o sistema consulta o servidor:
+                  <span className="block mt-1">· Já existe no banco → reconcilia como sincronizada (NÃO descarta).</span>
+                  <span className="block">· Não existe → descarta apenas o registro local.</span>
+                  <span className="block">· Erro na consulta → contabiliza conflito e mantém pendente.</span>
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2.5 text-xs text-muted-foreground space-y-1">
+            <p className="font-medium text-foreground flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0" />
+              Esta é uma limpeza LOCAL — não cancela vendas fiscais nem altera caixa/estoque/financeiro.
+            </p>
+            <p>Vendas confirmadas no servidor permanecem intactas no histórico.</p>
+          </div>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="border-border" disabled={bulkLimparLoading}>
+              Voltar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-warning text-warning-foreground hover:bg-warning/90 gap-2"
+              disabled={bulkLimparLoading || pendingSyncIds.size === 0}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmBulkLimpar()
+              }}
+            >
+              {bulkLimparLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {bulkLimparLoading ? "Verificando no servidor…" : "Limpar pendentes locais"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

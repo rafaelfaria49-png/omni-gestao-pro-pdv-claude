@@ -319,6 +319,35 @@ interface OperationsContextType {
     localId: string
     operador?: string
   }) => Promise<{ ok: true; deduped?: boolean } | { ok: false; reason: string }>
+  /**
+   * Reenvia ao servidor uma venda local marcada como `syncPending`. Em sucesso,
+   * limpa `syncPending`. Em erro, mantém o estado pendente e devolve o motivo.
+   */
+  retrySyncSale: (saleId: string) => Promise<{ ok: true } | { ok: false; reason: string }>
+  /**
+   * Verifica no servidor se a venda existe antes de descartar localmente.
+   * - Se o servidor tem (HTTP 200): NÃO descarta — apenas reconcilia `syncPending=false`.
+   * - Se o servidor NÃO tem (HTTP 404): remove a venda do estado local.
+   * - Outros erros: aborta sem alterar estado.
+   * Limpeza local pura — não toca em estoque, financeiro ou caixa.
+   */
+  discardLocalPendingSale: (saleId: string) => Promise<
+    | { ok: true; mode: "discarded" }
+    | { ok: true; mode: "reconciled"; reason: string }
+    | { ok: false; reason: string }
+  >
+  /**
+   * Para CADA venda local com `syncPending=true`, consulta o servidor: descarta as
+   * ausentes (404), reconcilia as presentes (200), contabiliza conflitos (outros).
+   * Limpeza local pura — não toca em estoque/financeiro/caixa.
+   */
+  bulkDiscardLocalPendingSales: () => Promise<{
+    ok: true
+    total: number
+    discarded: number
+    reconciled: number
+    conflicts: number
+  }>
 }
 
 const OperationsContext = createContext<OperationsContextType | null>(null)
@@ -796,6 +825,138 @@ export function OperationsProvider({
     }
   }, [storageKey])
 
+  const retrySyncSale = useCallback<OperationsContextType["retrySyncSale"]>(
+    async (saleId) => {
+      const sale = stateRef.current.sales.find((s) => s.id === saleId && s.syncPending === true)
+      if (!sale) {
+        return { ok: false, reason: "Venda local pendente não encontrada (talvez já tenha sincronizado)." }
+      }
+      const lj = opsLojaIdFromStorageKey(storageKey)
+      try {
+        const res = await fetch(vendaPersistUrl(lj), {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+            [ASSISTEC_LOJA_HEADER]: lj,
+          },
+          body: JSON.stringify({ sale }),
+        })
+        if (res.ok) {
+          setState((prev) => ({
+            ...prev,
+            sales: prev.sales.map((s) => (s.id === saleId ? { ...s, syncPending: false } : s)),
+          }))
+          return { ok: true }
+        }
+        const body = await res.text().catch(() => "")
+        const detail = formatVendaPersistErrorBody(body, res.status)
+        console.warn("[venda-persist] retry HTTP", res.status, saleId, "lojaId:", lj, "body:", detail)
+        return { ok: false, reason: `HTTP ${res.status} — ${detail}` }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.warn("[venda-persist] retry rede", saleId, "lojaId:", lj, err)
+        return { ok: false, reason: `Falha de rede: ${msg}` }
+      }
+    },
+    [storageKey],
+  )
+
+  const discardLocalPendingSale = useCallback<OperationsContextType["discardLocalPendingSale"]>(
+    async (saleId) => {
+      const sale = stateRef.current.sales.find((s) => s.id === saleId && s.syncPending === true)
+      if (!sale) {
+        return { ok: false, reason: "Venda local pendente não encontrada." }
+      }
+      const lj = opsLojaIdFromStorageKey(storageKey)
+      try {
+        const res = await fetch(`/api/vendas/${encodeURIComponent(saleId)}`, {
+          credentials: "include",
+          cache: "no-store",
+          headers: { [ASSISTEC_LOJA_HEADER]: lj },
+        })
+        if (res.ok) {
+          // Venda EXISTE no servidor — não pode ser descartada. Apenas reconcilia.
+          setState((prev) => ({
+            ...prev,
+            sales: prev.sales.map((s) => (s.id === saleId ? { ...s, syncPending: false } : s)),
+          }))
+          return {
+            ok: true,
+            mode: "reconciled",
+            reason: "Venda já existe no servidor — marcada como sincronizada (não descartada).",
+          }
+        }
+        if (res.status === 404) {
+          // Servidor confirma que a venda NÃO existe — limpeza local segura.
+          // Nenhum efeito em estoque/financeiro: a venda nunca tocou o banco.
+          setState((prev) => ({
+            ...prev,
+            sales: prev.sales.filter((s) => s.id !== saleId),
+          }))
+          return { ok: true, mode: "discarded" }
+        }
+        const body = await res.text().catch(() => "")
+        const snippet = body.trim().slice(0, 160)
+        return {
+          ok: false,
+          reason: `Verificação no servidor falhou (HTTP ${res.status}). Nada foi descartado. ${snippet}`,
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return { ok: false, reason: `Falha de rede ao verificar no servidor: ${msg}` }
+      }
+    },
+    [storageKey],
+  )
+
+  const bulkDiscardLocalPendingSales = useCallback<
+    OperationsContextType["bulkDiscardLocalPendingSales"]
+  >(async () => {
+    const pending = stateRef.current.sales.filter((s) => s.syncPending === true)
+    const total = pending.length
+    if (total === 0) {
+      return { ok: true, total: 0, discarded: 0, reconciled: 0, conflicts: 0 }
+    }
+    const lj = opsLojaIdFromStorageKey(storageKey)
+    const discardedIds = new Set<string>()
+    const reconciledIds = new Set<string>()
+    let conflicts = 0
+    for (const sale of pending) {
+      try {
+        const res = await fetch(`/api/vendas/${encodeURIComponent(sale.id)}`, {
+          credentials: "include",
+          cache: "no-store",
+          headers: { [ASSISTEC_LOJA_HEADER]: lj },
+        })
+        if (res.ok) {
+          reconciledIds.add(sale.id)
+        } else if (res.status === 404) {
+          discardedIds.add(sale.id)
+        } else {
+          conflicts += 1
+        }
+      } catch {
+        conflicts += 1
+      }
+    }
+    if (discardedIds.size > 0 || reconciledIds.size > 0) {
+      setState((prev) => ({
+        ...prev,
+        sales: prev.sales
+          .filter((s) => !discardedIds.has(s.id))
+          .map((s) => (reconciledIds.has(s.id) ? { ...s, syncPending: false } : s)),
+      }))
+    }
+    return {
+      ok: true,
+      total,
+      discarded: discardedIds.size,
+      reconciled: reconciledIds.size,
+      conflicts,
+    }
+  }, [storageKey])
+
   const flushPendingDevolucoes = useCallback(() => {
     const pending = stateRef.current.devolucoes.filter((d) => d.syncPending === true)
     if (pending.length === 0) return
@@ -1218,11 +1379,13 @@ export function OperationsProvider({
                 lj,
                 "body:",
                 detail,
+                "raw:",
+                body,
               )
               toast({
                 variant: "destructive",
-                title: "Venda não confirmada no servidor",
-                description: `${saleRow.id}: ${detail.slice(0, 160)}`,
+                title: `Venda ${saleRow.id} ficou pendente (HTTP ${res.status})`,
+                description: `${detail.slice(0, 200)} · Abra "Vendas" e use Reenviar sync para tentar novamente.`,
               })
             }
           })
@@ -1467,6 +1630,9 @@ export function OperationsProvider({
       finalizeSaleTransaction,
       registrarDevolucao,
       registrarOperacaoCaixa,
+      retrySyncSale,
+      discardLocalPendingSale,
+      bulkDiscardLocalPendingSales,
     }),
     [
       state,
@@ -1484,6 +1650,9 @@ export function OperationsProvider({
       finalizeSaleTransaction,
       registrarDevolucao,
       registrarOperacaoCaixa,
+      retrySyncSale,
+      discardLocalPendingSale,
+      bulkDiscardLocalPendingSales,
     ]
   )
 
