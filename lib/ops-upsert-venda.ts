@@ -49,6 +49,28 @@ function arredonda2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
 }
 
+/** Valida FK de Cliente — evita P2003 quando o PDV envia id stale/outra loja. */
+async function resolveClienteIdForStore(
+  tx: Prisma.TransactionClient,
+  lojaId: string,
+  rawClienteId: string | null,
+  pedidoId: string,
+): Promise<string | null> {
+  if (!rawClienteId) return null
+  const found = await tx.cliente.findFirst({
+    where: { id: rawClienteId, storeId: lojaId },
+    select: { id: true },
+  })
+  if (!found) {
+    console.warn(
+      "[upsert-venda] clienteId-ignorado",
+      JSON.stringify({ pedidoId, lojaId, clienteId: rawClienteId }),
+    )
+    return null
+  }
+  return found.id
+}
+
 /** Upsert de uma venda PDV + itens + ledger de estoque + movimentação financeira. */
 export async function upsertVendaInTransaction(
   tx: Prisma.TransactionClient,
@@ -71,8 +93,9 @@ export async function upsertVendaInTransaction(
   const clienteNome =
     typeof sale.customerName === "string" && sale.customerName.trim() ? sale.customerName.trim() : null
 
-  const clienteId =
+  const rawClienteId =
     typeof sale.clienteId === "string" && sale.clienteId.trim() ? sale.clienteId.trim() : null
+  const clienteId = await resolveClienteIdForStore(tx, lojaId, rawClienteId, pedidoId)
 
   const operador =
     operadorLabel?.trim() ||

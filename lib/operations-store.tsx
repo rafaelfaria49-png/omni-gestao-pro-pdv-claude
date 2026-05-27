@@ -137,10 +137,35 @@ function nextSaleId(sales: SaleRecord[]): string {
 
 /** Mescla vendas do Postgres sem sobrescrever o que já veio do localStorage (mesmo `id`). */
 function mergeSalesById(local: SaleRecord[], remote: SaleRecord[]): SaleRecord[] {
-  const ids = new Set(local.map((s) => s.id))
+  const remoteIds = new Set(remote.map((s) => s.id).filter(Boolean))
+  let reconciledPending = false
+  const mergedLocal = local.map((s) => {
+    if (s.syncPending && s.id && remoteIds.has(s.id)) {
+      reconciledPending = true
+      return { ...s, syncPending: false }
+    }
+    return s
+  })
+  const ids = new Set(mergedLocal.map((s) => s.id))
   const extra = remote.filter((s) => s.id && !ids.has(s.id))
-  if (extra.length === 0) return local
-  return [...local, ...extra].sort((a, b) => a.at.localeCompare(b.at))
+  if (extra.length === 0 && !reconciledPending) return local
+  return [...mergedLocal, ...extra].sort((a, b) => a.at.localeCompare(b.at))
+}
+
+function formatVendaPersistErrorBody(body: string, status: number): string {
+  try {
+    const j = JSON.parse(body) as { error?: string; detail?: string; code?: string }
+    const parts = [j.error, j.detail, j.code ? `(${j.code})` : ""].filter(Boolean)
+    if (parts.length > 0) return parts.join(" — ")
+  } catch {
+    /* raw text */
+  }
+  const trimmed = body.trim()
+  return trimmed || `HTTP ${status}`
+}
+
+function vendaPersistUrl(lojaId: string): string {
+  return `/api/ops/venda-persist?storeId=${encodeURIComponent(lojaId)}`
 }
 
 function mergeCustomerCredits(
@@ -744,7 +769,7 @@ export function OperationsProvider({
     if (pending.length === 0) return
     const lj = opsLojaIdFromStorageKey(storageKey)
     for (const sale of pending) {
-      void fetch("/api/ops/venda-persist", {
+      void fetch(vendaPersistUrl(lj), {
         method: "POST",
         credentials: "include",
         headers: {
@@ -761,7 +786,8 @@ export function OperationsProvider({
             }))
           } else {
             const body = await res.text().catch(() => "")
-            console.warn("[venda-persist] re-sync HTTP", res.status, sale.id, "lojaId:", lj, "body:", body)
+            const detail = formatVendaPersistErrorBody(body, res.status)
+            console.warn("[venda-persist] re-sync HTTP", res.status, sale.id, "lojaId:", lj, "body:", detail)
           }
         })
         .catch((err: unknown) => {
@@ -1164,7 +1190,7 @@ export function OperationsProvider({
       const saleRow = next.sales[next.sales.length - 1]
       if (saleRow) {
         emitEvent("venda_finalizada", { storeId: lj, entityId: saleRow.id, data: saleRow })
-        void fetch("/api/ops/venda-persist", {
+        void fetch(vendaPersistUrl(lj), {
           method: "POST",
           credentials: "include",
           headers: {
@@ -1183,6 +1209,7 @@ export function OperationsProvider({
               }))
             } else {
               const body = await res.text().catch(() => "")
+              const detail = formatVendaPersistErrorBody(body, res.status)
               console.error(
                 "[venda-persist] HTTP",
                 res.status,
@@ -1190,12 +1217,12 @@ export function OperationsProvider({
                 "lojaId:",
                 lj,
                 "body:",
-                body,
+                detail,
               )
               toast({
                 variant: "destructive",
                 title: "Venda não confirmada no servidor",
-                description: `Venda ${saleRow.id} salva localmente. Verifique a conexão e o status do caixa.`,
+                description: `${saleRow.id}: ${detail.slice(0, 160)}`,
               })
             }
           })
