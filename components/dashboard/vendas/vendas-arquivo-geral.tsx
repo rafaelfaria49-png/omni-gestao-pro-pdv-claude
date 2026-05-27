@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Search, RefreshCw,
   TrendingUp, BarChart3, AlertTriangle,
@@ -9,6 +9,7 @@ import {
   Receipt, Download, MoreHorizontal, Loader2, Calendar, Wrench, ShieldCheck, Monitor,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { RoadmapPreviewDialog } from "@/components/ui/roadmap-preview-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -271,6 +272,12 @@ export function VendasArquivoGeral() {
   const storeId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID
   const { sales: opsSales } = useOperationsStore()
   const { toast } = useToast()
+  
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    searchInputRef.current?.focus()
+  }, [])
 
   // Filters
   const [busca, setBusca] = useState("")
@@ -284,6 +291,7 @@ export function VendasArquivoGeral() {
   const [toDate, setToDate] = useState("")
   const [page, setPage] = useState(0)
   const [showFilters, setShowFilters] = useState(false)
+  const [exportRoadmapOpen, setExportRoadmapOpen] = useState(false)
 
   // Data
   const [loading, setLoading] = useState(true)
@@ -745,6 +753,9 @@ export function VendasArquivoGeral() {
     setTerminalFiltro("todos")
     setFromDate("")
     setToDate("")
+    setTimeout(() => {
+      searchInputRef.current?.focus()
+    }, 50)
   }, [])
 
   // ── KPI Cards ──────────────────────────────────────────────────────────────
@@ -806,16 +817,16 @@ export function VendasArquivoGeral() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" size="sm" disabled className="gap-1.5 opacity-70">
-                <Download className="h-4 w-4" />
-                Exportar
-                <Badge variant="secondary" className="text-[9px] px-1 py-0 font-normal">Em breve</Badge>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Exportação CSV/Excel — disponível em breve</TooltipContent>
-          </Tooltip>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 hover:bg-muted/40"
+            onClick={() => setExportRoadmapOpen(true)}
+          >
+            <Download className="h-4 w-4" />
+            Exportar
+            <Badge variant="secondary" className="text-[9px] px-1 py-0 font-normal bg-primary/10 border-primary/20 text-primary">Roadmap</Badge>
+          </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={load} disabled={loading}>
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             Atualizar
@@ -851,6 +862,7 @@ export function VendasArquivoGeral() {
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
+                ref={searchInputRef}
                 className="pl-9 h-10 bg-background"
                 placeholder="Buscar por cupom, cliente ou ID da venda…"
                 value={buscaInput}
@@ -1009,9 +1021,44 @@ export function VendasArquivoGeral() {
               <TableBody>
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell colSpan={10} className="py-3">
-                        <Skeleton className="h-8 w-full" />
+                    <TableRow key={i} className="border-border">
+                      <TableCell>
+                        <Skeleton className="h-5 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16 font-mono" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-32" />
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Skeleton className="h-5 w-20" />
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-center">
+                        <div className="flex justify-center">
+                          <Skeleton className="h-5 w-8" />
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell">
+                        <Skeleton className="h-5 w-24" />
+                      </TableCell>
+                      <TableCell className="hidden xl:table-cell">
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end">
+                          <Skeleton className="h-5 w-16" />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right sticky right-0 bg-card shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)]">
+                        <div className="flex justify-end gap-1">
+                          <Skeleton className="h-7 w-7 rounded-md" />
+                          <Skeleton className="h-7 w-7 rounded-md" />
+                          <Skeleton className="h-7 w-7 rounded-md" />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -2003,6 +2050,22 @@ export function VendasArquivoGeral() {
           )}
         </DialogContent>
       </Dialog>
+
+      <RoadmapPreviewDialog
+        open={exportRoadmapOpen}
+        onOpenChange={setExportRoadmapOpen}
+        title="Exportação de Relatórios de Vendas"
+        description="A exportação avançada de dados de vendas permitirá baixar planilhas em formatos CSV e Excel (XLSX) pré-filtrados, contendo o detalhamento de parcelas, status fiscais e de recebimentos."
+        phase="desenvolvimento"
+        icon={Download}
+        features={[
+          "Exportação completa de vendas em formato CSV/Excel com delimitadores customizáveis",
+          "Inclusão de detalhes de parcelas e conciliação bancária",
+          "Agendamento automático de relatórios por e-mail",
+          "Integração direta com ERPs contábeis e exportação em lote de cupons fiscais"
+        ]}
+        targetRelease="Fase 2 - Dashboard Financeiro"
+      />
     </div>
     </TooltipProvider>
   )

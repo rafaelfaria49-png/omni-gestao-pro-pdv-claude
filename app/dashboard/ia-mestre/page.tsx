@@ -22,10 +22,13 @@ import {
   ModelSelect,
   type ModelId,
 } from "@/components/ia-mestre/ModelSelect";
+import { IA_MESTRE_CREDITS_DEBIT_ACTIVE_NOTE } from "@/components/ia-mestre/ia-mestre-honesty";
 import {
-  IA_MESTRE_IMAGE_CREDITS_NOTE,
-  IA_MESTRE_IMAGE_SUCCESS_NOTE,
-} from "@/components/ia-mestre/ia-mestre-honesty";
+  formatIaMestreCostLabel,
+  resolveIaMestreCreditCost,
+} from "@/lib/ia-mestre/credit-costs";
+import { useUserCredits } from "@/hooks/useUserCredits";
+import { notifyCreditBalanceUpdated } from "@/lib/creditsEvents";
 import { useIaMestreChat } from "@/components/ia-mestre/IaMestreChatContext";
 import { iaMestreStoreHeaders } from "@/lib/ia-mestre/client-fetch";
 import { IA_MESTRE_UI_MODEL_IDS } from "@/components/ia-mestre/ModelSelect";
@@ -213,6 +216,19 @@ function Shell() {
   const [projectBanner, setProjectBanner] = useState<string | null>(null);
   const [docTitle, setDocTitle] = useState<string>("");
   const [docContent, setDocContent] = useState<string>("");
+  const { credits: userCredits } = useUserCredits();
+
+  const backendModel = useMemo(() => toBackendModel(model), [model]);
+
+  const textCostBreakdown = useMemo(
+    () => resolveIaMestreCreditCost({ action: "text", model: backendModel }),
+    [backendModel],
+  );
+
+  const imageCostBreakdown = useMemo(
+    () => resolveIaMestreCreditCost({ action: "image", model: backendModel }),
+    [backendModel],
+  );
 
   const isImageIntent = useCallback((text: string) => {
     const t = (text || "").toLowerCase();
@@ -337,6 +353,28 @@ function Shell() {
       return;
     }
 
+    const costBreakdown = isImageIntent(text)
+      ? imageCostBreakdown
+      : textCostBreakdown;
+    if (
+      typeof userCredits === "number" &&
+      costBreakdown.cost > 0 &&
+      userCredits < costBreakdown.cost
+    ) {
+      toast({
+        title: "Créditos insuficientes",
+        description: `Esta ação custa ${formatIaMestreCostLabel(costBreakdown)} e seu saldo é ${userCredits.toLocaleString("pt-BR")}.`,
+        variant: "destructive",
+        duration: 8000,
+        action: (
+          <ToastAction altText="Ver créditos" onClick={() => router.push("/dashboard/creditos")}>
+            Ver créditos
+          </ToastAction>
+        ),
+      });
+      return;
+    }
+
     const clientMessageId = crypto.randomUUID();
     const userMsg: ChatMsg = { id: clientMessageId, role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
@@ -365,6 +403,7 @@ function Shell() {
         message?: string
         error?: string
         tool?: { type?: string; url?: string }
+        credits?: { cost?: number; balance?: number; debited?: boolean; duplicate?: boolean }
         persistence?: {
           conversationId?: string
           userMessageId?: string
@@ -376,7 +415,8 @@ function Shell() {
         setMessages((prev) => prev.filter((m) => m.id !== clientMessageId));
         const info = interpretAiApiError({
           status: res.status,
-          message: String(data.error || data.message || "").trim(),
+          error: String((data as { error?: string }).error || "").trim(),
+          message: String(data.message || data.error || "").trim(),
         });
         toast({
           title: info.title,
@@ -386,15 +426,10 @@ function Shell() {
           action:
             info.kind === "credits" ? (
               <ToastAction
-                altText="Comprar créditos"
-                onClick={() =>
-                  toast({
-                    title: "Comprar créditos",
-                    description: "Compra de créditos em breve",
-                  })
-                }
+                altText="Ver créditos"
+                onClick={() => router.push("/dashboard/creditos")}
               >
-                Comprar créditos
+                Ver créditos
               </ToastAction>
             ) : undefined,
         });
@@ -427,11 +462,17 @@ function Shell() {
         setDocTitle(inferDocumentTitle(reply.content));
         setDocContent(reply.content);
       }
-      if (isImage) {
+      const credited = data.credits;
+      if (typeof credited?.balance === "number") {
+        notifyCreditBalanceUpdated();
+      }
+      if (credited?.debited && typeof credited.cost === "number" && credited.cost > 0) {
         toast({
-          title: "Imagem gerada",
-          description: IA_MESTRE_IMAGE_SUCCESS_NOTE,
+          title: isImage ? "Imagem gerada" : "Resposta enviada",
+          description: `-${credited.cost} crédito(s). Saldo: ${Number(credited.balance ?? 0).toLocaleString("pt-BR")}.`,
         });
+      } else if (isImage) {
+        toast({ title: "Imagem gerada", description: "Resposta recuperada do histórico (sem novo débito)." });
       }
       notifyConversationsRefresh();
     } catch (e) {
@@ -602,7 +643,15 @@ function Shell() {
                 <div className="mt-2 rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-foreground">
                   {pendingImageRequest}
                 </div>
-                <div className="mt-2 text-xs text-muted-foreground">{IA_MESTRE_IMAGE_CREDITS_NOTE}</div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Custo desta ação: <span className="font-medium text-foreground">{formatIaMestreCostLabel(imageCostBreakdown)}</span>
+                  {typeof userCredits === "number" ? (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · Saldo atual: {userCredits.toLocaleString("pt-BR")}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     type="button"
@@ -628,8 +677,16 @@ function Shell() {
                 </div>
               </div>
             ) : isImageIntentDraft ? (
-              <div className="mb-2 text-xs text-muted-foreground">{IA_MESTRE_IMAGE_CREDITS_NOTE}</div>
-            ) : null}
+              <div className="mb-2 text-xs text-muted-foreground">
+                Geração de imagem: {formatIaMestreCostLabel(imageCostBreakdown)}
+                {typeof userCredits === "number" ? ` · Saldo: ${userCredits.toLocaleString("pt-BR")}` : ""}
+              </div>
+            ) : (
+              <div className="mb-2 text-xs text-muted-foreground">
+                Mensagem de chat: {formatIaMestreCostLabel(textCostBreakdown)}
+                {typeof userCredits === "number" ? ` · Saldo: ${userCredits.toLocaleString("pt-BR")}` : ""}
+              </div>
+            )}
             <ChatInput
               onSend={handleSend}
               disabled={typing || !!pendingImageRequest || loadingConversation || !!storeRequiredError}
@@ -637,7 +694,7 @@ function Shell() {
               onValueChange={setDraft}
             />
             <p className="mt-2 text-center text-[12px] text-muted-foreground/80">
-              IA Mestre pode cometer erros. Sempre confirme dados financeiros importantes.
+              {IA_MESTRE_CREDITS_DEBIT_ACTIVE_NOTE} IA Mestre pode cometer erros — confirme dados financeiros importantes.
             </p>
           </div>
         </footer>

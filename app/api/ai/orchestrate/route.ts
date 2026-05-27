@@ -2,13 +2,20 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { orchestrateCommand, type PlanoAssinatura } from "@/services/ai-orchestrator"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
-import { storeIdFromIaMestreWrite } from "@/lib/ia-mestre/api-guard"
+import { guardIaMestreApiWrite } from "@/lib/ia-mestre/api-guard"
 import { prepareIaMestreTurn, saveIaMestreAssistantTurn } from "@/lib/ia-mestre/persist-turn"
 import { composeMestreUserMessage, type StockSummaryRow } from "@/services/ai-mestre-reply"
 import { pickMestreModel } from "@/lib/ai-model-policy"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
-import { requireAdmin } from "@/lib/require-admin"
 import { detectIntent } from "@/lib/aiOrchestrator"
+import { resolveIaMestreCreditCost } from "@/lib/ia-mestre/credit-costs"
+import {
+  debitIaMestreTurnAfterSuccess,
+  IaMestreInsufficientCreditsError,
+  readIaMestreTurnCreditsState,
+  validateIaMestreTurnCredits,
+} from "@/lib/ia-mestre/debit-turn-credits"
+import { CreditsUserIdError, resolveCreditsUserId } from "@/lib/credits/resolve-user-id"
 
 /** Prisma exige Node; a chamada Gemini em si é compatível com Edge, mas este handler não. */
 export const runtime = "nodejs"
@@ -72,6 +79,34 @@ function persistencePayload(p: {
     userMessageId: p.userMessageId,
     assistantMessageId: p.assistantMessageId,
   }
+}
+
+function creditsPayload(c: {
+  cost: number
+  balance: number
+  debited: boolean
+  duplicate: boolean
+  action: "text" | "image"
+}) {
+  return {
+    cost: c.cost,
+    balance: c.balance,
+    debited: c.debited,
+    duplicate: c.duplicate,
+    action: c.action,
+  }
+}
+
+function insufficientCreditsResponse(e: IaMestreInsufficientCreditsError) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "insufficient_credits",
+      message: `Saldo insuficiente: esta ação custa ${e.cost} crédito(s) e você tem ${e.balance}. Recarregue em Configurações → Créditos.`,
+      credits: { cost: e.cost, balance: e.balance, debited: false, duplicate: false },
+    },
+    { status: 402 },
+  )
 }
 
 function normalizeMessages(ms: ClientMessage[] | undefined): Array<{ role: "user" | "assistant"; content: string }> {
@@ -255,31 +290,25 @@ async function generateLocalDallEImage(prompt: string): Promise<string> {
 }
 
 export async function POST(req: Request) {
-  if (!isLocalDevelopment) {
-    const adminGate = await requireAdmin()
-    if (!adminGate.ok) return adminGate.res
-  } else {
-    console.log("[orchestrate] DEV: bypass de admin/assinatura ativo para teste local.")
+  if (isLocalDevelopment) {
+    console.log("[orchestrate] DEV: bypass de permissão enterprise (teste local).")
   }
+
+  const access = await guardIaMestreApiWrite(req)
+  if (!access.ok) return access.response
+
+  const lojaId = access.storeId
+
   let body: Body
   try {
     body = (await req.json()) as Body
   } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 })
+    return NextResponse.json({ ok: false, error: "invalid_json", message: "JSON inválido" }, { status: 400 })
   }
 
   const command = lastUserText(body)
-  if (!command) return NextResponse.json({ error: "command obrigatório" }, { status: 400 })
-
-  const lojaId = storeIdFromIaMestreWrite(req) ?? ""
-  if (!lojaId) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Selecione uma unidade ativa e envie o header x-assistec-loja-id.",
-      },
-      { status: 403 },
-    )
+  if (!command) {
+    return NextResponse.json({ ok: false, error: "command_required", message: "command obrigatório" }, { status: 400 })
   }
 
   const clientMessageId = typeof body.clientMessageId === "string" ? body.clientMessageId.trim() : ""
@@ -334,6 +363,23 @@ export async function POST(req: Request) {
   }
   const model = pickMestreModel({ plano, requestedModel: body.model, storedModel })
 
+  let userId: string
+  try {
+    userId = await resolveCreditsUserId()
+  } catch (e) {
+    if (e instanceof CreditsUserIdError) {
+      return NextResponse.json(
+        { ok: false, error: e.code, message: "Faça login para usar a IA Mestre." },
+        { status: 401 },
+      )
+    }
+    throw e
+  }
+
+  const intent = detectIntent(command)
+  const billableAction = intent === "image" ? ("image" as const) : ("text" as const)
+  const costBreakdown = resolveIaMestreCreditCost({ action: billableAction, model })
+
   const prepared = await prepareIaMestreTurn({
     storeId: lojaId,
     conversationId: body.conversationId,
@@ -351,6 +397,33 @@ export async function POST(req: Request) {
   if (prepared.cached) {
     const cached = prepared.cached
     const isImage = cached.type === "image"
+    const cachedAction = isImage ? ("image" as const) : ("text" as const)
+    const cachedCost = resolveIaMestreCreditCost({ action: cachedAction, model })
+    let creditsInfo = await readIaMestreTurnCreditsState({
+      userId,
+      storeId: lojaId,
+      conversationId,
+      assistantMessageId: cached.assistantMessageId,
+      clientMessageId,
+      fallbackCost: cachedCost.cost,
+      fallbackAction: cachedAction,
+    })
+    if (!creditsInfo.duplicate && cachedCost.cost > 0) {
+      try {
+        creditsInfo = await debitIaMestreTurnAfterSuccess({
+          userId,
+          storeId: lojaId,
+          conversationId,
+          clientMessageId,
+          assistantMessageId: cached.assistantMessageId,
+          action: cachedAction,
+          cost: cachedCost.cost,
+        })
+      } catch (e) {
+        if (e instanceof IaMestreInsufficientCreditsError) return insufficientCreditsResponse(e)
+        throw e
+      }
+    }
     return NextResponse.json({
       ok: true,
       type: isImage ? "image" : "text",
@@ -363,8 +436,16 @@ export async function POST(req: Request) {
         userMessageId,
         assistantMessageId: cached.assistantMessageId,
       }),
+      credits: creditsPayload({ ...creditsInfo, action: cachedAction }),
       duplicate: true,
     })
+  }
+
+  try {
+    await validateIaMestreTurnCredits(userId, costBreakdown.cost)
+  } catch (e) {
+    if (e instanceof IaMestreInsufficientCreditsError) return insufficientCreditsResponse(e)
+    throw e
   }
 
   let stockRows: StockSummaryRow[] = []
@@ -392,7 +473,6 @@ export async function POST(req: Request) {
   }
 
   // Tool Calling (imagem): determinístico (IA Mestre decide automaticamente)
-  const intent = detectIntent(command)
   if (intent === "image") {
     try {
       const prompt = buildImageGenerationPrompt(command)
@@ -424,6 +504,21 @@ export async function POST(req: Request) {
         type: "image",
         imageUrl,
       })
+      let creditsInfo
+      try {
+        creditsInfo = await debitIaMestreTurnAfterSuccess({
+          userId,
+          storeId: lojaId,
+          conversationId,
+          clientMessageId,
+          assistantMessageId: saved.assistantMessageId,
+          action: "image",
+          cost: costBreakdown.cost,
+        })
+      } catch (e) {
+        if (e instanceof IaMestreInsufficientCreditsError) return insufficientCreditsResponse(e)
+        throw e
+      }
       return NextResponse.json({
         ...result,
         type: "image",
@@ -437,6 +532,7 @@ export async function POST(req: Request) {
           userMessageId,
           assistantMessageId: saved.assistantMessageId,
         }),
+        credits: creditsPayload({ ...creditsInfo, action: "image" }),
       })
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Falha ao gerar imagem."
@@ -476,35 +572,58 @@ export async function POST(req: Request) {
       stockRowsLoaded: stockRows.length > 0,
       fallbackUsed: composed.meta.fallbackUsed,
     }
+
+    const saved = await saveIaMestreAssistantTurn({
+      storeId: lojaId,
+      conversationId,
+      clientMessageId,
+      content: message,
+      type: "text",
+    })
+    let creditsInfo
+    try {
+      creditsInfo = await debitIaMestreTurnAfterSuccess({
+        userId,
+        storeId: lojaId,
+        conversationId,
+        clientMessageId,
+        assistantMessageId: saved.assistantMessageId,
+        action: "text",
+        cost: costBreakdown.cost,
+      })
+    } catch (e) {
+      if (e instanceof IaMestreInsufficientCreditsError) return insufficientCreditsResponse(e)
+      throw e
+    }
+
+    return NextResponse.json({
+      ...result,
+      type: "text",
+      data: { message },
+      message,
+      integration: meta,
+      persistence: persistencePayload({
+        conversationId,
+        clientMessageId,
+        userMessageId,
+        assistantMessageId: saved.assistantMessageId,
+      }),
+      credits: creditsPayload({ ...creditsInfo, action: "text" }),
+    })
   } catch (e) {
     const err = e instanceof Error ? e.message : String(e)
     console.error("[orchestrate] llm:", err)
     if (err === "LLM_TIMEOUT") {
       return NextResponse.json({ ...result, ok: false, error: AI_TIMEOUT_MESSAGE }, { status: 504 })
     }
-    message = "Não consegui completar a resposta. Tente novamente em instantes."
-    meta = { llmConfigured: false, backend: null, stockRowsLoaded: stockRows.length > 0 }
+    return NextResponse.json(
+      {
+        ...result,
+        ok: false,
+        error: err === "OPENROUTER_KEY_MISSING" || err === "OPENAI_KEY_MISSING" ? err : "llm_failed",
+        message: "Não consegui completar a resposta. Tente novamente em instantes. Nenhum crédito foi debitado.",
+      },
+      { status: 502 },
+    )
   }
-
-  const saved = await saveIaMestreAssistantTurn({
-    storeId: lojaId,
-    conversationId,
-    clientMessageId,
-    content: message,
-    type: "text",
-  })
-
-  return NextResponse.json({
-    ...result,
-    type: "text",
-    data: { message },
-    message,
-    integration: meta,
-    persistence: persistencePayload({
-      conversationId,
-      clientMessageId,
-      userMessageId,
-      assistantMessageId: saved.assistantMessageId,
-    }),
-  })
 }

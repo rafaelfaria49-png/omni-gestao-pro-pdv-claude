@@ -3,7 +3,7 @@ import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { resolveActiveStoreId } from "@/lib/operacoes/assert-active-store"
 import { storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
-import { requireAdmin } from "@/lib/require-admin"
+import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 
 export type IaMestreApiGuardFail = { ok: false; response: NextResponse }
 export type IaMestreApiGuardOk = { ok: true; storeId: string }
@@ -11,8 +11,11 @@ export type IaMestreApiGuardResult = IaMestreApiGuardFail | IaMestreApiGuardOk
 
 const isLocalDevelopment = process.env.NODE_ENV === "development"
 
-function jsonError(error: string, status: number) {
-  return NextResponse.json({ ok: false, error }, { status })
+export const IA_MESTRE_FORBIDDEN_MESSAGE =
+  "Sem permissão para a IA Mestre. O seu perfil não inclui este módulo — peça acesso ao administrador."
+
+function jsonError(error: string, status: number, message: string) {
+  return NextResponse.json({ ok: false, error, message }, { status })
 }
 
 function activeStoreIdFromCookieHeader(cookieHeader: string | null): string | null {
@@ -46,42 +49,79 @@ export function storeIdFromIaMestreWrite(req: Request): string | null {
   return resolveActiveStoreId(storeIdFromAssistecRequestForWrite(req))
 }
 
-export async function guardIaMestreApiRead(req: Request): Promise<IaMestreApiGuardResult> {
-  if (!isLocalDevelopment) {
-    const adminGate = await requireAdmin()
-    if (!adminGate.ok) return { ok: false, response: adminGate.res }
+async function assertIaMestreEnterpriseAccess(storeId: string): Promise<IaMestreApiGuardFail | null> {
+  if (isLocalDevelopment) return null
+
+  const g = await requireEnterpriseWith(
+    storeId,
+    (p) => p.workspace.iaMestre,
+    IA_MESTRE_FORBIDDEN_MESSAGE,
+  )
+
+  if (g.ok) return null
+
+  if (g.status === 401) {
+    return {
+      ok: false,
+      response: jsonError(
+        "auth_required",
+        401,
+        "Faça login para usar a IA Mestre.",
+      ),
+    }
   }
 
+  if (g.error.includes("unidade")) {
+    return {
+      ok: false,
+      response: jsonError(
+        "store_forbidden",
+        403,
+        "Sem permissão para a unidade selecionada. Escolha outra loja no painel.",
+      ),
+    }
+  }
+
+  return {
+    ok: false,
+    response: jsonError("forbidden_ia_mestre", 403, g.error),
+  }
+}
+
+export async function guardIaMestreApiRead(req: Request): Promise<IaMestreApiGuardResult> {
   const storeId = storeIdFromIaMestreRead(req)
   if (!storeId) {
     return {
       ok: false,
       response: jsonError(
-        "Selecione uma unidade ativa no painel ou envie o header x-assistec-loja-id.",
+        "store_required",
         403,
+        "Selecione uma unidade ativa no painel ou envie o header x-assistec-loja-id.",
       ),
     }
   }
+
+  const denied = await assertIaMestreEnterpriseAccess(storeId)
+  if (denied) return denied
 
   return { ok: true, storeId }
 }
 
 export async function guardIaMestreApiWrite(req: Request): Promise<IaMestreApiGuardResult> {
-  if (!isLocalDevelopment) {
-    const adminGate = await requireAdmin()
-    if (!adminGate.ok) return { ok: false, response: adminGate.res }
-  }
-
   const storeId = storeIdFromIaMestreWrite(req)
   if (!storeId) {
     return {
       ok: false,
       response: jsonError(
-        "Unidade obrigatória: envie o header x-assistec-loja-id (loja ativa no dashboard).",
+        "store_required",
         403,
+        "Unidade obrigatória: envie o header x-assistec-loja-id (loja ativa no dashboard).",
       ),
     }
   }
+
+  const denied = await assertIaMestreEnterpriseAccess(storeId)
+  if (denied) return denied
 
   return { ok: true, storeId }
 }

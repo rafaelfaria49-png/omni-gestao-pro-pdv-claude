@@ -7,7 +7,6 @@ import type {
   LoteResult,
   ModoConflito,
   PreviewProdutosResult,
-  ProdutoNormalizado,
 } from "@/lib/importador-produtos/types"
 
 /**
@@ -21,6 +20,13 @@ import type {
  * Diferente do importador avançado: parsing acontece no servidor uma vez
  * (preview), depois o cliente envia lote a lote (~500 itens) clicando em
  * "Importar próximo lote".
+ *
+ * SEGURANÇA (pós-incidente Smart):
+ *  - Default seguro: modo "criar" (cria novos; pula apenas em match forte).
+ *  - Reset HARD ao escolher novo arquivo: aborta fetch pendente, zera tudo
+ *    para não reaproveitar preview de planilha anterior.
+ *  - Envia `lojaAtivaIdConfirmado` no body — servidor valida contra header.
+ *  - Reset também ao trocar de loja (lojaHeader muda → resetar tudo).
  */
 
 type Estado =
@@ -60,10 +66,14 @@ export function useImportadorProdutos() {
   const temLojaObrigatoria = lojaHeader.length > 0
 
   const [arquivo, setArquivo] = useState<File | null>(null)
-  const [modoConflito, setModoConflito] = useState<ModoConflito>("atualizar")
+  // Default seguro: "criar" — não atualiza nada automaticamente.
+  // (incidente Smart: "atualizar" era default e causou 0 criados / 500 atualizados)
+  const [modoConflito, setModoConflito] = useState<ModoConflito>("criar")
   const [estado, setEstado] = useState<Estado>({ fase: "idle" })
   const abortRef = useRef<AbortController | null>(null)
+  const lojaHeaderInicialRef = useRef<string>(lojaHeader)
 
+  /** Reset hard: aborta fetch pendente, zera arquivo, batchId, preview, lotes. */
   const limpar = useCallback(() => {
     abortRef.current?.abort()
     abortRef.current = null
@@ -72,9 +82,23 @@ export function useImportadorProdutos() {
   }, [])
 
   const escolherArquivo = useCallback((f: File | null) => {
+    // Reset hard ao trocar de arquivo — não reaproveitar nada da planilha anterior.
+    abortRef.current?.abort()
+    abortRef.current = null
     setArquivo(f)
     setEstado({ fase: "idle" })
   }, [])
+
+  // Se a loja ativa muda no meio do fluxo, reset hard (evita gravar em loja errada).
+  if (lojaHeader !== lojaHeaderInicialRef.current) {
+    lojaHeaderInicialRef.current = lojaHeader
+    abortRef.current?.abort()
+    abortRef.current = null
+    if (estado.fase !== "idle") {
+      setEstado({ fase: "idle" })
+      setArquivo(null)
+    }
+  }
 
   const rodarPreview = useCallback(async () => {
     if (!temLojaObrigatoria) {
@@ -117,6 +141,16 @@ export function useImportadorProdutos() {
         setEstado({ fase: "erro", mensagem: "Resposta inválida do servidor" })
         return
       }
+      // Validação extra: o storeId que o servidor confirmou deve bater com o
+      // header que enviamos. Se diferir, o cookie pode estar furando — abortar.
+      if (j.storeId !== lojaHeader) {
+        setEstado({
+          fase: "erro",
+          mensagem: "Resposta com unidade divergente — recarregue a página",
+          detalhe: `Enviei ${lojaHeader}, servidor confirmou ${j.storeId}. Risco de cookie cross-store. Não importe.`,
+        })
+        return
+      }
       setEstado({ fase: "preview-ok", preview: j, batchId: gerarBatchId() })
     } catch (e) {
       if ((e as { name?: string })?.name === "AbortError") return
@@ -128,6 +162,14 @@ export function useImportadorProdutos() {
   }, [arquivo, lojaHeader, temLojaObrigatoria])
 
   const enviarProximoLote = useCallback(async () => {
+    // Snapshot da loja ativa NO INÍCIO da operação — usado pelo body para
+    // que o servidor valide que header e UI batem.
+    const lojaAtivaNoMomento = lojaHeader
+    if (!lojaAtivaNoMomento) {
+      setEstado({ fase: "erro", mensagem: "Unidade ativa perdida — recarregue a página" })
+      return
+    }
+
     setEstado((prev) => {
       if (prev.fase !== "preview-ok" && prev.fase !== "lotes-em-andamento") return prev
       if (prev.fase === "lotes-em-andamento" && prev.enviando) return prev
@@ -138,6 +180,16 @@ export function useImportadorProdutos() {
       const resultadosPrev = prev.fase === "lotes-em-andamento" ? prev.resultados : []
 
       if (loteAtual >= preview.totalLotes) return prev
+
+      // Mais uma defesa: o storeId do preview deve bater com a loja ativa agora.
+      // Se o usuário trocou de loja entre o preview e o "Importar lote", abortar.
+      if (preview.storeId !== lojaAtivaNoMomento) {
+        return {
+          fase: "erro",
+          mensagem: "Loja ativa mudou desde o preview — refaça o preview",
+          detalhe: `Preview foi feito na loja ${preview.storeId}, mas a loja ativa agora é ${lojaAtivaNoMomento}.`,
+        }
+      }
 
       // Marca enviando antes do fetch (lock idempotente contra duplo-clique).
       const intermediario: Estado = {
@@ -157,7 +209,7 @@ export function useImportadorProdutos() {
             credentials: "include",
             headers: {
               "content-type": "application/json",
-              [ASSISTEC_LOJA_HEADER]: lojaHeader,
+              [ASSISTEC_LOJA_HEADER]: lojaAtivaNoMomento,
             },
             body: JSON.stringify({
               batchId,
@@ -166,6 +218,7 @@ export function useImportadorProdutos() {
               loteIndex: loteAtual,
               totalLotes: preview.totalLotes,
               itens: itensLote,
+              lojaAtivaIdConfirmado: lojaAtivaNoMomento,
             }),
             cache: "no-store",
           })

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { getUserId } from "@/src/lib/auth/getUserId"
+import { requireCreditsUserIdForApi } from "@/lib/credits/api-auth"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -25,7 +25,9 @@ export async function POST(req: Request) {
     )
   }
 
-  const userId = await getUserId()
+  const authUser = await requireCreditsUserIdForApi()
+  if (!authUser.ok) return authUser.response
+  const userId = authUser.userId
 
   let body: unknown
   try {

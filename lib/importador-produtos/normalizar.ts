@@ -25,19 +25,25 @@ function norm(s: unknown): string {
  * (ex.: "valor" sozinho NÃO casa preço — pode ser "valor desconto").
  */
 const ALIASES: Record<CampoCanonico, string[]> = {
+  // SKU = identificador estável do produto (idealmente alfanumérico ou ≥7 dígitos).
+  // Aliases agressivos removidos para evitar colisão entre planilhas:
+  //   - "id"           → era qualquer índice sequencial (1,2,3…), virava SKU acidental
+  //   - "cod" sozinho  → curto demais, ambíguo com "código interno do ERP"
+  //   - "id produto"   → mesmo problema
+  // O alias "codigo"/"código" permanece (é o nome mais comum em planilhas BR),
+  // mas a camada de match (lib/importador-produtos/match.ts) trata SKU curto
+  // numérico como "chave fraca" e não autoriza update automático por ela.
   sku: [
     "sku",
     "codigo",
     "código",
-    "cod",
     "cod produto",
     "codigo produto",
     "codigo interno",
+    "código interno",
     "referencia",
     "referência",
     "ref",
-    "id produto",
-    "id",
   ],
   barcode: [
     "barcode",

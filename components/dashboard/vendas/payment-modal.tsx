@@ -18,6 +18,7 @@ import {
   Wallet,
   CalendarClock,
   Layers,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -190,6 +191,7 @@ export function PaymentModal({
   onPrintCupom,
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
+  const [isConfirming, setIsConfirming] = useState(false)
   const { pdvParams, storeId: storeIdForPdv } = useStoreSettings()
   const { toast } = useToast()
   const [payments, setPayments] = useState<PaymentMethod[]>([])
@@ -215,6 +217,7 @@ export function PaymentModal({
   useEffect(() => {
     if (!isOpen) {
       setCpfDraft("")
+      setIsConfirming(false)
       return
     }
     setCpfDraft(selectedCustomer?.cpf?.trim() ?? "")
@@ -1291,6 +1294,7 @@ export function PaymentModal({
             </Button>
             <Button
               onClick={() => {
+                if (isConfirming) return
                 if (docInvalidoParaConfirmar) {
                   toast({
                     variant: "destructive",
@@ -1307,24 +1311,39 @@ export function PaymentModal({
                   })
                   return
                 }
-                const normalized = normalizePaymentsToMatchTotal(payments, total)
-                const adminIdForAudit = descontoManualAtivo ? (authorizedAdmin?.id || undefined) : undefined
-                onConfirm?.(normalized, {
-                  cashierId,
-                  discountAuthorizedByAdminId: descontoManualAtivo ? adminIdForAudit : undefined,
-                  discountReais: Number(discountReais) || 0,
-                  discountPercent: Number(discountPercent) || 0,
-                })
-                onClose()
+                setIsConfirming(true)
+                setTimeout(() => {
+                  try {
+                    const normalized = normalizePaymentsToMatchTotal(payments, total)
+                    const adminIdForAudit = descontoManualAtivo ? (authorizedAdmin?.id || undefined) : undefined
+                    onConfirm?.(normalized, {
+                      cashierId,
+                      discountAuthorizedByAdminId: descontoManualAtivo ? adminIdForAudit : undefined,
+                      discountReais: Number(discountReais) || 0,
+                      discountPercent: Number(discountPercent) || 0,
+                    })
+                    onClose()
+                  } catch (err) {
+                    setIsConfirming(false)
+                    toast({
+                      variant: "destructive",
+                      title: "Erro ao confirmar",
+                      description: err instanceof Error ? err.message : "Erro desconhecido",
+                    })
+                  }
+                }, 50)
               }}
-              disabled={faltaPagar > 0.02 || docInvalidoParaConfirmar || (descontoManualAtivo && !adminSessionOk)}
+              disabled={isConfirming || faltaPagar > 0.02 || docInvalidoParaConfirmar || (descontoManualAtivo && !adminSessionOk)}
               className="flex-1 h-12 bg-emerald-600 font-bold text-zinc-950 hover:bg-emerald-500 disabled:opacity-50"
             >
-              {faltaPagar > 0.02
-                ? `Falta ${formatCurrency(faltaPagar)}`
-                : docInvalidoParaConfirmar
-                  ? "Informe o CPF/CNPJ"
-                  : "Confirmar Pagamento"}
+              {isConfirming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isConfirming
+                ? "Processando..."
+                : faltaPagar > 0.02
+                  ? `Falta ${formatCurrency(faltaPagar)}`
+                  : docInvalidoParaConfirmar
+                    ? "Informe o CPF/CNPJ"
+                    : "Confirmar Pagamento"}
             </Button>
           </div>
         </div>

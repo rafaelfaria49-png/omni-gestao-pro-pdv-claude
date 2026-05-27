@@ -10,6 +10,7 @@ import {
   TrendingDown,
   AlertTriangle,
   Monitor,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -170,19 +171,19 @@ export function CaixaStatusBar({
       <>
         <div
           className={cn(
-            "bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-4",
+            "bg-warning/10 border border-warning/30 rounded-lg p-4 mb-4",
             variant === "pdv" && "rounded-none border-x-0 border-t-0 mb-0 px-2 py-2.5 sm:px-3"
           )}
         >
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                <Lock className="w-5 h-5 text-amber-500" />
+              <div className="w-10 h-10 rounded-full bg-warning/20 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-warning" />
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-amber-500">Caixa Fechado</span>
-                  <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  <span className="font-semibold text-warning">Caixa Fechado</span>
+                  <AlertTriangle className="w-4 h-4 text-warning" />
                   {terminalPill}
                   {terminal && (
                     <button
@@ -213,7 +214,7 @@ export function CaixaStatusBar({
     <>
       <div
         className={cn(
-          "bg-green-500/10 border border-green-500/30 rounded-lg mb-4 overflow-hidden",
+          "bg-success/10 border border-success/30 rounded-lg mb-4 overflow-hidden",
           variant === "pdv" && "rounded-none border-x-0 border-t-0 mb-0"
         )}
       >
@@ -225,13 +226,13 @@ export function CaixaStatusBar({
           )}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center shrink-0">
-              <Unlock className="w-5 h-5 text-green-500" />
+            <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center shrink-0">
+              <Unlock className="w-5 h-5 text-success" />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="font-semibold text-green-500">Caixa Aberto</span>
-                <Badge variant="outline" className="text-xs border-green-500/50 text-green-500 shrink-0">
+                <span className="font-semibold text-success">Caixa Aberto</span>
+                <Badge variant="outline" className="text-xs border-success/30 bg-success/5 text-success shrink-0">
                   <Clock className="w-3 h-3 mr-1" />
                   Desde {formatTime(caixa.dataAbertura)}
                 </Badge>
@@ -241,7 +242,7 @@ export function CaixaStatusBar({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-stretch justify-center gap-3 sm:gap-4 min-w-0">
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 min-w-0">
             <div className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-lg min-w-0">
               <DollarSign className="w-4 h-4 text-muted-foreground shrink-0" />
               <div className="text-right min-w-0">
@@ -250,26 +251,26 @@ export function CaixaStatusBar({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 rounded-lg min-w-0">
-              <TrendingUp className="w-4 h-4 text-green-500 shrink-0" />
+            <div className="flex items-center gap-2 px-3 py-2 bg-success/10 rounded-lg min-w-0">
+              <TrendingUp className="w-4 h-4 text-success shrink-0" />
               <div className="text-right min-w-0">
-                <p className="text-xs text-green-400">Entradas</p>
-                <p className="font-semibold text-sm text-green-500 truncate">{formatCurrency(caixa.totalEntradas)}</p>
+                <p className="text-xs text-success/80 dark:text-success/70">Entradas</p>
+                <p className="font-semibold text-sm text-success truncate">{formatCurrency(caixa.totalEntradas)}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 rounded-lg min-w-0">
-              <TrendingDown className="w-4 h-4 text-red-500 shrink-0" />
+            <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-lg min-w-0">
+              <TrendingDown className="w-4 h-4 text-destructive shrink-0" />
               <div className="text-right min-w-0">
-                <p className="text-xs text-red-400">Saidas</p>
-                <p className="font-semibold text-sm text-red-500 truncate">{formatCurrency(caixa.totalSaidas)}</p>
+                <p className="text-xs text-destructive/80 dark:text-destructive/70">Saídas</p>
+                <p className="font-semibold text-sm text-destructive truncate">{formatCurrency(caixa.totalSaidas)}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-lg min-w-0">
+            <div className="flex items-center gap-2 px-4 py-2 bg-success/15 border border-success/30 rounded-lg min-w-0">
               <div className="text-right min-w-0">
-                <p className="text-xs text-emerald-600 dark:text-emerald-400">Saldo Atual</p>
-                <p className="font-bold text-lg text-emerald-500 truncate">{formatCurrency(getSaldoAtual())}</p>
+                <p className="text-xs text-success/90 dark:text-success">Saldo Atual</p>
+                <p className="font-bold text-lg text-success truncate">{formatCurrency(getSaldoAtual())}</p>
               </div>
             </div>
           </div>
@@ -279,7 +280,8 @@ export function CaixaStatusBar({
               variant="outline"
               size="sm"
               onClick={() => setOperationType("sangria")}
-              className="border-red-500/40 text-red-500 hover:bg-red-500 hover:text-white"
+              disabled={opSaving || showFechamento}
+              className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
             >
               <TrendingDown className="w-4 h-4 mr-1.5" />
               Sangria
@@ -288,7 +290,8 @@ export function CaixaStatusBar({
               variant="outline"
               size="sm"
               onClick={() => setOperationType("suprimento")}
-              className="border-green-500/40 text-green-600 hover:bg-green-500 hover:text-white dark:text-green-400"
+              disabled={opSaving || showFechamento}
+              className="border-success/40 text-success hover:bg-success hover:text-success-foreground transition-colors"
             >
               <TrendingUp className="w-4 h-4 mr-1.5" />
               Suprimento
@@ -296,7 +299,8 @@ export function CaixaStatusBar({
             <Button
               variant="outline"
               onClick={() => setShowFechamento(true)}
-              className="border-red-500/50 text-red-500 hover:bg-red-500 hover:text-white"
+              disabled={opSaving || showFechamento}
+              className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
             >
               <Lock className="w-4 h-4 mr-2" />
               Fechar Caixa
@@ -342,7 +346,14 @@ export function CaixaStatusBar({
                 Cancelar
               </Button>
               <Button onClick={() => void confirmOp()} disabled={opSaving}>
-                {opSaving ? "Registrando…" : `Confirmar ${opLabel}`}
+                {opSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Registrando…
+                  </>
+                ) : (
+                  `Confirmar ${opLabel}`
+                )}
               </Button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Loader2, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -34,6 +35,14 @@ export function LotesProdutos({
   enviando,
   onImportarProximo,
 }: LotesProdutosProps) {
+  const [clicked, setClicked] = useState(false)
+
+  useEffect(() => {
+    if (!enviando) {
+      setClicked(false)
+    }
+  }, [enviando])
+
   const totalLotes = preview.totalLotes
   const concluido = loteAtual >= totalLotes
   const pct = totalLotes > 0 ? Math.round((loteAtual / totalLotes) * 100) : 0
@@ -97,11 +106,14 @@ export function LotesProdutos({
         <Button
           type="button"
           size="sm"
-          disabled={concluido || enviando}
-          onClick={onImportarProximo}
+          disabled={concluido || enviando || clicked}
+          onClick={() => {
+            setClicked(true)
+            onImportarProximo()
+          }}
           className="gap-2"
         >
-          {enviando ? (
+          {enviando || clicked ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
               Enviando lote {loteAtual + 1}…
@@ -155,38 +167,46 @@ function ModoConflitoSelector({
   onChange: (m: ModoConflito) => void
   desabilitado?: boolean
 }) {
+  const modos: Array<{ id: ModoConflito; label: string; title: string }> = [
+    {
+      id: "criar",
+      label: "Criar novos (seguro)",
+      title:
+        "Default. Cria todos os produtos novos. Pula apenas quando há match FORTE no banco (barcode EAN/GTIN ou SKU alfanumérico/longo). Match fraco (código curto numérico) NÃO é considerado duplicata.",
+    },
+    {
+      id: "atualizar",
+      label: "Atualizar existentes",
+      title:
+        "Atualiza dados cadastrais (nome/preço/custo/categoria) quando há match FORTE. Mantém estoque. Match fraco (código curto numérico) NÃO autoriza atualização — produto é criado como novo.",
+    },
+    {
+      id: "pular",
+      label: "Pular qualquer duplicata",
+      title:
+        "Cria apenas quando NÃO há nenhuma chave casando no banco (forte OU fraca). Mais conservador — recomendado para reimportações de planilhas com chaves frágeis.",
+    },
+  ]
   return (
-    <div className="flex items-center gap-1 rounded-lg border border-border bg-background p-1 text-xs">
-      <button
-        type="button"
-        disabled={desabilitado}
-        onClick={() => onChange("atualizar")}
-        className={cn(
-          "rounded-md px-2.5 py-1 transition",
-          valor === "atualizar"
-            ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:text-foreground",
-          desabilitado && "cursor-not-allowed opacity-60",
-        )}
-        title="Se SKU/barcode já existir, atualiza dados cadastrais (mantém estoque)"
-      >
-        Atualizar existente
-      </button>
-      <button
-        type="button"
-        disabled={desabilitado}
-        onClick={() => onChange("pular")}
-        className={cn(
-          "rounded-md px-2.5 py-1 transition",
-          valor === "pular"
-            ? "bg-primary text-primary-foreground"
-            : "text-muted-foreground hover:text-foreground",
-          desabilitado && "cursor-not-allowed opacity-60",
-        )}
-        title="Se SKU/barcode já existir, pula a linha"
-      >
-        Pular existente
-      </button>
+    <div className="flex flex-wrap items-center gap-1 rounded-lg border border-border bg-background p-1 text-xs">
+      {modos.map((m) => (
+        <button
+          key={m.id}
+          type="button"
+          disabled={desabilitado}
+          onClick={() => onChange(m.id)}
+          className={cn(
+            "rounded-md px-2.5 py-1 transition",
+            valor === m.id
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground",
+            desabilitado && "cursor-not-allowed opacity-60",
+          )}
+          title={m.title}
+        >
+          {m.label}
+        </button>
+      ))}
     </div>
   )
 }

@@ -126,15 +126,15 @@ export function Topbar() {
 
         <div className="hidden sm:block w-72">
           <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground transition-colors group-focus-within:text-foreground" />
             <input
               type="text"
               readOnly
-              placeholder="Busca global — em breve"
-              title="Busca global ainda não disponível"
-              className="w-full h-8 pl-8 pr-12 rounded-md bg-muted/60 border border-transparent text-[12.5px] cursor-default opacity-60 placeholder:text-muted-foreground outline-none"
+              placeholder="Pesquisar OS, vendas ou produtos..."
+              title="Pesquisa rápida (Alt+K) — em indexação"
+              className="w-full h-8 pl-8 pr-12 rounded-md bg-panel border border-border text-[12.5px] cursor-pointer placeholder:text-muted-foreground outline-none hover:bg-muted/40 hover:border-border-hover transition-all focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
             />
-            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] px-1.5 py-0.5 rounded border border-border bg-background/60 text-muted-foreground">
+            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[9px] px-1.5 py-0.5 rounded border border-border bg-background text-muted-foreground select-none pointer-events-none">
               ⌘K
             </kbd>
           </div>

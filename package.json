@@ -63,6 +63,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@stripe/stripe-js": "^9.4.0",
+    "@swc/helpers": "^0.5.22",
     "@tanstack/react-router": "^1.169.1",
     "@types/react-router-dom": "^5.3.3",
     "@vercel/analytics": "1.6.1",

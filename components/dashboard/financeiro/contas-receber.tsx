@@ -22,8 +22,10 @@ import {
   ChevronRight,
   Receipt,
   X,
+  Loader2,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
@@ -508,6 +510,9 @@ export function ContasReceber() {
   const [busca, setBusca] = useState("")
   const [selectedTituloIds, setSelectedTituloIds] = useState<string[]>([])
   const [contas, setContas] = useState<ContaReceberRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [salvandoNova, setSalvandoNova] = useState(false)
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false)
 
   const [novaOpen, setNovaOpen] = useState(false)
   const [novaDesc, setNovaDesc] = useState("")
@@ -696,6 +701,7 @@ export function ContasReceber() {
     }
     setContas(migrated)
 
+    setLoading(true)
     void (async () => {
       try {
         const r = await fetch(`/api/ops/contas-receber-list?lojaId=${encodeURIComponent(lojaKey)}`, {
@@ -711,6 +717,8 @@ export function ContasReceber() {
         setContas((prev) => mergeContasLocalWins(prev, fromServer))
       } catch {
         /* ignore */
+      } finally {
+        setLoading(false)
       }
     })()
   }, [lojaKey])
@@ -1793,12 +1801,16 @@ export function ContasReceber() {
 
   const salvarEdicao = () => {
     if (editId === null) return
+    if (salvandoEdicao) return
     const valor = parseValorBr(editValor)
     if (valor <= 0) {
       toast({ title: "Valor inválido", variant: "destructive" })
       return
     }
-    const orig = contas.find((x) => String(x.id) === String(editId))
+    setSalvandoEdicao(true)
+    setTimeout(() => {
+      try {
+        const orig = contas.find((x) => String(x.id) === String(editId))
     if (!orig) return
     const origHist = ensureHistoricoMigrado(orig).historicoPagamentos
     let valorTitulo = valor
@@ -1881,37 +1893,53 @@ export function ContasReceber() {
           }
         : c
     )
-    persist(next)
-    setEditOpen(false)
-    toast({ title: "Título atualizado" })
+        persist(next)
+        setEditOpen(false)
+        toast({ title: "Título atualizado" })
+      } catch (err) {
+        toast({ title: "Erro ao atualizar título", variant: "destructive" })
+      } finally {
+        setSalvandoEdicao(false)
+      }
+    }, 50)
   }
 
   const salvarNova = () => {
+    if (salvandoNova) return
     const valor = parseValorBr(novaValor)
     if (!novaDesc.trim() || valor <= 0) {
       toast({ title: "Preencha descrição e valor", variant: "destructive" })
       return
     }
-    const obs = novaObs.trim()
-    const row: ContaReceberRow = {
-      id: `cr-${Date.now()}`,
-      descricao: novaDesc.trim(),
-      cliente: novaCliente.trim() || "—",
-      valor,
-      vencimento: novaVenc.trim() || "—",
-      status: "pendente",
-      tipo: novaTipo.trim() || "Manual",
-      ...(obs ? { observacoesPagamento: obs } : {}),
-    }
-    persist([row, ...contas])
-    setNovaOpen(false)
-    setNovaDesc("")
-    setNovaCliente("")
-    setNovaValor("")
-    setNovaVenc("")
-    setNovaTipo("Manual")
-    setNovaObs("")
-    toast({ title: "Título criado" })
+    setSalvandoNova(true)
+    setTimeout(() => {
+      try {
+        const obs = novaObs.trim()
+        const row: ContaReceberRow = {
+          id: `cr-${Date.now()}`,
+          descricao: novaDesc.trim(),
+          cliente: novaCliente.trim() || "—",
+          valor,
+          vencimento: novaVenc.trim() || "—",
+          status: "pendente",
+          tipo: novaTipo.trim() || "Manual",
+          ...(obs ? { observacoesPagamento: obs } : {}),
+        }
+        persist([row, ...contas])
+        setNovaOpen(false)
+        setNovaDesc("")
+        setNovaCliente("")
+        setNovaValor("")
+        setNovaVenc("")
+        setNovaTipo("Manual")
+        setNovaObs("")
+        toast({ title: "Título criado" })
+      } catch (err) {
+        toast({ title: "Erro ao criar título", variant: "destructive" })
+      } finally {
+        setSalvandoNova(false)
+      }
+    }, 50)
   }
 
   const confirmarExclusao = () => {
@@ -2164,18 +2192,46 @@ export function ContasReceber() {
                 </div>
               </div>
             )
-          ) : contasFiltradas.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              Nenhum título nesta visão. Importe um extrato em Configurações ou crie um novo título.
-            </p>
           ) : (
-          <div className="space-y-3">
-            {contasFiltradas.map((conta) => {
-              const statusConfig = getStatusConfig(conta.status)
+            <div className="space-y-3">
+              {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-secondary/30"
+                >
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    <Skeleton className="h-4 w-4 shrink-0 rounded animate-pulse" />
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-4 w-40 sm:w-60" />
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-3.5 w-12 rounded bg-secondary animate-pulse" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
+                    <div className="space-y-1.5 text-right">
+                      <Skeleton className="h-4 w-20 ml-auto" />
+                      <Skeleton className="h-3 w-16 ml-auto" />
+                    </div>
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                    <Skeleton className="h-8 w-20 rounded-md" />
+                    <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                  </div>
+                </div>
+              ))
+            ) : contasFiltradas.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-8 text-center">
+                Nenhum título nesta visão. Importe um extrato em Configurações ou crie um novo título.
+              </p>
+            ) : (
+              contasFiltradas.map((conta) => {
+                const statusConfig = getStatusConfig(conta.status)
                 const podeReceber = conta.status !== "pago"
-              
-              return (
-                <div 
+                
+                return (
+                  <div 
                     key={String(conta.id)}
                     className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
                   >
@@ -2197,28 +2253,28 @@ export function ContasReceber() {
                           <User className="w-3 h-3 shrink-0" />
                           <span className="truncate text-foreground">{conta.cliente}</span>
                           <span className="px-1.5 py-0.5 rounded bg-secondary text-xs shrink-0">{conta.tipo}</span>
-                    </div>
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-4 flex-wrap justify-end">
-                    <div className="text-right">
+                      <div className="text-right">
                         <p className="font-semibold text-foreground">
-                        R$ {conta.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                      </p>
+                          R$ {conta.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </p>
                         <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
-                        <Calendar className="w-3 h-3" />
-                        {conta.vencimento}
+                          <Calendar className="w-3 h-3" />
+                          {conta.vencimento}
+                        </div>
                       </div>
-                    </div>
                       <span
                         className={cn(
                           "px-2 py-1 rounded-full text-xs font-medium transition-colors",
-                      statusConfig.bg,
-                      statusConfig.color
+                          statusConfig.bg,
+                          statusConfig.color
                         )}
                       >
-                      {statusConfig.label}
-                    </span>
+                        {statusConfig.label}
+                      </span>
                       {podeReceber && (
                         <Button
                           type="button"
@@ -2229,8 +2285,8 @@ export function ContasReceber() {
                         >
                           <Banknote className="w-4 h-4 mr-1" />
                           Receber
-                      </Button>
-                    )}
+                        </Button>
+                      )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button type="button" variant="ghost" size="icon" className="shrink-0" aria-label="Ações">
@@ -2309,7 +2365,8 @@ export function ContasReceber() {
                   </div>
                 </div>
               )
-            })}
+            })
+            )}
           </div>
           )}
         </CardContent>
@@ -2332,8 +2389,9 @@ export function ContasReceber() {
                   value={novaDesc}
                   onChange={(e) => setNovaDesc(e.target.value)}
                   placeholder="Ex.: Serviço / venda"
+                  autoFocus
                 />
-    </div>
+              </div>
               <div>
                 <Label htmlFor="cr-nova-cli" className="text-xs">
                   Cliente
@@ -2373,11 +2431,18 @@ export function ContasReceber() {
               </div>
             </div>
             <div className="mt-3 flex flex-row flex-wrap items-center justify-start gap-2 border-t border-border pt-2">
-              <Button variant="outline" type="button" size="sm" onClick={() => setNovaOpen(false)}>
+              <Button variant="outline" type="button" size="sm" onClick={() => setNovaOpen(false)} disabled={salvandoNova}>
                 Cancelar
               </Button>
-              <Button type="button" size="sm" onClick={salvarNova}>
-                Salvar
+              <Button type="button" size="sm" onClick={salvarNova} disabled={salvandoNova}>
+                {salvandoNova ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando…
+                  </>
+                ) : (
+                  "Salvar"
+                )}
               </Button>
             </div>
           </div>
@@ -2661,6 +2726,7 @@ export function ContasReceber() {
                             ? String(baixaParcelaSugestao).replace(".", ",")
                             : String(baixaAbertura).replace(".", ",")
                         }
+                        autoFocus
                       />
                       <p className="text-[10px] text-muted-foreground mt-0.5">
                         Saldo disponível nesta parcela/operação: R${" "}
@@ -2926,7 +2992,7 @@ export function ContasReceber() {
           </div>
           </div>
           <div className="shrink-0 border-t border-border bg-muted/40 px-3 py-2.5 flex flex-wrap items-center justify-end gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setBaixaOpen(false)}>
+              <Button type="button" variant="outline" size="sm" onClick={() => setBaixaOpen(false)} disabled={baixaRegistrando}>
                 Fechar
               </Button>
               {baixaModo === "receber" && (
@@ -2948,8 +3014,14 @@ export function ContasReceber() {
                     }
                     onClick={() => registrarRecebimentoClick(true)}
                   >
-                    <Banknote className="mr-1.5 h-3.5 w-3.5" />
-                    <Printer className="mr-1.5 h-3.5 w-3.5" />
+                    {baixaRegistrando ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <>
+                        <Banknote className="mr-1.5 h-3.5 w-3.5" />
+                        <Printer className="mr-1.5 h-3.5 w-3.5" />
+                      </>
+                    )}
                     {baixaEhAbatimento ? "Confirmar e imprimir" : "Salvar e imprimir"}
                   </Button>
                   <Button
@@ -2969,19 +3041,28 @@ export function ContasReceber() {
                     }
                     onClick={() => registrarRecebimentoClick(false)}
                   >
+                    {baixaRegistrando && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
                     {baixaEhAbatimento ? "Confirmar sem comprovante" : "Registrar sem imprimir"}
                   </Button>
                 </>
               )}
               {baixaModo === "marcarComRecibo" && (
-                <Button type="button" variant="default" size="sm" onClick={confirmarMarcarComRecibo}>
-                  <Printer className="mr-1.5 h-3.5 w-3.5" />
+                <Button type="button" variant="default" size="sm" onClick={confirmarMarcarComRecibo} disabled={baixaRegistrando}>
+                  {baixaRegistrando ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Printer className="mr-1.5 h-3.5 w-3.5" />
+                  )}
                   Marcar como pago e imprimir
                 </Button>
               )}
               {baixaModo === "reemitir" && (
-                <Button type="button" variant="default" size="sm" onClick={confirmarReemitirRecibo}>
-                  <Printer className="mr-1.5 h-3.5 w-3.5" />
+                <Button type="button" variant="default" size="sm" onClick={confirmarReemitirRecibo} disabled={baixaRegistrando}>
+                  {baixaRegistrando ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Printer className="mr-1.5 h-3.5 w-3.5" />
+                  )}
                   Imprimir recibo
                 </Button>
               )}
@@ -3021,7 +3102,7 @@ export function ContasReceber() {
               <Label htmlFor="cr-ed-desc" className="text-xs">
                 Descrição
               </Label>
-              <Input id="cr-ed-desc" className="h-8 text-sm" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+              <Input id="cr-ed-desc" className="h-8 text-sm" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} autoFocus />
             </div>
             <div>
               <Label htmlFor="cr-ed-cli" className="text-xs">
@@ -3300,7 +3381,7 @@ export function ContasReceber() {
             </div>
           </div>
           <div className="shrink-0 border-t border-border bg-muted/40 px-3 py-2.5 flex flex-wrap items-center justify-end gap-2">
-            <Button variant="outline" type="button" size="sm" onClick={() => setEditOpen(false)}>
+            <Button variant="outline" type="button" size="sm" onClick={() => setEditOpen(false)} disabled={salvandoEdicao}>
               Cancelar
             </Button>
             <Button
@@ -3308,12 +3389,19 @@ export function ContasReceber() {
               size="sm"
               variant="secondary"
               onClick={darBaixaParcial}
-              disabled={!editEntradaValor.trim() || !editEntradaForma.trim()}
+              disabled={salvandoEdicao || !editEntradaValor.trim() || !editEntradaForma.trim()}
             >
               Dar baixa parcial
             </Button>
-            <Button type="button" size="sm" onClick={salvarEdicao}>
-              Salvar alterações
+            <Button type="button" size="sm" onClick={salvarEdicao} disabled={salvandoEdicao}>
+              {salvandoEdicao ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando…
+                </>
+              ) : (
+                "Salvar alterações"
+              )}
             </Button>
           </div>
         </DialogContent>

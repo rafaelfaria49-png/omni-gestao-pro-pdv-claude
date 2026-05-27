@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea, useToggle } from "./ui-kit";
+import { RoadmapPreviewDialog } from "@/components/ui/roadmap-preview-dialog";
 import { ProductAIModal, QualityScore, InteligenciaCadastros } from "./produto-ia";
 import { MovimentacaoEstoqueModal, HistoricoEstoqueGeralModal } from "./MovimentacaoEstoqueModal";
 import { getEstoqueResumo, type EstoqueResumo } from "@/app/actions/estoque";
@@ -469,40 +470,82 @@ function Toolbar({
   filterQuery?: string;
   onFilterQueryChange?: (v: string) => void;
 }) {
+  const [activeRoadmap, setActiveRoadmap] = useState<"filtros" | "exportar" | null>(null);
+
   return (
-    <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2">
-      {onFilterQueryChange && (
-        <div className="relative min-w-0 max-w-full">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            placeholder={`Buscar em ${label.toLowerCase()}…`}
-            value={filterQuery ?? ""}
-            onChange={(e) => onFilterQueryChange?.(e.target.value)}
-            className="w-64 max-w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
-      )}
-      <button
-        disabled
-        title="Filtros avançados — em breve"
-        className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground opacity-50"
-      >
-        <Filter className="h-4 w-4" /> Filtros
-      </button>
-      <button
-        disabled
-        title="Exportar — em breve"
-        className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground opacity-50"
-      >
-        <Download className="h-4 w-4" /> Exportar
-      </button>
-      <span className="ml-auto text-sm text-muted-foreground">{count} {label}</span>
-      {onNew && (
-        <button onClick={onNew} className="flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
-          <Plus className="h-4 w-4" /> Novo
+    <>
+      <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2">
+        {onFilterQueryChange && (
+          <div className="relative min-w-0 max-w-full">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              placeholder={`Buscar em ${label.toLowerCase()}…`}
+              value={filterQuery ?? ""}
+              onChange={(e) => onFilterQueryChange?.(e.target.value)}
+              className="w-64 max-w-full rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        )}
+        <button
+          onClick={() => setActiveRoadmap("filtros")}
+          title="Ver Roadmap de Filtros"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-200"
+        >
+          <Filter className="h-4 w-4" /> Filtros
         </button>
+        <button
+          onClick={() => setActiveRoadmap("exportar")}
+          title="Ver Roadmap de Exportação"
+          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-200"
+        >
+          <Download className="h-4 w-4" /> Exportar
+        </button>
+        <span className="ml-auto text-sm text-muted-foreground">{count} {label}</span>
+        {onNew && (
+          <button onClick={onNew} className="flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90">
+            <Plus className="h-4 w-4" /> Novo
+          </button>
+        )}
+      </div>
+
+      {activeRoadmap === "filtros" && (
+        <RoadmapPreviewDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setActiveRoadmap(null);
+          }}
+          title="Filtros Avançados Inteligentes"
+          description="Filtre grandes volumes de cadastros cruzando tags, datas de movimentação, indicadores de compra e status operacionais em tempo real."
+          phase="planejado"
+          icon={Filter}
+          features={[
+            "Filtros por múltiplos status e tags simultâneos",
+            "Busca por data de cadastro e última interação",
+            "Salvamento de visões personalizadas (Smart Views)",
+          ]}
+          targetRelease="Fase 3 - Relatórios & Smart Views"
+        />
       )}
-    </div>
+
+      {activeRoadmap === "exportar" && (
+        <RoadmapPreviewDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setActiveRoadmap(null);
+          }}
+          title="Exportação Multi-Formato"
+          description="Exporte relatórios de cadastros completos em formatos Excel (XLSX), CSV e JSON com controle de colunas e permissões de segurança."
+          phase="desenvolvimento"
+          icon={Download}
+          features={[
+            "Exportação otimizada para planilhas eletrônicas",
+            "Configuração de colunas visíveis no arquivo final",
+            "Logs de segurança registrando quem realizou a exportação",
+          ]}
+          targetRelease="Fase 2 - Segurança & Compliance"
+        />
+      )}
+    </>
   );
 }
 

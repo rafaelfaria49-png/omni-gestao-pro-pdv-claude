@@ -9,7 +9,10 @@ import {
   processarArquivoProdutos,
   recortarParaPreview,
 } from "@/lib/importador-produtos/parser"
-import { contarDuplicadosInternos, contarPossiveisDuplicadosBanco } from "@/lib/importador-produtos/dedupe"
+import {
+  analisarDuplicadosBanco,
+  contarDuplicadosInternos,
+} from "@/lib/importador-produtos/dedupe"
 import type { PreviewProdutosErro, PreviewProdutosResult } from "@/lib/importador-produtos/types"
 
 export const runtime = "nodejs"
@@ -49,7 +52,13 @@ export async function POST(req: NextRequest) {
   if (!a.ok) return a.res
 
   const storeId = storeIdFromAssistecRequestForWrite(req)
-  if (!storeId) return erro("storeId ausente", 400)
+  if (!storeId) {
+    return erro(
+      "Unidade ativa não enviada (header x-assistec-loja-id obrigatório)",
+      400,
+      "Selecione a unidade no cabeçalho do sistema antes de pré-visualizar.",
+    )
+  }
 
   let formData: FormData
   try {
@@ -103,16 +112,29 @@ export async function POST(req: NextRequest) {
 
   const duplicadosInternos = contarDuplicadosInternos(validos)
 
-  let possiveisDuplicadosBanco = 0
+  // Análise por força do match — a MESMA usada pelo persistidor (defesa contra
+  // divergência preview vs execução).
+  let analiseDuplicadosBanco = { forte: 0, fraco: 0, semChave: 0 }
   try {
-    possiveisDuplicadosBanco = await contarPossiveisDuplicadosBanco(storeId, validos)
+    analiseDuplicadosBanco = await analisarDuplicadosBanco(storeId, validos)
   } catch (e) {
-    // Não bloqueia o preview — apenas reporta 0 e segue.
-    console.warn("[import/produtos/preview] dedupe DB falhou:", e instanceof Error ? e.message : e)
+    console.warn(
+      "[import/produtos/preview] análise de duplicados no DB falhou:",
+      e instanceof Error ? e.message : e,
+    )
   }
+  const possiveisDuplicadosBanco = analiseDuplicadosBanco.forte + analiseDuplicadosBanco.fraco
 
   const { amostra, invalidasReportadas } = recortarParaPreview(validos, invalidos)
   const lotes = fatiarEmLotes(validos, tamanhoLote)
+
+  console.info(
+    `[import/produtos/preview] storeId=${storeId} arquivo=${arquivo.name} ` +
+      `lidas=${totalLinhasLidas} validas=${validos.length} invalidas=${invalidos.length} ` +
+      `dup.int=${duplicadosInternos} match.forte=${analiseDuplicadosBanco.forte} ` +
+      `match.fraco=${analiseDuplicadosBanco.fraco} sem.chave=${analiseDuplicadosBanco.semChave} ` +
+      `lotes=${lotes.length}`,
+  )
 
   const resp: PreviewProdutosResult = {
     ok: true,
@@ -124,6 +146,7 @@ export async function POST(req: NextRequest) {
     totalLinhasInvalidas: invalidos.length,
     duplicadosInternos,
     possiveisDuplicadosBanco,
+    analiseDuplicadosBanco,
     amostra,
     linhasInvalidas: invalidasReportadas,
     lotes,

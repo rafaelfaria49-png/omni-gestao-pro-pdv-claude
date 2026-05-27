@@ -8,7 +8,9 @@ export function getActionLabel(action: string) {
     marketing_video: "Vídeo IA",
     avatar: "Avatar IA",
     marketing_avatar: "Avatar IA",
-    text: "Texto IA",
+    text: "Chat IA Mestre",
+    ia_mestre_text: "Chat IA Mestre",
+    ia_mestre_image: "Imagem IA Mestre",
   }
 
   return map[action] ?? action

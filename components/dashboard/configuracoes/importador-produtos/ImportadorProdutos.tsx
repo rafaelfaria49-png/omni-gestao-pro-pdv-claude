@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle, Package, Sparkles } from "lucide-react"
+import { AlertCircle, Loader2, Package, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useImportadorProdutos } from "./hooks/use-importador-produtos"
 import { UploadProdutos } from "./UploadProdutos"
@@ -94,7 +94,11 @@ export function ImportadorProdutos() {
               disabled={!arquivo || !temLojaObrigatoria || desabilitarUpload}
               className="gap-2"
             >
-              <Sparkles className="h-4 w-4" />
+              {fasePreview ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
               {fasePreview ? "Analisando…" : "Pré-visualizar"}
             </Button>
           </div>

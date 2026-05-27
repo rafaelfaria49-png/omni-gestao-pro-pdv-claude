@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle, Sparkles, Wand2 } from "lucide-react"
+import { AlertCircle, AlertTriangle, ArrowRight, Loader2, Sparkles, Wand2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useImportadorAvancado } from "./hooks/use-importador-avancado"
@@ -20,7 +20,33 @@ import { UploadZone } from "./UploadZone"
  * Renderiza UploadZone sempre; preview/log/erro aparecem conforme a fase.
  */
 
-export function ImportadorAvancado() {
+/**
+ * Heurística para detectar `.xls` BIFF antigo de produtos (relatórios legados).
+ * Esse formato costuma ter banner antes do cabeçalho — o parser do Importador
+ * Avançado lê a primeira linha como header e marca todos os produtos como
+ * "Nome vazio". Para esse caso o operador deve usar a aba "Produtos (lotes)",
+ * que detecta o cabeçalho dentro do arquivo.
+ *
+ * Critério deliberadamente estreito (.xls + "produto" no nome) para não falsar
+ * em backups GestaoClick legítimos (.xlsx) ou em outras planilhas.
+ */
+function parecemXlsLegadoDeProdutos(file: File): boolean {
+  const name = file.name.toLowerCase()
+  if (!name.endsWith(".xls")) return false
+  const semAcento = name.normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return semAcento.includes("produto")
+}
+
+export type ImportadorAvancadoProps = {
+  /**
+   * Opcional. Quando passado e o usuário envia um `.xls` legado de produtos,
+   * o banner de aviso ganha um botão para abrir a aba "Produtos (lotes)".
+   * Sem callback, o banner só mostra a orientação textual.
+   */
+  onSwitchToProdutosLotes?: () => void
+}
+
+export function ImportadorAvancado({ onSwitchToProdutosLotes }: ImportadorAvancadoProps = {}) {
   const imp = useImportadorAvancado()
   const {
     estado,
@@ -40,6 +66,8 @@ export function ImportadorAvancado() {
     estado.fase === "preview-loading" || estado.fase === "import-loading"
 
   const podePreVisualizar = totalArquivos > 0 && temLojaObrigatoria && !desabilitarUpload
+
+  const arquivosXlsLegadoProdutos = arquivos.filter(parecemXlsLegadoDeProdutos)
 
   return (
     <div className="space-y-6">
@@ -74,6 +102,43 @@ export function ImportadorAvancado() {
         }}
       />
 
+      {/* Aviso: XLS legado de produtos não é o fluxo certo desta aba */}
+      {arquivosXlsLegadoProdutos.length > 0 && estado.fase !== "import-ok" && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Arquivo XLS legado de produtos detectado
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Relatórios antigos (.xls) costumam ter banner antes do cabeçalho — esta aba lê a
+                primeira linha como header e marca todos os produtos como “Nome vazio”. Para esse
+                formato use a aba <strong className="font-medium">Produtos (lotes)</strong>, que
+                detecta o cabeçalho dentro do arquivo e processa em lotes de 500.
+              </p>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Detectado em: {arquivosXlsLegadoProdutos.map((f) => f.name).join(" · ")}
+            </p>
+            {onSwitchToProdutosLotes && (
+              <div className="pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={onSwitchToProdutosLotes}
+                  className="gap-2 border-amber-500/40 hover:bg-amber-500/10"
+                >
+                  Abrir aba “Produtos (lotes)”
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Ações primárias */}
       {totalArquivos > 0 && estado.fase !== "import-ok" && (
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -102,7 +167,11 @@ export function ImportadorAvancado() {
               disabled={!podePreVisualizar}
               className="gap-2"
             >
-              <Sparkles className="h-4 w-4" />
+              {estado.fase === "preview-loading" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
               {estado.fase === "preview-loading" ? "Analisando…" : "Pré-visualizar cruzamento"}
             </Button>
           </div>
@@ -123,7 +192,11 @@ export function ImportadorAvancado() {
 
       {/* Preview do cruzamento */}
       {estado.fase === "preview-ok" && (
-        <PreviewCruzamento preview={estado.preview} importando={false} onImportar={() => void rodarImport()} />
+        <PreviewCruzamento
+          preview={estado.preview}
+          importando={false}
+          onImportar={() => void rodarImport()}
+        />
       )}
 
       {/* Progresso do import */}

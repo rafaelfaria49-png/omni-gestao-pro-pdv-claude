@@ -172,108 +172,77 @@ export default function VendasHub() {
                flexClass = "flex-row items-center gap-5 p-5";
             }
 
-            const cardStyle: CSSProperties = { 
-              backgroundColor: "hsl(var(--card) / 0.7)", 
-              borderColor: "hsl(var(--primary) / 0.15)", 
-              color: "hsl(var(--card-foreground))" 
-            };
-
             return (
               <a
                 key={card.title}
                 href={card.dashboardHref}
-                className={`group relative rounded-[2rem] border cursor-pointer transition-all duration-300 hover:-translate-y-1 active:scale-[0.98] flex ${gridClass} backdrop-blur-xl shadow-sm`}
-                style={cardStyle}
+                className={`group relative rounded-xl border border-border cursor-pointer transition-smooth hover:-translate-y-0.5 active:scale-[0.99] flex ${gridClass} bg-card/70 backdrop-blur-xl text-card-foreground shadow-soft`}
               >
-                {/* Glow layer em hover para todos os cards (AGORA FORA DO OVERFLOW, BRILHA PARA FORA) */}
+                {/* Glow layer em hover para todos os cards */}
                 <div 
-                  className="pointer-events-none absolute inset-0 rounded-[2rem] opacity-0 transition-opacity duration-300 group-hover:opacity-100 ring-1 ring-inset z-0"
+                  className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 ring-1 ring-inset z-0"
                   style={{
-                    boxShadow: "0 0 40px 5px hsl(var(--primary) / 0.35)",
-                    borderColor: "hsl(var(--primary) / 0.5)"
+                    boxShadow: "0 8px 30px -12px hsl(var(--primary) / 0.25)",
+                    borderColor: "hsl(var(--primary) / 0.3)"
                   }}
                 />
-
-                {/* Camada interna COM overflow-hidden para conter a fumaça/borrados do fundo */}
-                <div className="pointer-events-none absolute inset-0 rounded-[2rem] overflow-hidden z-0">
-                  {/* Fundo sutil com a cor do tema nativamente em todos os cards */}
-                  <div 
-                    className="absolute inset-0 opacity-30"
-                    style={{ background: "linear-gradient(135deg, hsl(var(--primary)/0.2) 0%, transparent 100%)" }}
-                  />
-
-                  {/* Efeito extra de fumaça primária no canto direito para todos */}
-                  <div 
-                    className="absolute -right-10 -top-10 h-40 w-40 rounded-full blur-[60px] opacity-60" 
-                    style={{ backgroundColor: "hsl(var(--primary) / 0.15)" }} 
-                  />
-
-                  {/* Efeito Glow Extra para PDV Rápido no canto inferior */}
-                  {isPdvRapido && (
-                    <div 
-                      className="absolute -right-20 -bottom-20 h-64 w-64 rounded-full blur-[80px]" 
-                      style={{ backgroundColor: "hsl(var(--primary) / 0.20)" }} 
-                    />
-                  )}
-                </div>
 
                 {/* Container Principal do Conteúdo */}
                 <div className={`relative z-20 flex w-full h-full ${flexClass}`}>
                   <div className={`flex relative z-20 ${isPdvRapido ? "justify-between w-full" : flexClass.includes("flex-row") ? "items-center" : "mb-4 w-full"}`}>
                     <div
-                      className={`relative flex shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-110 ${isPdvRapido ? "h-16 w-16 rounded-2xl" : "h-12 w-12 rounded-xl"}`}
+                      className={`relative flex shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-105 ${isPdvRapido ? "h-14 w-14 rounded-xl" : "h-10 w-10 rounded-lg"}`}
                       style={{
-                        backgroundColor: "hsl(var(--primary) / 0.12)",
+                        backgroundColor: "hsl(var(--primary) / 0.08)",
                         color: "hsl(var(--primary))",
                       }}
                     >
-                      <Icon className={isPdvRapido ? "h-8 w-8 relative z-10" : "h-6 w-6 relative z-10"} strokeWidth={isPdvRapido ? 1.5 : 2} />
+                      <Icon className={isPdvRapido ? "h-7 w-7 relative z-10" : "h-5 w-5 relative z-10"} strokeWidth={2} />
                     </div>
                   </div>
 
-                  <div className={`flex-1 min-w-0 relative z-20 ${isPdvRapido ? "mt-auto pt-8" : flexClass.includes("flex-col") ? "" : "pr-6"}`}>
-                    <h2 className={`font-bold tracking-tight truncate ${isPdvRapido ? "text-2xl md:text-3xl mb-2 text-foreground" : "text-[16px] mb-0.5 text-foreground"}`}>
+                  <div className={`flex-1 min-w-0 relative z-20 ${isPdvRapido ? "mt-auto pt-6" : flexClass.includes("flex-col") ? "" : "pr-6"}`}>
+                    <h2 className={`font-semibold tracking-tight truncate ${isPdvRapido ? "text-xl md:text-2xl mb-1 text-foreground" : "text-sm mb-0.5 text-foreground"}`}>
                       {card.title}
                     </h2>
                     {card.meta && !isPdvRapido && (
-                      <p className="text-[10px] uppercase tracking-wide font-bold mb-1.5" style={{ color: "hsl(var(--primary) / 0.8)" }}>
+                      <p className="text-[9px] uppercase tracking-wider font-bold mb-1" style={{ color: "hsl(var(--primary) / 0.8)" }}>
                         {card.meta}
                       </p>
                     )}
-                    <p className={`leading-relaxed line-clamp-2 ${isPdvRapido ? "text-sm text-[hsl(var(--muted-foreground))] mb-3" : "text-[12px] text-[hsl(var(--muted-foreground))] mb-3"}`}>
+                    <p className={`leading-relaxed line-clamp-2 ${isPdvRapido ? "text-xs text-muted-foreground mb-3" : "text-[11px] text-muted-foreground mb-2"}`}>
                       {card.description}
                     </p>
                   </div>
 
                   {!isPdvRapido && (
                     <span
-                      className={`relative z-20 inline-flex items-center gap-1.5 shrink-0 rounded-lg px-3 py-2 text-[11px] font-semibold transition-all duration-300 group-hover:gap-2.5 group-hover:bg-[hsl(var(--primary)/0.15)] ${flexClass.includes("flex-row") ? "ml-auto" : "mt-auto self-start"}`}
+                      className={`relative z-20 inline-flex items-center gap-1 shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200 group-hover:bg-primary/10 ${flexClass.includes("flex-row") ? "ml-auto" : "mt-auto self-start"}`}
                       style={{
-                        backgroundColor: "hsl(var(--primary) / 0.08)",
-                        color: "hsl(var(--primary))",
+                        backgroundColor: "hsl(var(--muted))",
+                        color: "hsl(var(--foreground))",
                       }}
                     >
                       Acessar
-                      <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-1" />
+                      <ArrowRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" />
                     </span>
                   )}
 
                   {isPdvRapido && (
-                     <div className="mt-6 flex items-center justify-between border-t border-[hsl(var(--border)/0.5)] pt-5 w-full relative z-20">
-                        <span className="text-sm font-semibold text-foreground">Abrir módulo</span>
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] transition-transform duration-300 group-hover:translate-x-2">
-                          <ArrowRight className="h-5 w-5" />
+                     <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-4 w-full relative z-20">
+                        <span className="text-xs font-semibold text-foreground">Abrir módulo</span>
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform duration-200 group-hover:translate-x-1">
+                          <ArrowRight className="h-4 w-4" />
                         </div>
                      </div>
                   )}
                 </div>
 
-                {/* Bagde status no canto direito para todos os cards garantido */}
+                {/* Badge status no canto direito */}
                 {(card.badge || statusLabel) && (
-                  <div className={isPdvRapido ? "absolute right-6 top-6 z-30" : "absolute right-5 top-5 z-30"}>
+                  <div className={isPdvRapido ? "absolute right-5 top-5 z-30" : "absolute right-4 top-4 z-30"}>
                      <span
-                       className="text-[10px] uppercase tracking-wider font-bold px-2.5 py-1 rounded-full shadow-sm"
-                       style={statusStyle}
+                       className="text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border border-primary/20 bg-primary/10 text-primary"
                      >
                        {card.badge || statusLabel}
                      </span>

@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 26 Mai 2026 — Sessão: Lote 5 PDV Clássico (remoção do else branch JSX morto)
+> Última atualização: 26 Mai 2026 — Sessão: P0 importador produtos — matching seguro + isolamento multi-loja
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -11,7 +11,114 @@
 
 ---
 
+### P0 — Importador de Produtos: matching seguro + isolamento multi-loja (concluído 26/05/2026)
+
+**Incidente reportado:** ao importar planilha Smart (~4.800 itens) na Loja de Teste,
+preview reportou 25 possíveis duplicados; mas a execução do lote 1/10 retornou
+`Criados 0 / Atualizados 500`. Resultado real: 239 produtos antigos foram **sobrescritos**,
+nenhum novo foi criado.
+
+**Causa raiz (5 bugs):**
+
+1. **SKU inventado** (`persist.ts:58-60` antigo): quando a planilha não trazia SKU, o persist gerava `IMP-${cat}-${slugDoNome.slice(0,20)}`. Nomes parecidos (ex.: "Cabo USB 1m", "Cabo USB 2m") colidiam no slice → mesmo SKU → atualização cruzada em massa.
+2. **Matching `OR` agressivo** (`persist.ts:64-69` antigo): buscava `sku`, `sku-original`, `sku-normalizado`, `gc-${sku}`, `barcode`, **e barcode == sku se EAN-like**. SKU curto "10" da planilha bateu em produto antigo com SKU "10" da GestãoClick.
+3. **Aliases agressivos de SKU** (`normalizar.ts`): `"id"` e `"cod"` mapeavam qualquer índice numérico (1, 2, 3…) para SKU.
+4. **Preview ≠ Execute**: `dedupe.ts` (preview) usava um critério; `persist.ts` (execute) usava um OR mais amplo + considerava o SKU inventado. Daí "preview 25, execute atualizou 500".
+5. **Sem trava anti-update massivo**: rota aceitava qualquer ratio criados/atualizados sem questionar.
+
+Sobre multi-loja: `storeIdFromAssistecRequestForWrite` já está correto (sem fallback `loja-1`, retorna `null` se header ausente). Schema do Produto tem `@@unique([storeId, sku])` e `where: { storeId }` em todas as queries. Mas adicionamos **defesa em profundidade** com `lojaAtivaIdConfirmado` no body do lote — server compara com o header e aborta em divergência.
+
+**Arquivos alterados/criados:**
+
+| Arquivo | Mudança |
+|---------|---------|
+| `lib/importador-produtos/match.ts` **(NOVO)** | Função única `resolveProductImportMatch(p, banco)` + `decidirAcao(resolucao, modo)`. Classifica SKU/barcode em `forte` (alfanumérico OU ≥7 dígitos OU EAN-8/12/13/14) vs `fraca` (curto numérico ≤6 dígitos). Match fraco NUNCA autoriza update automático. |
+| `lib/importador-produtos/normalizar.ts` | Removidos aliases `"id"` e `"cod"` (curtos demais, ambíguos). Mantidos `"sku"`, `"codigo"/"código"`, `"codigo interno"`, `"referencia"`, `"ref"`. |
+| `lib/importador-produtos/persist.ts` | Reescrito: `aplicarLinha` usa `resolveProductImportMatch` + `decidirAcao`. SKU vazio → grava `null` (não inventa `IMP-*`). Snapshot do banco em 2 queries batch (em vez de N `findFirst`). Verifica `existente.storeId === storeId` antes do update. Logs estruturados. |
+| `lib/importador-produtos/dedupe.ts` | Reescrito: `analisarDuplicadosBanco` usa a MESMA `resolveProductImportMatch` do persist. Devolve `{ forte, fraco, semChave }`. Preview e execução agora compartilham a lógica de match. |
+| `lib/importador-produtos/types.ts` | + `ModoConflito: "atualizar" \| "pular" \| "criar"` (default novo é `criar`). + `analiseDuplicadosBanco: AnaliseDuplicados` no preview. + `lojaAtivaIdConfirmado: string` no `LoteRequest` (verificação dupla server-side). + `LoteErroSeguranca`. |
+| `app/api/import/produtos/preview/route.ts` | Storeid ausente → 400 com mensagem clara (sem fallback). Usa `analisarDuplicadosBanco` (forte/fraco). Logs estruturados. |
+| `app/api/import/produtos/lote/route.ts` | (a) Valida `body.lojaAtivaIdConfirmado === storeId` ou 409. (b) Trava **anti-update massivo**: se `criados=0 && atualizados=itens.length`, ou se `atualizados/itens > 50% && criados=0 && atualizados≥50` → 422 + log de auditoria `import.produtos.lote.bloqueado`. (c) `metadata.telemetria` com contagem de matches forte/fraco. |
+| `components/dashboard/configuracoes/importador-produtos/hooks/use-importador-produtos.ts` | Default `modoConflito = "criar"`. `escolherArquivo` faz reset hard (abort fetch + reseta estado). Detecta troca de loja no meio do fluxo e reseta. Envia `lojaAtivaIdConfirmado`. Valida `preview.storeId === lojaAtivaNoMomento` antes de enviar lote. |
+| `components/dashboard/configuracoes/importador-produtos/LotesProdutos.tsx` | `ModoConflitoSelector` passa a expor 3 modos com tooltips claros: "Criar novos (seguro)", "Atualizar existentes", "Pular qualquer duplicata". |
+| `components/dashboard/configuracoes/importador-produtos/PreviewProdutos.tsx` | Cards passam a separar "Match FORTE no banco", "Match FRACO (não atualiza)" e "Sem chave (criados sem SKU)" — operador vê exatamente o que vai acontecer. |
+| `lib/importador-produtos/match.test.ts` **(NOVO)** | 25 testes Vitest cobrindo classificação SKU/barcode, resolução de match, decisão por modo, e o **cenário do incidente Smart** (239 antigos + 500 novos com SKUs curtos): default e modo "atualizar" criam 500, modo "pular" pula 239 + cria 261. |
+
+**Regra SKU/barcode/código interno (consolidada):**
+
+| Origem na planilha | Vai para | Aceita update auto? |
+|---|---|---|
+| Coluna "SKU"/"Código"/"Referência" alfanumérica | `Produto.sku` | sim, se modo "atualizar" |
+| Coluna "SKU"/"Código" numérica ≥7 dígitos | `Produto.sku` (forte) | sim, se modo "atualizar" |
+| Coluna "SKU"/"Código" numérica ≤6 dígitos (ex.: "10", "148", "1000") | `Produto.sku` (gravado, mas considerado **fraco**) | **NÃO** — produto novo é criado |
+| Coluna "Código de barras"/"EAN"/"GTIN" 8/12/13/14 dígitos | `Produto.barcode` (forte) | sim, se modo "atualizar" |
+| SKU/barcode vazios na planilha | `null` no banco (Postgres NULL não conta para `@@unique`) | n/a |
+
+**Proteção anti-update errado (resumo):**
+
+1. **Classificação de chave** em `match.ts` separa forte vs fraca antes de qualquer query.
+2. **Preview e execute compartilham** a função `resolveProductImportMatch` — não pode divergir.
+3. **Default seguro**: modo `"criar"` (cria todos; pula só com match forte).
+4. **Trava server-side**: lote com `criados=0 + atualizados=todos` ou ratio > 50% sem nenhum criado retorna 422 + auditoria `bloqueado`.
+5. **Verificação dupla de loja**: `lojaAtivaIdConfirmado` no body é comparado ao `storeId` do header — divergência aborta com 409.
+6. **Reset hard no client**: trocar arquivo OU loja ativa aborta fetch pendente e zera estado.
+7. **Defesa final por linha**: antes do `update`, confere `existente.storeId === storeId`; mismatch retorna erro `tentativa de atualizar produto da loja X a partir da loja Y (bloqueado)`.
+
+**Onde estava o vazamento storeId (multi-loja):**
+
+Não houve vazamento estrutural — `storeIdFromAssistecRequestForWrite` e o `where: { storeId }` em todas as queries já isolavam por loja. A hipótese mais provável do incidente é **race entre troca de unidade na UI e click no botão de importar**: o usuário trocou para Loja de Teste, mas o header `x-assistec-loja-id` ainda continha `loja-1` no momento do upload. Daí a query achou os 239 produtos antigos da loja-1 e os atualizou. As travas novas (`lojaAtivaIdConfirmado` + reset on store change) bloqueiam esse cenário.
+
+**Comandos Prisma/migração:** nenhum. O schema `Produto.sku` já era `String?` — gravar `null` quando vazio funciona out-of-the-box no Postgres.
+
+**Validação:**
+- `npx tsc --noEmit` → 0 erros
+- `npx vitest run lib/importador-produtos/match.test.ts` → **25 testes passando** (cenário Smart inclusive)
+- `npm run build` → ver resultado mais abaixo (em execução)
+
+**Não alterado (intacto):** schema Prisma, auth, proxy, sidebar, PDV, financeiro, vendas, marketplace, WhatsApp, Omni Agent. O Importador Avançado (aba "Planilhas") segue intacto — só o "Produtos (lotes)" foi reformulado.
+
+**Próximo passo recomendado:** após confirmar o build, refazer o teste real com a planilha Smart na aba "Produtos (lotes)" da Loja de Teste e validar que o resultado bate com o preview (deve criar a maioria, não atualizar nada da loja-1).
+
+---
+
 ## ✅ Concluído e Funcionando
+
+---
+
+### Importação — aviso "XLS legado de produtos" na aba Planilhas (concluído 26/05/2026)
+
+**Contexto:** homologação do Importador de Produtos em lotes (entrega anterior) expôs uma armadilha
+de UX: ao enviar `Relatorio de produtos cadastrados.xls` na aba **antiga "Planilhas"** (Importador
+Avançado) em vez da nova **"Produtos (lotes)"**, o resultado foi `Criados 0 / Atualizados 0 /
+Ignorados 4749 / Erros 0` com mensagem de sucesso. Causa raiz: o parser do avançado
+(`lib/importador-avancado/parser.ts:23`) chama `sheet_to_json` sem `header:1` e usa a 1ª linha do
+XLS como cabeçalho. Como o relatório legado tem banner antes do header real, todos os "headers"
+ficam fora do dicionário semântico, `produto.nome` nunca é mapeado e cada linha cai em
+`Nome vazio` em `lib/importador-avancado/persistidor.ts:194-197`.
+
+Não mexemos no parser antigo nesta entrega (decisão explícita do usuário: validar a planilha
+na aba nova primeiro). Apenas adicionamos um aviso preventivo na aba errada.
+
+| Arquivo | Mudança |
+|---------|---------|
+| `components/dashboard/configuracoes/importador-avancado/ImportadorAvancado.tsx` | + helper inline `parecemXlsLegadoDeProdutos(file)` (estrito: extensão `.xls` BIFF antigo **+** "produto" no nome, sem acento). + prop opcional `onSwitchToProdutosLotes?: () => void`. Banner amber sob `UploadZone` quando há ≥1 arquivo detectado: explica por que o avançado ignoraria tudo, lista os arquivos, e (se a callback foi passada) renderiza botão "Abrir aba 'Produtos (lotes)'". Sem bloqueio do fluxo — o usuário ainda pode pré-visualizar se quiser. |
+| `components/cadastros/lovable/components/cadastros/ImportacaoHub.tsx` | `PlanilhasSection` ganha prop `onSwitchToProdutosLotes` e a repassa para `<ImportadorAvancado>`. O `ImportacaoHub` injeta `() => setSub("produtos")` ao renderizar a aba Planilhas. |
+
+**Não alterado (intacto):** schema Prisma, auth/proxy, parser/detector/merger/persistidor do
+Importador Avançado, fluxo da aba "Produtos (lotes)", outras rotas de importação. Outras chamadas
+de `<ImportadorAvancado />` fora do ImportacaoHub (se existirem) continuam funcionando — a prop é
+opcional, sem callback o banner só mostra o texto orientativo.
+
+**Critério de detecção (deliberadamente estreito):** só dispara para `.xls` (BIFF antigo) com
+"produto" no nome. Não pega `.xlsx` legítimos (backups GestaoClick canônicos) nem `.xls` de
+outros domínios (clientes, vendas).
+
+**Validação:** `npx tsc --noEmit` 0 erros · `npm run build` OK (todas as rotas geradas, sem erros nem warnings).
+
+**Próximo passo (pendente, fora desta entrega):** validar a mesma planilha
+`Relatorio de produtos cadastrados.xls` na aba **"Produtos (lotes)"**, conferir o preview real
+(linhas lidas / válidos / inválidos / cabeçalho detectado), e só então decidir se o parser
+antigo precisa ser endurecido (`header:1` + `detectarCabecalho` portado do novo).
 
 ---
 

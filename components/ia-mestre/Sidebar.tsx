@@ -272,7 +272,7 @@ export function Sidebar() {
           </p>
         )}
         <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-          Débito automático no chat ainda não está ativo. Saldo real em Configurações → IA e Créditos.
+          Chat e imagem debitam após resposta bem-sucedida da IA.
         </p>
         <Link
           href="/dashboard/creditos"

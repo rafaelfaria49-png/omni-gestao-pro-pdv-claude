@@ -1,7 +1,4 @@
-/** Mensagens compartilhadas — alinhamento UI × comportamento real (sem débito mock). */
+/** Textos alinhados ao débito real em `/api/ai/orchestrate` (User.credits). */
 
-export const IA_MESTRE_IMAGE_CREDITS_NOTE =
-  "Crédito de usuário ainda não é debitado automaticamente nesta ação. A geração pode usar API da loja (Marketing) conforme configuração no servidor."
-
-export const IA_MESTRE_IMAGE_SUCCESS_NOTE =
-  "Imagem gerada pela API. Débito em créditos do usuário ainda não está integrado nesta ação."
+export const IA_MESTRE_CREDITS_DEBIT_ACTIVE_NOTE =
+  "Cada envio de chat ou imagem confirmada debita créditos do seu usuário após sucesso da API."

@@ -4,6 +4,9 @@ Estas regras valem para **qualquer IA** que trabalhe neste repositório
 (Claude Code / Cursor / Antigravity / Claude Chat / ChatGPT / Gemini).
 São inegociáveis. Em caso de conflito, **estas regras vencem**.
 
+> **Versão de bolso (< 2 min de leitura, orientada a ação):** [`docs/governance/GOVERNANCA.md`](../../governance/GOVERNANCA.md).
+> Este `CORE_RULES.md` é a **referência detalhada**. Toda IA deve ler primeiro o `GOVERNANCA.md` e voltar aqui quando precisar de profundidade.
+
 ## 1. Pensar antes de codar
 
 - Entenda o pedido **antes** de abrir o editor.

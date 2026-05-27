@@ -35,6 +35,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
@@ -1342,8 +1343,64 @@ export function PdvClassic({
 
   if (lojaAtivaId && !storePdvGate.ready) {
     return (
-      <div className="flex min-h-[280px] w-full flex-1 items-center justify-center text-base font-medium text-white/70">
-        Carregando dados da unidade…
+      <div className="flex min-h-screen w-full flex-col bg-background p-4 space-y-4 animate-pulse">
+        {/* Topbar Skeleton */}
+        <div className="flex items-center justify-between border-b border-border pb-3 shrink-0">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-8 w-8 rounded-lg" />
+            <Skeleton className="h-6 w-32" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-24 rounded-lg" />
+            <Skeleton className="h-8 w-20 rounded-lg" />
+          </div>
+        </div>
+
+        {/* Main Area Skeleton */}
+        <div className="flex flex-1 gap-4 min-h-0">
+          {/* Cart Column Skeleton */}
+          <div className="flex-1 flex flex-col border border-border rounded-xl p-4 space-y-4 bg-card">
+            <div className="flex justify-between items-center">
+              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-4 w-12" />
+            </div>
+            <div className="flex-1 space-y-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex justify-between items-center">
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                  <Skeleton className="h-5 w-16" />
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-border pt-4 space-y-2 shrink-0">
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+              <div className="flex justify-between">
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-6 w-24" />
+              </div>
+            </div>
+          </div>
+
+          {/* Sidebar / Options Skeleton */}
+          <div className="w-80 border border-border rounded-xl p-4 space-y-4 bg-card shrink-0 hidden md:block">
+            <Skeleton className="h-5 w-32" />
+            <div className="grid grid-cols-2 gap-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full rounded-lg" />
+              ))}
+            </div>
+            <div className="space-y-2 pt-4 border-t border-border">
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

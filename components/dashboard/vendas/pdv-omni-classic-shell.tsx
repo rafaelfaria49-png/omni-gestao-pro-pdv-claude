@@ -530,14 +530,37 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   )}
                 </div>
               </div>
+              <div className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-2 text-xs">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 mb-1">Atalhos Operacionais</div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">F2 Cliente</span>
+                  <kbd className="rounded border border-b-2 border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold font-mono">F2</kbd>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">F3 Buscar Produto</span>
+                  <kbd className="rounded border border-b-2 border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold font-mono">F3</kbd>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">F4 Alterar Qtd</span>
+                  <kbd className="rounded border border-b-2 border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold font-mono">F4</kbd>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">F12 Pagto Múltiplo</span>
+                  <kbd className="rounded border border-b-2 border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold font-mono">F12</kbd>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">INS Item Avulso</span>
+                  <kbd className="rounded border border-b-2 border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold font-mono">INS</kbd>
+                </div>
+              </div>
               <Button
                 type="button"
                 onClick={() => props.onShortcutAction("F1")}
                 className="h-11 w-full shrink-0 gap-2 bg-[hsl(var(--pos-action))] font-semibold text-[hsl(var(--pos-action-foreground))] hover:bg-[hsl(var(--pos-action))]/90 cursor-pointer transition-colors shadow-sm"
               >
-                <Receipt className="h-4 w-4" />
-                Finalizar (F1)
-                <ChevronRight className="h-4 w-4" />
+                <Receipt className="h-4 w-4 shrink-0" />
+                <span>Finalizar Venda</span>
+                <kbd className="ml-auto rounded border border-b-2 border-primary-foreground/30 bg-primary-foreground/10 px-1.5 py-0.5 text-[10px] font-bold font-mono">F1</kbd>
               </Button>
             </aside>
           </div>
@@ -588,9 +611,9 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   onClick={() => props.onShortcutAction("F1")}
                   className="mt-4 w-full gap-2 bg-[hsl(var(--pos-action))] font-semibold text-[hsl(var(--pos-action-foreground))] hover:bg-[hsl(var(--pos-action))]/90 cursor-pointer transition-colors shadow-sm"
                 >
-                  <Receipt className="h-4 w-4" />
-                  Finalizar (F1)
-                  <ChevronRight className="ml-auto h-4 w-4" />
+                  <Receipt className="h-4 w-4 shrink-0" />
+                  <span>Finalizar Venda</span>
+                  <kbd className="ml-auto rounded border border-b-2 border-primary-foreground/30 bg-primary-foreground/10 px-1.5 py-0.5 text-[10px] font-bold font-mono">F1</kbd>
                 </Button>
               </div>
               <div className="min-h-0 flex-1 rounded-md border border-border bg-card p-4 shadow-sm">

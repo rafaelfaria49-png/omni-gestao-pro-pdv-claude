@@ -1,5 +1,9 @@
 # AI_WORKFLOW.md — Fluxo de trabalho entre IAs
 
+> ⚠️ **Fonte da verdade atualizada:** [`docs/governance/WORKFLOW_MULTI_IA.md`](../../governance/WORKFLOW_MULTI_IA.md).
+> Aquele documento é mais completo (matriz por tipo de tarefa, regras anti-conflito, pipeline oficial, handoff format, memória persistente).
+> Este `AI_WORKFLOW.md` fica preservado como **pointer histórico** — não duplica conteúdo.
+
 Este documento define **quem faz o quê** no desenvolvimento do OmniGestão Pro.
 O projeto usa várias IAs; cada uma tem um papel. Respeitar os papéis evita
 retrabalho, auditoria duplicada e decisões conflitantes.

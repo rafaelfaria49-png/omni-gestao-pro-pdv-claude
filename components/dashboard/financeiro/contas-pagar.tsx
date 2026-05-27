@@ -9,8 +9,10 @@ import {
   Clock,
   MoreHorizontal,
   Calendar,
+  Loader2,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -159,6 +161,9 @@ export function ContasPagar() {
     "pagamento_parcial",
   )
   const [acaoForm, setAcaoForm] = useState({ valor: "", observacao: "", motivo: "" })
+  const [loading, setLoading] = useState(false)
+  const [acaoSaving, setAcaoSaving] = useState(false)
+  const [formSaving, setFormSaving] = useState(false)
   const [form, setForm] = useState({
     descricao: "",
     fornecedor: "",
@@ -178,41 +183,44 @@ export function ContasPagar() {
     setAcaoOpen(true)
   }
 
-  const persistToServer = (nextRows: ContaPagarItem[], successMsg: string) => {
+  const persistToServer = async (nextRows: ContaPagarItem[], successMsg: string) => {
     if (!lojaId) {
       toast({ title: "Não foi possível salvar", description: "Loja não configurada.", variant: "destructive" })
       return
     }
-    void fetch("/api/ops/contas-pagar-persist", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "content-type": "application/json",
-        [ASSISTEC_LOJA_HEADER]: lojaId,
-      },
-      body: JSON.stringify({ lojaId, rows: rowsToPersistPayload(nextRows) }),
-    })
-      .then((res) => {
-        if (res.ok) {
-          setContasPagar(nextRows)
-          toast({ title: successMsg })
-        } else {
-          console.error("[contas-pagar] persist HTTP", res.status)
-          toast({
-            title: "Não foi possível salvar",
-            description: "Verifique a conexão e tente novamente.",
-            variant: "destructive",
-          })
-        }
+    setFormSaving(true)
+    try {
+      const res = await fetch("/api/ops/contas-pagar-persist", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+          [ASSISTEC_LOJA_HEADER]: lojaId,
+        },
+        body: JSON.stringify({ lojaId, rows: rowsToPersistPayload(nextRows) }),
       })
-      .catch((err: unknown) => {
-        console.error("[contas-pagar] persist rede", err)
+      if (res.ok) {
+        setContasPagar(nextRows)
+        toast({ title: successMsg })
+        setDialogOpen(false)
+      } else {
+        console.error("[contas-pagar] persist HTTP", res.status)
         toast({
           title: "Não foi possível salvar",
           description: "Verifique a conexão e tente novamente.",
           variant: "destructive",
         })
+      }
+    } catch (err: unknown) {
+      console.error("[contas-pagar] persist rede", err)
+      toast({
+        title: "Não foi possível salvar",
+        description: "Verifique a conexão e tente novamente.",
+        variant: "destructive",
       })
+    } finally {
+      setFormSaving(false)
+    }
   }
 
   const applyServerResultToLocal = (contaId: string, titulo: unknown, audit: unknown) => {
@@ -244,12 +252,13 @@ export function ContasPagar() {
   const confirmarAcao = async () => {
     const conta = acaoConta
     if (!conta) return
-
+    setAcaoSaving(true)
     try {
       if (acaoTipo === "pagamento_parcial") {
         const valor = parseFloat(acaoForm.valor.replace(",", "."))
         if (!Number.isFinite(valor) || valor <= 0) {
           toast({ title: "Valor inválido", variant: "destructive" })
+          setAcaoSaving(false)
           return
         }
         const json = await callApi("/api/financeiro/contas-pagar/pagamento-parcial", {
@@ -287,16 +296,18 @@ export function ContasPagar() {
         applyServerResultToLocal(conta.id, json.titulo, json.audit)
         toast({ title: "Estorno do último pagamento registrado" })
       }
+      setAcaoOpen(false)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       toast({ title: "Falha no servidor", description: msg, variant: "destructive" })
     } finally {
-      setAcaoOpen(false)
+      setAcaoSaving(false)
     }
   }
 
   const refreshFromServer = async () => {
     if (!lojaId) return
+    setLoading(true)
     try {
       const res = await fetch("/api/ops/contas-pagar-list", {
         method: "GET",
@@ -323,6 +334,8 @@ export function ContasPagar() {
       }
     } catch (e) {
       console.warn("[contas-pagar] fallback para localStorage:", e)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -417,8 +430,8 @@ export function ContasPagar() {
     const next = editing
       ? contasPagar.map((x) => (x.id === editing.id ? row : x))
       : [...contasPagar, row]
-    setDialogOpen(false)
-    persistToServer(next, editing ? "Conta atualizada" : "Conta adicionada")
+    
+    void persistToServer(next, editing ? "Conta atualizada" : "Conta adicionada")
   }
 
   const getStatusConfig = (status: string) => {
@@ -513,70 +526,99 @@ export function ContasPagar() {
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {contasFiltradas.map((conta) => {
-              const statusConfig = getStatusConfig(conta.status)
-              const StatusIcon = statusConfig.icon
-
-              return (
+            {loading ? (
+              Array.from({ length: 4 }).map((_, i) => (
                 <div
-                  key={conta.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
+                  key={i}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-secondary/30"
                 >
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", statusConfig.bg)}>
-                      <StatusIcon className={cn("w-5 h-5", statusConfig.color)} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium text-foreground truncate">{conta.descricao}</p>
-                      <p className="text-sm text-muted-foreground truncate">
-                        {conta.fornecedor} • {conta.categoria}
-                      </p>
+                  <div className="flex items-center gap-4 min-w-0 flex-1">
+                    <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-4 w-40 sm:w-60" />
+                      <Skeleton className="h-3 w-24" />
                     </div>
                   </div>
                   <div className="flex items-center gap-4 flex-wrap justify-end">
-                    <div className="text-right">
-                      <p className="font-semibold text-foreground">
-                        {conta.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                      </p>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Calendar className="w-3 h-3" />
-                        Venc.: {fmtData(conta.dataVencimento)}
-                      </div>
+                    <div className="space-y-1.5 text-right">
+                      <Skeleton className="h-4 w-20 ml-auto" />
+                      <Skeleton className="h-3 w-16 ml-auto" />
                     </div>
-                    <span
-                      className={cn(
-                        "px-2 py-1 rounded-full text-xs font-medium",
-                        statusConfig.bg,
-                        statusConfig.color
-                      )}
-                    >
-                      {statusConfig.label}
-                    </span>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(conta)}>
-                      Editar
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label="Ações">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openAcao(conta, "pagamento_parcial")}>
-                          Pagamento parcial
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openAcao(conta, "liquidar")}>Liquidar</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => openAcao(conta, "estornar")}>Estornar (título)</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openAcao(conta, "estornar_ultimo")}>
-                          Estornar último pagamento
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Skeleton className="h-6 w-16 rounded-full" />
+                    <Skeleton className="h-8 w-12 rounded-md" />
                   </div>
                 </div>
-              )
-            })}
+              ))
+            ) : contasFiltradas.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">
+                Nenhuma conta a pagar encontrada.
+              </div>
+            ) : (
+              contasFiltradas.map((conta) => {
+                const statusConfig = getStatusConfig(conta.status)
+                const StatusIcon = statusConfig.icon
+
+                return (
+                  <div
+                    key={conta.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", statusConfig.bg)}>
+                        <StatusIcon className={cn("w-5 h-5", statusConfig.color)} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground truncate">{conta.descricao}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {conta.fornecedor} • {conta.categoria}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 flex-wrap justify-end">
+                      <div className="text-right">
+                        <p className="font-semibold text-foreground">
+                          {conta.valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                        </p>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Calendar className="w-3 h-3" />
+                          Venc.: {fmtData(conta.dataVencimento)}
+                        </div>
+                      </div>
+                      <span
+                        className={cn(
+                          "px-2 py-1 rounded-full text-xs font-medium",
+                          statusConfig.bg,
+                          statusConfig.color
+                        )}
+                      >
+                        {statusConfig.label}
+                      </span>
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(conta)}>
+                        Editar
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" aria-label="Ações">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openAcao(conta, "pagamento_parcial")}>
+                            Pagamento parcial
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openAcao(conta, "liquidar")}>Liquidar</DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => openAcao(conta, "estornar")}>Estornar (título)</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openAcao(conta, "estornar_ultimo")}>
+                            Estornar último pagamento
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                )
+              })
+            )}
           </div>
         </CardContent>
       </Card>
@@ -595,7 +637,7 @@ export function ContasPagar() {
             {acaoTipo === "pagamento_parcial" && (
               <div className="space-y-1">
                 <Label>Valor (R$)</Label>
-                <Input value={acaoForm.valor} onChange={(e) => setAcaoForm((f) => ({ ...f, valor: e.target.value }))} />
+                <Input value={acaoForm.valor} onChange={(e) => setAcaoForm((f) => ({ ...f, valor: e.target.value }))} autoFocus />
               </div>
             )}
             {(acaoTipo === "pagamento_parcial" || acaoTipo === "liquidar") && (
@@ -604,21 +646,31 @@ export function ContasPagar() {
                 <Input
                   value={acaoForm.observacao}
                   onChange={(e) => setAcaoForm((f) => ({ ...f, observacao: e.target.value }))}
+                  autoFocus={acaoTipo === "liquidar"}
                 />
               </div>
             )}
             {(acaoTipo === "estornar" || acaoTipo === "estornar_ultimo") && (
               <div className="space-y-1">
                 <Label>Motivo</Label>
-                <Input value={acaoForm.motivo} onChange={(e) => setAcaoForm((f) => ({ ...f, motivo: e.target.value }))} />
+                <Input value={acaoForm.motivo} onChange={(e) => setAcaoForm((f) => ({ ...f, motivo: e.target.value }))} autoFocus />
               </div>
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAcaoOpen(false)}>
+            <Button variant="outline" onClick={() => setAcaoOpen(false)} disabled={acaoSaving}>
               Cancelar
             </Button>
-            <Button onClick={() => void confirmarAcao()}>Confirmar</Button>
+            <Button onClick={() => void confirmarAcao()} disabled={acaoSaving}>
+              {acaoSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Confirmando…
+                </>
+              ) : (
+                "Confirmar"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -634,6 +686,7 @@ export function ContasPagar() {
               <Input
                 value={form.descricao}
                 onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
+                autoFocus
               />
             </div>
             <div className="space-y-1">
@@ -684,10 +737,19 @@ export function ContasPagar() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={formSaving}>
               Cancelar
             </Button>
-            <Button onClick={salvar}>Salvar</Button>
+            <Button onClick={salvar} disabled={formSaving}>
+              {formSaving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Salvando…
+                </>
+              ) : (
+                "Salvar"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

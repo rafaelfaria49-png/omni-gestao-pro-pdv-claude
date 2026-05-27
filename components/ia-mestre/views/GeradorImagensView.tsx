@@ -3,7 +3,7 @@
 import { ImageIcon, MessageCircle, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { IaMestreSubPageShell } from "@/components/ia-mestre/IaMestreSubPageShell"
-import { IA_MESTRE_IMAGE_CREDITS_NOTE } from "@/components/ia-mestre/ia-mestre-honesty"
+import { IA_MESTRE_CREDITS_DEBIT_ACTIVE_NOTE } from "@/components/ia-mestre/ia-mestre-honesty"
 import { Button } from "@/components/ui/button"
 
 export function GeradorImagensView() {
@@ -27,7 +27,7 @@ export function GeradorImagensView() {
           funciona hoje no <strong className="font-medium text-foreground">chat da IA Mestre</strong> quando você pede
           logo, banner, arte ou post — o servidor chama a API de imagem (Marketing).
         </p>
-        <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">{IA_MESTRE_IMAGE_CREDITS_NOTE}</p>
+        <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">{IA_MESTRE_CREDITS_DEBIT_ACTIVE_NOTE}</p>
         <Button type="button" className="mt-6 h-10 gap-2 rounded-xl px-6" asChild>
           <Link href="/dashboard/ia-mestre">
             <MessageCircle className="h-4 w-4" />

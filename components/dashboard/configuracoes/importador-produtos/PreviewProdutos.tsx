@@ -55,9 +55,22 @@ export function PreviewProdutos({ preview }: PreviewProdutosProps) {
           tom={preview.duplicadosInternos > 0 ? "alerta" : "neutro"}
         />
         <ResumoCard
-          label="Possíveis duplicados no banco"
-          valor={formatNumero(preview.possiveisDuplicadosBanco)}
-          tom={preview.possiveisDuplicadosBanco > 0 ? "neutro" : "neutro"}
+          label="Match FORTE no banco"
+          valor={formatNumero(preview.analiseDuplicadosBanco.forte)}
+          tom={preview.analiseDuplicadosBanco.forte > 0 ? "alerta" : "neutro"}
+          hint="barcode EAN/GTIN ou SKU alfanumérico/≥7 dígitos batendo no banco — autoriza atualização"
+        />
+        <ResumoCard
+          label="Match FRACO (não atualiza)"
+          valor={formatNumero(preview.analiseDuplicadosBanco.fraco)}
+          tom={preview.analiseDuplicadosBanco.fraco > 0 ? "neutro" : "neutro"}
+          hint="SKU curto numérico (ex.: 10, 148) bateu no banco — será CRIADO como novo, não atualizado"
+        />
+        <ResumoCard
+          label="Sem chave (criados sem SKU)"
+          valor={formatNumero(preview.analiseDuplicadosBanco.semChave)}
+          tom="neutro"
+          hint="Linhas sem SKU nem barcode — serão criadas sem chave de identidade (SKU null)"
         />
       </div>
 
@@ -237,13 +250,15 @@ function ResumoCard({
   label,
   valor,
   tom = "neutro",
+  hint,
 }: {
   label: string
   valor: string
   tom?: "neutro" | "alerta" | "ok"
+  hint?: string
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card px-3 py-2">
+    <div className="rounded-xl border border-border bg-card px-3 py-2" title={hint}>
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
         className={cn(
@@ -257,6 +272,7 @@ function ResumoCard({
       >
         {valor}
       </p>
+      {hint && <p className="mt-0.5 truncate text-[10px] text-muted-foreground" title={hint}>{hint}</p>}
     </div>
   )
 }

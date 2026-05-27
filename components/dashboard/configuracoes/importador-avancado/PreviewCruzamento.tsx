@@ -233,6 +233,7 @@ export type PreviewCruzamentoProps = {
 
 export function PreviewCruzamento({ preview, importando = false, onImportar }: PreviewCruzamentoProps) {
   const { planilhas, erros } = preview
+  const [clicked, setClicked] = useState(false)
 
   const resumo = useMemo(() => {
     const arquivos = new Set(planilhas.map((p) => p.fileName)).size
@@ -297,11 +298,14 @@ export function PreviewCruzamento({ preview, importando = false, onImportar }: P
           </div>
           <Button
             type="button"
-            onClick={onImportar}
-            disabled={importando}
+            onClick={() => {
+              setClicked(true)
+              onImportar()
+            }}
+            disabled={importando || clicked}
             className="gap-2"
           >
-            {importando ? (
+            {importando || clicked ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Importando…

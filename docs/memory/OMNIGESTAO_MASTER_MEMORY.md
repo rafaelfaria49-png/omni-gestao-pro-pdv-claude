@@ -1,14 +1,96 @@
 # OmniGestão Pro — Memória viva consolidada
 
 **Tipo:** documento de continuidade (onboarding humano + agentes de IA).  
-**Última consolidação:** 2026-05-08  
+**Última consolidação:** 2026-05-08 · **Última revisão:** 2026-05-27 (Bloco 28 — pointer atualizado para o Sistema Operacional de Desenvolvimento)  
 **Fontes:** `docs/` (módulos, reports, ai, roadmap, architecture, deploy), `prisma/migrations/`, `git log`, inspeção de rotas críticas descrita na documentação existente, e contexto de implementações recentes (WhatsApp Cloud API, PDV, MVP).
 
-**Leitura complementar obrigatória (não duplicar integralmente aqui):**
+---
 
-- Estado resumido e checklist de retomada: [`docs/ai/CURRENT_STATUS.md`](../ai/CURRENT_STATUS.md)
+## 🆕 Sistema Operacional de Desenvolvimento — entrada oficial (2026-05-27)
+
+A partir de 2026-05-27 o projeto passou a operar sob um **Sistema Operacional de Desenvolvimento** persistido em `docs/`. **Toda IA/humano que entra no projeto deve seguir esta ordem de leitura:**
+
+1. **Entrada universal:** [`docs/skills/INDEX.md`](../skills/INDEX.md) — lista todos os documentos da governança e seus papéis.
+2. **Regras inegociáveis (versão de bolso):** [`docs/governance/GOVERNANCA.md`](../governance/GOVERNANCA.md) — leitura < 2 min antes de tocar qualquer arquivo.
+3. **Estado real:** [`docs/ai/CURRENT_STATUS_OVERVIEW.md`](../ai/CURRENT_STATUS_OVERVIEW.md) — overview enxuto (< 200 linhas). Histórico completo continua em [`CURRENT_STATUS.md`](../ai/CURRENT_STATUS.md).
+4. **Mapa estratégico:** [`docs/blueprint/MASTER_PLAN.md`](../blueprint/MASTER_PLAN.md) — visão única, 11 HUBs, 4 ondas.
+5. **Onde estamos por HUB:** [`docs/roadmaps/INDEX.md`](../roadmaps/INDEX.md) — 11 roadmaps detalhados.
+
+### Estrutura do sistema (Blocos 0–28)
+
+```
+docs/
+  governance/                          # Sistema Operacional (Blocos 0–7)
+    BLUEPRINT_GOVERNANCA.md            # Bloco 0 — mapa-mestre dos 28 blocos
+    GOVERNANCA.md                      # Bloco 1 — 7 inegociáveis (versão de bolso)
+    WORKFLOW_MULTI_IA.md               # Bloco 2 — Opus/Sonnet/Antigravity/Composer/ChatGPT
+    SESSION_HANDOFF.md                 # Bloco 3 — abrir/fechar sessão sem perder contexto
+    SPRINT_PROTOCOL.md                 # Bloco 4 — sprint do início ao fim
+    AUDIT_PROTOCOL.md                  # Bloco 5 — 8 tipos de auditoria, P0–P3
+    PROMPTS_OFICIAIS.md                # Bloco 7 — 13 prompts paste-and-go
+  decisions/                           # Bloco 6 — ADRs
+    INDEX.md
+    TEMPLATE_ADR.md
+    OS_ROUTE_OFICIAL.md                # ADR-0001 (legado)
+  roadmaps/                            # Blocos 8–19 — 1 índice + 11 ROADMAPs por HUB
+    INDEX.md                           # convenções + ordem ideal + matriz paralelismo
+    ROADMAP_PDV.md
+    ROADMAP_OPERACOES_OS.md
+    ROADMAP_FINANCEIRO.md
+    ROADMAP_ESTOQUE.md
+    ROADMAP_MARKETPLACE.md
+    ROADMAP_CRM.md
+    ROADMAP_WHATSAPP.md
+    ROADMAP_MARKETING_IA.md
+    ROADMAP_OMNI_AGENT.md
+    ROADMAP_BI.md
+    ROADMAP_MULTI_LOJA.md
+  sprints/TEMPLATE_SPRINT.md           # Bloco 20 — template oficial
+  audits/TEMPLATE_AUDITORIA.md         # Bloco 21 — template oficial
+  ai/CURRENT_STATUS_OVERVIEW.md        # Bloco 22 — overview enxuto
+  status/                              # Bloco 23 — status vivos
+    DIVIDA_TECNICA.md
+    MOCKS_TRACKING.md
+    RISCOS.md
+    BLOCKERS.md
+  blueprint/                           # Blocos 24–26 — estratégia
+    MASTER_PLAN.md
+    PRODUCT_VISION.md
+    MONETIZATION.md
+  architecture/INDEX.md                # Bloco 27 — arquitetura técnica detalhada
+  memory/OMNIGESTAO_MASTER_MEMORY.md   # Bloco 28 — este arquivo (continuidade histórica)
+  skills/INDEX.md                      # Entrada universal (atualizado em Blocos 7–22)
+```
+
+### Para que serve cada camada
+
+| Camada | Responde a... |
+|---|---|
+| **governance/** | "Como trabalhamos?" — regras, workflow IA, sprint/audit protocols, prompts |
+| **decisions/** | "Por que decidimos X?" — ADRs imutáveis |
+| **roadmaps/** | "Para onde vamos por HUB?" — visão, fases, gaps, métricas |
+| **sprints/** | "O que está sendo executado?" — sprint atual + histórico |
+| **audits/** | "O que está doente?" — auditorias periódicas com findings P0–P3 |
+| **ai/** | "Onde estamos hoje?" — overview enxuto + histórico completo |
+| **status/** | "O que está travando/devendo agora?" — dívida, mocks, riscos, blockers vivos |
+| **blueprint/** | "O que estamos construindo no fundo?" — master plan, visão produto, monetização |
+| **architecture/** | "Como o código está organizado?" — padrões, pastas, decisões técnicas |
+| **memory/** | "O que aconteceu antes?" — continuidade histórica (este arquivo) |
+
+### Princípios do sistema
+
+- **Documentação como código:** versionada, revisada, imutável quando precisa ser (ADRs, sprints encerradas, auditorias publicadas).
+- **Fonte da verdade única por assunto:** se duas docs falam o mesmo, uma é fonte e outra é pointer.
+- **Atualização disciplinada:** `last_update` no front matter; atualizar ao encerrar sprint, ao mudar estado, ao decidir.
+- **Modular incremental:** entregar bloco a bloco, sem respostas monolíticas que truncam contexto.
+
+---
+
+## Leitura complementar (legado e contexto histórico)
+
+- Histórico completo de sprints e contexto: [`docs/ai/CURRENT_STATUS.md`](../ai/CURRENT_STATUS.md) (1800+ linhas — apêndice histórico)
 - Auditoria por módulo (P0/P1, riscos): [`docs/modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md`](../modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md)
-- Roadmap macro: [`docs/roadmap/ROADMAP.md`](../roadmap/ROADMAP.md)
+- Roadmap macro **legado** (substituído pelos roadmaps por HUB): [`docs/roadmap/ROADMAP.md`](../roadmap/ROADMAP.md)
 - Backend (Actions, services, adapters): [`docs/architecture/BACKEND.md`](../architecture/BACKEND.md)
 - Checklist Vercel: [`docs/deploy/PRODUCTION_CHECKLIST.md`](../deploy/PRODUCTION_CHECKLIST.md)
 

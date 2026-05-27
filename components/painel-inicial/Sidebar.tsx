@@ -34,10 +34,10 @@ export function Sidebar() {
 
   const rowClasses = (active: boolean) =>
     [
-      "group relative flex items-center gap-2 rounded-lg px-2 py-1 text-[12px] transition-all duration-200",
+      "group relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] border transition-smooth",
       active
-        ? "bg-primary/15 text-primary font-semibold ring-1 ring-primary/25"
-        : "text-muted-foreground hover:text-foreground hover:bg-panel",
+        ? "bg-primary/8 text-primary font-semibold border-primary/15 shadow-soft"
+        : "text-muted-foreground hover:text-foreground hover:bg-muted/40 border-transparent",
     ].join(" ");
 
   const renderRow = (params: {

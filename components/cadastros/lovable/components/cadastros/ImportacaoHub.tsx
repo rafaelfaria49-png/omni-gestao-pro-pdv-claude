@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 
 import { Badge, Card, SectionTitle } from "./ui-kit";
+import { RoadmapPreviewDialog } from "@/components/ui/roadmap-preview-dialog";
 import { AppOpsProviders } from "@/components/dashboard/app-ops-providers";
 import { ImportadorAvancado } from "@/components/dashboard/configuracoes/importador-avancado/ImportadorAvancado";
 import { ImportadorProdutos } from "@/components/dashboard/configuracoes/importador-produtos/ImportadorProdutos";
@@ -91,7 +92,7 @@ export function ImportacaoHub() {
         </div>
       </div>
 
-      {sub === "planilhas" && <PlanilhasSection />}
+      {sub === "planilhas" && <PlanilhasSection onSwitchToProdutosLotes={() => setSub("produtos")} />}
       {sub === "produtos" && <ProdutosLotesSection />}
       {sub === "xml" && <XmlNfeSection />}
       {sub === "historico" && <HistoricoSection />}
@@ -233,7 +234,7 @@ const DOMINIOS_PLANILHA = [
   { l: "Financeiro", icon: Receipt },
 ] as const;
 
-function PlanilhasSection() {
+function PlanilhasSection({ onSwitchToProdutosLotes }: { onSwitchToProdutosLotes?: () => void }) {
   return (
     <div className="grid w-full min-w-0 gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
@@ -244,7 +245,7 @@ function PlanilhasSection() {
             action={<Badge tone="success">Em produção</Badge>}
           />
           <AppOpsProviders>
-            <ImportadorAvancado />
+            <ImportadorAvancado onSwitchToProdutosLotes={onSwitchToProdutosLotes} />
           </AppOpsProviders>
         </Card>
       </div>
@@ -438,6 +439,7 @@ function XmlNfeSection() {
   const [cabecalho, setCabecalho] = useState<NFeCabecalho>({});
   const [erro, setErro] = useState<string | null>(null);
   const [analisando, setAnalisando] = useState(false);
+  const [showRoadmap, setShowRoadmap] = useState(false);
 
   const limpar = useCallback(() => {
     setArquivo(null);
@@ -478,10 +480,10 @@ function XmlNfeSection() {
     <div className="grid w-full min-w-0 gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
         {/* Aviso honesto */}
-        <Card className="border-[color:var(--warning)]/30 bg-[color-mix(in_oklab,var(--warning)_8%,transparent)] p-4">
+        <div className="border border-border border-l-4 border-l-warning bg-warning/5 rounded-xl p-4">
           <div className="flex items-start gap-3">
-            <FileWarning className="mt-0.5 h-5 w-5 shrink-0 text-[color:var(--warning)]" />
-            <div className="min-w-0">
+            <FileWarning className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-foreground">
                 Parser experimental — preview apenas, não persiste no banco
               </p>
@@ -491,9 +493,11 @@ function XmlNfeSection() {
                 liberados quando o backend fiscal estiver pronto.
               </p>
             </div>
-            <Badge tone="warning">Em desenvolvimento</Badge>
+            <div className="shrink-0">
+              <Badge tone="warning">Em desenvolvimento</Badge>
+            </div>
           </div>
-        </Card>
+        </div>
 
         <Card className="p-5">
           <SectionTitle
@@ -514,7 +518,7 @@ function XmlNfeSection() {
 
           {!arquivo && (
             <div
-              className="rounded-2xl border border-dashed border-border bg-background p-8 text-center"
+              className="rounded-2xl border border-border bg-panel/35 hover:bg-panel/50 transition-colors p-8 text-center"
               onDragOver={(e) => {
                 e.preventDefault();
               }}
@@ -597,30 +601,30 @@ function XmlNfeSection() {
                   </div>
 
                   {/* Tabela de itens */}
-                  <div className="overflow-hidden rounded-xl border border-border">
+                  <div className="overflow-hidden rounded-xl border border-border bg-card">
                     <div className="max-h-[420px] overflow-auto">
                       <table className="w-full text-sm">
-                        <thead className="sticky top-0 bg-surface text-xs uppercase text-muted-foreground">
+                        <thead className="sticky top-0 bg-surface text-xs uppercase tracking-wide text-muted-foreground">
                           <tr>
-                            <th className="px-3 py-2 text-left font-medium">Produto</th>
-                            <th className="px-3 py-2 text-left font-medium">Cód.</th>
-                            <th className="px-3 py-2 text-left font-medium">NCM</th>
-                            <th className="px-3 py-2 text-left font-medium">CFOP</th>
-                            <th className="px-3 py-2 text-right font-medium">Qtd</th>
-                            <th className="px-3 py-2 text-right font-medium">V. unit</th>
+                            <th className="px-4 py-3 text-left font-medium">Produto</th>
+                            <th className="px-4 py-3 text-left font-medium">Cód.</th>
+                            <th className="px-4 py-3 text-left font-medium">NCM</th>
+                            <th className="px-4 py-3 text-left font-medium">CFOP</th>
+                            <th className="px-4 py-3 text-right font-medium">Qtd</th>
+                            <th className="px-4 py-3 text-right font-medium">V. unit</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                           {itens.map((it) => (
                             <tr key={it.id} className="hover:bg-accent/40">
-                              <td className="px-3 py-2 text-foreground">{it.nome}</td>
-                              <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{it.codigo}</td>
-                              <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{it.ncm || "—"}</td>
-                              <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{it.cfop || "—"}</td>
-                              <td className="px-3 py-2 text-right tabular-nums text-foreground">
+                              <td className="px-4 py-3 text-foreground">{it.nome}</td>
+                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{it.codigo}</td>
+                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{it.ncm || "—"}</td>
+                              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{it.cfop || "—"}</td>
+                              <td className="px-4 py-3 text-right tabular-nums text-foreground">
                                 {it.quantidade.toLocaleString("pt-BR")}
                               </td>
-                              <td className="px-3 py-2 text-right tabular-nums text-foreground">
+                              <td className="px-4 py-3 text-right tabular-nums text-foreground">
                                 {it.valorUnitario.toLocaleString("pt-BR", {
                                   style: "currency",
                                   currency: "BRL",
@@ -631,11 +635,11 @@ function XmlNfeSection() {
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td colSpan={4} className="px-3 py-2 text-right text-xs text-muted-foreground">
+                            <td colSpan={4} className="px-4 py-3 text-right text-xs text-muted-foreground">
                               Total estimado dos itens:
                             </td>
-                            <td className="px-3 py-2 text-right text-xs text-muted-foreground" />
-                            <td className="px-3 py-2 text-right font-semibold text-foreground">
+                            <td className="px-4 py-3 text-right text-xs text-muted-foreground" />
+                            <td className="px-4 py-3 text-right font-semibold text-foreground">
                               {totalValor.toLocaleString("pt-BR", {
                                 style: "currency",
                                 currency: "BRL",
@@ -647,20 +651,36 @@ function XmlNfeSection() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-background p-3 text-xs">
-                    <p className="text-muted-foreground">
-                      Preview lido pelo parser experimental. Confirmação de entrada e gravação serão
-                      liberadas no backend fiscal definitivo.
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-panel p-3 text-xs">
+                    <p className="min-w-0 flex-1 text-muted-foreground">
+                      Preview lido pelo parser experimental. A gravação e entrada no estoque serão liberadas no backend fiscal definitivo.
                     </p>
                     <button
                       type="button"
-                      disabled
-                      title="Disponível quando o backend fiscal estiver pronto"
-                      className="cursor-not-allowed rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground"
+                      onClick={() => setShowRoadmap(true)}
+                      className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-foreground hover:bg-accent transition"
                     >
-                      Confirmar entrada (em breve)
+                      Confirmar entrada
                     </button>
                   </div>
+
+                  {showRoadmap && (
+                    <RoadmapPreviewDialog
+                      open={showRoadmap}
+                      onOpenChange={setShowRoadmap}
+                      title="Entrada de Mercadoria & Integração SEFAZ"
+                      description="Importe arquivos XML de fornecedores com consulta automática à SEFAZ, correspondência inteligente de itens (De-Para) e atualização automática de custos e estoques."
+                      phase="desenvolvimento"
+                      icon={FileCode}
+                      features={[
+                        "Consulta à SEFAZ automática por chave de acesso",
+                        "Vínculo inteligente de fornecedores e produtos cadastrados",
+                        "Atualização em lote do preço de custo, NCM e estoque",
+                        "Lançamento automático de contas a pagar no financeiro",
+                      ]}
+                      targetRelease="Fase 2 - Módulo Fiscal"
+                    />
+                  )}
                 </>
               )}
             </div>
@@ -779,7 +799,7 @@ function HistoricoSection() {
         {err && <p className="text-sm text-destructive">{err}</p>}
 
         {!loading && !err && (logs?.length ?? 0) === 0 && (
-          <div className="rounded-2xl border border-dashed border-border bg-background p-10 text-center">
+          <div className="rounded-2xl border border-border bg-panel/30 shadow-soft p-10 text-center">
             <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
               <Sparkles className="h-5 w-5" />
             </div>
@@ -792,18 +812,18 @@ function HistoricoSection() {
         )}
 
         {!loading && !err && logs && logs.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-border">
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
             <div className="max-h-[640px] overflow-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-surface text-xs uppercase text-muted-foreground">
+                <thead className="sticky top-0 bg-surface text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium">Data</th>
-                    <th className="px-3 py-2 text-left font-medium">Tipo</th>
-                    <th className="px-3 py-2 text-left font-medium">Usuário</th>
-                    <th className="px-3 py-2 text-left font-medium">Resumo</th>
-                    <th className="px-3 py-2 text-right font-medium">Registros</th>
-                    <th className="px-3 py-2 text-right font-medium">Duração</th>
-                    <th className="px-3 py-2 text-left font-medium">Status</th>
+                    <th className="px-4 py-3 text-left font-medium">Data</th>
+                    <th className="px-4 py-3 text-left font-medium">Tipo</th>
+                    <th className="px-4 py-3 text-left font-medium">Usuário</th>
+                    <th className="px-4 py-3 text-left font-medium">Resumo</th>
+                    <th className="px-4 py-3 text-right font-medium">Registros</th>
+                    <th className="px-4 py-3 text-right font-medium">Duração</th>
+                    <th className="px-4 py-3 text-left font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -811,15 +831,15 @@ function HistoricoSection() {
                     const totaisRegistros = l.totais ? l.totais.criados + l.totais.atualizados : null;
                     return (
                       <tr key={l.id} className="align-top hover:bg-accent/40">
-                        <td className="px-3 py-3 text-foreground">
+                        <td className="px-4 py-3 text-foreground">
                           <div className="font-medium">{formatData(l.dataIso)}</div>
                           <div className="text-[11px] text-muted-foreground">{formatRelativo(l.dataIso)}</div>
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="px-4 py-3">
                           <Badge tone={l.tipo === "XML NF-e" ? "warning" : "primary"}>{l.tipo}</Badge>
                         </td>
-                        <td className="px-3 py-3 truncate text-foreground">{l.usuario}</td>
-                        <td className="px-3 py-3">
+                        <td className="px-4 py-3 truncate text-foreground">{l.usuario}</td>
+                        <td className="px-4 py-3">
                           <div className="text-foreground">{l.resumo || "—"}</div>
                           {l.porDominio && (
                             <div className="mt-1 flex flex-wrap gap-1">
@@ -842,13 +862,13 @@ function HistoricoSection() {
                             </div>
                           )}
                         </td>
-                        <td className="px-3 py-3 text-right tabular-nums text-foreground">
+                        <td className="px-4 py-3 text-right tabular-nums text-foreground">
                           {totaisRegistros == null ? "—" : totaisRegistros.toLocaleString("pt-BR")}
                         </td>
-                        <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
+                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
                           {l.duracaoMs == null ? "—" : `${(l.duracaoMs / 1000).toFixed(1)}s`}
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="px-4 py-3">
                           <Badge tone={l.status === "erro" ? "danger" : "success"}>
                             {l.status === "erro" ? "Com erros" : "OK"}
                           </Badge>
