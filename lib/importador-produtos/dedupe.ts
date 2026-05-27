@@ -1,26 +1,31 @@
 // ============================================================
 // lib/importador-produtos/dedupe.ts
 // Deduplicação interna da planilha + consulta de possíveis duplicados no banco.
+//
+// IMPORTANTE: a contagem aqui DEVE usar a mesma função de match que o persist
+// (lib/importador-produtos/match.ts) — preview e execução não podem divergir.
 // ============================================================
 
 import { prisma } from "@/lib/prisma"
-import { normalizeProdutoSku } from "@/lib/produto-sku-normalize"
 import { normalizeSkuForSave } from "@/lib/produto-sku"
 import type { ProdutoNormalizado } from "./types"
+import {
+  classificarBarcode,
+  classificarSku,
+  resolveProductImportMatch,
+  type SnapshotBancoProdutos,
+} from "./match"
 
-/** Identidade interna para dedup: prioridade SKU normalizado → barcode → nome normalizado. */
+/** Identidade interna para dedup (apenas dentro da própria planilha). */
 function chaveInterna(p: ProdutoNormalizado): string {
-  const skuN = normalizeProdutoSku(p.sku)
-  if (skuN) return `sku:${skuN}`
+  const sku = (p.sku ?? "").trim().toLowerCase()
+  if (sku) return `sku:${sku}`
   const bc = (p.barcode ?? "").trim()
   if (bc) return `bc:${bc}`
   return `nome:${(p.nome ?? "").trim().toLowerCase()}`
 }
 
-/**
- * Conta quantos produtos válidos colidiriam entre si dentro da planilha.
- * (Não remove — apenas reporta. Persist usa upsert idempotente; quem chega depois ganha.)
- */
+/** Conta linhas que colidiriam entre si dentro da planilha. */
 export function contarDuplicadosInternos(validos: ProdutoNormalizado[]): number {
   const visto = new Map<string, number>()
   for (const p of validos) {
@@ -34,80 +39,110 @@ export function contarDuplicadosInternos(validos: ProdutoNormalizado[]): number 
   return duplicados
 }
 
+export type AnaliseDuplicadosBanco = {
+  /** Match FORTE (autorizaria update automático): barcode EAN/GTIN ou SKU alfanumérico/longo. */
+  forte: number
+  /** Match FRACO (NÃO autoriza update — só informa): SKU curto numérico ou barcode mal formatado. */
+  fraco: number
+  /** Sem nenhuma chave que ajude a casar (planilha pobre — todos serão criados). */
+  semChave: number
+}
+
 /**
- * Verifica quantos dos itens já existem no banco para a loja informada.
- * Faz lookup em lotes para evitar query gigante.
+ * Roda a MESMA lógica de match do persist contra o snapshot do banco,
+ * devolvendo a separação forte/fraco para o preview.
  *
- * Considera "possível duplicado" se:
- *   - existe produto no storeId com `sku` igual (normalizado, ou com prefixo gc-)
- *   - OU existe produto com `barcode` igual
- *
- * O upsert real (em persist.ts) reusa a mesma lógica para decidir update vs create.
+ * Sem isso, o preview reportava "25 possíveis duplicados" via critério próprio
+ * e o persist atualizava 500 via critério agressivo (OR com gc-prefix, etc.) —
+ * divergência que causou o incidente Smart.
+ */
+export async function analisarDuplicadosBanco(
+  storeId: string,
+  validos: ProdutoNormalizado[],
+): Promise<AnaliseDuplicadosBanco> {
+  const out: AnaliseDuplicadosBanco = { forte: 0, fraco: 0, semChave: 0 }
+  if (validos.length === 0) return out
+
+  // 1. Monta snapshot do banco (mesma estratégia do persist — 2 queries batch).
+  const skusBuscar = new Set<string>()
+  const barcodesBuscar = new Set<string>()
+  for (const p of validos) {
+    const sku = (p.sku ?? "").trim()
+    const barcode = (p.barcode ?? "").trim()
+    if (sku) {
+      const skuToSave = normalizeSkuForSave(sku)
+      if (skuToSave) skusBuscar.add(skuToSave.toLowerCase())
+    }
+    if (barcode) barcodesBuscar.add(barcode)
+  }
+
+  const banco: SnapshotBancoProdutos = { skus: new Set(), barcodes: new Set() }
+
+  const arrSkus = Array.from(skusBuscar)
+  const arrBarcodes = Array.from(barcodesBuscar)
+
+  // Monta arrays de chunks
+  const skuChunks: string[][] = []
+  for (let i = 0; i < arrSkus.length; i += 500) skuChunks.push(arrSkus.slice(i, i + 500))
+  const barcodeChunks: string[][] = []
+  for (let i = 0; i < arrBarcodes.length; i += 500) barcodeChunks.push(arrBarcodes.slice(i, i + 500))
+
+  // Busca SKU e barcode em paralelo (não sequencial)
+  const [skuResultados, barcodeResultados] = await Promise.all([
+    Promise.all(
+      skuChunks.map((slice) =>
+        prisma.produto.findMany({
+          where: { storeId, sku: { in: slice, mode: "insensitive" } },
+          select: { sku: true, barcode: true, storeId: true },
+        }),
+      ),
+    ),
+    Promise.all(
+      barcodeChunks.map((slice) =>
+        prisma.produto.findMany({
+          where: { storeId, barcode: { in: slice } },
+          select: { sku: true, barcode: true, storeId: true },
+        }),
+      ),
+    ),
+  ])
+
+  for (const rows of [...skuResultados, ...barcodeResultados]) {
+    for (const f of rows) {
+      if (f.storeId !== storeId) continue
+      if (f.sku) banco.skus.add(f.sku.toLowerCase())
+      if (f.barcode) banco.barcodes.add(f.barcode)
+    }
+  }
+
+  // 2. Aplica `resolveProductImportMatch` linha a linha.
+  for (const p of validos) {
+    const resolucao = resolveProductImportMatch(p, banco)
+    if (resolucao.matchForte) {
+      out.forte++
+    } else if (resolucao.matchFraco) {
+      out.fraco++
+    } else {
+      const sku = (p.sku ?? "").trim()
+      const barcode = (p.barcode ?? "").trim()
+      if (classificarSku(sku) === "ausente" && classificarBarcode(barcode) === "ausente") {
+        out.semChave++
+      }
+    }
+  }
+
+  return out
+}
+
+/**
+ * Compatibilidade: a UI antiga chamava `contarPossiveisDuplicadosBanco`.
+ * Mantemos a função para não quebrar nada, mas devolve só `forte + fraco`.
+ * Novo código deve usar `analisarDuplicadosBanco` para granularidade.
  */
 export async function contarPossiveisDuplicadosBanco(
   storeId: string,
   validos: ProdutoNormalizado[],
 ): Promise<number> {
-  if (validos.length === 0) return 0
-
-  const skus = new Set<string>()
-  const skusComPrefixo = new Set<string>()
-  const barcodes = new Set<string>()
-  for (const p of validos) {
-    const skuN = normalizeProdutoSku(p.sku)
-    const skuSave = normalizeSkuForSave(p.sku)
-    if (skuN) {
-      skus.add(skuN)
-      skus.add(skuSave)
-      skusComPrefixo.add(`gc-${skuN}`)
-    }
-    const bc = (p.barcode ?? "").trim()
-    if (bc) barcodes.add(bc)
-  }
-
-  const todosSkus = Array.from(new Set([...skus, ...skusComPrefixo]))
-  const todosBarcodes = Array.from(barcodes)
-  if (todosSkus.length === 0 && todosBarcodes.length === 0) return 0
-
-  const BATCH = 500
-  const existentesSku = new Set<string>()
-  const existentesBarcode = new Set<string>()
-
-  for (let i = 0; i < todosSkus.length; i += BATCH) {
-    const slice = todosSkus.slice(i, i + BATCH)
-    const found = await prisma.produto.findMany({
-      where: { storeId, sku: { in: slice } },
-      select: { sku: true, barcode: true },
-    })
-    for (const f of found) {
-      if (f.sku) existentesSku.add(normalizeProdutoSku(f.sku))
-      if (f.barcode) existentesBarcode.add(f.barcode)
-    }
-  }
-
-  for (let i = 0; i < todosBarcodes.length; i += BATCH) {
-    const slice = todosBarcodes.slice(i, i + BATCH)
-    const found = await prisma.produto.findMany({
-      where: { storeId, barcode: { in: slice } },
-      select: { sku: true, barcode: true },
-    })
-    for (const f of found) {
-      if (f.sku) existentesSku.add(normalizeProdutoSku(f.sku))
-      if (f.barcode) existentesBarcode.add(f.barcode)
-    }
-  }
-
-  let possiveis = 0
-  for (const p of validos) {
-    const skuN = normalizeProdutoSku(p.sku)
-    const bc = (p.barcode ?? "").trim()
-    if (skuN && existentesSku.has(skuN)) {
-      possiveis++
-      continue
-    }
-    if (bc && existentesBarcode.has(bc)) {
-      possiveis++
-    }
-  }
-  return possiveis
+  const a = await analisarDuplicadosBanco(storeId, validos)
+  return a.forte + a.fraco
 }
