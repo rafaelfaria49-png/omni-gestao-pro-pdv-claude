@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { Check, Zap, Star, Sparkles, Diamond, CreditCard, CalendarDays, Loader2 } from "lucide-react"
+import { Check, Zap, Star, Sparkles, Diamond, CreditCard, CalendarDays, Loader2, ArrowLeft } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -120,6 +120,18 @@ export function BillingPageClient({
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8">
+      {/* Botão de Voltar */}
+      <div className="pt-2">
+        <button
+          type="button"
+          onClick={() => router.push("/dashboard/configuracoes")}
+          className="group inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all duration-200"
+        >
+          <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
+          Voltar para Configurações
+        </button>
+      </div>
+
       {/* Header */}
       <div>
         <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground">
