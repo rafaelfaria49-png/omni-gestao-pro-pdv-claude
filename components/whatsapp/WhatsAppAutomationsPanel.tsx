@@ -163,39 +163,43 @@ export function WhatsAppAutomationsPanel({
         {automations.map((a) => (
           <div
             key={a.id}
-            className="glass-card flex flex-wrap items-center gap-4 rounded-xl p-4 transition-colors hover:border-primary/25"
+            className="glass-card flex flex-col sm:flex-row sm:items-center gap-4 rounded-xl p-4 transition-colors hover:border-primary/25"
           >
-            <Switch checked={a.enabled} onCheckedChange={() => void toggle(a)} />
-            <div className="min-w-[200px] flex-1">
+            <div className="flex items-center gap-3 flex-none">
+              <Switch checked={a.enabled} onCheckedChange={() => void toggle(a)} />
+            </div>
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2 font-medium">
-                {a.name}
-                <Badge variant="outline" className="text-[10px]">
+                <span className="text-sm text-foreground">{a.name}</span>
+                <Badge variant="outline" className="text-[10px] shrink-0">
                   {TRIGGER_LABELS[a.trigger] ?? a.trigger}
                 </Badge>
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                <Badge variant="secondary" className="text-[10px]">
+                <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                <Badge variant="secondary" className="text-[10px] shrink-0">
                   {ACTION_LABELS[a.action] ?? a.action}
                 </Badge>
                 {a.deliveryLabel ? (
-                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-700 dark:text-amber-300">
+                  <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-700 dark:text-amber-300 shrink-0">
                     {a.deliveryLabel}
                   </Badge>
                 ) : null}
               </div>
               {a.description && (
-                <p className="mt-1 text-sm text-muted-foreground">{a.description}</p>
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{a.description}</p>
               )}
-              <p className="mt-1 text-[11px] text-muted-foreground">
+              <p className="mt-1 text-[10px] text-muted-foreground">
                 Última execução: {a.lastRun} · {a.runs} disparos
               </p>
             </div>
-            <Badge variant={a.enabled ? "default" : "outline"}>
-              {a.enabled ? "Ativa" : "Pausada"}
-            </Badge>
-            <Button variant="ghost" size="sm" disabled title="Em breve">
-              <Edit className="mr-1 h-4 w-4" />
-              Editar
-            </Button>
+            <div className="flex items-center gap-3 flex-none sm:ml-auto justify-between sm:justify-start">
+              <Badge variant={a.enabled ? "default" : "outline"} className="shrink-0">
+                {a.enabled ? "Ativa" : "Pausada"}
+              </Badge>
+              <Button variant="ghost" size="sm" disabled className="h-8 text-xs shrink-0" title="Em breve">
+                <Edit className="mr-1 h-3.5 w-3.5" />
+                Editar
+              </Button>
+            </div>
           </div>
         ))}
       </div>

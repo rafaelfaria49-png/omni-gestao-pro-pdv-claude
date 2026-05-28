@@ -1324,8 +1324,8 @@ export default function WhatsAppInbox({ embedded = false }: { embedded?: boolean
       <div
         className={cn(
           waHubShell,
-          "flex overflow-hidden",
-          embedded ? "h-[calc(100vh-11rem)] min-h-[420px]" : "h-[calc(100vh-4rem)]"
+          "flex-row flex-1 min-h-0 h-full w-full flex overflow-hidden",
+          embedded ? "" : "h-[calc(100vh-4rem)]"
         )}
       >
         {/* ── Sidebar ── */}

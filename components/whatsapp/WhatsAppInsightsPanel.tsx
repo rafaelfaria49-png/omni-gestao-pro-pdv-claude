@@ -66,8 +66,8 @@ export function WhatsAppInsightsPanel({
 
   if (loading) {
     return (
-      <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid gap-3 p-4 grid-cols-2 md:grid-cols-3 2xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="glass-card h-24 animate-pulse rounded-xl" />
         ))}
       </div>
@@ -85,7 +85,7 @@ export function WhatsAppInsightsPanel({
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 2xl:grid-cols-6">
         <HubStatCard icon={MessageSquare} label="Conversas" value={stats.total} hint={`${stats.open} abertas`} />
         <HubStatCard icon={Clock} label="Não lidas" value={stats.unread} hint="Mensagens pendentes" trend={stats.unread > 0 ? "up" : "neutral"} />
         <HubStatCard icon={Bot} label="Modo humano" value={stats.human} hint="Requer atenção" />

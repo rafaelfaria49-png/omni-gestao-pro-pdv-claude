@@ -28,11 +28,11 @@ export default function WhatsAppOperationalHub() {
   }, [lojaAtivaId])
 
   return (
-    <div className="flex min-h-0 w-full flex-col gap-3">
-      <header className="glass-card flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 md:px-5">
+    <div className="w-full h-full min-h-0 flex flex-col overflow-hidden gap-3">
+      <header className="glass-card flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 md:px-5 flex-none">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-violet-500/20">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-violet-500/20 animate-pulse-slow">
               <MessageSquare className="h-4 w-4 text-primary" />
             </div>
             <div>
@@ -54,8 +54,8 @@ export default function WhatsAppOperationalHub() {
         </Badge>
       </header>
 
-      <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col">
-        <TabsList className="glass-card h-auto w-full justify-start gap-1 rounded-xl p-1 md:w-auto">
+      <Tabs value={tab} onValueChange={setTab} className="flex-1 min-h-0 h-full w-full flex flex-col overflow-hidden">
+        <TabsList className="glass-card h-auto w-full justify-start gap-1 rounded-xl p-1 md:w-auto flex-none">
           <TabsTrigger value="inbox" className="gap-1.5 text-xs data-[state=active]:shadow-sm">
             <Inbox className="h-3.5 w-3.5" />
             Inbox
@@ -76,20 +76,20 @@ export default function WhatsAppOperationalHub() {
 
         <TabsContent
           value="inbox"
-          className={cn("mt-2 min-h-0 flex-1 data-[state=inactive]:hidden")}
+          className={cn("mt-2 min-h-0 flex-1 h-full w-full flex flex-col overflow-hidden data-[state=inactive]:hidden")}
         >
           <WhatsAppInbox embedded />
         </TabsContent>
 
-        <TabsContent value="insights" className="mt-2 min-h-0 flex-1 overflow-auto">
+        <TabsContent value="insights" className="mt-2 min-h-0 flex-1 h-full w-full overflow-y-auto overflow-x-hidden scroll-elegant pr-1 data-[state=inactive]:hidden">
           <WhatsAppInboxInsightsBridge apiHeaders={apiHeaders} />
         </TabsContent>
 
-        <TabsContent value="automacoes" className="mt-2 min-h-0 flex-1 overflow-auto">
+        <TabsContent value="automacoes" className="mt-2 min-h-0 flex-1 h-full w-full overflow-y-auto overflow-x-hidden scroll-elegant pr-1 data-[state=inactive]:hidden">
           <WhatsAppAutomationsPanel apiHeaders={apiHeaders} />
         </TabsContent>
 
-        <TabsContent value="ia" className="mt-2 min-h-0 flex-1 overflow-auto">
+        <TabsContent value="ia" className="mt-2 min-h-0 flex-1 h-full w-full overflow-y-auto overflow-x-hidden scroll-elegant pr-1 data-[state=inactive]:hidden">
           <WhatsAppIaPanel apiHeaders={apiHeaders} />
         </TabsContent>
       </Tabs>

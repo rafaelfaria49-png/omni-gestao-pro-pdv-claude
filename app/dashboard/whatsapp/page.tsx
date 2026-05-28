@@ -4,7 +4,7 @@ import WhatsAppOperationalHub from "@/components/whatsapp/WhatsAppOperationalHub
 
 export default function WhatsAppPage() {
   return (
-    <div className="min-w-0 overflow-x-hidden px-4 pb-2 pt-4 -mx-4 sm:-mx-6">
+    <div className="w-full h-full min-w-0 flex flex-col overflow-hidden px-4 py-5 sm:px-6 lg:px-8 pb-6 bg-background">
       <WhatsAppOperationalHub />
     </div>
   )
