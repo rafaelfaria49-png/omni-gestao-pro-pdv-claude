@@ -10,7 +10,6 @@ import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { useOperationsStore } from "@/lib/operations-store"
 import {
-  PDV_PRODUCTS_BASE,
   mergePdvCatalogWithInventory,
   newPdvLineId,
   type PdvCatalogProduct,
@@ -83,7 +82,7 @@ export function ControleConsumo({ onNavigateToPdv }: ControleConsumoProps) {
   const [attrSelections, setAttrSelections] = useState<Record<string, string>>({})
 
   const products = useMemo(
-    () => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory),
+    () => mergePdvCatalogWithInventory([], inventory),
     [inventory]
   )
 

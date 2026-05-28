@@ -17,7 +17,6 @@ import { AberturaCaixaModal } from "@/components/dashboard/caixa/abertura-caixa-
 import { FechamentoCaixaModal } from "@/components/dashboard/caixa/fechamento-caixa-modal"
 import { CaixaStatusBar } from "@/components/dashboard/caixa/caixa-status-bar"
 import {
-  PDV_PRODUCTS_BASE,
   mergePdvCatalogWithInventory,
   newPdvLineId,
   type PdvCatalogProduct,
@@ -135,7 +134,8 @@ export function PdvBlackEdition() {
 
   // ── Catálogo ───────────────────────────────────────────────────────────────
   const products = useMemo(
-    () => mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory),
+    // Server = fonte da verdade: somente estoque real da loja, sem catálogo mock.
+    () => mergePdvCatalogWithInventory([], inventory),
     [inventory]
   )
 

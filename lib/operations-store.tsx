@@ -557,7 +557,10 @@ export function OperationsProvider({
         let items = jInv.items ?? []
         let ordens = jOs.ordens ?? []
 
-        if (items.length === 0 && ordens.length === 0) {
+        // Migração legada localStorage → DB: SOMENTE para a loja primária legada.
+        // Lojas novas (multiloja) nunca recebem seed/migração automática — server é a
+        // fonte da verdade e uma loja vazia deve permanecer 100% vazia (sem resíduo/mock).
+        if (lj === LEGACY_PRIMARY_STORE_ID && items.length === 0 && ordens.length === 0) {
           const raw = localStorage.getItem(storageKey)
           const peek = peekLegacyInventoryOrdens(raw)
           const legInv = peek.inventory

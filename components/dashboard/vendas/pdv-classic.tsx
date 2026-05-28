@@ -78,7 +78,6 @@ import type { PdvClassicLayoutKind } from "@/lib/store-settings-types"
 import { writePdvClassicLayout } from "@/lib/pdv-classic-layout"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import {
-  PDV_PRODUCTS_BASE,
   mergePdvCatalogWithInventory,
   newPdvLineId,
   type PdvCatalogProduct,
@@ -382,7 +381,7 @@ export function PdvClassic({
     category: "Atalho",
   }))
 
-  const products = mergePdvCatalogWithInventory(PDV_PRODUCTS_BASE, inventory)
+  const products = mergePdvCatalogWithInventory([], inventory)
 
   const searchTrim = searchTerm.trim()
   const hideCategoriesPdv = pdvParams.ocultarCategoriasNoPdv === true
