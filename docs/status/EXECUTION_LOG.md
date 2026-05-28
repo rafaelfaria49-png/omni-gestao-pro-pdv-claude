@@ -485,7 +485,7 @@ resultado: encerrada
 pr: null
 branch: null
 commit_anterior: f9a5a432098e3e3185ccb36f862f272113424088
-commit_final: null
+commit_final: 4857ac5
 rollback: false
 diff:
   added: ~720
