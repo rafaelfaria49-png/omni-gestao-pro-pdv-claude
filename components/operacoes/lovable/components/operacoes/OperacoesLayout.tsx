@@ -82,15 +82,10 @@ export function OperacoesLayout({ children }: { children: ReactNode }) {
     setTheme(readGlobalTheme());
   }, []);
 
-  const handleThemeChange = (t: HubTheme) => {
-    setTheme(t);
-    applyGlobalTheme(t);
-  };
-
   return (
-    <div data-hub-theme={theme} className="w-full min-w-0 bg-background text-foreground transition-smooth">
+    <div data-hub-theme={theme} className="w-full h-full min-w-0 bg-background text-foreground transition-smooth flex flex-col overflow-hidden">
       {/* Sub-Header Integrado e Premium */}
-      <div className="border-b border-border/60 bg-background pb-3">
+      <div className="border-b border-border/60 bg-background pb-3 flex-none px-4 pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pt-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-foreground">Central de Operações</h1>
@@ -131,7 +126,7 @@ export function OperacoesLayout({ children }: { children: ReactNode }) {
         </nav>
       </div>
 
-      <main className="w-full min-w-0 pt-5">
+      <main className="w-full min-w-0 flex-1 overflow-y-auto scroll-elegant px-4 py-5 sm:px-6 lg:px-8 pb-6">
         {children}
       </main>
     </div>
