@@ -41,7 +41,7 @@ export function OperacoesHubIsolated() {
   const storeId = lojaAtivaId.trim();
 
   return (
-    <div className="w-full min-w-0">
+    <div className="w-full h-full min-w-0 flex flex-col overflow-hidden">
       <OSProvider key={storeId} initialStoreId={storeId}>
         <MemoryRouter initialEntries={["/operacoes"]} initialIndex={0}>
           <Routes>

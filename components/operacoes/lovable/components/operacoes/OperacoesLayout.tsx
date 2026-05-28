@@ -82,6 +82,10 @@ export function OperacoesLayout({ children }: { children: ReactNode }) {
     setTheme(readGlobalTheme());
   }, []);
 
+  const isScrollable =
+    pathname !== "/operacoes/os" &&
+    pathname !== "/operacoes/historico";
+
   return (
     <div data-hub-theme={theme} className="w-full h-full min-w-0 bg-background text-foreground transition-smooth flex flex-col overflow-hidden">
       {/* Sub-Header Integrado e Premium */}
@@ -126,7 +130,14 @@ export function OperacoesLayout({ children }: { children: ReactNode }) {
         </nav>
       </div>
 
-      <main className="w-full min-w-0 flex-1 overflow-y-auto scroll-elegant px-4 py-5 sm:px-6 lg:px-8 pb-6">
+      <main
+        className={cn(
+          "w-full min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 pb-6",
+          isScrollable
+            ? "overflow-y-auto scroll-elegant"
+            : "overflow-hidden flex flex-col h-full min-h-0"
+        )}
+      >
         {children}
       </main>
     </div>

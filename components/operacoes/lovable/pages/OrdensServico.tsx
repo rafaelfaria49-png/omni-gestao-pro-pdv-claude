@@ -11,21 +11,23 @@ export default function OrdensServicoPage() {
 
   return (
     <OperacoesLayout>
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Ordens de Serviço</h1>
-          <p className="text-sm text-muted-foreground">Pipeline operacional · arraste para mover entre status</p>
+      <div className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3 flex-none">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Ordens de Serviço</h1>
+            <p className="text-sm text-muted-foreground">Pipeline operacional · arraste para mover entre status</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => toast("Filtros (em breve)")}>
+              <Filter className="h-4 w-4" /> Filtros
+            </Button>
+            <Button className="gap-2" onClick={() => setNovaOpen(true)}>
+              <PlusCircle className="h-4 w-4" /> Nova OS
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => toast("Filtros (em breve)")}>
-            <Filter className="h-4 w-4" /> Filtros
-          </Button>
-          <Button className="gap-2" onClick={() => setNovaOpen(true)}>
-            <PlusCircle className="h-4 w-4" /> Nova OS
-          </Button>
-        </div>
+        <OSKanban />
       </div>
-      <OSKanban />
       <NovaOSModal open={novaOpen} onOpenChange={setNovaOpen} />
     </OperacoesLayout>
   );

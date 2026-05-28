@@ -67,22 +67,22 @@ export function OSKanban() {
 
   if (loading) {
     return (
-      <div className="min-w-0 space-y-4">
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
+      <div className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden space-y-4">
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 flex-none">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-8 w-[140px] animate-pulse rounded-lg bg-muted" />
           ))}
         </div>
-        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 overflow-hidden h-full">
           {PIPELINE.map((col) => (
-            <div key={col.id} className="flex flex-col rounded-2xl border border-border bg-card/50 p-3">
-              <div className="mb-3 flex items-center justify-between">
+            <div key={col.id} className="flex flex-col rounded-2xl border border-border bg-card/50 p-3 h-full max-h-full overflow-hidden min-h-0">
+              <div className="mb-3 flex items-center justify-between flex-none">
                 <div className="h-4 w-24 animate-pulse rounded bg-muted" />
                 <div className="h-5 w-7 animate-pulse rounded-full bg-muted" />
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex-1 overflow-y-auto scroll-elegant pr-1 flex flex-col gap-2 min-h-0">
                 {Array.from({ length: col.id === "aberta" ? 2 : 1 }).map((_, i) => (
-                  <div key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+                  <div key={i} className="h-24 animate-pulse rounded-xl bg-muted flex-none" />
                 ))}
               </div>
             </div>
@@ -94,7 +94,7 @@ export function OSKanban() {
 
   if (!loading && ordens.length === 0) {
     return (
-      <div className="flex min-h-[380px] flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center">
+      <div className="flex-1 flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/30 p-10 text-center my-auto">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-background shadow-sm">
           <ClipboardList className="h-8 w-8 text-muted-foreground/60" />
         </div>
@@ -114,8 +114,8 @@ export function OSKanban() {
   }
 
   return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3">
+    <div className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden space-y-4">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 flex-none">
         <FilterSelect value={fTecnico} onChange={setFTecnico} placeholder="Técnico"
           options={tecnicos.map((t) => ({ v: t.id, l: t.nome }))} />
         <FilterSelect value={fPrioridade} onChange={setFPrioridade} placeholder="Prioridade"
@@ -145,7 +145,7 @@ export function OSKanban() {
         </span>
       </div>
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 overflow-hidden h-full">
         {PIPELINE.map((col) => {
           const items = filtradas.filter((o) => o.status === col.id);
           return (
@@ -155,11 +155,11 @@ export function OSKanban() {
               onDragLeave={() => setDragOver((prev) => (prev === col.id ? null : prev))}
               onDrop={(e) => handleDrop(e, col.id)}
               className={cn(
-                "flex flex-col rounded-2xl border border-border bg-card/50 p-3 transition-colors",
+                "flex flex-col rounded-2xl border border-border bg-card/50 p-3 transition-colors h-full max-h-full overflow-hidden min-h-0",
                 dragOver === col.id && "border-primary/60 bg-primary/5",
               )}
             >
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex items-center justify-between flex-none">
                 <div>
                   <div className="text-sm font-semibold">{col.label}</div>
                   <div className="text-[11px] text-muted-foreground">{col.descricao}</div>
@@ -169,9 +169,9 @@ export function OSKanban() {
                 </span>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex-1 overflow-y-auto scroll-elegant pr-1 flex flex-col gap-2 min-h-0">
                 {items.length === 0 && (
-                  <div className="rounded-lg border border-dashed border-border p-4 text-center text-[11px] text-muted-foreground">
+                  <div className="rounded-lg border border-dashed border-border p-4 text-center text-[11px] text-muted-foreground flex-none">
                     Solte uma OS aqui
                   </div>
                 )}

@@ -26,9 +26,9 @@ const OperacoesHubIsolated = dynamic(
 export default function OperacoesV2Page() {
   return (
     <Suspense fallback={<OperacoesV2LoadingFallback />}>
-      <div className="w-full min-w-0 space-y-4">
+      <div className="w-full h-full min-w-0 flex flex-col overflow-hidden gap-4">
         <div
-          className="min-w-0 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-muted-foreground"
+          className="min-w-0 flex-none rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-muted-foreground"
           role="status"
         >
           <span className="inline-flex flex-wrap items-center gap-2">
@@ -39,7 +39,9 @@ export default function OperacoesV2Page() {
             Abertura, diagnóstico, orçamento, aprovação, peças, cobrança, entrega, timeline e garantia — tudo neste Operações HUB.
           </p>
         </div>
-        <OperacoesHubIsolated />
+        <div className="flex-1 min-h-0 w-full">
+          <OperacoesHubIsolated />
+        </div>
       </div>
     </Suspense>
   );
