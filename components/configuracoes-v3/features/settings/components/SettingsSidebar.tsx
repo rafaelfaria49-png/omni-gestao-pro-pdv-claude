@@ -10,9 +10,9 @@ interface SettingsSidebarProps {
 
 export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
   return (
-    <aside className="flex h-full w-full flex-col border-r border-border bg-sidebarBg lg:w-64 lg:shrink-0 select-none">
-      <div className="flex items-center gap-3 border-b border-border px-5 py-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
+    <aside className="settings-sidebar-aside border-r border-border bg-sidebarBg lg:w-64 lg:shrink-0 select-none">
+      <div className="settings-sidebar-header border-border">
+        <div className="settings-sidebar-logo-box bg-gradient-primary shadow-glow">
           <Sparkles className="h-5 w-5 text-primary-foreground" />
         </div>
         <div className="min-w-0">
@@ -21,13 +21,13 @@ export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-4 py-3 scroll-elegant">
-        <ul className="flex flex-col gap-1.5">
+      <nav className="settings-sidebar-nav scroll-elegant">
+        <ul className="settings-sidebar-list">
           {SETTINGS_SECTIONS.map((s) => {
             const isActive = !s.href && active === s.id;
             const Icon = s.icon;
             const itemClassName = cn(
-              "group flex w-full items-center gap-3 rounded-lg border border-transparent px-4 py-2.5 text-left text-sm tracking-wide transition-colors",
+              "settings-sidebar-item-btn",
               isActive
                 ? "bg-sidebarActive font-semibold text-sidebarActive-foreground"
                 : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -58,7 +58,7 @@ export function SettingsSidebar({ active, onChange }: SettingsSidebarProps) {
       </nav>
 
       {/* Acabamento inferior premium */}
-      <div className="mt-auto border-t border-border/40 p-4 bg-muted/5 flex flex-col items-center justify-center gap-1 flex-none select-none">
+      <div className="settings-sidebar-footer border-border/40 bg-muted/5">
         <p className="text-[9px] uppercase tracking-widest font-bold text-muted-foreground/50">
           OmniGestão Pro
         </p>

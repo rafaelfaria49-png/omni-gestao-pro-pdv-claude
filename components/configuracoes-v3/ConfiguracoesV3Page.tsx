@@ -102,7 +102,7 @@ export default function ConfiguracoesV3Page() {
       <ConfiguracoesNavProvider navigateToSection={navigateToSection}>
         <div className="configuracoes-v3-root configuracoes-v3-app flex h-full w-full bg-surface text-foreground">
           {/* Sidebar — desktop */}
-          <div className={active === "pdv" ? "hidden" : "hidden lg:flex"}>
+          <div className={active === "pdv" ? "hidden" : "hidden lg:flex h-full shrink-0"}>
             <SettingsSidebar active={active} onChange={handleChange} />
           </div>
 
