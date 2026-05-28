@@ -11,7 +11,6 @@ import {
   type PdvImpressaoConfig,
 } from "@/lib/pdv-impressao-config"
 import {
-  downloadEscPosFile,
   escapeHtml,
   openThermalHtmlPrint,
   sendEscPosViaProxy,
@@ -72,8 +71,13 @@ export async function printWithFallback(
   const proxy = await executeEscPosPrint(bytes, opts.config, { openDrawer: true })
   if (proxy.ok) return proxy
 
-  downloadEscPosFile(bytes, opts.filename ?? "cupom-escpos.bin")
+  const hasRealBridge = opts.config.impressoraHost.trim().length > 0
+  if (hasRealBridge) {
+    // Host configurado mas inacessível — erro honesto, sem abrir nova aba nem baixar .bin
+    return { ok: false, via: "proxy", error: proxy.error }
+  }
 
+  // Sem bridge térmica: fallback HTML (A4 / impressão do navegador)
   if (opts.buildHtmlBody) {
     const width = opts.config.bobinaTamanho === "58mm" ? "58mm" : "80mm"
     const inner = opts.buildHtmlBody()
@@ -82,7 +86,7 @@ export async function printWithFallback(
         ? `<div style="text-align:center;margin-bottom:6px"><img src="${escapeHtml(opts.logoUrl.trim())}" alt="" style="max-width:90%;max-height:48px;object-fit:contain" /></div>`
         : ""
     openThermalHtmlPrint(`${logo}${inner}`, opts.htmlTitle ?? "Cupom", { bobina: width })
-    return { ok: true, via: "html", error: proxy.error }
+    return { ok: true, via: "html" }
   }
 
   return { ok: false, via: "download", error: proxy.error }

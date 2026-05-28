@@ -20,7 +20,6 @@ import {
   UserPlus,
   Check,
   X,
-  Receipt,
   BookUser,
   Keyboard,
   Settings,
@@ -108,6 +107,7 @@ import {
   osServicoInventoryId,
 } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
+import { PdvPostSaleDialog } from "./pdv-post-sale-dialog"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { VendaEsperaModal } from "./venda-espera-modal"
@@ -1697,14 +1697,15 @@ export function PdvClassic({
             toast({ title: "Falha transacional", description: result.reason })
             return
           }
-          if (impressaoConfig.imprimirAutomatico && saleLines.length > 0) {
+          const _hadItems = cart.length > 0
+          if (impressaoConfig.imprimirAutomatico && _hadItems) {
             void printPdvSaleReceipt({
               config: impressaoConfig,
               receiptFooter: _rp.footer,
               logoUrl: storeLogoUrl,
               input: _printInput,
             })
-          } else if (saleLines.length > 0) {
+          } else if (_hadItems) {
             setPostSalePrintInput(_printInput)
             setPostSalePrintOpen(true)
           }
@@ -1868,72 +1869,16 @@ export function PdvClassic({
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo pós-venda: oferta de impressão do comprovante */}
-      <Dialog
+      <PdvPostSaleDialog
         open={postSalePrintOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPostSalePrintOpen(false)
-            setPostSalePrintInput(null)
-            focusShellBipe()
-          }
+        onOpenChange={(o) => {
+          if (!o) { setPostSalePrintOpen(false); setPostSalePrintInput(null) }
         }}
-      >
-        <DialogContent className="max-w-sm border-border bg-card">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
-              <Receipt className="h-5 w-5 text-primary" />
-              Imprimir comprovante?
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground -mt-2">
-            Venda registrada com sucesso. Deseja imprimir o comprovante não fiscal?
-          </p>
-          <div className="flex gap-3 pt-1">
-            <Button
-              type="button"
-              className="flex-1 h-11 gap-2 bg-[hsl(var(--pos-action))] font-semibold text-[hsl(var(--pos-action-foreground))] hover:bg-[hsl(var(--pos-action))]/90"
-              onClick={async () => {
-                if (!postSalePrintInput) return
-                setPostSalePrintOpen(false)
-                setPostSalePrintInput(null)
-                const result = await printPdvSaleReceipt({
-                  config: impressaoConfig,
-                  receiptFooter: postSalePrintInput.receiptFooter ?? undefined,
-                  logoUrl: storeLogoUrl,
-                  input: postSalePrintInput,
-                })
-                if (result.ok) {
-                  toast({
-                    title: result.via === "proxy" ? "Cupom enviado à impressora" : "Cupom aberto para impressão",
-                    description: result.via === "proxy"
-                      ? `${impressaoConfig.impressoraHost.trim() || "Impressora padrão"} · ${impressaoConfig.viasCupom} via(s).`
-                      : "Feche a janela após imprimir.",
-                  })
-                } else {
-                  toast({ title: "Falha na impressão", description: result.error || "Verifique as configurações.", variant: "destructive" })
-                }
-                focusShellBipe()
-              }}
-            >
-              <Receipt className="h-4 w-4" />
-              Sim, imprimir
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1 h-11 border-border"
-              onClick={() => {
-                setPostSalePrintOpen(false)
-                setPostSalePrintInput(null)
-                focusShellBipe()
-              }}
-            >
-              Não, obrigado
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        printInput={postSalePrintInput}
+        impressaoConfig={impressaoConfig}
+        logoUrl={storeLogoUrl}
+        onAfterClose={focusShellBipe}
+      />
 
       {/* Lote 4: dialog `operationType` + painel `cashHistory` REMOVIDOS.
           Sangria/suprimento e histórico vêm do CaixaStatusBar compartilhado. */}

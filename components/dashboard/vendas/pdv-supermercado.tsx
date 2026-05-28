@@ -56,6 +56,10 @@ import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { VendaEsperaModal } from "./venda-espera-modal"
+import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
+import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
+import type { PdvReceiptInput } from "@/lib/escpos"
+import { PdvPostSaleDialog } from "./pdv-post-sale-dialog"
 import {
   getHeldSales,
   saveHeldSale,
@@ -134,7 +138,7 @@ export function PdvSupermercado({
 }: VendasPDVProps) {
   const router = useRouter()
   const { toast } = useToast()
-  const { lojaAtivaId, opsStorageKey } = useLojaAtiva()
+  const { lojaAtivaId, opsStorageKey, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   const { pdvParams, blob, save: saveStoreSettings, impressaoConfig } = useStoreSettings()
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   
@@ -167,6 +171,9 @@ export function PdvSupermercado({
   const [supervisorErr, setSupervisorErr] = useState<string | null>(null)
   const [supervisorAction, setSupervisorAction] = useState<"clear_cart" | "remove_line" | null>(null)
   const [pendingRemoveLineId, setPendingRemoveLineId] = useState<string | null>(null)
+
+  const [postSalePrintOpen, setPostSalePrintOpen] = useState(false)
+  const [postSalePrintInput, setPostSalePrintInput] = useState<PdvReceiptInput | null>(null)
 
   const [weightDialogOpen, setWeightDialogOpen] = useState(false)
   const [weightProduct, setWeightProduct] = useState<Product | null>(null)
@@ -208,7 +215,7 @@ export function PdvSupermercado({
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
-      if (isPaymentModalOpen || supervisorDialogOpen || weightDialogOpen || attrDialogOpen) return
+      if (isPaymentModalOpen || supervisorDialogOpen || weightDialogOpen || attrDialogOpen || postSalePrintOpen) return
       if (cart.length === 0) return
       e.preventDefault()
       setCart((prev) => prev.slice(0, -1))
@@ -1095,6 +1102,24 @@ export function PdvSupermercado({
         multipayHint={multipayMode}
         cashierId={cashierId}
         onConfirm={(payments, meta) => {
+          // Capturar dados de impressão ANTES de limpar o cart
+          const _nomeFantasia = (empresaDocumentos?.nomeFantasia || "").trim() || lojaAtivaId || "Loja"
+          const _cnpj = (empresaDocumentos?.cnpj || "").trim()
+          const _footer = resolveCupomRodape(impressaoConfig, undefined)
+          const _printInput: PdvReceiptInput = {
+            nomeFantasia: _nomeFantasia,
+            cnpj: _cnpj,
+            enderecoLinha: getEnderecoDocumentos?.() ?? "",
+            receiptFooter: _footer,
+            itens: cart.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.price, lineTotal: i.price * i.quantity })),
+            subtotal,
+            taxes: impostoEstimado,
+            discount: discountTotal,
+            total,
+            dataHora: new Date().toLocaleString("pt-BR"),
+          }
+          const _hadItems = cart.length > 0
+
           const saleLines = cart
             .filter(
               (item) =>
@@ -1167,6 +1192,15 @@ export function PdvSupermercado({
             title: "Venda finalizada",
             description: `${payments.length} forma(s) de pagamento confirmada(s).`,
           })
+
+          // Pós-venda: impressão automática ou popup de oferta
+          if (impressaoConfig.imprimirAutomatico && _hadItems) {
+            void printPdvSaleReceipt({ config: impressaoConfig, receiptFooter: _footer, input: _printInput })
+          } else if (_hadItems) {
+            setPostSalePrintInput(_printInput)
+            setPostSalePrintOpen(true)
+          }
+
           queueMicrotask(() => {
             hardFocusSearch()
             if (isModoRapido) {
@@ -1202,6 +1236,16 @@ export function PdvSupermercado({
         onHold={handleHoldSale}
         onResume={handleResumeSale}
         onDiscard={handleDiscardHeldSale}
+      />
+
+      <PdvPostSaleDialog
+        open={postSalePrintOpen}
+        onOpenChange={(o) => {
+          if (!o) { setPostSalePrintOpen(false); setPostSalePrintInput(null) }
+        }}
+        printInput={postSalePrintInput}
+        impressaoConfig={impressaoConfig}
+        onAfterClose={() => queueMicrotask(hardFocusSearch)}
       />
 
       <AttrProductDialog

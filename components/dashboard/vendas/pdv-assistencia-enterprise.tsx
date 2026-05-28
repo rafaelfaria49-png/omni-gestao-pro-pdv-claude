@@ -87,6 +87,10 @@ import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
+import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
+import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
+import type { PdvReceiptInput } from "@/lib/escpos"
+import { PdvPostSaleDialog } from "./pdv-post-sale-dialog"
 import { VendaEsperaModal } from "./venda-espera-modal"
 import {
   getHeldSales,
@@ -1322,7 +1326,7 @@ function EditarAtalhosModal({
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig } = useStoreSettings()
-  const { lojaAtivaId } = useLojaAtiva()
+  const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   const shortcutsKey = useMemo(
     () => SHORTCUTS_STORAGE_KEY((lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID),
     [lojaAtivaId]
@@ -1338,6 +1342,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [showCustomerSidebarDropdown, setShowCustomerSidebarDropdown] = useState(false)
   const cartHydratedRef = useRef(false)
   const cartPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [postSalePrintOpen, setPostSalePrintOpen] = useState(false)
+  const [postSalePrintInput, setPostSalePrintInput] = useState<PdvReceiptInput | null>(null)
 
   // Somente itens reais do estoque — única fonte de catálogo no PDV Assistência
   const realCatalog = useMemo((): PdvCatalogProduct[] => {
@@ -1743,7 +1749,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         active instanceof HTMLSelectElement ||
         (active instanceof HTMLElement && active.isContentEditable)
 
-      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen
+      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen
 
       // END — toggle help overlay (always works)
       if (e.key === "End") {
@@ -2000,6 +2006,24 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   ) => {
     if (cart.length === 0 || discountOverTotal) return
 
+    // Capturar dados de impressão ANTES de limpar o cart
+    const _nomeFantasia = (empresaDocumentos?.nomeFantasia || "").trim() || lojaAtivaId || "Loja"
+    const _cnpj = (empresaDocumentos?.cnpj || "").trim()
+    const _footer = resolveCupomRodape(impressaoConfig, undefined)
+    const _printInput: PdvReceiptInput = {
+      nomeFantasia: _nomeFantasia,
+      cnpj: _cnpj,
+      enderecoLinha: getEnderecoDocumentos?.() ?? "",
+      receiptFooter: _footer,
+      itens: cart.map((l) => ({ name: l.title, quantity: l.qty, unitPrice: l.price, lineTotal: l.price * l.qty })),
+      subtotal,
+      taxes: impostoEstimado,
+      discount: desconto,
+      total,
+      dataHora: new Date().toLocaleString("pt-BR"),
+    }
+    const _hadItems = cart.length > 0
+
     const result = finalizeSaleTransaction({
       lines: cart.map((l) => ({
         inventoryId: l.inventoryId,
@@ -2054,6 +2078,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     } else {
       toast({ title: "Venda finalizada", description: result.saleId })
     }
+
+    // Pós-venda: impressão automática ou popup de oferta
+    if (impressaoConfig.imprimirAutomatico && _hadItems) {
+      void printPdvSaleReceipt({ config: impressaoConfig, receiptFooter: _footer, input: _printInput })
+    } else if (_hadItems) {
+      setPostSalePrintInput(_printInput)
+      setPostSalePrintOpen(true)
+    }
+
     queueMicrotask(() => {
       inputRef.current?.focus()
       if (isModoRapido) {
@@ -2946,6 +2979,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           </div>
         </DialogContent>
       </Dialog>
+
+      <PdvPostSaleDialog
+        open={postSalePrintOpen}
+        onOpenChange={(o) => {
+          if (!o) { setPostSalePrintOpen(false); setPostSalePrintInput(null) }
+        }}
+        printInput={postSalePrintInput}
+        impressaoConfig={impressaoConfig}
+        onAfterClose={() => queueMicrotask(() => inputRef.current?.focus())}
+      />
 
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
 
