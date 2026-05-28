@@ -108,7 +108,7 @@ import {
   osServicoInventoryId,
 } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
-import { productMatchesPdvSearch } from "@/lib/pdv-product-search"
+import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { VendaEsperaModal } from "./venda-espera-modal"
 import {
@@ -392,21 +392,21 @@ export function PdvClassic({
   )
 
   const filteredProducts = useMemo(() => {
-    return products.filter((p) => {
-      const catLower = p.category.toLowerCase()
-      if (searchTrim.length === 0) {
+    if (searchTrim.length === 0) {
+      return products.filter((p) => {
+        const catLower = p.category.toLowerCase()
         if (PDV_CATEGORIAS_OCULTAS_ATE_BUSCA.has(catLower)) return false
         if (hideCategoriesPdv && hiddenCategoriesSet.has(catLower)) return false
         return true
-      }
-      return productMatchesPdvSearch(p, searchTrim)
-    })
+      })
+    }
+    return filterPdvCatalogBySearch(products, searchTrim)
   }, [products, searchTrim, hideCategoriesPdv, hiddenCategoriesSet])
 
   const bipeSuggestions = useMemo(() => {
     const t = bipeCode.trim()
     if (!t) return []
-    return products.filter((p) => productMatchesPdvSearch(p, t)).slice(0, 8)
+    return filterPdvCatalogBySearch(products, t).slice(0, 12)
   }, [bipeCode, products])
 
   const storeDisplayName = useMemo(() => {

@@ -14,17 +14,23 @@ const norm = (v: string | undefined | null) =>
 
 /**
  * Pontua o produto contra o termo. 0 = não bate. >0 = bate (maior = prioridade maior).
- * 3 = começa com termo (nome/categoria), 2 = contém termo (nome/categoria), 1 = código/SKU/EAN contém termo.
+ *
+ * 4 = nome COMEÇA com o termo  (máxima prioridade — PDV operacional)
+ * 3 = nome CONTÉM o termo
+ * 2 = categoria começa ou contém o termo  (abaixo de qualquer match por nome)
+ * 1 = SKU / código / EAN / id contém o termo
  */
 export function scorePdvSearch(p: PdvCatalogProduct, rawQuery: string): number {
   const term = normalizePdvSearchText(rawQuery)
-  if (!term) return 3
+  if (!term) return 4
 
   const nameN = norm(p.name)
-  const catN = norm(p.category)
 
-  if (nameN.startsWith(term) || catN.startsWith(term)) return 3
-  if (nameN.includes(term) || catN.includes(term)) return 2
+  if (nameN.startsWith(term)) return 4
+  if (nameN.includes(term)) return 3
+
+  const catN = norm(p.category)
+  if (catN.startsWith(term) || catN.includes(term)) return 2
 
   const codeParts = [p.sku, p.codigo, p.codigoBarras, p.barcode, p.id].map(norm).filter(Boolean)
   if (codeParts.some((c) => c.includes(term))) return 1
