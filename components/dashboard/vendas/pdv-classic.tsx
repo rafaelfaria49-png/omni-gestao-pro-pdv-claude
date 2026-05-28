@@ -707,12 +707,14 @@ export function PdvClassic({
       addToCart(found, q)
       setBipeCode("")
       setShellNextQty("1")
+      const _newCount = cart.length + 1
+      const _newSub = cart.reduce((s, i) => s + i.price * i.quantity, 0) + found.price * q
       setShellInfo(
-        `✓ ${found.name} adicionado · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(found.price * q)}`
+        `✓ ${found.name} · ${_newCount} ${_newCount === 1 ? "item" : "itens"} · R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(_newSub)}`
       )
       queueMicrotask(() => shellBipeRef.current?.focus())
     },
-    [addToCart, bipeCode, products, shellNextQty, toast]
+    [addToCart, bipeCode, cart, products, shellNextQty, toast]
   )
 
   const handleBipeSuggestionSelect = useCallback(
@@ -721,12 +723,14 @@ export function PdvClassic({
       addToCart(product, q)
       setBipeCode("")
       setShellNextQty("1")
+      const _newCount = cart.length + 1
+      const _newSub = cart.reduce((s, i) => s + i.price * i.quantity, 0) + product.price * q
       setShellInfo(
-        `✓ ${product.name} adicionado · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(product.price * q)}`
+        `✓ ${product.name} · ${_newCount} ${_newCount === 1 ? "item" : "itens"} · R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(_newSub)}`
       )
       queueMicrotask(() => shellBipeRef.current?.focus())
     },
-    [addToCart, shellNextQty]
+    [addToCart, cart, shellNextQty]
   )
 
   const addComplemento = (productId: string, complementoName: string, complementoPrice: number) => {

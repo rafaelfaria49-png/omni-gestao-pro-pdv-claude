@@ -99,6 +99,14 @@ const ALIASES: Record<CampoCanonico, string[]> = {
     "valor",
     "preco unitario",
     "preço unitário",
+    // Variantes legadas BR com símbolo de moeda — norm() remove o "$",
+    // então "Venda R$" vira "venda r" e precisa de alias próprio.
+    // Cobre GestãoClick, planilhas XLS antigas e exports manuais.
+    "venda r",
+    "vlr venda",
+    "vl venda",
+    "preco r",
+    "preço r",
   ],
   estoque: [
     "estoque",

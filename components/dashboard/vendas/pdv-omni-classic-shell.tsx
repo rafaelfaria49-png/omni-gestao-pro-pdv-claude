@@ -566,7 +566,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
           </div>
         ) : (
           <div className="grid grid-cols-12 gap-3 h-full min-h-0 overflow-hidden bg-background">
-            <div className="flex min-h-0 flex-col overflow-hidden col-span-12 lg:col-span-9">
+            <div className="flex min-h-0 flex-col overflow-hidden col-span-12 md:col-span-8 lg:col-span-9">
               <ItemsTable
                 rows={props.cartRows}
                 highlightLineId={props.highlightLineId}
@@ -575,7 +575,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                 onSelect={props.onSelectLine}
               />
             </div>
-            <aside className="col-span-12 flex h-full min-h-0 flex-col gap-3 overflow-y-auto lg:col-span-3">
+            <aside className="col-span-12 flex min-h-0 flex-col gap-3 overflow-y-auto md:col-span-4 lg:col-span-3">
               <div className="rounded-md border border-border bg-card p-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
@@ -597,12 +597,8 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                       {props.previousSaleTotal != null ? `R$ ${fmt(props.previousSaleTotal)}` : "—"}
                     </div>
                   </div>
-                  <div>
-                    <div className="text-muted-foreground/60">Troco</div>
-                    <div className="font-semibold tabular-pdv text-foreground">R$ 0,00</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-muted-foreground/60">Sem desc.</div>
+                  <div className="col-span-2">
+                    <div className="text-muted-foreground/60">Total sem desconto</div>
                     <div className="font-semibold tabular-pdv text-foreground">R$ {fmt(props.total)}</div>
                   </div>
                 </div>

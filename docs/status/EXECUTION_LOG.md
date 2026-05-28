@@ -312,3 +312,109 @@ docs_atualizados:
 flags: []
 notes: "APPROVAL_BATCH_V1: 8 skills críticas do piloto promovidas draft → approved (Research: AUDIT_MULTI_LOJA, DOC_REFRESH · Proposal: PROPOSE_SPRINT, PROPOSE_ADR · Execution S: EXEC_DEBT_ITEM, EXEC_STABILIZATION, EXEC_TESTING · Runtime: HANDOFF_MVP). Aprovação consciente, rastreável, incremental. 24 skills permanecem draft (aprovadas por demanda em batches futuros). Multi-loja triad (AUDIT/DEBT/STABILIZATION) validado em profundidade (tenant safety, storeId, rollback, drift, lock, blast radius, LGPD). Sem código de produção tocado. Sem dry-run iniciado. Sem piloto iniciado. Próximo passo natural (com autorização separada): rodar AUDIT pré-piloto + EXEC_TESTING multi-loja baseline + PROPOSE_SPRINT do piloto."
 ```
+
+---
+
+```yaml
+# ─── ENTRY 004 ────────────────────────────────────────────────────
+ticket_id: AUDIT-MULTI_LOJA-PRE-PILOTO
+skill_id: SKILL_AUDIT_MULTI_LOJA
+skill_version: v1
+ia: opus
+modo: SAFE
+started_at: 2026-05-28T00:00:00-03:00
+ended_at: 2026-05-28T01:30:00-03:00
+duration: PT1H30M
+fases_completas: [1, 2, 3, 4, 12, 14, 16, 17]   # research-only: 5,6,7,8,9,10,11,13,15 não aplicáveis
+fase_falha: null
+resultado: encerrada
+pr: null
+branch: null   # read-only audit; sem branch git
+commit_anterior: null
+commit_final: null
+rollback: false
+diff:
+  added: ~480
+  removed: 0
+  files_modified: 2
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-05-28T00:00:00-03:00
+    pending: null
+    notes: "Autorização explícita: AUDIT pré-piloto multi-loja, modo SAFE/READ-ONLY, escopo declarado completo no input."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "N/A para SKILL_AUDIT_<HUB> (read-only; publica doc, não merge code)."
+audit_findings: {P0: 9, P1: 3, P2: 3, P3: 1}    # P1 F-14 upgraded → P0 por regra multi-loja+dinheiro
+benchmark: null
+sprint: null
+proposta: null
+auditoria: docs/audits/AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md
+adr_criada: null    # 2 ADRs sugeridos (eliminar fallback; router WhatsApp phone_number_id) — não criados aqui
+memoria_criada: null
+docs_atualizados:
+  - docs/audits/AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md   # criado (baseline oficial pré-piloto)
+  - docs/status/EXECUTION_LOG.md                          # esta entry
+flags: []
+notes: "AUDIT pré-piloto SPRINT_01_MULTI_LOJA: baseline oficial estabelecido. 16 findings (9 P0 efetivos após upgrade automático de F-14, 3 P1, 3 P2, 1 P3). Vetores P0 centrais: F-01 (raiz arquitetural: fallback silencioso em `storeIdFromAssistecRequestForRead`), F-02 (≥30 rotas com hardcode `|| \"loja-1\"`), F-03 (proxy.ts:132 lê cookie com nome errado `assistec_active_store` vs `assistec-active-store`), F-04 (webhook WhatsApp single-store via `WHATSAPP_WEBHOOK_STORE_ID`), F-05/F-06/F-07/F-08 (4 famílias de rota/action sem `canAccessStore`). F-10 (auditoria de dados em produção) NÃO MEDIDA — pré-requisito separado para 2ª loja real. Pontos positivos preservados em §7. Comparativo §8 sem versão anterior. Readiness do piloto: ⚠️ READY com 3 ressalvas — (1) escopo precisa ser fatiado pelo humano; (2) EXEC_TESTING deve rodar antes do primeiro EXEC_DEBT_ITEM; (3) proxy.ts (F-03) exige flag --with-protected-areas. Recommendation: rodar SKILL_EXEC_TESTING (test_type: multi_loja) → SKILL_PROPOSE_SPRINT (fatiado: piloto cobre F-01+F-02+F-03+5 rotas de F-05) → Gate #1 humano → dry-run SAFE. CURRENT_STATUS_OVERVIEW.md NÃO atualizado — DT-03 segue aberto; será atualizado apenas pós-sprint via SKILL_DOC_REFRESH. Sem código de produção tocado. Sem PROPOSE_SPRINT criada. Sem EXEC_TESTING iniciada. Sem piloto iniciado."
+```
+
+---
+
+```yaml
+# ─── ENTRY 005 ────────────────────────────────────────────────────
+ticket_id: MULTI_LOJA-S-TEST-001
+skill_id: SKILL_EXEC_TESTING
+skill_version: v1
+ia: opus
+modo: SAFE
+started_at: 2026-05-28T11:25:00-03:00
+ended_at: 2026-05-28T11:40:00-03:00
+duration: PT15M
+fases_completas: [1, 2, 3, 4, 8, 9, 10, 11, 16]   # Gate #1 humano ao vivo; Gate #2 (merge) NÃO obtido — sem commit
+fase_falha: null
+resultado: encerrada   # testes verdes; AGUARDANDO Gate #2 humano para commit
+pr: null
+branch: null   # sem commit por instrução explícita do humano
+commit_anterior: null
+commit_final: null
+rollback: false
+diff:
+  added: ~480
+  removed: 0
+  files_modified: 8   # 7 .test.ts + vitest.config.ts (infra de teste)
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-05-28T11:25:00-03:00
+    pending: null
+    notes: "Autorização explícita: SKILL_EXEC_TESTING baseline multi-loja, modo SAFE. Não corrigir produção, não commitar sem nova autorização."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "AGUARDANDO. Working tree tem 8 arquivos novos (7 testes + 1 vitest.config.ts). Humano decide commit."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}    # vitest run completo: 124 passed, 6 expected_fail; tsc 0 erros
+benchmark: null
+sprint: null
+proposta: null
+auditoria: docs/audits/AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md   # foi o input
+adr_criada: null
+memoria_criada: null
+docs_atualizados:
+  - docs/status/EXECUTION_LOG.md   # esta entry
+files_created:
+  - lib/store-id-from-request.test.ts          # F-01 — 26 testes, 3 expected-failing (it.fails)
+  - lib/store-defaults.test.ts                 # F-03 (parte 1) — contrato do cookie canônico
+  - lib/auth/proxy-enterprise-dashboard.test.ts # F-03 (parte 2) — gate isolado + matriz dashboard
+  - lib/auth/enterprise-permissions.test.ts    # F-05/06/07/08 — canAccessStore + matriz papéis
+  - lib/whatsapp-daily-server.test.ts          # F-14 — contrato storeId (1 expected-failing)
+  - lib/whatsapp/whatsapp-service-routing.test.ts  # F-04 — webhookDefaultStoreId contract replica (1 expected-failing)
+  - lib/multi-loja-no-hardcoded-fallback.test.ts   # F-02 — lint estático varredura código de produção (1 expected-failing)
+  - vitest.config.ts                            # infra mínima: alias @/* + exclude pdv-github-original (necessário p/ tests carregarem source com @/ imports)
+flags: []
+notes: "SKILL_EXEC_TESTING baseline multi-loja concluída. 7 arquivos de teste + 1 vitest.config.ts (infra mínima — sem nova dependência; só alias resolution e exclude do mirror legado). Total: 8 arquivos, ~480 linhas adicionadas, dentro do limite files_max=10 e expected_diff_max=400. Validação: `npx tsc --noEmit` EXIT=0 sem erros; `npm run test` 15 arquivos, 124 passed, 6 expected fail (130 total). Zero regressão nos 8 arquivos de teste pré-existentes. **Cobertura por finding da auditoria:** F-01 (raiz fallback) ✅ 26 assertions (3 expected-failing documentam contrato pós-piloto: storeIdFromAssistecRequestForRead DEVE retornar null sem contexto); F-02 (lint estático) ✅ baseline ≤32 ocorrências + lista de prefixos conhecidos + expected-failing alvo zero pós-piloto; F-03 (cookie canônico + gate isolado) ✅ contrato fixado (`assistec-active-store` com hífens, sem underscores) — teste de integração do proxy.ts fica para sprint sucessora (área protegida); F-04 (webhook fallback) ✅ via contract-replica (importação direta do whatsapp-service.ts impossível em vitest sem mock pesado de Prisma); F-05/06/07/08 (ACL) ✅ via testes isolados de canAccessStore + matriz por papel CAIXA/TECNICO/VENDEDOR/ADMIN — testes de integração que validem cada rota chamando o guard ficam para sprint sucessora (XL para uma S); F-14 (service storeId) ✅ contrato TS expected-failing. **NÃO COBERTO** nesta sprint S: F-09 (totalSpent cross-store integration — exige DB), F-10 (auditoria de dados em prod — exige acesso ao banco real), F-11/F-12/F-13/F-15/F-16 (observações ou ligadas a route legacy). **NÃO COBERTO** por design: testes de integração end-to-end (E2E) das rotas — exigem fixture de banco; sprint própria. **Riscos restantes pós-EXEC_TESTING:** os 6 expected-failing são red-flags vivos do bug que SPRINT_01_MULTI_LOJA precisa eliminar; quando o piloto fechar, o desenvolvedor troca `it.fails` por `it` e a suite vira green-only. Risco operacional baixo: nenhum código de produção tocado; vitest.config.ts apenas habilita aliases `@/*`. **AGUARDANDO autorização humana para commit (Gate #2).** Próximo passo natural (autorização separada): SKILL_PROPOSE_SPRINT cobrindo F-01+F-02+F-03 + ≤5 rotas de F-05 (escopo fatiado conforme recomendação §10 da auditoria)."
+```

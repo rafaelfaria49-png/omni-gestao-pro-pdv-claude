@@ -110,6 +110,7 @@ export function openThermalHtmlPrint(
   Desative &quot;Cabeçalhos e rodapés&quot; na impressão para ocultar data e URL.
 </p>
 <script>
+  window.onafterprint = function () { window.close(); };
   window.onload = function () {
     window.setTimeout(function () {
       window.print();
