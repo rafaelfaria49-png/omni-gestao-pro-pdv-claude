@@ -6,11 +6,8 @@ import {
   CreditCard,
   QrCode,
   FileText,
-  Printer,
-  FileCheck,
   X,
   Plus,
-  Minus,
   Calculator,
   Eye,
   EyeOff,
@@ -165,8 +162,6 @@ interface PaymentModalProps {
    * pagamentos — só descobre a UX nativa do modal para Clássico/Supermercado.
    */
   multipayHint?: boolean
-  /** Impressão térmica do cupom (Config V3 → Impressão). */
-  onPrintCupom?: () => void | Promise<void>
 }
 
 export function PaymentModal({ 
@@ -188,7 +183,6 @@ export function PaymentModal({
   onInstantPayIntentConsumed,
   onCustomerCpfUpdate,
   multipayHint = false,
-  onPrintCupom,
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
   const [isConfirming, setIsConfirming] = useState(false)
@@ -288,6 +282,11 @@ export function PaymentModal({
   const temDinheiro = payments.some((p) => p.type === "dinheiro")
   const troco =
     temDinheiro && totalPaid > total + 0.009 ? Math.round((totalPaid - total) * 100) / 100 : 0
+  const dinheiroRecebido = selectedType === "dinheiro" ? parseMoneyString(currentValue) : 0
+  const trocoEstimado =
+    selectedType === "dinheiro" && !multipayHint && dinheiroRecebido > faltaPagar + 0.009
+      ? Math.round((dinheiroRecebido - faltaPagar) * 100) / 100
+      : 0
 
   const descontoManualAtivo = useMemo(() => {
     const r = Number(discountReais) || 0
@@ -856,6 +855,37 @@ export function PaymentModal({
                   Total Restante
                 </Button>
               </div>
+
+              {/* Troco automático — aparece ao selecionar Dinheiro (fluxo dois passos) */}
+              {selectedType === "dinheiro" && !multipayHint && (
+                <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 space-y-2">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Total a cobrar</span>
+                    <span className="font-semibold tabular-nums">{formatCurrency(faltaPagar)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Recebido em dinheiro</span>
+                    <span className="font-semibold tabular-nums">
+                      {dinheiroRecebido > 0 ? formatCurrency(dinheiroRecebido) : <span className="text-muted-foreground/50">—</span>}
+                    </span>
+                  </div>
+                  {trocoEstimado > 0 && (
+                    <div className="flex justify-between items-center font-bold border-t border-emerald-500/30 pt-2 text-emerald-700 dark:text-emerald-300">
+                      <span>Troco a dar</span>
+                      <span className="tabular-nums text-lg">{formatCurrency(trocoEstimado)}</span>
+                    </div>
+                  )}
+                  <Button
+                    type="button"
+                    className="w-full mt-1 h-10 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                    onClick={() => handleAddPayment("dinheiro")}
+                  >
+                    {dinheiroRecebido > 0
+                      ? `Confirmar Dinheiro${trocoEstimado > 0 ? ` · Troco ${formatCurrency(trocoEstimado)}` : ""}`
+                      : "Confirmar valor exato"}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -935,6 +965,10 @@ export function PaymentModal({
                         }
                         if (runtime === "carne") {
                           setSelectedType("carne")
+                          return
+                        }
+                        if (runtime === "dinheiro" && !multipayHint) {
+                          setSelectedType("dinheiro")
                           return
                         }
                         setSelectedType(runtime)
@@ -1237,48 +1271,6 @@ export function PaymentModal({
               {supervisorErr ? <p className="mt-2 text-xs text-destructive">{supervisorErr}</p> : null}
             </div>
           ) : null}
-
-          {/* Botões de Impressão */}
-          <div className="space-y-3">
-            <Label className="text-sm text-muted-foreground">Impressão e Documentos</Label>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-14 border-border hover:bg-secondary"
-                disabled={faltaPagar > 0.02}
-                onClick={() => {
-                  if (onPrintCupom) void onPrintCupom()
-                  else
-                    toast({
-                      title: "Impressão indisponível",
-                      description: "Configure impressão em Configurações → PDV.",
-                      variant: "destructive",
-                    })
-                }}
-              >
-                <Printer className="w-5 h-5 mr-2" />
-                <div className="text-left">
-                  <p className="text-sm font-semibold">Imprimir Cupom</p>
-                  <p className="text-xs text-muted-foreground">Térmica (config da unidade)</p>
-                </div>
-              </Button>
-              
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-14 border-border hover:bg-secondary"
-                disabled={faltaPagar > 0.02}
-                onClick={() => toast({ title: "Contrato de garantia gerado", description: "Documento preparado para impressão A4." })}
-              >
-                <FileCheck className="w-5 h-5 mr-2" />
-                <div className="text-left">
-                  <p className="text-sm font-semibold">Gerar Contrato</p>
-                  <p className="text-xs text-muted-foreground">Garantia A4</p>
-                </div>
-              </Button>
-            </div>
-          </div>
 
         </div>
 

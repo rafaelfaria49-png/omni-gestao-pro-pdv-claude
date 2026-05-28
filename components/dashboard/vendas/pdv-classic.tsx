@@ -68,6 +68,7 @@ function formatBrDocDisplay(digitsRaw: string): string {
 }
 import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
+import type { PdvReceiptInput } from "@/lib/escpos"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
@@ -264,6 +265,9 @@ export function PdvClassic({
   /** Rodapé do cupom por unidade (StoreSettings). */
   const [pdvReceiptFooter, setPdvReceiptFooter] = useState("")
   const [storeLogoUrl, setStoreLogoUrl] = useState("")
+  /** Fluxo pós-venda: oferecer impressão após a venda ser persistida. */
+  const [postSalePrintOpen, setPostSalePrintOpen] = useState(false)
+  const [postSalePrintInput, setPostSalePrintInput] = useState<PdvReceiptInput | null>(null)
 
   useEffect(() => {
     const id = (lojaAtivaId || "").trim()
@@ -979,7 +983,8 @@ export function PdvClassic({
     attrDialogOpen ||
     weightDialogOpen ||
     showKeyboardHelp ||
-    showOperationsMenu
+    showOperationsMenu ||
+    postSalePrintOpen
 
   useEffect(() => {
     if (!isModoRapido) return
@@ -1595,7 +1600,6 @@ export function PdvClassic({
 
       <PaymentModal
         isOpen={isPaymentModalOpen}
-        onPrintCupom={() => void handlePrintReceipt()}
         onClose={() => {
           setIsPaymentModalOpen(false)
           setInstantPayIntent(null)
@@ -1633,6 +1637,21 @@ export function PdvClassic({
               ...(item.isAvulso ? { isAvulso: true as const } : {}),
               ...(item.custoUnitario !== undefined ? { custoUnitario: item.custoUnitario } : {}),
             }))
+          // Capturar dados de impressão ANTES de limpar o cart
+          const _rp = buildReceiptPrintPayload()
+          const _printInput: PdvReceiptInput = {
+            nomeFantasia: _rp.nome,
+            cnpj: _rp.cnpj,
+            enderecoLinha: getEnderecoDocumentos(),
+            receiptFooter: _rp.footer,
+            itens: _rp.itens,
+            subtotal,
+            taxes: impostoEstimado,
+            discount: discountTotal,
+            total,
+            dataHora: new Date().toLocaleString("pt-BR"),
+          }
+
           let dinheiro = 0
           let pix = 0
           let cartaoDebito = 0
@@ -1679,24 +1698,15 @@ export function PdvClassic({
             return
           }
           if (impressaoConfig.imprimirAutomatico && saleLines.length > 0) {
-            const p = buildReceiptPrintPayload()
             void printPdvSaleReceipt({
               config: impressaoConfig,
-              receiptFooter: p.footer,
+              receiptFooter: _rp.footer,
               logoUrl: storeLogoUrl,
-              input: {
-                nomeFantasia: p.nome,
-                cnpj: p.cnpj,
-                enderecoLinha: getEnderecoDocumentos(),
-                receiptFooter: p.footer,
-                itens: p.itens,
-                subtotal,
-                taxes: impostoEstimado,
-                discount: discountTotal,
-                total,
-                dataHora: new Date().toLocaleString("pt-BR"),
-              },
+              input: _printInput,
             })
+          } else if (saleLines.length > 0) {
+            setPostSalePrintInput(_printInput)
+            setPostSalePrintOpen(true)
           }
           if (aPrazo > 0.02 && selectedCustomer) {
             appendContaReceberTituloPdvAprazo({
@@ -1854,6 +1864,73 @@ export function PdvClassic({
             >
               Fechar (ESC)
             </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo pós-venda: oferta de impressão do comprovante */}
+      <Dialog
+        open={postSalePrintOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPostSalePrintOpen(false)
+            setPostSalePrintInput(null)
+            focusShellBipe()
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+              <Receipt className="h-5 w-5 text-primary" />
+              Imprimir comprovante?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Venda registrada com sucesso. Deseja imprimir o comprovante não fiscal?
+          </p>
+          <div className="flex gap-3 pt-1">
+            <Button
+              type="button"
+              className="flex-1 h-11 gap-2 bg-[hsl(var(--pos-action))] font-semibold text-[hsl(var(--pos-action-foreground))] hover:bg-[hsl(var(--pos-action))]/90"
+              onClick={async () => {
+                if (!postSalePrintInput) return
+                setPostSalePrintOpen(false)
+                setPostSalePrintInput(null)
+                const result = await printPdvSaleReceipt({
+                  config: impressaoConfig,
+                  receiptFooter: postSalePrintInput.receiptFooter ?? undefined,
+                  logoUrl: storeLogoUrl,
+                  input: postSalePrintInput,
+                })
+                if (result.ok) {
+                  toast({
+                    title: result.via === "proxy" ? "Cupom enviado à impressora" : "Cupom aberto para impressão",
+                    description: result.via === "proxy"
+                      ? `${impressaoConfig.impressoraHost.trim() || "Impressora padrão"} · ${impressaoConfig.viasCupom} via(s).`
+                      : "Feche a janela após imprimir.",
+                  })
+                } else {
+                  toast({ title: "Falha na impressão", description: result.error || "Verifique as configurações.", variant: "destructive" })
+                }
+                focusShellBipe()
+              }}
+            >
+              <Receipt className="h-4 w-4" />
+              Sim, imprimir
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 h-11 border-border"
+              onClick={() => {
+                setPostSalePrintOpen(false)
+                setPostSalePrintInput(null)
+                focusShellBipe()
+              }}
+            >
+              Não, obrigado
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
