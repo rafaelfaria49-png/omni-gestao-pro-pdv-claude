@@ -9,10 +9,10 @@ import {
   BarChart3,
   Clock,
   Package,
-  TrendingUp,
   type LucideIcon,
 } from "lucide-react"
 import ThemeSwitcher from "./ThemeSwitcher"
+import { cn } from "@/lib/utils"
 
 type Status = "ativo" | "beta" | "em-breve"
 
@@ -98,25 +98,24 @@ export default function VendasHub() {
   }
 
   return (
-    <div className="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))] px-4 py-6 md:px-8 md:py-8 flex flex-col">
+    <div className="min-h-screen bg-background text-foreground px-4 py-6 md:px-8 md:py-8 flex flex-col transition-smooth">
       <div className="mx-auto w-full max-w-5xl flex-1 flex flex-col">
         {/* Nav superior e Título */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="flex items-center gap-3 md:gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-border/40 pb-5">
+          <div className="space-y-1.5">
             <button
               type="button"
               onClick={handleBack}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] transition-colors"
-              title="Voltar"
-              aria-label="Voltar"
+              className="group inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all duration-200"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
+              Voltar para o Dashboard
             </button>
             <div>
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight leading-none text-[hsl(var(--foreground))]">
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
                 Vendas HUB Central
               </h1>
-              <p className="mt-1 text-xs md:text-sm text-[hsl(var(--muted-foreground))]">
+              <p className="mt-1.5 text-xs md:text-sm text-muted-foreground">
                 Todas as operações de venda em um único lugar
               </p>
             </div>
@@ -127,7 +126,7 @@ export default function VendasHub() {
         </div>
 
         {/* Bento Grid dos Módulos */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 auto-rows-[minmax(140px,auto)] gap-4 md:gap-5 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 auto-rows-[minmax(140px,auto)] gap-5 md:gap-6 w-full">
           {cards.map((card, index) => {
             const Icon = card.icon;
             // Configurações do Bento Grid
@@ -141,12 +140,6 @@ export default function VendasHub() {
             const isBeta = card.status === "beta";
             const isEmBreve = card.status === "em-breve";
             const statusLabel = card.status ? STATUS_LABEL[card.status] : undefined;
-
-            const statusStyle: CSSProperties = isEmBreve
-              ? { backgroundColor: "hsl(var(--muted))", color: "hsl(var(--muted-foreground))" }
-              : isBeta
-              ? { backgroundColor: "hsl(var(--success) / 0.12)", color: "hsl(var(--success))" }
-              : { backgroundColor: "hsl(var(--primary) / 0.10)", color: "hsl(var(--primary))" };
 
             // Grid classes manuais para Tailwind
             let gridClass = "";
@@ -176,14 +169,19 @@ export default function VendasHub() {
               <a
                 key={card.title}
                 href={card.dashboardHref}
-                className={`group relative rounded-xl border border-border cursor-pointer transition-smooth hover:-translate-y-0.5 active:scale-[0.99] flex ${gridClass} bg-card/70 backdrop-blur-xl text-card-foreground shadow-soft`}
+                className={cn(
+                  "group relative rounded-2xl border border-border/80 cursor-pointer transition-smooth hover:-translate-y-0.5 active:scale-[0.99] flex",
+                  gridClass,
+                  isPdvRapido
+                    ? "bg-gradient-to-br from-card to-muted/40 text-foreground shadow-sm"
+                    : "bg-card text-foreground shadow-sm"
+                )}
               >
                 {/* Glow layer em hover para todos os cards */}
                 <div 
-                  className="pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 ring-1 ring-inset z-0"
+                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 ring-1 ring-inset z-0 border border-primary/20 shadow-elegant"
                   style={{
-                    boxShadow: "0 8px 30px -12px hsl(var(--primary) / 0.25)",
-                    borderColor: "hsl(var(--primary) / 0.3)"
+                    boxShadow: "0 8px 30px -12px var(--primary-glow, rgb(239, 68, 68, 0.25))",
                   }}
                 />
 
@@ -191,37 +189,41 @@ export default function VendasHub() {
                 <div className={`relative z-20 flex w-full h-full ${flexClass}`}>
                   <div className={`flex relative z-20 ${isPdvRapido ? "justify-between w-full" : flexClass.includes("flex-row") ? "items-center" : "mb-4 w-full"}`}>
                     <div
-                      className={`relative flex shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-105 ${isPdvRapido ? "h-14 w-14 rounded-xl" : "h-10 w-10 rounded-lg"}`}
-                      style={{
-                        backgroundColor: "hsl(var(--primary) / 0.08)",
-                        color: "hsl(var(--primary))",
-                      }}
+                      className={cn(
+                        "relative flex shrink-0 items-center justify-center transition-transform duration-300 group-hover:scale-105 bg-primary/10 text-primary border border-primary/20",
+                        isPdvRapido ? "h-14 w-14 rounded-2xl" : "h-10 w-10 rounded-xl"
+                      )}
                     >
                       <Icon className={isPdvRapido ? "h-7 w-7 relative z-10" : "h-5 w-5 relative z-10"} strokeWidth={2} />
                     </div>
                   </div>
 
                   <div className={`flex-1 min-w-0 relative z-20 ${isPdvRapido ? "mt-auto pt-6" : flexClass.includes("flex-col") ? "" : "pr-6"}`}>
-                    <h2 className={`font-semibold tracking-tight truncate ${isPdvRapido ? "text-xl md:text-2xl mb-1 text-foreground" : "text-sm mb-0.5 text-foreground"}`}>
+                    <h2 className={cn(
+                      "font-semibold tracking-tight truncate text-foreground",
+                      isPdvRapido ? "text-xl md:text-2xl mb-1.5" : "text-sm mb-0.5"
+                    )}>
                       {card.title}
                     </h2>
                     {card.meta && !isPdvRapido && (
-                      <p className="text-[9px] uppercase tracking-wider font-bold mb-1" style={{ color: "hsl(var(--primary) / 0.8)" }}>
+                      <p className="text-[9px] uppercase tracking-wider font-bold mb-1 text-primary/80">
                         {card.meta}
                       </p>
                     )}
-                    <p className={`leading-relaxed line-clamp-2 ${isPdvRapido ? "text-xs text-muted-foreground mb-3" : "text-[11px] text-muted-foreground mb-2"}`}>
+                    <p className={cn(
+                      "leading-relaxed line-clamp-2 text-muted-foreground",
+                      isPdvRapido ? "text-xs mb-4" : "text-[11px] mb-2"
+                    )}>
                       {card.description}
                     </p>
                   </div>
 
                   {!isPdvRapido && (
                     <span
-                      className={`relative z-20 inline-flex items-center gap-1 shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200 group-hover:bg-primary/10 ${flexClass.includes("flex-row") ? "ml-auto" : "mt-auto self-start"}`}
-                      style={{
-                        backgroundColor: "hsl(var(--muted))",
-                        color: "hsl(var(--foreground))",
-                      }}
+                      className={cn(
+                        "relative z-20 inline-flex items-center gap-1 shrink-0 rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-all duration-300 bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground",
+                        flexClass.includes("flex-row") ? "ml-auto" : "mt-auto self-start"
+                      )}
                     >
                       Acessar
                       <ArrowRight className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5" />
@@ -229,9 +231,9 @@ export default function VendasHub() {
                   )}
 
                   {isPdvRapido && (
-                     <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-4 w-full relative z-20">
+                     <div className="mt-5 flex items-center justify-between border-t border-border/40 pt-4 w-full relative z-20">
                         <span className="text-xs font-semibold text-foreground">Abrir módulo</span>
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary transition-transform duration-200 group-hover:translate-x-1">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20 transition-transform duration-200 group-hover:translate-x-1">
                           <ArrowRight className="h-4 w-4" />
                         </div>
                      </div>
@@ -242,7 +244,12 @@ export default function VendasHub() {
                 {(card.badge || statusLabel) && (
                   <div className={isPdvRapido ? "absolute right-5 top-5 z-30" : "absolute right-4 top-4 z-30"}>
                      <span
-                       className="text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border border-primary/20 bg-primary/10 text-primary"
+                       className={cn(
+                         "text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border",
+                         isBeta 
+                           ? "border-amber-500/20 bg-amber-500/10 text-amber-500" 
+                           : "border-primary/20 bg-primary/10 text-primary"
+                       )}
                      >
                        {card.badge || statusLabel}
                      </span>

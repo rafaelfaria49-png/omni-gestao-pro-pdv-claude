@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Sun, Snowflake, Moon, Circle, Sparkles, Coffee } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const THEMES = [
   { id: "light", label: "Light", icon: Sun },
@@ -44,13 +45,7 @@ export default function ThemeSwitcher() {
   };
 
   return (
-    <div
-      className="inline-flex items-center gap-1 rounded-xl border p-1"
-      style={{
-        borderColor: "hsl(var(--border))",
-        backgroundColor: "hsl(var(--muted))",
-      }}
-    >
+    <div className="inline-flex flex-wrap items-center gap-1 rounded-xl border border-border/60 bg-muted/80 backdrop-blur-md p-1 shadow-sm max-w-full">
       {THEMES.map((t) => {
         const Icon = t.icon;
         const active = theme === t.id;
@@ -61,14 +56,15 @@ export default function ThemeSwitcher() {
             onClick={() => handleChange(t.id)}
             aria-label={t.label}
             title={t.label}
-            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-200"
-            style={{
-              backgroundColor: active ? "hsl(var(--primary))" : "transparent",
-              color: active ? "hsl(var(--primary-foreground))" : "hsl(var(--muted-foreground))",
-            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-300",
+              active
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-transparent text-muted-foreground hover:text-foreground hover:bg-background/40"
+            )}
           >
-            <Icon className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t.label}</span>
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            <span className="hidden lg:inline">{t.label}</span>
           </button>
         );
       })}

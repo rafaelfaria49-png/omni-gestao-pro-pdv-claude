@@ -1,199 +1,198 @@
 /**
- * Tokens HSL para o Vendas HUB (escopo local).
- * Aplicados apenas em [data-vendas-hub-theme-root] para não sobrescrever :root global.
+ * Tokens HSL e OKLCH para o Vendas HUB (escopo local).
+ * Sincronizados com os temas oficiais do globals.css do OmniGestão Pro.
  */
 [data-vendas-hub-theme-root] {
-  --radius: 0.625rem;
+  --radius: 1rem; /* Suavização das bordas alinhada ao design enterprise */
 }
 
+/* --- LIGHT --- */
 [data-vendas-hub-theme-root],
 [data-vendas-hub-theme-root][data-theme="light"] {
-  --background: 0 0% 100%;
-  --foreground: 222 47% 11%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 47% 11%;
-  --border: 214 32% 91%;
-  --input: 214 32% 91%;
-  --primary: 0 84% 50%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215 16% 47%;
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 142 71% 45%;
-  --pos-action-foreground: 0 0% 100%;
+  --background: hsl(210 20% 98%);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.9 0 0);
+  --primary: hsl(0 84% 50%);
+  --primary-foreground: oklch(1 0 0);
+  --muted: hsl(210 20% 98%);
+  --muted-foreground: oklch(0.55 0 0);
+  --success: oklch(0.62 0.17 150);
+  --success-foreground: oklch(1 0 0);
+  --destructive: oklch(0.62 0.22 25);
+  --destructive-foreground: oklch(0.985 0 0);
+  --primary-glow: hsl(0 80% 65% / 0.15);
 }
 
+/* --- SOFT ICE --- */
 [data-vendas-hub-theme-root][data-theme="soft-ice"] {
-  --background: 210 40% 98%;
-  --foreground: 222 47% 11%;
-  --card: 210 40% 100%;
-  --card-foreground: 222 47% 11%;
-  --border: 210 30% 88%;
-  --input: 210 30% 88%;
-  --primary: 200 90% 50%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 210 40% 94%;
-  --muted-foreground: 215 20% 40%;
-  --success: 160 84% 39%;
-  --success-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 200 90% 50%;
-  --pos-action-foreground: 0 0% 100%;
+  --background: oklch(0.984 0.003 240);
+  --foreground: oklch(0.21 0.04 265);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.04 265);
+  --border: oklch(0.9 0.01 240);
+  --input: oklch(0.92 0.01 240);
+  --primary: oklch(0.55 0.18 240);
+  --primary-foreground: oklch(1 0 0);
+  --muted: oklch(0.95 0.008 240);
+  --muted-foreground: oklch(0.5 0.03 250);
+  --success: oklch(0.58 0.15 150);
+  --success-foreground: oklch(1 0 0);
+  --destructive: oklch(0.6 0.24 25);
+  --destructive-foreground: oklch(1 0 0);
+  --primary-glow: oklch(0.72 0.16 220 / 0.18);
 }
 
+/* --- MIDNIGHT --- */
 [data-vendas-hub-theme-root][data-theme="midnight"] {
-  --background: 222 47% 11%;
-  --foreground: 210 40% 98%;
-  --card: 222 47% 14%;
-  --card-foreground: 210 40% 98%;
-  --border: 217 30% 32%;
-  --input: 217 30% 32%;
-  --primary: 217 91% 60%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 217 33% 20%;
-  --muted-foreground: 215 20% 72%;
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 217 91% 60%;
-  --pos-action-foreground: 0 0% 100%;
+  --background: oklch(0.21 0.04 265);
+  --foreground: oklch(0.984 0.003 240);
+  --card: oklch(0.27 0.04 265);
+  --card-foreground: oklch(0.984 0.003 240);
+  --border: oklch(0.35 0.04 265);
+  --input: oklch(0.32 0.04 265);
+  --primary: oklch(0.76 0.22 235);
+  --primary-foreground: oklch(0.15 0.04 265);
+  --muted: oklch(0.32 0.04 265);
+  --muted-foreground: oklch(0.7 0.03 250);
+  --success: oklch(0.72 0.16 150);
+  --success-foreground: oklch(0.15 0.04 265);
+  --destructive: oklch(0.65 0.24 25);
+  --destructive-foreground: oklch(0.984 0 0);
+  --primary-glow: oklch(0.82 0.2 225 / 0.2);
 }
 
+/* --- BLACK --- */
 [data-vendas-hub-theme-root][data-theme="black"] {
-  --background: 0 0% 4%;
-  --foreground: 0 0% 98%;
-  --card: 0 0% 8%;
-  --card-foreground: 0 0% 98%;
-  --border: 0 0% 22%;
-  --input: 0 0% 22%;
-  --primary: 142 100% 50%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 0 0% 12%;
-  --muted-foreground: 0 0% 75%;
-  --success: 142 100% 50%;
-  --success-foreground: 0 0% 4%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 142 100% 50%;
-  --pos-action-foreground: 0 0% 4%;
+  --background: oklch(0.13 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.16 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --border: oklch(0.24 0 0);
+  --input: oklch(0.18 0 0);
+  --primary: oklch(0.82 0.22 145);
+  --primary-foreground: oklch(0.05 0 0);
+  --muted: oklch(0.18 0 0);
+  --muted-foreground: oklch(0.62 0.02 250);
+  --success: oklch(0.82 0.22 145);
+  --success-foreground: oklch(0.05 0 0);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --primary-glow: oklch(0.88 0.22 145 / 0.22);
 }
 
+/* --- QUANTUM VIOLET --- */
 [data-vendas-hub-theme-root][data-theme="quantum-violet"] {
-  --background: 275 35% 8%;
-  --foreground: 275 20% 96%;
-  --card: 275 30% 12%;
-  --card-foreground: 275 20% 96%;
-  --border: 275 25% 20%;
-  --input: 275 25% 20%;
-  --primary: 310 85% 60%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 275 25% 14%;
-  --muted-foreground: 275 15% 68%;
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 310 85% 60%;
-  --pos-action-foreground: 0 0% 100%;
+  --background: oklch(0.14 0.045 295);
+  --foreground: oklch(0.96 0.02 295);
+  --card: oklch(0.17 0.045 295);
+  --card-foreground: oklch(0.96 0.02 295);
+  --border: oklch(0.24 0.04 295);
+  --input: oklch(0.19 0.04 295);
+  --primary: oklch(0.65 0.25 310);
+  --primary-foreground: oklch(0.99 0.01 295);
+  --muted: oklch(0.19 0.045 295);
+  --muted-foreground: oklch(0.68 0.04 295);
+  --success: oklch(0.82 0.22 145);
+  --success-foreground: oklch(0.05 0 0);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --primary-glow: oklch(0.72 0.25 310 / 0.2);
 }
 
+/* --- COFFEE GOLD --- */
 [data-vendas-hub-theme-root][data-theme="coffee-gold"] {
-  --background: 30 25% 8%;
-  --foreground: 40 20% 96%;
-  --card: 30 20% 12%;
-  --card-foreground: 40 20% 96%;
-  --border: 30 15% 20%;
-  --input: 30 15% 20%;
-  --primary: 38 75% 50%;
-  --primary-foreground: 30 40% 8%;
-  --muted: 30 15% 14%;
-  --muted-foreground: 40 10% 68%;
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 38 75% 50%;
-  --pos-action-foreground: 30 40% 8%;
+  --background: oklch(0.14 0.025 50);
+  --foreground: oklch(0.96 0.015 50);
+  --card: oklch(0.17 0.025 50);
+  --card-foreground: oklch(0.96 0.015 50);
+  --border: oklch(0.24 0.025 50);
+  --input: oklch(0.19 0.025 50);
+  --primary: oklch(0.78 0.14 75);
+  --primary-foreground: oklch(0.08 0.01 50);
+  --muted: oklch(0.19 0.025 50);
+  --muted-foreground: oklch(0.68 0.02 50);
+  --success: oklch(0.82 0.20 145);
+  --success-foreground: oklch(0.05 0 0);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --primary-glow: oklch(0.83 0.14 75 / 0.2);
 }
 
+/* --- RUBY BLACK --- */
 [data-vendas-hub-theme-root][data-theme="ruby-black"] {
-  --background: 0 5% 7%;
-  --foreground: 0 10% 96%;
-  --card: 0 4% 11%;
-  --card-foreground: 0 10% 96%;
-  --border: 0 8% 18%;
-  --input: 0 8% 18%;
-  --primary: 0 84% 50%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 0 4% 14%;
-  --muted-foreground: 0 4% 68%;
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 0 84% 50%;
-  --pos-action-foreground: 0 0% 100%;
+  --background: oklch(0.12 0.005 0);
+  --foreground: oklch(0.97 0.01 20);
+  --card: oklch(0.16 0.01 25);
+  --card-foreground: oklch(0.97 0.01 20);
+  --border: oklch(0.24 0.02 25);
+  --input: oklch(0.15 0.005 25);
+  --primary: oklch(0.60 0.25 25);
+  --primary-foreground: oklch(0.99 0.005 20);
+  --muted: oklch(0.15 0.005 25);
+  --muted-foreground: oklch(0.65 0.02 25);
+  --success: oklch(0.82 0.22 145);
+  --success-foreground: oklch(0.05 0 0);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --primary-glow: oklch(0.68 0.25 25 / 0.2);
 }
 
+/* --- NEON ICE --- */
 [data-vendas-hub-theme-root][data-theme="neon-ice"] {
-  --background: 145 30% 98%;
-  --foreground: 145 25% 18%;
-  --card: 0 0% 100%;
-  --card-foreground: 145 25% 18%;
-  --border: 145 20% 90%;
-  --input: 145 20% 90%;
-  --primary: 145 75% 45%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 145 20% 96%;
-  --muted-foreground: 145 15% 48%;
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 145 75% 45%;
-  --pos-action-foreground: 0 0% 100%;
+  --background: oklch(0.985 0.006 145);
+  --foreground: oklch(0.24 0.03 145);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.03 145);
+  --border: oklch(0.92 0.015 145);
+  --input: oklch(0.94 0.01 145);
+  --primary: oklch(0.70 0.20 145);
+  --primary-foreground: oklch(0.20 0.04 145);
+  --muted: oklch(0.95 0.008 145);
+  --muted-foreground: oklch(0.52 0.04 145);
+  --success: oklch(0.58 0.15 150);
+  --success-foreground: oklch(1 0 0);
+  --destructive: oklch(0.6 0.24 25);
+  --destructive-foreground: oklch(1 0 0);
+  --primary-glow: oklch(0.78 0.22 145 / 0.18);
 }
 
+/* --- VIOLET ICE --- */
 [data-vendas-hub-theme-root][data-theme="violet-ice"] {
-  --background: 295 30% 98%;
-  --foreground: 295 25% 18%;
-  --card: 0 0% 100%;
-  --card-foreground: 295 25% 18%;
-  --border: 295 20% 90%;
-  --input: 295 20% 90%;
-  --primary: 295 70% 52%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 295 20% 96%;
-  --muted-foreground: 295 15% 48%;
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 295 70% 52%;
-  --pos-action-foreground: 0 0% 100%;
+  --background: oklch(0.985 0.006 295);
+  --foreground: oklch(0.24 0.03 295);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.24 0.03 295);
+  --border: oklch(0.92 0.015 295);
+  --input: oklch(0.94 0.01 295);
+  --primary: oklch(0.60 0.18 295);
+  --primary-foreground: oklch(0.99 0.005 295);
+  --muted: oklch(0.95 0.008 295);
+  --muted-foreground: oklch(0.52 0.04 295);
+  --success: oklch(0.58 0.15 150);
+  --success-foreground: oklch(1 0 0);
+  --destructive: oklch(0.6 0.24 25);
+  --destructive-foreground: oklch(1 0 0);
+  --primary-glow: oklch(0.68 0.20 295 / 0.18);
 }
 
+/* --- COFFEE CREAM --- */
 [data-vendas-hub-theme-root][data-theme="coffee-cream"] {
-  --background: 45 25% 97%;
-  --foreground: 35 25% 18%;
-  --card: 45 30% 99%;
-  --card-foreground: 35 25% 18%;
-  --border: 45 15% 89%;
-  --input: 45 15% 89%;
-  --primary: 38 65% 42%;
-  --primary-foreground: 0 0% 100%;
-  --muted: 45 20% 95%;
-  --muted-foreground: 35 15% 48%;
-  --success: 142 71% 45%;
-  --success-foreground: 0 0% 100%;
-  --destructive: 0 84% 60%;
-  --destructive-foreground: 0 0% 100%;
-  --pos-action: 38 65% 42%;
-  --pos-action-foreground: 0 0% 100%;
+  --background: oklch(0.98 0.01 60);
+  --foreground: oklch(0.24 0.02 55);
+  --card: oklch(0.99 0.005 60);
+  --card-foreground: oklch(0.24 0.02 55);
+  --border: oklch(0.91 0.02 60);
+  --input: oklch(0.93 0.015 60);
+  --primary: oklch(0.66 0.12 65);
+  --primary-foreground: oklch(0.99 0.005 60);
+  --muted: oklch(0.95 0.01 60);
+  --muted-foreground: oklch(0.52 0.03 55);
+  --success: oklch(0.58 0.15 150);
+  --success-foreground: oklch(1 0 0);
+  --destructive: oklch(0.6 0.24 25);
+  --destructive-foreground: oklch(1 0 0);
+  --primary-glow: oklch(0.72 0.14 65 / 0.15);
 }
-
