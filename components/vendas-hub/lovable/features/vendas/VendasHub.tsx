@@ -104,13 +104,18 @@ export default function VendasHub() {
       className={cn(
         "bg-background text-foreground flex flex-col transition-smooth",
         isDashboard
-          ? "w-full h-full min-h-0 overflow-hidden px-4 py-5 sm:px-6 lg:px-8 pb-6"
+          ? "w-full h-full min-h-0 overflow-hidden px-4 py-3.5 sm:px-6 lg:px-8 pb-4"
           : "min-h-screen px-4 py-6 md:px-8 md:py-8"
       )}
     >
       <div className="mx-auto w-full max-w-5xl flex-1 flex flex-col">
         {/* Nav superior e Título */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-border/40 pb-5 flex-none">
+        <div
+          className={cn(
+            "flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 flex-none",
+            isDashboard ? "mb-4 pb-3" : "mb-6 pb-5"
+          )}
+        >
           <div className="space-y-1.5">
             {!isDashboard && (
               <button
@@ -132,7 +137,7 @@ export default function VendasHub() {
             </div>
           </div>
           <div className="self-end sm:self-auto">
-            <ThemeSwitcher />
+            <ThemeSwitcher compact={isDashboard} />
           </div>
         </div>
 
@@ -143,7 +148,14 @@ export default function VendasHub() {
             isDashboard ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden scroll-elegant" : ""
           )}
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 auto-rows-[minmax(140px,auto)] gap-5 md:gap-6 w-full">
+          <div
+            className={cn(
+              "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 w-full",
+              isDashboard
+                ? "auto-rows-[minmax(115px,auto)] gap-4 md:gap-5"
+                : "auto-rows-[minmax(140px,auto)] gap-5 md:gap-6"
+            )}
+          >
           {cards.map((card, index) => {
             const Icon = card.icon;
             // Configurações do Bento Grid
@@ -164,22 +176,22 @@ export default function VendasHub() {
             
             if (isPdvRapido) {
                gridClass = "md:col-span-2 md:row-span-2";
-               flexClass = "flex-col justify-between p-6 sm:p-8";
+               flexClass = cn("flex-col justify-between", isDashboard ? "p-5 sm:p-6" : "p-6 sm:p-8");
             } else if (isVendaCompleta) {
                gridClass = "md:col-span-2 md:row-span-1";
-               flexClass = "flex-row items-center gap-5 p-5";
+               flexClass = cn("flex-row items-center", isDashboard ? "gap-4 p-4" : "gap-5 p-5");
             } else if (isOrcamentos) {
                gridClass = "md:col-span-1 md:row-span-1";
-               flexClass = "flex-col p-5";
+               flexClass = cn("flex-col", isDashboard ? "p-4" : "p-5");
             } else if (isHistorico) {
                gridClass = "md:col-span-1 md:row-span-1";
-               flexClass = "flex-col p-5";
+               flexClass = cn("flex-col", isDashboard ? "p-4" : "p-5");
             } else if (isEstoque) {
                gridClass = "md:col-span-2 md:row-span-1";
-               flexClass = "flex-row items-center gap-5 p-5";
+               flexClass = cn("flex-row items-center", isDashboard ? "gap-4 p-4" : "gap-5 p-5");
             } else if (isRelatorios) {
                gridClass = "md:col-span-2 md:row-span-1";
-               flexClass = "flex-row items-center gap-5 p-5";
+               flexClass = cn("flex-row items-center", isDashboard ? "gap-4 p-4" : "gap-5 p-5");
             }
 
             return (
@@ -215,7 +227,12 @@ export default function VendasHub() {
                     </div>
                   </div>
 
-                  <div className={`flex-1 min-w-0 relative z-20 ${isPdvRapido ? "mt-auto pt-6" : flexClass.includes("flex-col") ? "" : "pr-6"}`}>
+                  <div className={cn(
+                    "flex-1 min-w-0 relative z-20",
+                    isPdvRapido
+                      ? (isDashboard ? "mt-auto pt-3" : "mt-auto pt-6")
+                      : (flexClass.includes("flex-col") ? "" : "pr-6")
+                  )}>
                     <h2 className={cn(
                       "font-semibold tracking-tight truncate text-foreground",
                       isPdvRapido ? "text-xl md:text-2xl mb-1.5" : "text-sm mb-0.5"
@@ -248,7 +265,10 @@ export default function VendasHub() {
                   )}
 
                   {isPdvRapido && (
-                     <div className="mt-5 flex items-center justify-between border-t border-border/40 pt-4 w-full relative z-20">
+                      <div className={cn(
+                         "flex items-center justify-between border-t border-border/40 w-full relative z-20",
+                         isDashboard ? "mt-3 pt-2.5" : "mt-5 pt-4"
+                      )}>
                         <span className="text-xs font-semibold text-foreground">Abrir módulo</span>
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary border border-primary/20 transition-transform duration-200 group-hover:translate-x-1">
                           <ArrowRight className="h-4 w-4" />

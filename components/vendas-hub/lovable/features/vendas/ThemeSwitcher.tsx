@@ -25,7 +25,7 @@ function applyTheme(theme: ThemeId) {
   });
 }
 
-export default function ThemeSwitcher() {
+export default function ThemeSwitcher({ compact }: { compact?: boolean }) {
   const [theme, setTheme] = useState<ThemeId>("light");
 
   useEffect(() => {
@@ -57,14 +57,15 @@ export default function ThemeSwitcher() {
             aria-label={t.label}
             title={t.label}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-all duration-300",
+              "inline-flex items-center gap-1.5 rounded-lg text-xs font-semibold transition-all duration-300",
+              compact ? "px-1.5 py-1" : "px-2.5 py-1.5",
               active
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "bg-transparent text-muted-foreground hover:text-foreground hover:bg-background/40"
             )}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" />
-            <span className="hidden lg:inline">{t.label}</span>
+            {!compact && <span className="hidden lg:inline">{t.label}</span>}
           </button>
         );
       })}
