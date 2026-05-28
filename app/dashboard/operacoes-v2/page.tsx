@@ -26,9 +26,9 @@ const OperacoesHubIsolated = dynamic(
 export default function OperacoesV2Page() {
   return (
     <Suspense fallback={<OperacoesV2LoadingFallback />}>
-      <div className="-mx-4 min-w-0 overflow-x-hidden sm:-mx-6 lg:-mx-8">
+      <div className="w-full min-w-0 space-y-4">
         <div
-          className="mx-4 mb-4 min-w-0 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-muted-foreground sm:mx-6 lg:mx-8"
+          className="min-w-0 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-muted-foreground"
           role="status"
         >
           <span className="inline-flex flex-wrap items-center gap-2">
