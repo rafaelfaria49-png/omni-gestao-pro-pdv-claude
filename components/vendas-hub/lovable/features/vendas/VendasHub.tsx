@@ -104,13 +104,13 @@ export default function VendasHub() {
       className={cn(
         "bg-background text-foreground flex flex-col transition-smooth",
         isDashboard
-          ? "w-full h-full min-h-0 overflow-y-auto overflow-x-hidden scroll-elegant px-4 py-5 sm:px-6 lg:px-8 pb-6"
+          ? "w-full h-full min-h-0 overflow-hidden px-4 py-5 sm:px-6 lg:px-8 pb-6"
           : "min-h-screen px-4 py-6 md:px-8 md:py-8"
       )}
     >
       <div className="mx-auto w-full max-w-5xl flex-1 flex flex-col">
         {/* Nav superior e Título */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-border/40 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-border/40 pb-5 flex-none">
           <div className="space-y-1.5">
             {!isDashboard && (
               <button
@@ -137,7 +137,13 @@ export default function VendasHub() {
         </div>
 
         {/* Bento Grid dos Módulos */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 auto-rows-[minmax(140px,auto)] gap-5 md:gap-6 w-full">
+        <div
+          className={cn(
+            "w-full pr-1 pb-4",
+            isDashboard ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden scroll-elegant" : ""
+          )}
+        >
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 auto-rows-[minmax(140px,auto)] gap-5 md:gap-6 w-full">
           {cards.map((card, index) => {
             const Icon = card.icon;
             // Configurações do Bento Grid
@@ -269,6 +275,7 @@ export default function VendasHub() {
               </a>
             );
           })}
+          </div>
         </div>
       </div>
     </div>
