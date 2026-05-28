@@ -27,7 +27,9 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
     pathname?.startsWith("/dashboard/vendas/") ||
     pathname?.startsWith("/dashboard/pdv-next") ||
     pathname === "/dashboard/configuracoes" ||
-    pathname?.startsWith("/dashboard/configuracoes/")
+    pathname?.startsWith("/dashboard/configuracoes/") ||
+    pathname === "/dashboard/ia-mestre" ||
+    pathname?.startsWith("/dashboard/ia-mestre/")
 
   const shell = (
     <AppShell noPadding={isFixedScreen}>
