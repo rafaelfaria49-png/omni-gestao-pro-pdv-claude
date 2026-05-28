@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   Zap,
   FileText,
@@ -88,6 +88,8 @@ const STATUS_LABEL: Record<Status, string> = {
 
 export default function VendasHub() {
   const router = useRouter()
+  const pathname = usePathname() ?? ""
+  const isDashboard = pathname.startsWith("/dashboard/vendas-hub")
 
   const handleBack = () => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -98,19 +100,28 @@ export default function VendasHub() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground px-4 py-6 md:px-8 md:py-8 flex flex-col transition-smooth">
+    <div
+      className={cn(
+        "bg-background text-foreground flex flex-col transition-smooth",
+        isDashboard
+          ? "w-full h-full min-h-0 overflow-y-auto overflow-x-hidden scroll-elegant px-4 py-5 sm:px-6 lg:px-8 pb-6"
+          : "min-h-screen px-4 py-6 md:px-8 md:py-8"
+      )}
+    >
       <div className="mx-auto w-full max-w-5xl flex-1 flex flex-col">
         {/* Nav superior e Título */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-border/40 pb-5">
           <div className="space-y-1.5">
-            <button
-              type="button"
-              onClick={handleBack}
-              className="group inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all duration-200"
-            >
-              <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
-              Voltar para o Dashboard
-            </button>
+            {!isDashboard && (
+              <button
+                type="button"
+                onClick={handleBack}
+                className="group inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-all duration-200"
+              >
+                <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
+                Voltar para o Dashboard
+              </button>
+            )}
             <div>
               <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
                 Vendas HUB Central
