@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Search, Plus, Upload, Users, Package, Wrench, Truck, HardHat, Smartphone,
   AlertTriangle, RefreshCw, LayoutDashboard, Tag, FileSpreadsheet, History,
@@ -73,79 +75,70 @@ export function CadastrosHub() {
   const [autoOpenNew, setAutoOpenNew] = useState<string | null>(null);
   const novo = useToggle();
   const { lojaAtivaId } = useLojaAtiva();
-  const storeId = (lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID;
-
-  return (
-    <div className="w-full min-w-0 max-w-full bg-background">
-      {/* HEADER */}
-      <header className="z-30 border-b border-border bg-background/80 backdrop-blur-xl">
-        <div className="w-full px-6 py-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl gradient-primary ring-primary-glow">
-                <Database className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="truncate text-xl font-bold text-foreground">Cadastros HUB</h1>
-                  <Badge tone="primary">Premium</Badge>
-                </div>
-                <p className="truncate text-xs text-muted-foreground">
-                  Clientes, produtos, serviços, fornecedores e base operacional centralizada.
-                </p>
-              </div>
+  const storeId = (lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID;  return (
+    <div className="w-full min-w-0 max-w-full bg-background text-foreground transition-smooth">
+      {/* HEADER INTEGRADO */}
+      <header className="border-b border-border/60 bg-background pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-foreground">Cadastros HUB</h1>
+              <Badge tone="primary">Premium</Badge>
             </div>
-
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              <button
-                onClick={() => {
-                  setTab("importacao");
-                  setAutoOpenNew(null);
-                }}
-                className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-accent transition"
-                title="Abrir HUB de Importação"
-              >
-                <Upload className="h-4 w-4" /> <span className="hidden md:inline">Importar</span>
-              </button>
-              <button
-                onClick={novo.openIt}
-                className="flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 transition"
-              >
-                <Plus className="h-4 w-4" /> Novo cadastro
-              </button>
-              <ThemeSwitcher />
-            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Clientes, produtos, serviços, fornecedores e base operacional centralizada
+            </p>
           </div>
 
-          {/* TABS */}
-          <nav className="mt-4 flex items-center gap-1 overflow-x-auto pb-1">
-            {TABS.map((t) => {
-              const Icon = t.icon;
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => {
-                    setTab(t.id);
-                    setAutoOpenNew(null);
-                  }}
-                  className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition ${
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  {t.label}
-                </button>
-              );
-            })}
-          </nav>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setTab("importacao");
+                setAutoOpenNew(null);
+              }}
+              className="flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground hover:bg-muted/40 transition-smooth"
+              title="Abrir HUB de Importação"
+            >
+              <Upload className="h-4 w-4" /> <span className="hidden md:inline">Importar</span>
+            </button>
+            <button
+              onClick={novo.openIt}
+              className="flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground hover:opacity-90 transition-smooth shadow-soft"
+            >
+              <Plus className="h-4 w-4" /> Novo cadastro
+            </button>
+          </div>
         </div>
+
+        {/* TABS HORIZONTAIS DISCRETAS */}
+        <nav className="mt-4 flex items-center gap-1 overflow-x-auto pb-1 scroll-elegant">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => {
+                  setTab(t.id);
+                  setAutoOpenNew(null);
+                }}
+                className={[
+                  "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-smooth border",
+                  active
+                    ? "bg-primary/8 border-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground border-transparent",
+                ].join(" ")}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {t.label}
+              </button>
+            );
+          })}
+        </nav>
       </header>
 
       {/* CONTENT */}
-      <main className="w-full min-w-0 px-6 py-8">
+      <main className="w-full min-w-0 pt-5">
         {tab === "dashboard" && (
           <DashboardPanel
             onAction={(targetTab, openNew) => {
@@ -688,8 +681,9 @@ function ClientesPanel({
                           try {
                             await updateCliente(storeId, c.id, { active: c.status !== "Ativo" });
                             await refresh();
+                            toast.success("Status do cliente atualizado com sucesso.");
                           } catch (e) {
-                            window.alert(e instanceof Error ? e.message : "Não foi possível atualizar status");
+                            toast.error(e instanceof Error ? e.message : "Não foi possível atualizar status.");
                           }
                         });
                       }}
@@ -700,10 +694,9 @@ function ClientesPanel({
                     </button>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <button disabled className="rounded p-1.5 opacity-40 cursor-not-allowed" title="Visualizar (em breve)"><Eye className="h-4 w-4" /></button>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
                       <button
-                        className="rounded p-1.5 hover:bg-accent hover:text-foreground"
+                        className="rounded p-1.5 hover:bg-accent hover:text-foreground transition-smooth"
                         title="Editar cliente"
                         onClick={() => {
                           setEditing(c);
@@ -712,11 +705,9 @@ function ClientesPanel({
                       >
                         <Edit3 className="h-4 w-4" />
                       </button>
-                      <button disabled className="rounded p-1.5 opacity-40 cursor-not-allowed" title="Nova OS (em breve)"><Wrench className="h-4 w-4" /></button>
-                      <button disabled className="rounded p-1.5 opacity-40 cursor-not-allowed" title="Nova venda (em breve)"><ShoppingCart className="h-4 w-4" /></button>
-                      {c.telefone && c.telefone !== "—" ? (
+                      {c.telefone && c.telefone !== "—" && (
                         <button
-                          className="rounded p-1.5 hover:bg-accent hover:text-foreground"
+                          className="rounded p-1.5 hover:bg-accent hover:text-foreground transition-smooth"
                           title="Abrir WhatsApp"
                           onClick={() => {
                             const digits = c.telefone.replace(/\D/g, "");
@@ -726,8 +717,6 @@ function ClientesPanel({
                         >
                           <MessageCircle className="h-4 w-4" />
                         </button>
-                      ) : (
-                        <button disabled className="rounded p-1.5 opacity-40 cursor-not-allowed" title="WhatsApp (sem telefone)"><MessageCircle className="h-4 w-4" /></button>
                       )}
                     </div>
                   </td>
@@ -787,8 +776,9 @@ function ClientesPanel({
             </Select>
           </Field>
           <Field label="Consentimento LGPD" span={2}>
-            <label className="flex items-center gap-2 rounded-lg border border-border bg-background p-3 text-sm text-foreground">
-              <input type="checkbox" /> Cliente autoriza uso dos dados conforme política de privacidade.
+            <label className="flex items-center gap-2.5 rounded-lg border border-border bg-background p-3 text-sm text-foreground cursor-pointer select-none">
+              <Checkbox id="lgpd-consent" />
+              <span className="text-xs text-muted-foreground">Cliente autoriza uso dos dados conforme política de privacidade.</span>
             </label>
           </Field>
         </div>

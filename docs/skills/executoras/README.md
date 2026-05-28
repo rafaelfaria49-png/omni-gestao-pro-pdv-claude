@@ -75,15 +75,15 @@ docs/skills/executoras/
 | [`SKILL_AUDIT_MARKETING_IA`](./research/SKILL_AUDIT_MARKETING_IA.md) | 🔄 draft | v1 | marketing_ia | 33 lote B |
 | [`SKILL_AUDIT_OMNI_AGENT`](./research/SKILL_AUDIT_OMNI_AGENT.md) | 🔄 draft | v1 | omni_agent | 33 lote C |
 | [`SKILL_AUDIT_BI`](./research/SKILL_AUDIT_BI.md) | 🔄 draft | v1 | bi | 33 lote C |
-| [`SKILL_AUDIT_MULTI_LOJA`](./research/SKILL_AUDIT_MULTI_LOJA.md) | 🔄 draft | v1 | multi_loja | 33 lote C |
-| [`SKILL_DOC_REFRESH`](./research/SKILL_DOC_REFRESH.md) | 🔄 draft | v1 | cross | 33 (encerra) |
+| [`SKILL_AUDIT_MULTI_LOJA`](./research/SKILL_AUDIT_MULTI_LOJA.md) | ✅ aprovado | v1 | multi_loja | 33 lote C · APPROVAL_BATCH_V1 |
+| [`SKILL_DOC_REFRESH`](./research/SKILL_DOC_REFRESH.md) | ✅ aprovado | v1 | cross | 33 (encerra) · APPROVAL_BATCH_V1 |
 
 ### 2.2 Proposal (Cat. 2)
 
 | Skill | Estado | Versão | HUB | Bloco |
 |---|---|---|---|---|
-| [`SKILL_PROPOSE_SPRINT`](./proposal/SKILL_PROPOSE_SPRINT.md) | 🔄 draft | v1 | cross | 34 |
-| [`SKILL_PROPOSE_ADR`](./proposal/SKILL_PROPOSE_ADR.md) | 🔄 draft | v1 | cross | 34 |
+| [`SKILL_PROPOSE_SPRINT`](./proposal/SKILL_PROPOSE_SPRINT.md) | ✅ aprovado | v1 | cross | 34 · APPROVAL_BATCH_V1 |
+| [`SKILL_PROPOSE_ADR`](./proposal/SKILL_PROPOSE_ADR.md) | ✅ aprovado | v1 | cross | 34 · APPROVAL_BATCH_V1 (validada em ADR-0002) |
 | [`SKILL_PROPOSE_REFACTOR`](./proposal/SKILL_PROPOSE_REFACTOR.md) | 🔄 draft | v1 | cross | 34 |
 
 ### 2.3 Execution S (Cat. 3)
@@ -91,10 +91,10 @@ docs/skills/executoras/
 | Skill | Estado | Versão | HUB | Bloco |
 |---|---|---|---|---|
 | [`SKILL_EXEC_FIX_MOCK`](./execution/SKILL_EXEC_FIX_MOCK.md) | 🔄 draft | v1 | cross | 35 |
-| [`SKILL_EXEC_DEBT_ITEM`](./execution/SKILL_EXEC_DEBT_ITEM.md) | 🔄 draft | v1 | cross | 35 — **piloto** |
+| [`SKILL_EXEC_DEBT_ITEM`](./execution/SKILL_EXEC_DEBT_ITEM.md) | ✅ aprovado | v1 | cross | 35 — **piloto** · APPROVAL_BATCH_V1 |
 | [`SKILL_EXEC_FEATURE_S`](./execution/SKILL_EXEC_FEATURE_S.md) | 🔄 draft | v1 | cross | 35 |
-| [`SKILL_EXEC_STABILIZATION`](./execution/SKILL_EXEC_STABILIZATION.md) | 🔄 draft | v1 | cross | 35 |
-| [`SKILL_EXEC_TESTING`](./execution/SKILL_EXEC_TESTING.md) | 🔄 draft | v1 | cross | 35 |
+| [`SKILL_EXEC_STABILIZATION`](./execution/SKILL_EXEC_STABILIZATION.md) | ✅ aprovado | v1 | cross | 35 · APPROVAL_BATCH_V1 |
+| [`SKILL_EXEC_TESTING`](./execution/SKILL_EXEC_TESTING.md) | ✅ aprovado | v1 | cross | 35 · APPROVAL_BATCH_V1 |
 
 ### 2.4 Execution M (Cat. 4) — Onda futura
 
@@ -114,7 +114,7 @@ docs/skills/executoras/
 
 | Skill | Estado | Versão | Bloco |
 |---|---|---|---|
-| [`SKILL_HANDOFF_MVP`](./runtime/SKILL_HANDOFF_MVP.md) | 🔄 draft | MVP-v1 | Bridge pré-piloto (`runtime/`) |
+| [`SKILL_HANDOFF_MVP`](./runtime/SKILL_HANDOFF_MVP.md) | ✅ aprovado | MVP-v1 | Bridge pré-piloto (`runtime/`) · APPROVAL_BATCH_V1 |
 | `SKILL_HANDOFF` | ⏳ | — | 41 (versão completa em `governance/`) |
 | `SKILL_LOCK_HUB` | ⏳ | — | 41 |
 | `SKILL_ROLLBACK` | ⏳ | — | 41 |
@@ -155,8 +155,8 @@ docs/skills/executoras/
 
 ## 5. Como modificar uma skill aprovada
 
-- **Front matter (API congelada):** exige ADR. Nova versão (`SKILL_<NOME>_v2.md`); v1 preservada.
-- **Conteúdo humano (corpo):** pode editar com revisão; atualizar `last_review` no front matter.
+- **Front matter (API congelada por [ADR-0002](../../decisions/ADR-0002-skill-front-matter-v1.md)):** o schema v1 é **imutável** até pós-piloto SPRINT_01_MULTI_LOJA. Qualquer mudança em **qualquer campo** do front matter exige **novo ADR + bump para v2** (nova versão `SKILL_<NOME>_v2.md`; v1 preservada). Pressão acumulada de melhorias vai para [`SKILL_SCHEMA_V2_BACKLOG.md`](./SKILL_SCHEMA_V2_BACKLOG.md) — não edite v1 direto.
+- **Conteúdo humano (corpo §1–12):** pode editar com revisão; atualizar `last_review` no front matter.
 - **Deprecar:** preencher `deprecated_by` + `deprecated_at`; nova skill sucessora referencia em "Notas".
 
 ---

@@ -142,8 +142,12 @@ function getInitials(name: string): string {
 
 function getAvatarColor(id: string): string {
   const colors = [
-    "bg-emerald-500", "bg-sky-500", "bg-violet-500", "bg-amber-500",
-    "bg-rose-500", "bg-teal-500", "bg-indigo-500", "bg-orange-500",
+    "bg-primary/15 text-primary border border-primary/20",
+    "bg-violet-500/15 text-violet-600 dark:text-violet-400 border border-violet-500/20",
+    "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
+    "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20",
+    "bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/20",
+    "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20",
   ]
   const hash = id.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0)
   return colors[hash % colors.length]
@@ -171,7 +175,7 @@ function ContactAvatar({ contact, size = "md" }: { contact: WaContact; size?: "s
     )
   }
   return (
-    <div className={cn("rounded-full flex-shrink-0 flex items-center justify-center text-white font-semibold", sz, getAvatarColor(contact.id))}>
+    <div className={cn("rounded-full flex-shrink-0 flex items-center justify-center font-semibold", sz, getAvatarColor(contact.id))}>
       {getInitials(contact.displayName)}
     </div>
   )
@@ -374,6 +378,8 @@ function QuickReplyModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
   function openEdit(r: WaQuickReply) {
     setEditId(r.id)
     setForm({ shortcut: r.shortcut, title: r.title, body: r.body, category: r.category })
@@ -413,8 +419,7 @@ function QuickReplyModal({
     }
   }
 
-  async function remove(id: string) {
-    if (!confirm("Remover esta resposta rápida?")) return
+  async function removeReal(id: string) {
     const res = await fetch(`/api/whatsapp/quick-replies/${id}`, { method: "DELETE", headers: apiHeaders })
     if (res.ok) onRefresh()
   }
@@ -470,8 +475,8 @@ function QuickReplyModal({
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
-                      onClick={() => remove(r.id)}
-                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-red-50 text-muted-foreground hover:text-red-500"
+                      onClick={() => setDeleteId(r.id)}
+                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -545,6 +550,31 @@ function QuickReplyModal({
           </div>
         </div>
       </div>
+
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover resposta rápida?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta resposta rápida? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <button
+              onClick={async () => {
+                if (deleteId) {
+                  await removeReal(deleteId)
+                  setDeleteId(null)
+                }
+              }}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 transition-smooth"
+            >
+              Remover
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -574,6 +604,7 @@ function EtiquetasModal({
   const [editId, setEditId] = useState<string | null>(null)
   const [editNome, setEditNome] = useState("")
   const [editCor, setEditCor] = useState("")
+  const [deleteId, setDeleteId] = useState<string | null>(null)
 
   async function create() {
     if (!nome.trim()) { setError("Nome obrigatório."); return }
@@ -607,8 +638,7 @@ function EtiquetasModal({
     if (res.ok) { setEditId(null); onRefresh() }
   }
 
-  async function remove(id: string) {
-    if (!confirm("Remover esta etiqueta? Será removida de todas as conversas.")) return
+  async function removeReal(id: string) {
     const res = await fetch(`/api/whatsapp/etiquetas/${id}`, { method: "DELETE", headers: apiHeaders })
     if (res.ok) onRefresh()
   }
@@ -703,7 +733,7 @@ function EtiquetasModal({
                     <button onClick={() => startEdit(e)} className="text-muted-foreground hover:text-foreground">
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
-                    <button onClick={() => remove(e.id)} className="text-muted-foreground hover:text-red-500">
+                    <button onClick={() => setDeleteId(e.id)} className="text-muted-foreground hover:text-red-500">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -713,6 +743,31 @@ function EtiquetasModal({
           </div>
         </div>
       </div>
+
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover etiqueta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta etiqueta? Ela será removida de todas as conversas associadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <button
+              onClick={async () => {
+                if (deleteId) {
+                  await removeReal(deleteId)
+                  setDeleteId(null)
+                }
+              }}
+              className="inline-flex h-9 items-center justify-center rounded-md bg-destructive px-4 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 transition-smooth"
+            >
+              Remover
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

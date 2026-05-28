@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMemo } from "react";
 import { PanelLeftClose, type LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { getEnterprisePermissions } from "@/lib/auth/enterprise-permissions";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
 import {
@@ -29,8 +30,6 @@ export function Sidebar() {
   const workspaceFiltered = useMemo(() => filterDashboardNav(workspaceNavItems, perms), [perms]);
   const hubsFiltered = useMemo(() => filterDashboardNav(hubsNavItems, perms), [perms]);
   const adminFiltered = useMemo(() => filterDashboardNav(administrationNavItems, perms), [perms]);
-
-  if (collapsed) return null;
 
   const rowClasses = (active: boolean) =>
     [
@@ -101,10 +100,15 @@ export function Sidebar() {
   );
 
   return (
-    <aside className="hidden lg:flex w-56 shrink-0 flex-col border-r border-border bg-background">
+    <aside
+      className={cn(
+        "hidden lg:flex shrink-0 flex-col border-r border-border bg-background transition-all duration-300 ease-in-out overflow-hidden",
+        collapsed ? "w-0 border-r-0 opacity-0" : "w-56 opacity-100"
+      )}
+    >
       <div className="h-12 flex items-center gap-2.5 px-3 border-b border-border">
-        <div className="h-6 w-6 rounded-md bg-primary grid place-items-center">
-          <span className="text-[10px] font-bold text-primary-foreground tracking-tight">OG</span>
+        <div className="h-6 w-6 shrink-0 rounded-md overflow-hidden bg-primary/10 grid place-items-center border border-primary/10">
+          <img src="/omni-gestao-pro-icon.svg" alt="OmniGestão Logo" className="h-4 w-4" />
         </div>
         <div className="leading-tight min-w-0 flex-1">
           <div className="font-display font-semibold text-[13px] text-sidebar-foreground tracking-tight truncate">

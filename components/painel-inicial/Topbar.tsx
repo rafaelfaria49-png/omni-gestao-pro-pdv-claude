@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { usePathname } from "next/navigation";
-import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package, PanelLeftOpen } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package, PanelLeftOpen, LayoutDashboard, MessageSquare, Users, Banknote, Settings, BarChart3 } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
 import { MobileNavSheet } from "@/components/painel-inicial/MobileNavSheet";
 import { useUserCredits } from "@/hooks/useUserCredits";
@@ -20,6 +20,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  CommandDialog,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandShortcut,
+  CommandSeparator,
+} from "@/components/ui/command";
 
 type NovoItem = {
   label: string;
@@ -64,10 +74,37 @@ export function Topbar() {
   const { credits, loading, error } = useUserCredits();
   const { data: session, status } = useSession();
   const { collapsed: sidebarCollapsed, setCollapsed: setSidebarCollapsed } = useSidebarCollapsed();
+  const router = useRouter();
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen((open) => !open);
+      }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
 
   const pathname = usePathname();
   const isPDV = useMemo(() => {
     return pathname?.includes("/vendas") || pathname?.includes("/pdv-next");
+  }, [pathname]);
+
+  const breadcrumbLabel = useMemo(() => {
+    if (!pathname) return "Painel";
+    if (pathname.includes("/whatsapp")) return "WhatsApp HUB";
+    if (pathname.includes("/operacoes")) return "Central de Operações";
+    if (pathname.includes("/cadastros")) return "Cadastros HUB";
+    if (pathname.includes("/financeiro")) return "Financeiro HUB";
+    if (pathname.includes("/vendas") || pathname.includes("/pdv-next")) return "Vendas & Caixa";
+    if (pathname.includes("/configuracoes")) return "Configurações";
+    if (pathname.includes("/relatorios")) return "Relatórios";
+    if (pathname.includes("/ia-mestre")) return "IA Mestre";
+    if (pathname.includes("/marketplace")) return "Marketplace";
+    return "Painel";
   }, [pathname]);
 
   const perms = useMemo(() => {
@@ -119,19 +156,19 @@ export function Topbar() {
         <nav className="hidden md:flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
           <span className="hover:text-foreground cursor-pointer">Matriz</span>
           <span className="text-border">/</span>
-          <span className="text-foreground font-medium">Painel</span>
+          <span className="text-foreground font-medium">{breadcrumbLabel}</span>
         </nav>
 
         <div className="flex-1" />
 
-        <div className="hidden sm:block w-72">
+        <div className="hidden sm:block w-72" onClick={() => setSearchOpen(true)}>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground transition-colors group-focus-within:text-foreground" />
             <input
               type="text"
               readOnly
               placeholder="Pesquisar OS, vendas ou produtos..."
-              title="Pesquisa rápida (Alt+K) — em indexação"
+              title="Pesquisa rápida (Alt+K) — Command Menu"
               className="w-full h-8 pl-8 pr-12 rounded-md bg-panel border border-border text-[12.5px] cursor-pointer placeholder:text-muted-foreground outline-none hover:bg-muted/40 hover:border-border-hover transition-all focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
             />
             <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[9px] px-1.5 py-0.5 rounded border border-border bg-background text-muted-foreground select-none pointer-events-none">
@@ -216,6 +253,142 @@ export function Topbar() {
           </div>
         </div>
       </div>
+
+      <CommandDialog open={searchOpen} onOpenChange={setSearchOpen} title="Buscar Rota ou Ação" description="Digite um comando de navegação para executar rápido.">
+        <CommandInput placeholder="Digite para buscar rotas, cadastros e atalhos..." />
+        <CommandList>
+          <CommandEmpty>Nenhum comando encontrado.</CommandEmpty>
+          <CommandGroup heading="Ações Rápidas">
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/vendas");
+              }}
+              className="cursor-pointer"
+            >
+              <ShoppingCart className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Nova Venda</span>
+              <CommandShortcut>N V</CommandShortcut>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/operacoes-v2");
+              }}
+              className="cursor-pointer"
+            >
+              <Wrench className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Nova Ordem de Serviço (OS)</span>
+              <CommandShortcut>N O</CommandShortcut>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/cadastros-v2");
+              }}
+              className="cursor-pointer"
+            >
+              <UserPlus className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Novo Cliente</span>
+              <CommandShortcut>N C</CommandShortcut>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/cadastros-v2");
+              }}
+              className="cursor-pointer"
+            >
+              <Package className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Novo Produto</span>
+              <CommandShortcut>N P</CommandShortcut>
+            </CommandItem>
+          </CommandGroup>
+          <CommandSeparator />
+          <CommandGroup heading="Navegação Geral">
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard");
+              }}
+              className="cursor-pointer"
+            >
+              <LayoutDashboard className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Ir para Painel Geral</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/vendas-hub");
+              }}
+              className="cursor-pointer"
+            >
+              <ShoppingCart className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Ir para Vendas HUB</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/whatsapp");
+              }}
+              className="cursor-pointer"
+            >
+              <MessageSquare className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Ir para WhatsApp HUB</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/operacoes-v2");
+              }}
+              className="cursor-pointer"
+            >
+              <Wrench className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Ir para Central de Operações</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/cadastros-v2");
+              }}
+              className="cursor-pointer"
+            >
+              <Users className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Ir para Cadastros HUB</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/financeiro-v2");
+              }}
+              className="cursor-pointer"
+            >
+              <Banknote className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Ir para Financeiro HUB</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/configuracoes-v2");
+              }}
+              className="cursor-pointer"
+            >
+              <Settings className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Ir para Configurações</span>
+            </CommandItem>
+            <CommandItem
+              onSelect={() => {
+                setSearchOpen(false);
+                router.push("/dashboard/relatorios");
+              }}
+              className="cursor-pointer"
+            >
+              <BarChart3 className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span>Ir para Relatórios</span>
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
     </header>
   );
 }

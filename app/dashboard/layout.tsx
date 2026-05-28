@@ -20,17 +20,21 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
   // PDV principal, suas subrotas (ex.: /vendas/venda-completa) e o PDV Next.
   // Match exato + barra evita capturar rotas irmãs como /dashboard/vendas-arquivo-geral
   // e /dashboard/vendas-hub, que são páginas com fluxo natural e precisam rolar.
-  const isVendas =
+  // Telas-fixas de painel ou PDV (scroll interno próprio, sem scroll de página):
+  // PDV principal, subrotas, PDV Next e a tela de Configurações V3.
+  const isFixedScreen =
     pathname === "/dashboard/vendas" ||
     pathname?.startsWith("/dashboard/vendas/") ||
-    pathname?.startsWith("/dashboard/pdv-next")
+    pathname?.startsWith("/dashboard/pdv-next") ||
+    pathname === "/dashboard/configuracoes" ||
+    pathname?.startsWith("/dashboard/configuracoes/")
 
   const shell = (
-    <AppShell noPadding={isVendas}>
+    <AppShell noPadding={isFixedScreen}>
       <FirstAccessWizard />
       <div
         className={
-          isVendas
+          isFixedScreen
             ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden basis-0"
             : "min-h-0 flex-1 overflow-auto"
         }

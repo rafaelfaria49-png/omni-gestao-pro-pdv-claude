@@ -88,52 +88,16 @@ export function OperacoesLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div data-hub-theme={theme} className="w-full min-w-0 bg-background text-foreground">
-      <header className="z-30 border-b border-border bg-background/80 backdrop-blur">
-        <div className="flex w-full items-center gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <Link to="/operacoes" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <Activity className="h-4 w-4" />
-            </div>
-            <div className="hidden sm:block">
-              <div className="text-sm font-semibold leading-none">Operações HUB</div>
-              <div className="text-[11px] text-muted-foreground">OmniGestão Pro</div>
-            </div>
-          </Link>
-
-          <nav className="ml-2 hidden items-center gap-1 md:flex">
-            {NAV.map((n) => {
-              const active =
-                pathname === n.to ||
-                (n.to !== "/operacoes" && pathname.startsWith(n.to));
-              return (
-                <Link
-                  key={n.to}
-                  to={n.to}
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors",
-                    active
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <n.icon className="h-4 w-4" />
-                  {n.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="ml-auto flex items-center gap-2">
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input placeholder="Buscar OS, cliente, técnico..." className="w-64 pl-9" />
-            </div>
-            <ThemeSwitcher value={theme} onChange={handleThemeChange} />
-            <Button variant="outline" size="icon" aria-label="Notificações">
-              <Bell className="h-4 w-4" />
-            </Button>
-            <Button asChild className="gap-2">
+    <div data-hub-theme={theme} className="w-full min-w-0 bg-background text-foreground transition-smooth">
+      {/* Sub-Header Integrado e Premium */}
+      <div className="border-b border-border/60 bg-background pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">Central de Operações</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Timeline, Kanbans, técnicos e garantia de ordens de serviço</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button asChild className="h-9 gap-2">
               <Link to="/operacoes/os">
                 <PlusCircle className="h-4 w-4" />
                 Nova OS
@@ -141,9 +105,33 @@ export function OperacoesLayout({ children }: { children: ReactNode }) {
             </Button>
           </div>
         </div>
-      </header>
 
-      <main className="w-full min-w-0 px-4 py-6 sm:px-6 lg:px-8">
+        {/* Sub-tabs horizontais discretas (estilo Stripe/Vercel) */}
+        <nav className="mt-4 flex items-center gap-1 overflow-x-auto pb-1 scroll-elegant">
+          {NAV.map((n) => {
+            const active =
+              pathname === n.to ||
+              (n.to !== "/operacoes" && pathname.startsWith(n.to));
+            return (
+              <Link
+                key={n.to}
+                to={n.to}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-smooth border",
+                  active
+                    ? "bg-primary/8 border-primary/15 text-primary"
+                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground border-transparent",
+                )}
+              >
+                <n.icon className="h-3.5 w-3.5" />
+                {n.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
+      <main className="w-full min-w-0 pt-5">
         {children}
       </main>
     </div>

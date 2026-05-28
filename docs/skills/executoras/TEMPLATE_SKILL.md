@@ -2,8 +2,11 @@
 # ════════════════════════════════════════════════════════════════
 # SKILL FRONT MATTER — API INTERNA OFICIAL (v1)
 # ════════════════════════════════════════════════════════════════
-# Aprovado e CONGELADO em 2026-05-27.
-# Mudança neste schema exige ADR.
+# Aprovado e CONGELADO em 2026-05-27 por ADR-0002.
+# Ver: docs/decisions/ADR-0002-skill-front-matter-v1.md
+# Mudança neste schema exige NOVO ADR + bump para v2 (template
+# v1 preservado; engine deve ler ambas versões — sem migração
+# forçada). Melhorias acumuladas: ver SKILL_SCHEMA_V2_BACKLOG.md.
 # Toda skill DEVE preencher TODOS os campos abaixo.
 # Campos vazios = `null`. Listas vazias = `[]`.
 # ════════════════════════════════════════════════════════════════
@@ -67,7 +70,7 @@ template_version: v1                         # versão deste template
 # SKILL_<NOME>
 
 > Esta seção em diante é **conteúdo humano-legível**. Pode evoluir.
-> O front matter acima é **API interna congelada** (mudança exige ADR).
+> O front matter acima é **API interna congelada** por [ADR-0002](../../decisions/ADR-0002-skill-front-matter-v1.md) — mudança exige novo ADR + bump para v2.
 
 ---
 

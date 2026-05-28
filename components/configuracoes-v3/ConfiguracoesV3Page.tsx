@@ -100,14 +100,14 @@ export default function ConfiguracoesV3Page() {
   return (
     <ThemeProvider>
       <ConfiguracoesNavProvider navigateToSection={navigateToSection}>
-        <div className="configuracoes-v3-root configuracoes-v3-app flex min-h-screen bg-surface text-foreground">
+        <div className="configuracoes-v3-root configuracoes-v3-app flex h-full w-full bg-surface text-foreground">
           {/* Sidebar — desktop */}
           <div className={active === "pdv" ? "hidden" : "hidden lg:flex"}>
             <SettingsSidebar active={active} onChange={handleChange} />
           </div>
 
           {/* Conteúdo */}
-          <main className="flex-1 min-w-0 flex flex-col">
+          <main className="flex-1 min-w-0 flex flex-col h-full">
             {/* Top bar mobile */}
             {active !== "pdv" && (
               <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
@@ -130,7 +130,7 @@ export default function ConfiguracoesV3Page() {
               </header>
             )}
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto scroll-elegant">
               <div
                 key={`${active}-${storeScopeKey}`}
                 className={`mx-auto w-full px-4 py-6 sm:px-8 sm:py-10 animate-fade-in ${active === "pdv" ? "max-w-7xl" : "max-w-5xl"}`}

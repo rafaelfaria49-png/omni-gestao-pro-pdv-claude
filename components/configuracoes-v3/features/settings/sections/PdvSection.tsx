@@ -154,12 +154,102 @@ function safePrinterRecord(raw: unknown): Record<string, unknown> {
 }
 
 /**
+ * Renderiza um mockup vetorial elegante representando a estrutura do PDV selecionado
+ * como fallback premium no caso de falha de carregamento de imagem.
+ */
+function PdvSvgFallback({ variant }: { variant: PdvFlowId }) {
+  return (
+    <div className="flex h-full w-full flex-col justify-between bg-zinc-950 p-4 font-sans text-white select-none">
+      {/* Topbar simulada */}
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+        <div className="flex items-center gap-1.5">
+          <div className="h-2 w-2 rounded-full bg-red-500" />
+          <span className="text-[9px] font-bold tracking-wider text-zinc-400 uppercase">
+            Omni PDV · {variant === "supermercado" ? "Grade" : variant}
+          </span>
+        </div>
+        <div className="h-3 w-16 rounded bg-zinc-900" />
+      </div>
+
+      {/* Corpo principal */}
+      <div className="grid flex-1 grid-cols-3 gap-2.5 pt-2.5 min-h-0">
+        {/* Esquerda: Lista de itens ou Grade */}
+        <div className="col-span-2 space-y-2 rounded border border-zinc-900 bg-zinc-900/20 p-2 overflow-hidden">
+          {variant === "supermercado" || variant === "classico" ? (
+            /* Mockup de Grid de Produtos ou Lista */
+            <div className="grid grid-cols-3 gap-1.5">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="rounded border border-zinc-800/80 bg-zinc-950 p-1 space-y-1">
+                  <div className="aspect-[4/3] rounded bg-zinc-900/60" />
+                  <div className="h-1.5 w-10/12 rounded bg-zinc-800" />
+                  <div className="h-1.5 w-1/2 rounded bg-zinc-700" />
+                </div>
+              ))}
+            </div>
+          ) : variant === "assistencia" ? (
+            /* Mockup de OS/Serviços */
+            <div className="space-y-1.5">
+              <div className="h-5 w-full rounded bg-zinc-900/60 flex items-center px-1.5 justify-between">
+                <div className="h-1.5 w-20 rounded bg-zinc-800" />
+                <div className="h-1.5 w-8 rounded bg-zinc-800" />
+              </div>
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between py-1 border-b border-zinc-900/50">
+                  <div className="h-1.5 w-24 rounded bg-zinc-850" />
+                  <div className="h-1.5 w-10 rounded bg-zinc-850" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Next: Premium Dashboard */
+            <div className="space-y-2">
+              <div className="h-6 rounded bg-zinc-900/60 flex items-center px-2">
+                <div className="h-1.5 w-1/3 rounded bg-zinc-800" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="h-10 rounded bg-zinc-900 border border-zinc-800" />
+                <div className="h-10 rounded bg-zinc-900 border border-zinc-800" />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Direita: Totalizador e Pagamento */}
+        <div className="flex flex-col justify-between rounded border border-zinc-900 bg-zinc-900/20 p-2 overflow-hidden">
+          <div className="space-y-2">
+            <div className="h-1.5 w-full rounded bg-zinc-800" />
+            <div className="h-1.5 w-2/3 rounded bg-zinc-800" />
+            <div className="pt-2 border-t border-zinc-900/60 space-y-1.5">
+              <div className="flex justify-between">
+                <div className="h-1 w-6 rounded bg-zinc-855" />
+                <div className="h-1 w-8 rounded bg-zinc-855" />
+              </div>
+              <div className="flex justify-between">
+                <div className="h-1.5 w-10 rounded bg-zinc-800" />
+                <div className="h-1.5 w-12 rounded bg-zinc-855" />
+              </div>
+            </div>
+          </div>
+          {/* Botão de pagamento */}
+          <div className="h-6 w-full rounded bg-emerald-600/90 flex items-center justify-center">
+            <div className="h-1.5 w-10 rounded bg-white/80" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Mini-preview do layout do PDV usando as capturas de tela reais armazenadas no repositório.
  * Seleciona a imagem dinamicamente de acordo com o tema selecionado na barra superior.
+ * Inclui fallback vetorial resiliente se a imagem falhar ao carregar.
  */
 function PdvMiniPreview({ variant, activeTheme }: { variant: PdvFlowId; activeTheme?: string }) {
   const { mode } = useTheme();
   const themeMode = activeTheme || (mode === "classic" ? "light" : mode); // "light" | "soft-ice" | "midnight" | "black"
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
 
   const flowPrefixMap: Record<PdvFlowId, string> = {
     classico: "classic",
@@ -176,31 +266,38 @@ function PdvMiniPreview({ variant, activeTheme }: { variant: PdvFlowId; activeTh
   };
 
   const prefix = flowPrefixMap[variant];
-  let dynamicSrc = `/images/pdv-${prefix}-${themeMode}.png`;
 
-  if (variant === "next") {
-    dynamicSrc = `/images/pdv-next/${themeMode}.png`;
-  } else if (variant === "assistencia") {
-    dynamicSrc = `/images/pdv-assistencia/${themeMode}.png`;
+  useEffect(() => {
+    let src = `/images/pdv-${prefix}-${themeMode}.png`;
+    if (variant === "next") {
+      src = `/images/pdv-next/${themeMode}.png`;
+    } else if (variant === "assistencia") {
+      src = `/images/pdv-assistencia/${themeMode}.png`;
+    }
+    setImgSrc(src);
+    setHasError(false);
+  }, [variant, themeMode, prefix]);
+
+  const handleImageError = () => {
+    const fallback = srcMap[variant];
+    if (imgSrc !== fallback) {
+      setImgSrc(fallback);
+    } else {
+      setHasError(true);
+    }
+  };
+
+  if (hasError || !imgSrc) {
+    return <PdvSvgFallback variant={variant} />;
   }
 
   return (
     <div className="relative h-full w-full bg-muted">
       <img
-        src={dynamicSrc}
+        src={imgSrc}
         alt={`Preview ${variant}`}
         className="h-full w-full object-cover object-top transition-all duration-350"
-        onError={(e) => {
-          // Fallback resiliente: se a imagem do tema não existir, usa a de preview legado do repositório
-          const fallback = srcMap[variant];
-          const currentUrl = e.currentTarget.src;
-          const fallbackAbsolute = window.location.origin + fallback;
-          if (currentUrl !== fallbackAbsolute) {
-            e.currentTarget.src = fallback;
-          } else {
-            e.currentTarget.style.display = "none";
-          }
-        }}
+        onError={handleImageError}
       />
     </div>
   );

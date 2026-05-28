@@ -200,3 +200,115 @@ docs_atualizados:
 flags: []
 notes: "Primeiro caso real da Proposal Layer (Bloco 34). Verificação de duplicidade ok (apenas ADR-0001 legado existe). Recomendação: aceitar Alternativa A (congelar v1 até pós-piloto). Aguardando aprovação humana antes de criar SKILL_SCHEMA_V2_BACKLOG.md."
 ```
+
+---
+
+```yaml
+# ─── ENTRY 002 ────────────────────────────────────────────────────
+ticket_id: ADR-0002
+skill_id: SKILL_PROPOSE_ADR
+skill_version: v1
+ia: opus
+modo: SAFE
+started_at: 2026-05-27T00:30:00-03:00
+ended_at: 2026-05-27T01:10:00-03:00
+duration: PT40M
+fases_completas: [GATE_1]
+fase_falha: null
+resultado: encerrada
+pr: null
+branch: null   # docs-only; sem branch dedicada
+commit_anterior: null
+commit_final: null
+rollback: false
+diff:
+  added: ~520
+  removed: ~10
+  files_modified: 6
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-05-27T01:00:00-03:00
+    pending: PT35M
+    notes: "Aceito Alternativa A (congelar v1 até pós-piloto). Draft ADR_PROPOSAL_0002 promovido a ADR-0002 oficial."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "N/A (Proposal Layer: gate único é a aceitação do ADR pelo humano)."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}
+benchmark: null
+sprint: null
+proposta: docs/decisions/drafts/ADR_PROPOSAL_0002_FRONT_MATTER_V1.md
+auditoria: null
+adr_criada: ADR-0002
+memoria_criada: null
+docs_atualizados:
+  - docs/decisions/ADR-0002-skill-front-matter-v1.md   # oficial (criado)
+  - docs/decisions/drafts/ADR_PROPOSAL_0002_FRONT_MATTER_V1.md   # marcado como promovido
+  - docs/decisions/INDEX.md   # §3 linha ADR-0002 + §6 Governança
+  - docs/skills/executoras/TEMPLATE_SKILL.md   # cabeçalho referencia ADR-0002 + link no corpo
+  - docs/skills/executoras/README.md   # §5 reforço sobre modificação
+  - docs/skills/executoras/SKILL_SCHEMA_V2_BACKLOG.md   # criado (17 itens iniciais)
+  - docs/status/EXECUTION_LOG.md   # esta entry
+flags: []
+notes: "Aceitação do ADR-0002 (congelamento Skill Front Matter v1 até pós-piloto SPRINT_01_MULTI_LOJA). Primeira aceitação real de ADR desde ADR-0001 legado — inaugura prática formal de ADRs do runtime. Backlog v2 criado com 17 itens documentados (Blocos 33–35 + Alternativa C). Decisão simétrica ao congelamento do EXECUTION_LOG schema v1 (Bloco 32). Sem código de produção tocado."
+```
+
+---
+
+```yaml
+# ─── ENTRY 003 ────────────────────────────────────────────────────
+ticket_id: APPROVAL-BATCH-V1
+skill_id: SKILL_HANDOFF_MVP    # governance op — closest fit no schema v1
+skill_version: v1
+ia: opus
+modo: SAFE
+started_at: 2026-05-27T01:30:00-03:00
+ended_at: 2026-05-27T02:15:00-03:00
+duration: PT45M
+fases_completas: [GOVERNANCE_BATCH]
+fase_falha: null
+resultado: encerrada
+pr: null
+branch: null   # docs-only governance batch
+commit_anterior: null
+commit_final: null
+rollback: false
+diff:
+  added: ~290
+  removed: ~16
+  files_modified: 11
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-05-27T01:30:00-03:00
+    pending: null
+    notes: "Autorização explícita: APPROVAL_BATCH_V1 (8 skills críticas do piloto)."
+  gate_2:
+    approved_by: Rafael
+    approved_at: 2026-05-27T02:10:00-03:00
+    pending: PT40M
+    notes: "Revisão consciente, individual, com rationale + restrictions registrados em docs/status/APPROVAL_BATCH_V1.md."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}
+benchmark: null
+sprint: null
+proposta: null
+auditoria: null
+adr_criada: null
+memoria_criada: null
+docs_atualizados:
+  - docs/status/APPROVAL_BATCH_V1.md                              # criado (registro do batch)
+  - docs/skills/executoras/research/SKILL_AUDIT_MULTI_LOJA.md     # status approved
+  - docs/skills/executoras/research/SKILL_DOC_REFRESH.md          # status approved
+  - docs/skills/executoras/proposal/SKILL_PROPOSE_SPRINT.md       # status approved
+  - docs/skills/executoras/proposal/SKILL_PROPOSE_ADR.md          # status approved
+  - docs/skills/executoras/execution/SKILL_EXEC_DEBT_ITEM.md      # status approved
+  - docs/skills/executoras/execution/SKILL_EXEC_STABILIZATION.md  # status approved
+  - docs/skills/executoras/execution/SKILL_EXEC_TESTING.md        # status approved
+  - docs/skills/executoras/runtime/SKILL_HANDOFF_MVP.md           # status approved
+  - docs/skills/executoras/README.md                              # §2 estados atualizados
+  - docs/status/EXECUTION_LOG.md                                  # esta entry
+flags: []
+notes: "APPROVAL_BATCH_V1: 8 skills críticas do piloto promovidas draft → approved (Research: AUDIT_MULTI_LOJA, DOC_REFRESH · Proposal: PROPOSE_SPRINT, PROPOSE_ADR · Execution S: EXEC_DEBT_ITEM, EXEC_STABILIZATION, EXEC_TESTING · Runtime: HANDOFF_MVP). Aprovação consciente, rastreável, incremental. 24 skills permanecem draft (aprovadas por demanda em batches futuros). Multi-loja triad (AUDIT/DEBT/STABILIZATION) validado em profundidade (tenant safety, storeId, rollback, drift, lock, blast radius, LGPD). Sem código de produção tocado. Sem dry-run iniciado. Sem piloto iniciado. Próximo passo natural (com autorização separada): rodar AUDIT pré-piloto + EXEC_TESTING multi-loja baseline + PROPOSE_SPRINT do piloto."
+```

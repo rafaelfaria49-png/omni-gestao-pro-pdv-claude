@@ -1,24 +1,34 @@
 ---
 title: ADR_PROPOSAL_0002 · Congelamento oficial do Skill Front Matter v1 até pós-piloto
-status: proposta
+status: promovida
 data: 2026-05-27
 autor: SKILL_PROPOSE_ADR v1
-revisores: []
+revisores: [Rafael]
 hub: cross
 tags: [runtime, skill-engine, schema, governance, api-interna]
 superado_por: null
 substitui: null
 proposta_em: 2026-05-27T00:00:00-03:00
 proposta_por: SKILL_PROPOSE_ADR v1
+promovido_em: 2026-05-27T01:00:00-03:00
+promovido_para: docs/decisions/ADR-0002-skill-front-matter-v1.md
+aprovado_por: Rafael
 related_findings: []
 related_blockers: []
 ticket_id: ADR-PROP-0002
 needs_strong_human_approval: true
 ---
 
+> ✅ **PROMOVIDA em 2026-05-27** — este draft foi aceito (Alternativa A) e promovido a
+> [`ADR-0002 · Congelamento oficial do Skill Front Matter v1 até pós-piloto`](../ADR-0002-skill-front-matter-v1.md).
+> Mantido aqui como histórico operacional da Proposal Layer (Bloco 34).
+> Para consultar a decisão vigente, use o ADR oficial — este draft é apenas referência da geração da proposta.
+
+---
+
 # ADR_PROPOSAL_0002 · Congelamento oficial do Skill Front Matter v1 até pós-piloto
 
-> **Status:** proposta
+> **Status:** promovida (2026-05-27) → ver [`ADR-0002`](../ADR-0002-skill-front-matter-v1.md)
 > **Decisão em uma frase:** congelar o schema do skill front matter v1 como API interna oficial e proibir mutação até a sprint piloto SPRINT_01_MULTI_LOJA encerrar com sucesso — evolução posterior apenas via nova versão (v2) com migration explícita.
 
 ---

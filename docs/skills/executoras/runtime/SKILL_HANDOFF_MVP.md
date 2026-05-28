@@ -2,7 +2,7 @@
 # IDENTITY
 skill_id: SKILL_HANDOFF_MVP
 version: v1
-status: draft
+status: approved
 category: 6
 size: S
 hub: cross
@@ -68,8 +68,8 @@ adr_required: never
 
 # LIFECYCLE
 owner: produto + Sonnet
-approved_by: null
-approved_at: null
+approved_by: Rafael
+approved_at: 2026-05-27T01:30:00-03:00
 deprecated_by: null
 deprecated_at: null
 last_review: 2026-05-27

@@ -2,7 +2,7 @@
 # IDENTITY
 skill_id: SKILL_AUDIT_MULTI_LOJA
 version: v1
-status: draft
+status: approved
 category: 1
 size: S
 hub: multi_loja
@@ -49,8 +49,8 @@ adr_required: never
 
 # LIFECYCLE
 owner: produto + Sonnet
-approved_by: null
-approved_at: null
+approved_by: Rafael
+approved_at: 2026-05-27T01:30:00-03:00
 deprecated_by: null
 deprecated_at: null
 last_review: 2026-05-27
