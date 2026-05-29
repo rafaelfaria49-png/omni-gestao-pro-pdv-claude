@@ -212,7 +212,9 @@ async function aplicarLinha(
           precoCusto: p.custo > 0 ? p.custo : undefined,
           price: p.preco > 0 ? p.preco : undefined,
           barcode: barcodeToSave ?? barcodeExistente ?? undefined,
-          brand: p.categoria || undefined,
+          // brand: nunca importado a partir da categoria — as planilhas
+          // suportadas (Gestão Clique / Smart Genius) não trazem coluna
+          // de marca real. Mantém o brand existente intocado.
         },
       })
       return { ...base, acao: "atualizado", detalhe: decisao.motivo }
@@ -248,7 +250,8 @@ async function criarProdutoNovo(
       price: p.preco,
       stock: p.estoque,
       barcode: barcodeToSave,
-      brand: p.categoria || "",
+      // brand: deixar vazio — schema default já é "". Planilhas suportadas
+      // não trazem coluna de marca real. Não duplicar categoria em brand.
     },
   })
   return { ...base, acao: "criado", detalhe: skuToSave ? undefined : "sem SKU (planilha não trouxe)" }

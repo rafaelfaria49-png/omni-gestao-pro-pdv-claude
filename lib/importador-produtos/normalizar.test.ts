@@ -52,6 +52,90 @@ describe("mapearHeader — custo R$ via contains", () => {
   })
 })
 
+describe("mapearHeader — stoplist (Gestão Clique e similares)", () => {
+  it("'Código NCM' não vira SKU (era bug: contains de 'codigo')", () => {
+    expect(mapearHeader("Código NCM")).toBeNull()
+    expect(mapearHeader("Codigo NCM")).toBeNull()
+    expect(mapearHeader("NCM")).toBeNull()
+  })
+
+  it("'Código CEST' não vira SKU", () => {
+    expect(mapearHeader("Código CEST")).toBeNull()
+    expect(mapearHeader("Codigo CEST")).toBeNull()
+    expect(mapearHeader("CEST")).toBeNull()
+  })
+
+  it("CFOP/CST/origem mercadoria são ignorados (fiscais sem schema)", () => {
+    expect(mapearHeader("CFOP")).toBeNull()
+    expect(mapearHeader("CST")).toBeNull()
+    expect(mapearHeader("CST PIS")).toBeNull()
+    expect(mapearHeader("CST COFINS")).toBeNull()
+    expect(mapearHeader("Origem Mercadoria")).toBeNull()
+  })
+
+  it("'Estoque mínimo'/'Estoque máximo' NÃO viram 'estoque' (era bug: contains)", () => {
+    expect(mapearHeader("Estoque mínimo")).toBeNull()
+    expect(mapearHeader("Estoque maximo")).toBeNull()
+    expect(mapearHeader("Estoque min")).toBeNull()
+    expect(mapearHeader("Estoque max")).toBeNull()
+    expect(mapearHeader("Qtde mínima")).toBeNull()
+    expect(mapearHeader("Qtde maxima")).toBeNull()
+  })
+
+  it("'Estoque atual' continua mapeando para estoque (não confundir)", () => {
+    expect(mapearHeader("Estoque atual")).toBe("estoque")
+    expect(mapearHeader("Estoque")).toBe("estoque")
+  })
+
+  it("Datas e IDs genéricos são ignorados", () => {
+    expect(mapearHeader("Data Cadastro")).toBeNull()
+    expect(mapearHeader("Data Alteração")).toBeNull()
+    expect(mapearHeader("ID")).toBeNull()
+    expect(mapearHeader("ID Externo")).toBeNull()
+  })
+
+  it("'Descrição NCM' / 'Descrição CEST' NÃO viram NOME (era bug: contains de 'descricao')", () => {
+    expect(mapearHeader("Descrição NCM")).toBeNull()
+    expect(mapearHeader("Descricao NCM")).toBeNull()
+    expect(mapearHeader("Descrição CEST")).toBeNull()
+    expect(mapearHeader("Descricao CEST")).toBeNull()
+    expect(mapearHeader("Descrição CFOP")).toBeNull()
+    expect(mapearHeader("Descrição CST")).toBeNull()
+  })
+
+  it("'Lucro %' / margem / promocional não viram preço", () => {
+    expect(mapearHeader("Lucro %")).toBeNull()
+    expect(mapearHeader("Lucro")).toBeNull()
+    expect(mapearHeader("Margem")).toBeNull()
+    expect(mapearHeader("Margem %")).toBeNull()
+    expect(mapearHeader("Preço Promocional")).toBeNull()
+    expect(mapearHeader("Valor Promocional")).toBeNull()
+  })
+
+  it("'P. Prom. R$' (preço promocional Smart Genius) é ignorado", () => {
+    // norm("P. Prom. R$") → "p prom r"
+    expect(mapearHeader("P. Prom. R$")).toBeNull()
+    expect(mapearHeader("P Prom")).toBeNull()
+  })
+
+  it("Dimensões e peso (Gestão Clique) são ignorados — não há campo no schema", () => {
+    expect(mapearHeader("Peso")).toBeNull()
+    expect(mapearHeader("Peso bruto")).toBeNull()
+    expect(mapearHeader("Peso líquido")).toBeNull()
+    expect(mapearHeader("Largura")).toBeNull()
+    expect(mapearHeader("Altura")).toBeNull()
+    expect(mapearHeader("Comprimento")).toBeNull()
+    expect(mapearHeader("Profundidade")).toBeNull()
+  })
+
+  it("'Nome' e 'Produto' continuam mapeando para nome — stoplist não vaza", () => {
+    expect(mapearHeader("Nome")).toBe("nome")
+    expect(mapearHeader("Produto")).toBe("nome")
+    expect(mapearHeader("Descrição")).toBe("nome")
+    expect(mapearHeader("Descrição do produto")).toBe("nome")
+  })
+})
+
 describe("mapearHeader — preço de venda (BUG 'Venda R$')", () => {
   it("'Venda R$' agora mapeia para preco (era o bug reportado)", () => {
     // norm("Venda R$") → "venda r". Antes do fix nenhum alias casava.

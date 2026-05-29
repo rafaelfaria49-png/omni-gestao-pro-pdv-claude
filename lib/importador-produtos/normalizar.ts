@@ -140,10 +140,103 @@ const ALIAS_INDEX: Map<string, CampoCanonico> = (() => {
   return m
 })()
 
+/**
+ * Stoplist: headers que NÃO devem ser mapeados a nenhum campo canônico,
+ * mesmo que o algoritmo de contains tente colá-los em um alias parecido.
+ *
+ * Casos cobertos (planilha Gestão Clique e similares):
+ *  - Campos fiscais (NCM/CEST/CFOP/CST/origem): hoje "Código NCM" iria virar
+ *    SKU via contains de "codigo" → criava SKU = NCM (lixo) e poluía o catálogo.
+ *  - Estoque mínimo/máximo: hoje "Estoque mínimo" iria virar `estoque` via
+ *    contains de "estoque" → sobrescrevia o estoque real com o valor de min/max.
+ *  - Datas e IDs genéricos: ruído raro que não cabe em nenhum campo canônico.
+ *
+ * Critério para entrar aqui: header que, sem a lista, é mapeado erradamente
+ * pelo contains e nunca representa o campo errado em produção.
+ */
+const HEADERS_IGNORADOS: ReadonlySet<string> = new Set([
+  // Fiscais — schema atual não tem ncm/cest/cfop/cst, então só ignorar.
+  "ncm",
+  "codigo ncm",
+  "n ncm",
+  "cest",
+  "codigo cest",
+  "n cest",
+  "cfop",
+  "cfop entrada",
+  "cfop saida",
+  "cst",
+  "cst entrada",
+  "cst saida",
+  "cst icms",
+  "cst pis",
+  "cst cofins",
+  "origem mercadoria",
+  // Descrições fiscais — "Descrição NCM" viraria NOME via contains de
+  // "descricao" (alias do campo nome). Crítico bloquear aqui.
+  "descricao ncm",
+  "descricao cest",
+  "descricao cfop",
+  "descricao cst",
+  "descricao origem",
+  "descricao tributacao",
+  // Promocional / margem — não é preço de venda final.
+  // norm("Lucro %") → "lucro" / norm("P. Prom. R$") → "p prom r"
+  "lucro",
+  "lucro %",
+  "lucro percentual",
+  "lucratividade",
+  "margem",
+  "margem %",
+  "margem lucro",
+  "p prom",
+  "p prom r",
+  "preco promocional",
+  "preco promo",
+  "valor promocional",
+  "valor promo",
+  // Estoque min/max — NÃO é estoque atual. Sem isso o contains "estoque"
+  // pega ambos e sobrescreve o saldo real.
+  "estoque minimo",
+  "estoque min",
+  "estoque min seguranca",
+  "estoque seguranca",
+  "estoque maximo",
+  "estoque max",
+  "qtde minima",
+  "qtde maxima",
+  "qtd minima",
+  "qtd maxima",
+  "quantidade minima",
+  "quantidade maxima",
+  // Dimensões / peso — não importáveis por enquanto (schema não tem campos).
+  "peso",
+  "peso bruto",
+  "peso liquido",
+  "largura",
+  "altura",
+  "comprimento",
+  "profundidade",
+  "dimensoes",
+  // Datas — não usar como SKU/preço/etc.
+  "data cadastro",
+  "data alteracao",
+  "data atualizacao",
+  "data criacao",
+  "data modificacao",
+  // IDs genéricos que iriam confundir matcher.
+  "id",
+  "id externo",
+  "id sistema",
+])
+
 /** Mapeia um header (cru) para campo canônico (ou null se desconhecido). */
 export function mapearHeader(header: unknown): CampoCanonico | null {
   const n = norm(header)
   if (!n) return null
+  // Stoplist: headers fiscais (NCM/CEST/…) e variantes confusas (Estoque mín/máx)
+  // sempre retornam null — protege contra contains pegando o campo errado.
+  if (HEADERS_IGNORADOS.has(n)) return null
   // Match exato primeiro
   const exato = ALIAS_INDEX.get(n)
   if (exato) return exato

@@ -239,11 +239,44 @@ function normalizarLinha(
     return { invalido: inv(motivos) }
   }
 
+  // Resolve SKU vs barcode segundo as regras do usuário:
+  //   SKU = código interno curto (até 4 dígitos).
+  //   Barcode = código longo (5+ dígitos numéricos) ou EAN/GTIN.
+  //   Coluna "Código de barra" tem prioridade absoluta para barcode.
+  //   Nunca duplicar o mesmo valor em SKU e barcode.
+  //   SKU vazio fica vazio (não inventar).
+  //
+  // Casos tratados (em ordem):
+  //  (a) Dedupe: SKU == barcode na linha → manter só em barcode.
+  //  (b) SKU é numérico com 5+ dígitos → não é SKU, é código de barras.
+  //       - Se barcode da linha vazio: promover SKU → barcode.
+  //       - Se barcode da linha tem outro valor: descarta SKU (manter o
+  //         barcode "oficial"; SKU 5+ dígitos não pode ficar em SKU).
+  //
+  // Não tratado aqui:
+  //  - SKU alfanumérico (qualquer comprimento) fica em SKU.
+  //  - SKU numérico ≤4 dígitos fica em SKU mesmo que barcode esteja vazio.
+  let skuFinal = (valoresPorCampo.sku[0] ?? "").trim()
+  let barcodeFinal = (valoresPorCampo.barcode[0] ?? "").trim()
+
+  if (skuFinal && skuFinal === barcodeFinal) {
+    // (a) Mesmo valor nas duas colunas — manter só barcode.
+    skuFinal = ""
+  }
+
+  if (skuFinal && /^\d{5,}$/.test(skuFinal)) {
+    // (b) Código numérico longo — não cabe em SKU.
+    if (!barcodeFinal) {
+      barcodeFinal = skuFinal
+    }
+    skuFinal = ""
+  }
+
   return {
     valido: {
       linha: linhaPlanilha,
-      sku: (valoresPorCampo.sku[0] ?? "").trim(),
-      barcode: (valoresPorCampo.barcode[0] ?? "").trim(),
+      sku: skuFinal,
+      barcode: barcodeFinal,
       nome,
       custo,
       preco,
