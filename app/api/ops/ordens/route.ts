@@ -14,6 +14,7 @@ export const revalidate = 0
 
 export async function GET(req: Request) {
   const storeId = storeIdFromAssistecRequestForRead(req)
+  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardOperacoesHubOrLegacy(storeId)
   if (denied) return denied
   try {

@@ -25,7 +25,8 @@ function err(error: string, code: string, status = 400) {
 }
 
 export async function GET(req: Request) {
-  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const storeId = opsLojaIdFromRequest(req)
+  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardFinanceiroViewOrOps(storeId)
   if (denied) return denied
 

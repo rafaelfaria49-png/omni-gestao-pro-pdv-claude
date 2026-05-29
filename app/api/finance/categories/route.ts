@@ -22,13 +22,14 @@ const patchSchema = z.object({
   icon: z.string().max(64).optional(),
 })
 
-function storeId(req: Request): string {
-  return opsLojaIdFromRequest(req) || "loja-1"
+function storeId(req: Request): string | null {
+  return opsLojaIdFromRequest(req)
 }
 
 export async function GET(req: Request) {
   await prismaEnsureConnected()
   const sid = storeId(req)
+  if (!sid) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   const url = new URL(req.url)
   const type = url.searchParams.get("type")
   try {
@@ -52,7 +53,8 @@ export async function POST(req: Request) {
   const parsed = createSchema.safeParse(json)
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Dados inválidos", issues: parsed.error.flatten() }, { status: 400 })
 
-  const sid = storeIdFromAssistecRequestForWrite(req) || storeId(req)
+  const sid = storeIdFromAssistecRequestForWrite(req) ?? storeId(req)
+  if (!sid) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   await prismaEnsureConnected()
   try {
     const category = await prisma.financialCategory.create({

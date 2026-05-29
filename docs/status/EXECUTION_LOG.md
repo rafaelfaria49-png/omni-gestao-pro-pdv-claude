@@ -567,3 +567,51 @@ docs_atualizados:
 flags: []
 notes: "SKILL_PROPOSE_SPRINT executada para piloto SPRINT_01_MULTI_LOJA. Proposta gerada em docs/sprints/proposals/SPRINT_MULTI_LOJA-S-001.md — 534 linhas, 13 seções, auto-suficiente para executor Sonnet. Escopo: F-01+F-02 atômicos (Opção A) + F-05 (5 rotas parcial) + F-06 + F-07 + F-14. Fora: F-03 (proxy, área protegida), F-04, F-08, F-10. Allow-list estrita: 43 arquivos. files_max override declarado (ADR-0002 §4). Exceção F-02-anchor documentada (exportar/route.ts mantém fallback com TODO). Saneamento banco A4: GREEN. Próximo: Rafael lê a proposta → emite APPROVE_GATE_1 → Sonnet inicia CP1."
 ```
+
+---
+
+```yaml
+# ─── ENTRY 009 ────────────────────────────────────────────────────
+ticket_id: MULTI_LOJA-S-001
+skill_id: SKILL_EXEC_DEBT_ITEM
+skill_version: v1
+ia: sonnet
+modo: SAFE
+started_at: 2026-05-29T00:00:00-03:00
+ended_at: null
+duration: null
+fases_completas: [CP1]
+fase_falha: null
+resultado: em_andamento
+pr: null
+branch: main
+commit_anterior: 82ecf3f
+commit_final: null
+rollback: false
+diff:
+  added: 3
+  removed: 3
+  files_modified: 1
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-05-29T00:00:00-03:00
+    pending: null
+    notes: "APPROVE_GATE_1 emitido: opcao_execucao A, allow_protected_areas false."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "Aguardando CP4 verde + AUDIT pós para Gate #2."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}
+benchmark: null
+sprint: docs/sprints/proposals/SPRINT_MULTI_LOJA-S-001.md
+proposta: docs/sprints/proposals/SPRINT_MULTI_LOJA-S-001.md
+auditoria: null
+adr_criada: null
+memoria_criada: null
+docs_atualizados:
+  - docs/status/EXECUTION_LOG.md
+flags: []
+notes: "CP1 concluído. lib/store-id-from-request.ts alterado: storeIdFromAssistecRequestForRead retorna string | null (era string). Import LEGACY_PRIMARY_STORE_ID removido do arquivo (constante ainda existe em store-defaults.ts). npx tsc --noEmit: 26 arquivos com erros de tipo — ESPERADO (prova necessidade de F-02). DESCOBERTA IMPORTANTE: as 32 rotas da allow-list F-02 (financeiro/vendas) usam opsLojaIdFromRequest() do wrapper lib/ops-api-gate.ts (não chamam ForRead diretamente). O wrapper declara retorno :string então TypeScript não mostra erros nessas rotas — mas em runtime null passa pelo wrapper e as rotas fazem null || 'loja-1' = 'loja-1' (fallback ainda ativo). Fix correto para CP2: (1) incluir lib/ops-api-gate.ts na allow-list, (2) alterar opsLojaIdFromRequest para string | null, (3) corrigir as 32 rotas removendo || 'loja-1' e adicionando guard 400. CALLERS INESPERADOS (fora allow-list): app/api/clientes/importar, app/api/clientes/route, app/api/debug/*, app/api/marketing/* (9 rotas), app/api/ops/categorias-produto, app/api/ops/import/clientes, app/api/ops/ordens, app/api/produtos/*, app/api/settings/perfil-loja — 21 arquivos chamam ForRead diretamente e não estão na allow-list. Aguardando decisão humana: (a) expandir allow-list para incluir lib/ops-api-gate.ts + callers inesperados, ou (b) estratégia alternativa. PARADO em CP1 conforme protocolo — não avançar sem confirmação."
+```

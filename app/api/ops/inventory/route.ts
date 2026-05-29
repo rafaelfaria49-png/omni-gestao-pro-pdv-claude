@@ -125,6 +125,7 @@ export async function GET(req: Request) {
     }
 
     const lojaIdRecebido = storeIdFromAssistecRequestForRead(req)
+    if (!lojaIdRecebido) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
     console.log(`[ops/inventory GET] lojaId recebido=${lojaIdRecebido}`)
 
     // Leitura do estoque por loja.

@@ -70,6 +70,7 @@ function buildVendasPorCategoria(
 export async function GET(req: Request) {
   try {
     const storeId = storeIdFromAssistecRequestForRead(req)
+    if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
 
     const now = new Date()
     const todayStart = startOfDayLocal(now)

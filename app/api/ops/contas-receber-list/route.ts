@@ -20,7 +20,8 @@ function rowFromPayload(localKey: string, payload: unknown): ContaReceberRow | n
 }
 
 export async function GET(req: Request) {
-  const lojaId = opsLojaIdFromRequest(req) || "loja-1"
+  const lojaId = opsLojaIdFromRequest(req)
+  if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardFinanceiroViewOrOps(lojaId, { skipOpsInDev: true })
   if (denied) return denied
 

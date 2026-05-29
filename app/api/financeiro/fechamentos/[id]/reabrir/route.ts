@@ -26,7 +26,8 @@ export async function POST(
 ) {
   await prismaEnsureConnected()
   const { id } = await params
-  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const storeId = opsLojaIdFromRequest(req)
+  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardEnterpriseOrOps(
     storeId,
     (p) => p.financeiro.fecharPeriodo,

@@ -19,7 +19,8 @@ function monthLabel(d: Date): string {
 
 export async function GET(req: Request) {
   await prismaEnsureConnected()
-  const sid = opsLojaIdFromRequest(req) || "loja-1"
+  const sid = opsLojaIdFromRequest(req)
+  if (!sid) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   const now = new Date()
   const mStart = startOfMonth(now)
   const mEnd = endOfMonth(now)

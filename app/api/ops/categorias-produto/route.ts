@@ -25,6 +25,7 @@ export async function GET(req: Request) {
   const gate = await requireSubscription()
   if (!gate.ok) return gate.res
   const lojaId = storeIdFromAssistecRequestForRead(req)
+  if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
 
   const rows = await withPrismaSafe(
     (db) =>

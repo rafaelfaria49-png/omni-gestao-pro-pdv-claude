@@ -300,6 +300,8 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
 export async function GET(req: Request) {
   await prismaEnsureConnected()
+  // TODO F-02-anchor: rota acessada via anchor-tag não envia x-assistec-loja-id.
+  // Resolver em SPRINT_MULTI_LOJA-S-002 (cookie/proxy de loja).
   const storeId = opsLojaIdFromRequest(req) || "loja-1"
   const url = new URL(req.url)
 

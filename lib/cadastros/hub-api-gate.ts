@@ -30,5 +30,12 @@ export async function requireCadastrosHubApi(req: Request, mode: "read" | "write
     }
     return { ok: true as const, storeId }
   }
-  return { ok: true as const, storeId: storeIdFromAssistecRequestForRead(req) }
+  const storeId = storeIdFromAssistecRequestForRead(req)
+  if (!storeId) {
+    return {
+      ok: false as const,
+      response: NextResponse.json({ error: "storeId obrigatório" }, { status: 400 }),
+    }
+  }
+  return { ok: true as const, storeId }
 }

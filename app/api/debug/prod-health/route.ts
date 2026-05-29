@@ -23,6 +23,7 @@ function safeGroupByResult(rows: Array<{ storeId: string; _count: { _all: number
  */
 export async function GET(req: Request) {
   const storeIdResolved = storeIdFromAssistecRequestForRead(req)
+  if (!storeIdResolved) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const hasDatabaseUrl = !!process.env.DATABASE_URL
   const hasDirectUrl = !!process.env.DIRECT_URL
 

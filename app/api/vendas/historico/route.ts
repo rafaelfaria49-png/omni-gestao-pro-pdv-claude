@@ -66,7 +66,8 @@ function paymentMatchesFilter(payload: unknown, filter: string): boolean {
 }
 
 export async function GET(req: Request) {
-  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const storeId = opsLojaIdFromRequest(req)
+  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const url = new URL(req.url)
   const q = url.searchParams.get("q")?.trim() ?? ""
   const statusFilter = url.searchParams.get("status")?.trim() ?? ""

@@ -39,7 +39,7 @@ function errMsg(e: unknown): string {
   return String(e)
 }
 
-function loja(req: Request) {
+function loja(req: Request): string | null {
   return storeIdFromAssistecRequestForRead(req)
 }
 
@@ -54,6 +54,7 @@ export async function GET(request: Request) {
       return json(request, { error: "Não autorizado", detail: auth.message }, 401)
     }
     const lid = loja(request)
+    if (!lid) return json(request, { error: "storeId obrigatório" }, 400)
     const clientes = await listClientesForLoja(lid)
     return json(request, { clientes })
   } catch (e) {

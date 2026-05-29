@@ -34,7 +34,8 @@ const postSchema = z.object({
 
 export async function GET(req: Request) {
   await prismaEnsureConnected()
-  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const storeId = opsLojaIdFromRequest(req)
+  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardEnterpriseOrOps(
     storeId,
     (p) => p.financeiro.conciliacao,
@@ -62,7 +63,8 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   await prismaEnsureConnected()
-  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const storeId = opsLojaIdFromRequest(req)
+  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardEnterpriseOrOps(
     storeId,
     (p) => p.financeiro.conciliacao,

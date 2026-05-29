@@ -7,7 +7,7 @@ import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-function storeIdFrom(req: Request): string {
+function storeIdFrom(req: Request): string | null {
   const h = req.headers.get(ASSISTEC_LOJA_HEADER)?.trim()
   if (h) return h
   return storeIdFromAssistecRequestForRead(req)
@@ -17,6 +17,7 @@ export async function GET(req: Request) {
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
   const storeId = storeIdFrom(req)
+  if (!storeId) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   try {
     const posts = await prisma.marketingIaPost.findMany({
       where: { storeId },
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
   const storeId = storeIdFrom(req)
+  if (!storeId) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   let body: PostBody
   try {
     body = (await req.json()) as PostBody

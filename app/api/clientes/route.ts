@@ -26,6 +26,7 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const q = normalizeSearch(url.searchParams.get("q") ?? "")
     const storeId = storeIdFromAssistecRequestForRead(req)
+    if (!storeId) return json({ error: "storeId obrigatório" }, { status: 400 })
 
     const clientes = await prisma.cliente.findMany({
       where: {

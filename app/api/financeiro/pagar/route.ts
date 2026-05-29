@@ -42,10 +42,9 @@ function err(error: string, code: string, status = 400) {
 }
 
 function readSid(req: Request, forWrite = false): string | null {
-  const sid = forWrite
+  return forWrite
     ? storeIdFromAssistecRequestForWrite(req)
-    : opsLojaIdFromRequest(req) || "loja-1"
-  return sid || null
+    : opsLojaIdFromRequest(req)
 }
 
 type HistEntry = { at?: string; tipo?: string; userLabel?: string; valor?: number; observacao?: string }

@@ -88,35 +88,21 @@ describe("storeIdFromAssistecRequestForRead — ordem de resolução", () => {
   })
 })
 
-describe("storeIdFromAssistecRequestForRead — fallback silencioso (DT-03)", () => {
-  /**
-   * EXPECTED-FAILING: documenta F-01 da auditoria.
-   * Comportamento atual: silenciosamente cai em "loja-1" — vetor de vazamento cross-tenant.
-   * Comportamento esperado (pós-piloto): retornar `null` ou lançar; rota chamadora decide 400/403.
-   *
-   * Quando SPRINT_01_MULTI_LOJA mergeada, troque `it.fails(` por `it(`.
-   */
-  it.fails("[F-01] DEVE retornar null quando header, query e cookie estão ausentes", () => {
+describe("storeIdFromAssistecRequestForRead — retorna null sem contexto (F-01 corrigido)", () => {
+  // SPRINT_MULTI_LOJA-S-001 CP1 executado: it.fails → it normais.
+  it("[F-01] retorna null quando header, query e cookie estão ausentes", () => {
     const req = makeReq({})
-    // Atualmente retorna "loja-1" (LEGACY_PRIMARY_STORE_ID). Bug a corrigir.
-    expect(storeIdFromAssistecRequestForRead(req) as unknown).toBeNull()
+    expect(storeIdFromAssistecRequestForRead(req)).toBeNull()
   })
 
-  it.fails("[F-01] DEVE retornar null quando header e query são strings vazias", () => {
+  it("[F-01] retorna null quando header e query são strings vazias", () => {
     const req = makeReq({ header: "", query: { storeId: "" } })
-    expect(storeIdFromAssistecRequestForRead(req) as unknown).toBeNull()
+    expect(storeIdFromAssistecRequestForRead(req)).toBeNull()
   })
 
-  it.fails("[F-01] DEVE retornar null quando cookie tem chave mas valor vazio", () => {
+  it("[F-01] retorna null quando cookie tem chave mas valor vazio", () => {
     const req = makeReq({ cookie: "assistec-active-store=" })
-    expect(storeIdFromAssistecRequestForRead(req) as unknown).toBeNull()
-  })
-
-  it("[snapshot atual] hoje retorna LEGACY_PRIMARY_STORE_ID sem contexto — DOCUMENTA o bug", () => {
-    // Este teste passa hoje. Quando o fix for aplicado, ele falha — sinal de remover.
-    const req = makeReq({})
-    expect(storeIdFromAssistecRequestForRead(req)).toBe(LEGACY_PRIMARY_STORE_ID)
-    expect(LEGACY_PRIMARY_STORE_ID).toBe("loja-1")
+    expect(storeIdFromAssistecRequestForRead(req)).toBeNull()
   })
 })
 

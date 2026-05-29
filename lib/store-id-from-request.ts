@@ -20,15 +20,15 @@ function activeStoreIdFromCookieHeader(cookieHeader: string | null): string | nu
 
 /**
  * Leituras: header `x-assistec-loja-id` → query `storeId` / `lojaId` → cookie {@link ASSISTEC_ACTIVE_STORE_COOKIE}
- * → {@link LEGACY_PRIMARY_STORE_ID} (último recurso para chamadas sem contexto).
+ * → `null` se nenhuma fonte resolver (F-01 · SPRINT_MULTI_LOJA-S-001).
  */
-export function storeIdFromAssistecRequestForRead(req: Request): string {
+export function storeIdFromAssistecRequestForRead(req: Request): string | null {
   const h = req.headers.get(ASSISTEC_LOJA_HEADER)?.trim()
   const url = new URL(req.url)
   const q = url.searchParams.get("storeId")?.trim() || url.searchParams.get("lojaId")?.trim()
   const c = activeStoreIdFromCookieHeader(req.headers.get("cookie"))
-  const v = (h || q || c || LEGACY_PRIMARY_STORE_ID).trim()
-  return v || LEGACY_PRIMARY_STORE_ID
+  const v = (h || q || c || "").trim()
+  return v.length > 0 ? v : null
 }
 
 /**

@@ -20,14 +20,15 @@ function perfilLojaToStoreProfile(perfil: PerfilLojaId): "ASSISTENCIA" | "VARIED
   return "ASSISTENCIA"
 }
 
-function getLojaId(req?: Request): string {
-  if (!req) return LEGACY_PRIMARY_STORE_ID
+function getLojaId(req?: Request): string | null {
+  if (!req) return null
   return storeIdFromAssistecRequestForRead(req)
 }
 
 export async function GET(req: Request) {
   try {
     const lojaId = getLojaId(req)
+    if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
     const store = await prisma.store.findUnique({ where: { id: lojaId } })
     const perfilLoja = store ? storeProfileToPerfilLoja(String(store.profile)) : parsePerfilLoja(undefined)
     return NextResponse.json({ perfilLoja, lojaId })

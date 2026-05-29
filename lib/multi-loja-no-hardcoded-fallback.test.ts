@@ -38,6 +38,12 @@ const EXCLUDE_PATH_FRAGMENTS = [
   // o próprio arquivo deste teste contém literal "loja-1" (sem espaço entre || e literal)
   // e seria self-contaminação; excluímos por nome.
   "multi-loja-no-hardcoded-fallback.test.ts",
+  // Exceção declarada F-02-anchor (SPRINT_MULTI_LOJA-S-001 §2.1):
+  // rota acessada via anchor-tag não envia x-assistec-loja-id — fallback mantido com TODO.
+  // Resolver em SPRINT_MULTI_LOJA-S-002.
+  "app/api/financeiro/relatorios/exportar/route.ts",
+  // F-13 da auditoria — UI legada /dashboard/os, fora do escopo F-02 (apenas rotas API).
+  "app/dashboard/os/",
 ]
 
 function shouldVisit(absPath: string): boolean {
@@ -128,47 +134,20 @@ describe("multi-loja: hardcode `|| \"loja-1\"` em código de produção (F-02)",
       // eslint-disable-next-line no-console
       console.log("[F-02 baseline] ocorrências:", occs)
     }
-    // Baseline pré-piloto: 30+ ocorrências detectadas em 2026-05-28.
-    // Toleramos 32 para folga; cada redução real reduz este número.
-    expect(occs.length).toBeLessThanOrEqual(32)
-    // Não pode crescer — qualquer regressão para de propagar fallback.
-    expect(occs.length).toBeGreaterThan(0) // se virar 0, troque por toBe(0) e remova fails abaixo
+    // Pós SPRINT_MULTI_LOJA-S-001: todas as ocorrências corrigidas (exceção exportar excluída acima).
+    // Resultado esperado: 0.
+    expect(occs.length).toBe(0)
   })
 
-  it("[snapshot baseline] todas as ocorrências estão em rotas API (financeiro, vendas, finance, ops/contas-*-list)", () => {
+  it("[pós-fix] sem ocorrências em rotas API conhecidas (baseline anti-regressão)", () => {
     const occs = findOccurrences()
-    const offenders = occs.map((o) => o.file)
-    const allowedPrefixes = [
-      "app/api/vendas/",
-      "app/api/financeiro/",
-      "app/api/finance/",
-      "app/api/ops/contas-receber-list/",
-      "app/api/ops/contas-pagar-list/",
-      // F-13 da auditoria — rota legada /dashboard/os/OsPageClient.tsx com TODO confessado
-      "app/dashboard/os/",
-    ]
-    for (const file of offenders) {
-      const matchesKnown = allowedPrefixes.some((p) => file.startsWith(p))
-      if (!matchesKnown) {
-        // Falha clara — surgiu offender NOVO fora da lista conhecida da auditoria.
-        // Ajuste a auditoria + esta lista, não silencie.
-        throw new Error(
-          `[F-02] Nova ocorrência fora da baseline conhecida: ${file}. ` +
-            `Atualize AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md ou corrija o código.`,
-        )
-      }
-    }
+    // Pós SPRINT_MULTI_LOJA-S-001: deve ser zero (exceção exportar já excluída no scan).
+    expect(occs).toHaveLength(0)
   })
 
-  /**
-   * EXPECTED-FAILING: alvo pós-SPRINT_01_MULTI_LOJA.
-   * Quando o piloto fechar, troque `it.fails` por `it` e a contagem cai para 0.
-   */
-  it.fails(
-    "[F-02] DEVE ter ZERO ocorrências de fallback hardcoded após SPRINT_01_MULTI_LOJA",
-    () => {
-      const occs = findOccurrences()
-      expect(occs).toEqual([])
-    },
-  )
+  // SPRINT_MULTI_LOJA-S-001 executada: it.fails → it normal.
+  it("[F-02] ZERO ocorrências de fallback hardcoded (SPRINT_MULTI_LOJA-S-001 concluída)", () => {
+    const occs = findOccurrences()
+    expect(occs).toEqual([])
+  })
 })

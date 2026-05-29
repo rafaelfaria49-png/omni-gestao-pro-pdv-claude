@@ -36,6 +36,7 @@ export async function GET(req: Request) {
   try {
     // Mantém compatibilidade com chamadas antigas, mas o model atual aponta para `cliente`.
     const lojaId = storeIdFromAssistecRequestForRead(req)
+    if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
     await withDbRetry("$connect", () => prisma.$connect())
     const rows = await withDbRetry("findMany", () =>
       prisma.cliente.findMany({

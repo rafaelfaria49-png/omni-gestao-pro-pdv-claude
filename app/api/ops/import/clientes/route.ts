@@ -52,6 +52,7 @@ export async function GET(req: Request) {
   const gate = await requireSubscription()
   if (!gate.ok) return gate.res
   const storeId = storeIdFromAssistecRequestForRead(req)
+  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
 
   try {
     const rows = await prisma.cliente.findMany({

@@ -27,8 +27,8 @@ export const revalidate = 0
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function storeIdFromReq(req: Request): string {
-  return opsLojaIdFromRequest(req) || "loja-1"
+function storeIdFromReq(req: Request): string | null {
+  return opsLojaIdFromRequest(req)
 }
 
 // ─── Schemas Zod ──────────────────────────────────────────────────────────────
@@ -57,6 +57,7 @@ const deleteSchema = z.object({
 
 export async function GET(req: Request) {
   const sid = storeIdFromReq(req)
+  if (!sid) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardFinanceiroViewOrOps(sid)
   if (denied) return denied
   const url = new URL(req.url)
@@ -117,6 +118,7 @@ export async function POST(req: Request) {
   }
 
   const sid = storeIdFromReq(req)
+  if (!sid) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(sid)
   if (denied) return denied
 
@@ -189,6 +191,7 @@ export async function DELETE(req: Request) {
   }
 
   const sid = storeIdFromReq(req)
+  if (!sid) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const denied = await apiGuardFinanceiroEditEnterpriseOrLegacy(sid)
   if (denied) return denied
 

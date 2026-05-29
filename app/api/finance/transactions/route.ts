@@ -39,13 +39,14 @@ const patchSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
 })
 
-function storeId(req: Request): string {
-  return opsLojaIdFromRequest(req) || "loja-1"
+function storeId(req: Request): string | null {
+  return opsLojaIdFromRequest(req)
 }
 
 export async function GET(req: Request) {
   await prismaEnsureConnected()
   const sid = storeId(req)
+  if (!sid) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   const url = new URL(req.url)
 
   const type = url.searchParams.get("type")
@@ -107,7 +108,8 @@ export async function POST(req: Request) {
   const parsed = createSchema.safeParse(json)
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Dados inválidos", issues: parsed.error.flatten() }, { status: 400 })
 
-  const sid = storeIdFromAssistecRequestForWrite(req) || storeId(req)
+  const sid = storeIdFromAssistecRequestForWrite(req) ?? storeId(req)
+  if (!sid) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   await prismaEnsureConnected()
   try {
     const { dueDate, paidAt, competencyDate, ...rest } = parsed.data
@@ -150,7 +152,8 @@ export async function PATCH(req: Request) {
   const parsed = patchSchema.safeParse(json)
   if (!parsed.success) return NextResponse.json({ ok: false, error: "Dados inválidos" }, { status: 400 })
 
-  const sid = storeIdFromAssistecRequestForWrite(req) || storeId(req)
+  const sid = storeIdFromAssistecRequestForWrite(req) ?? storeId(req)
+  if (!sid) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   await prismaEnsureConnected()
   try {
     const { id, dueDate, paidAt, competencyDate, ...rest } = parsed.data
@@ -201,7 +204,8 @@ export async function DELETE(req: Request) {
   const gate = await requireAdmin()
   if (!gate.ok) return gate.res
 
-  const sid = storeIdFromAssistecRequestForWrite(req) || storeId(req)
+  const sid = storeIdFromAssistecRequestForWrite(req) ?? storeId(req)
+  if (!sid) return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
   const url = new URL(req.url)
   const id = url.searchParams.get("id")
   if (!id) return NextResponse.json({ ok: false, error: "id obrigatório" }, { status: 400 })

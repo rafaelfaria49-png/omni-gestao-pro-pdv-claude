@@ -70,6 +70,7 @@ export async function GET(req: Request) {
   }
 
   const lojaId = opsLojaIdFromRequest(req)
+  if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
 
   try {
     await prismaEnsureConnected()

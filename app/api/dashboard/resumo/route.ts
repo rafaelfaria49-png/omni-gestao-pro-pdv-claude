@@ -9,6 +9,7 @@ export const revalidate = 0
 export async function GET(req: Request) {
   try {
     const storeId = storeIdFromAssistecRequestForRead(req)
+    if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
     const [totalClientes, produtosEsgotados] = await Promise.all([
       prisma.cliente.count({ where: { storeId } }),
       prisma.produto.count({ where: { storeId, stock: 0 } }),

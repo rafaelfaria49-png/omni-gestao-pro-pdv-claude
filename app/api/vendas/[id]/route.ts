@@ -62,7 +62,8 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  const storeId = opsLojaIdFromRequest(req)
+  if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const { id: rawId } = await params
   const pedidoId = rawId?.trim()
 

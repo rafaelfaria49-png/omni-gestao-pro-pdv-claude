@@ -16,8 +16,8 @@ export async function requireOpsSubscription() {
   return { ok: true as const, sub }
 }
 
-/** Header `x-assistec-loja-id`, query `storeId`/`lojaId` ou cookie `assistec-active-store` (último recurso: unidade legada). */
-export function opsLojaIdFromRequest(req: Request): string {
+/** Header `x-assistec-loja-id`, query `storeId`/`lojaId` ou cookie — retorna null se nenhuma fonte resolver (F-01 · SPRINT_MULTI_LOJA-S-001). */
+export function opsLojaIdFromRequest(req: Request): string | null {
   return storeIdFromAssistecRequestForRead(req)
 }
 

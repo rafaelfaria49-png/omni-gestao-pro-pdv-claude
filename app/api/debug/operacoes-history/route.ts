@@ -51,6 +51,7 @@ export async function GET(req: Request) {
   const focusNome = (url.searchParams.get("focusNome") ?? "SILVANA APARECIDA PEREIRA").trim()
 
   const storeScoped = storeIdFromAssistecRequestForRead(req)
+  if (!storeScoped) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
 
   try {
     const db = prisma
