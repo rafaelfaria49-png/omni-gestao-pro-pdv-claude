@@ -111,6 +111,7 @@ export function CaixaHistoricoClient() {
 
   const [sessoes, setSessoes] = useState<SessaoItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [detalhe, setDetalhe] = useState<SessaoDetalhe | null>(null)
   const [detalheTerminal, setDetalheTerminal] = useState<TerminalInfo | null>(null)
@@ -155,17 +156,29 @@ export function CaixaHistoricoClient() {
   const fetchSessoes = useCallback(async () => {
     if (!lojaAtivaId) return
     setLoading(true)
+    setFetchError(null)
     try {
       const params = new URLSearchParams({ take: "50" })
       if (statusFilter !== "todos") params.set("status", statusFilter)
       if (terminalFilter !== "todos") params.set("terminalId", terminalFilter)
       const res = await fetch(`/api/ops/caixa/sessoes?${params}`, {
+        credentials: "include",
+        cache: "no-store",
         headers: { "x-assistec-loja-id": lojaAtivaId },
       })
       if (res.ok) {
         const data = (await res.json()) as { sessoes: SessaoItem[] }
         setSessoes(data.sessoes ?? [])
+      } else {
+        const errData = await res.json().catch(() => null) as { error?: string } | null
+        const msg = errData?.error ?? `HTTP ${res.status}`
+        console.error("[caixa/historico] sessoes:", res.status, msg)
+        setFetchError(msg)
       }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha de rede"
+      console.error("[caixa/historico] sessoes:", msg)
+      setFetchError(msg)
     } finally {
       setLoading(false)
     }
@@ -353,6 +366,16 @@ export function CaixaHistoricoClient() {
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-20 w-full rounded-xl" />
           ))}
+        </div>
+      ) : fetchError ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-destructive/40 bg-destructive/5 py-16 text-center">
+          <AlertTriangle className="mb-3 h-8 w-8 text-destructive/60" />
+          <p className="font-medium text-foreground">Erro ao carregar sessões</p>
+          <p className="mt-1 text-sm text-muted-foreground">{fetchError}</p>
+          <Button variant="outline" size="sm" className="mt-4 gap-2" onClick={fetchSessoes}>
+            <RefreshCw className="h-4 w-4" />
+            Tentar novamente
+          </Button>
         </div>
       ) : filtradas.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/30 py-16 text-center">
