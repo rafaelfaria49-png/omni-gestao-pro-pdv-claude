@@ -64,7 +64,7 @@ export function CategoryChart({
 
   return (
     <div className="rounded-xl border border-border bg-card h-full flex flex-col">
-      <div className="px-4 py-2.5 border-b border-border">
+      <div className="px-[clamp(10px,1.5vh,16px)] py-[clamp(8px,1.2vh,12px)] border-b border-border">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-display font-semibold text-[14px] tracking-tight">Vendas por categoria</h3>
           {useLiveData && !loading && chartSlices?.length ? (
@@ -101,16 +101,16 @@ export function CategoryChart({
           </p>
         </div>
       ) : chartSlices ? (
-        <div className="flex-1 grid grid-cols-2 gap-2 p-3 items-center min-h-[160px]">
-          <div className="h-32 relative">
+        <div className="flex-1 grid grid-cols-2 gap-2 p-[clamp(8px,1.5vh,16px)] items-center min-h-[120px]">
+          <div className="h-[clamp(90px,14vh,128px)] relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={chartSlices}
                   dataKey="value"
                   nameKey="name"
-                  innerRadius={38}
-                  outerRadius={62}
+                  innerRadius="40%"
+                  outerRadius="75%"
                   paddingAngle={2}
                   stroke="var(--card)"
                   strokeWidth={2}

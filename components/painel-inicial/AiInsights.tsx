@@ -228,7 +228,7 @@ export function AiInsights({
 
   return (
     <div className="rounded-xl border border-border bg-gradient-to-br from-card via-card to-muted/20 overflow-hidden">
-      <div className="px-4 py-2.5 flex items-center justify-between border-b border-border gap-3">
+      <div className="px-[clamp(10px,1.5vh,16px)] py-[clamp(8px,1.2vh,12px)] flex items-center justify-between border-b border-border gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <div className="h-6 w-6 rounded-md bg-muted ring-1 ring-border grid place-items-center shrink-0">
             <Activity className="h-3.5 w-3.5 text-foreground" strokeWidth={2} />
@@ -272,7 +272,7 @@ export function AiInsights({
             return (
               <div
                 key={it.id}
-                className="px-4 py-2 flex gap-3 items-start min-w-0"
+                className="px-[clamp(10px,1.5vh,16px)] py-[clamp(6px,1.2vh,12px)] flex gap-3 items-start min-w-0"
                 role="status"
               >
                 <div

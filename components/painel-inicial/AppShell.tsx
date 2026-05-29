@@ -22,7 +22,7 @@ export function AppShell({
         <main
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-            !noPadding && "px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-5",
+            !noPadding && "px-4 sm:px-6 lg:px-8 py-[clamp(12px,2vh,24px)]",
           )}
         >
           <Suspense fallback={null}>

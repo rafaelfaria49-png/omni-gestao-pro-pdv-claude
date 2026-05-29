@@ -38,7 +38,7 @@ export default function DashboardInicioPage() {
   const nomeEmpresa = lojaAtivaRaw?.nomeFantasia?.trim() || "Unidade ativa";
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-3.5">
+    <div className="mx-auto w-full max-w-[1600px] space-y-[clamp(12px,2.2vh,24px)]">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -118,7 +118,7 @@ export default function DashboardInicioPage() {
 
       <QuickActions />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-[clamp(10px,1.5vh,16px)] sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Faturamento hoje"
           value={kpiValue(data?.cards.faturamentoHoje, true)}
@@ -181,7 +181,7 @@ export default function DashboardInicioPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-[clamp(12px,2vh,20px)] xl:grid-cols-3">
         <div className="xl:col-span-2">
           <RevenueChart
             faturamento7d={data?.faturamento7d}
@@ -207,7 +207,7 @@ export default function DashboardInicioPage() {
         error={error}
       />
 
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-[clamp(12px,2vh,20px)] xl:grid-cols-2">
         <CriticalStock
           estoqueCritico={data?.estoqueCritico}
           loading={loading && hasStore}

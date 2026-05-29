@@ -105,7 +105,7 @@ export function QuickActions() {
             key={a.label}
             type="button"
             onClick={() => handleAction(a.label)}
-            className="group rounded-lg border border-border bg-card hover:bg-panel hover:border-foreground/20 transition-all px-3 py-1.5 text-left flex items-center gap-2.5"
+            className="group rounded-lg border border-border bg-card hover:bg-panel hover:border-foreground/20 transition-all px-3 py-[clamp(6px,1vh,12px)] text-left flex items-center gap-2.5"
           >
             <div className="h-7 w-7 shrink-0 rounded-md bg-muted/60 ring-1 ring-border/40 grid place-items-center group-hover:bg-primary/15 group-hover:ring-primary/30 group-hover:text-primary transition-colors">
               <Icon className="h-3.5 w-3.5" strokeWidth={2} />

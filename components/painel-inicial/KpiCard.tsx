@@ -57,7 +57,7 @@ export function KpiCard({
   return (
     <div
       className={[
-        "rounded-xl border border-border bg-card p-3 transition-colors hover:border-foreground/20 hover:shadow-soft",
+        "rounded-xl border border-border bg-card p-[clamp(10px,1.5vh,16px)] transition-colors hover:border-foreground/20 hover:shadow-soft",
         loading ? "animate-pulse" : "",
       ].join(" ")}
     >
@@ -101,7 +101,7 @@ export function KpiCard({
         )}
       </div>
 
-      <div className="mt-1.5 flex items-end justify-between gap-3">
+      <div className="mt-[clamp(6px,1vh,12px)] flex items-end justify-between gap-3">
         <div className="min-w-0">
           <div className="text-2xl font-display font-bold tracking-tight text-foreground tabular-nums leading-none">
             {value}
