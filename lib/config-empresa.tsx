@@ -339,11 +339,7 @@ export const configPadrao: ConfigSistema = {
     formaPagamento: "pix",
   },
   pdv: {
-    atalhosRapidos: [
-      { id: "svc-limpeza", nome: "Limpeza Técnica", preco: 30 },
-      { id: "svc-backup", nome: "Backup / Transferência", preco: 50 },
-      { id: "svc-software", nome: "Software / Desbloqueio", preco: 80 },
-    ],
+    atalhosRapidos: [],
     garantiaPadraoDias: 90,
     validadeOrcamentoDias: 7,
     incluirImpostoEstimadoNoPdv: false,

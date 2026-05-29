@@ -50,7 +50,7 @@ const GARANTIA_LEGAL_CDC =
 
 function defaultPdvParams(): StorePdvParams {
   return {
-    atalhosRapidos: configPadrao.pdv.atalhosRapidos,
+    atalhosRapidos: [],
     ocultarCategoriasNoPdv: !!configPadrao.pdv.ocultarCategoriasNoPdv,
     categoriasOcultasNoPdv: [...(configPadrao.pdv.categoriasOcultasNoPdv ?? [])],
     garantiaPadraoDias: configPadrao.pdv.garantiaPadraoDias,

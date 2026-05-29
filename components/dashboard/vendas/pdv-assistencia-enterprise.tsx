@@ -1488,8 +1488,19 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   }, [localAtalhos, realCatalog])
 
   // ── Hydratação dos atalhos: localStorage (fast-path) → banco (fallback) ──────
+  // Re-hidrata por loja: `hydratedShortcutsKeyRef` guarda a chave da última loja
+  // hidratada. Ao trocar de loja, descarta os atalhos da loja anterior e hidrata
+  // do zero — sem vazamento entre lojas e sem fallback para a loja primária.
   const [hydratedFromDb, setHydratedFromDb] = useState(false)
+  const hydratedShortcutsKeyRef = useRef<string | null>(null)
   useEffect(() => {
+    // Loja ativa mudou: zera o estado e reexibe o skeleton até a nova carga.
+    if (hydratedShortcutsKeyRef.current !== null && hydratedShortcutsKeyRef.current !== shortcutsKey) {
+      hydratedShortcutsKeyRef.current = null
+      setHydratedFromDb(false)
+      setLocalAtalhos([])
+      return
+    }
     if (hydratedFromDb) return
 
     // Fast-path: localStorage por loja (disponível antes da resposta do servidor)
@@ -1499,16 +1510,18 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         const parsed = JSON.parse(raw) as AtalhoSaved[]
         if (Array.isArray(parsed)) {
           setLocalAtalhos(parsed)
+          hydratedShortcutsKeyRef.current = shortcutsKey
           setHydratedFromDb(true)
           return
         }
       }
     } catch { /* ignore */ }
 
-    // Server fallback: aguarda hidratação do banco
+    // Server fallback: aguarda hidratação do banco da loja ativa
     if (!settingsHydrated) return
     const saved = pdvParams.atalhosRapidos ?? []
     setLocalAtalhos(saved)
+    hydratedShortcutsKeyRef.current = shortcutsKey
     setHydratedFromDb(true)
   }, [shortcutsKey, settingsHydrated, hydratedFromDb, pdvParams.atalhosRapidos])
 
