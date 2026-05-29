@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 26 Mai 2026 — Sessão: P0 importador produtos — matching seguro + isolamento multi-loja
+> Última atualização: 29 Mai 2026 — SPRINT_MULTI_LOJA-S-001 CP1+CP2+CP3 executados (commits 6436d9b · a503d70 · 2e6e7d5)
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 **Memória viva consolidada:**
@@ -8,6 +8,31 @@
 
 **Auditoria consolidada:**
 [`docs/modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md`](../modules/reports/AUDITORIA_GERAL_OMNIGESTAO_PRO.md)
+
+---
+
+### SPRINT_MULTI_LOJA-S-001 — Fallback silencioso loja-1 eliminado + ACL guards (concluído 29/05/2026)
+
+**Escopo:** F-01 + F-02 (atômicos) + F-05 + F-06 + F-07 + F-14.
+
+| Item | Estado |
+|------|--------|
+| `storeIdFromAssistecRequestForRead` | Retorna `null` (era `"loja-1"`) |
+| `opsLojaIdFromRequest` (ops-api-gate) | Retorna `string \| null` |
+| Callers com `\|\| "loja-1"` | 55 rotas + helpers corrigidos com guard 400 |
+| Exceção F-02-anchor | `exportar/route.ts` — TODO para Sprint_02 |
+| auth() + canAccessStore | dashboard/resumo, dashboard/elite, clients, ops/inventory, ops/sync-legacy-vendas |
+| WhatsApp actions canAccessStore | sendWhatsAppTextAction, sendWhatsAppTemplateAction, sendWhatsAppMediaAction |
+| send-daily canAccessStore | Adicionado após storeId resolvido |
+| `sendDailyClosingToPhone.storeId` | Não-nullable (F-14) |
+| Testes | 189 passed \| 4 expected fail (era 90 \| 14) |
+| **Status** | **Pronto para Gate #2 (merge)** |
+
+**Pendências remanescentes (próximas sprints):**
+- F-03 — proxy.ts cookie typo (`assistec_active_store` vs `assistec-active-store`) — área protegida, Sprint_02
+- F-04 — Webhook WhatsApp single-store (`WHATSAPP_WEBHOOK_STORE_ID`) — schema novo necessário
+- F-08 — sync-legacy-financeiro sem auth+canAccessStore — sprint de descomissionamento legacy
+- F-02-anchor — `exportar/route.ts` via anchor-tag — cookie/proxy Sprint_02
 
 ---
 

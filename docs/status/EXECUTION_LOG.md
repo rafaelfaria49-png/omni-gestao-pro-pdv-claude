@@ -613,5 +613,17 @@ memoria_criada: null
 docs_atualizados:
   - docs/status/EXECUTION_LOG.md
 flags: []
-notes: "CP1+CP2 concluídos (opção B-completa aprovada). COMMIT 6436d9b. 58 arquivos alterados: 214 linhas adicionadas / 124 removidas. CP1: lib/store-id-from-request.ts — ForRead retorna string | null (era string). CP2: guard 400 aplicado em 55 callers + pivôs (lib/ops-api-gate, lib/cadastros/hub-api-gate, lib/marketing/hub-api-gate). Exceção F-02-anchor preservada em exportar/route.ts com TODO. Testes: 183 passed | 10 expected fail (era 90 | 14). 3 it.fails F-01 + 1 it.fails F-02 convertidos para it(). tsc --noEmit: 0 erros. DIFF REAL: 58 arquivos / +214 / -124 (estimado original: 43 arquivos / +334 / -50). Callers extras não previstos: marketing/* (hub-api-gate pivô), cadastros/* (hub-api-gate pivô), debug/*, ops/vendas-list, settings/perfil-loja — todos cobertos por B-completa. Aguardando confirmação humana para CP3 (F-05+F-06+F-07+F-14: ACL guards)."
+notes: "CP1+CP2+CP3+CP4 concluídos. Sprint MULTI_LOJA-S-001 pronta para Gate #2. COMMITS: 6436d9b (CP1+CP2) · a503d70 (log) · 2e6e7d5 (CP3) · CP4 pendente commit. CP1: lib/store-id-from-request.ts ForRead → null. CP2: 58 arquivos, guard 400 em todos callers, pivôs ops/cadastros/marketing hub-api-gate. CP3: auth()+canAccessStore em 5 rotas F-05 + 3 actions F-06 + send-daily F-07 + storeId não-nullable F-14; 10 arquivos. CP4: lint OK (após build gerar sw.js), build OK (64s, 97 páginas), CURRENT_STATUS atualizado. TESTES FINAIS: 189 passed | 4 expected fail (era 90 | 14). tsc 0 erros. DoD completo: F-01 ✓ F-02 ✓ F-05 ✓ F-06 ✓ F-07 ✓ F-14 ✓. Pendente: smoke check manual (Rafael) + AUDIT pós (SKILL_AUDIT_MULTI_LOJA) + Gate #2."
+ended_at: 2026-05-29T07:45:00-03:00
+duration: PT7H45M
+fases_completas: [CP1, CP2, CP3, CP4]
+resultado: encerrada
+commit_final: 2e6e7d5
+diff:
+  added: 317
+  removed: 209
+  files_modified: 68
+docs_atualizados:
+  - docs/status/EXECUTION_LOG.md
+  - docs/ai/CURRENT_STATUS.md
 ```
