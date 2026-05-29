@@ -5,9 +5,11 @@ import { usePathname } from "next/navigation";
 import { RouterProvider } from "@tanstack/react-router";
 import { getRouter } from "./lovable/router";
 import { cn } from "@/lib/utils";
+import { useTheme } from "@/components/theme/ThemeProvider";
 import "./vendas-hub-theme.css";
 
 export default function VendasHubPage() {
+  const { theme } = useTheme();
   const pathname = usePathname() ?? "";
   const isDashboard = pathname.startsWith("/dashboard/vendas-hub");
   const basepath = isDashboard
@@ -18,6 +20,7 @@ export default function VendasHubPage() {
   return (
     <div
       data-vendas-hub-theme-root
+      data-theme={theme === "black-edition" ? "black" : theme}
       className={cn(
         "vendas-hub-isolated antialiased",
         isDashboard

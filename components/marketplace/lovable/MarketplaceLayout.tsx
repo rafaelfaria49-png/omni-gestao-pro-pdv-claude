@@ -1,6 +1,5 @@
 "use client";
 
-import { ThemeSwitcher } from "./ThemeSwitcher";
 import { StatusPill } from "./StatusPill";
 import { AIBadge } from "./AIBadge";
 import {
@@ -394,7 +393,6 @@ export default function MarketplaceLayout() {
             </kbd>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <ThemeSwitcher />
             <button
               onClick={showPendingToast}
               title="Integração pendente"

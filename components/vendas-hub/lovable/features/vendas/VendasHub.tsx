@@ -11,7 +11,6 @@ import {
   Package,
   type LucideIcon,
 } from "lucide-react"
-import ThemeSwitcher from "./ThemeSwitcher"
 import { cn } from "@/lib/utils"
 
 type Status = "ativo" | "beta" | "em-breve"
@@ -135,9 +134,6 @@ export default function VendasHub() {
                 Todas as operações de venda em um único lugar
               </p>
             </div>
-          </div>
-          <div className="self-end sm:self-auto">
-            <ThemeSwitcher compact={isDashboard} />
           </div>
         </div>
 

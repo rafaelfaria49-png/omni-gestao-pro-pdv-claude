@@ -8,7 +8,6 @@ import {
   CheckCircle2, ArrowUpRight, Database, Filter, Download, Workflow, Barcode,
   ArrowRight,
 } from "lucide-react";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Badge, Card, Field, Input, Modal, SectionTitle, Select, Textarea, useToggle } from "./ui-kit";
 import { RoadmapPreviewDialog } from "@/components/ui/roadmap-preview-dialog";
 import { ProductAIModal, QualityScore, InteligenciaCadastros } from "./produto-ia";

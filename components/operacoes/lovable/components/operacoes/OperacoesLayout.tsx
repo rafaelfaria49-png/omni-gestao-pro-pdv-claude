@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Activity, BarChart3, Bell, KanbanSquare, LayoutDashboard, PlusCircle, Search, ShieldCheck, Users, Wrench, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ThemeSwitcher, type HubTheme } from "@/components/operacoes/ThemeSwitcher";
+import { type HubTheme } from "@/components/operacoes/ThemeSwitcher";
 import { cn } from "@/lib/utils";
 
 // ── Mapeamento bidirecional de temas ────────────────────────────────────────
