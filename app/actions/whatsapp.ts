@@ -8,6 +8,7 @@ import {
   sendCloudApiTextAndRecord,
 } from "@/lib/whatsapp/whatsapp-service"
 import type { TemplateComponent } from "@/lib/whatsapp"
+import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 
 type SendTextInput = {
   storeId: string
@@ -22,6 +23,7 @@ export async function sendWhatsAppTextAction(input: SendTextInput) {
 
   const storeId = (input.storeId ?? "").trim()
   if (!storeId) return { ok: false as const, error: "storeId obrigatório" }
+  if (!canAccessStore(session, storeId)) return { ok: false as const, error: "Sem acesso à loja" }
 
   try {
     const r = await sendCloudApiTextAndRecord(storeId, input.conversationId, input.text)
@@ -67,6 +69,7 @@ export async function sendWhatsAppTemplateAction(input: {
   if (!session?.user) return { ok: false as const, error: "Não autenticado" }
   const storeId = (input.storeId ?? "").trim()
   if (!storeId) return { ok: false as const, error: "storeId obrigatório" }
+  if (!canAccessStore(session, storeId)) return { ok: false as const, error: "Sem acesso à loja" }
   try {
     const r = await sendCloudApiTemplateAndRecord(storeId, input.conversationId, {
       templateName: input.templateName,
@@ -92,6 +95,7 @@ export async function sendWhatsAppMediaAction(input: {
   if (!session?.user) return { ok: false as const, error: "Não autenticado" }
   const storeId = (input.storeId ?? "").trim()
   if (!storeId) return { ok: false as const, error: "storeId obrigatório" }
+  if (!canAccessStore(session, storeId)) return { ok: false as const, error: "Sem acesso à loja" }
   try {
     const r = await sendCloudApiMediaAndRecord(storeId, input.conversationId, {
       mediaType: input.mediaType,

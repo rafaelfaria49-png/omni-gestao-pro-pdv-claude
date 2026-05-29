@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
+import type { Session } from "next-auth"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
 import { isVencimentoExpired } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
@@ -7,6 +8,7 @@ import { sendDailyClosingToPhone } from "@/lib/whatsapp-daily-server"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 import { resolveActiveStoreId } from "@/lib/operacoes/assert-active-store"
 import { storeIdFromWhatsAppApiRead } from "@/lib/whatsapp/whatsapp-api-guard"
+import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -16,15 +18,13 @@ export const maxDuration = 60
  * Usado pelo painel (credenciais) ou por automações internas.
  */
 export async function POST(request: Request) {
+  let session: Session | null = null
   try {
-    const session = await auth()
-    if (!session?.user) {
-      return NextResponse.json(
-        { error: "Autenticação obrigatória." },
-        { status: 401 }
-      )
-    }
+    session = await auth()
   } catch {
+    return NextResponse.json({ error: "Autenticação obrigatória." }, { status: 401 })
+  }
+  if (!session?.user) {
     return NextResponse.json({ error: "Autenticação obrigatória." }, { status: 401 })
   }
 
@@ -64,6 +64,9 @@ export async function POST(request: Request) {
       { error: "Unidade obrigatória: selecione uma loja ativa." },
       { status: 403 }
     )
+  }
+  if (!canAccessStore(session, storeId)) {
+    return NextResponse.json({ error: "Sem acesso à loja" }, { status: 403 })
   }
   const r = await sendDailyClosingToPhone({ phoneDigits: phone, empresaNome, storeId })
 

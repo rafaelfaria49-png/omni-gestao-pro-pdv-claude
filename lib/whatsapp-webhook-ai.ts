@@ -250,7 +250,8 @@ async function handleOwnerText(fromDigits: string, utterance: string): Promise<v
   if (voice?.kind === "fechar_dia") {
     const nome = process.env.ASSISTEC_EMPRESA_NOME?.trim() || APP_DISPLAY_NAME
     const dono = process.env.ASSISTEC_WHATSAPP_DONO?.replace(/\D/g, "") ?? fromDigits
-    const send = await sendDailyClosingToPhone({ phoneDigits: dono, empresaNome: nome })
+    const webhookStoreId = (process.env.WHATSAPP_WEBHOOK_STORE_ID ?? "").trim()
+    const send = await sendDailyClosingToPhone({ phoneDigits: dono, empresaNome: nome, storeId: webhookStoreId })
     const extra = send.ok
       ? " Resumo enviado."
       : ` Aviso: ${"error" in send ? send.error : ""}`

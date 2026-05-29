@@ -7,6 +7,8 @@ import { getTrustedTimeMs } from "@/lib/trusted-time"
 import type { Produto } from "@/generated/prisma"
 import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { requireAdmin } from "@/lib/require-admin"
+import { auth } from "@/auth"
+import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 // (sem normalizeNameForMatch — tabela `product` é minimalista)
 
 export const runtime = "nodejs"
@@ -117,6 +119,11 @@ async function requireSubscription() {
 }
 
 export async function GET(req: Request) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+  const lojaIdRecebido = storeIdFromAssistecRequestForRead(req)
+  if (!lojaIdRecebido) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
+  if (!canAccessStore(session, lojaIdRecebido)) return NextResponse.json({ error: "Sem acesso à loja" }, { status: 403 })
   try {
     const gate = await requireSubscription()
     if (!gate.ok) {
@@ -124,8 +131,6 @@ export async function GET(req: Request) {
       console.warn("[ops/inventory] bypass subscription check (dev mode)")
     }
 
-    const lojaIdRecebido = storeIdFromAssistecRequestForRead(req)
-    if (!lojaIdRecebido) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
     console.log(`[ops/inventory GET] lojaId recebido=${lojaIdRecebido}`)
 
     // Leitura do estoque por loja.

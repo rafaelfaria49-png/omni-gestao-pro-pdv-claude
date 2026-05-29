@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
+import { auth } from "@/auth"
+import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -33,10 +35,13 @@ async function withDbRetry<T>(label: string, fn: () => Promise<T>, attempts = 5)
  * Sem lógica de importação, sem CORS complexo: retorna o que existe em `cliente` (Supabase).
  */
 export async function GET(req: Request) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+  const lojaId = storeIdFromAssistecRequestForRead(req)
+  if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
+  if (!canAccessStore(session, lojaId)) return NextResponse.json({ error: "Sem acesso à loja" }, { status: 403 })
   try {
     // Mantém compatibilidade com chamadas antigas, mas o model atual aponta para `cliente`.
-    const lojaId = storeIdFromAssistecRequestForRead(req)
-    if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
     await withDbRetry("$connect", () => prisma.$connect())
     const rows = await withDbRetry("findMany", () =>
       prisma.cliente.findMany({

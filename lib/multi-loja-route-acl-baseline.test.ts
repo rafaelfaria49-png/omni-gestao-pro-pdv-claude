@@ -29,34 +29,31 @@ function read(relPath: string): string {
 // F-05 · /api/dashboard/resumo e /api/dashboard/elite sem auth + canAccessStore
 // ---------------------------------------------------------------------------
 
-describe("F-05 — /api/dashboard/resumo sem auth + canAccessStore", () => {
+describe("F-05 — /api/dashboard/resumo com auth + canAccessStore (SPRINT_MULTI_LOJA-S-001)", () => {
   const FILE = "app/api/dashboard/resumo/route.ts"
 
-  it("[snapshot atual — bug] NÃO importa auth de @/auth", () => {
+  it("[pós-fix] importa auth de @/auth", () => {
     const src = read(FILE)
-    expect(src).not.toMatch(/from ["']@\/auth["']/)
+    expect(src).toMatch(/from ["']@\/auth["']/)
   })
 
-  it("[snapshot atual — bug] NÃO chama await auth()", () => {
+  it("[pós-fix] chama await auth()", () => {
     const src = read(FILE)
-    expect(src).not.toContain("await auth()")
+    expect(src).toContain("await auth()")
   })
 
-  it("[snapshot atual — bug] NÃO chama canAccessStore", () => {
+  it("[pós-fix] chama canAccessStore", () => {
     const src = read(FILE)
-    expect(src).not.toContain("canAccessStore")
+    expect(src).toContain("canAccessStore")
   })
 
-  it("[snapshot atual] usa storeIdFromAssistecRequestForRead (fallback silencioso F-01)", () => {
+  it("[pós-fix] usa storeIdFromAssistecRequestForRead", () => {
     const src = read(FILE)
     expect(src).toContain("storeIdFromAssistecRequestForRead")
   })
 
-  /**
-   * EXPECTED-FAILING: pós-SPRINT_01_MULTI_LOJA.
-   * Troque `it.fails(` por `it(` quando auth + canAccessStore forem adicionados.
-   */
-  it.fails("[F-05] DEVE: importar auth(), chamar await auth() e canAccessStore antes de query", () => {
+  // SPRINT_MULTI_LOJA-S-001 CP3 executado: it.fails → it normal.
+  it("[F-05] importa auth(), chama await auth() e canAccessStore antes de query", () => {
     const src = read(FILE)
     expect(src).toMatch(/from ["']@\/auth["']/)
     expect(src).toContain("await auth()")
@@ -64,25 +61,26 @@ describe("F-05 — /api/dashboard/resumo sem auth + canAccessStore", () => {
   })
 })
 
-describe("F-05 — /api/dashboard/elite sem auth + canAccessStore", () => {
+describe("F-05 — /api/dashboard/elite com auth + canAccessStore (SPRINT_MULTI_LOJA-S-001)", () => {
   const FILE = "app/api/dashboard/elite/route.ts"
 
-  it("[snapshot atual — bug] NÃO importa auth de @/auth", () => {
+  it("[pós-fix] importa auth de @/auth", () => {
     const src = read(FILE)
-    expect(src).not.toMatch(/from ["']@\/auth["']/)
+    expect(src).toMatch(/from ["']@\/auth["']/)
   })
 
-  it("[snapshot atual — bug] NÃO chama canAccessStore", () => {
+  it("[pós-fix] chama canAccessStore", () => {
     const src = read(FILE)
-    expect(src).not.toContain("canAccessStore")
+    expect(src).toContain("canAccessStore")
   })
 
-  it("[snapshot atual] usa storeIdFromAssistecRequestForRead (fallback silencioso F-01)", () => {
+  it("[pós-fix] usa storeIdFromAssistecRequestForRead", () => {
     const src = read(FILE)
     expect(src).toContain("storeIdFromAssistecRequestForRead")
   })
 
-  it.fails("[F-05] DEVE: chamar auth() + canAccessStore (KPIs financeiros completos — alta sensibilidade)", () => {
+  // SPRINT_MULTI_LOJA-S-001 CP3 executado: it.fails → it normal.
+  it("[F-05] chama auth() + canAccessStore (KPIs financeiros completos — alta sensibilidade)", () => {
     const src = read(FILE)
     expect(src).toMatch(/from ["']@\/auth["']/)
     expect(src).toContain("await auth()")
@@ -90,25 +88,24 @@ describe("F-05 — /api/dashboard/elite sem auth + canAccessStore", () => {
   })
 })
 
-describe("F-05 — /api/clients sem auth + canAccessStore", () => {
+describe("F-05 — /api/clients com auth + canAccessStore (SPRINT_MULTI_LOJA-S-001)", () => {
   const FILE = "app/api/clients/route.ts"
 
-  it("[snapshot atual — bug] NÃO importa auth de @/auth", () => {
+  it("[pós-fix] importa auth de @/auth", () => {
     const src = read(FILE)
-    expect(src).not.toMatch(/from ["']@\/auth["']/)
+    expect(src).toMatch(/from ["']@\/auth["']/)
   })
 
-  it("[snapshot atual — bug] NÃO chama canAccessStore", () => {
+  it("[pós-fix] chama canAccessStore", () => {
     const src = read(FILE)
-    expect(src).not.toContain("canAccessStore")
+    expect(src).toContain("canAccessStore")
   })
 
-  it.fails("[F-05] DEVE: chamar auth() + canAccessStore ou deprecar em favor de /api/clientes", () => {
+  // SPRINT_MULTI_LOJA-S-001 CP3 executado: it.fails → it normal.
+  it("[F-05] chama auth() + canAccessStore", () => {
     const src = read(FILE)
-    // Ou adiciona auth+canAccessStore, ou a rota é removida (redirecionada para /api/clientes).
     const hasAuth = src.includes("await auth()") && src.includes("canAccessStore")
-    const isDeprecated = src.includes("deprecated") || src.includes("redirect") || src.includes("410")
-    expect(hasAuth || isDeprecated).toBe(true)
+    expect(hasAuth).toBe(true)
   })
 })
 
@@ -116,31 +113,26 @@ describe("F-05 — /api/clients sem auth + canAccessStore", () => {
 // F-06 · app/actions/whatsapp.ts tem auth() mas falta canAccessStore
 // ---------------------------------------------------------------------------
 
-describe("F-06 — app/actions/whatsapp.ts falta canAccessStore", () => {
+describe("F-06 — app/actions/whatsapp.ts com canAccessStore (SPRINT_MULTI_LOJA-S-001)", () => {
   const FILE = "app/actions/whatsapp.ts"
 
-  it("[snapshot atual — parcial] tem auth() — autenticação presente", () => {
+  it("[pós-fix] tem auth() — autenticação presente", () => {
     const src = read(FILE)
     expect(src).toContain("await auth()")
   })
 
-  it("[snapshot atual — bug] NÃO importa canAccessStore", () => {
+  it("[pós-fix] importa e chama canAccessStore", () => {
     const src = read(FILE)
-    // Usuário autenticado em Loja A pode disparar action com storeId="loja-b"
-    expect(src).not.toContain("canAccessStore")
+    expect(src).toContain("canAccessStore")
   })
 
-  it("[snapshot atual] aceita storeId cru do client sem validar acesso", () => {
+  it("[pós-fix] ainda recebe storeId do input do cliente (validado server-side)", () => {
     const src = read(FILE)
-    // O storeId vem do input do componente cliente e vai direto para o service
     expect(src).toContain("input.storeId")
   })
 
-  /**
-   * EXPECTED-FAILING: pós-SPRINT_01_MULTI_LOJA.
-   * Actions que aceitam storeId do cliente devem sempre validar canAccessStore server-side.
-   */
-  it.fails("[F-06] DEVE: importar e chamar canAccessStore(session, storeId) antes de sendCloud*", () => {
+  // SPRINT_MULTI_LOJA-S-001 CP3 executado: it.fails → it normal.
+  it("[F-06] importa e chama canAccessStore(session, storeId) antes de sendCloud*", () => {
     const src = read(FILE)
     expect(src).toContain("canAccessStore")
   })
@@ -150,32 +142,27 @@ describe("F-06 — app/actions/whatsapp.ts falta canAccessStore", () => {
 // F-07 · /api/whatsapp/send-daily tem auth() mas falta canAccessStore
 // ---------------------------------------------------------------------------
 
-describe("F-07 — /api/whatsapp/send-daily falta canAccessStore", () => {
+describe("F-07 — /api/whatsapp/send-daily com canAccessStore (SPRINT_MULTI_LOJA-S-001)", () => {
   const FILE = "app/api/whatsapp/send-daily/route.ts"
 
-  it("[snapshot atual — parcial] tem auth() — autenticação presente", () => {
+  it("[pós-fix] tem auth() — autenticação presente", () => {
     const src = read(FILE)
     expect(src).toContain("await auth()")
   })
 
-  it("[snapshot atual — parcial] verifica que storeId não é vazio (guarda mínimo presente)", () => {
+  it("[pós-fix] verifica que storeId não é vazio", () => {
     const src = read(FILE)
-    // resolveActiveStoreId retorna null e a rota retorna 403 se storeId vazio — bom sinal.
-    // Mas não valida que o usuário TEM direito à loja informada.
     expect(src).toContain("resolveActiveStoreId")
     expect(src).toContain("!storeId")
   })
 
-  it("[snapshot atual — bug] NÃO chama canAccessStore (usuário pode enviar resumo de outra loja)", () => {
+  it("[pós-fix] chama canAccessStore após resolver storeId", () => {
     const src = read(FILE)
-    expect(src).not.toContain("canAccessStore")
+    expect(src).toContain("canAccessStore")
   })
 
-  /**
-   * EXPECTED-FAILING: pós-SPRINT_01_MULTI_LOJA.
-   * Rota deve validar que session.user tem acesso ao storeId resolvido.
-   */
-  it.fails("[F-07] DEVE: chamar canAccessStore(session, storeId) após resolver storeId", () => {
+  // SPRINT_MULTI_LOJA-S-001 CP3 executado: it.fails → it normal.
+  it("[F-07] chama canAccessStore(session, storeId) após resolver storeId", () => {
     const src = read(FILE)
     expect(src).toContain("canAccessStore")
   })
@@ -185,29 +172,26 @@ describe("F-07 — /api/whatsapp/send-daily falta canAccessStore", () => {
 // F-08 · sync-legacy-* usa só requireOpsSubscription, sem auth() + canAccessStore
 // ---------------------------------------------------------------------------
 
-describe("F-08 — /api/ops/sync-legacy-vendas sem auth() + canAccessStore", () => {
+describe("F-05/F-08 — /api/ops/sync-legacy-vendas com auth() + canAccessStore (SPRINT_MULTI_LOJA-S-001)", () => {
   const FILE = "app/api/ops/sync-legacy-vendas/route.ts"
 
-  it("[snapshot atual — parcial] usa requireOpsSubscription (gate de assinatura presente)", () => {
+  it("[pós-fix] mantém requireOpsSubscription (gate de assinatura)", () => {
     const src = read(FILE)
     expect(src).toContain("requireOpsSubscription")
   })
 
-  it("[snapshot atual — bug] NÃO importa auth de @/auth", () => {
+  it("[pós-fix] importa auth de @/auth", () => {
     const src = read(FILE)
-    expect(src).not.toMatch(/from ["']@\/auth["']/)
+    expect(src).toMatch(/from ["']@\/auth["']/)
   })
 
-  it("[snapshot atual — bug] NÃO chama canAccessStore (escrita em qualquer loja via header)", () => {
+  it("[pós-fix] chama canAccessStore", () => {
     const src = read(FILE)
-    expect(src).not.toContain("canAccessStore")
+    expect(src).toContain("canAccessStore")
   })
 
-  /**
-   * EXPECTED-FAILING: pós-SPRINT_01_MULTI_LOJA (ou sprint dedicada de legacy ops).
-   * Escrita de vendas legadas deve validar que o caller tem direito à loja alvo.
-   */
-  it.fails("[F-08] DEVE: chamar auth() + canAccessStore antes de upsertVendaInTransaction", () => {
+  // SPRINT_MULTI_LOJA-S-001 CP3 executado: it.fails → it normal.
+  it("[F-05] chama auth() + canAccessStore antes de upsertVendaInTransaction", () => {
     const src = read(FILE)
     expect(src).toMatch(/from ["']@\/auth["']/)
     expect(src).toContain("await auth()")

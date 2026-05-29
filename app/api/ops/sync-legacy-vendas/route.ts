@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireOpsSubscription, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { upsertVendaInTransaction, type SalePayload } from "@/lib/ops-upsert-venda"
+import { auth } from "@/auth"
+import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -10,6 +12,9 @@ export const revalidate = 0
 const MAX_SALES = 5000
 
 export async function POST(req: Request) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+
   const gate = await requireOpsSubscription()
   if (!gate.ok) return gate.res
 
@@ -26,6 +31,9 @@ export async function POST(req: Request) {
       { error: "Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId / lojaId." },
       { status: 400 }
     )
+  }
+  if (!canAccessStore(session, lojaId)) {
+    return NextResponse.json({ error: "Sem acesso à loja" }, { status: 403 })
   }
 
   const b = body as { sales?: unknown }
