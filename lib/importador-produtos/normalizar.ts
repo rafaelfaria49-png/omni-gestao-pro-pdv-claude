@@ -129,6 +129,25 @@ const ALIASES: Record<CampoCanonico, string[]> = {
     "seção",
     "departamento",
   ],
+  // Campos fiscais — persistidos em Produto.metadata.{ncm,cest} (schema
+  // não tem coluna dedicada; decisão arquitetural em
+  // docs/auditoria/COMPRAS_FORNECEDORES_PLANO_TECNICO.md:347).
+  // NOTA: "descricao ncm" / "descricao cest" continuam na stoplist —
+  // são strings descritivas, não o código fiscal em si.
+  ncm: [
+    "ncm",
+    "codigo ncm",
+    "código ncm",
+    "n ncm",
+    "ncm produto",
+  ],
+  cest: [
+    "cest",
+    "codigo cest",
+    "código cest",
+    "n cest",
+    "cest produto",
+  ],
 }
 
 /** Conjunto reverso: alias normalizado → campo canônico. */
@@ -155,13 +174,9 @@ const ALIAS_INDEX: Map<string, CampoCanonico> = (() => {
  * pelo contains e nunca representa o campo errado em produção.
  */
 const HEADERS_IGNORADOS: ReadonlySet<string> = new Set([
-  // Fiscais — schema atual não tem ncm/cest/cfop/cst, então só ignorar.
-  "ncm",
-  "codigo ncm",
-  "n ncm",
-  "cest",
-  "codigo cest",
-  "n cest",
+  // CFOP / CST / origem ainda sem campo no schema nem em metadata
+  // documentada — continuam ignorados até decisão de produto.
+  // (NCM e CEST passaram para os ALIASES e vão em Produto.metadata.{ncm,cest}.)
   "cfop",
   "cfop entrada",
   "cfop saida",
@@ -173,7 +188,8 @@ const HEADERS_IGNORADOS: ReadonlySet<string> = new Set([
   "cst cofins",
   "origem mercadoria",
   // Descrições fiscais — "Descrição NCM" viraria NOME via contains de
-  // "descricao" (alias do campo nome). Crítico bloquear aqui.
+  // "descricao" (alias do campo nome). Continuar bloqueando aqui.
+  // (NÃO confundir com "Código NCM"/"NCM" puro, que SÃO mapeados.)
   "descricao ncm",
   "descricao cest",
   "descricao cfop",
@@ -277,6 +293,23 @@ export function celulaParaString(v: unknown): string {
   if (typeof v === "boolean") return v ? "sim" : "nao"
   if (v instanceof Date) return v.toISOString().slice(0, 10)
   return String(v).trim()
+}
+
+/**
+ * Sanitiza código fiscal (NCM / CEST / CFOP). Remove pontos, espaços,
+ * traços e qualquer não-dígito. Aceita os formatos comuns:
+ *  - "3926.90.90" → "39269090"
+ *  - "39269090"   → "39269090"
+ *  - 39269090     → "39269090" (número)
+ *  - "2810600"    → "2810600"  (CEST)
+ *  - "" / "—" / "n/a" → ""
+ *
+ * NÃO valida comprimento (NCM = 8, CEST = 7) — devolve só dígitos.
+ * Linha pode trazer NCM curto (4 dígitos do capítulo) ou completo —
+ * aceitamos ambos como string e deixamos a UI/fiscal decidir.
+ */
+export function sanitizarCodigoFiscal(raw: unknown): string {
+  return celulaParaString(raw).replace(/\D/g, "")
 }
 
 /**

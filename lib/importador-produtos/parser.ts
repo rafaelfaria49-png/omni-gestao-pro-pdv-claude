@@ -11,6 +11,7 @@ import {
   parseNumeroBr,
   pareceBanner,
   pontuarLinhaComoCabecalho,
+  sanitizarCodigoFiscal,
 } from "./normalizar"
 
 const JANELA_DETECCAO_CABECALHO = 20 // linhas
@@ -201,6 +202,8 @@ function normalizarLinha(
     preco: [],
     estoque: [],
     categoria: [],
+    ncm: [],
+    cest: [],
   }
   for (const [header, campo] of Object.entries(cabecalho.mapeamento)) {
     if (!campo) continue
@@ -272,6 +275,12 @@ function normalizarLinha(
     skuFinal = ""
   }
 
+  // NCM/CEST: sanitizam para só dígitos (aceita "3926.90.90" → "39269090").
+  // Vão para Produto.metadata.{ncm,cest} no persist — schema não tem coluna
+  // dedicada. Não validamos comprimento (NCM=8, CEST=7) — UI/fiscal decide.
+  const ncm = sanitizarCodigoFiscal(valoresPorCampo.ncm[0] ?? "")
+  const cest = sanitizarCodigoFiscal(valoresPorCampo.cest[0] ?? "")
+
   return {
     valido: {
       linha: linhaPlanilha,
@@ -282,6 +291,8 @@ function normalizarLinha(
       preco,
       estoque: Math.round(estoqueNum),
       categoria: (valoresPorCampo.categoria[0] ?? "").trim(),
+      ncm,
+      cest,
     },
   }
 }

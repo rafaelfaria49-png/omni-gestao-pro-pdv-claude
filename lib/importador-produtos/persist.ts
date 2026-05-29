@@ -240,6 +240,13 @@ async function criarProdutoNovo(
   barcodeToSave: string | null,
   base: ItemResultado,
 ): Promise<ItemResultado> {
+  // NCM/CEST vão em Produto.metadata (schema não tem coluna dedicada —
+  // decisão arquitetural em docs/auditoria/COMPRAS_FORNECEDORES_PLANO_TECNICO.md:347).
+  // Omite o objeto inteiro quando ambos vazios para não poluir o JSONB.
+  const metadataExtras: Record<string, string> = {}
+  if (p.ncm) metadataExtras.ncm = p.ncm
+  if (p.cest) metadataExtras.cest = p.cest
+
   await prisma.produto.create({
     data: {
       storeId,
@@ -250,6 +257,7 @@ async function criarProdutoNovo(
       price: p.preco,
       stock: p.estoque,
       barcode: barcodeToSave,
+      metadata: Object.keys(metadataExtras).length > 0 ? metadataExtras : undefined,
       // brand: deixar vazio — schema default já é "". Planilhas suportadas
       // não trazem coluna de marca real. Não duplicar categoria em brand.
     },

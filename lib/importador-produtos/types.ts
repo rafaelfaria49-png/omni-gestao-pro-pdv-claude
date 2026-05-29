@@ -12,6 +12,8 @@ export type CampoCanonico =
   | "preco"
   | "estoque"
   | "categoria"
+  | "ncm"
+  | "cest"
 
 /** Resultado da detecção de cabeçalho. */
 export type DeteccaoCabecalho = {
@@ -34,6 +36,15 @@ export type ProdutoNormalizado = {
   preco: number
   estoque: number
   categoria: string
+  /**
+   * Código NCM (8 dígitos brasileiros, sem separadores). Vazio se a planilha
+   * não trouxer ou se vier lixo. Persistido em `Produto.metadata.ncm`
+   * (schema não tem coluna dedicada — decisão arquitetural em
+   * docs/auditoria/COMPRAS_FORNECEDORES_PLANO_TECNICO.md:347).
+   */
+  ncm: string
+  /** Código CEST (7 dígitos, sem separadores). Mesmas regras de NCM. */
+  cest: string
 }
 
 /** Linha que não passou na validação. */

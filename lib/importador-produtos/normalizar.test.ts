@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { mapearHeader, parseNumeroBr } from "./normalizar"
+import { mapearHeader, parseNumeroBr, sanitizarCodigoFiscal } from "./normalizar"
 
 // ── mapeamento de headers ─────────────────────────────────────
 // Cobre o bug do "Venda R$" não mapear para `preco` (todos os
@@ -52,19 +52,38 @@ describe("mapearHeader — custo R$ via contains", () => {
   })
 })
 
+describe("mapearHeader — campos fiscais NCM/CEST (vão para Produto.metadata)", () => {
+  it("'Código NCM' / 'NCM' agora mapeiam para o campo ncm", () => {
+    expect(mapearHeader("Código NCM")).toBe("ncm")
+    expect(mapearHeader("Codigo NCM")).toBe("ncm")
+    expect(mapearHeader("NCM")).toBe("ncm")
+    expect(mapearHeader("NCM Produto")).toBe("ncm")
+  })
+
+  it("'Código CEST' / 'CEST' agora mapeiam para o campo cest", () => {
+    expect(mapearHeader("Código CEST")).toBe("cest")
+    expect(mapearHeader("Codigo CEST")).toBe("cest")
+    expect(mapearHeader("CEST")).toBe("cest")
+    expect(mapearHeader("CEST Produto")).toBe("cest")
+  })
+
+  it("NCM/CEST nunca caem em SKU (era bug: contains de 'codigo')", () => {
+    // mapearHeader retorna o campo correto, sku NÃO aparece.
+    expect(mapearHeader("Código NCM")).not.toBe("sku")
+    expect(mapearHeader("Código CEST")).not.toBe("sku")
+    expect(mapearHeader("Codigo NCM")).not.toBe("sku")
+    expect(mapearHeader("Codigo CEST")).not.toBe("sku")
+  })
+
+  it("'Descrição NCM' / 'Descrição CEST' continuam null (texto descritivo, não código)", () => {
+    expect(mapearHeader("Descrição NCM")).toBeNull()
+    expect(mapearHeader("Descricao NCM")).toBeNull()
+    expect(mapearHeader("Descrição CEST")).toBeNull()
+    expect(mapearHeader("Descricao CEST")).toBeNull()
+  })
+})
+
 describe("mapearHeader — stoplist (Gestão Clique e similares)", () => {
-  it("'Código NCM' não vira SKU (era bug: contains de 'codigo')", () => {
-    expect(mapearHeader("Código NCM")).toBeNull()
-    expect(mapearHeader("Codigo NCM")).toBeNull()
-    expect(mapearHeader("NCM")).toBeNull()
-  })
-
-  it("'Código CEST' não vira SKU", () => {
-    expect(mapearHeader("Código CEST")).toBeNull()
-    expect(mapearHeader("Codigo CEST")).toBeNull()
-    expect(mapearHeader("CEST")).toBeNull()
-  })
-
   it("CFOP/CST/origem mercadoria são ignorados (fiscais sem schema)", () => {
     expect(mapearHeader("CFOP")).toBeNull()
     expect(mapearHeader("CST")).toBeNull()
@@ -172,6 +191,41 @@ describe("mapearHeader — preço de venda (BUG 'Venda R$')", () => {
 })
 
 // ── parseNumeroBr — sanity check ──────────────────────────────
+
+describe("sanitizarCodigoFiscal", () => {
+  it("remove pontos do NCM com separadores", () => {
+    expect(sanitizarCodigoFiscal("3926.90.90")).toBe("39269090")
+    expect(sanitizarCodigoFiscal("4202.12.20")).toBe("42021220")
+    expect(sanitizarCodigoFiscal("8506.50.10")).toBe("85065010")
+  })
+
+  it("aceita NCM sem separadores", () => {
+    expect(sanitizarCodigoFiscal("39269090")).toBe("39269090")
+    expect(sanitizarCodigoFiscal("42021220")).toBe("42021220")
+  })
+
+  it("aceita CEST com e sem separadores", () => {
+    expect(sanitizarCodigoFiscal("28.106.00")).toBe("2810600")
+    expect(sanitizarCodigoFiscal("2810600")).toBe("2810600")
+  })
+
+  it("aceita NCM/CEST como número (planilhas que entregam Number)", () => {
+    expect(sanitizarCodigoFiscal(39269090)).toBe("39269090")
+    expect(sanitizarCodigoFiscal(2810600)).toBe("2810600")
+  })
+
+  it("retorna vazio para lixo / null / undefined", () => {
+    expect(sanitizarCodigoFiscal("")).toBe("")
+    expect(sanitizarCodigoFiscal("—")).toBe("")
+    expect(sanitizarCodigoFiscal("n/a")).toBe("")
+    expect(sanitizarCodigoFiscal(null)).toBe("")
+    expect(sanitizarCodigoFiscal(undefined)).toBe("")
+  })
+
+  it("não valida comprimento — aceita NCM curto (4 dígitos de capítulo)", () => {
+    expect(sanitizarCodigoFiscal("3926")).toBe("3926")
+  })
+})
 
 describe("parseNumeroBr", () => {
   it("aceita R$ brasileiro", () => {

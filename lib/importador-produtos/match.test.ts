@@ -20,6 +20,8 @@ function produto(over: Partial<ProdutoNormalizado>): ProdutoNormalizado {
     preco: 0,
     estoque: 0,
     categoria: "",
+    ncm: "",
+    cest: "",
     ...over,
   }
 }

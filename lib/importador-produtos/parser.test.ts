@@ -45,19 +45,19 @@ describe("processarArquivoProdutos — layout Gestão Clique completo", () => {
     "Código NCM;Descrição NCM;Código CEST;Descrição CEST;" +
     "Peso;Largura;Altura;Comprimento"
 
-  it("mapeia 7 colunas canônicas e ignora 10 colunas extras (fiscais/dimensões/min-max)", async () => {
+  it("mapeia 9 colunas canônicas e ignora 8 colunas (descrições fiscais/dimensões/min-max)", async () => {
     const csv = csvBuffer([
       HEADER,
-      // SKU curto + barcode EAN-13 — caso comum.
-      "10;7891234567890;Massa Dino Loand;Brinquedos;44,15;78,90;25;5;100;94022000;Brinquedos diversos;2810600;Descricao CEST;0,250;5;10;15",
-      // SKU alfanumérico, sem barcode na linha.
+      // SKU curto + barcode EAN-13 + NCM/CEST reais (exemplos do usuário).
+      "10;7891234567890;Massa Dino Loand;Brinquedos;44,15;78,90;25;5;100;39269090;Brinquedos diversos;2810600;Descricao CEST;0,250;5;10;15",
+      // SKU alfanumérico, sem barcode na linha, NCM presente.
       "ABC-99;;Caneta Bic Azul;Papelaria;1,20;3,50;180;20;500;96081000;Canetas;;;;;;",
-      // Sem SKU, com barcode.
-      ";7891111111111;Refrigerante Cola 2L;Bebidas;5,00;9,90;40;10;200;22021000;Refrigerantes;;;;;;",
+      // Sem SKU, com barcode, sem NCM/CEST.
+      ";7891111111111;Refrigerante Cola 2L;Bebidas;5,00;9,90;40;10;200;;;;;;;;",
     ])
     const r = await processarArquivoProdutos(csv, "gestao-clique.csv")
 
-    // ── Mapeamento canônico
+    // ── Mapeamento canônico (9 colunas)
     expect(r.cabecalho.mapeamento["Codigo"]).toBe("sku")
     expect(r.cabecalho.mapeamento["Codigo de barra"]).toBe("barcode")
     expect(r.cabecalho.mapeamento["Produto"]).toBe("nome")
@@ -65,13 +65,13 @@ describe("processarArquivoProdutos — layout Gestão Clique completo", () => {
     expect(r.cabecalho.mapeamento["Valor de custo"]).toBe("custo")
     expect(r.cabecalho.mapeamento["Valor Varejo"]).toBe("preco")
     expect(r.cabecalho.mapeamento["Estoque atual"]).toBe("estoque")
+    expect(r.cabecalho.mapeamento["Código NCM"]).toBe("ncm") // ⬅ agora mapeia
+    expect(r.cabecalho.mapeamento["Código CEST"]).toBe("cest") // ⬅ agora mapeia
 
-    // ── Ignorados (era o bug — todos viravam algum campo errado antes)
+    // ── Ignorados (8 — descrições fiscais, min/max, dimensões)
     expect(r.cabecalho.mapeamento["Estoque mínimo"]).toBeNull()
     expect(r.cabecalho.mapeamento["Estoque máximo"]).toBeNull()
-    expect(r.cabecalho.mapeamento["Código NCM"]).toBeNull()
     expect(r.cabecalho.mapeamento["Descrição NCM"]).toBeNull() // ⬅ viraria "nome" via contains
-    expect(r.cabecalho.mapeamento["Código CEST"]).toBeNull()
     expect(r.cabecalho.mapeamento["Descrição CEST"]).toBeNull()
     expect(r.cabecalho.mapeamento["Peso"]).toBeNull()
     expect(r.cabecalho.mapeamento["Largura"]).toBeNull()
@@ -87,16 +87,22 @@ describe("processarArquivoProdutos — layout Gestão Clique completo", () => {
     expect(massa.custo).toBe(44.15)
     expect(massa.preco).toBe(78.9)
     expect(massa.estoque).toBe(25) // Estoque atual — NÃO 5 (mín) nem 100 (máx)
+    expect(massa.ncm).toBe("39269090") // ⬅ NCM popula corretamente
+    expect(massa.cest).toBe("2810600")
 
     const caneta = porNome(r.validos, "Caneta Bic Azul")!
     expect(caneta.sku).toBe("ABC-99") // alfanumérico → SKU
     expect(caneta.barcode).toBe("")
     expect(caneta.estoque).toBe(180)
+    expect(caneta.ncm).toBe("96081000") // NCM presente, CEST vazio
+    expect(caneta.cest).toBe("")
 
     const refri = porNome(r.validos, "Refrigerante Cola 2L")!
     expect(refri.sku).toBe("")
     expect(refri.barcode).toBe("7891111111111")
     expect(refri.estoque).toBe(40)
+    expect(refri.ncm).toBe("") // sem NCM na linha
+    expect(refri.cest).toBe("")
   })
 
   it("'Codigo' 5+ dígitos sem coluna 'Codigo de barra' → vai para barcode", async () => {
@@ -247,5 +253,65 @@ describe("processarArquivoProdutos — dedupe SKU/barcode", () => {
     expect(r.validos).toHaveLength(1)
     expect(r.validos[0]!.sku).toBe("1234") // SKU curto fica em SKU
     expect(r.validos[0]!.barcode).toBe("7891234567890")
+  })
+})
+
+// ── NCM / CEST (Produto.metadata) ────────────────────────────
+
+describe("processarArquivoProdutos — NCM/CEST", () => {
+  it("Código NCM e Código CEST saem em ncm/cest no ProdutoNormalizado", async () => {
+    const csv = csvBuffer([
+      "Codigo;Produto;Valor Varejo;Código NCM;Código CEST",
+      "1;Produto Fiscal;10,00;39269090;2810600",
+    ])
+    const r = await processarArquivoProdutos(csv, "ncm-basico.csv")
+    expect(r.validos).toHaveLength(1)
+    expect(r.validos[0]!.ncm).toBe("39269090")
+    expect(r.validos[0]!.cest).toBe("2810600")
+  })
+
+  it("NCM com separadores 'XXXX.XX.XX' é sanitizado para 8 dígitos", async () => {
+    const csv = csvBuffer([
+      "Produto;Valor Varejo;NCM;CEST",
+      "Produto A;10,00;3926.90.90;28.106.00",
+      "Produto B;20,00;4202.12.20;",
+    ])
+    const r = await processarArquivoProdutos(csv, "ncm-formatado.csv")
+    expect(r.validos).toHaveLength(2)
+    const a = porNome(r.validos, "Produto A")!
+    expect(a.ncm).toBe("39269090")
+    expect(a.cest).toBe("2810600")
+    const b = porNome(r.validos, "Produto B")!
+    expect(b.ncm).toBe("42021220")
+    expect(b.cest).toBe("")
+  })
+
+  it("NCM/CEST NUNCA caem em SKU nem barcode", async () => {
+    const csv = csvBuffer([
+      "Codigo;Produto;Valor Varejo;Código NCM;Código CEST",
+      // Código vazio + NCM/CEST de 8 e 7 dígitos respectivamente.
+      ";Produto Sem Codigo;10,00;39269090;2810600",
+    ])
+    const r = await processarArquivoProdutos(csv, "ncm-isolado.csv")
+    expect(r.validos).toHaveLength(1)
+    const p = r.validos[0]!
+    // ⚠ Regra crítica: NCM tem 8 dígitos numéricos. Sem a stoplist/aliases
+    // corretos, o algoritmo de contains pegaria "Código NCM" como SKU e o
+    // NCM 39269090 (≥5 dígitos) ainda seria promovido para barcode.
+    expect(p.sku).toBe("")
+    expect(p.barcode).toBe("")
+    expect(p.ncm).toBe("39269090")
+    expect(p.cest).toBe("2810600")
+  })
+
+  it("Sem coluna NCM/CEST → ncm e cest ficam string vazia (não null/undefined)", async () => {
+    const csv = csvBuffer([
+      "Codigo;Produto;Valor Varejo",
+      "10;Produto Simples;5,00",
+    ])
+    const r = await processarArquivoProdutos(csv, "sem-ncm.csv")
+    expect(r.validos).toHaveLength(1)
+    expect(r.validos[0]!.ncm).toBe("")
+    expect(r.validos[0]!.cest).toBe("")
   })
 })

@@ -68,7 +68,12 @@ function isProdutoNormalizado(x: unknown): x is ProdutoNormalizado {
     typeof o.custo === "number" &&
     typeof o.preco === "number" &&
     typeof o.estoque === "number" &&
-    typeof o.categoria === "string"
+    typeof o.categoria === "string" &&
+    // ncm/cest aceitam string ou undefined para tolerar payloads de cliente
+    // antigos (versão pré-NCM do tipo ProdutoNormalizado). persist.ts trata
+    // ausência como "sem NCM/CEST" (não grava em metadata).
+    (typeof o.ncm === "string" || o.ncm === undefined) &&
+    (typeof o.cest === "string" || o.cest === undefined)
   )
 }
 

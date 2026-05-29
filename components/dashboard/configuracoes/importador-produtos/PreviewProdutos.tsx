@@ -25,6 +25,8 @@ const ROTULO_CAMPO: Record<CampoCanonico, string> = {
   preco: "Preço",
   estoque: "Estoque",
   categoria: "Categoria",
+  ncm: "NCM (fiscal)",
+  cest: "CEST (fiscal)",
 }
 
 export type PreviewProdutosProps = {
