@@ -227,6 +227,10 @@ export function ProductAIModal({
     custo: number;
     preco: number;
     garantia: number;
+    /** `Produto.metadata.ncm` (ex.: importador Gestão Clique) */
+    ncm?: string;
+    /** `Produto.metadata.cest` */
+    cest?: string;
   }>;
   productId?: string;
 }) {
@@ -253,11 +257,16 @@ export function ProductAIModal({
   const [marcaOpts, setMarcaOpts] = useState<string[]>([]);
   const [optsLoading, setOptsLoading] = useState(false);
 
+  const [ncmDisplay, setNcmDisplay] = useState(initial?.ncm ?? "");
+  const [cestDisplay, setCestDisplay] = useState(initial?.cest ?? "");
+
   // Reseta quando troca de produto em edição (modal reabrindo com outro id).
   useEffect(() => {
     setCategoria(initial?.categoria ?? "");
     setMarca(initial?.marca ?? "");
-  }, [productId, initial?.categoria, initial?.marca]);
+    setNcmDisplay(initial?.ncm ?? "");
+    setCestDisplay(initial?.cest ?? "");
+  }, [productId, initial?.categoria, initial?.marca, initial?.ncm, initial?.cest]);
 
   // Carrega dicionário (CategoriaCadastro/MarcaCadastro) + valores legados em uso ao abrir.
   useEffect(() => {
@@ -456,7 +465,24 @@ export function ProductAIModal({
                 <Field label="Margem"><Input readOnly defaultValue="" placeholder="Auto" className="bg-muted/40 text-muted-foreground cursor-default" /></Field>
               </div>
             </div>
-            <Field label="NCM"><Input placeholder="Fase fiscal futura" className="text-muted-foreground" /></Field>
+            <Field label="NCM">
+              <Input
+                readOnly
+                value={ncmDisplay}
+                placeholder={ncmDisplay ? undefined : "Fase fiscal futura"}
+                className={ncmDisplay ? "font-mono text-foreground" : "text-muted-foreground cursor-default"}
+                title={ncmDisplay ? "NCM importado ou persistido em metadata" : "Edição fiscal — em breve"}
+              />
+            </Field>
+            <Field label="CEST">
+              <Input
+                readOnly
+                value={cestDisplay}
+                placeholder={cestDisplay ? undefined : "—"}
+                className={cestDisplay ? "font-mono text-foreground" : "text-muted-foreground cursor-default"}
+                title={cestDisplay ? "CEST persistido em metadata" : "Não informado"}
+              />
+            </Field>
             <Field label="Tributação"><Select defaultValue=""><option value="">—</option><option>Simples</option><option>Lucro Presumido</option><option>Lucro Real</option></Select></Field>
             <Field label="Tags" span={2}><Input placeholder="Separadas por vírgula — Ex.: apple, tela, original" /></Field>
             <Field label="Descrição" span={2}>

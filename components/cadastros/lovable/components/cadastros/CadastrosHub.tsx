@@ -1334,6 +1334,14 @@ function ProdutosPanel({
                 custo: editing.custo,
                 preco: editing.preco,
                 garantia: editing.garantia,
+                ncm:
+                  editing.metadata?.ncm != null && String(editing.metadata.ncm).trim()
+                    ? String(editing.metadata.ncm).trim()
+                    : undefined,
+                cest:
+                  editing.metadata?.cest != null && String(editing.metadata.cest).trim()
+                    ? String(editing.metadata.cest).trim()
+                    : undefined,
               }
             : undefined
         }
