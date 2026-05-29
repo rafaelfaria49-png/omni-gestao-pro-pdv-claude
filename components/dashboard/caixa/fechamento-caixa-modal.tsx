@@ -224,9 +224,161 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   }
 
   const handleFecharCaixa = async () => {
-    // sid é mutável: pode ser atualizado pela criação retroativa abaixo
+    // ── Regra 4: validar unidade ativa ANTES de qualquer coisa ──────────────
+    // Sem unidade não há como persistir nem identificar a sessão no servidor.
+    if (!lojaAtivaId) {
+      console.error("[caixa/fechar] bloqueado: lojaAtivaId ausente")
+      toast({
+        variant: "destructive",
+        title: "Unidade não selecionada",
+        description: "Selecione a unidade ativa antes de fechar o caixa.",
+      })
+      return
+    }
+
+    const lojaId = lojaAtivaId
+    const terminalId = terminal?.id ?? null
+
+    // POST de fechamento (reutilizado na reconciliação). Devolve ok + status + erro.
+    const postFechar = async (
+      sessaoIdToClose: string,
+    ): Promise<{ ok: boolean; status: number; error?: string }> => {
+      try {
+        const res = await fetch("/api/ops/caixa/fechar", {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaId },
+          body: JSON.stringify({
+            sessaoId: sessaoIdToClose,
+            saldoFinal: saldoEsperado,
+            saldoContado: valorContado !== "" ? valorContadoNum : undefined,
+            observacao: observacao.trim(),
+            payload: {
+              ledger,
+              saldoInicial: caixa.saldoInicial,
+              totalEntradas: caixa.totalEntradas,
+              totalSaidas: caixa.totalSaidas,
+              dataAberturaReal: caixa.dataAbertura?.toISOString() ?? null,
+              // Consolidação ERP (por origem + por pagamento + totais) para o
+              // comprovante de fechamento e futura impressão térmica. JSONB — sem schema novo.
+              resumoFechamento: resumo,
+              saldoDinheiroEsperado,
+              operadores: operadoresSessao,
+              terminalId,
+              terminalLabel,
+            },
+          }),
+        })
+        if (res.ok) return { ok: true, status: res.status }
+        const errData = (await res.json().catch(() => null)) as { error?: string } | null
+        return { ok: false, status: res.status, error: errData?.error }
+      } catch (err: unknown) {
+        return { ok: false, status: 0, error: err instanceof Error ? err.message : "Falha de rede" }
+      }
+    }
+
+    // Reconciliação (Regra 5): busca a sessão ABERTA atual da loja no servidor.
+    const buscarSessaoAberta = async (): Promise<string | null> => {
+      try {
+        const res = await fetch("/api/ops/caixa/sessoes?status=ABERTA&take=1", {
+          credentials: "include",
+          cache: "no-store",
+          headers: { "x-assistec-loja-id": lojaId },
+        })
+        if (!res.ok) return null
+        const data = (await res.json()) as { sessoes?: Array<{ id: string }> }
+        return data.sessoes?.[0]?.id ?? null
+      } catch {
+        return null
+      }
+    }
+
+    setSalvando(true)
+    let persisted = false
+    let lastError: { status: number; error?: string } | null = null
     let sid = sessaoId
 
+    try {
+      // Regra 5 (passo 1): sem sessaoId local → reconcilia buscando a sessão ABERTA
+      // da loja. Se não houver nenhuma, tenta abertura retroativa idempotente (o guard
+      // do /abrir devolve a sessão existente ou registra uma recuperável).
+      if (!sid) {
+        console.warn("[caixa/fechar] sessaoId ausente — reconciliando", { storeId: lojaId, terminalId })
+        sid = await buscarSessaoAberta()
+        if (!sid) {
+          try {
+            const abrirRes = await fetch("/api/ops/caixa/abrir", {
+              method: "POST",
+              credentials: "include",
+              cache: "no-store",
+              headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaId },
+              body: JSON.stringify({
+                saldoInicial: caixa.saldoInicial,
+                observacao: "Sessão retroativa — abertura não registrada no servidor",
+                ...(terminalId ? { terminalId } : {}),
+              }),
+            })
+            if (abrirRes.ok) {
+              const abrirData = (await abrirRes.json()) as { sessaoId?: string }
+              sid = abrirData.sessaoId ?? null
+            }
+          } catch (err: unknown) {
+            console.error("[caixa/fechar] abertura retroativa falhou:", err)
+          }
+        }
+      }
+
+      if (sid) {
+        console.info("[caixa/fechar] fechando", { storeId: lojaId, sessaoId: sid, terminalId })
+        let r = await postFechar(sid)
+        console.info("[caixa/fechar] resposta", {
+          storeId: lojaId, sessaoId: sid, terminalId, status: r.status, ok: r.ok, error: r.error,
+        })
+
+        // Regra 5 (passo 2): sessaoId inválido (404) → reconcilia e tenta UMA vez mais.
+        if (!r.ok && r.status === 404) {
+          const reconciliado = await buscarSessaoAberta()
+          if (reconciliado && reconciliado !== sid) {
+            console.warn("[caixa/fechar] sessaoId inválido — reconciliado", {
+              storeId: lojaId, antigo: sid, novo: reconciliado, terminalId,
+            })
+            sid = reconciliado
+            r = await postFechar(sid)
+            console.info("[caixa/fechar] resposta (retry)", {
+              storeId: lojaId, sessaoId: sid, terminalId, status: r.status, ok: r.ok, error: r.error,
+            })
+          }
+        }
+
+        if (r.ok) persisted = true
+        else lastError = { status: r.status, error: r.error }
+      } else {
+        console.error("[caixa/fechar] nenhuma sessão ABERTA encontrada", { storeId: lojaId, terminalId })
+        lastError = { status: 0, error: "Nenhuma sessão de caixa aberta encontrada no servidor." }
+      }
+    } finally {
+      setSalvando(false)
+    }
+
+    // ── Regras 1, 2, 3: sem confirmação do servidor → NÃO fecha localmente ──
+    // Mantém o caixa aberto, a sessão e os inputs intactos para nova tentativa.
+    if (!persisted) {
+      const detalhe =
+        lastError?.status === 404
+          ? "A sessão não consta como aberta no servidor. Atualize a página e tente novamente."
+          : lastError?.error
+            ? `Erro do servidor: ${lastError.error}`
+            : "Não foi possível confirmar o fechamento no servidor. O caixa continua ABERTO."
+      toast({
+        variant: "destructive",
+        title: "Fechamento não concluído",
+        description: detalhe,
+      })
+      return
+    }
+
+    // ── Sucesso confirmado pelo servidor: agora sim, encerra localmente ─────
     if (valorContado !== "" && temDiferenca) {
       appendAuditLog({
         action: "quebra_caixa",
@@ -242,85 +394,11 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       })
     }
 
-    setSalvando(true)
-    let serverPersisted = false
-
-    try {
-      // Se a abertura não criou sessão no servidor (ex.: estava offline),
-      // tenta criar retroativamente para que o fechamento tenha um registro recuperável.
-      if (!sid && lojaAtivaId) {
-        try {
-          const abrirRes = await fetch("/api/ops/caixa/abrir", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
-            body: JSON.stringify({
-              saldoInicial: caixa.saldoInicial,
-              observacao: "Sessão retroativa — abertura não foi registrada no servidor",
-            }),
-          })
-          if (abrirRes.ok) {
-            const abrirData = (await abrirRes.json()) as { sessaoId?: string }
-            if (abrirData.sessaoId) sid = abrirData.sessaoId
-          }
-        } catch (err: unknown) {
-          console.error("[caixa/fechar] criação retroativa falhou:", err)
-        }
-      }
-
-      if (sid && lojaAtivaId) {
-        const res = await fetch("/api/ops/caixa/fechar", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json", "x-assistec-loja-id": lojaAtivaId },
-          body: JSON.stringify({
-            sessaoId: sid,
-            saldoFinal: saldoEsperado,
-            saldoContado: valorContado !== "" ? valorContadoNum : undefined,
-            observacao: observacao.trim(),
-            payload: {
-              ledger,
-              saldoInicial: caixa.saldoInicial,
-              totalEntradas: caixa.totalEntradas,
-              totalSaidas: caixa.totalSaidas,
-              dataAberturaReal: caixa.dataAbertura?.toISOString() ?? null,
-              // Consolidação ERP (por origem + por pagamento + totais) para o
-              // comprovante de fechamento e futura impressão térmica. JSONB — sem schema novo.
-              resumoFechamento: resumo,
-              saldoDinheiroEsperado,
-              operadores: operadoresSessao,
-              terminalId: terminal?.id ?? null,
-              terminalLabel,
-            },
-          }),
-        })
-        if (res.ok) {
-          serverPersisted = true
-        } else {
-          const errData = await res.json().catch(() => null) as { error?: string } | null
-          console.error("[caixa/fechar] HTTP", res.status, errData?.error)
-        }
-      }
-    } catch (err: unknown) {
-      console.error("[caixa/fechar] rede:", err)
-    } finally {
-      setSalvando(false)
-    }
-
     fecharCaixa()
     setValorContado("")
     setObservacao("")
     onClose()
-
-    if (serverPersisted || !lojaAtivaId) {
-      toast({ title: "Caixa fechado", description: "Sessão encerrada e registrada com sucesso." })
-    } else {
-      toast({
-        variant: "destructive",
-        title: "Caixa fechado localmente",
-        description: "Sessão encerrada, mas não confirmada no servidor. Verifique a conexão.",
-      })
-    }
+    toast({ title: "Caixa fechado", description: "Sessão encerrada e registrada no servidor." })
   }
 
   return (
