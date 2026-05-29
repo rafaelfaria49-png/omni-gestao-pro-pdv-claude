@@ -33,7 +33,7 @@ export function Sidebar() {
 
   const rowClasses = (active: boolean) =>
     [
-      "group relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[12px] border transition-smooth",
+      "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] border transition-smooth",
       active
         ? "bg-primary/8 text-primary font-semibold border-primary/15 shadow-soft"
         : "text-muted-foreground hover:text-foreground hover:bg-muted/40 border-transparent",
@@ -91,8 +91,8 @@ export function Sidebar() {
   const sectionLabel = (label: string, first = false) => (
     <div
       className={[
-        "px-2 pb-0.5 text-[9.5px] uppercase tracking-[0.14em] font-semibold text-muted-foreground/70",
-        first ? "" : "pt-2",
+        "px-2 pb-1.5 text-[10px] uppercase tracking-[0.14em] font-bold text-muted-foreground/80",
+        first ? "pt-1" : "pt-4",
       ].join(" ")}
     >
       {label}
@@ -127,20 +127,35 @@ export function Sidebar() {
         </button>
       </div>
 
-      <nav className="flex-1 min-h-0 px-2.5 py-1.5 space-y-0.5">
+      <nav className="flex-1 min-h-0 px-2.5 py-1.5 space-y-1 overflow-y-auto">
         {sectionLabel("Workspace", true)}
-        <div className="space-y-0.5">{workspaceFiltered.map(renderItem)}</div>
+        <div className="space-y-1">{workspaceFiltered.map(renderItem)}</div>
 
         {sectionLabel("Hubs")}
-        <div className="space-y-0.5">{hubsFiltered.map(renderItem)}</div>
+        <div className="space-y-1">{hubsFiltered.map(renderItem)}</div>
 
         {adminFiltered.length > 0 && (
           <>
             {sectionLabel("Administração")}
-            <div className="space-y-0.5">{adminFiltered.map(renderItem)}</div>
+            <div className="space-y-1">{adminFiltered.map(renderItem)}</div>
           </>
         )}
       </nav>
+
+      <div className="mt-auto border-t border-border/60 p-3 bg-muted/20 shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[10px] font-medium text-muted-foreground truncate">
+              Servidor Conectado
+            </span>
+          </div>
+          <span className="text-[9px] font-mono text-muted-foreground/50">v1.2.4</span>
+        </div>
+      </div>
     </aside>
   );
 }

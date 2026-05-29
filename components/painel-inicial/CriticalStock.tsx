@@ -77,8 +77,8 @@ export function CriticalStock({
   const rows = showDemo ? DEMO_ITEMS : liveItems;
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden h-full flex flex-col">
-      <div className="px-5 py-3.5 flex items-start justify-between gap-3 border-b border-border">
+    <div className="rounded-xl border border-border bg-card overflow-hidden h-full flex flex-col">
+      <div className="px-4 py-2.5 flex items-start justify-between gap-3 border-b border-border">
         <div className="flex items-start gap-2 min-w-0">
           <AlertTriangle className="h-3.5 w-3.5 text-warning shrink-0 mt-0.5" />
           <div className="min-w-0">
@@ -129,7 +129,7 @@ export function CriticalStock({
           {rows.map((it) => {
             const sev = stockSeverity(it.stock);
             return (
-              <div key={it.id} className="px-5 py-3">
+              <div key={it.id} className="px-4 py-2">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-[13px] truncate">{it.name}</span>
@@ -155,7 +155,7 @@ export function CriticalStock({
         </div>
       )}
 
-      <div className="px-5 py-3 border-t border-border mt-auto">
+      <div className="px-4 py-2.5 border-t border-border mt-auto">
         <Button variant="outline" size="sm" className="w-full h-8 text-xs" asChild>
           <Link href="/dashboard/estoque" className="inline-flex items-center justify-center gap-1">
             Ver estoque

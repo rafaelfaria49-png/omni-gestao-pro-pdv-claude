@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { LayoutDashboard, RefreshCw } from "lucide-react";
 import { QuickActions } from "@/components/painel-inicial/QuickActions";
@@ -13,6 +13,9 @@ import { EmpresaSetupCard } from "@/components/painel-inicial/EmpresaSetupCard";
 import { ShoppingCart, Wrench, AlertTriangle, Banknote } from "lucide-react";
 import { useDashboardElite } from "@/hooks/use-dashboard-elite";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import { configuracoesSectionHref } from "@/components/configuracoes-v3/features/settings/section-routing";
 
 const fmtBrl = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
@@ -21,6 +24,7 @@ const fmtInt = (n: number) => new Intl.NumberFormat("pt-BR").format(n);
 
 export default function DashboardInicioPage() {
   const { data, loading, error, refresh, hasStore } = useDashboardElite();
+  const { storesLoaded, cadastroBasicoIncompleto, lojaAtivaRaw } = useLojaAtiva();
   const live = Boolean(data && !error && hasStore);
 
   const kpiValue = (n: number | undefined, asMoney: boolean) => {
@@ -30,18 +34,39 @@ export default function DashboardInicioPage() {
     return asMoney ? fmtBrl(n) : fmtInt(n);
   };
 
+  const hrefEmpresa = configuracoesSectionHref("geral");
+  const nomeEmpresa = lojaAtivaRaw?.nomeFantasia?.trim() || "Unidade ativa";
+
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-5">
+    <div className="mx-auto w-full max-w-[1600px] space-y-3.5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[12px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Painel Inicial
-          </p>
-          <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-foreground">
-            Vis{"\u00e3"}o geral enterprise
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground/80">
+              Painel Inicial
+            </p>
+            {live && (
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-emerald-500">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                Ao vivo
+              </span>
+            )}
+          </div>
+          <h1 className="mt-1 font-display text-2xl sm:text-3xl font-semibold tracking-tight text-foreground flex flex-wrap items-center gap-2.5">
+            <span>Vis{"\u00e3"}o geral enterprise</span>
+            {storesLoaded && lojaAtivaRaw && !cadastroBasicoIncompleto && (
+              <Link
+                href={hrefEmpresa}
+                title="Configurações da empresa"
+                className="inline-flex items-center gap-1 rounded-md border border-border/80 bg-card px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground hover:border-foreground/20 transition-all shadow-sm"
+              >
+                <span>{nomeEmpresa}</span>
+                <span className="text-[9px] text-muted-foreground/50 font-normal">· Gerenciar</span>
+              </Link>
+            )}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Resumo operacional da unidade ativa — veja o aviso abaixo sobre dados reais e demonstrativos.
+          <p className="mt-1 text-[13px] text-muted-foreground leading-normal">
+            Resumo operacional integrado da sua unidade ativa.
           </p>
         </div>
         <div className="hidden items-center gap-2 sm:flex">
@@ -156,7 +181,7 @@ export default function DashboardInicioPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <RevenueChart
             faturamento7d={data?.faturamento7d}
@@ -182,7 +207,7 @@ export default function DashboardInicioPage() {
         error={error}
       />
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
         <CriticalStock
           estoqueCritico={data?.estoqueCritico}
           loading={loading && hasStore}

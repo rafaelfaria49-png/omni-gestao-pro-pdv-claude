@@ -63,8 +63,8 @@ export function CategoryChart({
   const failedLive = useLiveData && !loading && hasStore && Boolean(error);
 
   return (
-    <div className="rounded-lg border border-border bg-card h-full flex flex-col">
-      <div className="px-5 py-3.5 border-b border-border">
+    <div className="rounded-xl border border-border bg-card h-full flex flex-col">
+      <div className="px-4 py-2.5 border-b border-border">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-display font-semibold text-[14px] tracking-tight">Vendas por categoria</h3>
           {useLiveData && !loading && chartSlices?.length ? (
@@ -101,8 +101,8 @@ export function CategoryChart({
           </p>
         </div>
       ) : chartSlices ? (
-        <div className="flex-1 grid grid-cols-2 gap-2 p-4 items-center min-h-[180px]">
-          <div className="h-36 relative">
+        <div className="flex-1 grid grid-cols-2 gap-2 p-3 items-center min-h-[160px]">
+          <div className="h-32 relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie

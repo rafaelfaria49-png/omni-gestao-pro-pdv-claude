@@ -105,16 +105,16 @@ export function QuickActions() {
             key={a.label}
             type="button"
             onClick={() => handleAction(a.label)}
-            className="group rounded-lg border border-border bg-card hover:bg-panel hover:border-foreground/20 transition-all px-3 py-2.5 text-left flex items-center gap-2.5"
+            className="group rounded-lg border border-border bg-card hover:bg-panel hover:border-foreground/20 transition-all px-3 py-1.5 text-left flex items-center gap-2.5"
           >
-            <div className="h-8 w-8 shrink-0 rounded-md bg-muted/60 ring-1 ring-border/40 grid place-items-center group-hover:bg-primary/15 group-hover:ring-primary/30 group-hover:text-primary transition-colors">
+            <div className="h-7 w-7 shrink-0 rounded-md bg-muted/60 ring-1 ring-border/40 grid place-items-center group-hover:bg-primary/15 group-hover:ring-primary/30 group-hover:text-primary transition-colors">
               <Icon className="h-3.5 w-3.5" strokeWidth={2} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[12.5px] font-medium tracking-tight truncate">{a.label}</div>
-              <div className="text-[10.5px] text-muted-foreground truncate">{a.hint}</div>
+              <div className="text-[12px] font-semibold tracking-tight text-foreground truncate">{a.label}</div>
+              <div className="text-[10px] text-muted-foreground truncate">{a.hint}</div>
             </div>
-            <kbd className="hidden xl:inline-flex font-mono text-[9.5px] text-muted-foreground bg-background/60 border border-border rounded px-1 py-0.5">
+            <kbd className="hidden xl:inline-flex font-mono text-[9px] text-muted-foreground/60 bg-background/60 border border-border/80 rounded px-1">
               {a.shortcut}
             </kbd>
           </button>

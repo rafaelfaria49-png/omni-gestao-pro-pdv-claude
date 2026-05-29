@@ -9,16 +9,15 @@ export function DashboardDemoNotice() {
   return (
     <div
       role="status"
-      className="flex items-start gap-3 rounded-lg border border-border border-l-4 border-l-primary bg-card px-4 py-3 text-sm shadow-soft transition-smooth hover:shadow-card"
+      className="flex items-center gap-2 rounded-lg border border-border/80 bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground"
     >
-      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary/10 text-primary">
-        <Activity className="h-3.5 w-3.5" />
-      </div>
-      <div className="leading-relaxed text-muted-foreground text-xs md:text-sm">
-        <span className="font-semibold text-foreground">Painel ao vivo.</span> Com a unidade selecionada, os
-        indicadores, gráficos, atividades, estoque e insights operacionais abaixo utilizam dados reais da sua
-        operação de forma integrada e segura.
-      </div>
+      <span className="relative flex h-2 w-2 shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+      </span>
+      <span>
+        <strong className="text-foreground font-semibold">Painel ao vivo:</strong> Os indicadores, gráficos, atividades, estoque e insights abaixo utilizam dados reais integrados da sua unidade.
+      </span>
     </div>
   );
 }

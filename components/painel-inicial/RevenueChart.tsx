@@ -85,8 +85,8 @@ export function RevenueChart({
           : "—";
 
   return (
-    <div className="rounded-lg border border-border bg-card">
-      <div className="flex items-start justify-between p-5 pb-3">
+    <div className="rounded-xl border border-border bg-card">
+      <div className="flex items-start justify-between p-4 pb-2">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-display font-semibold text-[14px] tracking-tight">Faturamento</h3>
@@ -142,7 +142,7 @@ export function RevenueChart({
         </div>
       </div>
 
-      <div className="h-60 px-2 pb-3">
+      <div className="h-[200px] sm:h-[220px] lg:h-[250px] px-2 pb-2.5">
         {loading && useLiveData ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Carregando faturamento…</div>
         ) : (

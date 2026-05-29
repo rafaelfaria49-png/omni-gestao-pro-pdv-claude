@@ -57,29 +57,36 @@ export function KpiCard({
   return (
     <div
       className={[
-        "rounded-lg border border-border bg-card p-4 transition-colors hover:border-foreground/20",
+        "rounded-xl border border-border bg-card p-3 transition-colors hover:border-foreground/20 hover:shadow-soft",
         loading ? "animate-pulse" : "",
       ].join(" ")}
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <div className={`h-6 w-6 rounded-md grid place-items-center ${accentBg[accent]}`}>
-            <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+          <div className={`h-5 w-5 rounded-md grid place-items-center ${accentBg[accent]}`}>
+            <Icon className="h-3 w-3" strokeWidth={2} />
           </div>
-          <span className="text-[12px] font-medium text-muted-foreground truncate">
+          <span className="text-[11.5px] font-medium text-muted-foreground truncate">
             {label}
           </span>
         </div>
         {loading ? (
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">…</span>
+          <span className="text-[9.5px] font-medium uppercase tracking-wide text-muted-foreground">…</span>
         ) : hideTrend ? (
-          <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            {statusLabel ?? "Ilustrativo"}
-          </span>
+          statusLabel === "Ao vivo" ? (
+            <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-emerald-500">
+              <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse"></span>
+              {statusLabel}
+            </span>
+          ) : (
+            <span className="text-[9.5px] font-medium uppercase tracking-wide text-muted-foreground">
+              {statusLabel ?? "Ilustrativo"}
+            </span>
+          )
         ) : (
           <span
             className={[
-              "inline-flex items-center gap-0.5 text-[11px] font-semibold tabular-nums",
+              "inline-flex items-center gap-0.5 text-[10.5px] font-bold tabular-nums",
               positive ? "text-success" : "text-destructive",
             ].join(" ")}
           >
@@ -94,17 +101,17 @@ export function KpiCard({
         )}
       </div>
 
-      <div className="mt-3 flex items-end justify-between gap-3">
+      <div className="mt-1.5 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-2xl font-display font-semibold tracking-tight tabular-nums">
+          <div className="text-2xl font-display font-bold tracking-tight text-foreground tabular-nums leading-none">
             {value}
           </div>
           {hint && (
-            <div className="mt-0.5 text-[11px] text-muted-foreground truncate">{hint}</div>
+            <div className="mt-0.5 text-[10px] text-muted-foreground truncate">{hint}</div>
           )}
         </div>
         {!hideSpark ? (
-          <div className="h-10 w-20 shrink-0 -mb-1">
+          <div className="h-8 w-20 shrink-0 -mb-0.5">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
                 <defs>

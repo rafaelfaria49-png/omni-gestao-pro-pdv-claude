@@ -130,8 +130,8 @@ export function RecentActivityTable({
   const failedLive = useLiveData && !loading && hasStore && Boolean(error);
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="px-5 py-3.5 flex items-center justify-between border-b border-border gap-3">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
+      <div className="px-4 py-2.5 flex items-center justify-between border-b border-border gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-display font-semibold text-[14px] tracking-tight">Atividades Recentes</h3>
@@ -185,7 +185,7 @@ export function RecentActivityTable({
               return (
                 <div
                   key={r.id}
-                  className="px-5 py-3 flex items-center gap-3 transition-colors"
+                  className="px-4 py-2 flex items-center gap-3 transition-colors"
                   aria-disabled
                 >
                   <div
@@ -271,7 +271,7 @@ export function RecentActivityTable({
                 <Link
                   key={`${m.kind}-${m.id}`}
                   href={href}
-                  className="px-5 py-3 flex items-center gap-3 hover:bg-muted/40 transition-colors"
+                  className="px-4 py-2 flex items-center gap-3 hover:bg-muted/40 transition-colors"
                   title={`Abrir ${m.kind === "venda" ? "histórico de vendas" : "Operações"}`}
                 >
                   {content}
@@ -281,7 +281,7 @@ export function RecentActivityTable({
             return (
               <div
                 key={`${m.kind}-${m.id}`}
-                className="px-5 py-3 flex items-center gap-3 transition-colors"
+                className="px-4 py-2 flex items-center gap-3 transition-colors"
               >
                 {content}
               </div>
