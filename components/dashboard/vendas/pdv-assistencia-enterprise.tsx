@@ -89,7 +89,7 @@ import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
 import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
-import type { PdvReceiptInput } from "@/lib/escpos"
+import { buildPagamentosResumo, type PdvReceiptInput } from "@/lib/escpos"
 import { PdvPostSaleDialog } from "./pdv-post-sale-dialog"
 import { VendaEsperaModal } from "./venda-espera-modal"
 import {
@@ -2028,6 +2028,17 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       cnpj: _cnpj,
       enderecoLinha: getEnderecoDocumentos?.() ?? "",
       receiptFooter: _footer,
+      operador: cashierId,
+      clienteNome: customerName.trim() || undefined,
+      clienteCpf: selectedClienteDoc ?? undefined,
+      pagamentos: buildPagamentosResumo({
+        dinheiro: payments.dinheiro,
+        pix: payments.pix,
+        cartaoDebito: payments.cartaoDebito,
+        cartaoCredito: payments.cartaoCredito,
+        aPrazo: payments.aPrazo,
+        creditoVale: payments.creditoVale,
+      }),
       itens: cart.map((l) => ({ name: l.title, quantity: l.qty, unitPrice: l.price, lineTotal: l.price * l.qty })),
       subtotal,
       taxes: impostoEstimado,
@@ -2072,6 +2083,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       toast({ title: "Falha ao finalizar", description: result.reason, variant: "destructive" })
       return
     }
+    _printInput.numeroVenda = result.saleId
 
     // Venda real concluída — limpa carrinho e persistência.
     paymentDiscountSnapshotRef.current = null

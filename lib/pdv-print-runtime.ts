@@ -106,15 +106,39 @@ export async function printPdvSaleReceipt(params: {
   )
 
   const br = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+  const i = params.input
   const itensHtml =
     params.config.comprovanteModo === "simplificado"
-      ? `<p style="text-align:center;font-size:11px">${params.input.itens.length} item(ns)</p>`
-      : params.input.itens
+      ? `<p style="text-align:center;font-size:11px">${i.itens.length} item(ns)</p>`
+      : i.itens
           .map(
-            (i) =>
-              `<p>${escapeHtml(String(i.quantity))}x ${escapeHtml(i.name)} — ${br.format(i.lineTotal)}</p>`,
+            (it) =>
+              `<p>${escapeHtml(String(it.quantity))}x ${escapeHtml(it.name)} — ${br.format(it.lineTotal)}</p>`,
           )
           .join("")
+
+  const infoRow = (k: string, v: string) =>
+    `<div style="display:flex;justify-content:space-between;gap:8px"><span>${escapeHtml(k)}</span><span style="text-align:right">${escapeHtml(v)}</span></div>`
+  const infoHtml = [
+    i.numeroVenda?.trim() ? infoRow("Venda:", i.numeroVenda.trim()) : "",
+    infoRow("Data:", i.dataHora),
+    i.operador?.trim() ? infoRow("Operador:", i.operador.trim()) : "",
+    i.clienteNome?.trim() ? infoRow("Cliente:", i.clienteNome.trim()) : "",
+    i.clienteCpf?.trim() ? infoRow("CPF:", i.clienteCpf.trim()) : "",
+  ].join("")
+
+  const pagamentos = (i.pagamentos ?? []).filter((p) => Number.isFinite(p.valor) && p.valor > 0.005)
+  const pagamentosHtml =
+    pagamentos.length > 0
+      ? `<div style="border-top:1px dashed #000;margin:6px 0"></div>
+      <p style="font-size:10px;font-weight:600;margin:0 0 2px">PAGAMENTO</p>
+      ${pagamentos
+        .map(
+          (p) =>
+            `<div style="display:flex;justify-content:space-between"><span>${escapeHtml(p.label)}</span><span>${br.format(p.valor)}</span></div>`,
+        )
+        .join("")}`
+      : ""
 
   return printWithFallback(bytes, {
     config: params.config,
@@ -123,18 +147,20 @@ export async function printPdvSaleReceipt(params: {
     filename: "recibo-pdv.bin",
     htmlTitle: "Recibo PDV",
     buildHtmlBody: () => `
-      <div style="text-align:center;font-weight:700;margin-bottom:6px">${escapeHtml(params.input.nomeFantasia)}</div>
-      <div style="text-align:center;font-size:11px;margin-bottom:4px">CNPJ ${escapeHtml(params.input.cnpj)}</div>
-      ${params.input.enderecoLinha?.trim() ? `<div style="font-size:10px;margin-bottom:8px">${escapeHtml(params.input.enderecoLinha.trim())}</div>` : ""}
+      <div style="text-align:center;font-weight:700;margin-bottom:6px">${escapeHtml(i.nomeFantasia)}</div>
+      <div style="text-align:center;font-size:11px;margin-bottom:4px">CNPJ ${escapeHtml(i.cnpj)}</div>
+      ${i.enderecoLinha?.trim() ? `<div style="font-size:10px;margin-bottom:8px">${escapeHtml(i.enderecoLinha.trim())}</div>` : ""}
+      <div style="border-top:1px dashed #000;margin:6px 0"></div>
+      <div style="font-size:11px">${infoHtml}</div>
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
       ${itensHtml}
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
-      <p>Subtotal: ${br.format(params.input.subtotal)}</p>
-      ${params.input.taxes > 0 ? `<p>Imposto estimado: ${br.format(params.input.taxes)}</p>` : ""}
-      ${params.input.discount > 0 ? `<p>Desconto: ${br.format(params.input.discount)}</p>` : ""}
-      <p style="font-weight:700">Total: ${br.format(params.input.total)}</p>
+      <p>Subtotal: ${br.format(i.subtotal)}</p>
+      ${i.taxes > 0 ? `<p>Imposto estimado: ${br.format(i.taxes)}</p>` : ""}
+      ${i.discount > 0 ? `<p>Desconto: ${br.format(i.discount)}</p>` : ""}
+      <p style="font-weight:700">Total: ${br.format(i.total)}</p>
+      ${pagamentosHtml}
       ${footer ? `<div style="font-size:10px;margin-top:8px;white-space:pre-wrap">${escapeHtml(footer)}</div>` : ""}
-      <p style="font-size:10px;margin-top:8px">${escapeHtml(params.input.dataHora)}</p>
     `,
   })
 }

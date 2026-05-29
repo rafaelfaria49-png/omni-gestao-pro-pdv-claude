@@ -83,18 +83,61 @@ function truncateField(s: string, max: number): string {
 
 const SEP = "--------------------------------"
 
+export type PdvReceiptPagamento = { label: string; valor: number }
+
 export type PdvReceiptInput = {
   nomeFantasia: string
   cnpj: string
   enderecoLinha?: string
   /** Rodapé por unidade (ex.: StoreSettings.receiptFooter). */
   receiptFooter?: string
+  /** Identificador da venda (ex.: VDA-2026-0001). Opcional — só impresso quando presente. */
+  numeroVenda?: string
+  /** Operador/caixa que registrou a venda. */
+  operador?: string
+  /** Nome do cliente, quando identificado. */
+  clienteNome?: string
+  /** CPF/CNPJ do cliente, quando informado. */
+  clienteCpf?: string
+  /** Formas de pagamento agregadas (label + valor). */
+  pagamentos?: PdvReceiptPagamento[]
   itens: Array<{ name: string; quantity: number; unitPrice: number; lineTotal: number }>
   subtotal: number
   taxes: number
   discount: number
   total: number
   dataHora: string
+}
+
+/** Breakdown de formas de pagamento do PDV (chaves do paymentBreakdown). */
+export type PdvPagamentoBreakdown = {
+  dinheiro?: number
+  pix?: number
+  cartaoDebito?: number
+  cartaoCredito?: number
+  carne?: number
+  aPrazo?: number
+  creditoVale?: number
+}
+
+const PDV_PAGAMENTO_LABELS: Array<[keyof PdvPagamentoBreakdown, string]> = [
+  ["dinheiro", "Dinheiro"],
+  ["pix", "PIX"],
+  ["cartaoDebito", "Cartão Débito"],
+  ["cartaoCredito", "Cartão Crédito"],
+  ["carne", "Carnê"],
+  ["aPrazo", "A Prazo"],
+  ["creditoVale", "Crédito/Vale"],
+]
+
+/** Converte o breakdown numérico do PDV em `{ label, valor }[]`, omitindo formas zeradas. */
+export function buildPagamentosResumo(b: PdvPagamentoBreakdown): PdvReceiptPagamento[] {
+  const out: PdvReceiptPagamento[] = []
+  for (const [key, label] of PDV_PAGAMENTO_LABELS) {
+    const v = Number(b[key] ?? 0)
+    if (Number.isFinite(v) && v > 0.005) out.push({ label, valor: Math.round(v * 100) / 100 })
+  }
+  return out
 }
 
 export function buildPdvReceiptEscPos(
@@ -116,9 +159,24 @@ export function buildPdvReceiptEscPos(
   if (input.enderecoLinha?.trim()) {
     parts.push(line(truncateField(input.enderecoLinha.trim(), maxChars)))
   }
-  parts.push(line(truncateField(input.dataHora, maxChars)))
   parts.push(line(sep))
   parts.push(escposAlign(0))
+
+  // Bloco de identificação — campos opcionais; nunca imprime linha vazia.
+  if (input.numeroVenda?.trim()) {
+    parts.push(line(truncateField(`Venda: ${input.numeroVenda.trim()}`, maxChars)))
+  }
+  parts.push(line(truncateField(`Data: ${input.dataHora}`, maxChars)))
+  if (input.operador?.trim()) {
+    parts.push(line(truncateField(`Operador: ${input.operador.trim()}`, maxChars)))
+  }
+  if (input.clienteNome?.trim()) {
+    parts.push(line(truncateField(`Cliente: ${input.clienteNome.trim()}`, maxChars)))
+  }
+  if (input.clienteCpf?.trim()) {
+    parts.push(line(truncateField(`CPF: ${input.clienteCpf.trim()}`, maxChars)))
+  }
+  parts.push(line(sep))
 
   if (simplificado) {
     parts.push(line(`${input.itens.length} item(ns)`))
@@ -137,6 +195,14 @@ export function buildPdvReceiptEscPos(
   parts.push(escposBold(true))
   parts.push(line(`Valor final pago: ${br.format(input.total)}`))
   parts.push(escposBold(false))
+  const pagamentos = (input.pagamentos ?? []).filter((p) => Number.isFinite(p.valor) && p.valor > 0.005)
+  if (pagamentos.length > 0) {
+    parts.push(line(sep))
+    parts.push(line("Pagamento:"))
+    for (const pg of pagamentos) {
+      parts.push(line(truncateField(`  ${pg.label}: ${br.format(pg.valor)}`, maxChars)))
+    }
+  }
   parts.push(line(""))
   const footer = (input.receiptFooter || "").trim()
   if (footer) {

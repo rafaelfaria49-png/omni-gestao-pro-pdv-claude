@@ -58,7 +58,7 @@ import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { VendaEsperaModal } from "./venda-espera-modal"
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
 import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
-import type { PdvReceiptInput } from "@/lib/escpos"
+import { buildPagamentosResumo, type PdvReceiptInput } from "@/lib/escpos"
 import { PdvPostSaleDialog } from "./pdv-post-sale-dialog"
 import {
   getHeldSales,
@@ -1111,6 +1111,7 @@ export function PdvSupermercado({
             cnpj: _cnpj,
             enderecoLinha: getEnderecoDocumentos?.() ?? "",
             receiptFooter: _footer,
+            operador: meta?.cashierId ?? cashierId,
             itens: cart.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.price, lineTotal: i.price * i.quantity })),
             subtotal,
             taxes: impostoEstimado,
@@ -1151,6 +1152,9 @@ export function PdvSupermercado({
             else if (p.type === "a_prazo") { aPrazo += p.value; if (p.aPrazoConfig) aPrazoConfig = p.aPrazoConfig }
             else if (p.type === "credito_vale") creditoVale += p.value
           }
+          _printInput.pagamentos = buildPagamentosResumo({
+            dinheiro, pix, cartaoDebito, cartaoCredito, carne, aPrazo, creditoVale,
+          })
 
           const result = finalizeSaleTransaction({
             lines: saleLines,
@@ -1178,6 +1182,7 @@ export function PdvSupermercado({
             toast({ title: "Falha transacional", description: result.reason })
             return
           }
+          _printInput.numeroVenda = result.saleId
 
           setCart([])
           setDiscountReais(0)

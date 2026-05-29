@@ -67,7 +67,7 @@ function formatBrDocDisplay(digitsRaw: string): string {
 }
 import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
-import type { PdvReceiptInput } from "@/lib/escpos"
+import { buildPagamentosResumo, type PdvReceiptInput } from "@/lib/escpos"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
@@ -909,6 +909,9 @@ export function PdvClassic({
         cnpj: p.cnpj,
         enderecoLinha: getEnderecoDocumentos(),
         receiptFooter: p.footer,
+        operador: cashierId,
+        clienteNome: selectedCustomer?.name,
+        clienteCpf: selectedCustomer?.cpf,
         itens: p.itens,
         subtotal,
         taxes: impostoEstimado,
@@ -1643,6 +1646,9 @@ export function PdvClassic({
             cnpj: _rp.cnpj,
             enderecoLinha: getEnderecoDocumentos(),
             receiptFooter: _rp.footer,
+            operador: meta?.cashierId ?? cashierId,
+            clienteNome: selectedCustomer?.name,
+            clienteCpf: selectedCustomer?.cpf,
             itens: _rp.itens,
             subtotal,
             taxes: impostoEstimado,
@@ -1668,6 +1674,9 @@ export function PdvClassic({
             else if (p.type === "a_prazo") { aPrazo += p.value; if (p.aPrazoConfig) aPrazoConfig = p.aPrazoConfig }
             else if (p.type === "credito_vale") creditoVale += p.value
           }
+          _printInput.pagamentos = buildPagamentosResumo({
+            dinheiro, pix, cartaoDebito, cartaoCredito, carne, aPrazo, creditoVale,
+          })
           const result = finalizeSaleTransaction({
             lines: saleLines,
             total,
@@ -1696,6 +1705,7 @@ export function PdvClassic({
             toast({ title: "Falha transacional", description: result.reason })
             return
           }
+          _printInput.numeroVenda = result.saleId
           const _hadItems = cart.length > 0
           if (impressaoConfig.imprimirAutomatico && _hadItems) {
             void printPdvSaleReceipt({
