@@ -516,5 +516,54 @@ files_created:
   - lib/proxy-cookie-mismatch.test.ts            # F-03 — lint estático de proxy.ts usando literal errado (4 testes + 1 expected-fail)
   - docs/execution/PILOT_RUNBOOK_MULTI_LOJA.md  # A2 — cabine operacional única do piloto (544 linhas, 13 seções)
 flags: []
-notes: "Expansão do baseline de testes multi-loja (continuação ENTRY 005) + criação do runbook operacional do piloto (A2). NOVOS TESTES: lib/multi-loja-route-acl-baseline.test.ts cobre F-05 (/api/dashboard/resumo, /api/dashboard/elite, /api/clients), F-06 (app/actions/whatsapp.ts sem canAccessStore), F-07 (send-daily sem canAccessStore), F-08 (sync-legacy-vendas/financeiro sem auth). lib/proxy-cookie-mismatch.test.ts cobre F-03 lint estático (proxy.ts usa 'assistec_active_store' com underscores em vez da constante com hífens). Totais suite completa (10 arquivos): 90 passed | 14 expected fail (104). tsc 0 erros. build OK. RUNBOOK: docs/execution/PILOT_RUNBOOK_MULTI_LOJA.md — 13 seções, sequência oficial do piloto, áreas protegidas, locks, rollback, gates, padrões A6 de aprovação. REVISÃO ARQUITETURAL (Opus): estado READY FOR FIRST CONTROLLED EXECUTION. Decisão Opção A (atômica F-01+F-02). A5: Lovable Financeiro seguro (withStoreHeaders). A4: queries SQL prontas para Rafael rodar no Supabase. Próximo: SKILL_PROPOSE_SPRINT → SPRINT_MULTI_LOJA-S-001.md. commit_final será atualizado via ENTRY 008 após hash confirmado."
+notes: "Expansão do baseline de testes multi-loja (continuação ENTRY 005) + criação do runbook operacional do piloto (A2). NOVOS TESTES: lib/multi-loja-route-acl-baseline.test.ts cobre F-05 (/api/dashboard/resumo, /api/dashboard/elite, /api/clients), F-06 (app/actions/whatsapp.ts sem canAccessStore), F-07 (send-daily sem canAccessStore), F-08 (sync-legacy-vendas/financeiro sem auth). lib/proxy-cookie-mismatch.test.ts cobre F-03 lint estático (proxy.ts usa 'assistec_active_store' com underscores em vez da constante com hífens). Totais suite completa (10 arquivos): 90 passed | 14 expected fail (104). tsc 0 erros. build OK. RUNBOOK: docs/execution/PILOT_RUNBOOK_MULTI_LOJA.md — 13 seções, sequência oficial do piloto, áreas protegidas, locks, rollback, gates, padrões A6 de aprovação. REVISÃO ARQUITETURAL (Opus): estado READY FOR FIRST CONTROLLED EXECUTION. Decisão Opção A (atômica F-01+F-02). A5: Lovable Financeiro seguro (withStoreHeaders). A4: saneamento banco GREEN (12 tabelas, 0 orphans) executado por Rafael em 2026-05-28."
+```
+
+---
+
+```yaml
+# ─── ENTRY 008 ────────────────────────────────────────────────────
+ticket_id: MULTI_LOJA-S-001-PROPOSE
+skill_id: SKILL_PROPOSE_SPRINT
+skill_version: v1
+ia: opus
+modo: SAFE
+started_at: 2026-05-28T19:00:00-03:00
+ended_at: 2026-05-28T19:30:00-03:00
+duration: PT30M
+fases_completas: [1, 2, 3, 4, 6, 16, 17]
+fase_falha: null
+resultado: encerrada
+pr: null
+branch: null
+commit_anterior: 68181a3
+commit_final: null
+rollback: false
+diff:
+  added: ~534
+  removed: 0
+  files_modified: 2
+gates:
+  gate_1:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "N/A — gerar proposta não exige gate (SKILL_PROPOSE_SPRINT §9 gates: []). Gate #1 será emitido pelo humano ao ler e aprovar SPRINT_MULTI_LOJA-S-001.md com APPROVE_GATE_1."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "N/A para Proposal Layer."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}
+benchmark: null
+sprint: null
+proposta: docs/sprints/proposals/SPRINT_MULTI_LOJA-S-001.md
+auditoria: docs/audits/AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md
+adr_criada: null
+memoria_criada: null
+docs_atualizados:
+  - docs/sprints/proposals/SPRINT_MULTI_LOJA-S-001.md
+  - docs/status/EXECUTION_LOG.md
+flags: []
+notes: "SKILL_PROPOSE_SPRINT executada para piloto SPRINT_01_MULTI_LOJA. Proposta gerada em docs/sprints/proposals/SPRINT_MULTI_LOJA-S-001.md — 534 linhas, 13 seções, auto-suficiente para executor Sonnet. Escopo: F-01+F-02 atômicos (Opção A) + F-05 (5 rotas parcial) + F-06 + F-07 + F-14. Fora: F-03 (proxy, área protegida), F-04, F-08, F-10. Allow-list estrita: 43 arquivos. files_max override declarado (ADR-0002 §4). Exceção F-02-anchor documentada (exportar/route.ts mantém fallback com TODO). Saneamento banco A4: GREEN. Próximo: Rafael lê a proposta → emite APPROVE_GATE_1 → Sonnet inicia CP1."
 ```
