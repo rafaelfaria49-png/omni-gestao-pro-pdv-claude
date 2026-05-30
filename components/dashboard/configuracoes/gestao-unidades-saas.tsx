@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { isWhitelistedProtectedStore } from "@/lib/store-defaults"
 import { cn } from "@/lib/utils"
 
 type StoreProfile = "ASSISTENCIA" | "VARIEDADES" | "SUPERMERCADO"
@@ -354,6 +355,16 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
           {stores.map((s) => {
             const isSelected = s.id === selectedId
             const isPrincipal = s.id === primaryStoreId
+            const isActive = s.id === lojaAtivaId
+            const isProtectedReal = isWhitelistedProtectedStore(s.id)
+            // Fase 1 — Proteção de lojas: bloqueia exclusão de loja real protegida,
+            // loja principal e unidade ativa atual.
+            const isProtected = isPrincipal || isProtectedReal || isActive
+            const protectedReason = isProtectedReal
+              ? "Unidade real protegida — não pode ser excluída."
+              : isPrincipal
+                ? "A loja principal da conta não pode ser excluída."
+                : "Esta é a unidade ativa. Troque de unidade antes de excluí-la."
             const name = (s.name || "Unidade").trim()
             return (
               <div
@@ -385,13 +396,13 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                   >
                     <Store className="h-5 w-5" aria-hidden />
                   </div>
-                  {isPrincipal && (
+                  {(isPrincipal || isProtectedReal) && (
                     <Badge
                       className="shrink-0 gap-1 border-amber-500/35 bg-amber-500/10 text-amber-600 dark:text-amber-300"
                       variant="outline"
                     >
                       <ShieldCheck className="h-3 w-3" />
-                      Principal
+                      {isPrincipal ? "Principal" : "Protegida"}
                     </Badge>
                   )}
                 </div>
@@ -437,13 +448,13 @@ export function GestaoUnidadesSaas({ embed = false }: GestaoUnidadesSaasProps) {
                   >
                     Gerenciar
                   </Button>
-                  {isPrincipal ? (
+                  {isProtected ? (
                     <Button
                       type="button"
                       size="sm"
                       variant="ghost"
                       disabled
-                      title="A loja principal da conta não pode ser excluída."
+                      title={protectedReason}
                       className="shrink-0 cursor-not-allowed opacity-30 text-muted-foreground/40"
                       onClick={(e) => e.stopPropagation()}
                     >

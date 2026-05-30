@@ -1,7 +1,31 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 29 Mai 2026 — SPRINT_MULTI_LOJA-S-001 CP1+CP2+CP3 executados (commits 6436d9b · a503d70 · 2e6e7d5)
+> Última atualização: 30 Mai 2026 — Fase 1 (Proteção de Lojas) concluída
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Limpeza de unidades — Fase 1: Proteção de Lojas (concluído 30/05/2026)
+
+Antecede a limpeza/exclusão das lojas de teste. Inventário read-only mapeou **10 lojas**
+(relatório: `docs/modules/reports/INVENTARIO_LOJAS_2026-05-30.md`). Achado: a API
+`DELETE /api/stores/[id]` só protegia a loja principal — **loja-2 e loja-11 estavam
+excluíveis**. Fase 1 adiciona uma camada de proteção antes de qualquer DELETE.
+
+| Arquivo | Papel |
+|---------|-------|
+| `lib/store-defaults.ts` | `PROTECTED_STORE_IDS = ["loja-1","loja-2"]`, `isWhitelistedProtectedStore()`, `evaluateStoreProtection()` (decisão pura, sem I/O) |
+| `lib/stores-api-access.ts` | `assertStoreDeletable(req, storeId)` resolve loja principal + ativa e aplica a decisão; re-exporta a lógica |
+| `app/api/stores/[id]/route.ts` | `DELETE` chama `assertStoreDeletable()` (substitui check só-principal) |
+| `components/dashboard/configuracoes/gestao-unidades-saas.tsx` | Botão excluir desabilitado + badge "Protegida" p/ loja real/principal/ativa |
+| `lib/stores-api-access.test.ts` | 9 testes da lógica de proteção |
+
+**Bloqueios ativos:** loja-1 (403), loja-2 (403), loja principal (403), loja **ativa** (409),
+storeId vazio (400). **loja-11 permanece SEM proteção** de propósito (decisão de destino
+pendente). Validação: `tsc` limpo · `next build` OK · `vitest` 12/12 (novos + store-defaults).
+
+**Não alterado:** schema Prisma, auth, proxy. **Nenhuma limpeza/exclusão executada** —
+Fases 2-5 aguardam autorização explícita.
 
 **Memória viva consolidada:**
 [`docs/memory/OMNIGESTAO_MASTER_MEMORY.md`](../memory/OMNIGESTAO_MASTER_MEMORY.md)

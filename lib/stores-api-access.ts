@@ -3,8 +3,20 @@ import type { Session } from "next-auth"
 import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import { isElevatedRole } from "@/lib/auth/admin-users-policy"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
+import {
+  LEGACY_PRIMARY_STORE_ID,
+  PROTECTED_STORE_IDS,
+  evaluateStoreProtection,
+  isWhitelistedProtectedStore,
+} from "@/lib/store-defaults"
+import { storeIdFromAssistecRequestForRead } from "@/lib/store-id-from-request"
 import { prisma } from "@/lib/prisma"
+
+// Reexporta a lógica de proteção (definida em store-defaults — módulo sem deps de
+// servidor, testável isoladamente) para que rotas API possam importar tudo daqui. Ver
+// docs/modules/reports/INVENTARIO_LOJAS_2026-05-30.md.
+export { PROTECTED_STORE_IDS, isWhitelistedProtectedStore, evaluateStoreProtection }
+export type { StoreProtectionInput, StoreProtectionResult } from "@/lib/store-defaults"
 
 export async function requireStoresSession(): Promise<
   | { ok: true; session: Session }
@@ -78,6 +90,21 @@ export async function countStoreOperationalLinks(storeId: string): Promise<Store
   ])
   const hasLinks = clientes > 0 || os > 0 || produtos > 0 || tecnicos > 0
   return { clientes, os, produtos, tecnicos, hasLinks }
+}
+
+/**
+ * Guard de request para exclusão/limpeza de loja. Resolve loja principal e loja ativa,
+ * aplica {@link evaluateStoreProtection} e retorna o `NextResponse` de bloqueio (ou null
+ * se a operação é permitida). Deve ser chamado ANTES de qualquer DELETE/limpeza.
+ */
+export async function assertStoreDeletable(req: Request, storeId: string): Promise<NextResponse | null> {
+  const primaryStoreId = await resolvePrimaryStoreId()
+  const activeStoreId = storeIdFromAssistecRequestForRead(req)
+  const result = evaluateStoreProtection({ storeId, primaryStoreId, activeStoreId })
+  if (result.blocked) {
+    return NextResponse.json({ ok: false, error: result.error }, { status: result.status })
+  }
+  return null
 }
 
 export function parseStoreDeleteConfirm(body: StoreDeleteConfirmBody, pathStoreId: string): NextResponse | null {

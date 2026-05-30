@@ -2,9 +2,9 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/require-admin"
 import {
+  assertStoreDeletable,
   countStoreOperationalLinks,
   denyIfNoStoreAccess,
-  isProtectedPrimaryStore,
   parseStoreDeleteConfirm,
   requireStoresSession,
   type StoreDeleteConfirmBody,
@@ -67,12 +67,10 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
     const confirmErr = parseStoreDeleteConfirm(body, id)
     if (confirmErr) return confirmErr
 
-    if (await isProtectedPrimaryStore(id)) {
-      return NextResponse.json(
-        { ok: false, error: "A loja principal não pode ser excluída." },
-        { status: 403 },
-      )
-    }
+    // Fase 1 — Proteção de lojas: bloqueia loja real protegida (loja-1, loja-2),
+    // loja principal e a unidade ativa atual antes de qualquer exclusão.
+    const protectedErr = await assertStoreDeletable(req, id)
+    if (protectedErr) return protectedErr
 
     const existing = await prisma.store.findUnique({
       where: { id },
