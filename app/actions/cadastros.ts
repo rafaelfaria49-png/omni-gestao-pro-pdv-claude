@@ -1290,6 +1290,112 @@ export async function listProdutosPaginado(
     metadata: true,
   } as const;
 
+  // ── Busca com ranking de relevância (raw SQL) ─────────────────────────────
+  // O Prisma `orderBy` não consegue expressar "nome começa com o termo", então
+  // uma busca textual ordenada por `updatedAt` deixava itens cujo match veio de
+  // marca/categoria/fornecedor (ex.: "Vinho") acima de itens cujo NOME bate
+  // (ex.: "Teclado"). Quando há termo de busca e o usuário não escolheu uma
+  // coluna de ordenação manual, ranqueamos por relevância priorizando o nome.
+  const useRelevance = !!q && !opts?.orderBy;
+
+  if (useRelevance) {
+    try {
+      const escapeLike = (s: string) => s.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+      const term = escapeLike(q as string);
+      const starts = `${term}%`;
+      const wordStarts = `% ${term}%`;
+      const contains = `%${term}%`;
+
+      // Condições espelham o `where` Prisma acima (mesma semântica de filtros + busca).
+      const sqlConditions: Prisma.Sql[] = [Prisma.sql`p."storeId" = ${storeId}`];
+
+      if (opts?.filters) {
+        const f = opts.filters;
+        if (f.status === "Ativo") {
+          sqlConditions.push(
+            Prisma.sql`(p."active" = true AND p."name" <> '' AND p."price" > 0 AND p."category" IS NOT NULL)`,
+          );
+        } else if (f.status === "Inativo") {
+          sqlConditions.push(
+            Prisma.sql`(p."active" = false AND p."name" <> '' AND p."price" > 0 AND p."category" IS NOT NULL)`,
+          );
+        } else if (f.status === "Incompleto") {
+          sqlConditions.push(
+            Prisma.sql`(p."name" = '' OR p."category" = '' OR p."category" IS NULL OR p."price" <= 0)`,
+          );
+        }
+        if (f.estoque === "com") sqlConditions.push(Prisma.sql`p."stock" > 0`);
+        else if (f.estoque === "sem") sqlConditions.push(Prisma.sql`p."stock" <= 0`);
+        else if (f.estoque === "baixo") sqlConditions.push(Prisma.sql`(p."stock" > 0 AND p."stock" < 6)`);
+        if (f.preco === "semPreco") sqlConditions.push(Prisma.sql`p."price" <= 0`);
+        if (f.fornecedor === "semFornecedor") sqlConditions.push(Prisma.sql`p."supplierName" = ''`);
+        if (f.categoria && f.categoria !== "todos") sqlConditions.push(Prisma.sql`p."category" = ${f.categoria}`);
+        if (f.marca && f.marca !== "todos") sqlConditions.push(Prisma.sql`p."brand" = ${f.marca}`);
+      }
+
+      // Busca textual (default escape de LIKE no Postgres já é a barra invertida).
+      sqlConditions.push(Prisma.sql`(
+        p."name" ILIKE ${contains} OR p."sku" ILIKE ${contains}
+        OR p."barcode" ILIKE ${contains} OR p."category" ILIKE ${contains}
+        OR p."brand" ILIKE ${contains} OR p."supplierName" ILIKE ${contains}
+      )`);
+
+      const whereSql = Prisma.join(sqlConditions, " AND ");
+
+      // Ranking: nome começando > nome (palavra) > nome contém > sku > barras > marca > categoria.
+      const orderSql = Prisma.sql`
+        CASE
+          WHEN p."name" ILIKE ${starts} THEN 0
+          WHEN p."name" ILIKE ${wordStarts} THEN 1
+          WHEN p."name" ILIKE ${contains} THEN 2
+          WHEN p."sku" ILIKE ${starts} THEN 3
+          WHEN p."sku" ILIKE ${contains} THEN 4
+          WHEN p."barcode" ILIKE ${contains} THEN 5
+          WHEN p."brand" ILIKE ${contains} THEN 6
+          WHEN p."category" ILIKE ${contains} THEN 7
+          ELSE 8
+        END ASC, p."name" ASC
+      `;
+
+      type RawProdutoRow = {
+        id: string;
+        name: string;
+        sku: string | null;
+        barcode: string | null;
+        category: string | null;
+        brand: string;
+        supplierName: string;
+        stock: number | null;
+        price: number | null;
+        precoCusto: number | null;
+        warrantyDays: number | null;
+        active: boolean;
+        metadata: unknown;
+      };
+
+      const [rawRows, countRows] = await Promise.all([
+        prisma.$queryRaw<RawProdutoRow[]>`
+          SELECT p."id", p."name", p."sku", p."barcode", p."category", p."brand",
+                 p."supplierName", p."stock", p."price", p."price_cost" AS "precoCusto",
+                 p."warrantyDays", p."active", p."metadata"
+          FROM "estoque_produtos" p
+          WHERE ${whereSql}
+          ORDER BY ${orderSql}
+          LIMIT ${pageSize} OFFSET ${skip}
+        `,
+        prisma.$queryRaw<Array<{ count: number }>>`
+          SELECT COUNT(*)::int AS count FROM "estoque_produtos" p WHERE ${whereSql}
+        `,
+      ]);
+
+      return { produtos: rawRows.map(mapRow), total: Number(countRows[0]?.count ?? 0) };
+    } catch (e) {
+      // Se o ranking raw falhar, cai para o caminho Prisma padrão abaixo (sem ranking,
+      // mas ainda filtrando corretamente) em vez de quebrar a tabela.
+      console.error("[cadastros:listProdutosPaginado:relevance]", e instanceof Error ? e.message : String(e));
+    }
+  }
+
   try {
     const [rows, total] = await Promise.all([
       prisma.produto.findMany({
