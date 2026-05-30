@@ -146,6 +146,8 @@ type AtalhoEntry = {
   ativo: boolean
   favorito: boolean
   stockAtual: number
+  /** Produto do atalho não existe no catálogo da unidade ativa → não renderiza na grade. */
+  orphan: boolean
   barcode?: string
   sku?: string
 }
@@ -164,6 +166,10 @@ function toAtalhoEntry(a: AtalhoSaved, catalog: PdvCatalogProduct[]): AtalhoEntr
     ativo: a.ativo !== false,
     favorito: a.favorito ?? false,
     stockAtual: live?.stock ?? (isService ? 999 : 0),
+    // Órfão: produto não existe no catálogo desta unidade (deletado, reimportado
+    // com novo ID ou de outra loja). Só sinaliza com catálogo já carregado para
+    // não gerar falso-positivo durante a corrida de hidratação do estoque.
+    orphan: catalog.length > 0 && !live,
     barcode: live?.barcode ?? live?.codigoBarras,
     sku: live?.sku ?? live?.codigo,
   }
@@ -1081,7 +1087,7 @@ function EditarAtalhosModal({
     if (!isService && prdEntries.length >= MAX_PRD) return
     setEntries((prev) => [
       ...prev,
-      { id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false, stockAtual: p.stock, barcode: p.barcode, sku: p.sku ?? p.codigo },
+      { id: p.id, nome: p.name, preco: p.price, categoria: p.category, ativo: true, favorito: false, stockAtual: p.stock, orphan: false, barcode: p.barcode, sku: p.sku ?? p.codigo },
     ])
   }
 
@@ -1102,6 +1108,7 @@ function EditarAtalhosModal({
         className={cn(
           "flex items-center gap-1.5 rounded-xl border px-2.5 py-2 transition-all",
           e.ativo ? "border-border bg-background" : "border-border/50 bg-muted/30 opacity-60",
+          e.orphan && "border-destructive/40 bg-destructive/5",
         )}
       >
         {/* Reorder */}
@@ -1125,6 +1132,11 @@ function EditarAtalhosModal({
             {outOfStock && (
               <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 px-1 py-px text-[9px] font-semibold text-amber-600 dark:text-amber-400">
                 sem estoque
+              </Badge>
+            )}
+            {e.orphan && (
+              <Badge variant="outline" className="border-destructive/40 bg-destructive/10 px-1 py-px text-[9px] font-semibold text-destructive">
+                indisponível nesta unidade
               </Badge>
             )}
           </div>
@@ -1327,8 +1339,10 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig } = useStoreSettings()
   const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
+  // Chave dos atalhos: estritamente a unidade ativa, sem fallback silencioso para
+  // loja-1 (alinhado à política multi-loja). A grade só monta com unidade ativa.
   const shortcutsKey = useMemo(
-    () => SHORTCUTS_STORAGE_KEY((lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID),
+    () => SHORTCUTS_STORAGE_KEY((lojaAtivaId ?? "").trim()),
     [lojaAtivaId]
   )
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
@@ -3110,6 +3124,17 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         catalogForAdd={realCatalog}
         savedAtalhos={localAtalhos}
         onSave={(atalhos) => {
+          // Anti-contaminação: só persiste se os atalhos em memória foram hidratados
+          // para a unidade ativa atual — evita gravar atalhos de uma loja sob a chave
+          // de outra durante uma troca de unidade em andamento.
+          if (hydratedShortcutsKeyRef.current !== shortcutsKey) {
+            toast({
+              title: "Troca de unidade detectada",
+              description: "Reabra os atalhos na loja ativa antes de salvar.",
+              variant: "destructive",
+            })
+            return
+          }
           setLocalAtalhos(atalhos)
           try { localStorage.setItem(shortcutsKey, JSON.stringify(atalhos)) } catch { /* ignore */ }
           void saveStoreSettings({
