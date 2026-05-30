@@ -2,7 +2,7 @@
 title: SPRINT_MULTI_LOJA-S-001 · Eliminar fallback silencioso loja-1 + ACL rotas críticas
 sprint_id: MULTI_LOJA-S-001
 hub: multi_loja
-status: proposta
+status: mergeada
 origin:
   type: finding
   id: F-01

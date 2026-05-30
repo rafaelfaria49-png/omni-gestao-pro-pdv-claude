@@ -89,7 +89,7 @@ gates: []
 
 ## 4. Findings
 
-### F-01 · Fallback silencioso `loja-1` em leituras API (raiz da convenção) — `P0`
+### F-01 · Fallback silencioso `loja-1` em leituras API (raiz da convenção) — `P0` — ✅ RESOLVIDO (SPRINT_MULTI_LOJA-S-001 · 6436d9b)
 
 - **Local:** `lib/store-id-from-request.ts:25-32` (função `storeIdFromAssistecRequestForRead`)
 - **Descrição:** A resolução de `storeId` em leituras chega ao `LEGACY_PRIMARY_STORE_ID = "loja-1"` quando header `x-assistec-loja-id`, query `storeId`/`lojaId` e cookie `assistec-active-store` falham. Não há erro, não há sinal observável: a request **sempre** retorna dados de `loja-1` para qualquer cliente sem contexto de loja. Esta é a raiz arquitetural do DT-03.
@@ -105,7 +105,7 @@ gates: []
 
 ---
 
-### F-02 · Fallback hardcoded `|| "loja-1"` em ≥30 rotas financeiras/vendas — `P0`
+### F-02 · Fallback hardcoded `|| "loja-1"` em ≥30 rotas financeiras/vendas — `P0` — ✅ RESOLVIDO (SPRINT_MULTI_LOJA-S-001 · 6436d9b)
 
 - **Local (lista canônica detectada):**
   - `app/api/vendas/{[id],[id]/cancelar,[id]/corrigir,historico}/route.ts`
@@ -173,7 +173,7 @@ gates: []
 
 ---
 
-### F-05 · Rotas `/api/dashboard/*`, `/api/clients`, `/api/ops/inventory` GET sem ACL `canAccessStore` — `P0`
+### F-05 · Rotas `/api/dashboard/*`, `/api/clients`, `/api/ops/inventory` GET sem ACL `canAccessStore` — `P0` — ✅ RESOLVIDO (SPRINT_MULTI_LOJA-S-001 · 2e6e7d5)
 
 - **Local:**
   - `app/api/dashboard/resumo/route.ts:9-25`
@@ -202,7 +202,7 @@ gates: []
 
 ---
 
-### F-06 · Server Action `sendWhatsAppTextAction` aceita `storeId` cru do cliente sem validar acesso — `P0`
+### F-06 · Server Action `sendWhatsAppTextAction` aceita `storeId` cru do cliente sem validar acesso — `P0` — ✅ RESOLVIDO (SPRINT_MULTI_LOJA-S-001 · 2e6e7d5)
 
 - **Local:** `app/actions/whatsapp.ts:19-33` (`sendWhatsAppTextAction`), `:59-80` (`sendWhatsAppTemplateAction`) e variante `sendWhatsAppMediaAction` (mesmo padrão, não relido).
 - **Descrição:** a action exige `session?.user` (presença), mas **não** chama `canAccessStore(session, input.storeId)`. O `storeId` chega via input do componente cliente. Usuário autenticado restrito à Loja A pode disparar `sendWhatsAppTextAction({ storeId: "loja-b", … })` e a mensagem é gravada/enviada na Loja B.
@@ -226,7 +226,7 @@ gates: []
 
 ---
 
-### F-07 · Rota `/api/whatsapp/send-daily` aceita `body.storeId` sem validar `canAccessStore` — `P0`
+### F-07 · Rota `/api/whatsapp/send-daily` aceita `body.storeId` sem validar `canAccessStore` — `P0` — ✅ RESOLVIDO (SPRINT_MULTI_LOJA-S-001 · 2e6e7d5)
 
 - **Local:** `app/api/whatsapp/send-daily/route.ts:40-67`
 - **Descrição:** rota exige sessão e assinatura, depois pega `body.storeId` cru (com fallback para `storeIdFromWhatsAppApiRead(request)`), resolve com `resolveActiveStoreId`. Não há `canAccessStore`. Quem tem sessão pode mandar resumo diário para qualquer loja.
@@ -319,7 +319,7 @@ gates: []
 
 ---
 
-### F-14 · `lib/whatsapp-daily-server.ts:38` fallback silencioso `LEGACY_PRIMARY_STORE_ID` — `P1` (upgrade P0)
+### F-14 · `lib/whatsapp-daily-server.ts:38` fallback silencioso `LEGACY_PRIMARY_STORE_ID` — `P1` (upgrade P0) — ✅ RESOLVIDO (SPRINT_MULTI_LOJA-S-001 · 2e6e7d5)
 
 - **Local:** `lib/whatsapp-daily-server.ts:6, 38`
 - **Descrição:** `sendDailyClosingToPhone` aceita `params.storeId` opcional. Se vazio: cai em `LEGACY_PRIMARY_STORE_ID` e lê `LedgerSnapshot` dela. Junto com F-07 (a rota que chama isto), forma cadeia: rota não valida → service fallback → vazamento.

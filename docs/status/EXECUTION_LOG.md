@@ -599,10 +599,10 @@ gates:
     pending: null
     notes: "APPROVE_GATE_1 emitido: opcao_execucao A, allow_protected_areas false."
   gate_2:
-    approved_by: null
-    approved_at: null
-    pending: null
-    notes: "Aguardando CP4 verde + AUDIT pós para Gate #2."
+    approved_by: Rafael
+    approved_at: 2026-05-30T00:00:00-03:00
+    pending: PT16H
+    notes: "APPROVE_GATE_2 emitido. smoke_status: PASS (3 smokes OK: 400 sem header, 200 com header, 401 no exportar preservando exceção F-02-anchor). PDV smoke checklist fornecido para validação manual."
 audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}
 benchmark: null
 sprint: docs/sprints/proposals/SPRINT_MULTI_LOJA-S-001.md

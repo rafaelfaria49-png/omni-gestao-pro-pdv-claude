@@ -82,6 +82,7 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 |---|--------|-----|--------|------|---------|
 | 0001 (legado) | Rota Oficial de Operações de Serviço | Operações | ✅ Decidido | 2026-05-15 | [`OS_ROUTE_OFICIAL.md`](./OS_ROUTE_OFICIAL.md) |
 | 0002 | Congelamento do Skill Front Matter v1 até pós-piloto | cross / governance | ✅ Aceita | 2026-05-27 | [`ADR-0002-skill-front-matter-v1.md`](./ADR-0002-skill-front-matter-v1.md) |
+| 0003 | Eliminar fallback `LEGACY_PRIMARY_STORE_ID` em leituras de API | multi_loja | ✅ Aceita | 2026-05-29 | [`ADR-0003-eliminar-fallback-legacy-primary-store-id.md`](./ADR-0003-eliminar-fallback-legacy-primary-store-id.md) |
 
 > **Nota sobre o ADR legado:** `OS_ROUTE_OFICIAL.md` foi escrito antes desta convenção e não segue o template/naming atual. Mantido como histórico. Quando precisar ser referenciado, citar como **ADR-0001 (legado)**. Migração para o naming `ADR-0001-os-route-oficial.md` é uma tarefa **opcional** e exige autorização (renomear histórico pode quebrar links externos).
 
