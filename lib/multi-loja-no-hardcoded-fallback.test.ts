@@ -38,10 +38,8 @@ const EXCLUDE_PATH_FRAGMENTS = [
   // o próprio arquivo deste teste contém literal "loja-1" (sem espaço entre || e literal)
   // e seria self-contaminação; excluímos por nome.
   "multi-loja-no-hardcoded-fallback.test.ts",
-  // Exceção declarada F-02-anchor (SPRINT_MULTI_LOJA-S-001 §2.1):
-  // rota acessada via anchor-tag não envia x-assistec-loja-id — fallback mantido com TODO.
-  // Resolver em SPRINT_MULTI_LOJA-S-002.
-  "app/api/financeiro/relatorios/exportar/route.ts",
+  // F-02-anchor RESOLVIDO em SPRINT_MULTI_LOJA-S-002: exportar/route.ts deixou de usar
+  // `|| "loja-1"` (agora 400 quando storeId ausente). Removido da exclusão — passa a ser coberto.
   // F-13 da auditoria — UI legada /dashboard/os, fora do escopo F-02 (apenas rotas API).
   "app/dashboard/os/",
 ]

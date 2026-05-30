@@ -15,8 +15,9 @@
  * `lib/auth/proxy-enterprise-dashboard.test.ts`. Este arquivo cobre especificamente
  * que proxy.ts usa o literal errado.
  *
- * Quando o fix for aplicado (proxy.ts importa e usa ASSISTEC_ACTIVE_STORE_COOKIE),
- * os testes de snapshot mudam para expected-passing e o it.fails vira it.
+ * Fix aplicado em SPRINT_MULTI_LOJA-S-002: proxy.ts importa e usa
+ * ASSISTEC_ACTIVE_STORE_COOKIE; o literal com underscore foi eliminado.
+ * Os snapshots do bug foram convertidos para o contrato pós-fix.
  */
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
@@ -35,30 +36,24 @@ describe("proxy.ts — cookie name mismatch (F-03)", () => {
     expect(ASSISTEC_ACTIVE_STORE_COOKIE).not.toContain("_")
   })
 
-  it("[snapshot atual — bug F-03] proxy.ts contém o literal errado 'assistec_active_store' (underscores)", () => {
+  it("[pós-fix F-03] proxy.ts NÃO contém mais o literal errado 'assistec_active_store' (underscores)", () => {
     const src = readProxy()
-    // Documenta o bug: proxy.ts usa underscores em vez de hífens.
-    // Quando o fix for aplicado, este expect falha — remova este teste ou atualize.
-    expect(src).toContain("assistec_active_store")
+    expect(src).not.toMatch(/"assistec_active_store"/)
+    expect(src).not.toMatch(/'assistec_active_store'/)
   })
 
-  it("[snapshot atual — bug F-03] proxy.ts NÃO importa ASSISTEC_ACTIVE_STORE_COOKIE", () => {
+  it("[pós-fix F-03] proxy.ts importa e usa ASSISTEC_ACTIVE_STORE_COOKIE", () => {
     const src = readProxy()
-    // O proxy não importa a constante — a divergência de nome passou despercebida
-    // porque ambos os contextos (onde set e onde get) nunca foram comparados em teste.
-    expect(src).not.toContain("ASSISTEC_ACTIVE_STORE_COOKIE")
+    // O proxy passou a importar a constante canônica — fim da divergência de naming.
+    expect(src).toContain("ASSISTEC_ACTIVE_STORE_COOKIE")
   })
 
   /**
-   * EXPECTED-FAILING: contrato pós-fix (SPRINT_01_MULTI_LOJA).
-   *
-   * Após a correção:
+   * Contrato pós-fix consolidado (SPRINT_MULTI_LOJA-S-002):
    * - proxy.ts importa `ASSISTEC_ACTIVE_STORE_COOKIE` de `@/lib/store-defaults`
    * - Não usa mais a string literal com underscore
-   *
-   * Quando o fix for aplicado, troque `it.fails(` por `it(`.
    */
-  it.fails("[F-03] DEVE: proxy.ts importa ASSISTEC_ACTIVE_STORE_COOKIE e não usa literal com underscore", () => {
+  it("[F-03] proxy.ts importa ASSISTEC_ACTIVE_STORE_COOKIE e não usa literal com underscore", () => {
     const src = readProxy()
     expect(src).toContain("ASSISTEC_ACTIVE_STORE_COOKIE")
     expect(src).not.toMatch(/"assistec_active_store"/)

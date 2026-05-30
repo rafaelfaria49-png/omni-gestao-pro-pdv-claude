@@ -8,6 +8,7 @@ import {
   verifySubscriptionCookieValue,
 } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
+import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 import { enterpriseDashboardRedirect, enterpriseStoreCookieRedirect } from "@/lib/auth/proxy-enterprise-dashboard"
 import {
   buildLegacyPageRedirectUrl,
@@ -129,7 +130,7 @@ export const proxy = auth(async (req) => {
     const sess = session as unknown as Session
     const denied = enterpriseDashboardRedirect(req.nextUrl.origin, pathname, sess)
     if (denied) return NextResponse.redirect(denied)
-    const storeCookie = req.cookies.get("assistec_active_store")?.value
+    const storeCookie = req.cookies.get(ASSISTEC_ACTIVE_STORE_COOKIE)?.value
     const storeDeny = enterpriseStoreCookieRedirect(req.nextUrl.origin, sess, storeCookie)
     if (storeDeny) return NextResponse.redirect(storeDeny)
   }

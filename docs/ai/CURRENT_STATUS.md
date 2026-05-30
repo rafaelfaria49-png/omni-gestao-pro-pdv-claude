@@ -93,10 +93,25 @@ Produtos, fluxo genérico do Importador Avançado (Gestão Clique). Nenhuma migr
 | **Status** | **Pronto para Gate #2 (merge)** |
 
 **Pendências remanescentes (próximas sprints):**
-- F-03 — proxy.ts cookie typo (`assistec_active_store` vs `assistec-active-store`) — área protegida, Sprint_02
+- ~~F-03 — proxy.ts cookie typo~~ — ✅ RESOLVIDO em SPRINT_MULTI_LOJA-S-002
 - F-04 — Webhook WhatsApp single-store (`WHATSAPP_WEBHOOK_STORE_ID`) — schema novo necessário
 - F-08 — sync-legacy-financeiro sem auth+canAccessStore — sprint de descomissionamento legacy
-- F-02-anchor — `exportar/route.ts` via anchor-tag — cookie/proxy Sprint_02
+- ~~F-02-anchor — `exportar/route.ts` via anchor-tag~~ — ✅ RESOLVIDO em SPRINT_MULTI_LOJA-S-002
+
+---
+
+### SPRINT_MULTI_LOJA-S-002 — F-03 (proxy cookie typo) + F-02-anchor (exportar) (concluído 30/05/2026)
+
+**Escopo fechado:** F-03 + F-02-anchor (somente). Nenhuma área vetada tocada.
+
+| Finding | Local | Correção |
+|---------|-------|----------|
+| F-03 | `proxy.ts:132` | Lia `req.cookies.get("assistec_active_store")` (underscores) — cookie real é `assistec-active-store` (hífens). Agora importa e usa `ASSISTEC_ACTIVE_STORE_COOKIE` de `@/lib/store-defaults`. O redirect `?storeAccess=denied` (ACL de loja na borda via `enterpriseStoreCookieRedirect`) passa a disparar de verdade. |
+| F-02-anchor | `app/api/financeiro/relatorios/exportar/route.ts:303-307` | Removido o `\|\| "loja-1"` (único remanescente em produção). `storeId` ausente → **400** explícito (alinhado ao ADR-0003). O caller (`FinanceiroRealContext.tsx:exportarRelatorio`) já enviava `storeId` na query e bloqueava sem loja ativa — caminho feliz intacto. |
+
+**Testes ajustados:** `lib/proxy-cookie-mismatch.test.ts` (snapshots do bug → contrato pós-fix; `it.fails` → `it`); `lib/multi-loja-no-hardcoded-fallback.test.ts` (removida a exclusão do `exportar/route.ts` — agora coberto, segue 0 ocorrências).
+
+**Validação:** `tsc` limpo · Vitest **217 passed | 3 expected fail** · `next build` OK (middleware Proxy compilou no Edge). **Não alterado:** schema Prisma, auth, demais áreas vetadas. ADR-0003 atualizado (exceção F-02-anchor encerrada).
 
 ---
 

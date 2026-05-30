@@ -300,9 +300,13 @@ async function fetchRows(storeId: string, tipo: string, filtro: PeriodoFiltro): 
 
 export async function GET(req: Request) {
   await prismaEnsureConnected()
-  // TODO F-02-anchor: rota acessada via anchor-tag não envia x-assistec-loja-id.
-  // Resolver em SPRINT_MULTI_LOJA-S-002 (cookie/proxy de loja).
-  const storeId = opsLojaIdFromRequest(req) || "loja-1"
+  // F-02-anchor (SPRINT_MULTI_LOJA-S-002): a chamada via anchor-tag (`<a href>`) não envia
+  // `x-assistec-loja-id`, mas o cliente passa `storeId` na query — resolvido por
+  // `storeIdFromAssistecRequestForRead`. Sem fallback `loja-1`: ausência → 400 explícito.
+  const storeId = opsLojaIdFromRequest(req)
+  if (!storeId) {
+    return NextResponse.json({ ok: false, error: "storeId obrigatório" }, { status: 400 })
+  }
   const url = new URL(req.url)
 
   const tipo = url.searchParams.get("tipo") ?? "movimentacoes"
