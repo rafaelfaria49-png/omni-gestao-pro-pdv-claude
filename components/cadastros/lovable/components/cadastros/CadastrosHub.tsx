@@ -24,7 +24,7 @@ import {
   listClientes,
   listFornecedores,
   listMarcas,
-  listProdutos,
+  listProdutosPaginado,
   listServicos,
   listTecnicos,
   listLogsAuditoriaCadastros,
@@ -930,8 +930,12 @@ function ProdutosPanel({
   const [estoqueProduto, setEstoqueProduto] = useState<ProdutoDTO | null>(null);
   const [histGeralOpen, setHistGeralOpen] = useState(false);
   const [resumo, setResumo] = useState<EstoqueResumo | null>(null);
+  const PAGE_SIZE = 100;
   const [rows, setRows] = useState<ProdutoDTO[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
+  const [page, setPage] = useState(1);
   const [filterQuery, setFilterQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
   useEffect(() => {
     if (autoOpen) {
@@ -952,21 +956,28 @@ function ProdutosPanel({
     { l: "Prontos p/ Marketplace", n: 0, t: "success" },
   ]);
 
-  // Carrega só a lista — rápido, desbloqueia tabela e busca imediatamente
+  // Carrega a página atual — server-side para suportar 5000+ produtos sem travar
   const refreshRows = useMemo(
     () => async () => {
       setLoadingRows(true);
       setErr(null);
       try {
-        const data = await listProdutos(storeId);
-        setRows(data);
+        const { produtos, total } = await listProdutosPaginado(storeId, {
+          q: debouncedQuery || undefined,
+          page,
+          pageSize: PAGE_SIZE,
+        });
+        setRows(produtos);
+        setTotalRows(total);
       } catch (e) {
         setErr(e instanceof Error ? e.message : "Falha ao carregar produtos");
       } finally {
         setLoadingRows(false);
       }
     },
-    [storeId]
+    // PAGE_SIZE é constante local — seguro omitir do array de deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [storeId, debouncedQuery, page]
   );
 
   // Carrega stats/alertas — pesado (>15 queries), não bloqueia tabela nem busca
@@ -1004,20 +1015,19 @@ function ProdutosPanel({
     [refreshRows, refreshAlerts]
   );
 
-  // Dispara os dois carregamentos em paralelo na montagem do painel
+  // Debounce: aguarda 300ms após última tecla para disparar busca no servidor
   useEffect(() => {
-    void refreshRows();
-    void refreshAlerts();
-  }, [refreshRows, refreshAlerts]);
+    const t = setTimeout(() => {
+      setDebouncedQuery(filterQuery.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [filterQuery]);
 
-  const visibleRows = useMemo(() => {
-    const q = filterQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((p) => {
-      const blob = [p.nome, p.sku, p.barras, p.categoria, p.marca, p.fornecedor].join(" ").toLowerCase();
-      return blob.includes(q);
-    });
-  }, [rows, filterQuery]);
+  // Rows: dispara sempre que storeId, debouncedQuery ou page mudam
+  useEffect(() => { void refreshRows(); }, [refreshRows]);
+  // Alertas: dispara apenas na montagem e troca de loja (não em cada página)
+  useEffect(() => { void refreshAlerts(); }, [refreshAlerts]);
 
   const fmtBRL = (n: number) =>
     n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -1122,7 +1132,7 @@ function ProdutosPanel({
       </div>
 
       <Toolbar
-        count={visibleRows.length}
+        count={totalRows}
         label="produtos"
         onNew={m.openIt}
         filterQuery={filterQuery}
@@ -1138,7 +1148,7 @@ function ProdutosPanel({
         </Card>
       )}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
-      {!loadingRows && !err && rows.length === 0 && (
+      {!loadingRows && !err && rows.length === 0 && !debouncedQuery && (
         <Card className="mb-4 border-dashed border-2 border-border/80 bg-gradient-to-br from-card to-muted/20 p-10 text-center">
           <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
             <Package className="h-7 w-7" />
@@ -1156,7 +1166,7 @@ function ProdutosPanel({
           </button>
         </Card>
       )}
-      {!loadingRows && !err && rows.length > 0 && visibleRows.length === 0 && (
+      {!loadingRows && !err && rows.length === 0 && !!debouncedQuery && (
         <Card className="mb-4 border border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
           Nenhum produto corresponde à busca. Limpe o filtro ou ajuste os termos.
         </Card>
@@ -1173,7 +1183,7 @@ function ProdutosPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {visibleRows.map((p) => {
+              {rows.map((p) => {
                 const score = catalogQualityScore(p);
                 const iaStub = p.metadata && typeof p.metadata.cadastroIa === "object";
                 const est = estoqueBadge(p.estoque);
@@ -1308,6 +1318,39 @@ function ProdutosPanel({
             </tbody>
           </table>
         </div>
+        {/* Paginação: exibida apenas quando há mais produtos do que o tamanho de página */}
+        {totalRows > PAGE_SIZE && (
+          <div className="flex items-center justify-between border-t border-border px-4 py-3">
+            <span className="text-xs text-muted-foreground">
+              {Math.min((page - 1) * PAGE_SIZE + 1, totalRows).toLocaleString("pt-BR")}
+              {" – "}
+              {Math.min(page * PAGE_SIZE, totalRows).toLocaleString("pt-BR")}
+              {" de "}
+              {totalRows.toLocaleString("pt-BR")} produtos
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground transition hover:bg-accent disabled:opacity-40"
+              >
+                ← Anterior
+              </button>
+              <span className="min-w-[6rem] text-center text-xs text-muted-foreground">
+                Página {page} de {Math.ceil(totalRows / PAGE_SIZE)}
+              </span>
+              <button
+                type="button"
+                disabled={page >= Math.ceil(totalRows / PAGE_SIZE)}
+                onClick={() => setPage((p) => p + 1)}
+                className="rounded-md border border-border bg-background px-3 py-1.5 text-xs text-foreground transition hover:bg-accent disabled:opacity-40"
+              >
+                Próxima →
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
       )}
 

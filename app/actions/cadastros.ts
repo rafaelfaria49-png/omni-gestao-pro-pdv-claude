@@ -1115,6 +1115,154 @@ export async function listProdutos(storeId: string, opts?: { q?: string }): Prom
   }
 }
 
+// ─── Listagem paginada (CadastrosHub → ProdutosPanel) ───────────────────────
+// Os demais callers (osStore, executor, api/estoque) continuam usando
+// `listProdutos` (retorna ProdutoDTO[]) e não foram alterados.
+// Esta função usa count + findMany em paralelo e suporta 5000+ produtos.
+export async function listProdutosPaginado(
+  storeId: string,
+  opts?: { q?: string; page?: number; pageSize?: number },
+): Promise<{ produtos: ProdutoDTO[]; total: number }> {
+  const q = opts?.q?.trim() || undefined;
+  const pageSize = Math.min(200, Math.max(10, opts?.pageSize ?? 100));
+  const page = Math.max(1, opts?.page ?? 1);
+  const skip = (page - 1) * pageSize;
+
+  const where = {
+    storeId,
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q, mode: "insensitive" as const } },
+            { sku: { contains: q, mode: "insensitive" as const } },
+            { barcode: { contains: q, mode: "insensitive" as const } },
+            { category: { contains: q, mode: "insensitive" as const } },
+            { brand: { contains: q, mode: "insensitive" as const } },
+            { supplierName: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  } as const;
+
+  const mapRow = (p: {
+    id: string;
+    name: string;
+    sku: string | null;
+    barcode: string | null;
+    category: string | null;
+    brand: string;
+    supplierName: string;
+    stock: number | null;
+    price: number | null;
+    precoCusto: number | null;
+    warrantyDays: number | null;
+    active: boolean;
+    metadata: unknown;
+  }): ProdutoDTO => {
+    const preco = Number(p.price ?? 0);
+    const custo = Number(p.precoCusto ?? 0);
+    const margem = preco > 0 ? ((preco - custo) / preco) * 100 : 0;
+    const status =
+      !p.name || !p.category || preco <= 0
+        ? ("Incompleto" as const)
+        : p.active
+          ? ("Ativo" as const)
+          : ("Inativo" as const);
+    return {
+      id: p.id,
+      nome: p.name,
+      sku: p.sku ?? "—",
+      barras: p.barcode ?? "",
+      categoria: p.category ?? "—",
+      marca: p.brand || "—",
+      fornecedor: p.supplierName || "—",
+      estoque: p.stock ?? 0,
+      custo,
+      preco,
+      margem: Number.isFinite(margem) ? Number(margem.toFixed(1)) : 0,
+      garantia: p.warrantyDays ?? 0,
+      status,
+      metadata: produtoMetadataRecord(p.metadata),
+    };
+  };
+
+  const SELECT = {
+    id: true,
+    name: true,
+    sku: true,
+    barcode: true,
+    category: true,
+    brand: true,
+    supplierName: true,
+    stock: true,
+    price: true,
+    precoCusto: true,
+    warrantyDays: true,
+    active: true,
+    metadata: true,
+  } as const;
+
+  try {
+    const [rows, total] = await Promise.all([
+      prisma.produto.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+        skip,
+        take: pageSize,
+        select: SELECT,
+      }),
+      prisma.produto.count({ where }),
+    ]);
+    return { produtos: rows.map(mapRow), total };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[cadastros:listProdutosPaginado]", msg);
+    // fallback mínimo sem metadados opcionais
+    const [legacyRows, legacyTotal] = await Promise.all([
+      withPrismaSafe(
+        (db) =>
+          db.produto.findMany({
+            where,
+            orderBy: { updatedAt: "desc" },
+            skip,
+            take: pageSize,
+            select: {
+              id: true,
+              name: true,
+              sku: true,
+              barcode: true,
+              category: true,
+              stock: true,
+              price: true,
+              precoCusto: true,
+              warrantyDays: true,
+              active: true,
+            },
+          }),
+        [] as Array<{
+          id: string;
+          name: string;
+          sku: string | null;
+          barcode: string | null;
+          category: string | null;
+          stock: number | null;
+          price: number | null;
+          precoCusto: number | null;
+          warrantyDays: number | null;
+          active: boolean;
+        }>,
+      ),
+      withPrismaSafe((db) => db.produto.count({ where: { storeId } }), 0),
+    ]);
+    return {
+      produtos: legacyRows.map((p) =>
+        mapRow({ ...p, brand: "", supplierName: "", metadata: null }),
+      ),
+      total: legacyTotal,
+    };
+  }
+}
+
 export async function upsertProduto(
   storeId: string,
   input: {
