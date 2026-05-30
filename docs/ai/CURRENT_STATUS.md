@@ -11,6 +11,46 @@
 
 ---
 
+### Migração Smart Genius — adaptador Clientes + Contas a Receber (concluído 29/05/2026)
+
+**Problema:** os relatórios Smart Genius `RELATORIO DE CLIENTES CADASTRADOS.xls` e
+`RELATORIO DE CONTAS Á RECEBER.xls` não importavam pelo Importador Avançado:
+clientes caíam 100% como "Nome vazio" (banner na linha 0 + cabeçalho real em 1-2 linhas
+não lido por `sheet_to_json` sem `header:1`); contas a receber caíam como `desconhecido`
+(filename "contas **a** receber" não casava, cabeçalho na linha 1, rótulos Smart
+`Total:`/`Menor Venc:`/`Em atraso:`/`A vencer:` ausentes do dicionário).
+
+**Solução:** adaptador **isolado** `lib/importador-avancado/smart-genius/`, interceptado
+em `app/api/import/advanced/route.ts` ANTES do fluxo genérico. Detecção estrita por
+banner ("Listagem de Clientes" / "Listagem de Contas a Receber") com testes negativos
+garantindo que **Gestão Clique e Smart Genius Produtos NÃO casam** (seguem intactos).
+
+| Arquivo | Papel |
+|---------|-------|
+| `lib/importador-avancado/smart-genius/detectar.ts` | Detecção por assinatura de banner + cabeçalho (1 ou 2 linhas) |
+| `lib/importador-avancado/smart-genius/parser.ts` | AOA (`header:1`), pula banner, mapa rótulo→coluna, normaliza |
+| `lib/importador-avancado/smart-genius/normalizar.ts` | número BR, telefone (remove duplicata), data dd/mm→ISO |
+| `lib/importador-avancado/smart-genius/persistir.ts` | Clientes (dedupe por nome) + Contas a Receber (2 títulos via `upsertContaReceber`) |
+| `lib/importador-avancado/smart-genius/orquestrar.ts` | Separa Smart vs genérico; persiste clientes antes de contas |
+| `app/api/import/advanced/route.ts` | Branch Smart (fase 1.5); fluxo genérico intacto para o resto |
+| `+ detectar.test.ts / parser.test.ts` | 12 testes (inclui negativos GC/Smart Produtos) |
+
+**Regra Contas a Receber (aprovada):** saldo consolidado → 2 títulos/cliente.
+`Em atraso > 0` → título **vencido** (desc. "SALDO MIGRADO SMARTGENIUS - EM ATRASO");
+`A vencer > 0` → título **pendente** (desc. "… - A VENCER"); valor zero não cria título;
+importa o **principal** (nunca soma Reaj); `Total`/`Reaj`/`Tot. Reaj`/código legado vão em
+`payload.observacao`. Vencimento = "Menor Venc". `localKey` = `imp-smart:{storeId}:cr:{codigo|slugNome}:{atraso|avencer}`
+(idempotente). Reimport não rebaixa título já pago/parcial/cancelado/estornado.
+
+**Validação contra arquivos reais:** Clientes 80 válidos / 4 sem-nome; Contas 45 clientes →
+**42 títulos vencidos (R$ 16.280,50) + 7 pendentes (R$ 1.243,06)**. `tsc` limpo ·
+`vitest` 202 passed / 4 expected-fail · `next build` OK.
+
+**Não alterado (intacto):** schema Prisma, auth, proxy, `financeiro/contracts`, Importador de
+Produtos, fluxo genérico do Importador Avançado (Gestão Clique). Nenhuma migração de banco.
+
+---
+
 ### SPRINT_MULTI_LOJA-S-001 — Fallback silencioso loja-1 eliminado + ACL guards (concluído 29/05/2026)
 
 **Escopo:** F-01 + F-02 (atômicos) + F-05 + F-06 + F-07 + F-14.

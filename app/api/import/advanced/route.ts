@@ -8,6 +8,7 @@ import { parsearArquivos } from "@/lib/importador-avancado/parser"
 import { agruparEMerge, labelDominio } from "@/lib/importador-avancado"
 import { persistirImportacao } from "@/lib/importador-avancado/persistidor"
 import type { DominioImport } from "@/lib/importador-avancado/types"
+import { separarSmart, persistirSmartSeparado } from "@/lib/importador-avancado/smart-genius/orquestrar"
 import { prisma } from "@/lib/prisma"
 
 export const runtime = "nodejs"
@@ -88,10 +89,29 @@ export async function POST(req: NextRequest) {
     arquivos.push({ buffer: Buffer.from(arrayBuffer), nome: file.name })
   }
 
-  // ── Fase 2: parse ────────────────────────────────────────────────────────
+  // ── Fase 1.5: adaptador Smart Genius (clientes / contas a receber) ───────
+  // Intercepta SOMENTE os dois relatórios Smart Genius desta entrega; os demais
+  // arquivos seguem 100% pelo fluxo genérico (Gestão Clique etc. inalterados).
+  let sep
+  try {
+    sep = await separarSmart(arquivos)
+  } catch (e) {
+    return NextResponse.json(
+      { error: "Falha ao analisar arquivos Smart Genius", detalhe: e instanceof Error ? e.message : String(e) },
+      { status: 422 }
+    )
+  }
+  // Respeita o filtro de domínios também para os arquivos Smart.
+  const smartDetectados =
+    dominiosFiltro.length > 0
+      ? sep.detectados.filter((d) => dominiosFiltro.includes(d.dominio as DominioImport))
+      : sep.detectados
+  const temSmart = smartDetectados.length > 0
+
+  // ── Fase 2: parse genérico (apenas dos arquivos NÃO-Smart) ───────────────
   let planilhas
   try {
-    planilhas = await parsearArquivos(arquivos)
+    planilhas = await parsearArquivos(sep.restantes)
   } catch (e) {
     return NextResponse.json(
       { error: "Falha ao parsear arquivos", detalhe: e instanceof Error ? e.message : String(e) },
@@ -99,7 +119,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  if (planilhas.length === 0) {
+  if (planilhas.length === 0 && !temSmart) {
     return NextResponse.json({ error: "Nenhuma planilha válida encontrada nos arquivos enviados" }, { status: 422 })
   }
 
@@ -123,9 +143,27 @@ export async function POST(req: NextRequest) {
     headers: p.headers.slice(0, 20),
   }))
 
+  // Anexa as detecções Smart no MESMO formato (confiança 1 — banner explícito).
+  for (const d of smartDetectados) {
+    deteccao.push({
+      arquivo: d.arquivo,
+      dominio: d.dominio as DominioImport,
+      label: d.label,
+      confianca: 1,
+      totalLinhas: d.totalLinhas,
+      headers: [],
+    })
+  }
+
   const totaisDetectados: Record<string, number> = {}
   for (const [dom, regs] of grupos) {
     totaisDetectados[dom] = regs.length
+  }
+  // Smart entra na contagem por domínio (clientes = nº de clientes;
+  // contas_receber = nº de títulos previstos, não de linhas).
+  for (const d of smartDetectados) {
+    const prev = d.dominio === "contas_receber" ? (d.titulosPrevistos ?? 0) : d.validos
+    totaisDetectados[d.dominio] = (totaisDetectados[d.dominio] ?? 0) + prev
   }
 
   // ── Modo preview: retorna detecção sem persistir ─────────────────────────
@@ -150,11 +188,44 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // Persiste os arquivos Smart (respeitando o filtro de domínios).
+  let smartAgg: Awaited<ReturnType<typeof persistirSmartSeparado>> | null = null
+  if (temSmart) {
+    try {
+      const sepFiltrada =
+        dominiosFiltro.length > 0
+          ? {
+              detectados: smartDetectados,
+              clientes: dominiosFiltro.includes("clientes" as DominioImport) ? sep.clientes : [],
+              contas: dominiosFiltro.includes("contas_receber" as DominioImport) ? sep.contas : [],
+              restantes: sep.restantes,
+            }
+          : sep
+      smartAgg = await persistirSmartSeparado(storeId, sepFiltrada)
+    } catch (e) {
+      return NextResponse.json(
+        { error: "Falha ao persistir importação Smart Genius", detalhe: e instanceof Error ? e.message : String(e) },
+        { status: 500 }
+      )
+    }
+  }
+
+  // Totais finais = genérico + Smart (Smart não passa pelo `resultado.log`).
+  const totaisFinais = {
+    criados: resultado.criados + (smartAgg?.totais.criados ?? 0),
+    atualizados: resultado.atualizados + (smartAgg?.totais.atualizados ?? 0),
+    ignorados: resultado.ignorados + (smartAgg?.totais.ignorados ?? 0),
+    erros: resultado.erros + (smartAgg?.totais.erros ?? 0),
+    duracaoMs: resultado.duracaoMs,
+  }
+  const okFinal = resultado.ok && (smartAgg?.totais.erros ?? 0) === 0
+
   // Agrupa erros por domínio para facilitar diagnóstico no cliente
   const errosDetalhados = resultado.log
     .filter((l) => l.acao === "erro")
     .slice(0, 50)
-    .map((l) => ({ dominio: l.dominio, chave: l.chave, detalhe: l.detalhe }))
+    .map((l) => ({ dominio: l.dominio as string, chave: l.chave, detalhe: l.detalhe }))
+  if (smartAgg) errosDetalhados.push(...smartAgg.errosDetalhados.slice(0, 50))
 
   const porDominio: Record<string, { criados: number; atualizados: number; erros: number }> = {}
   for (const entry of resultado.log) {
@@ -162,6 +233,14 @@ export async function POST(req: NextRequest) {
     if (entry.acao === "criado") porDominio[entry.dominio]!.criados++
     else if (entry.acao === "atualizado") porDominio[entry.dominio]!.atualizados++
     else if (entry.acao === "erro") porDominio[entry.dominio]!.erros++
+  }
+  if (smartAgg) {
+    for (const [dom, t] of Object.entries(smartAgg.porDominio)) {
+      const slot = (porDominio[dom] ??= { criados: 0, atualizados: 0, erros: 0 })
+      slot.criados += t.criados
+      slot.atualizados += t.atualizados
+      slot.erros += t.erros
+    }
   }
 
   // ── Auditoria: registra batch para a aba Histórico do Importação HUB ────
@@ -173,24 +252,24 @@ export async function POST(req: NextRequest) {
       .slice(0, 6)
       .join(" · ")
     const detalhe =
-      `${resultado.criados} criados · ${resultado.atualizados} atualizados · ${resultado.ignorados} ignorados · ${resultado.erros} erros` +
+      `${totaisFinais.criados} criados · ${totaisFinais.atualizados} atualizados · ${totaisFinais.ignorados} ignorados · ${totaisFinais.erros} erros` +
       (partes ? ` — ${partes}` : "")
     const userLabel = (authResult.userLabel && authResult.userLabel.trim()) || "Importador Avançado"
     await prisma.logsAuditoria.create({
       data: {
-        action: resultado.ok ? "import.planilha" : "import.planilha.erro",
+        action: okFinal ? "import.planilha" : "import.planilha.erro",
         userLabel: userLabel.slice(0, 500),
         detail: detalhe.slice(0, 4000),
         source: "importador_avancado",
         metadata: JSON.stringify({
           batchId,
           storeId,
-          duracaoMs: resultado.duracaoMs,
+          duracaoMs: totaisFinais.duracaoMs,
           totais: {
-            criados: resultado.criados,
-            atualizados: resultado.atualizados,
-            ignorados: resultado.ignorados,
-            erros: resultado.erros,
+            criados: totaisFinais.criados,
+            atualizados: totaisFinais.atualizados,
+            ignorados: totaisFinais.ignorados,
+            erros: totaisFinais.erros,
           },
           porDominio,
           arquivos: deteccao.map((d) => ({ arquivo: d.arquivo, dominio: d.dominio, confianca: d.confianca, totalLinhas: d.totalLinhas })),
@@ -204,15 +283,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     batchId,
     modo: "importar",
-    ok: resultado.ok,
+    ok: okFinal,
     planilhasDetectadas: deteccao,
-    totais: {
-      criados: resultado.criados,
-      atualizados: resultado.atualizados,
-      ignorados: resultado.ignorados,
-      erros: resultado.erros,
-      duracaoMs: resultado.duracaoMs,
-    },
+    totais: totaisFinais,
     porDominio,
     errosDetalhados,
   })
