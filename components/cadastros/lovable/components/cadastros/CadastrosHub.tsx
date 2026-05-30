@@ -455,12 +455,14 @@ function Toolbar({
   onNew,
   filterQuery,
   onFilterQueryChange,
+  onFilterClick,
 }: {
   count: number;
   label: string;
   onNew?: () => void;
   filterQuery?: string;
   onFilterQueryChange?: (v: string) => void;
+  onFilterClick?: () => void;
 }) {
   const [activeRoadmap, setActiveRoadmap] = useState<"filtros" | "exportar" | null>(null);
 
@@ -479,9 +481,13 @@ function Toolbar({
           </div>
         )}
         <button
-          onClick={() => setActiveRoadmap("filtros")}
-          title="Ver Roadmap de Filtros"
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-200"
+          onClick={onFilterClick ? onFilterClick : () => setActiveRoadmap("filtros")}
+          title={onFilterClick ? "Filtrar listagem" : "Ver Roadmap de Filtros"}
+          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-all duration-200 ${
+            onFilterClick
+              ? "border-primary/20 bg-primary/5 text-primary hover:bg-primary/10"
+              : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
+          }`}
         >
           <Filter className="h-4 w-4" /> Filtros
         </button>
@@ -590,6 +596,24 @@ function ClientesPanel({
   const observacoesRef = useRef<HTMLTextAreaElement | null>(null);
   const statusRef = useRef<HTMLSelectElement | null>(null);
 
+  // Estados de filtros avançados
+  const [showFilters, setShowFilters] = useState(false);
+  const [tipoFilter, setTipoFilter] = useState("todos");
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [tagFilter, setTagFilter] = useState("todos");
+
+  // Estado de ordenação
+  const [sortConfig, setSortConfig] = useState<{ field: string; direction: "asc" | "desc" } | undefined>(undefined);
+
+  // Estados de seleção em lote
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkCheckResults, setBulkCheckResults] = useState<any[]>([]);
+  const [bulkChecking, setBulkChecking] = useState(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [bulkActionSelected, setBulkActionSelected] = useState<"delete" | "inactivate">("inactivate");
+  const [bulkConfirmText, setBulkConfirmText] = useState("");
+
   useEffect(() => {
     if (autoOpen) {
       m.openIt();
@@ -630,101 +654,446 @@ function ClientesPanel({
     }
   }, [m.open, editing]);
 
-  const visibleRows = useMemo(() => {
-    const q = filterQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((c) => {
-      const blob = [c.nome, c.telefone, c.documento, c.cidade].join(" ").toLowerCase();
-      return blob.includes(q);
+  // Reseta seleção em lote ao mudar filtros ou busca
+  useEffect(() => {
+    setSelectedClientIds(new Set());
+  }, [filterQuery, tipoFilter, statusFilter, tagFilter, sortConfig]);
+
+  // Extrai todas as tags únicas dos clientes carregados
+  const todasTags = useMemo(() => {
+    const set = new Set<string>();
+    rows.forEach((c) => {
+      if (Array.isArray(c.tags)) {
+        c.tags.forEach((t) => set.add(t));
+      }
     });
-  }, [rows, filterQuery]);
+    return Array.from(set);
+  }, [rows]);
+
+  // Filtra e ordena localmente os clientes
+  const sortedAndFilteredRows = useMemo(() => {
+    let result = rows;
+
+    const q = filterQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter((c) => {
+        const blob = [c.nome, c.telefone, c.documento, c.cidade].join(" ").toLowerCase();
+        return blob.includes(q);
+      });
+    }
+
+    if (tipoFilter !== "todos") {
+      result = result.filter((c) => c.tipo === tipoFilter);
+    }
+
+    if (statusFilter !== "todos") {
+      result = result.filter((c) => c.status === statusFilter);
+    }
+
+    if (tagFilter !== "todos") {
+      result = result.filter((c) => c.tags.includes(tagFilter));
+    }
+
+    if (sortConfig) {
+      const { field, direction } = sortConfig;
+      result = [...result].sort((a, b) => {
+        let valA: any = "";
+        let valB: any = "";
+
+        if (field === "nome") {
+          valA = a.nome;
+          valB = b.nome;
+        } else if (field === "tipo") {
+          valA = a.tipo;
+          valB = b.tipo;
+        } else if (field === "telefone") {
+          valA = a.telefone;
+          valB = b.telefone;
+        } else if (field === "documento") {
+          valA = a.documento;
+          valB = b.documento;
+        } else if (field === "cidade") {
+          valA = a.cidade;
+          valB = b.cidade;
+        } else if (field === "totalGasto") {
+          valA = a.totalGasto;
+          valB = b.totalGasto;
+        } else if (field === "ultimaCompra") {
+          valA = a.ultimaCompra;
+          valB = b.ultimaCompra;
+        } else if (field === "status") {
+          valA = a.status;
+          valB = b.status;
+        }
+
+        if (valA < valB) return direction === "asc" ? -1 : 1;
+        if (valA > valB) return direction === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+
+    return result;
+  }, [rows, filterQuery, tipoFilter, statusFilter, tagFilter, sortConfig]);
+
+  const handleSort = (field: string) => {
+    setSortConfig((curr) => {
+      if (!curr || curr.field !== field) {
+        return { field, direction: "asc" };
+      }
+      if (curr.direction === "asc") {
+        return { field, direction: "desc" };
+      }
+      return undefined;
+    });
+  };
+
+  const renderSortArrow = (field: string) => {
+    if (!sortConfig || sortConfig.field !== field) return <span className="text-muted-foreground/30 text-[10px]">▲▼</span>;
+    return sortConfig.direction === "asc" ? <span className="text-primary text-[10px]">▲</span> : <span className="text-primary text-[10px]">▼</span>;
+  };
+
+  const handleBulkInactivate = async () => {
+    if (selectedClientIds.size === 0) return;
+    if (!window.confirm(`Tem certeza que deseja inativar os ${selectedClientIds.size} clientes selecionados?`)) return;
+
+    setBulkActionLoading(true);
+    try {
+      const res = await fetch("/api/clientes/bulk-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": storeId,
+        },
+        body: JSON.stringify({
+          ids: Array.from(selectedClientIds),
+          action: "inactivate",
+          userLabel: "Administrador",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao inativar clientes");
+
+      toast.success(`${data.inactivated} cliente(s) inativados com sucesso.`);
+      setSelectedClientIds(new Set());
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro desconhecido");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedClientIds.size === 0) return;
+    setBulkChecking(true);
+    setBulkModalOpen(true);
+    setBulkConfirmText("");
+    setBulkActionSelected("inactivate");
+    try {
+      const res = await fetch("/api/clientes/bulk-check-dependencies", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": storeId,
+        },
+        body: JSON.stringify({
+          ids: Array.from(selectedClientIds),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao verificar dependências");
+      setBulkCheckResults(data.results || []);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao verificar vínculos");
+      setBulkModalOpen(false);
+    } finally {
+      setBulkChecking(false);
+    }
+  };
+
+  const executeBulkAction = async () => {
+    if (bulkConfirmText.toUpperCase() !== "EXCLUIR") {
+      toast.error("Por favor, digite EXCLUIR para confirmar");
+      return;
+    }
+    setBulkActionLoading(true);
+    try {
+      let idsToProcess = Array.from(selectedClientIds);
+      if (bulkActionSelected === "inactivate") {
+        // Envia todos os ids
+      } else {
+        const linkedIds = bulkCheckResults.filter((r) => r.isLinked).map((r) => r.id);
+        idsToProcess = idsToProcess.filter((id) => !linkedIds.includes(id));
+      }
+
+      if (idsToProcess.length === 0) {
+        toast.info("Nenhum cliente livre para exclusão");
+        setBulkModalOpen(false);
+        return;
+      }
+
+      const res = await fetch("/api/clientes/bulk-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": storeId,
+        },
+        body: JSON.stringify({
+          ids: idsToProcess,
+          action: "delete",
+          userLabel: "Administrador",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao executar ação em lote");
+
+      toast.success(
+        `Sucesso: ${data.deleted} cliente(s) excluídos permanentemente e ${data.inactivated} cliente(s) inativados.`
+      );
+      setSelectedClientIds(new Set());
+      setBulkModalOpen(false);
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao executar lote");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
 
   return (
     <div className="w-full min-w-0">
       <Toolbar
-        count={visibleRows.length}
+        count={sortedAndFilteredRows.length}
         label="clientes"
         onNew={m.openIt}
         filterQuery={filterQuery}
         onFilterQueryChange={setFilterQuery}
+        onFilterClick={() => setShowFilters(!showFilters)}
       />
+
+      {showFilters && (
+        <Card className="mb-4 bg-muted/20 border border-border/80 p-4 transition-all animate-fade-in">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Field label="Tipo de Pessoa">
+              <Select value={tipoFilter} onChange={(e: any) => setTipoFilter(e.target.value)}>
+                <option value="todos">Todos</option>
+                <option value="PF">PF — Pessoa Física</option>
+                <option value="PJ">PJ — Pessoa Jurídica</option>
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select value={statusFilter} onChange={(e: any) => setStatusFilter(e.target.value)}>
+                <option value="todos">Todos</option>
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
+              </Select>
+            </Field>
+            <Field label="Tags">
+              <Select value={tagFilter} onChange={(e: any) => setTagFilter(e.target.value)}>
+                <option value="todos">Todas</option>
+                {todasTags.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setTipoFilter("todos");
+                setStatusFilter("todos");
+                setTagFilter("todos");
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground font-medium transition"
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        </Card>
+      )}
+
       {loading && <div className="mb-3 text-sm text-muted-foreground">Carregando clientes…</div>}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
-      <Card className="overflow-hidden">
-        <div className="w-full min-w-0 max-w-full overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-surface text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                {["Cliente", "Tipo", "Telefone", "Documento", "Cidade", "Total gasto", "Última compra", "Tags", "Status", ""].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {visibleRows.map((c) => (
-                <tr key={c.id} className="hover:bg-accent/40">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-foreground">{c.nome}</div>
-                  </td>
-                  <td className="px-4 py-3"><Badge tone={c.tipo === "PJ" ? "info" : "default"}>{c.tipo}</Badge></td>
-                  <td className="px-4 py-3 text-foreground">{c.telefone}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{c.documento}</td>
-                  <td className="px-4 py-3 text-foreground">{c.cidade}</td>
-                  <td className="px-4 py-3 font-medium text-foreground">R$ {c.totalGasto.toLocaleString("pt-BR")}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{c.ultimaCompra}</td>
-                  <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{c.tags.map((t) => <Badge key={t}>{t}</Badge>)}</div></td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => {
-                        startSaving(async () => {
-                          try {
-                            await updateCliente(storeId, c.id, { active: c.status !== "Ativo" });
-                            await refresh();
-                            toast.success("Status do cliente atualizado com sucesso.");
-                          } catch (e) {
-                            toast.error(e instanceof Error ? e.message : "Não foi possível atualizar status.");
-                          }
-                        });
+      
+      {!loading && !err && sortedAndFilteredRows.length === 0 && (
+        <Card className="mb-4 border border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+          Nenhum cliente corresponde aos filtros e busca ativos.
+        </Card>
+      )}
+
+      {!loading && !err && sortedAndFilteredRows.length > 0 && (
+        <Card className="overflow-hidden relative">
+          <div className="w-full min-w-0 max-w-full overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-surface text-xs uppercase tracking-wide text-muted-foreground select-none">
+                <tr>
+                  <th className="px-4 py-3 text-left w-12">
+                    <Checkbox
+                      checked={sortedAndFilteredRows.length > 0 && selectedClientIds.size === sortedAndFilteredRows.length}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedClientIds(new Set(sortedAndFilteredRows.map((c) => c.id)));
+                        } else {
+                          setSelectedClientIds(new Set());
+                        }
                       }}
-                      className="inline-flex"
-                      title="Ativar/Inativar"
-                    >
-                      <Badge tone={c.status === "Ativo" ? "success" : "default"}>{c.status}</Badge>
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <button
-                        className="rounded p-1.5 hover:bg-accent hover:text-foreground transition-smooth"
-                        title="Editar cliente"
-                        onClick={() => {
-                          setEditing(c);
-                          m.openIt();
+                    />
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                    onClick={() => handleSort("nome")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Cliente {renderSortArrow("nome")}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                    onClick={() => handleSort("tipo")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Tipo {renderSortArrow("tipo")}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                    onClick={() => handleSort("telefone")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Telefone {renderSortArrow("telefone")}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                    onClick={() => handleSort("documento")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Documento {renderSortArrow("documento")}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                    onClick={() => handleSort("cidade")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Cidade {renderSortArrow("cidade")}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                    onClick={() => handleSort("totalGasto")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Total gasto {renderSortArrow("totalGasto")}
+                    </div>
+                  </th>
+                  <th
+                    className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                    onClick={() => handleSort("ultimaCompra")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Última compra {renderSortArrow("ultimaCompra")}
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium">Tags</th>
+                  <th
+                    className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                    onClick={() => handleSort("status")}
+                  >
+                    <div className="flex items-center gap-1">
+                      Status {renderSortArrow("status")}
+                    </div>
+                  </th>
+                  <th className="px-4 py-3 text-left font-medium"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {sortedAndFilteredRows.map((c) => (
+                  <tr
+                    key={c.id}
+                    className={`hover:bg-accent/40 ${
+                      selectedClientIds.has(c.id) ? "bg-primary/5" : ""
+                    }`}
+                  >
+                    <td className="px-4 py-3 w-12">
+                      <Checkbox
+                        checked={selectedClientIds.has(c.id)}
+                        onCheckedChange={(checked) => {
+                          const next = new Set(selectedClientIds);
+                          if (checked) {
+                            next.add(c.id);
+                          } else {
+                            next.delete(c.id);
+                          }
+                          setSelectedClientIds(next);
                         }}
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-foreground">{c.nome}</div>
+                    </td>
+                    <td className="px-4 py-3"><Badge tone={c.tipo === "PJ" ? "info" : "default"}>{c.tipo}</Badge></td>
+                    <td className="px-4 py-3 text-foreground">{c.telefone}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{c.documento}</td>
+                    <td className="px-4 py-3 text-foreground">{c.cidade}</td>
+                    <td className="px-4 py-3 font-medium text-foreground font-mono">R$ {c.totalGasto.toLocaleString("pt-BR")}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{c.ultimaCompra}</td>
+                    <td className="px-4 py-3"><div className="flex flex-wrap gap-1">{c.tags.map((t) => <Badge key={t}>{t}</Badge>)}</div></td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => {
+                          startSaving(async () => {
+                            try {
+                              await updateCliente(storeId, c.id, { active: c.status !== "Ativo" });
+                              await refresh();
+                              toast.success("Status do cliente updated.");
+                            } catch (e) {
+                              toast.error(e instanceof Error ? e.message : "Não foi possível atualizar status.");
+                            }
+                          });
+                        }}
+                        className="inline-flex"
+                        title="Ativar/Inativar"
                       >
-                        <Edit3 className="h-4 w-4" />
+                        <Badge tone={c.status === "Ativo" ? "success" : "default"}>{c.status}</Badge>
                       </button>
-                      {c.telefone && c.telefone !== "—" && (
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
                         <button
                           className="rounded p-1.5 hover:bg-accent hover:text-foreground transition-smooth"
-                          title="Abrir WhatsApp"
+                          title="Editar cliente"
                           onClick={() => {
-                            const digits = c.telefone.replace(/\D/g, "");
-                            const phone = digits.startsWith("55") ? digits : `55${digits}`;
-                            window.open(`https://wa.me/${phone}`, "_blank");
+                            setEditing(c);
+                            m.openIt();
                           }}
                         >
-                          <MessageCircle className="h-4 w-4" />
+                          <Edit3 className="h-4 w-4" />
                         </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                        {c.telefone && c.telefone !== "—" && (
+                          <button
+                            className="rounded p-1.5 hover:bg-accent hover:text-foreground transition-smooth"
+                            title="Abrir WhatsApp"
+                            onClick={() => {
+                              const digits = c.telefone.replace(/\D/g, "");
+                              const phone = digits.startsWith("55") ? digits : `55${digits}`;
+                              window.open(`https://wa.me/${phone}`, "_blank");
+                            }}
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <Modal
         open={m.open}
@@ -937,12 +1306,58 @@ function ProdutosPanel({
   const [filterQuery, setFilterQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
+  // Estados de filtros avançados
+  const [showFilters, setShowFilters] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [estoqueFilter, setEstoqueFilter] = useState("todos");
+  const [precoFilter, setPrecoFilter] = useState("todos"); // "todos" | "semPreco"
+  const [fornecedorFilter, setFornecedorFilter] = useState("todos"); // "todos" | "semFornecedor"
+  const [categoriaFilter, setCategoriaFilter] = useState("todos");
+  const [marcaFilter, setMarcaFilter] = useState("todos");
+
+  const [categorias, setCategorias] = useState<string[]>([]);
+  const [marcas, setMarcas] = useState<string[]>([]);
+
+  // Estado de ordenação
+  const [sortConfig, setSortConfig] = useState<{ field: string; direction: "asc" | "desc" } | undefined>(undefined);
+
+  // Estados de seleção em lote
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const [bulkCheckResults, setBulkCheckResults] = useState<any[]>([]);
+  const [bulkChecking, setBulkChecking] = useState(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [bulkActionSelected, setBulkActionSelected] = useState<"delete" | "inactivate">("inactivate");
+  const [bulkConfirmText, setBulkConfirmText] = useState("");
+
   useEffect(() => {
     if (autoOpen) {
       m.openIt();
       onAutoOpenConsumed?.();
     }
   }, [autoOpen, onAutoOpenConsumed, m]);
+
+  // Carrega categorias e marcas para os filtros
+  useEffect(() => {
+    listCategorias(storeId)
+      .then((cats) => {
+        setCategorias(cats.filter((c) => c.active && c.type === "produto").map((c) => c.name));
+      })
+      .catch(console.error);
+
+    listMarcas(storeId)
+      .then((mrcs) => {
+        setMarcas(mrcs.filter((m) => m.active).map((m) => m.name));
+      })
+      .catch(console.error);
+  }, [storeId]);
+
+  // Reseta página quando os filtros ou ordenação mudam
+  useEffect(() => {
+    setPage(1);
+    setSelectedProductIds(new Set());
+  }, [statusFilter, estoqueFilter, precoFilter, fornecedorFilter, categoriaFilter, marcaFilter, sortConfig]);
+
   // loadingRows: bloqueia apenas a tabela; loadingAlerts: atualiza os cards silenciosamente
   const [loadingRows, setLoadingRows] = useState(true);
   const [loadingAlerts, setLoadingAlerts] = useState(true);
@@ -966,6 +1381,15 @@ function ProdutosPanel({
           q: debouncedQuery || undefined,
           page,
           pageSize: PAGE_SIZE,
+          filters: {
+            status: statusFilter,
+            estoque: estoqueFilter,
+            preco: precoFilter,
+            fornecedor: fornecedorFilter,
+            categoria: categoriaFilter,
+            marca: marcaFilter,
+          },
+          orderBy: sortConfig,
         });
         setRows(produtos);
         setTotalRows(total);
@@ -975,9 +1399,18 @@ function ProdutosPanel({
         setLoadingRows(false);
       }
     },
-    // PAGE_SIZE é constante local — seguro omitir do array de deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storeId, debouncedQuery, page]
+    [
+      storeId,
+      debouncedQuery,
+      page,
+      statusFilter,
+      estoqueFilter,
+      precoFilter,
+      fornecedorFilter,
+      categoriaFilter,
+      marcaFilter,
+      sortConfig,
+    ]
   );
 
   // Carrega stats/alertas — pesado (>15 queries), não bloqueia tabela nem busca
@@ -1028,6 +1461,132 @@ function ProdutosPanel({
   useEffect(() => { void refreshRows(); }, [refreshRows]);
   // Alertas: dispara apenas na montagem e troca de loja (não em cada página)
   useEffect(() => { void refreshAlerts(); }, [refreshAlerts]);
+
+  const handleSort = (field: string) => {
+    setSortConfig((curr) => {
+      if (!curr || curr.field !== field) {
+        return { field, direction: "asc" };
+      }
+      if (curr.direction === "asc") {
+        return { field, direction: "desc" };
+      }
+      return undefined;
+    });
+  };
+
+  const renderSortArrow = (field: string) => {
+    if (!sortConfig || sortConfig.field !== field) return <span className="text-muted-foreground/30 text-[10px]">▲▼</span>;
+    return sortConfig.direction === "asc" ? <span className="text-primary text-[10px]">▲</span> : <span className="text-primary text-[10px]">▼</span>;
+  };
+
+  const handleBulkInactivate = async () => {
+    if (selectedProductIds.size === 0) return;
+    if (!window.confirm(`Tem certeza que deseja inativar os ${selectedProductIds.size} produtos selecionados?`)) return;
+
+    setBulkActionLoading(true);
+    try {
+      const res = await fetch("/api/produtos/bulk-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": storeId,
+        },
+        body: JSON.stringify({
+          ids: Array.from(selectedProductIds),
+          action: "inactivate",
+          userLabel: "Administrador",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao inativar produtos");
+
+      toast.success(`${data.inactivated} produto(s) inativados com sucesso.`);
+      setSelectedProductIds(new Set());
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro desconhecido");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedProductIds.size === 0) return;
+    setBulkChecking(true);
+    setBulkModalOpen(true);
+    setBulkConfirmText("");
+    setBulkActionSelected("inactivate");
+    try {
+      const res = await fetch("/api/produtos/bulk-check-dependencies", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": storeId,
+        },
+        body: JSON.stringify({
+          ids: Array.from(selectedProductIds),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao verificar dependências");
+      setBulkCheckResults(data.results || []);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao verificar vínculos");
+      setBulkModalOpen(false);
+    } finally {
+      setBulkChecking(false);
+    }
+  };
+
+  const executeBulkAction = async () => {
+    if (bulkConfirmText.toUpperCase() !== "EXCLUIR") {
+      toast.error("Por favor, digite EXCLUIR para confirmar");
+      return;
+    }
+    setBulkActionLoading(true);
+    try {
+      let idsToProcess = Array.from(selectedProductIds);
+      if (bulkActionSelected === "inactivate") {
+        // Envia todos os ids. Os vinculados serão inativados e os livres deletados
+      } else {
+        // Ignora os vinculados (mantém ativos) e deleta os livres
+        const linkedIds = bulkCheckResults.filter((r) => r.isLinked).map((r) => r.id);
+        idsToProcess = idsToProcess.filter((id) => !linkedIds.includes(id));
+      }
+
+      if (idsToProcess.length === 0) {
+        toast.info("Nenhum produto livre para exclusão");
+        setBulkModalOpen(false);
+        return;
+      }
+
+      const res = await fetch("/api/produtos/bulk-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-assistec-loja-id": storeId,
+        },
+        body: JSON.stringify({
+          ids: idsToProcess,
+          action: "delete",
+          userLabel: "Administrador",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao executar ação em lote");
+
+      toast.success(
+        `Sucesso: ${data.deleted} produto(s) excluídos permanentemente e ${data.inactivated} produto(s) inativados.`
+      );
+      setSelectedProductIds(new Set());
+      setBulkModalOpen(false);
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao executar lote");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
 
   const fmtBRL = (n: number) =>
     n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -1137,7 +1696,79 @@ function ProdutosPanel({
         onNew={m.openIt}
         filterQuery={filterQuery}
         onFilterQueryChange={setFilterQuery}
+        onFilterClick={() => setShowFilters(!showFilters)}
       />
+
+      {showFilters && (
+        <Card className="mb-4 bg-muted/20 border border-border/80 p-4 transition-all animate-fade-in">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
+            <Field label="Status">
+              <Select value={statusFilter} onChange={(e: any) => setStatusFilter(e.target.value)}>
+                <option value="todos">Todos</option>
+                <option value="Ativo">Ativo</option>
+                <option value="Inativo">Inativo</option>
+                <option value="Incompleto">Incompleto</option>
+              </Select>
+            </Field>
+            <Field label="Estoque">
+              <Select value={estoqueFilter} onChange={(e: any) => setEstoqueFilter(e.target.value)}>
+                <option value="todos">Todos</option>
+                <option value="com">Com estoque</option>
+                <option value="sem">Sem estoque</option>
+                <option value="baixo">Estoque crítico (1-5)</option>
+              </Select>
+            </Field>
+            <Field label="Preço">
+              <Select value={precoFilter} onChange={(e: any) => setPrecoFilter(e.target.value)}>
+                <option value="todos">Todos</option>
+                <option value="semPreco">Sem preço de venda</option>
+              </Select>
+            </Field>
+            <Field label="Fornecedor">
+              <Select value={fornecedorFilter} onChange={(e: any) => setFornecedorFilter(e.target.value)}>
+                <option value="todos">Todos</option>
+                <option value="semFornecedor">Sem fornecedor</option>
+              </Select>
+            </Field>
+            <Field label="Categoria">
+              <Select value={categoriaFilter} onChange={(e: any) => setCategoriaFilter(e.target.value)}>
+                <option value="todos">Todas</option>
+                {categorias.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Marca">
+              <Select value={marcaFilter} onChange={(e: any) => setMarcaFilter(e.target.value)}>
+                <option value="todos">Todas</option>
+                {marcas.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setStatusFilter("todos");
+                setEstoqueFilter("todos");
+                setPrecoFilter("todos");
+                setFornecedorFilter("todos");
+                setCategoriaFilter("todos");
+                setMarcaFilter("todos");
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground font-medium transition"
+            >
+              Limpar Filtros
+            </button>
+          </div>
+        </Card>
+      )}
+
       {loadingRows && (
         <Card className="mb-4 overflow-hidden p-4" aria-busy="true" aria-label="Carregando produtos">
           <div className="space-y-2">
@@ -1148,7 +1779,7 @@ function ProdutosPanel({
         </Card>
       )}
       {err && <div className="mb-3 text-sm text-destructive">{err}</div>}
-      {!loadingRows && !err && rows.length === 0 && !debouncedQuery && (
+      {!loadingRows && !err && rows.length === 0 && !debouncedQuery && statusFilter === "todos" && estoqueFilter === "todos" && precoFilter === "todos" && fornecedorFilter === "todos" && categoriaFilter === "todos" && marcaFilter === "todos" && (
         <Card className="mb-4 border-dashed border-2 border-border/80 bg-gradient-to-br from-card to-muted/20 p-10 text-center">
           <div className="mx-auto mb-3 grid h-14 w-14 place-items-center rounded-2xl bg-primary/10 text-primary">
             <Package className="h-7 w-7" />
@@ -1166,20 +1797,80 @@ function ProdutosPanel({
           </button>
         </Card>
       )}
-      {!loadingRows && !err && rows.length === 0 && !!debouncedQuery && (
+      {!loadingRows && !err && rows.length === 0 && (!!debouncedQuery || statusFilter !== "todos" || estoqueFilter !== "todos" || precoFilter !== "todos" || fornecedorFilter !== "todos" || categoriaFilter !== "todos" || marcaFilter !== "todos") && (
         <Card className="mb-4 border border-border bg-muted/20 p-6 text-center text-sm text-muted-foreground">
-          Nenhum produto corresponde à busca. Limpe o filtro ou ajuste os termos.
+          Nenhum produto corresponde aos filtros e busca ativos. Ajuste os termos.
         </Card>
       )}
       {!loadingRows && !err && rows.length > 0 && (
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden relative">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[56rem] text-sm">
-            <thead className="bg-surface text-xs uppercase tracking-wide text-muted-foreground">
+            <thead className="bg-surface text-xs uppercase tracking-wide text-muted-foreground select-none">
               <tr>
-                {["Produto", "SKU", "Categoria", "Estoque", "Preço", "Margem", "Qualidade", "Status", "Ações"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
-                ))}
+                <th className="px-4 py-3 text-left w-12">
+                  <Checkbox
+                    checked={rows.length > 0 && selectedProductIds.size === rows.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedProductIds(new Set(rows.map((p) => p.id)));
+                      } else {
+                        setSelectedProductIds(new Set());
+                      }
+                    }}
+                  />
+                </th>
+                <th
+                  className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                  onClick={() => handleSort("nome")}
+                >
+                  <div className="flex items-center gap-1">
+                    Produto {renderSortArrow("nome")}
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                  onClick={() => handleSort("sku")}
+                >
+                  <div className="flex items-center gap-1">
+                    SKU {renderSortArrow("sku")}
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                  onClick={() => handleSort("categoria")}
+                >
+                  <div className="flex items-center gap-1">
+                    Categoria {renderSortArrow("categoria")}
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                  onClick={() => handleSort("estoque")}
+                >
+                  <div className="flex items-center gap-1">
+                    Estoque {renderSortArrow("estoque")}
+                  </div>
+                </th>
+                <th
+                  className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                  onClick={() => handleSort("preco")}
+                >
+                  <div className="flex items-center gap-1">
+                    Preço {renderSortArrow("preco")}
+                  </div>
+                </th>
+                <th className="px-4 py-3 text-left font-medium">Margem</th>
+                <th className="px-4 py-3 text-left font-medium">Qualidade</th>
+                <th
+                  className="px-4 py-3 text-left font-medium cursor-pointer hover:text-foreground transition"
+                  onClick={() => handleSort("status")}
+                >
+                  <div className="flex items-center gap-1">
+                    Status {renderSortArrow("status")}
+                  </div>
+                </th>
+                <th className="px-4 py-3 text-left font-medium">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -1192,8 +1883,24 @@ function ProdutosPanel({
                 return (
                   <tr
                     key={p.id}
-                    className={`hover:bg-accent/40 ${inativo ? "bg-muted/20 opacity-80" : ""}`}
+                    className={`hover:bg-accent/40 ${inativo ? "bg-muted/20 opacity-80" : ""} ${
+                      selectedProductIds.has(p.id) ? "bg-primary/5" : ""
+                    }`}
                   >
+                    <td className="px-4 py-3 w-12">
+                      <Checkbox
+                        checked={selectedProductIds.has(p.id)}
+                        onCheckedChange={(checked) => {
+                          const next = new Set(selectedProductIds);
+                          if (checked) {
+                            next.add(p.id);
+                          } else {
+                            next.delete(p.id);
+                          }
+                          setSelectedProductIds(next);
+                        }}
+                      />
+                    </td>
                     <td className="px-4 py-3 min-w-0">
                       <div className="font-medium text-foreground">{p.nome}</div>
                       <div className="text-xs text-muted-foreground">{p.marca} • {p.fornecedor}</div>
@@ -1352,6 +2059,139 @@ function ProdutosPanel({
           </div>
         )}
       </Card>
+      )}
+
+      {/* Barra flutuante de ações em lote */}
+      {selectedProductIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-4 rounded-xl border border-primary/20 bg-background/95 px-6 py-4 shadow-xl backdrop-blur-md animate-fade-in-up">
+          <div className="text-sm font-medium text-foreground">
+            {selectedProductIds.size} {selectedProductIds.size === 1 ? "selecionado" : "selecionados"}
+          </div>
+          <div className="h-4 w-px bg-border" />
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkInactivate}
+              disabled={bulkActionLoading}
+              className="rounded-lg bg-secondary px-3.5 py-2 text-xs font-semibold text-foreground hover:bg-secondary/80 disabled:opacity-60 transition"
+            >
+              Inativar selecionados
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkActionLoading}
+              className="rounded-lg bg-destructive px-3.5 py-2 text-xs font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60 transition shadow-md"
+            >
+              Excluir selecionados
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Exclusão Segura em Lote */}
+      {bulkModalOpen && (
+        <Modal
+          open={true}
+          onClose={() => !bulkActionLoading && setBulkModalOpen(false)}
+          title="Confirmar Exclusão em Lote"
+          subtitle="Validação de integridade e dependências"
+          size="lg"
+        >
+          <div className="space-y-4 text-sm">
+            {bulkChecking ? (
+              <div className="py-8 text-center text-muted-foreground animate-pulse">
+                Analisando dependências contábeis e operacionais...
+              </div>
+            ) : (
+              <>
+                <div className="rounded-lg border border-warning/30 bg-warning/5 p-4 text-xs space-y-2">
+                  <div className="font-semibold text-warning flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" /> Alerta de Integridade Contábil
+                  </div>
+                  <p className="text-muted-foreground">
+                    O sistema analisou os {selectedProductIds.size} itens selecionados e identificou o seguinte status:
+                  </p>
+                  <ul className="list-disc pl-5 space-y-1 mt-2 text-foreground font-medium">
+                    <li>
+                      {bulkCheckResults.filter((r) => r.isLinked).length} produto(s) possuem vendas ou OS vinculadas (exclusão física bloqueada).
+                    </li>
+                    <li>
+                      {bulkCheckResults.filter((r) => !r.isLinked).length} produto(s) estão livres e podem ser excluídos permanentemente.
+                    </li>
+                  </ul>
+                </div>
+
+                {bulkCheckResults.filter((r) => r.isLinked).length > 0 && (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-muted-foreground">
+                      Escolha a ação para os itens vinculados/bloqueados:
+                    </label>
+                    <div className="space-y-2">
+                      <label className="flex items-start gap-2.5 rounded-lg border border-border bg-background p-3 text-xs text-foreground cursor-pointer select-none">
+                        <input
+                          type="radio"
+                          name="bulkActionSelect"
+                          className="mt-0.5"
+                          checked={bulkActionSelected === "inactivate"}
+                          onChange={() => setBulkActionSelected("inactivate")}
+                        />
+                        <div>
+                          <span className="font-medium block text-foreground">Inativar os vinculados (Recomendado)</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            Preserva relatórios de faturamento, histórico de movimentação de caixa e Ordens de Serviço.
+                          </span>
+                        </div>
+                      </label>
+                      <label className="flex items-start gap-2.5 rounded-lg border border-border bg-background p-3 text-xs text-foreground cursor-pointer select-none">
+                        <input
+                          type="radio"
+                          name="bulkActionSelect"
+                          className="mt-0.5"
+                          checked={bulkActionSelected === "delete"}
+                          onChange={() => setBulkActionSelected("delete")}
+                        />
+                        <div>
+                          <span className="font-medium block text-foreground">Manter vinculados ativos e ignorá-los</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            Apenas os produtos sem histórico serão excluídos. Os demais permanecem ativos como estão.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-2">
+                  <label className="block text-xs font-semibold text-muted-foreground">
+                    Para confirmar a exclusão dos produtos livres e a ação desejada para os vinculados, digite a palavra <span className="font-bold text-destructive">EXCLUIR</span> abaixo:
+                  </label>
+                  <Input
+                    value={bulkConfirmText}
+                    onChange={(e: any) => setBulkConfirmText(e.target.value)}
+                    placeholder="EXCLUIR"
+                    className="border-destructive/30 focus:ring-destructive"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <button
+                    disabled={bulkActionLoading}
+                    onClick={() => setBulkModalOpen(false)}
+                    className="rounded-lg border border-border px-4 py-2 text-sm"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    disabled={bulkActionLoading || bulkConfirmText.toUpperCase() !== "EXCLUIR"}
+                    onClick={executeBulkAction}
+                    className="rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60 transition"
+                  >
+                    {bulkActionLoading ? "Processando..." : "Confirmar Lote"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
       )}
 
       <ProductAIModal

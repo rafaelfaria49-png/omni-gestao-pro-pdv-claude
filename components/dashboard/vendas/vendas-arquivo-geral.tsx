@@ -1161,7 +1161,7 @@ export function VendasArquivoGeral() {
                   <TableHead className="min-w-[90px] font-semibold text-foreground hidden xl:table-cell">Terminal</TableHead>
                   <TableHead className="min-w-[100px] font-semibold text-foreground">Status</TableHead>
                   <TableHead className="min-w-[140px] font-semibold text-foreground text-right whitespace-nowrap pr-6">Total</TableHead>
-                  <TableHead className="min-w-[180px] font-semibold text-foreground text-right sticky right-0 z-20 bg-muted/40 border-l border-border/60 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
+                  <TableHead className="w-[190px] min-w-[180px] font-semibold text-foreground text-right sticky right-0 z-30 bg-card border-l border-border/60 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.12)]">
                     Ações
                   </TableHead>
                 </TableRow>
@@ -1201,8 +1201,8 @@ export function VendasArquivoGeral() {
                           <Skeleton className="h-5 w-16" />
                         </div>
                       </TableCell>
-                      <TableCell className="text-right sticky right-0 bg-card shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)]">
-                        <div className="flex justify-end gap-1">
+                      <TableCell className="w-[190px] min-w-[180px] text-right sticky right-0 z-30 bg-card border-l border-border/60 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.10)]">
+                        <div className="flex justify-end gap-2 whitespace-nowrap">
                           <Skeleton className="h-7 w-7 rounded-md" />
                           <Skeleton className="h-7 w-7 rounded-md" />
                           <Skeleton className="h-7 w-7 rounded-md" />
@@ -1291,13 +1291,13 @@ export function VendasArquivoGeral() {
                             {statusLabel(v.status)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right whitespace-nowrap pr-6">
+                        <TableCell className="w-[140px] min-w-[120px] text-right whitespace-nowrap pr-6">
                           <span className={cn("font-bold tabular-nums", v.cancelada && "line-through text-muted-foreground")}>
                             {fmtBrl(v.total)}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right sticky right-0 z-20 bg-card group-hover:bg-muted/50 border-l border-border/60 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.06)] transition-colors">
-                          <div className="flex items-center justify-end gap-0.5">
+                        <TableCell className="w-[190px] min-w-[180px] text-right sticky right-0 z-30 bg-card border-l border-border/60 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.10)]">
+                          <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openDetalhe(v.id)}>

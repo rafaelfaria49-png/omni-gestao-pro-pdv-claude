@@ -1114,22 +1114,87 @@ export async function listProdutos(storeId: string, opts?: { q?: string }): Prom
     });
   }
 }
-
 // ─── Listagem paginada (CadastrosHub → ProdutosPanel) ───────────────────────
 // Os demais callers (osStore, executor, api/estoque) continuam usando
 // `listProdutos` (retorna ProdutoDTO[]) e não foram alterados.
 // Esta função usa count + findMany em paralelo e suporta 5000+ produtos.
 export async function listProdutosPaginado(
   storeId: string,
-  opts?: { q?: string; page?: number; pageSize?: number },
+  opts?: {
+    q?: string;
+    page?: number;
+    pageSize?: number;
+    filters?: {
+      status?: string;
+      estoque?: string;
+      preco?: string;
+      fornecedor?: string;
+      categoria?: string;
+      marca?: string;
+    };
+    orderBy?: {
+      field: string;
+      direction: "asc" | "desc";
+    };
+  },
 ): Promise<{ produtos: ProdutoDTO[]; total: number }> {
   const q = opts?.q?.trim() || undefined;
   const pageSize = Math.min(200, Math.max(10, opts?.pageSize ?? 100));
   const page = Math.max(1, opts?.page ?? 1);
   const skip = (page - 1) * pageSize;
 
-  const where = {
+  // Construção das cláusulas de filtro
+  const filterClauses: Prisma.ProdutoWhereInput[] = [];
+
+  if (opts?.filters) {
+    const f = opts.filters;
+    if (f.status && f.status !== "todos") {
+      if (f.status === "Ativo") {
+        filterClauses.push({ active: true, name: { not: "" }, price: { gt: 0 }, category: { not: null } });
+      } else if (f.status === "Inativo") {
+        filterClauses.push({ active: false, name: { not: "" }, price: { gt: 0 }, category: { not: null } });
+      } else if (f.status === "Incompleto") {
+        filterClauses.push({
+          OR: [
+            { name: "" },
+            { category: "" },
+            { category: null },
+            { price: { lte: 0 } }
+          ]
+        });
+      }
+    }
+
+    if (f.estoque && f.estoque !== "todos") {
+      if (f.estoque === "com") {
+        filterClauses.push({ stock: { gt: 0 } });
+      } else if (f.estoque === "sem") {
+        filterClauses.push({ stock: { lte: 0 } });
+      } else if (f.estoque === "baixo") {
+        filterClauses.push({ stock: { gt: 0, lt: 6 } });
+      }
+    }
+
+    if (f.preco === "semPreco") {
+      filterClauses.push({ price: { lte: 0 } });
+    }
+
+    if (f.fornecedor === "semFornecedor") {
+      filterClauses.push({ supplierName: "" });
+    }
+
+    if (f.categoria && f.categoria !== "todos") {
+      filterClauses.push({ category: f.categoria });
+    }
+
+    if (f.marca && f.marca !== "todos") {
+      filterClauses.push({ brand: f.marca });
+    }
+  }
+
+  const where: Prisma.ProdutoWhereInput = {
     storeId,
+    AND: filterClauses.length > 0 ? filterClauses : undefined,
     ...(q
       ? {
           OR: [
@@ -1142,7 +1207,30 @@ export async function listProdutosPaginado(
           ],
         }
       : {}),
-  } as const;
+  };
+
+  // Configuração da ordenação (orderBy)
+  let prismaOrderBy: Prisma.ProdutoOrderByWithRelationInput = { updatedAt: "desc" };
+
+  if (opts?.orderBy) {
+    const field = opts.orderBy.field;
+    const dir = opts.orderBy.direction;
+    if (field === "nome") {
+      prismaOrderBy = { name: dir };
+    } else if (field === "sku") {
+      prismaOrderBy = { sku: dir };
+    } else if (field === "estoque") {
+      prismaOrderBy = { stock: dir };
+    } else if (field === "preco") {
+      prismaOrderBy = { price: dir };
+    } else if (field === "status") {
+      prismaOrderBy = { active: dir };
+    } else if (field === "categoria") {
+      prismaOrderBy = { category: dir };
+    } else if (field === "updatedAt") {
+      prismaOrderBy = { updatedAt: dir };
+    }
+  }
 
   const mapRow = (p: {
     id: string;
@@ -1206,7 +1294,7 @@ export async function listProdutosPaginado(
     const [rows, total] = await Promise.all([
       prisma.produto.findMany({
         where,
-        orderBy: { updatedAt: "desc" },
+        orderBy: prismaOrderBy,
         skip,
         take: pageSize,
         select: SELECT,
@@ -1223,7 +1311,7 @@ export async function listProdutosPaginado(
         (db) =>
           db.produto.findMany({
             where,
-            orderBy: { updatedAt: "desc" },
+            orderBy: prismaOrderBy,
             skip,
             take: pageSize,
             select: {
@@ -1252,7 +1340,7 @@ export async function listProdutosPaginado(
           active: boolean;
         }>,
       ),
-      withPrismaSafe((db) => db.produto.count({ where: { storeId } }), 0),
+      withPrismaSafe((db) => db.produto.count({ where }), 0),
     ]);
     return {
       produtos: legacyRows.map((p) =>
