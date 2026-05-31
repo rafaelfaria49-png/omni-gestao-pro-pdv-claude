@@ -71,7 +71,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { useToast } from "@/hooks/use-toast"
@@ -271,7 +270,7 @@ function saleRecordToVendaItem(s: SaleRecord): VendaItem {
 
 export function VendasArquivoGeral() {
   const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
-  const storeId = lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID
+  const storeId = (lojaAtivaId ?? "").trim()
   const {
     sales: opsSales,
     retrySyncSale,

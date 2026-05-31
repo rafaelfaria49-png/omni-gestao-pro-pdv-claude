@@ -2,7 +2,7 @@
 title: Execution Log — registro append-only de execuções de skill
 status: vivo (append-only)
 owner: Execution Engine (automático) + revisão humana mensal
-last_update: 2026-05-30
+last_update: 2026-05-31
 schema_version: v1
 ---
 
@@ -775,4 +775,54 @@ docs_atualizados:
   - docs/status/EXECUTION_LOG.md             # esta ENTRY 012 (append-only)
 flags: []                               # NÃO tocou área protegida: app/api/financeiro/* são ROTAS, não lib/financeiro/* (services)
 notes: "DT-14 — eliminação do fallback nullish `?? \"loja-1\"` server-side. ESCOPO (fechado): 4 arquivos / 5 endpoints — app/api/financeiro/carteiras/route.ts (GET+POST), carteiras/[id]/route.ts (PATCH), carteiras/transferencia/route.ts (POST), dre/route.ts (GET). Em cada um: removido o getStoreId() local (que terminava em `?? \"loja-1\"`) e substituído pelo helper canônico — opsLojaIdFromRequest (leituras: header→query→cookie→null) e opsLojaIdFromRequestForWrite (escritas: header→query→null, anti-CSRF) — com guard `if (!storeId) return err(...,\"STORE_REQUIRED\",400)` ANTES do apiGuard. ACL (apiGuard*/canAccessStore) intacto. INSIGHT-CHAVE: este era o resíduo que a S-001/S-002 NÃO pegou — a forma nullish `??` (o teste/áudit da S-001 só varria `|| \"loja-1\"`) e ainda multi-linha (`??` no fim de uma linha + `\"loja-1\"` na seguinte), invisível a scan linha-a-linha. DT-14 fecha o vetor server-side a 100%. PERFIL: primeira execução real de SAFE-lite REFORÇADO sob ADR-0004 — Gate #1 + AUDIT focada + Gate #2 mantidos por ser dinheiro+multi-loja, mas sem o pipeline de 17 fases. VALIDAÇÃO: npx tsc --noEmit limpo (EXIT 0) · vitest 223 passed | 3 expected fail (subiu de 217: +6 do bloco DT-14 estático novo em multi-loja-route-acl-baseline.test.ts; regex de multi-loja-no-hardcoded-fallback.test.ts estendida `(?:\\|\\||\\?\\?)` como hardening futuro single-line) · next build OK · grep `\"loja-1\"` em app/api/** = 0 literal de código (resta só 1 comentário em exportar/route.ts:305). TESTES red→green: RED demonstrado antes do fix (bloco DT-14 = 6 failed). AUDIT FOCADA: 0 findings; 2 NUANCES intencionais — (a) leituras passam a aceitar TAMBÉM o cookie como fonte (semântica canônica de leitura ADR-0003; inofensiva pois os callers sempre mandam header); (b) PATCH carteiras/[id] NÃO tem caller no repo hoje (UI de editar/recalcular não plugada) → endurecida proativamente. CALLER SURFACE (verificado por grep, não memória): único consumidor é components/financeiro/lovable/context/FinanceiroRealContext.tsx (refreshCarteiras/criarCarteira/transferir/refreshDRE), todos com withStoreHeaders() + guard readActiveStoreIdFromBrowser() → caminho feliz inalterado; mudança observável única = 400 em vez de loja-1 silencioso quando não há header/query/cookie. ÁREAS PROTEGIDAS: nenhuma tocada (rotas em app/api, não services lib/financeiro/*; sem prisma/schema/auth/proxy/core). COMMIT/PUSH: PENDENTES — aguardam decisão do humano após este DOC_REFRESH. TIMESTAMPS: started_at/ended_at são PROXY; evidência real são os timestamps dos runs vitest (~23:22→23:25 de 2026-05-30); duration: null para não fabricar precisão (mesmo critério das ENTRY 010/011). REFERÊNCIAS: docs/status/DIVIDA_TECNICA.md DT-14 (§3, paga) · docs/decisions/ADR-0003 (fallback LEGACY_PRIMARY_STORE_ID) · docs/decisions/ADR-0004 (SAFE-lite modo padrão) · ENTRY 010 (S-002, F-02-anchor) que deixou este resíduo nullish para trás."
+```
+
+---
+
+```yaml
+# ─── ENTRY 013 ────────────────────────────────────────────────────
+ticket_id: MULTI_LOJA-DT-13          # debt-item client-side (PDV/vendas); tracking em DIVIDA_TECNICA DT-13
+skill_id: SKILL_EXEC_DEBT_ITEM       # execução de dívida técnica
+skill_version: v1
+ia: opus
+modo: SAFE                           # perfil real = SAFE-lite LIGHT (ADR-0004); client-only, servidor já impõe; valor mantido SAFE (schema v1 congelado)
+started_at: 2026-05-31T08:18:00-03:00   # PROXY — evidência real: RED run vitest 08:19:23, GREEN 08:22:41
+ended_at: 2026-05-31T08:35:00-03:00     # PROXY — fim do DOC_REFRESH (Gate #2); hora fina não rastreada
+duration: null                          # janela observada nos testes (~08:19→08:24); precisão não rastreada (não fabricar)
+fases_completas: [SAFE_LITE_LIGHT]      # red→código→green(tsc/vitest/build)→AUDIT focada light→Gate#2→DOC_REFRESH (fora do pipeline de 17 fases)
+fase_falha: null
+resultado: encerrada                    # execução completa; commit/push PENDENTES de decisão humana
+pr: null
+branch: main                            # working tree em main; sem branch skill/*; sem commit ainda
+commit_anterior: 4358d99                # HEAD = DT-14 (commitado por Rafael) sob o qual o DT-13 foi executado
+commit_final: null                      # commit/push adiados por decisão do humano
+rollback: false
+diff:
+  added: ~5                             # componentes; +1 arquivo de teste novo (~50 linhas)
+  removed: ~9
+  files_modified: 4                     # 4 telas PDV/vendas + 1 teste novo (untracked) + DOC_REFRESH (5 docs)
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-05-31T00:00:00-03:00   # date-proxy
+    pending: null
+    notes: "Gate #1 aprovado com Escopo A (enxuto = 4 telas PDV/vendas). Decisões: abrir DT-15 separado para o restante; SEM banner/hardening extra; executar E1–E6; parar antes do Gate #2."
+  gate_2:
+    approved_by: Rafael
+    approved_at: 2026-05-31T00:00:00-03:00
+    pending: null
+    notes: "Gate #2 aprovado: AUDIT focada light 0 findings; DOC_REFRESH autorizado; DT-13 paga; DT-15 aberta; NÃO declarar client-side 100% encerrado; commit/push adiados."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}   # AUDIT focada light: 0 defeitos
+benchmark: null
+sprint: null                            # SAFE-lite debt-item; proposta inline na conversa; tracking em DIVIDA_TECNICA DT-13 (§3, paga)
+auditoria: null                         # AUDIT focada inline light (sem arquivo SKILL_AUDIT — perfil client-only)
+adr_criada: null                        # governado por ADR-0003; SEM ADR novo
+memoria_criada: null                    # memória Claude Code (contexto vivo) atualizada fora do repo (~/.claude); sem artefato no repo
+docs_atualizados:
+  - docs/status/DIVIDA_TECNICA.md            # DT-13 §2→§3 (paga) + DT-15 aberta (§2) + Nota DT-13 (client NÃO 100%)
+  - docs/ai/CURRENT_STATUS_OVERVIEW.md       # §1 maturidade, §5 footnote, §6 apêndice
+  - docs/roadmaps/ROADMAP_MULTI_LOJA.md      # front matter + §5/§6/§11/§12/§13
+  - docs/status/EXECUTION_LOG.md             # esta ENTRY 013 (append-only)
+flags: []                               # NÃO tocou área protegida: components/dashboard/vendas/* (UI client), sem lib core/services
+notes: "DT-13 — eliminação do resíduo client-side de LEGACY_PRIMARY_STORE_ID em PDV/vendas (Escopo A enxuto). ESCOPO (fechado): 4 telas / 5 sites — vendas-arquivo-geral.tsx:274, venda-completa-enterprise.tsx:140, pdv-venda-completa-enterprise.tsx:155, pdv-assistencia-enterprise.tsx:1351 (storeIdKey) + :3111 (prop PdvClientePicker). Padrão: trocar `(lojaAtivaId || LEGACY).trim() || LEGACY` / `lojaAtivaId ?? LEGACY` por `(lojaAtivaId ?? \"\").trim()` (canônico, já em pdv-classic, pdv-recebimento-modal e no shortcutsKey do próprio pdv-assistência via 234dd7a) + remoção do import LEGACY_PRIMARY_STORE_ID (4 arquivos). PERFIL: SAFE-lite LIGHT (não reforçado como DT-14) — client-only, NÃO muta dinheiro server-side, e o servidor já impõe (/api/clientes:28-29 = storeIdFromAssistecRequestForRead + 400; rotas de vendas pós-S-001/DT-14). RISCO: P2 latente → borderline P3 (servidor é o ponto de imposição; o LEGACY client só decidia QUAL header sair). VALIDAÇÃO: tsc --noEmit limpo (EXIT 0) · vitest 228 passed | 3 expected fail (+5 do guard novo lib/multi-loja-client-no-legacy-fallback.test.ts) · build verde. RED→GREEN: guard DT-13 = 4 failed antes do fix, 5 passed depois. BUILD FLAKE (transparência): 2 primeiras execuções do build crasharam com 0xC0000409 em 'Collecting page data' — flake nativo de worker no Windows sob pressão de memória (compile passava; tsc limpo; crash nativo ≠ throw JS); 3ª execução isolada passou EXIT 0 com árvore de rotas completa (inclui /dashboard/vendas-arquivo-geral e /dashboard/vendas/venda-completa). NÃO é efeito do DT-13. AUDIT FOCADA LIGHT: 0 findings — swap nos 5 sites, zero LEGACY residual (grep=0), CART_STORAGE_KEY/DRAFT_KEY mantêm continuidade (mesmas vars), empty-state degrada via servidor 400/empty sem crash, storeIdKey agora consistente com shortcutsKey. BLAST RADIUS (verificado por leitura): pdv-assistencia protegido por guard upstream vendas-pdv.tsx:114 (fallback era dead code → P3); venda-completa/vendas-arquivo sem guard upstream → mudança observável só na borda (sem loja → header vazio → 400/empty em vez de loja-1 silencioso). CLIENT-SIDE NÃO 100% ENCERRADO: resta resíduo em marketing/config/onboarding/cadastros (→ DT-15 aberta, 6 arq./9 sites), no provider-fonte lib/loja-ativa.tsx (F-11) e lib/stores-api-access.ts (F-15, server, onboarding-only). store-defaults.ts:4 (canônico) permanece. F-04 (webhook WhatsApp single-store) permanece separado. ÁREAS PROTEGIDAS: nenhuma tocada (UI client em components/dashboard/vendas; sem schema/auth/proxy/core/services). COMMIT/PUSH: PENDENTES. TIMESTAMPS: started_at/ended_at são PROXY (evidência real = runs vitest 08:19→08:23 de 2026-05-31); duration null (mesmo critério das ENTRY 010/011/012). REFERÊNCIAS: docs/status/DIVIDA_TECNICA.md DT-13 (§3, paga) + DT-15 (§2, aberta) · docs/decisions/ADR-0003 · docs/decisions/ADR-0004 (SAFE-lite) · 234dd7a (precedente: normalizou shortcutsKey, deixou storeIdKey fora) · ENTRY 012 (DT-14, server-side)."
 ```

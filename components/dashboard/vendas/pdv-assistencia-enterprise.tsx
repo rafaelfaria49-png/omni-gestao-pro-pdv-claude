@@ -78,7 +78,6 @@ import {
   type AssistenciaPayMethodRuntime,
 } from "@/lib/pdv-formas-pagamento"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
@@ -1348,7 +1347,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { caixa } = useCaixa()
   const storeIdKey = useMemo(
-    () => (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
+    () => (lojaAtivaId ?? "").trim(),
     [lojaAtivaId]
   )
   const [clienteQuery, setClienteQuery] = useState("")
@@ -3108,7 +3107,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
       <PdvClientePicker
         open={clientePickerOpen}
-        storeId={(lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID}
+        storeId={(lojaAtivaId ?? "").trim()}
         onSelect={(c: PdvClienteResult) => {
           setCustomerName(c.name)
           setSelectedClienteId(c.id)

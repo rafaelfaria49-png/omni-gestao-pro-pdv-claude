@@ -37,7 +37,6 @@ import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import {
   newPdvLineId,
   type PdvCatalogProduct,
@@ -152,7 +151,7 @@ export function PdvVendaCompletaEnterprise({
   const { toast } = useToast()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const storeId = useMemo(
-    () => (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
+    () => (lojaAtivaId ?? "").trim(),
     [lojaAtivaId]
   )
 

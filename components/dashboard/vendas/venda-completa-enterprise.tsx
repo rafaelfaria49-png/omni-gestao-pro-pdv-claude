@@ -32,7 +32,6 @@ import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
@@ -137,7 +136,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
 
   const storeId = useMemo(
-    () => (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
+    () => (lojaAtivaId ?? "").trim(),
     [lojaAtivaId],
   )
 
