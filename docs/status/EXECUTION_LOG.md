@@ -676,3 +676,51 @@ docs_atualizados:
 flags: []
 notes: "REGISTRO RETROATIVO criado na fase R0 (lote R0-L0). TIMESTAMPS: apenas o author date do commit c615e7c (2026-05-30T17:01:08-03:00) é evidência real; started_at e duration NÃO foram rastreados (hotfix sem rastro de início) — started_at repete o commit time apenas como proxy e duration fica null para não fabricar precisão. A S-002 foi executada como HOTFIX cirúrgico FORA do pipeline ritualizado de 17 fases: sem PROPOSE_SPRINT, sem ENTRY contemporânea, sem SKILL_AUDIT pós-impl, sem lock formal, commitada direto em main. Escopo (fechado): F-03 (proxy.ts lia cookie 'assistec_active_store' com underscores; correto é 'assistec-active-store' com hífens — passa a usar ASSISTEC_ACTIVE_STORE_COOKIE de @/lib/store-defaults) + F-02-anchor (app/api/financeiro/relatorios/exportar/route.ts: removido o último '|| loja-1' de produção; storeId ausente → 400). Validação registrada no commit c615e7c: tsc limpo · vitest 217 passed | 3 expected fail · next build OK. Áreas vetadas intocadas. Baseline da reconciliação: docs/audits/AUDITORIA_R0_RECONCILIACAO_GOVERNANCA.md. Observação: é exatamente o tipo de execução que o SAFE-lite (R1) deve formalizar."
 ```
+
+---
+
+```yaml
+# ─── ENTRY 011 ────────────────────────────────────────────────────
+ticket_id: R1-DP-01-REGISTER         # R1 (Retro do Piloto) — registro da dívida de processo
+skill_id: SKILL_HANDOFF_MVP          # governance op — closest fit no schema v1 (como ENTRY 003/006)
+skill_version: v1
+ia: opus
+modo: SAFE                           # perfil SAFE-lite (ADR-0004); valor mantido SAFE pois schema v1 está congelado
+started_at: 2026-05-30T00:00:00-03:00   # data do lote R1-L4; HORA NÃO RASTREADA (date-proxy, ver notes)
+ended_at: 2026-05-30T00:00:00-03:00
+duration: null                       # lote docs-only; horas não rastreadas (não fabricar precisão)
+fases_completas: [GOVERNANCE_RECORD] # registro de governança, fora do pipeline de 17 fases
+fase_falha: null
+resultado: encerrada
+pr: null
+branch: null                         # docs-only; sem commit (R1 inteiro aguarda decisão de commit único do humano)
+commit_anterior: 234dd7a             # HEAD de produção sob o qual o R1 é commitado (R1 foi redigido sobre c615e7c)
+commit_final: null
+rollback: false
+diff:
+  added: ~30
+  removed: 0
+  files_modified: 1                  # apenas este arquivo (a própria ENTRY 011)
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-05-30T00:00:00-03:00
+    pending: null
+    notes: "Objetivos do R1-L4 aprovados explicitamente: registrar DP-01 append-only; não editar ENTRY 010; tocar só EXECUTION_LOG."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "N/A — entrada de registro documental (não mergeia código)."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}
+benchmark: null
+sprint: null
+proposta: null
+auditoria: null
+adr_criada: null                     # ADR-0004 foi criado no R1-L3, não neste lote
+memoria_criada: null
+docs_atualizados:
+  - docs/status/EXECUTION_LOG.md      # esta entry (append-only)
+flags: []
+notes: "REGISTRO DA DÍVIDA DE PROCESSO DP-01 (R1 — Retro do Piloto, lote R1-L4). A S-002 (ENTRY 010) foi executada como HOTFIX fora do ritual de 17 fases. A dívida de processo correspondente — DP-01 — está registrada em docs/execution/RETRO_PILOTO_R1.md §5 e considerada PAGA por: (1) R0 — reconciliação dos documentos que a S-002 deveria ter atualizado; (2) R1 — formalização do SAFE-lite em docs/execution/EXECUTION_ENGINE.md §11 + ADR-0004, que torna o perfil de execução leve um ritual LEGÍTIMO (deixa de ser 'fora do ritual'). A ENTRY 010 NÃO foi editada (regra append-only §4 preservada integralmente); esta ENTRY 011 é o cross-ref formal. REFERÊNCIAS: docs/execution/RETRO_PILOTO_R1.md §5 (DP-01) · docs/decisions/ADR-0004-safe-lite-modo-padrao.md (SAFE-lite modo padrão) · ENTRY 010 (S-002). Lote docs-only: apenas EXECUTION_LOG.md tocado. TIMESTAMPS: started_at/ended_at são date-proxy (2026-05-30); hora real não rastreada — duration: null para não fabricar precisão (mesmo critério da ENTRY 010). Sem commit/push: o R1 inteiro aguarda a decisão de commit único do humano."
+```

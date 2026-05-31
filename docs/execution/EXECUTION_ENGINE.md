@@ -2,7 +2,7 @@
 title: Execution Engine — Pipeline oficial
 status: vivo
 owner: produto + arquitetura
-last_update: 2026-05-27
+last_update: 2026-05-30
 versao: v1
 bloco: 29
 ---
@@ -24,6 +24,14 @@ O Execution Engine recebe um **ticket** (item de backlog, blocker, dívida, find
 - Próximo ticket elegível (em modo composite/overnight).
 
 Cada fase tem **input, output, critério de aprovação, modo de falha**.
+
+> **Modo padrão (formalizado no R1).** Na prática, a maioria das execuções é **pequena e
+> cirúrgica** (bugfix, debt-item, mock removal, **ajustes documentais/governança**). Para elas
+> o modo padrão é o **SAFE-lite** (§11): o mesmo pipeline com a cerimônia colapsada,
+> **preservando os dois Human Gates, os testes e o DOC_REFRESH**. O **pipeline completo de 17
+> fases** fica **reservado** para trabalho grande, feature nova ou risco alto
+> (auth/proxy/schema/core/multi-loja/dinheiro/fiscal). A decisão de reposicionamento será
+> formalizada em **ADR-0004** (R1-L3). O pipeline em si **não muda** (segue v1).
 
 ---
 
@@ -258,25 +266,27 @@ INTAKE → PRE-FLIGHT → LOCK → SCOPE → [BENCHMARK?] → PROPOSAL
 
 ## 8. Estado das fases em cada modo
 
-| Fase | SAFE | OVERNIGHT | COWORK | AUDIT |
-|---|---|---|---|---|
-| 1 INTAKE | manual | da fila | manual ou da fila | manual |
-| 2 PRE-FLIGHT | obrig | obrig | obrig | obrig |
-| 3 LOCK | obrig | obrig | obrig (chave da serialização) | leitura-only |
-| 4 SCOPE | aceita S/M/L | apenas S | aceita S/M | n/a |
-| 5 BENCHMARK | condicional | apenas se feature nova | condicional | n/a |
-| 6 PROPOSAL | obrig | obrig (gerada pela skill) | obrig | n/a |
-| 7 GATE #1 | humano ao vivo | coberto por aprovação prévia da fila | humano ao vivo | n/a |
-| 8 PRE-TESTS | obrig | obrig | obrig | n/a |
-| 9 SNAPSHOT | obrig | obrig | obrig | n/a |
-| 10 IMPLEMENT | obrig | obrig (sem áreas protegidas) | obrig | n/a |
-| 11 POST-TESTS | obrig | obrig | obrig | n/a |
-| 12 AUDIT | obrig | obrig | obrig | é a fase |
-| 13 GATE #2 | humano ao vivo | **para aí** — PR draft | humano ao vivo | n/a |
-| 14 DOC UPDATE | obrig pós-merge | depois que humano mergeia de dia | obrig pós-merge | só doc da auditoria |
-| 15 ADR/MEMORY | condicional | condicional (sem ADR novo em overnight) | condicional | só memory se houver |
-| 16 HANDOFF + LOG | obrig | obrig | obrig | obrig |
-| 17 LOCK RELEASE | obrig | obrig | obrig | n/a |
+> O modo **SAFE-lite** (coluna abaixo) é definido em detalhe na **§11**.
+
+| Fase | SAFE | SAFE-lite | OVERNIGHT | COWORK | AUDIT |
+|---|---|---|---|---|---|
+| 1 INTAKE | manual | informal (pedido no chat) | da fila | manual ou da fila | manual |
+| 2 PRE-FLIGHT | obrig | leve (status/roadmap do tema + checa área protegida) | obrig | obrig | obrig |
+| 3 LOCK | obrig | opcional (operador único) | obrig | obrig (chave da serialização) | leitura-only |
+| 4 SCOPE | aceita S/M/L | apenas S/cirúrgico; cresceu → escala | apenas S | aceita S/M | n/a |
+| 5 BENCHMARK | condicional | pula | apenas se feature nova | condicional | n/a |
+| 6 PROPOSAL | obrig | preview inline no chat (sem SPRINT_<ticket>.md) | obrig (gerada pela skill) | obrig | n/a |
+| 7 GATE #1 | humano ao vivo | **obrig — humano inline** | coberto por aprovação prévia da fila | humano ao vivo | n/a |
+| 8 PRE-TESTS | obrig | tsc (+ build/vitest se aplicável) | obrig | obrig | n/a |
+| 9 SNAPSHOT | obrig | só se mexe em código | obrig | obrig | n/a |
+| 10 IMPLEMENT | obrig | cirúrgico; ≤500 linhas; sem comando destrutivo | obrig (sem áreas protegidas) | obrig | n/a |
+| 11 POST-TESTS | obrig | tsc (+ build/vitest se aplicável) | obrig | obrig | n/a |
+| 12 AUDIT | obrig | auto-revisão (sem SKILL_AUDIT formal) | obrig | obrig | é a fase |
+| 13 GATE #2 | humano ao vivo | **obrig — humano inline antes de merge/commit** | **para aí** — PR draft | humano ao vivo | n/a |
+| 14 DOC UPDATE | obrig pós-merge | **DOC_REFRESH obrigatório (§11.5)** | depois que humano mergeia de dia | obrig pós-merge | só doc da auditoria |
+| 15 ADR/MEMORY | condicional | condicional | condicional (sem ADR novo em overnight) | condicional | só memory se houver |
+| 16 HANDOFF + LOG | obrig | relatório no chat + ENTRY no EXECUTION_LOG | obrig | obrig | obrig |
+| 17 LOCK RELEASE | obrig | n/a se não houve lock | obrig | obrig | n/a |
 
 ---
 
@@ -295,3 +305,83 @@ INTAKE → PRE-FLIGHT → LOCK → SCOPE → [BENCHMARK?] → PROPOSAL
 - **Limites:** [`SAFE_GUARDS.md`](./SAFE_GUARDS.md).
 - **Gates obrigatórios:** [`HUMAN_GATES.md`](./HUMAN_GATES.md).
 - **Quem pode rodar o quê:** [`SKILL_TAXONOMY.md`](./SKILL_TAXONOMY.md).
+
+---
+
+## 11. Modo SAFE-lite (formalizado no R1)
+
+> SAFE-lite **não cria fases novas nem altera o pipeline** (segue v1). É o pipeline de 17 fases
+> com a cerimônia colapsada para trabalho **pequeno e cirúrgico**, preservando as travas de
+> segurança. Formaliza a prática real da operação (mai/2026) e do próprio R0.
+> Decisão de reposicionamento: a ser formalizada em **ADR-0004** (R1-L3).
+
+### 11.1 Quando usar SAFE-lite (modo padrão)
+- Tamanho **S** + mudança **cirúrgica** + **não** toca área protegida.
+- Perfis cobertos: bugfix, debt-item conhecido, mock removal, estabilização pequena,
+  **ajustes documentais / governança** (ex.: o R0 inteiro rodou nesse perfil).
+
+### 11.2 Quando NÃO usar — escala para o Engine completo (modo pesado reservado)
+- Toca **auth / proxy / `prisma/schema.prisma` / core** (PDV, Financeiro, Operações funcionais) —
+  e, explicitamente, **WhatsApp (integrações reais)** e **Marketplace (integrações reais)**:
+  módulos que frequentemente extrapolam o escopo S e têm maior *blast radius* operacional.
+- Tamanho **M+**, feature nova, mudança arquitetural, ou risco **multi-loja / dinheiro / fiscal**,
+  ou **integração externa com efeito colateral real** (ex.: envio WhatsApp Cloud API, Marketplace
+  com integração real) — módulos que frequentemente já estouram o escopo S.
+- Nesses casos vale o **pipeline completo (§2)** com toda a cerimônia.
+- SAFE-lite **não relaxa nenhuma área protegida**: a deny-list de [`SAFE_GUARDS.md §3`](./SAFE_GUARDS.md)
+  e [`GOVERNANCA.md §4`](../governance/GOVERNANCA.md) continuam **integralmente** em vigor.
+
+### 11.3 As 17 fases em SAFE-lite
+| Fase | Comportamento em SAFE-lite |
+|---|---|
+| 1 INTAKE | Informal — pedido humano no chat. |
+| 2 PRE-FLIGHT | Leve — lê o status/roadmap do tema e **checa área protegida**. |
+| 3 LOCK | Opcional (operador único; sem concorrência de IA). |
+| 4 SCOPE | Apenas **S/cirúrgico**. Cresceu para M+ ou tocou área protegida → **escala para o Engine completo**. |
+| 5 BENCHMARK | Pula. |
+| 6 PROPOSAL | **Preview inline no chat** (diff antes de escrever) — sem `SPRINT_<ticket>.md` formal. |
+| 7 ⛔ GATE #1 | **Mantido** — humano aprova inline **antes de escrever**. |
+| 8 PRE-TESTS | `npx tsc --noEmit` (+ `build`/`vitest` se aplicável). |
+| 9 SNAPSHOT | Branch só se mexe em **código**; docs-only dispensa. |
+| 10 IMPLEMENT | Cirúrgico; allow-list acordada no chat; **≤500 linhas; sem comando destrutivo**. |
+| 11 POST-TESTS | `tsc` (+ `build`/`vitest` se aplicável). |
+| 12 AUDIT | Auto-revisão (sem `SKILL_AUDIT` formal). |
+| 13 ⛔ GATE #2 | **Mantido** — humano aprova inline **antes de merge/commit**. |
+| 14 DOC UPDATE | **DOC_REFRESH obrigatório** (§11.5). |
+| 15 ADR/MEMORY | Condicional. |
+| 16 HANDOFF + LOG | Relatório final no chat + **ENTRY append-only** no `EXECUTION_LOG.md`. |
+| 17 LOCK RELEASE | n/a se não houve lock. |
+
+### 11.4 Inegociáveis (nunca colapsam em SAFE-lite)
+- ⛔ **Gate #1** (humano aprova antes de escrever) e ⛔ **Gate #2** (humano aprova antes de merge/commit).
+- `npx tsc --noEmit` (+ `build`/`vitest` quando aplicável).
+- **Regra de área protegida**: tocou auth/proxy/schema/core → **não é SAFE-lite**, escala para o Engine.
+- **DOC_REFRESH** no fechamento (§11.5).
+- **Sem commit/push sem ok humano explícito.**
+
+### 11.5 Checklist DOC_REFRESH (obrigatório no fechamento do SAFE-lite)
+> Lição do R0 (RETRO §3 · F1/F4): atualizar só `status/` **não basta** — o contexto vivo também drifta.
+> Marcar todos que se aplicam ao que mudou:
+
+**Status vivos:**
+- [ ] `CURRENT_STATUS_OVERVIEW.md` (§1 maturidade · §5 dívida · §6 entrada)
+- [ ] `DIVIDA_TECNICA.md` / `MOCKS_TRACKING.md` / `RISCOS.md` / `BLOCKERS.md` (se aplicável)
+- [ ] `EXECUTION_LOG.md` (ENTRY append-only)
+
+**Roadmaps:**
+- [ ] `ROADMAP_<HUB>.md` (§5 gaps · §7 backlog · §11 sprint)
+
+**Contexto vivo (a parte que o R0 provou ser esquecida):**
+- [ ] `docs/ai/MASTER_CONTEXT.md`
+- [ ] `docs/ai/ENTERPRISE_MODULE_MAP.md`
+- [ ] `docs/memory/OMNIGESTAO_MASTER_MEMORY.md`
+- [ ] **grep** pelo conceito alterado (ex.: `"mock"`, `"loja-1"`) nesses 3 + status/roadmaps,
+      para caçar drift residual **antes** de declarar limpo.
+
+**Memória do usuário:**
+- [ ] `MEMORY.md` (diretório do usuário) — atualizar pointer se houve aprendizado reutilizável.
+
+### 11.6 Relação com a skill SKILL_DOC_REFRESH
+> A skill [`SKILL_DOC_REFRESH`](../skills/executoras/research/SKILL_DOC_REFRESH.md)
+> (aprovada no `APPROVAL_BATCH_V1`) permanece como a forma **pesada** (modo Engine, Fase 14).
+> O checklist §11.5 é a forma **leve** equivalente para o modo SAFE-lite. **Não há skill nova.**
