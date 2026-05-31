@@ -72,7 +72,7 @@ Cada lock vive como linha na tabela §3 com os campos:
 
 | HUB | ticket_id | IA | started_at | ended_at | duracao | status final | notes |
 |---|---|---|---|---|---|---|---|
-| (vazio — sistema acabou de ser provisionado) | | | | | | | |
+| multi_loja | MULTI_LOJA-S-001 | sonnet | 2026-05-29 | 2026-05-30 | — | released | Piloto SPRINT_01_MULTI_LOJA (F-01/F-02/F-05/F-06/F-07/F-14). Datas por git: execução CP1–CP4 em 2026-05-29 (6436d9b→22ae2e6), fechamento/Gate #2 em 2026-05-30 (7d304db). Horas e duração NÃO rastreadas (lock não foi registrado em §3 à época; ENTRY 009 auto-reportou ~PT7H45M). Registro retroativo no R0-L0. |
 
 ---
 

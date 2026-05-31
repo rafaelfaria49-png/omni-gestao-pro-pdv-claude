@@ -57,7 +57,7 @@
 
 | Dimensão | Detalhe |
 |----------|---------|
-| **Status** | **Híbrido** — núcleo **real** em `lib/financeiro/services/*`, rotas `/api/ops/*` e `/api/financeiro/*`; **HUB V2** Lovable ainda com **dados mock inline** na UI principal (`components/financeiro/lovable/`); existe **`FinanceiroRealContext.tsx`** para caminhos “reais” com header de loja. |
+| **Status** | **Híbrido** — núcleo **real** em `lib/financeiro/services/*`, rotas `/api/ops/*` e `/api/financeiro/*`; **HUB V2** Lovable **plugado a dados reais** (FinanceiroRealContext.tsx, header de loja) na UI principal (`components/financeiro/lovable/`); existe **`FinanceiroRealContext.tsx`** para caminhos “reais” com header de loja. |
 | **Rotas** | `/dashboard/financeiro-v2`; legado `/dashboard/financeiro`, `/dashboard/financeiro/contas-a-receber`, `/dashboard/financeiro/contas-a-pagar`; redirect/stubs conforme rota. |
 | **Componentes-chave** | `FinanceiroHubIsolated.tsx`, `routes/financeiro.tsx` (massivo), painéis `components/dashboard/financeiro/contas-receber.tsx`, `contas-pagar.tsx`. |
 | **Contexts** | `FinanceiroProvider` (`lib/financeiro-store.tsx` — localStorage `centro-financeiro` v3 por loja); contexto Lovable `FinanceiroRealContext` onde usado. |
@@ -321,7 +321,7 @@
 
 | Prioridade | Itens |
 |------------|--------|
-| **P0** | Duplicidade **OS HUB vs legado**; **financeiro** fonte única (HUB mock vs APIs reais); **auth** staff mock em produção; **deploy/ENV/storeId** dados vazios; expectativas do **dashboard** inicial. |
+| **P0** | Duplicidade **OS HUB vs legado**; **financeiro** fonte única (HUB V2 já real; consolidar com legado); **auth** staff mock em produção; **deploy/ENV/storeId** dados vazios; expectativas do **dashboard** inicial. |
 | **P1** | **PDV/caixa** multi-terminal; **contas a pagar** reduzir LS; **WhatsApp** produção (secrets, filas); **Cadastros** smoke por loja; **Vendas HUB** matriz real/mock. |
 | **P2** | **Master Console** Prisma; **Marketing IA** custos; **Omni Agent** LLM com limites; catalogação **OpenAPI** interna; **docs** placeholders (`THEMES.md`, etc.). |
 

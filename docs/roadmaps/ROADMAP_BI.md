@@ -3,7 +3,7 @@ title: Roadmap — HUB BI / Dashboards / Analytics
 hub: bi
 status: vivo
 owner: produto + Sonnet (técnico)
-last_update: 2026-05-27
+last_update: 2026-05-30
 sprint_atual: nenhuma (a iniciar)
 ---
 
@@ -162,7 +162,7 @@ BI é **leitura, nunca escrita** — não bloqueia nada. Alimenta o painel inici
 
 ## 12. Status atual
 
-BI ainda **não existe como HUB próprio** — está espalhado: painel inicial misturado com mocks, financeiro-v2 mock, sem materialized views. É **o HUB que mais valor agrega depois que os outros estão prontos** — KPIs cruzados só fazem sentido com dados reais nos HUBs origem. Recomendação: priorizar Fase 1 (limpar mocks do painel) em paralelo à evolução dos outros HUBs (BI não bloqueia ninguém).
+BI ainda **não existe como HUB próprio** — está espalhado: painel inicial misturado com mocks (MOCK-03/DT-11), sem materialized views — financeiro-v2 já opera sobre dados reais (R0-L5). É **o HUB que mais valor agrega depois que os outros estão prontos** — KPIs cruzados só fazem sentido com dados reais nos HUBs origem. Recomendação: priorizar Fase 1 (limpar mocks do painel) em paralelo à evolução dos outros HUBs (BI não bloqueia ninguém).
 
 ---
 

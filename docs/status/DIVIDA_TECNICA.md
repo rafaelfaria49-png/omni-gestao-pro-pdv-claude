@@ -2,7 +2,7 @@
 title: Dívida Técnica — Tracking vivo
 status: vivo
 owner: produto + Sonnet
-last_update: 2026-05-27
+last_update: 2026-05-30
 fonte_overview: docs/ai/CURRENT_STATUS_OVERVIEW.md §5
 ---
 
@@ -36,17 +36,16 @@ fonte_overview: docs/ai/CURRENT_STATUS_OVERVIEW.md §5
 | # | Título | HUB | Severidade | Estado | Aberta em | Sprint alvo | Notas |
 |---|---|---|---|---|---|---|---|
 | DT-01 | PDV Next (Black Edition) sem persistência server-side | PDV | P0 | ⏳ | 2026-05-19 | SPRINT_NN_PDV | localStorage only; risco de venda perdida |
-| DT-02 | `/dashboard/financeiro-v2` ainda mock | Financeiro | P1 | ⏳ | 2026-04-xx | SPRINT_NN_FINANCEIRO | UI Lovable pronta, dados parciais |
-| DT-03 | Fallback `storeId = "loja-1"` silencioso | Multi-loja | P0 | ⏳ | herdada | SPRINT_NN_MULTI_LOJA | Risco LGPD/legal |
 | DT-04 | Rota legada `/dashboard/os` paralela à oficial | Operações/OS | P1 | ⏳ | 2026-04-xx | SPRINT_NN_OS | ADR-0001 diz que oficial é `/operacoes-v2` |
 | DT-05 | PIN supervisor contra `User.pin` (não `AdminUser`) | PDV / Auth | P1 | ⏳ | 2026-05-xx | a planejar | Memória `project_vendas_hub_correcao_operacional` |
 | DT-06 | Item Avulso sem CFOP/categoria padrão | PDV | P2 | ⏳ | 2026-05-23 | bloqueia Fase 2 fiscal PDV | — |
-| DT-07 | Webhook WhatsApp por env fixo (não por `phone_number_id`) | WhatsApp / Multi-loja | P1 | ⏳ | 2026-05-09 | a planejar | Vira P0 quando 2ª loja ligar WhatsApp |
+| DT-07 | Webhook WhatsApp por env fixo (não por `phone_number_id`) | WhatsApp / Multi-loja | P1 | ⏳ | 2026-05-09 | SPRINT_NN_MULTI_LOJA (F-04) | = **F-04**. Vira **P0** quando loja-2 (Rafa Brinquedos, já ativa) ligar WhatsApp. Próxima sprint do HUB (J3) |
 | DT-08 | Sem multi-depósito no Estoque | Estoque | P0 | ⏳ | herdada | SPRINT_NN_ESTOQUE | Bloqueia adapter Marketplace |
 | DT-09 | budget-policy-service com regras hardcoded | OS | P1 | ⏳ | herdada | a planejar | Falta UI por loja |
 | DT-10 | Pool de executores Omni Agent pequeno | Omni Agent | P1 | ⏳ | herdada | a planejar | Só `recebimentoFinanceiro` real |
 | DT-11 | Painel inicial com mocks misturados | BI | P0 | ⏳ | herdada | SPRINT_NN_BI | Confunde decisão de negócio |
 | DT-12 | Mocks no `lib/utils.ts` Lovable excluídos do tsc | Lovable | P3 | 🚫 | herdada | aceito | Decisão de isolamento documentada no CLAUDE.md |
+| DT-13 | Resíduo `LEGACY_PRIMARY_STORE_ID` client-side (PDV/vendas) | Multi-loja | P2 | ⏳ | 2026-05-30 | a planejar | Fallback client-side em `vendas-arquivo-geral`, `venda-completa-enterprise`, `pdv-assistencia-enterprise`. Risco menor (UI quase sempre tem loja ativa). Parte coberta por F-11. Resíduo de DT-03 (server pago em S-001/S-002) |
 
 ---
 
@@ -54,7 +53,12 @@ fonte_overview: docs/ai/CURRENT_STATUS_OVERVIEW.md §5
 
 | # | Título | Paga em | Sprint que pagou |
 |---|---|---|---|
-| (em branco — começar a registrar ao pagar) | | | |
+| DT-02 | `/dashboard/financeiro-v2` "mock" — UI plugada a dados reais (FinanceiroRealProvider) | ~2026-05 (pré-baseline) | migração real-data (ef44def→417872b) |
+| DT-03 | Fallback `storeId="loja-1"` silencioso — vetor **server-side** de leitura de API | 2026-05-29→30 | SPRINT_MULTI_LOJA-S-001 + S-002 · ADR-0003 |
+
+> **Nota DT-03 (resíduo honesto — J4):** pago **apenas** o vetor **server-side** (leitura de API → guard 400). Permanecem (não-críticos): fallback `LEGACY_PRIMARY_STORE_ID` **client-side** (→ DT-13, P2) e **webhook WhatsApp** single-store (→ DT-07/F-04, P1, vira P0 com loja-2). Multi-loja **NÃO está 100% livre de `loja-1`**.
+
+> **Nota DT-02 (R0-L5):** evidência code-structural (não runtime): hub lê de `/api/financeiro/*` via `FinanceiroRealProvider` (16 fetches; 0 dados hardcoded; sem fallback fake; init em arrays vazios). **Observação:** **DRE / Fluxo de caixa** têm dados reais conectados, mas **evolução visual/funcional ainda pendente** (`ROADMAP_FINANCEIRO` §6/§8) — maturidade de UI, **não** mock.
 
 ---
 

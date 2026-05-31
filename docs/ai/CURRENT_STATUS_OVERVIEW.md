@@ -2,7 +2,7 @@
 title: CURRENT_STATUS · Overview enxuto
 status: vivo
 owner: produto + Sonnet (atualiza a cada sprint encerrada)
-last_update: 2026-05-27
+last_update: 2026-05-30
 fonte_detalhada: docs/ai/CURRENT_STATUS.md
 ---
 
@@ -24,7 +24,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 |---|---|---|---|---|
 | 1 | **PDV** | 🟢 maduro | Fase 1 ~70%: 4 PDVs convergentes, multi-terminais com lock, INSERT, F7, À Prazo, fechamento premium | 🔴 PDV Next não persiste vendas (server-side) |
 | 1 | **Operações/OS** | 🟢 maduro | Adapters Fase 2 ✅, hydration FK ✅, ADR-0001 oficial | 🟡 rota legada `/dashboard/os` ainda em paralelo |
-| 1 | **Financeiro** | 🟢 backend maduro / 🟠 UI | Backend sólido (services, adapters, idempotência, importador parcelado, crédito persistente) | 🔴 `/dashboard/financeiro-v2` ainda mock |
+| 1 | **Financeiro** | 🟢 backend + UI real | financeiro-v2 plugado a dados reais (FinanceiroRealProvider) ✅; services, adapters, idempotência, importador parcelado, crédito persistente | 🟡 DRE/Fluxo: evolução visual/funcional (não é mock) |
 | 1 | **Estoque** | 🟢 ledger maduro | Ledger profissional ✅, importador defensivo ✅, saneamento SKU ✅ | 🟠 sem multi-depósito (bloqueia Marketplace) |
 | 2 | **Operações/OS** (cross-onda) | (acima) | NFS-e, comunicação WhatsApp | 🔴 sem NFS-e |
 | 2 | **CRM** | 🟡 base sólida | FK Venda→Cliente ✅, modal PF/PJ ✅, crédito persistente ✅, importador defensivo ✅ | 🟡 sem tela 360° consolidada, sem segmentação |
@@ -33,7 +33,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | 3 | **Marketing IA** | 🟠 incipiente | Gerador de imagens ✅, credit-costs ✅, debit-turn-credits ✅ | 🔴 sem orquestrador de campanha, sem atribuição |
 | 4 | **Omni Agent** | 🟠 infra ok / poucos executores | API-guard, honesty, regex determinística, executor `recebimentoFinanceiro` ✅ | 🔴 pool de executores reais pequeno |
 | 4 | **BI** | 🟠 espalhado | Painel inicial parcial | 🔴 mocks misturados com real |
-| 4 | **Multi-loja** | 🟡 convenção ok | `storeId` everywhere ✅, `PdvTerminal` por loja ✅, defesa 3 camadas ✅ | 🔴 fallback `loja-1` silencioso ainda existe |
+| 4 | **Multi-loja** | 🟢 isolamento server / 🟡 resíduos | fallback `loja-1` **server-side eliminado** (S-001/S-002, ADR-0003) ✅, ACL `canAccessStore` ✅, proxy cookie ✅, `storeId` everywhere ✅ | 🟡 F-04 webhook WhatsApp single-store + resíduo `loja-1` client-side |
 
 ---
 
@@ -43,7 +43,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 
 | Sprint | HUB | Status | Owner IA | Data início |
 |---|---|---|---|---|
-| — | — | nenhuma sprint formal em curso (último marco: Lote 5 PDV em 2026-05-26) | — | — |
+| R0 — Reconciliação governança | cross | em curso (L0 ✅; baseline `AUDITORIA_R0_RECONCILIACAO_GOVERNANCA.md`) | Opus + Rafael | 2026-05-30 |
 
 ---
 
@@ -52,10 +52,11 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 > Em ordem recomendada — quem encerra a atual, abre a próxima.
 
 1. **SPRINT_NN_PDV** — Persistência server-side do PDV Next (P0; fecha Fase 1 PDV).
-2. **SPRINT_NN_FINANCEIRO** — Substituir mocks do `/dashboard/financeiro-v2` por dados reais (P1; fecha Fase 1 Financeiro).
-3. **SPRINT_NN_MULTI_LOJA** — Eliminar fallback `loja-1` + lint customizado de `storeId` (P0; previne incidente legal).
-4. **SPRINT_NN_WHATSAPP** — Opt-out persistente + monitor qualidade (P0; previne banimento Meta).
-5. **SPRINT_NN_ESTOQUE** — Modelagem multi-depósito (P0; desbloqueia Marketplace).
+2. **SPRINT_NN_MULTI_LOJA** — F-04: router WhatsApp por `phone_number_id` (P1→P0 antes de loja-2 ativar WhatsApp). *Fallback `loja-1` server-side já eliminado em S-001/S-002.*
+3. **SPRINT_NN_WHATSAPP** — Opt-out persistente + monitor qualidade (P0; previne banimento Meta).
+4. **SPRINT_NN_ESTOQUE** — Modelagem multi-depósito (P0; desbloqueia Marketplace).
+
+> financeiro-v2 saiu do top-5: deixou de ser mock (DT-02 paga, R0-L5). Evolução de UI DRE/Fluxo segue no `ROADMAP_FINANCEIRO`.
 
 ---
 
@@ -78,14 +79,13 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | # | Item | HUB | Severidade |
 |---|---|---|---|
 | 1 | PDV Next sem persistência server-side | PDV | P0 |
-| 2 | financeiro-v2 mock | Financeiro | P1 |
-| 3 | `loja-1` fallback silencioso | Multi-loja | P0 |
-| 4 | Opt-out WhatsApp ausente | WhatsApp | P0 |
-| 5 | Sem multi-depósito Estoque | Estoque | P0 (bloqueia Marketplace) |
-| 6 | Rota legada `/dashboard/os` paralela | OS | P1 |
-| 7 | Pool de executores Omni Agent pequeno | Omni Agent | P1 |
+| 2 | Webhook WhatsApp single-store (`phone_number_id`) — DT-07 | Multi-loja/WhatsApp | P1 (→P0 c/ loja-2) |
+| 3 | Opt-out WhatsApp ausente | WhatsApp | P0 |
+| 4 | Sem multi-depósito Estoque | Estoque | P0 (bloqueia Marketplace) |
+| 5 | Rota legada `/dashboard/os` paralela | OS | P1 |
+| 6 | Pool de executores Omni Agent pequeno | Omni Agent | P1 |
 
-> Detalhe e tracking vivo em `docs/status/DIVIDA_TECNICA.md` (Bloco 23 — a criar).
+> Detalhe e tracking vivo em `docs/status/DIVIDA_TECNICA.md`. (DT-03 `loja-1` server-side **pago** — ver §3 de lá.)
 
 ---
 
@@ -93,6 +93,11 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 
 > Apêndice — listar entradas mais recentes do `CURRENT_STATUS.md` para contexto rápido.
 
+- **2026-05-30** — R0-L5: financeiro-v2 confirmado sobre dados reais (DT-02 paga · MOCK-01 removido · BL-13 destravado); DRE/Fluxo = evolução de UI pendente.
+- **2026-05-30** — R0: reconciliação da governança iniciada (baseline `AUDITORIA_R0`; lote L0 ✅).
+- **2026-05-30** — SPRINT_MULTI_LOJA-S-002: F-03 (proxy cookie) + F-02-anchor (exportar) — fallback `loja-1` **server-side** 100% eliminado.
+- **2026-05-30** — Fase 1 Proteção de Lojas (anti-exclusão acidental).
+- **2026-05-29** — SPRINT_MULTI_LOJA-S-001: fallback silencioso `loja-1` em leituras de API eliminado + ACL `canAccessStore` (ADR-0003).
 - **2026-05-26** — Lote 5: remoção do else branch JSX morto no PDV Clássico.
 - **2026-05-26** — Lote 3: F9 recebimento de contas convergente nos 3 PDVs.
 - **2026-05-26** — Convergência operacional PDV: INSERT + Pagamento Múltiplo nos 3 PDVs.
@@ -128,4 +133,4 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 - **Sprints:** [`docs/sprints/TEMPLATE_SPRINT.md`](../sprints/TEMPLATE_SPRINT.md) → como rodar sprint
 - **Auditorias:** [`docs/audits/TEMPLATE_AUDITORIA.md`](../audits/TEMPLATE_AUDITORIA.md) → como auditar
 - **ADRs:** [`docs/decisions/INDEX.md`](../decisions/INDEX.md) → decisões arquiteturais
-- **Status vivos (Bloco 23):** `docs/status/{DIVIDA_TECNICA,MOCKS_TRACKING,RISCOS,BLOCKERS}.md` (a criar)
+- **Status vivos:** `docs/status/{DIVIDA_TECNICA,MOCKS_TRACKING,RISCOS,BLOCKERS}.md`

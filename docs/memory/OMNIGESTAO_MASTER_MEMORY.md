@@ -1,7 +1,7 @@
 # OmniGestão Pro — Memória viva consolidada
 
 **Tipo:** documento de continuidade (onboarding humano + agentes de IA).  
-**Última consolidação:** 2026-05-08 · **Última revisão:** 2026-05-27 (Bloco 28 — pointer atualizado para o Sistema Operacional de Desenvolvimento)  
+**Última consolidação:** 2026-05-08 · **Última revisão:** 2026-05-30 (R0-L4 — Blocos 0–35 + Approval Batch V1 + piloto Multi-Loja registrados; R0 em andamento)  
 **Fontes:** `docs/` (módulos, reports, ai, roadmap, architecture, deploy), `prisma/migrations/`, `git log`, inspeção de rotas críticas descrita na documentação existente, e contexto de implementações recentes (WhatsApp Cloud API, PDV, MVP).
 
 ---
@@ -15,6 +15,18 @@ A partir de 2026-05-27 o projeto passou a operar sob um **Sistema Operacional de
 3. **Estado real:** [`docs/ai/CURRENT_STATUS_OVERVIEW.md`](../ai/CURRENT_STATUS_OVERVIEW.md) — overview enxuto (< 200 linhas). Histórico completo continua em [`CURRENT_STATUS.md`](../ai/CURRENT_STATUS.md).
 4. **Mapa estratégico:** [`docs/blueprint/MASTER_PLAN.md`](../blueprint/MASTER_PLAN.md) — visão única, 11 HUBs, 4 ondas.
 5. **Onde estamos por HUB:** [`docs/roadmaps/INDEX.md`](../roadmaps/INDEX.md) — 11 roadmaps detalhados.
+
+### Atualização de estado (2026-05-30 · R0-L4)
+
+Desde a entrada oficial (Blocos 0–28), o Sistema Operacional avançou e foi exercitado:
+
+- **Blocos 29–35 concluídos:** Execution Engine (pipeline 17 fases, safe-guards, gates, taxonomia), Research Layer (11 Benchmark + 11 Audit + Doc_Refresh), Proposal Layer (3 skills), Execution Layer S (5 skills). Total: 32 skills criadas.
+- **ADR-0002** (congelamento Skill Front Matter v1) e **APPROVAL_BATCH_V1** (8 skills críticas aprovadas) concluídos.
+- **Piloto Multi-Loja executado:** SPRINT_MULTI_LOJA-S-001 (mergeada, ADR-0003) + S-002 (concluída) — primeiro uso real do Engine fim-a-fim.
+- **R0 — Reconciliação da governança em andamento:** alinhar status vivos/roadmap/memória ao estado real pós-operação. Baseline: `docs/audits/AUDITORIA_R0_RECONCILIACAO_GOVERNANCA.md`.
+- **Estratégia atual:** "servir a operação real". Blocos 36+ (modos avançados/overnight/cowork/composite) **congelados** até concluir R0 e R1.
+
+> Detalhe vivo: `docs/ai/CURRENT_STATUS_OVERVIEW.md` · `docs/status/EXECUTION_LOG.md` · `docs/execution/INDEX.md §5`.
 
 ### Estrutura do sistema (Blocos 0–28)
 
@@ -124,7 +136,7 @@ O repositório não marca commits por ferramenta. A seção 3 e 4 deste document
 - **Next.js 16 (App Router)** + React 19 + TypeScript strict.
 - **Prisma 6** + PostgreSQL (Supabase: `DATABASE_URL` pooler, `DIRECT_URL` migrations).
 - **UI:** Tailwind 4 + shadcn; HUBs Lovable em subárvores com MemoryRouter e providers locais.
-- **Estado global:** Zustand em fluxos operacionais; **loja ativa** via `LojaAtivaProvider` + cookie `assistec_active_store` + header `x-assistec-loja-id`.
+- **Estado global:** Zustand em fluxos operacionais; **loja ativa** via `LojaAtivaProvider` + cookie `assistec-active-store` (hífens; const `ASSISTEC_ACTIVE_STORE_COOKIE`) + header `x-assistec-loja-id`.
 - **Padrão de dados:** muitas entidades usam **`payload` JSONB** como fonte rica de estado; enums Prisma como “visão colapsada” (ex.: status OS).
 - **Backend:** Server Actions preferidas para mutações do dashboard; **API Routes** para automações, webhooks, clientes HTTP externos e painéis que já consomem REST.
 - **Deploy:** Vercel; riscos de **cache** e **ENV** documentados (`VERCEL_PROD_DATA_EMPTY_DIAGNOSIS.md`, checklist produção).
@@ -139,7 +151,7 @@ O repositório não marca commits por ferramenta. A seção 3 e 4 deste document
 | Vendas / PDV | `/dashboard/vendas`, `?modo=rapido` | Transação real; caixa local por loja |
 | Operações HUB | `/dashboard/operacoes-v2` | OS Prisma + adapters CR/estoque |
 | OS legado | `/dashboard/os` | Fluxo completo paralelo |
-| Financeiro HUB V2 | `/dashboard/financeiro-v2` | UI Lovable; **dados principais ainda mock inline** (ver `FINANCEIRO_V2_REAL_CHECKIN.md`) |
+| Financeiro HUB V2 | `/dashboard/financeiro-v2` | UI Lovable **plugada a dados reais** (FinanceiroRealProvider, header de loja); DRE/Fluxo = evolução de UI (R0-L5) |
 | Financeiro legado | `components/dashboard/financeiro/*` | Contas a pagar **híbrido** server-first + localStorage espelho |
 | WhatsApp HUB | `/dashboard/whatsapp` | **Conversas/mensagens/envio** ligados a Prisma + Meta Cloud API quando configurado |
 | Marketing / IA Mestre | várias sob `/dashboard` | Misto real/mock conforme tela |
@@ -164,9 +176,9 @@ O repositório não marca commits por ferramenta. A seção 3 e 4 deste document
 
 **Parcial:**
 
-- Financeiro HUB V2: UI premium com **mock inline** nas abas principais; badges Preview/Demo.
+- Financeiro HUB V2: UI premium **sobre dados reais** (FinanceiroRealProvider); DRE/Fluxo com evolução de UI pendente (R0-L5).
 - Rotas `app/dashboard/financeiro/*`: vários stubs “em construção” — usuário pode cair em superfície sem dados.
-- Fluxo de caixa / carteiras na UI V2: ainda narrativa mock onde não plugado.
+- Fluxo de caixa / carteiras na UI V2: **plugados a dados reais** (`/api/financeiro/fluxo-caixa`, `/carteiras`); evolução de UI pendente (R0-L5).
 
 **Pendente / decisão de produto:**
 
@@ -336,7 +348,7 @@ Indícios: tarefas interativas de integração, ajustes finos, documentação po
 | Prisma + migrations | ✅ Pronto |
 | Operações HUB OS + adapters | ✅ Pronto (com ressalva duplicidade OS legado) |
 | Financeiro servidor (CR/CP) | ✅ Pronto |
-| Financeiro HUB V2 UI dados | ⚠️ Parcial (mock principal) |
+| Financeiro HUB V2 UI dados | ✅ Dados reais (DRE/Fluxo: evolução de UI) |
 | PDV venda + layout | ✅ Pronto |
 | Caixa multi-terminal | ⚠️ Parcial (localStorage) |
 | WhatsApp conversas + webhook + send | ✅ Pronto (config ENV) |

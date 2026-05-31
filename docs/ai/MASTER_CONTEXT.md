@@ -127,7 +127,7 @@ Legenda: **Real** = Prisma/API como fluxo principal · **Mock** = demonstração
 | Painel inicial | `/dashboard` | **Mock / demo** honestizado (KPIs neutros); ainda não é BI real agregado |
 | Operações HUB V2 | `/dashboard/operacoes-v2` | **Híbrido** — **OS Prisma** + Server Actions + adapters (receber, estoque na entrega, anexos IndexedDB); UI Lovable; conviver com doc legada que citava “tudo mock” |
 | OS legado | `/dashboard/os` | **Real** — fluxo completo alternativo; **risco P0:** duplicidade com HUB V2 |
-| Financeiro HUB V2 | `/dashboard/financeiro-v2` | **Mock** nos dados principais da UI Lovable; núcleo **Real** em serviços/APIs |
+| Financeiro HUB V2 | `/dashboard/financeiro-v2` | **Dados reais** via FinanceiroRealProvider (header de loja); núcleo **Real** em serviços/APIs. DRE/Fluxo = evolução de UI (R0-L5) |
 | Financeiro (guarda-chuva APIs + painéis) | `/api/ops/*`, `/api/financeiro/*`, painéis em `components/dashboard/financeiro/` | **Híbrido** — serviços reais; algumas rotas dashboard stub; pagar com caminho **server-first** + fallback histórico |
 | PDV / Vendas | `/dashboard/vendas`, alias `/dashboard/pdv` | **Híbrido** — `finalizeSaleTransaction` real; caixa em **localStorage** por loja |
 | Estoque | `/dashboard/estoque`, alias `/dashboard/produtos` | **Híbrido** — dados reais; validar telas vs seed |

@@ -204,6 +204,8 @@ input:
 - Blockers: BL-01 (provedor fiscal — separado de cobrança), BL-13 (financeiro-v2 mock).
 - Auditorias prévias: **nenhuma dedicada ainda**.
 
+> **Atualização R0 (2026-05-30):** DT-02, MOCK-01 e BL-13 foram **resolvidos/destravados** — financeiro-v2 opera sobre dados reais (DRE/Fluxo = evolução de UI, não mock). As referências acima refletem o estado **pré-R0**; auditoria futura deve partir do estado reconciliado nos status vivos.
+
 ---
 
 ## 11. Notas

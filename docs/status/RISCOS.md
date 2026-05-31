@@ -2,7 +2,7 @@
 title: Riscos do projeto — tracking vivo
 status: vivo
 owner: produto + Opus (estratégia)
-last_update: 2026-05-27
+last_update: 2026-05-30
 ---
 
 # ⚠️ Riscos — Tracking vivo
@@ -40,7 +40,7 @@ last_update: 2026-05-27
 | # | Risco | Categoria | Probabilidade | Impacto | Estado | HUB | Mitigação atual |
 |---|---|---|---|---|---|---|---|
 | R-01 | Conta Meta banida por marketing sem opt-out | NEG/LEG | 🟠 | crítico | 🛡️ parcial | WhatsApp | Sprint opt-out P0 planejada; sem orquestrador de massa ainda evita dispara em volume |
-| R-02 | Vazamento de dados entre lojas (`storeId` errado) | LEG/SEG | 🟡 | crítico | 🛡️ parcial | Multi-loja | Convenção sólida; fallback `loja-1` silencioso ainda existe |
+| R-02 | Vazamento de dados entre lojas (`storeId` errado) | LEG/SEG | 🔵 | crítico | 🛡️ parcial | Multi-loja | Vetor **server-side mitigado** (S-001/S-002, ADR-0003: guard 400 + ACL `canAccessStore`). Latente: F-04 webhook (DT-07) + resíduo client-side (DT-13) |
 | R-03 | Venda perdida no PDV Next (sem persistência server) | FIN/NEG | 🟠 | alto | 🆕 | PDV | Conhecido (DT-01); sem mitigação até sprint |
 | R-04 | Provedor fiscal único = single point of failure | TEC/NEG | 🟡 | alto | 🆕 | PDV/OS | Arquitetar adapter fiscal antes de escolher (ADR) |
 | R-05 | Oversell em Marketplace por sync de saldo lento | FIN/NEG | 🟠 | alto | 🆕 | Marketplace | HUB não iniciado; risco fica latente |
@@ -78,7 +78,7 @@ last_update: 2026-05-27
 ## 5. Top 5 riscos para atenção imediata (resumo executivo)
 
 1. **R-01 — Banimento Meta** — está mitigado por *não usar massa*; vira P0 absoluto quando marketing IA atacar.
-2. **R-02 — Vazamento multi-loja** — convenção boa, mas `loja-1` silencioso é bomba-relógio.
+2. **R-02 — Vazamento multi-loja** — vetor server-side **fechado** (S-001/S-002); risco latente residual em F-04 (webhook) e resíduo client-side (DT-13). Não é mais bomba-relógio, mas não está zerado.
 3. **R-03 — Venda perdida PDV Next** — conhecido, ainda sem mitigação.
 4. **R-11 — Concorrente lança fiscal integrado primeiro** — pressão de tempo na Fase 2 fiscal.
 5. **R-13 — Prompt injection no Omni Agent** — virá relevante quando executores crescerem; padronizar antes.

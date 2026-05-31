@@ -2,7 +2,7 @@
 title: Execução — Índice oficial do Execution Engine
 status: vivo
 owner: produto + arquitetura
-last_update: 2026-05-27
+last_update: 2026-05-30
 versao: v1
 ---
 
@@ -48,7 +48,7 @@ versao: v1
 | **OVERNIGHT** | Cron / agendamento | Apenas skills S; sem áreas protegidas; sem ADR novo; fila pré-aprovada | HUBs em "verde" (sem blocker P0 aberto) |
 | **AUDIT** | Humano ou agendamento | Read-only puro | Qualquer HUB |
 
-> **Estado atual:** apenas **SAFE** liberado. **COWORK** e **OVERNIGHT** liberados após sprint piloto validar (Bloco 43+).
+> **Estado atual (2026-05-30):** apenas **SAFE** liberado. Piloto (Bloco 43) **executado** (SPRINT_MULTI_LOJA-S-001/S-002), mas **COWORK** e **OVERNIGHT** seguem **não liberados** — congelados até concluir R0 (reconciliação) e R1 (retro do piloto).
 
 ---
 
@@ -72,11 +72,11 @@ versao: v1
 
 | Onda | Blocos | Status |
 |---|---|---|
-| **I — Fundação engine** | 29, 30, 31 | 🔄 em entrega (esta sessão) |
-| **II — Template + skills críticas** | 32, 33, 34, 35 | ⏳ próxima |
-| **III — Modos avançados** | 36, 37, 38, 39 | ⏳ após piloto |
-| **IV — Composição + governança operacional** | 40, 41, 42 | ⏳ |
-| **V — Validação no campo** | 43 (piloto), 44 (retro), 45 (liberar overnight) | ⏳ |
+| **I — Fundação engine** | 29, 30, 31 | ✅ concluída |
+| **II — Template + skills críticas** | 32, 33, 34, 35 | ✅ concluída (32 skills; 8 aprovadas em APPROVAL_BATCH_V1) |
+| **III — Modos avançados** | 36, 37, 38, 39 | ⏸️ congelada (estratégia "servir a operação real"; reavaliar pós-R0/R1) |
+| **IV — Composição + governança operacional** | 40, 41, 42 | ⏸️ congelada |
+| **V — Validação no campo** | 43 (piloto), 44 (retro), 45 (liberar overnight) | 🔄 43 ✅ (piloto Multi-Loja) · 44 (retro) = R1, pendente · 45 pendente |
 
 ---
 

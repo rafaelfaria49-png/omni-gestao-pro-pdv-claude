@@ -2,7 +2,7 @@
 title: Mocks Tracking — onde ainda há mock no projeto
 status: vivo
 owner: produto + Sonnet
-last_update: 2026-05-27
+last_update: 2026-05-30
 ---
 
 # 🎭 Mocks Tracking
@@ -36,7 +36,6 @@ last_update: 2026-05-27
 
 | # | Local | Tipo | Risco | Estado | HUB | Notas |
 |---|---|---|---|---|---|---|
-| MOCK-01 | `/dashboard/financeiro-v2` (várias views Lovable) | UI-mock | 🔴 | ⏳ | Financeiro | Backend tem dados reais, UI não plugada — gera decisão errada |
 | MOCK-02 | `/dashboard/whatsapp` inbox parcial | UI-mock | 🟡 | ⏳ | WhatsApp | Mensagens reais chegam ao banco, mas inbox UI ainda exibe mock parcial |
 | MOCK-03 | Painel inicial — alguns KPI cards | UI-mock | 🔴 | ⏳ | BI | Mocks misturados com dados reais; sem banner identificando |
 | MOCK-04 | `/dashboard/operacoes-v2` mock data inicial dos cards | UI-mock | 🟡 | ⏳ | OS | Hidratação real cobre, mas seed inicial vem de mocks Lovable |
@@ -51,7 +50,9 @@ last_update: 2026-05-27
 
 | # | Local | Removido em | Sprint que removeu |
 |---|---|---|---|
-| (em branco — começar a registrar) | | | |
+| MOCK-01 | `/dashboard/financeiro-v2` (views Lovable) | ~2026-05 (pré-baseline) | migração FinanceiroRealProvider (real-data); confirmado no R0-L5 |
+
+> **Obs. MOCK-01 (R0-L5):** UI plugada a dados reais (sem dataset fake; sem fallback). **DRE / Fluxo de caixa**: dados conectados, mas **evolução visual/funcional pendente** (`ROADMAP_FINANCEIRO`) — maturidade de UI, não mock.
 
 ---
 

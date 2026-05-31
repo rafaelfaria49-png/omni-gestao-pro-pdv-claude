@@ -627,3 +627,52 @@ docs_atualizados:
   - docs/status/EXECUTION_LOG.md
   - docs/ai/CURRENT_STATUS.md
 ```
+
+---
+
+```yaml
+# ─── ENTRY 010 ────────────────────────────────────────────────────
+ticket_id: MULTI_LOJA-S-002
+skill_id: SKILL_EXEC_DEBT_ITEM    # closest fit — execução NÃO ritualizada (ver notes)
+skill_version: v1
+ia: opus                           # atribuição via Co-Authored-By do commit c615e7c
+modo: SAFE
+started_at: 2026-05-30T17:01:08-03:00   # = commit time de c615e7c (proxy); INÍCIO REAL DESCONHECIDO
+ended_at: 2026-05-30T17:01:08-03:00     # = author date do commit c615e7c (evidência git)
+duration: null                          # DESCONHECIDA — execução não rastreada (hotfix fora do Engine)
+fases_completas: [HOTFIX]               # fora do pipeline de 17 fases (ver notes)
+fase_falha: null
+resultado: encerrada
+pr: null
+branch: main                            # commitado direto em main (sem branch skill/*)
+commit_anterior: 7d304db
+commit_final: c615e7c
+rollback: false
+diff:
+  added: 41
+  removed: 28
+  files_modified: 6
+gates:
+  gate_1:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "N/A — hotfix cirúrgico sem proposta formal (fora do ritual Execution Engine)."
+  gate_2:
+    approved_by: Rafael
+    approved_at: 2026-05-30T17:01:08-03:00   # = commit time; aprovação inferida (Rafael = autor do commit)
+    pending: null
+    notes: "Commit aplicado diretamente por Rafael. Sem Gate #2 formal registrado à época; approved_at inferido do timestamp do commit."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}   # sem AUDIT pós formal; testes verdes no commit
+benchmark: null
+sprint: null                            # sem proposta formal em docs/sprints/proposals/
+proposta: null
+auditoria: null                         # sem SKILL_AUDIT pós-impl
+adr_criada: null                        # ADR-0003 ATUALIZADO (não criado) — exceção F-02-anchor encerrada
+memoria_criada: null
+docs_atualizados:
+  - docs/ai/CURRENT_STATUS.md
+  - docs/decisions/ADR-0003-eliminar-fallback-legacy-primary-store-id.md
+flags: []
+notes: "REGISTRO RETROATIVO criado na fase R0 (lote R0-L0). TIMESTAMPS: apenas o author date do commit c615e7c (2026-05-30T17:01:08-03:00) é evidência real; started_at e duration NÃO foram rastreados (hotfix sem rastro de início) — started_at repete o commit time apenas como proxy e duration fica null para não fabricar precisão. A S-002 foi executada como HOTFIX cirúrgico FORA do pipeline ritualizado de 17 fases: sem PROPOSE_SPRINT, sem ENTRY contemporânea, sem SKILL_AUDIT pós-impl, sem lock formal, commitada direto em main. Escopo (fechado): F-03 (proxy.ts lia cookie 'assistec_active_store' com underscores; correto é 'assistec-active-store' com hífens — passa a usar ASSISTEC_ACTIVE_STORE_COOKIE de @/lib/store-defaults) + F-02-anchor (app/api/financeiro/relatorios/exportar/route.ts: removido o último '|| loja-1' de produção; storeId ausente → 400). Validação registrada no commit c615e7c: tsc limpo · vitest 217 passed | 3 expected fail · next build OK. Áreas vetadas intocadas. Baseline da reconciliação: docs/audits/AUDITORIA_R0_RECONCILIACAO_GOVERNANCA.md. Observação: é exatamente o tipo de execução que o SAFE-lite (R1) deve formalizar."
+```

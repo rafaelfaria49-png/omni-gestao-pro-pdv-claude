@@ -3,7 +3,7 @@ title: Roadmap — HUB Financeiro
 hub: financeiro
 status: vivo
 owner: produto + Sonnet (técnico)
-last_update: 2026-05-27
+last_update: 2026-05-30
 sprint_atual: nenhuma (próxima a planejar)
 ---
 
@@ -61,7 +61,7 @@ Financeiro **não tem UI primária para criar receita** — recebe via adapters 
 |---|---|---|
 | **Sem emissão de boleto/PIX** real (cobrança ativa) | 🔴 P0 | gap de produto |
 | **Conciliação bancária OFX/CSV** inexistente | 🟡 P1 | gap de produto |
-| **DRE / Fluxo de caixa** visuais embrionários | 🟡 P1 | gap de UI (financeiro-v2 ainda mock) |
+| **DRE / Fluxo de caixa** — dados reais conectados; evolução visual/funcional pendente | 🟡 P1 | gap de UI (não é mock de dados) |
 | **Plano de contas hierárquico configurável** parcial — só via importador | 🟡 P1 | inspeção |
 | **Contas a Pagar** menos maduro que Receber (sem boleto pago via leitor) | 🟡 P1 | gap de produto |
 | **Carteira multi-conta bancária** não modelada explicitamente | 🟢 P2 | gap de modelo |
@@ -78,7 +78,7 @@ Financeiro **não tem UI primária para criar receita** — recebe via adapters 
 |---|---|---|
 | 1 | **Boleto/PIX** via Asaas ou similar (cobrança ativa) | P0 |
 | 2 | **Conciliação bancária** OFX/CSV + match automático | P1 |
-| 3 | **DRE + Fluxo de caixa** real (substituir mock financeiro-v2) | P1 |
+| 3 | **DRE + Fluxo de caixa** — evoluir UI/UX (dados reais já conectados) | P1 |
 | 4 | **Régua de cobrança** automática (X dias antes, no vencimento, em atraso) | P1 |
 | 5 | **Plano de contas hierárquico** configurável via UI | P1 |
 | 6 | **Fechamento mensal** travado com aprovação | P1 |
@@ -101,7 +101,7 @@ Financeiro **não tem UI primária para criar receita** — recebe via adapters 
 | UI de plano de contas hierárquico | M | Backend já cobre |
 | Tela de fechamento mensal + lock | M | Decisão de quem aprova |
 | Parser OFX (importação extrato) | M | Definir bancos suportados |
-| DRE real (substituir mocks do financeiro-v2) | L | Plano de contas pronto |
+| DRE — evolução visual/funcional (dados já reais) | L | Plano de contas pronto |
 | Adapter `marketplace-conciliacao.ts` | L | Bloco 13 iniciado |
 | Recibo PDF + envio WhatsApp | S | Template definido |
 
@@ -111,7 +111,7 @@ Financeiro **não tem UI primária para criar receita** — recebe via adapters 
 
 ### Fase 1 — Núcleo estável (~80% feita)
 **Objetivo:** Receber/Pagar/Carteira/Movimento idempotentes + adapter OS funcional.
-**Saída:** ✅ adapters PDV e OS reconciliando · ✅ importador parcelado · ✅ crédito cliente persistente · ✅ À Prazo Enterprise · falta: financeiro-v2 deixar de ser mock.
+**Saída:** ✅ adapters PDV e OS reconciliando · ✅ importador parcelado · ✅ crédito cliente persistente · ✅ À Prazo Enterprise · ✅ financeiro-v2 sobre dados reais (DT-02 paga) · falta: evolução de UI em DRE/Fluxo.
 
 ### Fase 2 — Cobrança ativa
 **Objetivo:** boleto/PIX + régua de cobrança automática.
@@ -161,13 +161,13 @@ Financeiro **não tem UI primária para criar receita** — recebe via adapters 
 
 **Nenhuma.** Último marco: importador contas_receber/pagar parcelado (memória registrada).
 
-Próxima sugerida: **SPRINT_NN_FINANCEIRO — Substituir mocks do `/dashboard/financeiro-v2` por dados reais**.
+Próxima sugerida (itens do §6): **Boleto/PIX** (P0) e **evolução de UI DRE/Fluxo** — financeiro-v2 já opera sobre dados reais (DT-02 paga; R0-L5).
 
 ---
 
 ## 12. Status atual
 
-Financeiro tem **backend sólido** (services + adapters + contracts), idempotência via `localKey`, auditoria via `payload.historico[]`, importador de parcelas funcional, crédito de cliente persistente e À Prazo Enterprise materializando corretamente. A **UI `/dashboard/financeiro-v2`** (Lovable) ainda opera com mocks — gap mais visível. Cobrança ativa (boleto/PIX) e conciliação bancária são gaps de funcionalidade críticos para sair de "ERP de registro" para "ERP de operação financeira ativa".
+Financeiro tem **backend sólido** (services + adapters + contracts), idempotência via `localKey`, auditoria via `payload.historico[]`, importador de parcelas funcional, crédito de cliente persistente e À Prazo Enterprise materializando corretamente. A **UI `/dashboard/financeiro-v2`** (Lovable) **opera sobre dados reais** (FinanceiroRealProvider; DT-02 paga) — resta **evolução visual/funcional de DRE/Fluxo**. Cobrança ativa (boleto/PIX) e conciliação bancária são gaps de funcionalidade críticos para sair de "ERP de registro" para "ERP de operação financeira ativa".
 
 ---
 
@@ -190,7 +190,7 @@ Financeiro tem **backend sólido** (services + adapters + contracts), idempotên
 |---|---|
 | Decisão de provedor de cobrança (ADR) | Fase 2 |
 | Modelagem multi-conta bancária | Fase 4 |
-| financeiro-v2 ainda mock | Onda 1 considerada completa |
+| Evolução de UI DRE/Fluxo (financeiro-v2 já sobre dados reais) | Onda 1 considerada completa |
 
 ---
 
