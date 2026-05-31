@@ -224,3 +224,39 @@ describe("F-08 — /api/ops/sync-legacy-financeiro sem auth() + canAccessStore",
     expect(src).toContain("canAccessStore")
   })
 })
+
+// ---------------------------------------------------------------------------
+// DT-14 · financeiro/carteiras + dre sem fallback "loja-1" (resíduo nullish de F-02)
+// Forma multi-linha (`??` + `"loja-1"` na linha seguinte) não pega no scan
+// linha-a-linha do F-02; aqui validamos por substring no arquivo inteiro.
+// ---------------------------------------------------------------------------
+
+describe("DT-14 — financeiro/carteiras + dre sem fallback loja-1 (SAFE-lite)", () => {
+  const READ_FILES = [
+    "app/api/financeiro/carteiras/route.ts", // GET
+    "app/api/financeiro/dre/route.ts",       // GET
+  ]
+  const WRITE_FILES = [
+    "app/api/financeiro/carteiras/route.ts",               // POST
+    "app/api/financeiro/carteiras/[id]/route.ts",          // PATCH
+    "app/api/financeiro/carteiras/transferencia/route.ts", // POST
+  ]
+  const ALL = [...new Set([...READ_FILES, ...WRITE_FILES])]
+
+  for (const f of ALL) {
+    it(`[${f}] sem literal "loja-1", sem getStoreId local, com guard STORE_REQUIRED`, () => {
+      const src = read(f)
+      expect(src).not.toContain('"loja-1"')
+      expect(src).not.toContain("function getStoreId")
+      expect(src).toContain("STORE_REQUIRED")
+    })
+  }
+
+  it("leituras (GET) usam opsLojaIdFromRequest", () => {
+    for (const f of READ_FILES) expect(read(f)).toContain("opsLojaIdFromRequest(")
+  })
+
+  it("escritas (POST/PATCH) usam opsLojaIdFromRequestForWrite (anti-CSRF)", () => {
+    for (const f of WRITE_FILES) expect(read(f)).toContain("opsLojaIdFromRequestForWrite(")
+  })
+})

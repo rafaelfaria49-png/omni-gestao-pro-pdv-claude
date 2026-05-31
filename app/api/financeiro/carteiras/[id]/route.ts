@@ -6,16 +6,9 @@ import {
   TIPOS_CARTEIRA,
 } from "@/lib/financeiro/services/carteiras-service"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
+import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { auth } from "@/auth"
 import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
-
-function getStoreId(req: NextRequest): string {
-  return (
-    req.headers.get("x-assistec-loja-id") ??
-    req.nextUrl.searchParams.get("storeId") ??
-    "loja-1"
-  )
-}
 
 function err(msg: string, code: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg, code }, { status })
@@ -37,7 +30,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const storeId = getStoreId(req)
+  const storeId = opsLojaIdFromRequestForWrite(req)
+  if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
   const denied = await apiGuardEnterpriseOrOps(
     storeId,
     (p) => p.financeiro.edit,

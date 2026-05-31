@@ -7,16 +7,9 @@ import {
   TIPOS_CARTEIRA,
 } from "@/lib/financeiro/services/carteiras-service"
 import { apiGuardEnterpriseOrOps, apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
+import { opsLojaIdFromRequest, opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { auth } from "@/auth"
 import { extractAuditoriaActor, logAuditoriaFinanceira } from "@/lib/financeiro/services/auditoria-actor"
-
-function getStoreId(req: NextRequest): string {
-  return (
-    req.headers.get("x-assistec-loja-id") ??
-    req.nextUrl.searchParams.get("storeId") ??
-    "loja-1"
-  )
-}
 
 function err(msg: string, code: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg, code }, { status })
@@ -25,7 +18,8 @@ function err(msg: string, code: string, status = 400) {
 // ─── GET /api/financeiro/carteiras ───────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const storeId = getStoreId(req)
+  const storeId = opsLojaIdFromRequest(req)
+  if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
   const denied = await apiGuardFinanceiroViewOrOps(storeId)
   if (denied) return denied
   const apenasAtivas = req.nextUrl.searchParams.get("ativas") === "1"
@@ -54,7 +48,8 @@ const postSchema = z.object({
 })
 
 export async function POST(req: NextRequest) {
-  const storeId = getStoreId(req)
+  const storeId = opsLojaIdFromRequestForWrite(req)
+  if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
   const denied = await apiGuardEnterpriseOrOps(
     storeId,
     (p) => p.financeiro.edit,

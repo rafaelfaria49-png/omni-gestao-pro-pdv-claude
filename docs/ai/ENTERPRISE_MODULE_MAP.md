@@ -208,7 +208,7 @@
 
 - **Server Actions** em `app/actions/` para domínios cadastro/operações/omni-agent/whatsapp/auth.  
 - **Serviços puros** em `lib/*/services/` consumidos por actions e `app/api/*`.  
-- **Multi-loja:** header **`x-assistec-loja-id`** (`lib/assistec-headers.ts`); cookie **`assistec-active-store`** (`lib/store-defaults.ts`); fallback **`loja-1`**; escritas API: `storeIdFromAssistecRequestForWrite` exige header/query explícitos (`lib/store-id-from-request.ts`).
+- **Multi-loja:** header **`x-assistec-loja-id`** (`lib/assistec-headers.ts`); cookie **`assistec-active-store`** (`lib/store-defaults.ts`); **sem fallback `loja-1` server-side** (leitura → header→query→cookie→`null`→`400`; escrita → header→query→`null`→`400`, anti-CSRF; `storeIdFromAssistecRequestForRead/ForWrite` em `lib/store-id-from-request.ts` · S-001/S-002 + DT-14). `LEGACY_PRIMARY_STORE_ID="loja-1"` permanece só como **default client-side** (DT-13) e constante canônica em `lib/store-defaults.ts`.
 
 ### 3.3 Tokens e temas
 

@@ -33,7 +33,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | 3 | **Marketing IA** | 🟠 incipiente | Gerador de imagens ✅, credit-costs ✅, debit-turn-credits ✅ | 🔴 sem orquestrador de campanha, sem atribuição |
 | 4 | **Omni Agent** | 🟠 infra ok / poucos executores | API-guard, honesty, regex determinística, executor `recebimentoFinanceiro` ✅ | 🔴 pool de executores reais pequeno |
 | 4 | **BI** | 🟠 espalhado | Painel inicial parcial | 🔴 mocks misturados com real |
-| 4 | **Multi-loja** | 🟢 isolamento server / 🟡 resíduos | fallback `loja-1` **server-side eliminado** (S-001/S-002, ADR-0003) ✅, ACL `canAccessStore` ✅, proxy cookie ✅, `storeId` everywhere ✅ | 🟡 F-04 webhook WhatsApp single-store + resíduo `loja-1` client-side |
+| 4 | **Multi-loja** | 🟢 isolamento server / 🟡 resíduos | fallback `loja-1` **server-side 100% eliminado** (S-001/S-002 + DT-14, ADR-0003) ✅, ACL `canAccessStore` ✅, proxy cookie ✅, `storeId` everywhere ✅ | 🟡 F-04 webhook WhatsApp single-store + resíduo `loja-1` client-side |
 
 ---
 
@@ -52,7 +52,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 > Em ordem recomendada — quem encerra a atual, abre a próxima.
 
 1. **SPRINT_NN_PDV** — Persistência server-side do PDV Next (P0; fecha Fase 1 PDV).
-2. **SPRINT_NN_MULTI_LOJA** — F-04: router WhatsApp por `phone_number_id` (P1→P0 antes de loja-2 ativar WhatsApp). *Fallback `loja-1` server-side já eliminado em S-001/S-002.*
+2. **SPRINT_NN_MULTI_LOJA** — F-04: router WhatsApp por `phone_number_id` (P1→P0 antes de loja-2 ativar WhatsApp). *Fallback `loja-1` server-side já eliminado (S-001/S-002 + DT-14).*
 3. **SPRINT_NN_WHATSAPP** — Opt-out persistente + monitor qualidade (P0; previne banimento Meta).
 4. **SPRINT_NN_ESTOQUE** — Modelagem multi-depósito (P0; desbloqueia Marketplace).
 
@@ -85,7 +85,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | 5 | Rota legada `/dashboard/os` paralela | OS | P1 |
 | 6 | Pool de executores Omni Agent pequeno | Omni Agent | P1 |
 
-> Detalhe e tracking vivo em `docs/status/DIVIDA_TECNICA.md`. (DT-03 `loja-1` server-side **pago** — ver §3 de lá.)
+> Detalhe e tracking vivo em `docs/status/DIVIDA_TECNICA.md`. (DT-03 + DT-14: `loja-1` server-side **100% pago** — ver §3 de lá.)
 
 ---
 
@@ -93,6 +93,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 
 > Apêndice — listar entradas mais recentes do `CURRENT_STATUS.md` para contexto rápido.
 
+- **2026-05-30** — DT-14 (SAFE-lite reforçado): fallback nullish `?? "loja-1"` em `carteiras/*` + `dre` eliminado (forma que escapou da S-001 por ser `??` e multi-linha) — `loja-1` **server-side 100%** fechado; ADR-0003.
 - **2026-05-30** — R0-L5: financeiro-v2 confirmado sobre dados reais (DT-02 paga · MOCK-01 removido · BL-13 destravado); DRE/Fluxo = evolução de UI pendente.
 - **2026-05-30** — R0: reconciliação da governança iniciada (baseline `AUDITORIA_R0`; lote L0 ✅).
 - **2026-05-30** — SPRINT_MULTI_LOJA-S-002: F-03 (proxy cookie) + F-02-anchor (exportar) — fallback `loja-1` **server-side** 100% eliminado.

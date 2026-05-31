@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getDREMensal } from "@/lib/financeiro/services/dre-service"
 import { apiGuardFinanceiroViewOrOps } from "@/lib/auth/api-enterprise-guard"
-
-function getStoreId(req: NextRequest): string {
-  return (
-    req.headers.get("x-assistec-loja-id") ??
-    req.nextUrl.searchParams.get("storeId") ??
-    "loja-1"
-  )
-}
+import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 
 function err(msg: string, code: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg, code }, { status })
@@ -17,7 +10,8 @@ function err(msg: string, code: string, status = 400) {
 // ─── GET /api/financeiro/dre?mes=5&ano=2026 ───────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const storeId = getStoreId(req)
+  const storeId = opsLojaIdFromRequest(req)
+  if (!storeId) return err("Loja não identificada.", "STORE_REQUIRED", 400)
   const denied = await apiGuardFinanceiroViewOrOps(storeId)
   if (denied) return denied
   const params = req.nextUrl.searchParams

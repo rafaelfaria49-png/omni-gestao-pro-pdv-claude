@@ -4,8 +4,8 @@
  * Cobertura: F-02 da AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md
  *
  * Varre código de produção (`app/`, `lib/`, exceto mirror legado e este próprio
- * arquivo) procurando por hardcode do fallback `"loja-1"` no padrão
- * `|| "loja-1"`. Documenta as ocorrências CONHECIDAS e detecta regressão futura.
+ * arquivo) procurando por hardcode do fallback `"loja-1"` nos padrões
+ * `|| "loja-1"` e `?? "loja-1"` (em UMA linha). Documenta as ocorrências CONHECIDAS e detecta regressão futura.
  *
  * Estratégia em duas camadas:
  *
@@ -83,10 +83,14 @@ function walk(dir: string, acc: string[] = []): string[] {
 }
 
 /**
- * Padrão alvo: `|| "loja-1"` ou `|| 'loja-1'` (com ou sem espaço).
- * Captura também a versão com template literal `|| \`loja-1\``.
+ * Padrão alvo: `|| "loja-1"` / `?? "loja-1"` (e `'...'` / template, com ou sem espaço).
+ * DT-14: a forma nullish `??` foi adicionada (a regex antiga só pegava `||`).
+ * Nota: este scan é linha-a-linha, então só pega a forma em UMA linha. A forma
+ * multi-linha (`??` no fim de uma linha + `"loja-1"` na seguinte) usada em
+ * `carteiras/*` e `dre/*` é coberta pelo bloco DT-14 em
+ * `multi-loja-route-acl-baseline.test.ts` (substring no arquivo inteiro).
  */
-const HARDCODED_FALLBACK_RE = /\|\|\s*["'`]loja-1["'`]/g
+const HARDCODED_FALLBACK_RE = /(?:\|\||\?\?)\s*["'`]loja-1["'`]/g
 
 type Occurrence = { file: string; line: number; snippet: string }
 
@@ -124,7 +128,7 @@ function findOccurrences(): Occurrence[] {
   return out
 }
 
-describe("multi-loja: hardcode `|| \"loja-1\"` em código de produção (F-02)", () => {
+describe("multi-loja: hardcode `|| \"loja-1\"` / `?? \"loja-1\"` em código de produção (F-02)", () => {
   it("[snapshot baseline] contagem documentada de ocorrências (deve só diminuir)", () => {
     const occs = findOccurrences()
     // Registro para troubleshooting humano se o teste falhar:

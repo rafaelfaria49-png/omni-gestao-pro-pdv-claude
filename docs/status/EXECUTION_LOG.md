@@ -2,7 +2,7 @@
 title: Execution Log — registro append-only de execuções de skill
 status: vivo (append-only)
 owner: Execution Engine (automático) + revisão humana mensal
-last_update: 2026-05-27
+last_update: 2026-05-30
 schema_version: v1
 ---
 
@@ -723,4 +723,56 @@ docs_atualizados:
   - docs/status/EXECUTION_LOG.md      # esta entry (append-only)
 flags: []
 notes: "REGISTRO DA DÍVIDA DE PROCESSO DP-01 (R1 — Retro do Piloto, lote R1-L4). A S-002 (ENTRY 010) foi executada como HOTFIX fora do ritual de 17 fases. A dívida de processo correspondente — DP-01 — está registrada em docs/execution/RETRO_PILOTO_R1.md §5 e considerada PAGA por: (1) R0 — reconciliação dos documentos que a S-002 deveria ter atualizado; (2) R1 — formalização do SAFE-lite em docs/execution/EXECUTION_ENGINE.md §11 + ADR-0004, que torna o perfil de execução leve um ritual LEGÍTIMO (deixa de ser 'fora do ritual'). A ENTRY 010 NÃO foi editada (regra append-only §4 preservada integralmente); esta ENTRY 011 é o cross-ref formal. REFERÊNCIAS: docs/execution/RETRO_PILOTO_R1.md §5 (DP-01) · docs/decisions/ADR-0004-safe-lite-modo-padrao.md (SAFE-lite modo padrão) · ENTRY 010 (S-002). Lote docs-only: apenas EXECUTION_LOG.md tocado. TIMESTAMPS: started_at/ended_at são date-proxy (2026-05-30); hora real não rastreada — duration: null para não fabricar precisão (mesmo critério da ENTRY 010). Sem commit/push: o R1 inteiro aguarda a decisão de commit único do humano."
+```
+
+---
+
+```yaml
+# ─── ENTRY 012 ────────────────────────────────────────────────────
+ticket_id: MULTI_LOJA-DT-14          # debt-item server-side (carteiras + dre); tracking em DIVIDA_TECNICA DT-14
+skill_id: SKILL_EXEC_DEBT_ITEM       # execução de dívida técnica (mesmo fit da ENTRY 010)
+skill_version: v1
+ia: opus
+modo: SAFE                           # perfil real = SAFE-lite REFORÇADO (ADR-0004); valor mantido SAFE pois schema v1 está congelado
+started_at: 2026-05-30T23:15:00-03:00   # PROXY — registro DT-14 + edições; evidência real: RED run no vitest às 23:22:21
+ended_at: 2026-05-30T23:45:00-03:00     # PROXY — fim do DOC_REFRESH (Gate #2); hora fina não rastreada
+duration: null                          # janela real observada nos testes (~23:22→23:25); precisão não rastreada (não fabricar)
+fases_completas: [SAFE_LITE_REFORCADO]  # registro→código→testes(red→green)→AUDIT focada→Gate#2→DOC_REFRESH (fora do pipeline de 17 fases)
+fase_falha: null
+resultado: encerrada                    # execução completa; commit/push PENDENTES de decisão humana (ver notes)
+pr: null
+branch: main                            # working tree em main; sem branch skill/*; sem commit ainda
+commit_anterior: 45f955b                # HEAD (commit do R1) sob o qual o DT-14 foi executado
+commit_final: null                      # commit/push adiados por decisão do humano
+rollback: false
+diff:
+  added: ~140                           # APROX — código+testes ≈ 61/43 em 7 arquivos + DOC_REFRESH; número final no git diff --stat pré-commit
+  removed: ~55
+  files_modified: ~11                   # 4 rotas + 2 testes + DIVIDA + OVERVIEW + ROADMAP + ENTERPRISE_MODULE_MAP + EXECUTION_LOG
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-05-30T00:00:00-03:00   # date-proxy; hora não rastreada
+    pending: null
+    notes: "Gate #1 aprovado: diff preview completo + plano + impacto esperado + checklist de testes validados. Decisões: SAFE-lite reforçado (não Engine completo); DT-14 antes de DT-13; F-04 permanece separado; registrar DT-14 em DIVIDA antes de executar."
+  gate_2:
+    approved_by: Rafael
+    approved_at: 2026-05-30T00:00:00-03:00
+    pending: null
+    notes: "Gate #2 aprovado: AUDIT focada limpa (0 findings); DOC_REFRESH completo autorizado e executado; commit/push adiados para decisão posterior."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}   # AUDIT focada: 0 defeitos; 2 nuances INTENCIONAIS (ver notes)
+benchmark: null
+sprint: null                            # SAFE-lite debt-item; sem arquivo formal em docs/sprints/proposals
+proposta: null                          # proposta DT-14 inline na conversa; registrada em DIVIDA_TECNICA §3 (DT-14)
+auditoria: null                         # AUDIT focada inline (sem arquivo SKILL_AUDIT dedicado — perfil SAFE-lite)
+adr_criada: null                        # governado por ADR-0003 (cobertura completa de F-02 server-side); SEM ADR novo
+memoria_criada: null                    # memória Claude Code (contexto vivo §11.5) adicionada fora do repo (~/.claude); sem artefato no repo
+docs_atualizados:
+  - docs/status/DIVIDA_TECNICA.md            # DT-14 §2→§3 (paga) + Nota DT-03/DT-14
+  - docs/ai/CURRENT_STATUS_OVERVIEW.md       # §1 maturidade, §3 sugestão, §5 footnote, §6 apêndice
+  - docs/roadmaps/ROADMAP_MULTI_LOJA.md      # front matter + §5/§6/§8/§10/§11/§12/§13
+  - docs/ai/ENTERPRISE_MODULE_MAP.md         # §3.2 — drift "fallback loja-1" corrigido
+  - docs/status/EXECUTION_LOG.md             # esta ENTRY 012 (append-only)
+flags: []                               # NÃO tocou área protegida: app/api/financeiro/* são ROTAS, não lib/financeiro/* (services)
+notes: "DT-14 — eliminação do fallback nullish `?? \"loja-1\"` server-side. ESCOPO (fechado): 4 arquivos / 5 endpoints — app/api/financeiro/carteiras/route.ts (GET+POST), carteiras/[id]/route.ts (PATCH), carteiras/transferencia/route.ts (POST), dre/route.ts (GET). Em cada um: removido o getStoreId() local (que terminava em `?? \"loja-1\"`) e substituído pelo helper canônico — opsLojaIdFromRequest (leituras: header→query→cookie→null) e opsLojaIdFromRequestForWrite (escritas: header→query→null, anti-CSRF) — com guard `if (!storeId) return err(...,\"STORE_REQUIRED\",400)` ANTES do apiGuard. ACL (apiGuard*/canAccessStore) intacto. INSIGHT-CHAVE: este era o resíduo que a S-001/S-002 NÃO pegou — a forma nullish `??` (o teste/áudit da S-001 só varria `|| \"loja-1\"`) e ainda multi-linha (`??` no fim de uma linha + `\"loja-1\"` na seguinte), invisível a scan linha-a-linha. DT-14 fecha o vetor server-side a 100%. PERFIL: primeira execução real de SAFE-lite REFORÇADO sob ADR-0004 — Gate #1 + AUDIT focada + Gate #2 mantidos por ser dinheiro+multi-loja, mas sem o pipeline de 17 fases. VALIDAÇÃO: npx tsc --noEmit limpo (EXIT 0) · vitest 223 passed | 3 expected fail (subiu de 217: +6 do bloco DT-14 estático novo em multi-loja-route-acl-baseline.test.ts; regex de multi-loja-no-hardcoded-fallback.test.ts estendida `(?:\\|\\||\\?\\?)` como hardening futuro single-line) · next build OK · grep `\"loja-1\"` em app/api/** = 0 literal de código (resta só 1 comentário em exportar/route.ts:305). TESTES red→green: RED demonstrado antes do fix (bloco DT-14 = 6 failed). AUDIT FOCADA: 0 findings; 2 NUANCES intencionais — (a) leituras passam a aceitar TAMBÉM o cookie como fonte (semântica canônica de leitura ADR-0003; inofensiva pois os callers sempre mandam header); (b) PATCH carteiras/[id] NÃO tem caller no repo hoje (UI de editar/recalcular não plugada) → endurecida proativamente. CALLER SURFACE (verificado por grep, não memória): único consumidor é components/financeiro/lovable/context/FinanceiroRealContext.tsx (refreshCarteiras/criarCarteira/transferir/refreshDRE), todos com withStoreHeaders() + guard readActiveStoreIdFromBrowser() → caminho feliz inalterado; mudança observável única = 400 em vez de loja-1 silencioso quando não há header/query/cookie. ÁREAS PROTEGIDAS: nenhuma tocada (rotas em app/api, não services lib/financeiro/*; sem prisma/schema/auth/proxy/core). COMMIT/PUSH: PENDENTES — aguardam decisão do humano após este DOC_REFRESH. TIMESTAMPS: started_at/ended_at são PROXY; evidência real são os timestamps dos runs vitest (~23:22→23:25 de 2026-05-30); duration: null para não fabricar precisão (mesmo critério das ENTRY 010/011). REFERÊNCIAS: docs/status/DIVIDA_TECNICA.md DT-14 (§3, paga) · docs/decisions/ADR-0003 (fallback LEGACY_PRIMARY_STORE_ID) · docs/decisions/ADR-0004 (SAFE-lite modo padrão) · ENTRY 010 (S-002, F-02-anchor) que deixou este resíduo nullish para trás."
 ```
