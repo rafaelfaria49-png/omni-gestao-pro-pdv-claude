@@ -205,6 +205,12 @@ Marketplace (greenfield + cadeia de blockers) — começar por um HUB maduro com
 **Não recomendado agora:** criar `SKILL_INTAKE_ROUTER` ou novos protocolos — seria
 overengineering antes de existir o runtime que os consuma.
 
+> **Detalhamento operacional (2026-06-01):** o mapa de desbloqueio passo-a-passo, o design do
+> `SKILL_LOCK_HUB`, a tabela consolidada de aprovação de skills e o veredito de liberação estão
+> em [`COWORK_RELEASE_PLAN.md`](./COWORK_RELEASE_PLAN.md). Resumo: governança do bootstrap **~98%**;
+> CoWork **supervisionado** destravável com **1 decisão** (ADR-0005), sem build novo; **autônomo**
+> exige 3 builds (`SKILL_LOCK_HUB` · Approval Batch V2 · `BENCHMARK_PROTOCOL`).
+
 ---
 
 ## 9. Referências

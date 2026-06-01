@@ -39,6 +39,7 @@ escreve é a pista escolhida (SAFE-lite inline ou Engine de 17 fases). Ver §2.
 | 30 | [`SAFE_GUARDS.md`](./SAFE_GUARDS.md) + [`HUMAN_GATES.md`](./HUMAN_GATES.md) | Limites de segurança + gates obrigatórios |
 | 31 | [`SKILL_TAXONOMY.md`](./SKILL_TAXONOMY.md) | 6 categorias + allow/deny-list + skills proibidas |
 | pós-R1 | [`INTAKE_PROTOCOL.md`](./INTAKE_PROTOCOL.md) | Roteamento read-only de "Trabalhe no X" → Intake Manifest → Gate #1 (materializa a FASE 1; não altera pipeline/modos/gates) |
+| pós-R1 | [`BOOTSTRAP_COWORK_MATURITY.md`](./BOOTSTRAP_COWORK_MATURITY.md) · [`COWORK_RELEASE_PLAN.md`](./COWORK_RELEASE_PLAN.md) | Maturidade do bootstrap (roteamento ~98%) + plano de liberação do CoWork (auditoria de gargalos · mapa de desbloqueio · design `SKILL_LOCK_HUB` · veredito) |
 | 36 | `BENCHMARK_PROTOCOL.md` (a criar) | Pipeline de benchmark por sprint |
 | 37 | `OVERNIGHT_PROTOCOL.md` (a criar) | Modo overnight |
 | 38 | `COWORK_PROTOCOL.md` (a criar) | Modo multi-IA simultâneo |
@@ -55,7 +56,7 @@ escreve é a pista escolhida (SAFE-lite inline ou Engine de 17 fases). Ver §2.
 | **OVERNIGHT** | Cron / agendamento | Apenas skills S; sem áreas protegidas; sem ADR novo; fila pré-aprovada | HUBs em "verde" (sem blocker P0 aberto) |
 | **AUDIT** | Humano ou agendamento | Read-only puro | Qualquer HUB |
 
-> **Estado atual (2026-05-30):** apenas **SAFE** liberado. Piloto (Bloco 43) **executado** (SPRINT_MULTI_LOJA-S-001/S-002), mas **COWORK** e **OVERNIGHT** seguem **não liberados** — congelados até concluir R0 (reconciliação) e R1 (retro do piloto).
+> **Estado atual (2026-06-01):** apenas **SAFE** liberado. R0 (reconciliação) e R1 (retro do piloto) **concluídos** — a condição "congelado até R0/R1" foi satisfeita. A **liberação do COWORK** (supervisionado primeiro) está **pendente de decisão humana** → ver [`COWORK_RELEASE_PLAN.md`](./COWORK_RELEASE_PLAN.md) (formaliza em **ADR-0005**). **OVERNIGHT** segue não liberado (adiável). Piloto (Bloco 43) executado (SPRINT_MULTI_LOJA-S-001/S-002).
 
 ---
 

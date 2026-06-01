@@ -1033,3 +1033,55 @@ docs_atualizados:
 flags: []                               # NÃO tocou área protegida: docs/** apenas; sem código/schema/auth/proxy/core/services
 notes: "Fechar os últimos gaps do bootstrap CoWork pós-INTAKE. VEREDITO: separa (A) ROTEAMENTO de intake — 'Trabalhe no X' → descobre roadmap/status/skill/benchmark/modo/backlog/DoD → para no Gate #1 — que está MADURO (~95%), de (B) EXECUÇÃO semi-autônoma CoWork (~60%), congelada por DECISÃO HUMANA + builds, não por falta de doc. ESCOPO (fechado): 1 doc novo (relatório) + 2 gaps DOC-FIXÁVEIS fechados — (g1) PORTA DE ENTRADA cabeada (skills/INDEX nova seção 'Comando livre' + execution/INDEX §1 'Porta de entrada'): antes o INTAKE_PROTOCOL existia mas não era anunciado como 1ª ação de um comando livre; (g2) DoD PROVISÓRIO passa a viajar no Intake Manifest (INTAKE §4 deriva de ROADMAP §8 Saída + §7; §12 campo definition_of_done; §16 legitima mudança ADITIVA = v1, quebrante = v2). DECISÕES PEDIDAS: SKILL_INTAKE_ROUTER = ainda NÃO (capability-gating; sem runtime consumidor — segue diferida); outro protocolo = NÃO p/ bootstrap (BENCHMARK_PROTOCOL é downstream de execução, Bloco 36 congelado); outro doc = só wiring (feito) + recomendação de 1 linha no CLAUDE.md (fora do escopo auto-aplicável — NÃO editei CLAUDE.md). SIMULAÇÃO 'Trabalhe no Marketplace' rodada à mão contra arquivos reais → manifest RED/BLOCKED correto (greenfield + BL-12→BL-07→BL-03), recommended_skill=SKILL_PROPOSE_ADR, para no Gate #1 — comprova o alvo SEM tocar código. GAPS NÃO-DOC (surfaced, NÃO acionados): COWORK congelado (RETRO_R1 §7, decisão Bloco 45), SKILL_LOCK_HUB ausente (Bloco 41), 24/32 skills draft, BENCHMARK_PROTOCOL ausente. COMPAT: nenhuma das 17 fases tocada; ADR-0002 (front matter de SKILL) preservado — o manifest do INTAKE é schema próprio, e a mudança foi aditiva e documentada; SAFE-lite/HUMAN_GATES intactos. VALIDAÇÃO: docs-only → tsc/build N/A; auto-revisão = integridade de links + coerência com ADR-0004/RETRO_R1/BLOCKERS. ÁREAS PROTEGIDAS: nenhuma (docs/** apenas). COMMIT/PUSH: PENDENTES — não solicitados; aguardam validação humana (Gate de §critério de parada). TIMESTAMPS: PROXY (2026-06-01); duration null. REFERÊNCIAS: docs/execution/BOOTSTRAP_COWORK_MATURITY.md (novo) · docs/execution/INTAKE_PROTOCOL.md (§4/§12/§16) · docs/execution/RETRO_PILOTO_R1.md §7 (COWORK congelado) · docs/decisions/ADR-0004 · ENTRY 015 (criação do INTAKE) · ENTRY 016 (DT-16, última execução antes desta)."
 ```
+
+---
+
+```yaml
+# ─── ENTRY 018 ────────────────────────────────────────────────────
+ticket_id: GOVERNANCA-S-003          # 3º trabalho de governança documental (CoWork Release Plan — fechar gargalos do bootstrap); HUB=cross; não é debt-item
+skill_id: SKILL_DOC_REFRESH          # closest fit no schema v1 (análise + autoria de doc de governança); sem skill dedicada de "release planning"
+skill_version: v1
+ia: opus
+modo: SAFE                           # perfil real = SAFE-lite LIGHT (ADR-0004); docs-only; valor mantido SAFE (schema v1 congelado)
+started_at: 2026-06-01T00:00:00-03:00   # PROXY — sessão de auditoria dos gargalos + plano de liberação; hora real não rastreada
+ended_at: 2026-06-01T00:00:00-03:00     # PROXY — fim da escrita (antes do gate de validação)
+duration: null                          # precisão não rastreada (não fabricar — critério das ENTRY 010-017)
+fases_completas: [SAFE_LITE_LIGHT]      # auditoria read-only (LOCKS/DIVIDA/catálogo/ADRs) → desenho → write doc+índices → auto-revisão (fora do pipeline de 17 fases)
+fase_falha: null
+resultado: encerrada                    # escrita completa e auto-revisada; commit/push PENDENTES de validação humana (parar no Gate #1)
+pr: null
+branch: main                            # working tree em main; sem branch skill/* (docs-only dispensa); sem commit ainda
+commit_anterior: 7204cd6                # HEAD = GOVERNANCA-S-002 (BOOTSTRAP_COWORK_MATURITY, commitado/pushado na ENTRY 017)
+commit_final: null                      # commit/push adiados por decisão do humano
+rollback: false
+diff:
+  added: ~265                           # APROX — COWORK_RELEASE_PLAN.md (~250, novo) + execution/INDEX (§2 row + §3 nota, ~6) + BOOTSTRAP_COWORK_MATURITY (~7) + OVERVIEW §6 (~1); número final no git diff --stat pré-commit
+  removed: ~2
+  files_modified: 5                     # COWORK_RELEASE_PLAN (novo) + execution/INDEX + BOOTSTRAP_COWORK_MATURITY + CURRENT_STATUS_OVERVIEW + EXECUTION_LOG (esta ENTRY)
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-06-01T00:00:00-03:00   # date-proxy
+    pending: null
+    notes: "Autorização operacional para documentação de governança (analisar + alterar/criar docs de governança; sem código/Prisma/banco; sem commit; sem push). Equivale ao 'go' de roteamento/escrita do SAFE-lite light."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "AGUARDANDO — o humano pediu para PARAR no Gate #1. Docs escritos e auto-revisados; commit/push NÃO solicitados nesta etapa."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}   # docs-only; auto-revisão: integridade de links + coerência com ADR-0004/LOCKS/APPROVAL_BATCH_V1/RETRO_R1; sem contradição
+benchmark: null
+sprint: null                            # SAFE-lite docs/governança; sem arquivo em docs/sprints/proposals
+proposta: null                          # plano/diff apresentado inline na conversa
+auditoria: docs/execution/COWORK_RELEASE_PLAN.md   # o plano de liberação É o artefato de análise persistido
+adr_criada: null                        # RECOMENDA ADR-0005 (liberar COWORK) mas NÃO o cria — é decisão humana (HUMAN_GATES §8: IA não aprova IA); SEM ADR novo nesta etapa
+memoria_criada: memory/project_cowork_release_plan   # memória Claude Code fora do repo (~/.claude)
+docs_atualizados:
+  - docs/execution/COWORK_RELEASE_PLAN.md         # NOVO — FASE A-F + mapa de desbloqueio (2 trilhos) + design SKILL_LOCK_HUB + veredito + plano ordenado
+  - docs/execution/INDEX.md                        # §2 nova linha (BOOTSTRAP + RELEASE_PLAN) + §3 nota atualizada (R0/R1 concluídos; liberação COWORK pendente de ADR-0005)
+  - docs/execution/BOOTSTRAP_COWORK_MATURITY.md   # §8 pointer para o COWORK_RELEASE_PLAN
+  - docs/ai/CURRENT_STATUS_OVERVIEW.md            # §6 entrada nova (2026-06-01)
+  - docs/status/EXECUTION_LOG.md                   # esta ENTRY 018 (append-only)
+flags: []                               # NÃO tocou área protegida: docs/** apenas; sem código/schema/auth/proxy/core/services
+notes: "CoWork Release Plan — fechar os últimos gargalos do bootstrap CoWork. VEREDITO: o gargalo NÃO é mais documentação. Governança do bootstrap ~98% (design). A distância até 'CoWork rodando' resolve em 2 TRILHOS: (T1) PILOTO SUPERVISIONADO destravável com 1 DECISÃO humana (liberar COWORK via ADR-0005) — NÃO exige build novo (o lock manual MVP do LOCKS.md já carregou a S-001; as 8 skills aprovadas cobrem o loop debt-item/test/stabilization/audit-multiloja); (T2) AUTÔNOMO/ESCALÁVEL exige 3 builds (SKILL_LOCK_HUB, Approval Batch V2, BENCHMARK_PROTOCOL), nenhum no caminho crítico do 1º CoWork. FASE A (4 gargalos → obrigatório/opcional/adiável/impede): obrigatório = só a decisão de liberar COWORK; SKILL_LOCK_HUB só impede CoWork SIMULTÂNEO (git-conflict em LOCKS.md, LOCKS §10 — único bloqueio TÉCNICO real); approval de skills só impede tarefas de feature/mock; BENCHMARK só impede feature nova. FASE C: 8 skills aprovadas bastam p/ piloto debt/test; draft (FIX_MOCK, FEATURE_S) só bloqueiam mock/feature; SKILL_LOCK_HUB/HANDOFF-completo/ROLLBACK/Composite não-criadas mas não bloqueiam piloto. FASE D (design SKILL_LOCK_HUB, SEM implementar): Cat. 6 que mecaniza acquire/release/extend/detect-stale sobre o LOCKS.md atual (sem novo schema), automatiza checagem da matriz roadmaps/INDEX §4 + heartbeat por checkpoint; risco-chave R1 = git-conflict 2-IAs; força-release continua só humano; integra Fase 3/17 do Engine e torna o lock obrigatório sob COWORK (SAFE-lite §11.3 hoje trata como opcional). FASE E (BENCHMARK_PROTOCOL): NÃO necessário p/ bootstrap/piloto; adiável até 1º ticket de feature; dependentes = Marketplace/Marketing IA/WhatsApp massa/CRM 360; impacto baixo p/ debt, médio p/ entrega de feature. FASE F (veredito): bootstrap 98% (design; 2% restantes = BENCHMARK_PROTOCOL adiável); operacional supervisionado destravável JÁ (1 decisão, não é mais %); autônomo ~70% (3 builds). NÃO declaro 100% (COWORK nunca rodou; SKILL_LOCK_HUB não existe — honestidade herdada de ADR-0004). 1º HUB recomendado = MULTI-LOJA (melhor rede de testes 245 passing + guard estático; contexto profundo; 1º ticket não-protegido = BL-08 lint storeId CI / test-hardening; EVITAR F-04 que toca lib/whatsapp protegido). PDV/Financeiro não p/ estreia (DT-01 server-core protegido / dinheiro=reforçado); Marketplace proibido (greenfield, INTAKE roteia p/ RED). PRÓXIMO PASSO ÚNICO: autorizar draft do ADR-0005 (SKILL_PROPOSE_ADR) — tudo a jusante decorre dele. DOC_REFRESH: execution/INDEX §3 corrigido (estava 'congelado até R0/R1' — ambos concluídos). NÃO criei ADR-0005 (decisão humana). NÃO toquei CLAUDE.md. ÁREAS PROTEGIDAS: nenhuma (docs/** apenas). COMMIT/PUSH: PENDENTES — parar no Gate #1. TIMESTAMPS: PROXY (2026-06-01); duration null. REFERÊNCIAS: docs/execution/COWORK_RELEASE_PLAN.md (novo) · docs/execution/BOOTSTRAP_COWORK_MATURITY.md · docs/status/LOCKS.md (§8/§9/§10) · docs/status/APPROVAL_BATCH_V1.md · docs/execution/RETRO_PILOTO_R1.md §7 · docs/decisions/ADR-0004 · ENTRY 016 (DT-16) · ENTRY 017 (GOVERNANCA-S-002, última execução antes desta)."
+```
