@@ -1757,6 +1757,7 @@ export function PdvClassic({
           toast({
             title: "Venda finalizada",
             description: `${payments.length} forma(s) de pagamento confirmada(s).`,
+            duration: 4000,
           })
           queueMicrotask(() => {
             shellBipeRef.current?.focus()

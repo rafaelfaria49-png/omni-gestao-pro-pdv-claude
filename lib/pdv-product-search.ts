@@ -46,13 +46,29 @@ export function productMatchesPdvSearch(p: PdvCatalogProduct, rawQuery: string):
 /**
  * Lista filtrada e ordenada por relevância (começa-com > contém > código).
  * Query vazia retorna a lista completa sem reordenar.
+ * Multi-termos (separados por espaço): todos os termos devem ter match em algum campo.
+ * Exemplo: "cabo KD11C" → produto precisa ter "cabo" E "KD11C" em qualquer campo.
  */
 export function filterPdvCatalogBySearch(products: PdvCatalogProduct[], rawQuery: string): PdvCatalogProduct[] {
   const q = rawQuery.trim()
   if (!q) return products
-  const scored = products
-    .map((p) => ({ p, s: scorePdvSearch(p, q) }))
-    .filter((x) => x.s > 0)
-  scored.sort((a, b) => b.s - a.s)
-  return scored.map((x) => x.p)
+
+  const terms = q.split(/\s+/).filter(Boolean)
+
+  if (terms.length <= 1) {
+    const scored = products
+      .map((p) => ({ p, s: scorePdvSearch(p, q) }))
+      .filter((x) => x.s > 0)
+    scored.sort((a, b) => b.s - a.s)
+    return scored.map((x) => x.p)
+  }
+
+  // Multi-termos: todos os termos devem bater em pelo menos um campo
+  return products
+    .filter((p) => terms.every((term) => scorePdvSearch(p, term) > 0))
+    .sort((a, b) => {
+      const sA = terms.reduce((sum, t) => sum + scorePdvSearch(a, t), 0)
+      const sB = terms.reduce((sum, t) => sum + scorePdvSearch(b, t), 0)
+      return sB - sA
+    })
 }

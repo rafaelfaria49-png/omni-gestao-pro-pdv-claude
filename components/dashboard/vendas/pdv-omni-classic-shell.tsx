@@ -432,7 +432,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                           }}
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="truncate font-medium">{product.name}</div>
+                            <div className="truncate font-medium" title={product.name}>{product.name}</div>
                             <div className="text-xs text-muted-foreground/60">
                               {[
                                 product.sku ? `SKU ${product.sku}` : null,
@@ -634,7 +634,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       {!isModoRapido ? <ShortcutBar onAction={props.onShortcutAction} /> : null}
 
       <Dialog open={props.productSearchOpen} onOpenChange={props.onProductSearchOpenChange}>
-        <DialogContent className="max-w-lg border-border bg-card text-foreground">
+        <DialogContent className="max-w-2xl border-border bg-card text-foreground">
           <DialogHeader>
             <DialogTitle>Pesquisar Produto (F3)</DialogTitle>
             <DialogDescription className="text-muted-foreground/75">
@@ -656,24 +656,46 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                 <p className="text-xs">Ajuste o termo ou limpe o filtro para ver o catálogo completo.</p>
               </div>
             ) : (
-              productsForDialog.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    props.onProductSearchOpenChange(false)
-                    props.onAddProductFromSearch(p)
-                  }}
-                  className="grid w-full grid-cols-[100px_1fr_70px_100px] gap-2 border-b border-border/50 px-3 py-2 text-left text-sm hover:bg-muted/65 cursor-pointer text-foreground"
-                >
-                  <span className="font-mono text-muted-foreground/60">{p.barcode || p.sku || p.id}</span>
-                  <span className="truncate text-foreground/80">{p.name}</span>
-                  <span className="text-muted-foreground/50">{p.vendaPorPeso ? "KG" : "UN"}</span>
-                  <span className="text-right font-semibold tabular-pdv text-[hsl(var(--pos-action))]">
-                    {p.vendaPorPeso ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg` : `R$ ${fmt(p.price)}`}
-                  </span>
-                </button>
-              ))
+              productsForDialog.map((p) => {
+                const isService = p.category === "Servicos"
+                const unlimited = p.stock >= 999
+                const codeLabel = [p.sku, p.codigoBarras || p.barcode].filter(Boolean).join(" · ")
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      props.onProductSearchOpenChange(false)
+                      props.onAddProductFromSearch(p)
+                    }}
+                    className="grid w-full grid-cols-[1fr_72px_108px] items-center gap-2 border-b border-border/50 px-3 py-2 text-left text-sm hover:bg-muted/65 cursor-pointer text-foreground"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-foreground" title={p.name}>{p.name}</div>
+                      <div className="truncate font-mono text-[10px] text-muted-foreground/60">
+                        {codeLabel || p.id}{p.vendaPorPeso ? " · KG" : " · UN"}
+                      </div>
+                    </div>
+                    <div
+                      className={cn(
+                        "text-right text-xs tabular-pdv",
+                        isService || unlimited
+                          ? "text-muted-foreground/40"
+                          : p.stock <= 0
+                            ? "text-destructive/80"
+                            : p.stock <= 5
+                              ? "text-amber-500"
+                              : "text-muted-foreground/70",
+                      )}
+                    >
+                      {isService ? "Serviço" : unlimited ? "—" : `${p.stock} un`}
+                    </div>
+                    <span className="text-right font-semibold tabular-pdv text-[hsl(var(--pos-action))]">
+                      {p.vendaPorPeso ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg` : `R$ ${fmt(p.price)}`}
+                    </span>
+                  </button>
+                )
+              })
             )}
           </div>
         </DialogContent>

@@ -353,6 +353,60 @@ function QuickCard({
   )
 }
 
+// ─── QuickRow — linha compacta para lista de resultados de busca ──────────────
+
+function QuickRow({
+  item,
+  onAdd,
+  isPickHighlight,
+  reservedQty = 0,
+}: {
+  item: PdvCatalogProduct
+  onAdd: (item: PdvCatalogProduct) => void
+  isPickHighlight?: boolean
+  reservedQty?: number
+}) {
+  const isService = item.category === "Servicos"
+  const availableStock = Math.max(0, item.stock - reservedQty)
+  const outOfStock = !isService && item.stock < 999 && availableStock <= 0
+  const lowStock = !isService && !outOfStock && availableStock <= 5 && item.stock < 999
+  const codeLabel = [item.sku, item.codigoBarras || item.barcode].filter(Boolean).join(" · ")
+
+  return (
+    <div
+      className={cn(
+        "flex cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3 py-2",
+        "transition-all duration-100 hover:border-border hover:bg-accent/50",
+        isPickHighlight && "border-primary/40 bg-primary/5 ring-1 ring-primary/30",
+        outOfStock && "opacity-55",
+      )}
+      onClick={() => onAdd(item)}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium leading-tight text-foreground">{item.name}</p>
+        <p className="mt-0.5 text-[10px] text-muted-foreground">
+          {codeLabel ? `${codeLabel} · ${item.category}` : item.category}
+        </p>
+      </div>
+      <div className="shrink-0 text-right">
+        <p className="text-sm font-bold tabular-nums text-foreground">{brl(item.price)}</p>
+        <p className={cn(
+          "text-[10px]",
+          outOfStock ? "text-destructive/80" : lowStock ? "text-amber-500 dark:text-amber-300" : "text-muted-foreground",
+        )}>
+          {isService ? "Serviço" : outOfStock ? "Sem estoque" : lowStock ? `Baixo: ${availableStock}un.` : `${availableStock} un.`}
+        </p>
+      </div>
+      <div className={cn(
+        "grid h-7 w-7 shrink-0 place-items-center rounded-lg transition-all duration-100",
+        outOfStock ? "text-muted-foreground/30" : "bg-primary/10 text-primary",
+      )}>
+        <Plus className="h-3.5 w-3.5" />
+      </div>
+    </div>
+  )
+}
+
 // ─── PaymentModal ─────────────────────────────────────────────────────────────
 
 function PaymentModal({
@@ -1684,7 +1738,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     if (!raw) return []
     const exact = findPdvProductByScan(raw, realCatalog)
     if (exact) return [exact]
-    return filterPdvCatalogBySearch(realCatalog, raw).slice(0, 12)
+    return filterPdvCatalogBySearch(realCatalog, raw).slice(0, 50)
   }, [search, realCatalog])
 
   useEffect(() => {
@@ -1775,7 +1829,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         active instanceof HTMLSelectElement ||
         (active instanceof HTMLElement && active.isContentEditable)
 
-      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen
+      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen || showItemAvulsoModal
 
       // END — toggle help overlay (always works)
       if (e.key === "End") {
@@ -1841,11 +1895,18 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
       // INSERT — Item Avulso (venda de balcão sem cadastro). Tratado ANTES do guard
       // de F_KEYS abaixo: senão o early-return em "Insert ∉ F_KEYS" matava esse
-      // caminho e o `case "Insert"` ficava inalcançável (convergência operacional
-      // com Clássico/Supermercado — todos os 3 PDVs respondem ao INSERT agora).
+      // caminho e o `case "Insert"` ficava inalcançável.
+      //
+      // Consistência com Clássico/Supermercado (todos os 3 PDVs respondem ao INSERT):
+      // INSERT abre Item Avulso SEMPRE que não há modal aberto, independente de qual
+      // campo está focado. Antes bloqueava em inputs ≠ busca, o que tornava o atalho
+      // dependente do foco ("às vezes funciona, às vezes não"). INSERT não digita
+      // caractere, então abrir o avulso a partir de qualquer campo é seguro.
+      // Limpa a busca se ela estava focada (evita texto residual após o avulso).
       if (e.key === "Insert") {
-        if (inInput || anyModalOpen) return
+        if (anyModalOpen) return
         e.preventDefault()
+        if (active === inputRef.current) setSearch("")
         setShowItemAvulsoModal(true)
         return
       }
@@ -1944,7 +2005,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen])
+  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct) => {
@@ -2112,9 +2173,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     setRapidoPickIdx(0)
     closePaymentModal(false)
     if (notes.trim()) {
-      toast({ title: "Venda finalizada", description: notes.trim() })
+      toast({ title: "Venda finalizada", description: notes.trim(), duration: 4000 })
     } else {
-      toast({ title: "Venda finalizada", description: result.saleId })
+      toast({ title: "Venda finalizada", description: result.saleId, duration: 4000 })
     }
 
     // Pós-venda: impressão automática ou popup de oferta
@@ -2334,21 +2395,30 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
-                  if (!modoRapido || !search.trim()) return
-                  if (e.key === "ArrowDown") {
+                  if (!search.trim()) return
+                  if (e.key === "ArrowDown" && modoRapido) {
                     e.preventDefault()
                     setRapidoPickIdx((i) => Math.min(i + 1, Math.max(0, fullSearch.length - 1)))
                     return
                   }
-                  if (e.key === "ArrowUp") {
+                  if (e.key === "ArrowUp" && modoRapido) {
                     e.preventDefault()
                     setRapidoPickIdx((i) => Math.max(0, i - 1))
                     return
                   }
+                  // Enter: adiciona automaticamente quando há 1 resultado (scan exato ou busca que
+                  // narrou para 1 produto) OU em modoRapido (seta seleciona, Enter confirma).
                   if (e.key === "Enter" && fullSearch.length > 0) {
-                    e.preventDefault()
-                    const pick = fullSearch[rapidoPickIdx] ?? fullSearch[0]
-                    if (pick) addItem(pick)
+                    if (fullSearch.length === 1 || modoRapido) {
+                      e.preventDefault()
+                      const pick = modoRapido ? (fullSearch[rapidoPickIdx] ?? fullSearch[0]) : fullSearch[0]
+                      if (pick) {
+                        addItem(pick)
+                        // Limpa para o próximo bipe — scan contínuo em qualquer modo.
+                        // (addItem só limpa em modoRapido; aqui cobre o modo padrão.)
+                        setSearch("")
+                      }
+                    }
                   }
                 }}
                 placeholder="Bipe o produto ou busque por nome / código  [F3]"
@@ -2413,9 +2483,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                   {fullSearch.length} resultado{fullSearch.length !== 1 ? "s" : ""} para &ldquo;{search}&rdquo;
                 </p>
                 <ScrollArea className="min-h-0 flex-1">
-                  <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  <div className="flex flex-col gap-0.5 pr-1">
                     {fullSearch.map((p, idx) => (
-                      <QuickCard
+                      <QuickRow
                         key={p.id}
                         item={p}
                         onAdd={addItem}
@@ -2424,7 +2494,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       />
                     ))}
                     {fullSearch.length === 0 && (
-                      <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
+                      <div className="flex flex-col items-center gap-3 py-12 text-center">
                         <div className="grid h-12 w-12 place-items-center rounded-2xl bg-muted/60 text-muted-foreground/40">
                           <PackageSearch className="h-6 w-6" />
                         </div>
