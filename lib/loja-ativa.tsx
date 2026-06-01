@@ -16,8 +16,9 @@ import {
   configPadrao,
   type PerfilLojaUnidade,
 } from "@/lib/config-empresa"
-import { ASSISTEC_ACTIVE_STORE_COOKIE, LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
+import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 import { nomeFantasiaOuFallbackUnidade } from "@/lib/store-display-name"
+import { resolveSeedStoreId } from "@/lib/loja-ativa-seed"
 
 const LOJA_ATIVA_STORAGE = "assistec-pro-loja-ativa-v1"
 
@@ -92,29 +93,32 @@ function parseStoreProfile(raw: unknown): NonNullable<PerfilLojaUnidade["storePr
 }
 
 function mapStoresResponseToPerfis(stores: Array<Record<string, unknown>>): PerfilLojaUnidade[] {
-  return stores.map((s) => {
-    const addr = s.address && typeof s.address === "object" ? (s.address as Record<string, unknown>) : {}
-    return {
-      id: String(s.id || "").trim() || LEGACY_PRIMARY_STORE_ID,
-      nomeFantasia: String(s.name || "").trim(),
-      razaoSocial: String(s.name || "").trim(),
-      cnpj: String(s.cnpj || "").trim(),
-      endereco: {
-        rua: String(addr.rua || ""),
-        numero: String(addr.numero || ""),
-        bairro: String(addr.bairro || ""),
-        cidade: String(addr.cidade || ""),
-        estado: String(addr.estado || ""),
-        cep: String(addr.cep || ""),
-      },
-      logoUrl: String(s.logoUrl || "").trim(),
-      storeProfile: parseStoreProfile(s.profile),
-      subscriptionPlan:
-        s.subscriptionPlan === "OURO" || s.subscriptionPlan === "PRATA" || s.subscriptionPlan === "BRONZE"
-          ? (s.subscriptionPlan as any)
-          : undefined,
-    }
-  })
+  return stores
+    .map((s) => {
+      const addr = s.address && typeof s.address === "object" ? (s.address as Record<string, unknown>) : {}
+      return {
+        id: String(s.id || "").trim(),
+        nomeFantasia: String(s.name || "").trim(),
+        razaoSocial: String(s.name || "").trim(),
+        cnpj: String(s.cnpj || "").trim(),
+        endereco: {
+          rua: String(addr.rua || ""),
+          numero: String(addr.numero || ""),
+          bairro: String(addr.bairro || ""),
+          cidade: String(addr.cidade || ""),
+          estado: String(addr.estado || ""),
+          cep: String(addr.cep || ""),
+        },
+        logoUrl: String(s.logoUrl || "").trim(),
+        storeProfile: parseStoreProfile(s.profile),
+        subscriptionPlan:
+          s.subscriptionPlan === "OURO" || s.subscriptionPlan === "PRATA" || s.subscriptionPlan === "BRONZE"
+            ? (s.subscriptionPlan as any)
+            : undefined,
+      }
+    })
+    // Descarta unidades sem id (sem fallback silencioso para a loja principal — DT-03/ADR-0003).
+    .filter((p) => p.id.length > 0)
 }
 
 export function LojaAtivaProvider({ children }: { children: ReactNode }) {
@@ -180,22 +184,18 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
     if (!configHydrated || typeof window === "undefined") return
     try {
       const raw = localStorage.getItem(LOJA_ATIVA_STORAGE)
-      // Migração de sessão: se ficou preso no id antigo, force para `loja-1`.
-      if (raw === "loja-antiga") {
-        localStorage.setItem(LOJA_ATIVA_STORAGE, LEGACY_PRIMARY_STORE_ID)
+      // Decisão pura: id salvo válido é mantido; sentinela legado (`loja-antiga`) migra para a
+      // primeira loja real; sem nada determinável retorna null (NÃO semeia loja-1 — DT-03/ADR-0003).
+      const resolved = resolveSeedStoreId(raw, lojas)
+      // Sem loja conhecida ainda (ex.: primeira carga antes de /api/stores responder): não semeia.
+      // O effect re-roda quando `lojas` carregar e a semente correta é então gravada.
+      if (!resolved) return
+      setLojaAtivaIdState(resolved)
+      setActiveStoreCookie(resolved)
+      // Só reescreve o storage quando o valor mudou (migração de sentinela ou semente inicial).
+      if (resolved !== (raw ?? "").trim()) {
+        localStorage.setItem(LOJA_ATIVA_STORAGE, resolved)
       }
-      const normalized = raw === "loja-antiga" ? LEGACY_PRIMARY_STORE_ID : raw
-      // Persistência forte: se existe um id salvo, mantenha-o mesmo que a lista ainda não tenha carregado.
-      if (normalized && normalized.trim()) {
-        const nid = normalized.trim()
-        setLojaAtivaIdState(nid)
-        setActiveStoreCookie(nid)
-        return
-      }
-      const fallback = lojas[0]?.id || LEGACY_PRIMARY_STORE_ID
-      setLojaAtivaIdState(fallback)
-      localStorage.setItem(LOJA_ATIVA_STORAGE, fallback)
-      setActiveStoreCookie(fallback)
     } catch {
       /* ignore */
     }
@@ -295,10 +295,9 @@ export function LojaAtivaProvider({ children }: { children: ReactNode }) {
   }, [empresaDocumentos.endereco])
 
   const opsStorageKey = useMemo(() => {
-    const id =
-      (lojaSelecionada?.id || lojaAtivaId || lojas[0]?.id || LEGACY_PRIMARY_STORE_ID).trim() ||
-      LEGACY_PRIMARY_STORE_ID
-    return opsKeyForLoja(id)
+    // Sem unidade resolvida: cai na chave legada global (igual ao hook sem-provider), nunca loja-1.
+    const id = (lojaSelecionada?.id || lojaAtivaId || lojas[0]?.id || "").trim()
+    return id ? opsKeyForLoja(id) : OPS_KEY_LEGACY
   }, [lojas, lojaSelecionada])
 
   const value = useMemo<LojaAtivaContextType>(

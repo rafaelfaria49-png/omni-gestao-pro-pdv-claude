@@ -1,7 +1,35 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 30 Mai 2026 — Fase 1 (Proteção de Lojas) concluída
+> Última atualização: 01 Jun 2026 — DT-16 (F-11, provider-fonte de loja ativa) concluída
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### DT-16 — F-11: provider-fonte de loja ativa sem fallback loja-1 (concluído 01/06/2026)
+
+**Escopo fechado (SAFE-lite reforçado):** elimina o último resíduo client-side de
+`LEGACY_PRIMARY_STORE_ID` — a **raiz** que semeava `lojaAtivaId`. Com isso o **client-side
+fica 100%** sem fallback silencioso para a loja principal (server-side já estava 100% via DT-03/DT-14).
+
+| Arquivo | Mudança |
+|---------|---------|
+| `lib/loja-ativa-seed.ts` **(NOVO)** | Helper puro `resolveSeedStoreId(rawSaved, lojas)` — decisão de semente sem I/O/React. Retorna `null` quando nenhuma loja é determinável (1ª carga antes de `/api/stores`): **não semeia `loja-1`**. Sentinela legado `loja-antiga` migra para a primeira loja real. |
+| `lib/loja-ativa.tsx` | O1: `mapStoresResponseToPerfis` descarta loja sem id (era `\|\| LEGACY`). O2+O3: effect de semente passa pelo helper; sem loja → não grava (re-roda quando `lojas` carrega). O5: `opsStorageKey` cai em `OPS_KEY_LEGACY` (não `loja-1`). Import de `LEGACY_PRIMARY_STORE_ID` removido. |
+| `lib/perfil-loja-provider.tsx` | Irmão: `lojaAtivaId \|\| LEGACY_PRIMARY_STORE_ID` → `(lojaAtivaId ?? "").trim()`; sem unidade ativa não consulta `/api/settings/perfil-loja` (guard nos 2 effects). Import removido. |
+| `lib/loja-ativa-seed.test.ts` **(NOVO)** | 9 testes do helper (inclui o bug-raiz: LS vazio + sem lojas → `null`). |
+| `lib/multi-loja-client-no-legacy-fallback.test.ts` | Guard estático estendido (bloco DT-16) a `loja-ativa.tsx` + `perfil-loja-provider.tsx`. |
+
+**Bug-raiz corrigido:** na race de 1ª carga (LS vazio + `lojas` ainda vazio), o effect semeava
+`loja-1` em state+localStorage+cookie e, ao re-rodar, travava nele — prendendo contas multi-loja
+cuja 1ª loja ≠ `loja-1`. Benigno na RafaCell (loja-1 é a matriz real), risco P2→P1 em multi-tenant.
+
+**Validação:** `npx tsc --noEmit` 0 erros · Vitest **245 passed | 3 expected fail** · `npm run build` OK
+(flake OOM nativo no Windows em "Collecting page data" na 1ª execução — recompilação com
+`--max-old-space-size=8192` gerou todas as rotas; não é efeito do código).
+
+**Não alterado:** schema Prisma, auth, proxy, services (`lib/financeiro/*`, `lib/operacoes/*`),
+`store-defaults.ts` (constante canônica), `lib/ops-loja-id.ts` (P3), `lib/stores-api-access.ts`
+(F-15, server). **Único vetor `loja-1` ainda aberto:** F-04/DT-07 (webhook WhatsApp single-store).
 
 ---
 

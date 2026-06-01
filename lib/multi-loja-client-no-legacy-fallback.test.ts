@@ -13,8 +13,10 @@
  * quando o storeId está ausente.
  *
  * DT-15 ESTENDE a cobertura a marketing/config/onboarding/cadastros (6 arquivos).
- * FORA de ambos (decisão separada): `lib/loja-ativa.tsx` (F-11, o provider que
- * SEMEIA lojaAtivaId — fonte), `lib/stores-api-access.ts` (F-15, server),
+ * DT-16 (F-11) ESTENDE ao provider-fonte `lib/loja-ativa.tsx` (que SEMEIA lojaAtivaId)
+ * e ao irmão `lib/perfil-loja-provider.tsx`. Com isso o client-side fica 100% sem
+ * fallback silencioso para a loja principal.
+ * FORA (legítimos por design): `lib/stores-api-access.ts` (F-15, server),
  * `lib/ops-loja-id.ts` (P3) e `store-defaults.ts` (definição canônica).
  */
 import { readFileSync } from "node:fs"
@@ -67,4 +69,27 @@ describe("DT-15 — marketing/config/onboarding/cadastros sem fallback LEGACY_PR
       expect(src).not.toContain("LEGACY_PRIMARY_STORE_ID")
     })
   }
+})
+
+/**
+ * F-11 (DT-16): o provider-fonte que semeia `lojaAtivaId` e o irmão que reaplicava o
+ * fallback no header de `/api/settings/perfil-loja`. Raiz do client-side multi-loja.
+ */
+const DT16_FILES = [
+  "lib/loja-ativa.tsx",
+  "lib/perfil-loja-provider.tsx",
+]
+
+describe("DT-16 (F-11) — provider-fonte loja-ativa + perfil-loja sem fallback LEGACY_PRIMARY_STORE_ID", () => {
+  for (const f of DT16_FILES) {
+    it(`[${f}] não importa nem usa LEGACY_PRIMARY_STORE_ID`, () => {
+      const src = read(f)
+      expect(src).not.toContain("LEGACY_PRIMARY_STORE_ID")
+    })
+  }
+
+  it("a semente do provider passa pelo helper puro resolveSeedStoreId (sem semear loja-1)", () => {
+    const src = read("lib/loja-ativa.tsx")
+    expect(src).toContain("resolveSeedStoreId")
+  })
 })

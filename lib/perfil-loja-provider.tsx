@@ -17,7 +17,6 @@ import {
 } from "@/lib/perfil-loja-types"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { ASSISTEC_STORES_SYNC_STORAGE_KEY } from "@/lib/loja-ativa"
 
 type PerfilLojaContextType = {
@@ -34,9 +33,15 @@ export function PerfilLojaProvider({ children }: { children: ReactNode }) {
   const [perfilLoja, setPerfilLojaState] = useState<PerfilLojaId>(PERFIL_LOJA_DEFAULT)
   const [perfilHydrated, setPerfilHydrated] = useState(false)
   const { lojaAtivaId } = useLojaAtiva()
-  const lojaHeader = lojaAtivaId || LEGACY_PRIMARY_STORE_ID
+  // Sem fallback silencioso loja-1 (DT-03/ADR-0003): sem unidade ativa, não consulta o perfil.
+  const lojaHeader = (lojaAtivaId ?? "").trim()
 
   useEffect(() => {
+    if (!lojaHeader) {
+      setPerfilLojaState(PERFIL_LOJA_DEFAULT)
+      setPerfilHydrated(true)
+      return
+    }
     let cancelled = false
     const load = async () => {
       try {
@@ -63,6 +68,7 @@ export function PerfilLojaProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return
     const onStorage = (e: StorageEvent) => {
       if (e.key !== ASSISTEC_STORES_SYNC_STORAGE_KEY) return
+      if (!lojaHeader) return
       // Perfil é atributo do Store: refetch quando outra aba/fluxo salvar os dados.
       void (async () => {
         try {
