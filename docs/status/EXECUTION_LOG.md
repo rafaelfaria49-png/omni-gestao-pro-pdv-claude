@@ -1085,3 +1085,58 @@ docs_atualizados:
 flags: []                               # NÃO tocou área protegida: docs/** apenas; sem código/schema/auth/proxy/core/services
 notes: "CoWork Release Plan — fechar os últimos gargalos do bootstrap CoWork. VEREDITO: o gargalo NÃO é mais documentação. Governança do bootstrap ~98% (design). A distância até 'CoWork rodando' resolve em 2 TRILHOS: (T1) PILOTO SUPERVISIONADO destravável com 1 DECISÃO humana (liberar COWORK via ADR-0005) — NÃO exige build novo (o lock manual MVP do LOCKS.md já carregou a S-001; as 8 skills aprovadas cobrem o loop debt-item/test/stabilization/audit-multiloja); (T2) AUTÔNOMO/ESCALÁVEL exige 3 builds (SKILL_LOCK_HUB, Approval Batch V2, BENCHMARK_PROTOCOL), nenhum no caminho crítico do 1º CoWork. FASE A (4 gargalos → obrigatório/opcional/adiável/impede): obrigatório = só a decisão de liberar COWORK; SKILL_LOCK_HUB só impede CoWork SIMULTÂNEO (git-conflict em LOCKS.md, LOCKS §10 — único bloqueio TÉCNICO real); approval de skills só impede tarefas de feature/mock; BENCHMARK só impede feature nova. FASE C: 8 skills aprovadas bastam p/ piloto debt/test; draft (FIX_MOCK, FEATURE_S) só bloqueiam mock/feature; SKILL_LOCK_HUB/HANDOFF-completo/ROLLBACK/Composite não-criadas mas não bloqueiam piloto. FASE D (design SKILL_LOCK_HUB, SEM implementar): Cat. 6 que mecaniza acquire/release/extend/detect-stale sobre o LOCKS.md atual (sem novo schema), automatiza checagem da matriz roadmaps/INDEX §4 + heartbeat por checkpoint; risco-chave R1 = git-conflict 2-IAs; força-release continua só humano; integra Fase 3/17 do Engine e torna o lock obrigatório sob COWORK (SAFE-lite §11.3 hoje trata como opcional). FASE E (BENCHMARK_PROTOCOL): NÃO necessário p/ bootstrap/piloto; adiável até 1º ticket de feature; dependentes = Marketplace/Marketing IA/WhatsApp massa/CRM 360; impacto baixo p/ debt, médio p/ entrega de feature. FASE F (veredito): bootstrap 98% (design; 2% restantes = BENCHMARK_PROTOCOL adiável); operacional supervisionado destravável JÁ (1 decisão, não é mais %); autônomo ~70% (3 builds). NÃO declaro 100% (COWORK nunca rodou; SKILL_LOCK_HUB não existe — honestidade herdada de ADR-0004). 1º HUB recomendado = MULTI-LOJA (melhor rede de testes 245 passing + guard estático; contexto profundo; 1º ticket não-protegido = BL-08 lint storeId CI / test-hardening; EVITAR F-04 que toca lib/whatsapp protegido). PDV/Financeiro não p/ estreia (DT-01 server-core protegido / dinheiro=reforçado); Marketplace proibido (greenfield, INTAKE roteia p/ RED). PRÓXIMO PASSO ÚNICO: autorizar draft do ADR-0005 (SKILL_PROPOSE_ADR) — tudo a jusante decorre dele. DOC_REFRESH: execution/INDEX §3 corrigido (estava 'congelado até R0/R1' — ambos concluídos). NÃO criei ADR-0005 (decisão humana). NÃO toquei CLAUDE.md. ÁREAS PROTEGIDAS: nenhuma (docs/** apenas). COMMIT/PUSH: PENDENTES — parar no Gate #1. TIMESTAMPS: PROXY (2026-06-01); duration null. REFERÊNCIAS: docs/execution/COWORK_RELEASE_PLAN.md (novo) · docs/execution/BOOTSTRAP_COWORK_MATURITY.md · docs/status/LOCKS.md (§8/§9/§10) · docs/status/APPROVAL_BATCH_V1.md · docs/execution/RETRO_PILOTO_R1.md §7 · docs/decisions/ADR-0004 · ENTRY 016 (DT-16) · ENTRY 017 (GOVERNANCA-S-002, última execução antes desta)."
 ```
+
+---
+
+```yaml
+# ─── ENTRY 019 ────────────────────────────────────────────────────
+ticket_id: MULTI_LOJA-S-003          # debt-item F-04/DT-07 (router WhatsApp multi-loja); tracking em DIVIDA_TECNICA DT-07
+skill_id: SKILL_EXEC_DEBT_ITEM       # execução de dívida técnica (mesmo fit das ENTRY 012/013/014/016)
+skill_version: v1
+ia: opus
+modo: SAFE                           # perfil real = SAFE-lite REFORÇADO (ADR-0004); área protegida (schema + lib/whatsapp); valor mantido SAFE (schema v1 congelado)
+started_at: 2026-06-01T00:00:00-03:00   # PROXY — execução CP1–CP4 + fechamento CP5; hora fina não rastreada
+ended_at: 2026-06-01T00:00:00-03:00     # PROXY — fim do CP5 (antes do Gate #2)
+duration: null                          # precisão não rastreada (não fabricar — critério das ENTRY 010-018)
+fases_completas: [SAFE_LITE_REFORCADO]  # CP1(schema+migração)→CP2(inbound)→CP3(outbound/credencial)→CP4(owner-AI/debug/omni)→CP5(build+ADR+DOC_REFRESH+AUDIT) (fora do pipeline de 17 fases)
+fase_falha: null
+resultado: encerrada                    # CP1–CP4 + CP5 fechamento + Gate #2 aprovado (commit/push autorizados)
+pr: null
+branch: main                            # commitado em main (convenção das ENTRY 009/010/012-016); sem branch skill/*
+commit_anterior: f652a87                # HEAD = ADR-0005 CoWork draft (commitado/pushado); ENTRY 018 (RELEASE_PLAN) sobre 7204cd6, depois 07fa030 + f652a87
+commit_final: commit único da sprint S-003   # hash registrado no relatório de Gate #2 (ENTRY 019 estava no working tree pré-commit; entra no MESMO commit, por isso o hash não pode ser auto-referenciado aqui — ver §commit no handoff)
+rollback: false
+diff:
+  added: ~750                          # APROX — código CP1-CP4 (~248) + novos (store-credentials.ts/.test, migração 0010, backfill) + CP5 docs (ADR-0006 ~150, AUDITORIA F-04 ~180, edições CURRENT_STATUS/OVERVIEW/CLAUDE/INDEX/DIVIDA); número final no git diff --stat pré-commit
+  removed: ~165
+  files_modified: ~19                   # 11 código tocados + 4 novos código + ~8 docs (ADR/AUDIT novos + 6 edições) — com sobreposição
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-06-01T00:00:00-03:00   # date-proxy
+    pending: null
+    notes: "Gate #1 aprovado para F-04 (área protegida autorizada: schema.prisma + lib/whatsapp/*). Escopo: roteamento por phone_number_id + credencial por loja, sem fallback loja-1. CP1–CP4 aprovados sequencialmente (CP4 aprovado explicitamente: 'CP4 aprovado, pode avançar para o CP5')."
+  gate_2:
+    approved_by: Rafael
+    approved_at: 2026-06-01T00:00:00-03:00   # date-proxy
+    pending: null
+    notes: "APROVADO. CP5 revisado (build verde, ADR-0006, AUDITORIA F-04, DOC_REFRESH, DT-07). Aceitação aplicada: ADR-0006 proposta→aceito (INDEX §4→§3), DT-07 §2 🔄 → §3 ✅ (pago). Commit único + push em main autorizados. CUTOVER (NÃO executado nesta etapa): db:push migração 0010 → backfill --exec → deploy."
+audit_findings: {P0: 0, P1: 0, P2: 1, P3: 2}   # AUDITORIA F-04: F-01/F-02 resolvidos; P2 onboarding por loja; P3 heurística Evolution + 200 anti-retry intencional
+benchmark: null
+sprint: null                            # SAFE-lite debt-item; tracking em DIVIDA_TECNICA DT-07 (§3, ✅ pago — Gate #2)
+proposta: null                          # diff/escopo CP1–CP4 inline na conversa
+auditoria: docs/audits/AUDITORIA_F-04_WHATSAPP_ROUTER_MULTI_LOJA.md   # auditoria de fechamento (publicada)
+adr_criada: ADR-0006                    # docs/decisions/ADR-0006-whatsapp-router-multi-loja.md (status: aceito — Gate #2)
+memoria_criada: memory/project_f04_whatsapp_router_multi_loja   # memória Claude Code fora do repo (~/.claude)
+docs_atualizados:
+  - docs/decisions/ADR-0006-whatsapp-router-multi-loja.md   # NOVO — decisão (proposta)
+  - docs/decisions/INDEX.md                                 # §4 (0005 CoWork draft + 0006 WhatsApp) + §6 atalhos WhatsApp/Multi-loja
+  - docs/audits/AUDITORIA_F-04_WHATSAPP_ROUTER_MULTI_LOJA.md # NOVO — auditoria de fechamento (publicada)
+  - docs/status/DIVIDA_TECNICA.md                           # DT-07 §2 ⏳ → 🔄 (em pagamento; move a §3 no Gate #2) + nota do último vetor loja-1
+  - docs/ai/CURRENT_STATUS.md                               # entrada S-003 no topo + last_update 01/06/2026
+  - docs/ai/CURRENT_STATUS_OVERVIEW.md                      # §1 (WhatsApp + Multi-loja), §3, §5, §6 entrada nova
+  - CLAUDE.md                                               # seção env WhatsApp — modelo multi-loja (WhatsAppPhoneNumber, sem WHATSAPP_WEBHOOK_STORE_ID)
+  - docs/status/EXECUTION_LOG.md                            # esta ENTRY 019 (append-only)
+flags: ["--with-protected-areas: prisma/schema.prisma", "--with-protected-areas: lib/whatsapp/*"]   # área protegida tocada COM autorização explícita (F-04 exige o mapa em schema)
+notes: "MULTI_LOJA-S-003 (F-04/DT-07) — router WhatsApp multi-loja por phone_number_id; FECHA O ÚLTIMO VETOR loja-1 DO PROJETO (server-side 100% via S-001/S-002+DT-14; client-side 100% via DT-13/15/16; agora WhatsApp). ESCOPO (fechado): inbound roteia por phone_number_id (mapa novo WhatsAppPhoneNumber → storeId), outbound resolve credencial POR LOJA (tokenEnvKey → env, token nunca no DB), fluxos sem phone_number_id (Evolution/owner-AI/debug) via resolveSoleActiveStoreId (só se houver EXATAMENTE 1 loja ativa; 0/>1 → null+auditoria, sem loja-1). webhookDefaultStoreId REMOVIDO (grep=0). CP1: prisma/schema.prisma model WhatsAppPhoneNumber + migração 0010 (aditiva, CREATE TABLE IF NOT EXISTS + FK guardada; aplicar via npm run db:push). CP2: lib/whatsapp-meta-cloud-webhook.ts roteia por phone_number_id, número não-mapeado/inativo descarta+audita. CP3: lib/whatsapp.ts deixa de ler env global (caller injeta WhatsAppCloudCredentials) + lib/whatsapp/store-credentials.ts (resolveCredentialsFromRow puro/testável) + requireStoreCloudCreds (lança+audita sem credencial). CP4: owner-AI (lib/whatsapp-webhook-ai.ts), rotas debug, omni-agent status POR LOJA. CP5 (este fechamento): build verde + ADR-0006 (proposta) + AUDITORIA F-04 + DOC_REFRESH + DT-07 preparado. DECISÃO DE NUMERAÇÃO (humano): ADR-0005 já commitado para CoWork (f652a87) → WhatsApp Router = ADR-0006 (próximo livre); NÃO renumerar histórico publicado; comentários ADR-0005→ADR-0006 corrigidos em 8 artefatos CP1-CP4 (comment-only, sem alterar runtime: 7 .ts + migração 0010). ENTRY: o plano dizia '017', mas o log já chegou a 018 (GOVERNANCA-S-003) → esta é a ENTRY 019 (append-only sequencial). PERFIL: SAFE-lite REFORÇADO — toca área protegida (schema + lib/whatsapp/*) COM autorização explícita; é roteamento multi-tenant de mensageria. VALIDAÇÃO: npx tsc --noEmit limpo (EXIT 0) · npm run build OK (EXIT 0, árvore de rotas completa, NODE_OPTIONS=--max-old-space-size=8192 na 1ª execução — sem flake) · vitest 258 passed | 2 expected fail (era 245 | 3 no DT-16; o expected-fail do baseline F-04 agora passa + store-credentials.test.ts/whatsapp-service-routing.test.ts). AUDIT (AUDITORIA_F-04, publicada): F-01 inbound RESOLVIDO, F-02 outbound RESOLVIDO; F-03 onboarding por loja (P2, dívida consciente: número precisa ser cadastrado em whatsapp_phone_numbers + env do token; backfill script disponível); F-04 heurística Evolution single-number (P3); F-05 webhook 200 a número não-mapeado (P3, anti-retry intencional). 0 P0/P1. ÁREAS PROTEGIDAS: schema.prisma + lib/whatsapp/* tocadas COM autorização (flags). NÃO tocado: auth, proxy, services lib/financeiro/* + lib/operacoes/*, PDV core. COMMIT/PUSH: PENDENTES — parar no fim do CP5. TIMESTAMPS: PROXY (2026-06-01); duration null (critério ENTRY 010-018). REFERÊNCIAS: docs/decisions/ADR-0006-whatsapp-router-multi-loja.md (proposta) · docs/audits/AUDITORIA_F-04_WHATSAPP_ROUTER_MULTI_LOJA.md · docs/status/DIVIDA_TECNICA.md DT-07 (§2, 🔄) · docs/audits/AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md §F-04 (baseline) · docs/decisions/ADR-0003 (doutrina falha visível) · docs/decisions/ADR-0004 (SAFE-lite) · ENTRY 016 (DT-16, fechou client-side) · ENTRY 018 (GOVERNANCA-S-003, última execução antes desta)."
+```

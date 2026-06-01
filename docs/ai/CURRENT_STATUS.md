@@ -1,7 +1,44 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 01 Jun 2026 — DT-16 (F-11, provider-fonte de loja ativa) concluída
+> Última atualização: 01 Jun 2026 — MULTI_LOJA-S-003 (F-04/DT-07, router WhatsApp multi-loja) — **Gate #2 aprovado** (cutover operacional pendente)
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### MULTI_LOJA-S-003 — F-04/DT-07: router WhatsApp multi-loja por `phone_number_id` (Gate #2 aprovado · cutover pendente — 01/06/2026)
+
+**Escopo fechado (SAFE-lite reforçado — área protegida autorizada):** elimina o **último vetor
+`loja-1` aberto** do projeto. O WhatsApp era single-store (`WHATSAPP_WEBHOOK_STORE_ID` + número/token
+global, com fallback silencioso `loja-1` via `webhookDefaultStoreId`). Passa a rotear **inbound por
+`phone_number_id`** e resolver **credencial outbound por loja** — sem fallback. Decisão: **ADR-0006**.
+
+| Arquivo | Mudança |
+|---------|---------|
+| `prisma/schema.prisma` + `prisma/migrations/0010_whatsapp_phone_number/` | Model **`WhatsAppPhoneNumber`** (`phoneNumberId @unique → storeId`, `tokenEnvKey`, `wabaId`, `displayPhone`, `active`). Migração **aditiva** (`CREATE TABLE IF NOT EXISTS` + FK guardada); aplicar com `npm run db:push`. Token **nunca no DB** — só o nome da env. |
+| `lib/whatsapp/whatsapp-service.ts` | `webhookDefaultStoreId` **removido**. Novos: `resolveStoreIdByPhoneNumberId` (inbound), `resolveSoleActiveStoreId` (fluxos sem `phone_number_id`), `requireStoreCloudCreds` (outbound, lança + audita sem credencial). |
+| `lib/whatsapp/store-credentials.ts` **(NOVO)** | `resolveCredentialsFromRow` (decisão **pura/testável**) + `resolveStoreWhatsAppCredentials(storeId)`. |
+| `lib/whatsapp.ts` | Cliente Graph não lê env global de número/token — caller injeta `WhatsAppCloudCredentials`. |
+| `lib/whatsapp-meta-cloud-webhook.ts` | Roteamento por `phone_number_id`; número não-mapeado/inativo → descarta + audita, **sem `loja-1`**. |
+| `app/api/whatsapp/webhook/route.ts` + `app/api/debug/whatsapp-*` | Webhook não-Meta audita store-agnóstico; debug resolve via `?storeId=`/`resolveSoleActiveStoreId`. |
+| `lib/whatsapp-webhook-ai.ts` | Owner-AI (`fechar_dia`) resolve a loja pela única ativa; 0/>1 → avisa o dono + audita, sem `loja-1`. |
+| `app/actions/omni-agent.ts` | Status WhatsApp Cloud **por loja** (não env global). |
+| `lib/whatsapp/whatsapp-service-routing.test.ts` + `lib/whatsapp/store-credentials.test.ts` | Guard estático (anti-reintrodução de `webhookDefaultStoreId`) + testes da decisão pura. |
+| `scripts/backfill-whatsapp-phone-number.mjs` **(NOVO)** | Seed do número atual no mapa. |
+
+**Validação (CP5):** `npx tsc --noEmit` 0 erros · `npm run build` **OK** (exit 0, árvore completa) ·
+Vitest **258 passed | 2 expected fail** (era 245 | 3; o expected-fail do baseline F-04 agora passa).
+
+**Auditoria de fechamento:** `docs/audits/AUDITORIA_F-04_WHATSAPP_ROUTER_MULTI_LOJA.md` — **0 P0/P1**;
+F-01 (inbound) e F-02 (outbound) **resolvidos**; resíduos P2 (onboarding por loja) + P3 (heurística
+Evolution single-number; 200 anti-retry intencional).
+
+**Gate #2 aprovado (01/06/2026):** ADR-0006 `aceito`, DT-07 §3 ✅, commit + push em `main`. **Zero
+fallback silencioso `loja-1` em todo o projeto** (server + client + WhatsApp). **Cutover operacional
+pendente** (não executado): `npm run db:push` (aplica `whatsapp_phone_numbers`) → `backfill --exec`
+(seed do número atual) → deploy.
+
+**Não alterado:** auth, proxy, services `lib/financeiro/*` / `lib/operacoes/*`, PDV core. Schema e
+`lib/whatsapp/*` foram tocados **com autorização explícita** (F-04 exige o mapa em schema).
 
 ---
 

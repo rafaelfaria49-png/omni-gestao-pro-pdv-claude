@@ -7,6 +7,7 @@ import { interpretOmniAgentCommand, intentRequiresConfirmation } from "@/lib/omn
 import { executeOmniAgentIntent } from "@/lib/omni-agent/executor"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
+import { resolveStoreWhatsAppCredentials } from "@/lib/whatsapp/store-credentials"
 import { ensureDefaultOmniAgentAutomations } from "@/lib/omni-agent/omni-automation-engine"
 import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
 import { normalizeOmniAgentCanal } from "@/lib/omni-agent/canal"
@@ -312,7 +313,7 @@ export async function rejectOmniAgentCommand(commandId: string, storeId: string)
   return toDto(upd)
 }
 
-/** Indica se o ambiente tem credenciais WhatsApp Cloud API (Meta). Não implica número por loja. */
+/** Indica se a LOJA tem número WhatsApp Cloud API (Meta) ativo + token (mapa por loja). */
 export type OmniAgentWhatsAppCloudStatusDTO = {
   configured: boolean
   phoneNumberIdLast4?: string
@@ -322,9 +323,10 @@ export async function getOmniAgentWhatsAppCloudStatus(storeId: string): Promise<
   const g = await requireEnterpriseWith(storeId, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
   if (!g.ok) throw new Error(g.error)
 
-  const id = (process.env.WHATSAPP_PHONE_NUMBER_ID ?? "").trim()
-  const token = (process.env.WHATSAPP_ACCESS_TOKEN ?? "").trim()
-  const configured = id.length > 0 && token.length > 0
+  // Status POR LOJA (F-04/DT-07 · ADR-0006): reflete o número/token da loja ativa, sem env global.
+  const creds = await resolveStoreWhatsAppCredentials(storeId)
+  const configured = creds !== null
+  const id = creds?.phoneNumberId ?? ""
   return {
     configured,
     phoneNumberIdLast4: configured && id.length >= 4 ? id.slice(-4) : configured ? id : undefined,

@@ -11,7 +11,6 @@ import { processMetaWhatsAppWebhookPayload } from "@/lib/whatsapp-meta-cloud-web
 import { corsHeaders, withCors } from "@/lib/api-cors"
 import { extractFromEvolutionLikePayload } from "@/lib/whatsapp-webhook-parse"
 import { processOwnerWhatsAppAI } from "@/lib/whatsapp-webhook-ai"
-import { logWebhookPayload, webhookDefaultStoreId } from "@/lib/whatsapp/whatsapp-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -244,20 +243,21 @@ export async function POST(request: Request) {
     return withCors(request, NextResponse.json({ error: "Unauthorized" }, { status: 401 }))
   }
 
+  // Payload NÃO-Meta (Evolution-like legado). Sem `phone_number_id` não há loja a resolver;
+  // audita de forma store-agnóstica — sem fallback silencioso loja-1 (F-04/DT-07 · ADR-0006).
+  // O roteamento do owner-AI por número é tratado no CP4.
   const body = parsed
-  const storeId = webhookDefaultStoreId()
   try {
-    await logWebhookPayload(storeId, body)
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
     await prisma.logsAuditoria.create({
       data: {
-        action: "whatsapp_webhook_log_fail",
-        userLabel: `store:${storeId}`,
-        detail: msg.slice(0, MAX_DETAIL),
+        action: "whatsapp_legacy_webhook_ingress",
+        userLabel: "provider:evolution",
+        detail: "Payload não-Meta recebido (Evolution-like). Sem phone_number_id — não roteado a loja.",
         source: "webhook",
       },
     })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
     return withCors(request, NextResponse.json({ ok: false, error: "log_failed", detail: msg.slice(0, 200) }, { status: 500 }))
   }
 

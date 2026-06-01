@@ -5,7 +5,7 @@
  * Nunca expõe tokens, segredos ou dados pessoais completos.
  *
  * Campos retornados:
- *   - webhookStoreId         — storeId que o webhook usa (WHATSAPP_WEBHOOK_STORE_ID ou loja-1)
+ *   - webhookStoreId         — storeId resolvido (?storeId= ou única loja com número ativo; '' se ambíguo)
  *   - configuredPhoneNumberId — WHATSAPP_PHONE_NUMBER_ID mascarado (ou null)
  *   - últimas 10 conversas (storeId, status, lastMessageAt, unreadCount, contato mascarado)
  *   - últimas 20 mensagens globais (direction, body truncado, storeId, createdAt)
@@ -16,7 +16,7 @@
 
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { webhookDefaultStoreId } from "@/lib/whatsapp/whatsapp-service"
+import { resolveSoleActiveStoreId } from "@/lib/whatsapp/whatsapp-service"
 
 export const runtime  = "nodejs"
 export const dynamic  = "force-dynamic"
@@ -47,7 +47,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Unauthorized — inclua ?secret= na URL" }, { status: 401 })
   }
 
-  const webhookStoreId = webhookDefaultStoreId()
+  const webhookStoreId =
+    (new URL(req.url).searchParams.get("storeId") ?? "").trim() || (await resolveSoleActiveStoreId()) || ""
   const rawPhoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID ?? "").trim()
   const configuredPhoneNumberId = rawPhoneNumberId ? maskId(rawPhoneNumberId) : null
 

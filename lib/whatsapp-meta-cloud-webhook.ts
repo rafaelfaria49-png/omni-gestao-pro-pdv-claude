@@ -5,7 +5,7 @@ import {
   createOrUpdateContact,
   findOrCreateOpenConversation,
   logWebhookPayload,
-  webhookDefaultStoreId,
+  resolveStoreIdByPhoneNumberId,
 } from "@/lib/whatsapp/whatsapp-service"
 
 const MAX_AUDIT = 4000
@@ -71,30 +71,14 @@ function maskId(id: string): string {
  * Idempotente por `externalMessageId` (wamid).
  */
 export async function processMetaWhatsAppWebhookPayload(raw: unknown): Promise<void> {
-  const storeId = webhookDefaultStoreId()
-
-  try {
-    await logWebhookPayload(storeId, raw)
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    await prisma.logsAuditoria.create({
-      data: {
-        action: "whatsapp_meta_webhook_log_fail",
-        userLabel: `store:${storeId}`,
-        detail: msg.slice(0, MAX_AUDIT),
-        source: "webhook",
-      },
-    })
-  }
-
   if (!raw || typeof raw !== "object") return
 
-  const expectedPn = (process.env.WHATSAPP_PHONE_NUMBER_ID ?? "").trim()
   const entries = (raw as { entry?: unknown[] }).entry
   if (!Array.isArray(entries)) return
 
   for (const entry of entries) {
     if (!entry || typeof entry !== "object") continue
+    const wabaId = String((entry as { id?: string }).id ?? "").trim()
     const changes = (entry as { changes?: unknown[] }).changes
     if (!Array.isArray(changes)) continue
 
@@ -105,32 +89,40 @@ export async function processMetaWhatsAppWebhookPayload(raw: unknown): Promise<v
 
       const phoneNumberId = String((value as { metadata?: { phone_number_id?: string } }).metadata?.phone_number_id ?? "").trim()
 
-      if (expectedPn && phoneNumberId && expectedPn !== phoneNumberId) {
+      // ── Roteamento multi-loja por phone_number_id (F-04/DT-07 · ADR-0006) ──
+      // Número não mapeado/inativo → NÃO grava, NÃO cai em loja-1; audita e segue (rota responde 200).
+      const storeId = await resolveStoreIdByPhoneNumberId(phoneNumberId)
+      if (!storeId) {
         console.warn("[whatsapp-webhook:REAL_SAVE_SKIP]", JSON.stringify({
-          reason: "phone_number_id_mismatch",
-          expectedMasked: maskId(expectedPn),
-          receivedMasked: maskId(phoneNumberId),
-          storeId,
-          hint: "Verificar WHATSAPP_PHONE_NUMBER_ID na Vercel vs phone_number_id recebido do payload Meta",
+          reason: phoneNumberId ? "phone_number_id_unmapped" : "phone_number_id_absent",
+          receivedMasked: phoneNumberId ? maskId(phoneNumberId) : null,
+          wabaIdMasked: wabaId ? maskId(wabaId) : null,
+          hint: "Número não mapeado a nenhuma loja — descartado sem fallback loja-1. Cadastrar em whatsapp_phone_numbers.",
         }))
         await prisma.logsAuditoria.create({
           data: {
-            action: "whatsapp_meta_webhook_skip_phone_number_id",
-            userLabel: `store:${storeId}`,
-            detail: `phone_number_id mismatch: esperado=${maskId(expectedPn)} recebido=${maskId(phoneNumberId)}`,
+            action: "whatsapp_meta_webhook_unmapped_phone_number",
+            userLabel: phoneNumberId ? `pnid:${maskId(phoneNumberId)}` : "pnid:absent",
+            detail: `phone_number_id ${phoneNumberId ? maskId(phoneNumberId) : "(ausente)"} sem loja mapeada — payload descartado (sem fallback loja-1).`,
             source: "webhook",
           },
-        })
+        }).catch(() => { /* best-effort: auditoria não pode derrubar o webhook */ })
         continue
       }
 
-      if (expectedPn && !phoneNumberId) {
-        console.info("[whatsapp-webhook:REAL_SAVE_SKIP]", JSON.stringify({
-          reason: "phone_number_id_absent_in_payload",
-          expectedMasked: maskId(expectedPn),
-          storeId,
-          hint: "Payload Meta não trouxe metadata.phone_number_id — processando assim mesmo (fallback seguro)",
-        }))
+      // Ingress log sob a loja resolvida (best-effort).
+      try {
+        await logWebhookPayload(storeId, raw)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        await prisma.logsAuditoria.create({
+          data: {
+            action: "whatsapp_meta_webhook_log_fail",
+            userLabel: `store:${storeId}`,
+            detail: msg.slice(0, MAX_AUDIT),
+            source: "webhook",
+          },
+        }).catch(() => { /* best-effort */ })
       }
 
       const contacts = Array.isArray((value as { contacts?: unknown[] }).contacts)

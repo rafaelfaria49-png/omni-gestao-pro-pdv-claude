@@ -1,82 +1,64 @@
 /**
- * Testes-baseline: roteamento de webhook WhatsApp por tenant.
+ * F-04 / DT-07 (MULTI_LOJA-S-003): guard estático do roteamento WhatsApp por tenant.
  *
- * Cobertura: F-04 da AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md
- * - `webhookDefaultStoreId()` cai em LEGACY_PRIMARY_STORE_ID quando env
- *   WHATSAPP_WEBHOOK_STORE_ID não está setada → vazamento cross-tenant
- *   quando 2ª loja conectar WhatsApp.
- *
- * NOTA: o módulo whatsapp-service.ts importa Prisma e cliente Cloud API;
- * carregar o módulo inteiro em Vitest é caro e instável. Aqui replicamos o
- * **contrato** declarado por `webhookDefaultStoreId` e testamos a função-contrato
- * isoladamente. A garantia de que o código de produção segue esse contrato vem
- * do code review humano + grep estático (lint test em
- * `lib/multi-loja-no-hardcoded-fallback.test.ts`).
- *
- * Um teste de integração que carregue o módulo real virá em sprint sucessora
- * com setup de mock de Prisma — fora do escopo S desta sprint de baseline.
+ * Após o CP4, `webhookDefaultStoreId` foi REMOVIDO. O inbound roteia por `phone_number_id`
+ * (`resolveStoreIdByPhoneNumberId`); o outbound resolve credenciais por loja; o owner-AI e as
+ * rotas de debug resolvem a loja sem env single-store. Validamos por inspeção de fonte —
+ * carregar os módulos reais em Vitest puxa Prisma + Cloud API (caro/instável); o guard
+ * estático é a rede de segurança contra reintrodução do fallback silencioso para a loja principal.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { LEGACY_PRIMARY_STORE_ID } from "../store-defaults"
+import { describe, expect, it } from "vitest"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 
-/**
- * Réplica EXATA da função em `lib/whatsapp/whatsapp-service.ts:34-37`.
- * Qualquer mudança aqui DEVE acompanhar mudança no original — o lint test
- * `multi-loja-no-hardcoded-fallback.test.ts` ajuda a detectar divergência via
- * scan estático.
- */
-function webhookDefaultStoreIdContract(): string {
-  const env = process.env.WHATSAPP_WEBHOOK_STORE_ID?.trim()
-  return env && env.length > 0 ? env : LEGACY_PRIMARY_STORE_ID
-}
+const readSrc = (rel: string) => readFileSync(resolve(process.cwd(), rel), "utf8")
 
-describe("webhookDefaultStoreId (contract replica) — env routing (single-store legado)", () => {
-  const originalEnv = process.env.WHATSAPP_WEBHOOK_STORE_ID
-
-  beforeEach(() => {
-    delete process.env.WHATSAPP_WEBHOOK_STORE_ID
+describe("F-04 — roteamento WhatsApp por tenant, sem fallback loja-1", () => {
+  it("whatsapp-service.ts exporta resolveStoreIdByPhoneNumberId (inbound)", () => {
+    expect(readSrc("lib/whatsapp/whatsapp-service.ts")).toContain(
+      "export async function resolveStoreIdByPhoneNumberId"
+    )
   })
 
-  afterEach(() => {
-    if (originalEnv === undefined) {
-      delete process.env.WHATSAPP_WEBHOOK_STORE_ID
-    } else {
-      process.env.WHATSAPP_WEBHOOK_STORE_ID = originalEnv
+  it("whatsapp-service.ts NÃO contém mais webhookDefaultStoreId (removido no CP4)", () => {
+    expect(readSrc("lib/whatsapp/whatsapp-service.ts")).not.toContain("webhookDefaultStoreId")
+  })
+
+  it("o processor de ingress usa o resolver e NÃO usa webhookDefaultStoreId", () => {
+    const src = readSrc("lib/whatsapp-meta-cloud-webhook.ts")
+    expect(src).toContain("resolveStoreIdByPhoneNumberId")
+    expect(src).not.toContain("webhookDefaultStoreId")
+  })
+
+  it("o processor de ingress NÃO referencia LEGACY_PRIMARY_STORE_ID", () => {
+    expect(readSrc("lib/whatsapp-meta-cloud-webhook.ts")).not.toContain("LEGACY_PRIMARY_STORE_ID")
+  })
+
+  it("as rotas de webhook NÃO usam webhookDefaultStoreId", () => {
+    expect(readSrc("app/api/whatsapp/webhook/route.ts")).not.toContain("webhookDefaultStoreId")
+    expect(readSrc("app/api/webhooks/whatsapp/route.ts")).not.toContain("webhookDefaultStoreId")
+  })
+
+  it("nenhuma rota de debug usa webhookDefaultStoreId (CP4)", () => {
+    for (const f of [
+      "app/api/debug/whatsapp-latest/route.ts",
+      "app/api/debug/whatsapp-send-fake-meta/route.ts",
+      "app/api/debug/whatsapp-webhook-ping/route.ts",
+    ]) {
+      expect(readSrc(f)).not.toContain("webhookDefaultStoreId")
     }
   })
 
-  it("retorna o valor da env quando setada", () => {
-    process.env.WHATSAPP_WEBHOOK_STORE_ID = "loja-x"
-    expect(webhookDefaultStoreIdContract()).toBe("loja-x")
+  it("owner-AI NÃO lê WHATSAPP_WEBHOOK_STORE_ID (resolve a loja pelo mapa)", () => {
+    const src = readSrc("lib/whatsapp-webhook-ai.ts")
+    expect(src).not.toContain("WHATSAPP_WEBHOOK_STORE_ID")
+    expect(src).toContain("resolveSoleActiveStoreId")
   })
 
-  it("trim do valor da env", () => {
-    process.env.WHATSAPP_WEBHOOK_STORE_ID = "  loja-y  "
-    expect(webhookDefaultStoreIdContract()).toBe("loja-y")
-  })
-
-  it("[snapshot atual — bug DT-07] cai em LEGACY_PRIMARY_STORE_ID quando env ausente", () => {
-    delete process.env.WHATSAPP_WEBHOOK_STORE_ID
-    expect(webhookDefaultStoreIdContract()).toBe(LEGACY_PRIMARY_STORE_ID)
-  })
-
-  it("[snapshot atual] env vazia também cai em LEGACY_PRIMARY_STORE_ID", () => {
-    process.env.WHATSAPP_WEBHOOK_STORE_ID = ""
-    expect(webhookDefaultStoreIdContract()).toBe(LEGACY_PRIMARY_STORE_ID)
-  })
-
-  it("[snapshot atual] env só whitespace cai em LEGACY_PRIMARY_STORE_ID", () => {
-    process.env.WHATSAPP_WEBHOOK_STORE_ID = "    "
-    expect(webhookDefaultStoreIdContract()).toBe(LEGACY_PRIMARY_STORE_ID)
-  })
-
-  /**
-   * EXPECTED-FAILING: contrato pós-piloto.
-   * Pós SPRINT_NN_MULTI_LOJA (Recomendação #6) o webhook resolve `storeId`
-   * via lookup por `phone_number_id`. Sem env e sem lookup → erro explícito.
-   */
-  it.fails("[F-04] DEVE rejeitar (lançar) quando env ausente — sem fallback silencioso", () => {
-    delete process.env.WHATSAPP_WEBHOOK_STORE_ID
-    expect(() => webhookDefaultStoreIdContract()).toThrow()
+  it("status do Omni Agent reflete a loja (sem env global de número/token)", () => {
+    const src = readSrc("app/actions/omni-agent.ts")
+    expect(src).toContain("resolveStoreWhatsAppCredentials")
+    expect(src).not.toContain("process.env.WHATSAPP_PHONE_NUMBER_ID")
+    expect(src).not.toContain("process.env.WHATSAPP_ACCESS_TOKEN")
   })
 })

@@ -21,7 +21,7 @@
 import { NextResponse } from "next/server"
 import { processMetaWhatsAppWebhookPayload } from "@/lib/whatsapp-meta-cloud-webhook"
 import { prisma } from "@/lib/prisma"
-import { webhookDefaultStoreId } from "@/lib/whatsapp/whatsapp-service"
+import { resolveSoleActiveStoreId } from "@/lib/whatsapp/whatsapp-service"
 
 export const runtime  = "nodejs"
 export const dynamic  = "force-dynamic"
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
   const o         = (body ?? {}) as Record<string, unknown>
   const from      = String(o.from ?? "5511999990000").replace(/\D/g, "").trim() || "5511999990000"
   const text      = String(o.text ?? "Teste fake Meta — pipeline OmniGestão").trim()
-  const storeId   = webhookDefaultStoreId()
+  const storeId   = (await resolveSoleActiveStoreId()) || ""
 
   const phoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID ?? "TEST_PHONE_ID").trim()
   const payload       = buildRealisticMetaPayload(from, text, phoneNumberId)

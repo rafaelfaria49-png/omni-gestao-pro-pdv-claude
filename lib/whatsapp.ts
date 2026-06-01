@@ -1,6 +1,9 @@
 /**
  * Cliente minimalista para WhatsApp Cloud API (Meta Graph).
- * Credenciais: WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_ACCESS_TOKEN.
+ *
+ * Credenciais são resolvidas POR LOJA (F-04/DT-07 · ADR-0006): o caller passa
+ * `WhatsAppCloudCredentials` ({ phoneNumberId, accessToken }) da loja correta.
+ * Este módulo NÃO lê número/token de env global (apenas a versão da API, não-secreta).
  * Não logar token nem corpo de erro completo (pode conter dados sensíveis).
  */
 
@@ -11,16 +14,15 @@ function graphBase(): string {
   return `https://graph.facebook.com/${v}`
 }
 
-function phoneNumberId(): string {
-  const id = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim()
-  if (!id) throw new Error("WHATSAPP_PHONE_NUMBER_ID não configurado")
-  return id
-}
-
-function accessToken(): string {
-  const t = process.env.WHATSAPP_ACCESS_TOKEN?.trim()
-  if (!t) throw new Error("WHATSAPP_ACCESS_TOKEN não configurado")
-  return t
+/**
+ * Credenciais Meta resolvidas POR LOJA. O cliente Graph não lê env global de
+ * número/token — quem envia injeta as credenciais da loja correta.
+ */
+export type WhatsAppCloudCredentials = {
+  /** Meta `phone_number_id` da loja. */
+  phoneNumberId: string
+  /** Access token Meta da loja (resolvido de env via `tokenEnvKey`; nunca persistido). */
+  accessToken: string
 }
 
 /** Somente dígitos; E.164 sem + (ex.: 5511999990000). */
@@ -47,13 +49,16 @@ type GraphSendResponse = {
   error?: { message?: string; code?: number; error_subcode?: number }
 }
 
-async function postMessages(body: unknown): Promise<GraphSendResponse> {
-  const pnid = phoneNumberId()
+async function postMessages(creds: WhatsAppCloudCredentials, body: unknown): Promise<GraphSendResponse> {
+  const pnid = (creds?.phoneNumberId ?? "").trim()
+  const token = (creds?.accessToken ?? "").trim()
+  if (!pnid) throw new Error("WhatsApp Cloud API: phoneNumberId da loja ausente")
+  if (!token) throw new Error("WhatsApp Cloud API: accessToken da loja ausente")
   const url = `${graphBase()}/${encodeURIComponent(pnid)}/messages`
   const res = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${accessToken()}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -67,11 +72,15 @@ async function postMessages(body: unknown): Promise<GraphSendResponse> {
   return json
 }
 
-export async function sendTextMessage(toDigits: string, text: string): Promise<GraphSendResponse> {
+export async function sendTextMessage(
+  creds: WhatsAppCloudCredentials,
+  toDigits: string,
+  text: string
+): Promise<GraphSendResponse> {
   const to = assertValidWhatsAppRecipientDigits(toDigits)
   const body = (text ?? "").trim()
   if (!body) throw new Error("Texto vazio")
-  return postMessages({
+  return postMessages(creds, {
     messaging_product: "whatsapp",
     to,
     type: "text",
@@ -86,17 +95,20 @@ export type TemplateComponent = {
   index?: string | number
 }
 
-export async function sendTemplateMessage(input: {
-  toDigits: string
-  templateName: string
-  languageCode: string
-  components?: TemplateComponent[]
-}): Promise<GraphSendResponse> {
+export async function sendTemplateMessage(
+  creds: WhatsAppCloudCredentials,
+  input: {
+    toDigits: string
+    templateName: string
+    languageCode: string
+    components?: TemplateComponent[]
+  }
+): Promise<GraphSendResponse> {
   const to = assertValidWhatsAppRecipientDigits(input.toDigits)
   const name = (input.templateName ?? "").trim()
   if (!name) throw new Error("templateName obrigatório")
   const languageCode = (input.languageCode ?? "").trim() || "pt_BR"
-  return postMessages({
+  return postMessages(creds, {
     messaging_product: "whatsapp",
     to,
     type: "template",
@@ -108,14 +120,17 @@ export async function sendTemplateMessage(input: {
   })
 }
 
-export async function sendMediaMessage(input: {
-  toDigits: string
-  mediaType: "image" | "document" | "audio" | "video"
-  /** URL HTTPS pública acessível pela Meta. */
-  link: string
-  caption?: string
-  filename?: string
-}): Promise<GraphSendResponse> {
+export async function sendMediaMessage(
+  creds: WhatsAppCloudCredentials,
+  input: {
+    toDigits: string
+    mediaType: "image" | "document" | "audio" | "video"
+    /** URL HTTPS pública acessível pela Meta. */
+    link: string
+    caption?: string
+    filename?: string
+  }
+): Promise<GraphSendResponse> {
   const to = assertValidWhatsAppRecipientDigits(input.toDigits)
   const link = (input.link ?? "").trim()
   if (!link.startsWith("https://")) throw new Error("link deve ser HTTPS")
@@ -133,7 +148,7 @@ export async function sendMediaMessage(input: {
         : {}),
     },
   }
-  return postMessages(payload)
+  return postMessages(creds, payload)
 }
 
 export function firstOutboundWamid(res: GraphSendResponse): string {

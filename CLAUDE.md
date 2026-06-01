@@ -173,15 +173,19 @@ STRIPE_PRICE_DIAMANTE_YEARLY  # price_...
 # Webhook endpoint a registrar na Vercel: https://<seu-dominio>/api/webhooks/stripe
 # Eventos necessários: checkout.session.completed, customer.subscription.updated,
 #   customer.subscription.deleted, invoice.paid, invoice.payment_failed
-# WhatsApp Cloud API (Meta Business) — obrigatórias para envio/recebimento real:
-WHATSAPP_PHONE_NUMBER_ID     # ID do número no Meta Business (ex.: 123456789)
-WHATSAPP_ACCESS_TOKEN        # Token de acesso permanente da Meta Graph API
+# WhatsApp Cloud API (Meta Business) — MULTI-LOJA por `phone_number_id` (ADR-0006 · F-04/DT-07):
+WHATSAPP_ACCESS_TOKEN        # Token Meta Graph da loja. Referenciado por `WhatsAppPhoneNumber.tokenEnvKey` (default = WHATSAPP_ACCESS_TOKEN). Token NUNCA no DB — só o nome da env. Lojas distintas podem usar envs distintas (ex.: WHATSAPP_ACCESS_TOKEN_LOJA2).
 WHATSAPP_VERIFY_TOKEN        # Deve ser **idêntico** ao "Verify token" no painel Meta (sem aspas na Vercel). Aliases aceitos no código: META_WHATSAPP_VERIFY_TOKEN, WHATSAPP_WEBHOOK_VERIFY_TOKEN
 WHATSAPP_APP_SECRET          # App Secret do Meta App (para validar X-Hub-Signature-256)
-WHATSAPP_WEBHOOK_STORE_ID    # storeId para roteamento de mensagens recebidas
+# WHATSAPP_PHONE_NUMBER_ID   # legado/diagnóstico apenas. O roteamento NÃO usa mais env global de número — usa o mapa `WhatsAppPhoneNumber` (tabela `whatsapp_phone_numbers`).
+# WHATSAPP_WEBHOOK_STORE_ID  # REMOVIDO (ADR-0006). Roteamento inbound agora é por `phone_number_id` (Meta) → `storeId`; sem fallback `loja-1`. `webhookDefaultStoreId` não existe mais.
 # WHATSAPP_API_VERSION       # opcional (padrão: v21.0)
+# Roteamento multi-loja: cada número Meta é mapeado em `whatsapp_phone_numbers` (model `WhatsAppPhoneNumber`):
+#   { phoneNumberId @unique → storeId, tokenEnvKey, wabaId, displayPhone, active }. Migração 0010 (aditiva); aplicar com `npm run db:push`.
+#   Seed do número atual: `node scripts/backfill-whatsapp-phone-number.mjs`. Inbound de número não-mapeado é descartado + auditado (sem gravar em loja).
 # Webhook na Meta (URL pública): https://<seu-dominio>/api/webhooks/whatsapp
 # Implementação: rewrite next.config → `app/api/whatsapp/webhook/route.ts` (GET handshake + POST Meta Cloud + Evolution).
+#   Inbound: `resolveStoreIdByPhoneNumberId` · Outbound: `resolveStoreWhatsAppCredentials` (credencial da loja, sem env global).
 # Eventos: messages, message_deliveries, message_reads
 # Envio manual: POST /api/whatsapp/send (header x-assistec-loja-id + { conversationId, text })
 ```

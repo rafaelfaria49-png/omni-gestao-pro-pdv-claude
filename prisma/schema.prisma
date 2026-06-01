@@ -88,6 +88,7 @@ model Store {
   whatsappEtiquetas      WhatsAppEtiqueta[]
   whatsappAiSetting      WhatsAppAiSetting?
   whatsappAutomationLogs WhatsAppAutomationLog[]
+  whatsappPhoneNumbers   WhatsAppPhoneNumber[]
   sessoesCaixa           SessaoCaixa[]
   devolucoes             DevolucaoVenda[]
   garantiasOrdemServico  GarantiaOrdemServico[]
@@ -393,6 +394,31 @@ model WhatsAppAutomationLog {
   @@index([storeId, createdAt])
   @@index([action])
   @@map("whatsapp_automation_logs")
+}
+
+/**
+ * Mapeia cada número WhatsApp (Meta `phone_number_id`) à sua loja — roteamento
+ * multi-loja do webhook (inbound) e resolução de credencial (outbound).
+ * O token NÃO é armazenado: `tokenEnvKey` referencia a env (Vercel secret) que o contém.
+ */
+model WhatsAppPhoneNumber {
+  id            String   @id @default(cuid())
+  storeId       String   @map("storeId")
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /** Meta WhatsApp Cloud `phone_number_id` — chave de roteamento do webhook. */
+  phoneNumberId String   @unique @map("phoneNumberId")
+  /** WhatsApp Business Account id (`entry[].id`) — auditoria/diagnóstico. */
+  wabaId        String   @default("") @map("wabaId")
+  /** Número exibível (E.164) — apresentação. */
+  displayPhone  String   @default("") @map("displayPhone")
+  /** Nome da env (Vercel secret) com o access token da loja. Token nunca no DB. */
+  tokenEnvKey   String   @default("WHATSAPP_ACCESS_TOKEN") @map("tokenEnvKey")
+  active        Boolean  @default(true) @map("active")
+  createdAt     DateTime @default(now()) @map("createdAt")
+  updatedAt     DateTime @updatedAt @map("updatedAt")
+
+  @@index([storeId])
+  @@map("whatsapp_phone_numbers")
 }
 
 /**

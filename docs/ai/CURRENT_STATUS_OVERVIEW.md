@@ -28,12 +28,12 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | 1 | **Estoque** | 🟢 ledger maduro | Ledger profissional ✅, importador defensivo ✅, saneamento SKU ✅ | 🟠 sem multi-depósito (bloqueia Marketplace) |
 | 2 | **Operações/OS** (cross-onda) | (acima) | NFS-e, comunicação WhatsApp | 🔴 sem NFS-e |
 | 2 | **CRM** | 🟡 base sólida | FK Venda→Cliente ✅, modal PF/PJ ✅, crédito persistente ✅, importador defensivo ✅ | 🟡 sem tela 360° consolidada, sem segmentação |
-| 2 | **WhatsApp** | 🟡 infra ok | Webhook canônico ✅, HMAC ✅, roteamento `storeId` ✅, envio manual ✅ | 🔴 sem opt-out persistente, sem orquestrador de massa |
+| 2 | **WhatsApp** | 🟡 infra ok | Webhook canônico ✅, HMAC ✅, **router multi-loja por `phone_number_id`** (ADR-0006, S-003) ✅, credencial outbound por loja ✅, envio manual ✅ | 🔴 sem opt-out persistente, sem orquestrador de massa · ⚙️ cutover (`db:push`+backfill) pendente |
 | 3 | **Marketplace** | 🔴 não iniciado | Greenfield total | 🔴 sem arquitetura, sem código |
 | 3 | **Marketing IA** | 🟠 incipiente | Gerador de imagens ✅, credit-costs ✅, debit-turn-credits ✅ | 🔴 sem orquestrador de campanha, sem atribuição |
 | 4 | **Omni Agent** | 🟠 infra ok / poucos executores | API-guard, honesty, regex determinística, executor `recebimentoFinanceiro` ✅ | 🔴 pool de executores reais pequeno |
 | 4 | **BI** | 🟠 espalhado | Painel inicial parcial | 🔴 mocks misturados com real |
-| 4 | **Multi-loja** | 🟢 isolamento server / 🟡 resíduo provider | fallback `loja-1` **server-side 100% eliminado** (S-001/S-002 + DT-14, ADR-0003) ✅, ACL `canAccessStore` ✅, proxy cookie ✅, `storeId` everywhere ✅, **client de componentes limpo** (DT-13 + DT-15) ✅ | 🟡 F-04 webhook WhatsApp + **F-11** provider-fonte `lib/loja-ativa.tsx` (raiz) — **client ainda não 100%** |
+| 4 | **Multi-loja** | 🟢 **zero `loja-1`** | fallback `loja-1` **server-side 100%** (S-001/S-002 + DT-14, ADR-0003) ✅, **client-side 100%** (DT-13 + DT-15 + DT-16) ✅, **WhatsApp F-04** (ADR-0006, S-003) ✅, ACL `canAccessStore` ✅, proxy cookie ✅ | ✅ **zero fallback silencioso `loja-1`** em todo o projeto (server+client+WhatsApp) |
 
 ---
 
@@ -52,7 +52,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 > Em ordem recomendada — quem encerra a atual, abre a próxima.
 
 1. **SPRINT_NN_PDV** — Persistência server-side do PDV Next (P0; fecha Fase 1 PDV).
-2. **SPRINT_NN_MULTI_LOJA** — F-04: router WhatsApp por `phone_number_id` (P1→P0 antes de loja-2 ativar WhatsApp). *Fallback `loja-1` server-side já eliminado (S-001/S-002 + DT-14).*
+2. ~~**SPRINT_NN_MULTI_LOJA** — F-04: router WhatsApp por `phone_number_id`~~ — ✅ **concluída** (`MULTI_LOJA-S-003`; ADR-0006; Gate #2 01/06). *Fechou o **último vetor `loja-1`**; multi-loja 100% (server+client+WhatsApp). Resta o cutover operacional (`db:push`+backfill+deploy).*
 3. **SPRINT_NN_WHATSAPP** — Opt-out persistente + monitor qualidade (P0; previne banimento Meta).
 4. **SPRINT_NN_ESTOQUE** — Modelagem multi-depósito (P0; desbloqueia Marketplace).
 
@@ -79,7 +79,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | # | Item | HUB | Severidade |
 |---|---|---|---|
 | 1 | PDV Next sem persistência server-side | PDV | P0 |
-| 2 | Webhook WhatsApp single-store (`phone_number_id`) — DT-07 | Multi-loja/WhatsApp | P1 (→P0 c/ loja-2) |
+| 2 | ~~Webhook WhatsApp single-store — DT-07~~ | Multi-loja/WhatsApp | ✅ **pago** (S-003 · ADR-0006 · Gate #2 01/06) |
 | 3 | Opt-out WhatsApp ausente | WhatsApp | P0 |
 | 4 | Sem multi-depósito Estoque | Estoque | P0 (bloqueia Marketplace) |
 | 5 | Rota legada `/dashboard/os` paralela | OS | P1 |
@@ -93,6 +93,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 
 > Apêndice — listar entradas mais recentes do `CURRENT_STATUS.md` para contexto rápido.
 
+- **2026-06-01** — **MULTI_LOJA-S-003 (F-04/DT-07) — Gate #2 APROVADO:** router WhatsApp multi-loja por `phone_number_id` (mapa `WhatsAppPhoneNumber`) + credencial outbound por loja, **sem fallback `loja-1`**; `webhookDefaultStoreId` removido. **ADR-0006 `aceito`**, DT-07 **pago**. Migração `0010` aditiva (cutover `db:push`+backfill pendente). Build OK · vitest **258 passed | 2 expected fail**. Auditoria: [`AUDITORIA_F-04_WHATSAPP_ROUTER_MULTI_LOJA.md`](../audits/AUDITORIA_F-04_WHATSAPP_ROUTER_MULTI_LOJA.md). **Era o último vetor `loja-1`** → agora zero fallback silencioso em todo o projeto (server+client+WhatsApp).
 - **2026-06-01** — Governança: **`COWORK_RELEASE_PLAN.md`** criado — auditoria dos 4 gargalos (COWORK frozen · `SKILL_LOCK_HUB` · approval de skills · `BENCHMARK_PROTOCOL`) + mapa de desbloqueio em 2 trilhos + design do `SKILL_LOCK_HUB` + veredito. **Conclusão:** bootstrap **~98%** (design); CoWork **supervisionado destravável com 1 decisão** (ADR-0005, sem build novo); **autônomo** exige 3 builds. 1º HUB recomendado: **Multi-Loja** (não-protegido, ex.: BL-08). `execution/INDEX §3` atualizado (R0/R1 concluídos; liberação COWORK pendente de decisão).
 - **2026-06-01** — Governança: **Bootstrap CoWork — maturidade pós-INTAKE** avaliada e 2 gaps doc-fixáveis fechados (SAFE-lite light): (1) **porta de entrada** cabeada (`skills/INDEX` + `execution/INDEX §1`) — comando livre "Trabalhe no X" agora aponta o `INTAKE_PROTOCOL` como 1ª ação; (2) **DoD provisório** passa a viajar no Intake Manifest (`INTAKE §4/§12 definition_of_done`). Veredito: **roteamento de intake ~95%** (maduro); **execução CoWork ~60%** (congelada por decisão + builds: COWORK frozen, `SKILL_LOCK_HUB`, skills draft, `BENCHMARK_PROTOCOL`). Simulação "Trabalhe no Marketplace" → `RED/BLOCKED` correto. Relatório: [`docs/execution/BOOTSTRAP_COWORK_MATURITY.md`](../execution/BOOTSTRAP_COWORK_MATURITY.md).
 - **2026-06-01** — Governança: **`INTAKE_PROTOCOL.md`** criado (`docs/execution/`, pós-R1) — roteador **read-only** que materializa a `FASE 1` (comando livre "Trabalhe no X" → Intake Manifest → **Gate #1 existente**); não altera Engine/SAFE-lite/gates. Canoniza **`ROADMAP §7`** como backlog (reconciliação Tier A em `GOVERNANCA §8` + `SPRINT_PROTOCOL §4.1`). `SKILL_INTAKE_ROUTER` diferida.

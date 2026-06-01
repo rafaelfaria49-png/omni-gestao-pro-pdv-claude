@@ -16,7 +16,7 @@ import { NextResponse } from "next/server"
 import { createHmac } from "crypto"
 import { processMetaWhatsAppWebhookPayload } from "@/lib/whatsapp-meta-cloud-webhook"
 import { prisma } from "@/lib/prisma"
-import { webhookDefaultStoreId } from "@/lib/whatsapp/whatsapp-service"
+import { resolveSoleActiveStoreId } from "@/lib/whatsapp/whatsapp-service"
 
 export const runtime  = "nodejs"
 export const dynamic  = "force-dynamic"
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
     process.env.META_WHATSAPP_VERIFY_TOKEN ??
     process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN ?? ""
   ).trim()
-  const storeId = webhookDefaultStoreId()
+  const storeId = (await resolveSoleActiveStoreId()) || ""
 
   // Probe DB: conta conversas existentes
   let convCount = 0
@@ -153,7 +153,7 @@ export async function POST(req: Request) {
   const text = String(o.text ?? "Ping OmniGestão — teste webhook pipeline").trim()
 
   const phoneNumberId = (process.env.WHATSAPP_PHONE_NUMBER_ID ?? "TEST_PHONE_ID").trim()
-  const storeId = webhookDefaultStoreId()
+  const storeId = (await resolveSoleActiveStoreId()) || ""
 
   const payload = buildMetaPayload(from, text, phoneNumberId)
 

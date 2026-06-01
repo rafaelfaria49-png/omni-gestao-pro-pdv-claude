@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import type { Prisma } from "@/generated/prisma"
 import { isProductionRuntime } from "@/lib/whatsapp/webhook-hmac-policy"
 import {
@@ -10,6 +9,7 @@ import {
   sendTextMessage as cloudSendText,
   type TemplateComponent,
 } from "@/lib/whatsapp"
+import { resolveStoreWhatsAppCredentials } from "@/lib/whatsapp/store-credentials"
 
 export type ContactInput = {
   phoneDigits: string
@@ -31,9 +31,34 @@ function normalizeDigits(raw: string): string {
   return String(raw || "").replace(/\D/g, "")
 }
 
-export function webhookDefaultStoreId(): string {
-  const env = process.env.WHATSAPP_WEBHOOK_STORE_ID?.trim()
-  return env && env.length > 0 ? env : LEGACY_PRIMARY_STORE_ID
+/**
+ * Resolve o `storeId` quando há EXATAMENTE UMA loja com número WhatsApp ativo (deployment
+ * single-number). Retorna `null` se houver zero ou múltiplas — o caller decide (sem loja-1).
+ * Usado por fluxos sem `phone_number_id` no payload (ex.: owner-AI via Evolution; debug).
+ */
+export async function resolveSoleActiveStoreId(): Promise<string | null> {
+  const rows = await prisma.whatsAppPhoneNumber.findMany({
+    where: { active: true },
+    select: { storeId: true },
+    take: 2,
+  })
+  const ids = [...new Set(rows.map((r) => r.storeId))]
+  return ids.length === 1 ? ids[0] : null
+}
+
+/**
+ * Resolve o `storeId` a partir do `phone_number_id` da Meta via mapa `WhatsAppPhoneNumber`.
+ * Retorna `null` quando o número não está mapeado ou está inativo — o caller NÃO deve gravar
+ * em loja nenhuma nem cair em `loja-1` (F-04/DT-07 · ADR-0006). Sem fallback silencioso.
+ */
+export async function resolveStoreIdByPhoneNumberId(phoneNumberId: string): Promise<string | null> {
+  const pnid = (phoneNumberId ?? "").trim()
+  if (!pnid) return null
+  const row = await prisma.whatsAppPhoneNumber.findUnique({
+    where: { phoneNumberId: pnid },
+    select: { storeId: true, active: true },
+  })
+  return row?.active ? row.storeId : null
 }
 
 export async function logWebhookPayload(storeId: string, raw: unknown): Promise<void> {
@@ -572,6 +597,32 @@ export async function sendWhatsAppMessage(input: {
   return { conversationId: conv.id, messageId: m.id, contactId }
 }
 
+/**
+ * Resolve as credenciais Meta DA LOJA para o envio físico ou LANÇA (sem fallback global).
+ * Registra auditoria explícita quando a loja não tem número ativo/token (F-04/DT-07 · ADR-0006).
+ */
+async function requireStoreCloudCreds(storeId: string) {
+  const creds = await resolveStoreWhatsAppCredentials(storeId)
+  if (!creds) {
+    await prisma.logsAuditoria
+      .create({
+        data: {
+          action: "whatsapp_send_no_store_credentials",
+          userLabel: `store:${storeId}`,
+          detail:
+            "Envio bloqueado: loja sem número WhatsApp ativo ou token ausente (sem fallback global). " +
+            "Cadastrar em whatsapp_phone_numbers + definir a env de tokenEnvKey.",
+          source: "dashboard",
+        },
+      })
+      .catch(() => {
+        /* best-effort: auditoria não pode mascarar o erro de envio */
+      })
+    throw new Error(`WhatsApp não configurado para a loja ${storeId} (sem número ativo/token).`)
+  }
+  return creds
+}
+
 export async function sendCloudApiTextAndRecord(storeId: string, conversationId: string, text: string) {
   const trimmed = text.trim()
   if (!trimmed) throw new Error("message vazio")
@@ -583,7 +634,8 @@ export async function sendCloudApiTextAndRecord(storeId: string, conversationId:
   if (!conv) throw new Error("Conversa não encontrada")
 
   const to = assertValidWhatsAppRecipientDigits(conv.contact.phoneDigits)
-  const res = await cloudSendText(to, trimmed)
+  const creds = await requireStoreCloudCreds(storeId)
+  const res = await cloudSendText(creds, to, trimmed)
   const wamid = firstOutboundWamid(res)
   const m = await addMessage(storeId, conversationId, {
     direction: "outbound",
@@ -607,7 +659,8 @@ export async function sendCloudApiTemplateAndRecord(
   if (!conv) throw new Error("Conversa não encontrada")
 
   const to = assertValidWhatsAppRecipientDigits(conv.contact.phoneDigits)
-  const res = await cloudSendTemplate({
+  const creds = await requireStoreCloudCreds(storeId)
+  const res = await cloudSendTemplate(creds, {
     toDigits: to,
     templateName: input.templateName,
     languageCode: input.languageCode,
@@ -644,7 +697,8 @@ export async function sendCloudApiMediaAndRecord(
   if (!conv) throw new Error("Conversa não encontrada")
 
   const to = assertValidWhatsAppRecipientDigits(conv.contact.phoneDigits)
-  const res = await cloudSendMedia({
+  const creds = await requireStoreCloudCreds(storeId)
+  const res = await cloudSendMedia(creds, {
     toDigits: to,
     mediaType: input.mediaType,
     link: input.link,

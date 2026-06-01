@@ -2,7 +2,7 @@
 title: Dívida Técnica — Tracking vivo
 status: vivo
 owner: produto + Sonnet
-last_update: 2026-05-31
+last_update: 2026-06-01
 fonte_overview: docs/ai/CURRENT_STATUS_OVERVIEW.md §5
 ---
 
@@ -39,7 +39,6 @@ fonte_overview: docs/ai/CURRENT_STATUS_OVERVIEW.md §5
 | DT-04 | Rota legada `/dashboard/os` paralela à oficial | Operações/OS | P1 | ⏳ | 2026-04-xx | SPRINT_NN_OS | ADR-0001 diz que oficial é `/operacoes-v2` |
 | DT-05 | PIN supervisor contra `User.pin` (não `AdminUser`) | PDV / Auth | P1 | ⏳ | 2026-05-xx | a planejar | Memória `project_vendas_hub_correcao_operacional` |
 | DT-06 | Item Avulso sem CFOP/categoria padrão | PDV | P2 | ⏳ | 2026-05-23 | bloqueia Fase 2 fiscal PDV | — |
-| DT-07 | Webhook WhatsApp por env fixo (não por `phone_number_id`) | WhatsApp / Multi-loja | P1 | ⏳ | 2026-05-09 | SPRINT_NN_MULTI_LOJA (F-04) | = **F-04**. Vira **P0** quando loja-2 (Rafa Brinquedos, já ativa) ligar WhatsApp. Próxima sprint do HUB (J3) |
 | DT-08 | Sem multi-depósito no Estoque | Estoque | P0 | ⏳ | herdada | SPRINT_NN_ESTOQUE | Bloqueia adapter Marketplace |
 | DT-09 | budget-policy-service com regras hardcoded | OS | P1 | ⏳ | herdada | a planejar | Falta UI por loja |
 | DT-10 | Pool de executores Omni Agent pequeno | Omni Agent | P1 | ⏳ | herdada | a planejar | Só `recebimentoFinanceiro` real |
@@ -58,11 +57,12 @@ fonte_overview: docs/ai/CURRENT_STATUS_OVERVIEW.md §5
 | DT-13 | Resíduo `LEGACY_PRIMARY_STORE_ID` client-side em **PDV/vendas** (4 telas) | 2026-05-31 | DT-13 (SAFE-lite) · ADR-0003 |
 | DT-15 | Resíduo `LEGACY_PRIMARY_STORE_ID` client-side em **marketing/config/onboarding/cadastros** (6 arq./9 sites; +3 guards) | 2026-05-31 | DT-15 (SAFE-lite) · ADR-0003 |
 | DT-16 | **Provider-fonte** (`lib/loja-ativa.tsx`, F-11) semeava `lojaAtivaId` com `lojas[0]?.id \|\| LEGACY_PRIMARY_STORE_ID` na race de 1ª carga + irmão `lib/perfil-loja-provider.tsx` | 2026-06-01 | DT-16 (SAFE-lite reforçado) · ADR-0003 |
+| DT-07 | **Webhook WhatsApp single-store** (`WHATSAPP_WEBHOOK_STORE_ID` + número/token global, fallback `loja-1`) → router multi-loja por `phone_number_id` (`WhatsAppPhoneNumber`) + credencial por loja (**F-04**) | 2026-06-01 | MULTI_LOJA-S-003 · ADR-0006 |
 
 > **Nota DT-03 + DT-14 (server-side fechado — J4):** o vetor **server-side** de `loja-1` está **100% eliminado**. A S-001/S-002 cobriu a forma `|| "loja-1"`; **DT-14** fechou a forma **nullish** `?? "loja-1"` que havia escapado em `carteiras/*` + `dre/route.ts` (o teste/áudit da S-001 só varria `||`, e o resíduo era multi-linha). Hoje **zero** literal `"loja-1"` de código em `app/api/**` (resta só 1 comentário em `exportar/route.ts`).
 
 > **Nota DT-13 + DT-15 + DT-16 (client-side 100% fechado — J4):** **DT-13** (4 telas PDV/vendas) + **DT-15** (marketing, configuracoes ×3, centro-personalizacao, importador, onboarding, cadastros — 6 arq./9 sites, +3 guards de loja vazia) eliminaram o fallback `LEGACY_PRIMARY_STORE_ID` em **todos os componentes de UI**; **DT-16** fechou a **raiz** — o provider-fonte `lib/loja-ativa.tsx` (F-11) + o irmão `lib/perfil-loja-provider.tsx`. Padrão canônico `(lojaAtivaId ?? "").trim()`; semente extraída para helper puro `lib/loja-ativa-seed.ts` (`resolveSeedStoreId`, sem semear `loja-1` na 1ª carga). Guard estático em `lib/multi-loja-client-no-legacy-fallback.test.ts` (12 arquivos — agora cobre `loja-ativa.tsx` + `perfil-loja-provider.tsx`). **O client-side de `lojaAtivaId` está 100% sem fallback silencioso.**
-> - **F-04/DT-07** — **webhook WhatsApp** single-store (P1, vira P0 com loja-2). Já em §2 (DT-07). **Único vetor `loja-1` ainda aberto.**
+> - **F-04/DT-07** — **webhook WhatsApp** single-store: **PAGO** (`MULTI_LOJA-S-003`, Gate #2 aprovado 2026-06-01 · **ADR-0006**). Roteamento inbound por `phone_number_id` (mapa `WhatsAppPhoneNumber`) + credencial outbound por loja, sem `loja-1`; `webhookDefaultStoreId` removido. Era o **último vetor `loja-1` aberto** → agora **zero fallback silencioso `loja-1` em todo o projeto** (server + client + WhatsApp). **Cutover operacional pendente:** `db:push` da migração `0010` + backfill do número no deploy (ver ENTRY 019 + AUDITORIA F-04 §6).
 > - Legítimos por design (não são dívida ativa): `lib/stores-api-access.ts` (**F-15**, server, onboarding-only), `lib/ops-loja-id.ts` (P3 intencional), `store-defaults.ts` (constante canônica).
 
 > **Nota DT-02 (R0-L5):** evidência code-structural (não runtime): hub lê de `/api/financeiro/*` via `FinanceiroRealProvider` (16 fetches; 0 dados hardcoded; sem fallback fake; init em arrays vazios). **Observação:** **DRE / Fluxo de caixa** têm dados reais conectados, mas **evolução visual/funcional ainda pendente** (`ROADMAP_FINANCEIRO` §6/§8) — maturidade de UI, **não** mock.

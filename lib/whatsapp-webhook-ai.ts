@@ -14,6 +14,7 @@ import { sendWhatsAppText, sendWhatsAppButtons } from "@/lib/whatsapp-send"
 import { orchestrateCommand, type PlanoAssinatura } from "@/services/ai-orchestrator"
 import { parseVoiceIntent, extractBrlFromUtterance } from "@/lib/voice-intents"
 import { sendDailyClosingToPhone } from "@/lib/whatsapp-daily-server"
+import { resolveSoleActiveStoreId } from "@/lib/whatsapp/whatsapp-service"
 import type { InboundExtract } from "@/lib/whatsapp-webhook-parse"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 
@@ -250,8 +251,25 @@ async function handleOwnerText(fromDigits: string, utterance: string): Promise<v
   if (voice?.kind === "fechar_dia") {
     const nome = process.env.ASSISTEC_EMPRESA_NOME?.trim() || APP_DISPLAY_NAME
     const dono = process.env.ASSISTEC_WHATSAPP_DONO?.replace(/\D/g, "") ?? fromDigits
-    const webhookStoreId = (process.env.WHATSAPP_WEBHOOK_STORE_ID ?? "").trim()
-    const send = await sendDailyClosingToPhone({ phoneDigits: dono, empresaNome: nome, storeId: webhookStoreId })
+    // Evolution não traz phone_number_id: resolve pela ÚNICA loja com número ativo.
+    // Sem loja resolvível (0 ou >1) → não fecha, audita explícito (sem fallback loja-1).
+    const storeId = await resolveSoleActiveStoreId()
+    if (!storeId) {
+      await sendWhatsAppText(
+        fromDigits,
+        `${APP_DISPLAY_NAME}: não consegui identificar a loja para o fechamento (configuração multi-loja). Configure o número WhatsApp da loja.`
+      )
+      await prisma.logsAuditoria.create({
+        data: {
+          action: "whatsapp_owner_fechar_dia_sem_loja",
+          userLabel: `wa:${fromDigits}`,
+          detail: "fechar_dia sem loja resolvível (0 ou >1 números ativos no mapa) — sem fallback loja-1.",
+          source: "webhook",
+        },
+      })
+      return
+    }
+    const send = await sendDailyClosingToPhone({ phoneDigits: dono, empresaNome: nome, storeId })
     const extra = send.ok
       ? " Resumo enviado."
       : ` Aviso: ${"error" in send ? send.error : ""}`
@@ -260,7 +278,7 @@ async function handleOwnerText(fromDigits: string, utterance: string): Promise<v
       data: {
         action: "whatsapp_comando",
         userLabel: `wa:${fromDigits}`,
-        detail: `fechar_dia | envio: ${send.ok ? "ok" : "falha"}`,
+        detail: `fechar_dia | loja: ${storeId} | envio: ${send.ok ? "ok" : "falha"}`,
         source: "webhook",
       },
     })
