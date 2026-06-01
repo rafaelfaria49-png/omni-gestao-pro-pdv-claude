@@ -16,7 +16,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { dispatchClientesRevalidate } from "@/lib/clientes-revalidate"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { defaultChecklist, horaAtualHHMM } from "@/components/dashboard/os/ordens-servico"
 import { cellToTrimmedString } from "@/lib/import-normalize"
@@ -2599,7 +2598,7 @@ export function ImportadorDadosExternos() {
             })
           }
         }
-        const key = contasReceberStorageKey(lojaAtivaId || LEGACY_PRIMARY_STORE_ID)
+        const key = contasReceberStorageKey((lojaAtivaId ?? "").trim())
         try {
           const prev = JSON.parse(localStorage.getItem(key) || "[]") as unknown
           const merged = Array.isArray(prev) ? [...novos, ...prev] : novos

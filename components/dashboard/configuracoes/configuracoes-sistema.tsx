@@ -36,7 +36,6 @@ import {
   WHITELABEL_NOME_FANTASIA_PADRAO,
   WHITELABEL_TELEFONE_PADRAO,
 } from "@/lib/config-empresa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { useToast } from "@/hooks/use-toast"
 import { UploadCloud, ShieldCheck, KeyRound } from "lucide-react"
@@ -227,7 +226,7 @@ export function ConfiguracoesSistema({ initialTab = "geral" }: ConfiguracoesSist
   }, [])
 
   useEffect(() => {
-    const id = (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim()
+    const id = (lojaAtivaId ?? "").trim()
     const k = `${RAMO_ATUACAO_STORAGE_PREFIX}${id}`
     try {
       const raw = String(localStorage.getItem(k) || "").trim()
@@ -729,7 +728,7 @@ export function ConfiguracoesSistema({ initialTab = "geral" }: ConfiguracoesSist
                   const next: RamoAtuacao =
                     v === "supermercado" ? "supermercado" : v === "moda" ? "moda" : v === "outros" ? "outros" : "assistencia"
                   setRamoAtuacao(next)
-                  const id = (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim()
+                  const id = (lojaAtivaId ?? "").trim()
                   const k = `${RAMO_ATUACAO_STORAGE_PREFIX}${id}`
                   try {
                     localStorage.setItem(k, next)
@@ -1144,7 +1143,7 @@ export function ConfiguracoesSistema({ initialTab = "geral" }: ConfiguracoesSist
               </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Unidade atual: <strong>{lojaAtivaId || LEGACY_PRIMARY_STORE_ID}</strong> · Perfil: <strong>{perfilLoja}</strong>
+                Unidade atual: <strong>{(lojaAtivaId ?? "").trim() || "—"}</strong> · Perfil: <strong>{perfilLoja}</strong>
               </p>
             </CardContent>
           </Card>

@@ -33,7 +33,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | 3 | **Marketing IA** | 🟠 incipiente | Gerador de imagens ✅, credit-costs ✅, debit-turn-credits ✅ | 🔴 sem orquestrador de campanha, sem atribuição |
 | 4 | **Omni Agent** | 🟠 infra ok / poucos executores | API-guard, honesty, regex determinística, executor `recebimentoFinanceiro` ✅ | 🔴 pool de executores reais pequeno |
 | 4 | **BI** | 🟠 espalhado | Painel inicial parcial | 🔴 mocks misturados com real |
-| 4 | **Multi-loja** | 🟢 isolamento server / 🟡 resíduos client | fallback `loja-1` **server-side 100% eliminado** (S-001/S-002 + DT-14, ADR-0003) ✅, ACL `canAccessStore` ✅, proxy cookie ✅, `storeId` everywhere ✅, **client PDV/vendas limpo** (DT-13) ✅ | 🟡 F-04 webhook WhatsApp + resíduo `loja-1` **client-side** restante (DT-15: marketing/config/onboarding/cadastros) — **client não 100%** |
+| 4 | **Multi-loja** | 🟢 isolamento server / 🟡 resíduo provider | fallback `loja-1` **server-side 100% eliminado** (S-001/S-002 + DT-14, ADR-0003) ✅, ACL `canAccessStore` ✅, proxy cookie ✅, `storeId` everywhere ✅, **client de componentes limpo** (DT-13 + DT-15) ✅ | 🟡 F-04 webhook WhatsApp + **F-11** provider-fonte `lib/loja-ativa.tsx` (raiz) — **client ainda não 100%** |
 
 ---
 
@@ -85,7 +85,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | 5 | Rota legada `/dashboard/os` paralela | OS | P1 |
 | 6 | Pool de executores Omni Agent pequeno | Omni Agent | P1 |
 
-> Detalhe e tracking vivo em `docs/status/DIVIDA_TECNICA.md`. (DT-03 + DT-14: `loja-1` server-side **100% pago**; DT-13: client **PDV/vendas** pago; **client-side ainda não 100%** — resta DT-15 + F-11 — ver §3/§2 de lá.)
+> Detalhe e tracking vivo em `docs/status/DIVIDA_TECNICA.md`. (DT-03 + DT-14: `loja-1` server-side **100% pago**; DT-13 + DT-15: client **de componentes** pago; **client-side ainda não 100%** — resta **F-11** provider-fonte + F-04 webhook — ver §3 de lá.)
 
 ---
 
@@ -93,7 +93,8 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 
 > Apêndice — listar entradas mais recentes do `CURRENT_STATUS.md` para contexto rápido.
 
-- **2026-05-31** — DT-13 (SAFE-lite): resíduo `LEGACY_PRIMARY_STORE_ID` client-side nas **4 telas de PDV/vendas** eliminado (`(lojaAtivaId ?? "").trim()` + guard estático). **Client-side ainda não 100%** — aberto **DT-15** (marketing/config/onboarding/cadastros).
+- **2026-05-31** — DT-15 (SAFE-lite): resíduo `LEGACY_PRIMARY_STORE_ID` client-side em marketing/config/onboarding/cadastros eliminado (6 arq./9 sites + 3 guards de loja vazia). Com DT-13, **client de componentes limpo**. **Ainda não 100%** — resta **F-11** (provider-fonte `lib/loja-ativa.tsx`).
+- **2026-05-31** — DT-13 (SAFE-lite): resíduo `LEGACY_PRIMARY_STORE_ID` client-side nas **4 telas de PDV/vendas** eliminado (`(lojaAtivaId ?? "").trim()` + guard estático).
 - **2026-05-30** — DT-14 (SAFE-lite reforçado): fallback nullish `?? "loja-1"` em `carteiras/*` + `dre` eliminado (forma que escapou da S-001 por ser `??` e multi-linha) — `loja-1` **server-side 100%** fechado; ADR-0003.
 - **2026-05-30** — R0-L5: financeiro-v2 confirmado sobre dados reais (DT-02 paga · MOCK-01 removido · BL-13 destravado); DRE/Fluxo = evolução de UI pendente.
 - **2026-05-30** — R0: reconciliação da governança iniciada (baseline `AUDITORIA_R0`; lote L0 ✅).

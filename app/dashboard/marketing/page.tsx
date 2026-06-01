@@ -16,7 +16,6 @@ import { useToast } from "@/hooks/use-toast"
 import { ToastAction } from "@/components/ui/toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
 import { cn } from "@/lib/utils"
 import { interpretAiApiError } from "@/lib/handleAiApiError"
@@ -66,10 +65,7 @@ export default function MarketingStudioPage() {
   const [googleReplyBusy, setGoogleReplyBusy] = useState(false)
   const [dailyTip] = useState(() => dailyPostingSuggestion())
 
-  const lojaId = useMemo(
-    () => (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
-    [lojaAtivaId]
-  )
+  const lojaId = useMemo(() => (lojaAtivaId ?? "").trim(), [lojaAtivaId])
 
   useEffect(() => {
     setBrandVoice(readBrandVoiceFromStorage())

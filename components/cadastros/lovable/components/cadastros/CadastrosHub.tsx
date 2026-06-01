@@ -15,7 +15,6 @@ import { MovimentacaoEstoqueModal, HistoricoEstoqueGeralModal } from "./Moviment
 import { getEstoqueResumo, type EstoqueResumo } from "@/app/actions/estoque";
 import { ImportacaoHub } from "./ImportacaoHub";
 import { useLojaAtiva } from "@/lib/loja-ativa";
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults";
 import {
   createCliente,
   getCadastrosDashboardStats,
@@ -74,7 +73,7 @@ export function CadastrosHub() {
   const [autoOpenNew, setAutoOpenNew] = useState<string | null>(null);
   const novo = useToggle();
   const { lojaAtivaId } = useLojaAtiva();
-  const storeId = (lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID;  return (
+  const storeId = (lojaAtivaId ?? "").trim();  return (
     <div className="w-full min-w-0 max-w-full bg-background text-foreground transition-smooth">
       {/* HEADER INTEGRADO */}
       <header className="border-b border-border/60 bg-background pb-3">
@@ -245,7 +244,7 @@ function DashboardPanel({ onAction }: { onAction: (tabId: TabId, autoOpen?: bool
     { l: "Revisar incompletos", i: AlertTriangle, tab: "produtos" as TabId, autoOpen: false },
   ];
   const { lojaAtivaId } = useLojaAtiva();
-  const storeId = (lojaAtivaId ?? LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID;
+  const storeId = (lojaAtivaId ?? "").trim();
   const [stats, setStats] = useState<Awaited<ReturnType<typeof getCadastrosDashboardStats>> | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);

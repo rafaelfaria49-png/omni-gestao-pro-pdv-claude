@@ -12,9 +12,10 @@
  * silencioso para a loja principal. O servidor (pós S-001/DT-14) responde 400
  * quando o storeId está ausente.
  *
- * FORA do escopo DT-13 (mesma natureza, módulos diferentes → futuro DT-15):
- * marketing, configuracoes, onboarding, cadastros. E `lib/loja-ativa.tsx` (F-11,
- * o provider que SEMEIA lojaAtivaId — fonte, decisão separada).
+ * DT-15 ESTENDE a cobertura a marketing/config/onboarding/cadastros (6 arquivos).
+ * FORA de ambos (decisão separada): `lib/loja-ativa.tsx` (F-11, o provider que
+ * SEMEIA lojaAtivaId — fonte), `lib/stores-api-access.ts` (F-15, server),
+ * `lib/ops-loja-id.ts` (P3) e `store-defaults.ts` (definição canônica).
  */
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
@@ -47,4 +48,23 @@ describe("DT-13 — PDV/vendas sem fallback LEGACY_PRIMARY_STORE_ID (client-side
     const anyHasCanonical = DT13_FILES.some((f) => read(f).includes('(lojaAtivaId ?? "").trim()'))
     expect(anyHasCanonical).toBe(true)
   })
+})
+
+/** Telas fora de PDV/vendas no escopo do DT-15 (marketing/config/onboarding/cadastros). */
+const DT15_FILES = [
+  "app/dashboard/marketing/page.tsx",
+  "components/dashboard/configuracoes/configuracoes-sistema.tsx",
+  "components/dashboard/configuracoes/centro-personalizacao-financeira-rafacell.tsx",
+  "components/dashboard/configuracoes/backup-importador/importador-dados-externos.tsx",
+  "components/onboarding/first-access-wizard.tsx",
+  "components/cadastros/lovable/components/cadastros/CadastrosHub.tsx",
+]
+
+describe("DT-15 — marketing/config/onboarding/cadastros sem fallback LEGACY_PRIMARY_STORE_ID", () => {
+  for (const f of DT15_FILES) {
+    it(`[${f}] não importa nem usa LEGACY_PRIMARY_STORE_ID`, () => {
+      const src = read(f)
+      expect(src).not.toContain("LEGACY_PRIMARY_STORE_ID")
+    })
+  }
 })

@@ -45,7 +45,6 @@ fonte_overview: docs/ai/CURRENT_STATUS_OVERVIEW.md §5
 | DT-10 | Pool de executores Omni Agent pequeno | Omni Agent | P1 | ⏳ | herdada | a planejar | Só `recebimentoFinanceiro` real |
 | DT-11 | Painel inicial com mocks misturados | BI | P0 | ⏳ | herdada | SPRINT_NN_BI | Confunde decisão de negócio |
 | DT-12 | Mocks no `lib/utils.ts` Lovable excluídos do tsc | Lovable | P3 | 🚫 | herdada | aceito | Decisão de isolamento documentada no CLAUDE.md |
-| DT-15 | Resíduo `LEGACY_PRIMARY_STORE_ID` client-side (marketing/config/onboarding/cadastros) | Multi-loja | P2 | ⏳ | 2026-05-31 | a planejar | Mesma natureza do DT-13, outros módulos: `marketing/page.tsx:70`, `configuracoes-sistema.tsx:230/732/1147`, `centro-personalizacao-financeira-rafacell.tsx:102`, `importador-dados-externos.tsx:2602`, `first-access-wizard.tsx:24`, `CadastrosHub.tsx:77/248` (6 arq./9 sites). ⚠️ algumas telas de Config já têm `UnidadeAtivaRequiredBanner` — verificar guard por arquivo (não copiar cego). NÃO inclui F-11 (`lib/loja-ativa.tsx`, o provider-fonte) nem F-15 (server) |
 
 ---
 
@@ -57,10 +56,16 @@ fonte_overview: docs/ai/CURRENT_STATUS_OVERVIEW.md §5
 | DT-03 | Fallback `storeId="loja-1"` silencioso — vetor **server-side** de leitura de API | 2026-05-29→30 | SPRINT_MULTI_LOJA-S-001 + S-002 · ADR-0003 |
 | DT-14 | Fallback `?? "loja-1"` server-side em `carteiras/*` + `dre/route` (forma nullish que escapou da S-001) | 2026-05-30 | DT-14 (SAFE-lite reforçado) · ADR-0003 |
 | DT-13 | Resíduo `LEGACY_PRIMARY_STORE_ID` client-side em **PDV/vendas** (4 telas) | 2026-05-31 | DT-13 (SAFE-lite) · ADR-0003 |
+| DT-15 | Resíduo `LEGACY_PRIMARY_STORE_ID` client-side em **marketing/config/onboarding/cadastros** (6 arq./9 sites; +3 guards) | 2026-05-31 | DT-15 (SAFE-lite) · ADR-0003 |
 
 > **Nota DT-03 + DT-14 (server-side fechado — J4):** o vetor **server-side** de `loja-1` está **100% eliminado**. A S-001/S-002 cobriu a forma `|| "loja-1"`; **DT-14** fechou a forma **nullish** `?? "loja-1"` que havia escapado em `carteiras/*` + `dre/route.ts` (o teste/áudit da S-001 só varria `||`, e o resíduo era multi-linha). Hoje **zero** literal `"loja-1"` de código em `app/api/**` (resta só 1 comentário em `exportar/route.ts`).
 
-> **Nota DT-13 (client PDV/vendas pago — J4) — ⚠️ client-side NÃO está 100% limpo:** o **DT-13** eliminou o fallback `LEGACY_PRIMARY_STORE_ID` nas **4 telas de PDV/vendas** (`vendas-arquivo-geral`, `venda-completa-enterprise`, `pdv-venda-completa-enterprise`, `pdv-assistencia-enterprise`) — agora `(lojaAtivaId ?? "").trim()`, guard estático em `lib/multi-loja-client-no-legacy-fallback.test.ts`. **Permanece resíduo client-side** em **marketing/config/onboarding/cadastros** (→ **DT-15**, P2, 6 arq.), no provider-fonte `lib/loja-ativa.tsx` (**F-11**) e em `lib/stores-api-access.ts` (**F-15**, server, onboarding-only). **Não declarar o client-side como 100% encerrado.** Pendente de integração: **webhook WhatsApp** single-store (→ DT-07/F-04, P1, vira P0 com loja-2). Multi-loja **não está 100% livre de `loja-1`** fora do servidor.
+> **Nota DT-13 + DT-15 (client-side de componentes limpo — J4) — ⚠️ client-side NÃO está 100%:** **DT-13** (4 telas PDV/vendas) + **DT-15** (marketing, configuracoes ×3, centro-personalizacao, importador, onboarding, cadastros — 6 arq./9 sites, +3 guards de loja vazia) eliminaram o fallback `LEGACY_PRIMARY_STORE_ID` em **todos os componentes de UI** → padrão `(lojaAtivaId ?? "").trim()`; guard estático em `lib/multi-loja-client-no-legacy-fallback.test.ts` (10 arquivos). **Permanecem (client-side NÃO é 100%):**
+> - **F-11** — `lib/loja-ativa.tsx` é o **provider-fonte** que semeia `lojaAtivaId` com `lojas[0]?.id || LEGACY_PRIMARY_STORE_ID`. É a **raiz** (alimenta o header de todas as telas). Mudança mais arriscada → decisão própria, **sem DT próprio por ora** (rastreado como finding **F-11** + nas notas; ver `AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01` §F-11).
+> - **F-04/DT-07** — **webhook WhatsApp** single-store (P1, vira P0 com loja-2). Já em §2 (DT-07).
+> - Legítimos por design (não são dívida ativa): `lib/stores-api-access.ts` (**F-15**, server, onboarding-only), `lib/ops-loja-id.ts` (P3 intencional), `store-defaults.ts` (constante canônica).
+>
+> **Não declarar o client-side como 100% encerrado** enquanto **F-11** existir.
 
 > **Nota DT-02 (R0-L5):** evidência code-structural (não runtime): hub lê de `/api/financeiro/*` via `FinanceiroRealProvider` (16 fetches; 0 dados hardcoded; sem fallback fake; init em arrays vazios). **Observação:** **DRE / Fluxo de caixa** têm dados reais conectados, mas **evolução visual/funcional ainda pendente** (`ROADMAP_FINANCEIRO` §6/§8) — maturidade de UI, **não** mock.
 

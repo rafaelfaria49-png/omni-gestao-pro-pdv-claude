@@ -4,7 +4,7 @@ hub: multi_loja
 status: vivo
 owner: produto + Sonnet (técnico)
 last_update: 2026-05-31
-sprint_atual: nenhuma em curso · S-001/S-002 + DT-14 + DT-13 concluídas · próxima = F-04 (webhook por phone_number_id)
+sprint_atual: nenhuma em curso · S-001/S-002 + DT-14 + DT-13 + DT-15 concluídas · próxima = F-04 (webhook por phone_number_id)
 ---
 
 # 🏬 Roadmap — HUB Multi-loja
@@ -58,7 +58,7 @@ Multi-loja **não é um módulo** — é uma **propriedade** do banco e da aplic
 
 | Gap | Severidade |
 |---|---|
-| **Resíduo `loja-1` client-side** — PDV/vendas **limpo** (DT-13 ✅); resta marketing/config/onboarding/cadastros. Server-side **100% eliminado** (S-001/S-002 + DT-14, ADR-0003) | 🟡 P2 (DT-15) |
+| **Resíduo `loja-1` client-side** — componentes de UI **limpos** (DT-13 + DT-15 ✅); resta o **provider-fonte** `lib/loja-ativa.tsx` (F-11, raiz). Server-side **100% eliminado** (S-001/S-002 + DT-14, ADR-0003) | 🟡 P2 (F-11) |
 | **Sem organização (matriz)** modelada | 🟡 P1 |
 | **Permissão por loja granular** ainda incipiente | 🟡 P1 |
 | **Transferência entre lojas** inexistente (estoque, OS, cliente) | 🟡 P1 |
@@ -75,7 +75,7 @@ Multi-loja **não é um módulo** — é uma **propriedade** do banco e da aplic
 | # | Funcionalidade | Prioridade |
 |---|---|---|
 | 1 | **Auditoria automática** que detecta query sem filtro `storeId` | P0 |
-| 2 | **Eliminar fallback `loja-1`** silencioso — ✅ **server-side 100%** (S-001/S-002 + DT-14) + ✅ **client PDV/vendas** (DT-13); resta client marketing/config/onboarding/cadastros (DT-15) | ✅ / P2 |
+| 2 | **Eliminar fallback `loja-1`** silencioso — ✅ **server-side 100%** (S-001/S-002 + DT-14) + ✅ **client de componentes** (DT-13 + DT-15); resta o **provider-fonte** `lib/loja-ativa.tsx` (F-11) | ✅ / P2 |
 | 3 | **Modelar `Organizacao`** + FK em `Store` | P1 |
 | 4 | **Permissão granular** por loja (matriz `User × Store × Role`) | P1 |
 | 5 | **Transferência de estoque** entre lojas | P1 |
@@ -153,15 +153,15 @@ Multi-loja **não é um módulo** — é uma **propriedade** do banco e da aplic
 
 ## 11. Sprint atual
 
-**Nenhuma em curso.** **Concluídas:** SPRINT_MULTI_LOJA-S-001 (F-01/F-02/F-05/F-06/F-07/F-14 — fallback server eliminado + ACL; ADR-0003), SPRINT_MULTI_LOJA-S-002 (F-03 proxy cookie + F-02-anchor exportar), **DT-14** (SAFE-lite reforçado — resíduo nullish `?? "loja-1"` em `carteiras/*` + `dre`; fecha o server-side 100%) e **DT-13** (SAFE-lite — resíduo client-side `LEGACY_PRIMARY_STORE_ID` nas 4 telas de PDV/vendas).
+**Nenhuma em curso.** **Concluídas:** SPRINT_MULTI_LOJA-S-001 (F-01/F-02/F-05/F-06/F-07/F-14 — fallback server eliminado + ACL; ADR-0003), SPRINT_MULTI_LOJA-S-002 (F-03 proxy cookie + F-02-anchor exportar), **DT-14** (SAFE-lite reforçado — resíduo nullish `?? "loja-1"` em `carteiras/*` + `dre`; fecha o server-side 100%), **DT-13** (SAFE-lite — client `LEGACY_PRIMARY_STORE_ID` nas 4 telas de PDV/vendas) e **DT-15** (SAFE-lite — client em marketing/config/onboarding/cadastros, 6 arq./9 sites + 3 guards; fecha o client de **componentes**).
 
-**Próxima sugerida (J3):** **SPRINT_NN_MULTI_LOJA — F-04: webhook routing por `phone_number_id`** (P1→P0 antes de loja-2 ativar WhatsApp). Depois: **DT-15** (resíduo client-side restante: marketing/config/onboarding/cadastros), F-08 (sync-legacy-financeiro), F-10 (auditoria de dados em produção — pré-req da 2ª loja real).
+**Próxima sugerida (J3):** **SPRINT_NN_MULTI_LOJA — F-04: webhook routing por `phone_number_id`** (P1→P0 antes de loja-2 ativar WhatsApp). Depois: **F-11** (provider-fonte `lib/loja-ativa.tsx` — raiz do client-side; mudança mais arriscada), F-08 (sync-legacy-financeiro), F-10 (auditoria de dados em produção — pré-req da 2ª loja real).
 
 ---
 
 ## 12. Status atual
 
-Multi-loja tem **convenção sólida** + **isolamento server-side fechado**: o fallback silencioso `loja-1` em rotas de API foi **100% eliminado** (S-001/S-002 cobriu `|| "loja-1"`; **DT-14** fechou a forma nullish `?? "loja-1"` em `carteiras/*` + `dre` que havia escapado, ADR-0003), com guard `400` e ACL `canAccessStore` nas rotas sensíveis; proxy cookie corrigido (F-03). **Não está 100% livre de `loja-1` fora do servidor**: o **client-side de PDV/vendas** foi limpo (DT-13 ✅, `(lojaAtivaId ?? "").trim()`), mas **resta** (a) resíduo `LEGACY_PRIMARY_STORE_ID` **client-side** em marketing/config/onboarding/cadastros (**DT-15**, P2) + provider-fonte `lib/loja-ativa.tsx` (F-11) e (b) **webhook WhatsApp** single-store por env fixo (F-04/DT-07, P1 → P0 quando loja-2 ativar WhatsApp). **Client-side ainda não está 100% encerrado.** Organização (matriz/franquia) e permissão granular ainda não modeladas. Continua o HUB de maior risco de incidente legal — **resolver F-04 antes de habilitar WhatsApp na loja-2**.
+Multi-loja tem **convenção sólida** + **isolamento server-side fechado**: o fallback silencioso `loja-1` em rotas de API foi **100% eliminado** (S-001/S-002 cobriu `|| "loja-1"`; **DT-14** fechou a forma nullish `?? "loja-1"` em `carteiras/*` + `dre` que havia escapado, ADR-0003), com guard `400` e ACL `canAccessStore` nas rotas sensíveis; proxy cookie corrigido (F-03). **Não está 100% livre de `loja-1` fora do servidor**: o **client-side de componentes** foi limpo (DT-13 + DT-15 ✅, `(lojaAtivaId ?? "").trim()` + 3 guards de loja vazia), mas **resta** (a) o **provider-fonte** `lib/loja-ativa.tsx` (**F-11**) que semeia `lojaAtivaId` com `lojas[0]?.id || LEGACY` — a **raiz** do client-side, mudança mais arriscada e (b) **webhook WhatsApp** single-store por env fixo (F-04/DT-07, P1 → P0 quando loja-2 ativar WhatsApp). **Client-side ainda não está 100% encerrado enquanto F-11 existir.** Organização (matriz/franquia) e permissão granular ainda não modeladas. Continua o HUB de maior risco de incidente legal — **resolver F-04 antes de habilitar WhatsApp na loja-2**.
 
 ---
 
@@ -170,7 +170,7 @@ Multi-loja tem **convenção sólida** + **isolamento server-side fechado**: o f
 | Métrica | Meta |
 |---|---|
 | Queries sem filtro `storeId` em código de produção | **0** |
-| Ocorrências de fallback `loja-1` em produção | server-side **0 ✅** (incl. nullish, DT-14) · client PDV/vendas **0 ✅** (DT-13) · client restante **pendente** (DT-15) · webhook **pendente** (F-04) |
+| Ocorrências de fallback `loja-1` em produção | server-side **0 ✅** (incl. nullish, DT-14) · client de componentes **0 ✅** (DT-13 + DT-15) · provider-fonte **pendente** (F-11) · webhook **pendente** (F-04) |
 | Vazamentos detectados (registro de loja A visto na loja B) | **0** |
 | Tempo de execução do lint customizado | **< 30s** |
 | Cobertura de testes E2E de isolamento | **100%** das rotas de leitura sensível |

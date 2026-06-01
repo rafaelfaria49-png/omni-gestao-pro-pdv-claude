@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { ASSISTEC_STORES_SYNC_STORAGE_KEY, useLojaAtiva } from "@/lib/loja-ativa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 
 type WizardStep = 1 | 2 | 3
 type StoreProfile = "ASSISTENCIA" | "SUPERMERCADO" | "VARIEDADES"
@@ -21,7 +20,7 @@ function emptyAddress() {
 export function FirstAccessWizard() {
   const { toast } = useToast()
   const { lojaAtivaId, lojaAtivaRaw, cadastroBasicoIncompleto, storesLoaded, refreshStoresList } = useLojaAtiva()
-  const storeId = (lojaAtivaId || lojaAtivaRaw?.id || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID
+  const storeId = (lojaAtivaId ?? lojaAtivaRaw?.id ?? "").trim()
 
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<WizardStep>(1)
@@ -109,6 +108,10 @@ export function FirstAccessWizard() {
 
   const finish = async () => {
     if (!validateStep1() || !validateStep2() || !validateStep3()) return
+    if (!storeId) {
+      toast({ title: "Nenhuma unidade ativa", description: "Selecione uma unidade para concluir o cadastro.", variant: "destructive" })
+      return
+    }
     const nomeTrim = nomeFantasia.trim()
     const cnpjTrim = cnpj.trim()
     setSaving(true)

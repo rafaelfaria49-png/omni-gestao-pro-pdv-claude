@@ -48,7 +48,6 @@ import {
 } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import {
   type CentroFinanceiroV3,
   type ContaBanco,
@@ -98,10 +97,7 @@ function formatBRL(n: number): string {
 export function CentroPersonalizacaoFinanceiraRafacell() {
   const { toast } = useToast()
   const { lojaAtivaId } = useLojaAtiva()
-  const effectiveStoreId = useMemo(
-    () => (lojaAtivaId || LEGACY_PRIMARY_STORE_ID).trim() || LEGACY_PRIMARY_STORE_ID,
-    [lojaAtivaId]
-  )
+  const effectiveStoreId = useMemo(() => (lojaAtivaId ?? "").trim(), [lojaAtivaId])
   const [hydrated, setHydrated] = useState(false)
   const [draft, setDraft] = useState<CentroFinanceiroV3>(() => defaultCentroFinanceiroV3())
   const [baselineJson, setBaselineJson] = useState("")
@@ -121,6 +117,7 @@ export function CentroPersonalizacaoFinanceiraRafacell() {
     let cancelled = false
     setHydrated(false)
     void (async () => {
+      if (!effectiveStoreId) { setHydrated(true); return }   // sem loja ativa → não busca /api/stores//settings
       let loaded = loadCentroFinanceiroV3ForStore(effectiveStoreId)
       try {
         const r = await fetch(`/api/stores/${encodeURIComponent(effectiveStoreId)}/settings`, {
@@ -182,6 +179,10 @@ export function CentroPersonalizacaoFinanceiraRafacell() {
   }, [draft.maquininhas, calcMaquininhaIdEfetivo])
 
   const salvarAlteracoes = useCallback(async () => {
+    if (!effectiveStoreId) {
+      toast({ title: "Selecione uma unidade", description: "Nenhuma unidade ativa para salvar.", variant: "destructive" })
+      return
+    }
     const normalized = normalizeCentroV3(draft)
     setDraft(normalized)
     persistCentroFinanceiroV3ForStore(effectiveStoreId, normalized)
