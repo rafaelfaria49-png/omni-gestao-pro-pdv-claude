@@ -4,7 +4,7 @@ import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
-import { upsertVendaInTransaction, type SalePayload } from "@/lib/ops-upsert-venda"
+import { upsertVendaInTransaction, InsufficientStockError, type SalePayload } from "@/lib/ops-upsert-venda"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -50,11 +50,30 @@ export async function POST(req: Request) {
   try {
     await prismaEnsureConnected()
     await prisma.$transaction(async (tx) => {
-      await upsertVendaInTransaction(tx, lojaId, sale, operadorLabel)
+      await upsertVendaInTransaction(tx, lojaId, sale, operadorLabel, { enforceStock: true })
     })
 
     return NextResponse.json({ ok: true })
   } catch (e) {
+    // Anti-negativo (DT-B): saldo insuficiente é falha de negócio explícita (409),
+    // não erro de servidor. O cliente PDV mantém a venda em `syncPending` e mostra o
+    // toast com `detail`, permitindo reabrir o caixa/ajustar estoque e reenviar.
+    if (e instanceof InsufficientStockError) {
+      console.warn(
+        "[ops/venda-persist] estoque-insuficiente",
+        JSON.stringify({
+          lojaId,
+          pedidoId,
+          produtoId: e.produtoId,
+          disponivel: e.disponivel,
+          solicitado: e.solicitado,
+        }),
+      )
+      return NextResponse.json(
+        { error: "Estoque insuficiente", detail: e.message, code: e.code },
+        { status: 409 },
+      )
+    }
     const msg = e instanceof Error ? e.message : String(e)
     // Extrai code do PrismaClientKnownRequestError (P2002 unique, P2003 FK, P2025 not found, etc.)
     const code =

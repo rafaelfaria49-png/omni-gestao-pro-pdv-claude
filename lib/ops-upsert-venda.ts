@@ -2,6 +2,39 @@ import type { Prisma } from "@/generated/prisma"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 
+/**
+ * Lançada pela baixa de estoque do PDV quando `enforceStock` está ativo e o saldo
+ * do produto não cobre a quantidade vendida (anti-negativo / anti-oversell — DT-B).
+ * O caller (rota `venda-persist`) traduz para HTTP 409 explícito.
+ */
+export class InsufficientStockError extends Error {
+  readonly code = "ESTOQUE_INSUFICIENTE"
+  readonly produtoId: string
+  readonly produtoNome: string
+  readonly disponivel: number
+  readonly solicitado: number
+  constructor(produtoId: string, produtoNome: string, disponivel: number, solicitado: number) {
+    super(
+      `Estoque insuficiente para "${produtoNome}": disponível ${disponivel}, solicitado ${solicitado}.`,
+    )
+    this.name = "InsufficientStockError"
+    this.produtoId = produtoId
+    this.produtoNome = produtoNome
+    this.disponivel = disponivel
+    this.solicitado = solicitado
+  }
+}
+
+export type UpsertVendaOptions = {
+  /**
+   * Quando `true`, a baixa de estoque bloqueia qualquer decremento que deixaria o saldo
+   * negativo, falhando com `InsufficientStockError`. Usado no fluxo PDV ao vivo
+   * (`/api/ops/venda-persist`). O replay legado (`/api/ops/sync-legacy-vendas`) mantém
+   * o default `false` para não quebrar a importação histórica.
+   */
+  enforceStock?: boolean
+}
+
 export type SalePayload = {
   id?: string
   at?: string
@@ -76,8 +109,10 @@ export async function upsertVendaInTransaction(
   tx: Prisma.TransactionClient,
   lojaId: string,
   sale: SalePayload,
-  operadorLabel?: string
+  operadorLabel?: string,
+  options?: UpsertVendaOptions
 ): Promise<void> {
+  const enforceStock = options?.enforceStock === true
   const pedidoId = typeof sale.id === "string" && sale.id.trim() ? sale.id.trim() : ""
   if (!pedidoId) throw new Error("sale.id inválido")
 
@@ -251,10 +286,26 @@ export async function upsertVendaInTransaction(
     const estoqueAntes = produtoAtual.stock
     const custo = arredonda2(Math.max(0, produtoAtual.precoCusto))
 
-    await tx.produto.update({
-      where: { id: produtoId },
-      data: { stock: { decrement: qty } },
-    })
+    if (enforceStock) {
+      // Baixa atômica anti-negativo (DT-B): o predicado `stock >= qty` faz parte do
+      // WHERE do UPDATE, reavaliado sob lock de linha pelo Postgres. Dois caixas
+      // vendendo o mesmo SKU em paralelo serializam na linha — a 2ª transação que
+      // não encontrar saldo retorna `count = 0` e falha de forma explícita, sem
+      // nunca deixar `Produto.stock` abaixo de zero.
+      const baixa = await tx.produto.updateMany({
+        where: { id: produtoId, storeId: lojaId, stock: { gte: qty } },
+        data: { stock: { decrement: qty } },
+      })
+      if (baixa.count === 0) {
+        // Rollback de toda a transação da venda (atomicidade do $transaction).
+        throw new InsufficientStockError(produtoId, resolved.name, estoqueAntes, qty)
+      }
+    } else {
+      await tx.produto.update({
+        where: { id: produtoId },
+        data: { stock: { decrement: qty } },
+      })
+    }
 
     await tx.movimentacaoEstoque.create({
       data: {
