@@ -5,16 +5,41 @@ import { ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCaixa } from "./caixa-provider"
 import { ensureLedger, useOperationsStore } from "@/lib/operations-store"
+import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { cn } from "@/lib/utils"
 
 function fmt(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
 }
 
+/** Rótulo curto da forma de pagamento de uma venda (derivado do breakdown). */
+function metodoLabel(pb: PaymentBreakdownFull): string {
+  const entries: Array<[string, number]> = [
+    ["Dinheiro", pb.dinheiro],
+    ["Pix", pb.pix],
+    ["Débito", pb.cartaoDebito],
+    ["Crédito", pb.cartaoCredito],
+    ["Carnê", pb.carne],
+    ["A prazo", pb.aPrazo],
+    ["Vale", pb.creditoVale],
+  ]
+  const nonZero = entries.filter(([, v]) => v > 0.009)
+  if (nonZero.length === 0) return "—"
+  if (nonZero.length === 1) return nonZero[0]![0]
+  return "Múltiplo"
+}
+
+/** HH:mm a partir do timestamp ISO da venda. */
+function horaCurta(at: string): string {
+  const d = new Date(at)
+  if (Number.isNaN(d.getTime())) return "--:--"
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+}
+
 export function CaixaDashboard({ className }: { className?: string }) {
   const [open, setOpen] = useState(false)
   const { caixa, getSaldoAtual, sessaoId } = useCaixa()
-  const { dailyLedger, devolucoes } = useOperationsStore()
+  const { dailyLedger, devolucoes, sales } = useOperationsStore()
   const ledger = ensureLedger(dailyLedger)
   const today = new Date().toISOString().split("T")[0]
 
@@ -23,6 +48,27 @@ export function CaixaDashboard({ className }: { className?: string }) {
     [devolucoes, today]
   )
   const totalCreditoDevolucao = devolucoesHoje.reduce((s, d) => s + (d.creditIssued ?? 0), 0)
+
+  // Últimas vendas do dia. Fonte real já existente: `store.sales`
+  // (localStorage + /api/ops/vendas-list). Sem mock: lista vazia => empty state honesto.
+  // Não recalcula nem altera nenhum total do caixa — é apenas uma visão de leitura.
+  const recentSales = useMemo(
+    () =>
+      sales
+        .filter((s) => String(s.at).startsWith(today) && s.status !== "cancelada")
+        .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+        .slice(0, 6),
+    [sales, today]
+  )
+
+  const formasPagamento: Array<[string, number]> = [
+    ["Dinheiro", ledger.vendasDinheiro],
+    ["Pix", ledger.vendasPix],
+    ["Cartão débito", ledger.vendasCartaoDebito],
+    ["Cartão crédito", ledger.vendasCartaoCredito],
+    ["Carnê / a prazo", ledger.vendasCarne],
+    ["Crédito / vale", ledger.vendasCreditoVale],
+  ]
 
   return (
     <div className={cn("border-b border-border bg-muted/15", className)}>
@@ -36,14 +82,16 @@ export function CaixaDashboard({ className }: { className?: string }) {
         {open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
       </Button>
       {open && (
-        <div className="space-y-3 border-t border-border/60 px-3 pb-3 pt-2 text-xs text-foreground">
+        <div className="border-t border-border/60 px-3 pb-3 pt-2 text-xs text-foreground">
           {sessaoId && (
-            <p className="text-muted-foreground">
+            <p className="mb-2 text-muted-foreground">
               <span className="font-semibold text-foreground">Sessão:</span>{" "}
               <span className="font-mono break-all">{sessaoId}</span>
             </p>
           )}
-          <div className="grid gap-2 sm:grid-cols-2">
+
+          {/* Métricas do caixa — linha única no desktop (compacto) */}
+          <div className="mb-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
             <div className="rounded-md border border-border bg-background/80 p-2">
               <p className="text-muted-foreground">Abertura</p>
               <p className="text-sm font-semibold">{fmt(caixa.saldoInicial)}</p>
@@ -53,7 +101,7 @@ export function CaixaDashboard({ className }: { className?: string }) {
               <p className="text-sm font-semibold text-primary">{fmt(getSaldoAtual())}</p>
             </div>
             <div className="rounded-md border border-border bg-background/80 p-2">
-              <p className="text-muted-foreground">Entradas (vendas + suprimentos)</p>
+              <p className="text-muted-foreground">Entradas (vendas + supr.)</p>
               <p className="text-sm font-semibold text-primary">{fmt(caixa.totalEntradas)}</p>
             </div>
             <div className="rounded-md border border-border bg-background/80 p-2">
@@ -62,39 +110,71 @@ export function CaixaDashboard({ className }: { className?: string }) {
             </div>
           </div>
 
-          <div className="rounded-md border border-border bg-background/80 p-2 space-y-1.5">
-            <p className="font-semibold text-foreground">Formas de pagamento (hoje)</p>
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Dinheiro</span>
-              <span className="font-medium tabular-nums">{fmt(ledger.vendasDinheiro)}</span>
+          {/* Duas colunas no desktop: formas de pagamento (esq.) × últimas vendas (dir.) */}
+          <div className="grid gap-3 lg:grid-cols-2">
+            {/* Esquerda: formas de pagamento + total (totais inalterados) */}
+            <div className="space-y-1.5 rounded-md border border-border bg-background/80 p-2">
+              <p className="font-semibold text-foreground">Formas de pagamento (hoje)</p>
+              {formasPagamento.map(([label, value]) => (
+                <div key={label} className="flex justify-between gap-2">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="font-medium tabular-nums">{fmt(value)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between gap-2 border-t border-border pt-1.5 font-semibold">
+                <span>Total vendas (dia)</span>
+                <span className="tabular-nums">{fmt(ledger.totalVendas)}</span>
+              </div>
             </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Pix</span>
-              <span className="font-medium tabular-nums">{fmt(ledger.vendasPix)}</span>
-            </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Cartão débito</span>
-              <span className="font-medium tabular-nums">{fmt(ledger.vendasCartaoDebito)}</span>
-            </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Cartão crédito</span>
-              <span className="font-medium tabular-nums">{fmt(ledger.vendasCartaoCredito)}</span>
-            </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Carnê / a prazo</span>
-              <span className="font-medium tabular-nums">{fmt(ledger.vendasCarne)}</span>
-            </div>
-            <div className="flex justify-between gap-2">
-              <span className="text-muted-foreground">Crédito / vale</span>
-              <span className="font-medium tabular-nums">{fmt(ledger.vendasCreditoVale)}</span>
-            </div>
-            <div className="flex justify-between gap-2 border-t border-border pt-1.5 font-semibold">
-              <span>Total vendas (dia)</span>
-              <span className="tabular-nums">{fmt(ledger.totalVendas)}</span>
+
+            {/* Direita: últimas vendas do dia */}
+            <div className="rounded-md border border-border bg-background/80 p-2">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <p className="font-semibold text-foreground">Últimas vendas (dia)</p>
+                {recentSales.length > 0 && (
+                  <span className="text-[10px] text-muted-foreground">{recentSales.length} recente(s)</span>
+                )}
+              </div>
+              {recentSales.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-1 py-6 text-center">
+                  <p className="text-muted-foreground">Nenhuma venda recente encontrada</p>
+                  <p className="text-[10px] text-muted-foreground/70">
+                    As vendas do dia aparecem aqui automaticamente.
+                  </p>
+                </div>
+              ) : (
+                <ul className="divide-y divide-border/40">
+                  {recentSales.map((s) => {
+                    const nItens = s.lines.reduce((acc, l) => acc + (l.quantity || 0), 0)
+                    const nItensLabel =
+                      nItens % 1 === 0 ? String(nItens) : nItens.toLocaleString("pt-BR", { maximumFractionDigits: 3 })
+                    return (
+                      <li key={s.id} className="flex items-center justify-between gap-2 py-1">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold tabular-nums">{fmt(s.total)}</span>
+                            <span className="text-muted-foreground">· {metodoLabel(s.paymentBreakdown)}</span>
+                          </div>
+                          <div className="truncate text-[10px] text-muted-foreground">
+                            {horaCurta(s.at)} · {nItensLabel} {nItens === 1 ? "item" : "itens"}
+                            {s.customerName ? ` · ${s.customerName}` : ""}
+                          </div>
+                        </div>
+                        {s.syncPending && (
+                          <span className="shrink-0 rounded bg-amber-500/15 px-1 py-px text-[9px] font-medium text-amber-600 dark:text-amber-300">
+                            sincronizando
+                          </span>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
           </div>
 
-          <div className="rounded-md border border-border bg-background/80 p-2">
+          {/* Devoluções — rodapé compacto */}
+          <div className="mt-3 rounded-md border border-border bg-background/80 p-2">
             <p className="font-semibold text-foreground">Devoluções hoje</p>
             <p className="text-muted-foreground">
               {devolucoesHoje.length} registro(s) · crédito emitido {fmt(totalCreditoDevolucao)}

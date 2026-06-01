@@ -478,6 +478,11 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
           value={props.nextQtyStr}
           onChange={(e) => props.onNextQtyStrChange(e.target.value)}
           inputMode="decimal"
+          // Seleciona todo o valor ao focar/clicar (igual ao F4): digitar substitui direto.
+          // onFocus cobre Tab/foco programático; onClick garante a seleção no clique do mouse
+          // (o mouseup após o clique desfaz a seleção feita só no onFocus).
+          onFocus={(e) => e.currentTarget.select()}
+          onClick={(e) => e.currentTarget.select()}
         />
         {!isModoRapido ? (
           <PosField
@@ -611,10 +616,6 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   <span>Finalizar Venda</span>
                   <kbd className="ml-auto rounded border border-b-2 border-primary-foreground/30 bg-primary-foreground/10 px-1.5 py-0.5 text-[10px] font-bold font-mono">F1</kbd>
                 </Button>
-              </div>
-              <div className="min-h-0 flex-1 rounded-md border border-border bg-card p-4 shadow-sm">
-                <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">Informativo</div>
-                <p className="mt-2 text-sm leading-relaxed text-foreground">{props.info}</p>
               </div>
               <div className="rounded-md border border-border bg-muted/40 p-3 text-[11px] text-muted-foreground/70">
                 <div className="flex justify-between">
