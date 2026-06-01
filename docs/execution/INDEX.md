@@ -23,6 +23,12 @@ versao: v1
 
 **Filosofia:** *execução semi-autônoma governada — pequena, incremental, serializada, rastreável.*
 
+**Porta de entrada (comando livre).** Um pedido em linguagem natural — *"Trabalhe no X"*,
+*"Avance o Y"*, *"Pague a DT-NN"* — entra pelo **[`INTAKE_PROTOCOL.md`](./INTAKE_PROTOCOL.md)**:
+roteador **read-only** que descobre roadmap · status · skill · modo · backlog · **critérios de
+pronto (DoD)**, emite o **Intake Manifest** e **para no Gate #1**. Ele **roteia e para** — quem
+escreve é a pista escolhida (SAFE-lite inline ou Engine de 17 fases). Ver §2.
+
 ---
 
 ## 2. Documentos desta camada

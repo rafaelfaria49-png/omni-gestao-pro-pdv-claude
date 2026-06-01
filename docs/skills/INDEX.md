@@ -12,6 +12,16 @@ deve ler este índice **antes de iniciar uma tarefa**.
 4. Estado atual do projeto: [`docs/ai/CURRENT_STATUS.md`](../ai/CURRENT_STATUS.md).
 5. As regras detalhadas abaixo.
 
+## Comando livre de trabalho ("Trabalhe no X")
+
+Quando o humano abre uma tarefa por **comando livre** — *"Trabalhe no Marketplace"*, *"Avance o
+PDV"*, *"Pague a DT-04"*, *"Audite o Financeiro"* — a **primeira ação** da IA **não é codar**: é
+rodar o **[`INTAKE_PROTOCOL`](../execution/INTAKE_PROTOCOL.md)** (roteador read-only), emitir o
+**Intake Manifest** (roadmap · status · skill · modo SAFE-lite/Engine · backlog · **critérios de
+pronto**) e **parar no Gate #1** para validação humana. Só **depois** do Gate #1 a execução
+escreve qualquer arquivo. O protocolo **roteia e para** — não executa. Greenfield (ex.:
+Marketplace) sai como `RED` + caminho desbloqueador, **nunca** auto-execução.
+
 ## Regras de governança (`docs/skills/rules/`)
 
 | Regra | Quando aplicar |

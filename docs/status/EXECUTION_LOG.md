@@ -980,3 +980,56 @@ docs_atualizados:
 flags: []                               # NÃO tocou área protegida: lib/loja-ativa* + lib/perfil-loja-provider são providers client; sem schema/auth/proxy/core/services
 notes: "DT-16 — eliminação do fallback LEGACY_PRIMARY_STORE_ID no PROVIDER-FONTE (F-11), a raiz que semeia lojaAtivaId. Fecha o client-side a 100% (server-side já estava 100% via DT-03/DT-14; componentes via DT-13/DT-15). ESCOPO (fechado): 4 ocorrências no lib/loja-ativa.tsx + 1 irmão. O1: mapStoresResponseToPerfis trocou `id || LEGACY` por `id` trim + `.filter(p=>p.id)` (descarta loja sem id em vez de renomear p/ loja-1). O2+O3: effect de semente reescrito sobre helper puro NOVO resolveSeedStoreId(rawSaved, lojas) em lib/loja-ativa-seed.ts — id salvo válido é mantido; sentinela `loja-antiga` migra p/ primeira loja real; SEM nada determinável → null (NÃO semeia loja-1); o effect re-roda quando `lojas` carrega e só reescreve o storage quando o valor muda. O5: opsStorageKey cai em OPS_KEY_LEGACY (igual ao hook sem-provider) em vez de loja-1. Import LEGACY removido. IRMÃO lib/perfil-loja-provider.tsx:37: `lojaAtivaId || LEGACY` → `(lojaAtivaId ?? '').trim()`; guard nos 2 effects (load + onStorage) para não consultar /api/settings/perfil-loja sem unidade ativa; import removido. BUG-RAIZ: na race de 1ª carga (LS vazio + lojas vazio) o effect semeava loja-1 em state+LS+cookie e travava nele no re-run (guard de persistência forte) — prendia contas multi-loja cuja 1ª loja ≠ loja-1. Benigno na RafaCell (loja-1 = matriz real); P2 latente, P1 em multi-tenant. PERFIL: SAFE-lite REFORÇADO (como DT-14, não light como DT-13/15) — é a RAIZ que alimenta o header de todas as telas (blast radius = 1ª carga de toda tela), embora o diff seja pequeno. INSIGHT: o valor EXPOSTO value.lojaAtivaId já preferia lojas[0] via lojaSelecionada (O4, mantido) — o vazamento só ocorria pelo caminho de PERSISTÊNCIA O3; por isso o fix de maior valor foi cirúrgico em O3. TESTES: lib/loja-ativa-seed.test.ts NOVO (9 testes do helper, inclui bug-raiz LS vazio+sem lojas→null); guard estático lib/multi-loja-client-no-legacy-fallback.test.ts estendido (bloco DT-16: loja-ativa.tsx + perfil-loja-provider.tsx not.toContain LEGACY_PRIMARY_STORE_ID + assert resolveSeedStoreId presente). RED→GREEN confirmado nos testes-alvo. VALIDAÇÃO: npx tsc --noEmit limpo (EXIT 0) · vitest 245 passed | 3 expected fail (subiu de 234: +9 helper + 2 DT-16 + outros) · next build OK. BUILD FLAKE (transparência): 1ª execução crashou com 0xC0000409 (3221226505) em 'Collecting page data using 11 workers' APÓS '✓ Compiled successfully in 2.5min' — flake OOM nativo de worker no Windows documentado nas ENTRY 013/014 (compile passa, tsc limpo, crash nativo ≠ throw JS); recompilação com NODE_OPTIONS=--max-old-space-size=8192 gerou a árvore de rotas completa EXIT 0. NÃO é efeito do DT-16. AUDIT FOCADA: 0 findings — grep LEGACY_PRIMARY_STORE_ID em loja-ativa.tsx + perfil-loja-provider.tsx = 0 (só 2 comentários explicativos com literal 'loja-1', sem padrão ||/?? → não trip nos lints); O4 (lojas[0] em lojaSelecionada) mantido por ser comportamento correto (primeira loja real, não loja-1); opsStorageKey degrada para OPS_KEY_LEGACY de forma consistente com useLojaAtiva sem-provider; perfil-loja guard evita /api/settings/perfil-loja com header vazio. CLIENT-SIDE AGORA 100%: DT-13 (PDV/vendas) + DT-15 (marketing/config/onboarding/cadastros) + DT-16 (raiz provider-fonte) = zero fallback silencioso de lojaAtivaId no client. Permanece SÓ F-04/DT-07 (webhook WhatsApp single-store, vetor server por env). Legítimos por design intactos: store-defaults.ts (canônico), lib/ops-loja-id.ts (P3), lib/stores-api-access.ts (F-15 server, onboarding-only). ÁREAS PROTEGIDAS: nenhuma tocada (providers client em lib/; sem schema/auth/proxy/core/services). COMMIT/PUSH: PENDENTES — não solicitados nesta sessão. TIMESTAMPS: PROXY (execução 2026-06-01); duration null (critério ENTRY 010-015). REFERÊNCIAS: docs/status/DIVIDA_TECNICA.md DT-16 (§3, paga) + Nota DT-13+DT-15+DT-16 · docs/ai/CURRENT_STATUS.md (entrada DT-16) · docs/audits/AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md §F-11 (input) · docs/decisions/ADR-0003 (eliminar fallback LEGACY) · docs/decisions/ADR-0004 (SAFE-lite) · ENTRY 013 (DT-13) · ENTRY 014 (DT-15) · ENTRY 015 (última execução antes desta)."
 ```
+
+---
+
+```yaml
+# ─── ENTRY 017 ────────────────────────────────────────────────────
+ticket_id: GOVERNANCA-S-002          # 2º trabalho de governança documental (fechar gaps do bootstrap CoWork pós-INTAKE); HUB=cross; não é debt-item
+skill_id: SKILL_DOC_REFRESH          # closest fit no schema v1 (docs-only governança); análise+wiring de protocolo não tem skill dedicada — SKILL_INTAKE_ROUTER segue DIFERIDA
+skill_version: v1
+ia: opus
+modo: SAFE                           # perfil real = SAFE-lite LIGHT (ADR-0004); docs-only; valor mantido SAFE (schema v1 congelado)
+started_at: 2026-06-01T00:00:00-03:00   # PROXY — sessão de avaliação de maturidade + fechamento de gaps; hora real não rastreada
+ended_at: 2026-06-01T00:00:00-03:00     # PROXY — fim da escrita (antes do gate de validação)
+duration: null                          # precisão não rastreada (não fabricar — critério das ENTRY 010-016)
+fases_completas: [SAFE_LITE_LIGHT]      # auditoria read-only → desenho → write docs/índices → auto-revisão (fora do pipeline de 17 fases)
+fase_falha: null
+resultado: encerrada                    # escrita completa e auto-revisada; commit/push PENDENTES de validação humana
+pr: null
+branch: main                            # working tree em main; sem branch skill/* (docs-only dispensa); sem commit ainda
+commit_anterior: 9f8f5c1                # HEAD = DT-16 (commitado/pushado); INTAKE (f4df599) + DT-15 (a5a790e) já publicados
+commit_final: null                      # commit/push adiados por decisão do humano
+rollback: false
+diff:
+  added: ~245                           # APROX — BOOTSTRAP_COWORK_MATURITY.md (~200, novo) + INTAKE §4/§12/§16 (~28) + skills/INDEX (~9) + execution/INDEX §1 (~6) + OVERVIEW §6 (~1); número final no git diff --stat pré-commit
+  removed: ~4
+  files_modified: 6                     # BOOTSTRAP_COWORK_MATURITY (novo) + INTAKE_PROTOCOL + skills/INDEX + execution/INDEX + CURRENT_STATUS_OVERVIEW + EXECUTION_LOG (esta ENTRY)
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-06-01T00:00:00-03:00   # date-proxy
+    pending: null
+    notes: "Autorização operacional AMPLA para documentação de governança: analisar + atualizar docs/índices/status/roadmaps/memória + criar docs novos se necessário; 'não interromper para pedir permissões intermediárias relacionadas à documentação de governança'. Equivale ao 'go' de roteamento/escrita do SAFE-lite. Restrições mantidas: sem código/Prisma/banco/auth/proxy/integrações; sem commit; sem push."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "AGUARDANDO — validação humana pré-commit (o humano chamou este ponto de 'Gate #1'). Docs escritos e auto-revisados; commit/push NÃO solicitados. Working tree em main com 6 arquivos (1 novo + 5 editados)."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}   # docs-only; auto-revisão: integridade de links + coerência com ADR-0004/ADR-0002/RETRO_R1; sem contradição
+benchmark: null
+sprint: null                            # SAFE-lite docs/governança; proposta inline (relatório + diff preview); sem arquivo em docs/sprints/proposals
+proposta: null                          # plano/diff apresentado inline na conversa
+auditoria: docs/execution/BOOTSTRAP_COWORK_MATURITY.md   # o relatório de maturidade É o artefato de análise persistido
+adr_criada: null                        # governado por ADR-0004 (SAFE-lite) + ADR-0002 (front matter v1 NÃO tocado; manifest é schema separado, mudança ADITIVA documentada em INTAKE §16); SEM ADR novo
+memoria_criada: memory/project_bootstrap_cowork_gaps   # memória Claude Code fora do repo (~/.claude)
+docs_atualizados:
+  - docs/execution/BOOTSTRAP_COWORK_MATURITY.md   # NOVO — relatório (veredito + flow map + scorecard + gaps + simulação Marketplace + recomendação)
+  - docs/execution/INTAKE_PROTOCOL.md             # §4 (deriva DoD) + §12 (campo definition_of_done) + §16 (versionamento aditivo vs quebrante)
+  - docs/skills/INDEX.md                          # nova seção "Comando livre de trabalho" — porta de entrada → INTAKE_PROTOCOL
+  - docs/execution/INDEX.md                        # §1 "Porta de entrada (comando livre)" → INTAKE_PROTOCOL
+  - docs/ai/CURRENT_STATUS_OVERVIEW.md            # §6 entrada nova (2026-06-01)
+  - docs/status/EXECUTION_LOG.md                   # esta ENTRY 017 (append-only)
+flags: []                               # NÃO tocou área protegida: docs/** apenas; sem código/schema/auth/proxy/core/services
+notes: "Fechar os últimos gaps do bootstrap CoWork pós-INTAKE. VEREDITO: separa (A) ROTEAMENTO de intake — 'Trabalhe no X' → descobre roadmap/status/skill/benchmark/modo/backlog/DoD → para no Gate #1 — que está MADURO (~95%), de (B) EXECUÇÃO semi-autônoma CoWork (~60%), congelada por DECISÃO HUMANA + builds, não por falta de doc. ESCOPO (fechado): 1 doc novo (relatório) + 2 gaps DOC-FIXÁVEIS fechados — (g1) PORTA DE ENTRADA cabeada (skills/INDEX nova seção 'Comando livre' + execution/INDEX §1 'Porta de entrada'): antes o INTAKE_PROTOCOL existia mas não era anunciado como 1ª ação de um comando livre; (g2) DoD PROVISÓRIO passa a viajar no Intake Manifest (INTAKE §4 deriva de ROADMAP §8 Saída + §7; §12 campo definition_of_done; §16 legitima mudança ADITIVA = v1, quebrante = v2). DECISÕES PEDIDAS: SKILL_INTAKE_ROUTER = ainda NÃO (capability-gating; sem runtime consumidor — segue diferida); outro protocolo = NÃO p/ bootstrap (BENCHMARK_PROTOCOL é downstream de execução, Bloco 36 congelado); outro doc = só wiring (feito) + recomendação de 1 linha no CLAUDE.md (fora do escopo auto-aplicável — NÃO editei CLAUDE.md). SIMULAÇÃO 'Trabalhe no Marketplace' rodada à mão contra arquivos reais → manifest RED/BLOCKED correto (greenfield + BL-12→BL-07→BL-03), recommended_skill=SKILL_PROPOSE_ADR, para no Gate #1 — comprova o alvo SEM tocar código. GAPS NÃO-DOC (surfaced, NÃO acionados): COWORK congelado (RETRO_R1 §7, decisão Bloco 45), SKILL_LOCK_HUB ausente (Bloco 41), 24/32 skills draft, BENCHMARK_PROTOCOL ausente. COMPAT: nenhuma das 17 fases tocada; ADR-0002 (front matter de SKILL) preservado — o manifest do INTAKE é schema próprio, e a mudança foi aditiva e documentada; SAFE-lite/HUMAN_GATES intactos. VALIDAÇÃO: docs-only → tsc/build N/A; auto-revisão = integridade de links + coerência com ADR-0004/RETRO_R1/BLOCKERS. ÁREAS PROTEGIDAS: nenhuma (docs/** apenas). COMMIT/PUSH: PENDENTES — não solicitados; aguardam validação humana (Gate de §critério de parada). TIMESTAMPS: PROXY (2026-06-01); duration null. REFERÊNCIAS: docs/execution/BOOTSTRAP_COWORK_MATURITY.md (novo) · docs/execution/INTAKE_PROTOCOL.md (§4/§12/§16) · docs/execution/RETRO_PILOTO_R1.md §7 (COWORK congelado) · docs/decisions/ADR-0004 · ENTRY 015 (criação do INTAKE) · ENTRY 016 (DT-16, última execução antes desta)."
+```

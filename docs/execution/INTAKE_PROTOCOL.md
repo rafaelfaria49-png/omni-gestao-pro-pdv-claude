@@ -101,6 +101,10 @@ Cada passo é **uma leitura pura + uma derivação**. Nenhuma escrita em disco.
   - Se `origin_id` veio → casa com a linha do roadmap/status.
   - Se veio livre → escolhe o **topo do §7 Backlog** (ou a próxima fase em §8) e o declara
     como **hipótese a confirmar no Gate #1** (`confidence` no manifest).
+- **Deriva o DoD provisório:** lê as **Saídas** das fases (§8) + o critério do item de §7 e
+  popula `definition_of_done` (`provisional: true`) no manifest. Fecha o "descobrir critérios
+  de pronto" já no intake; o Gate #1 confirma ou refina. Sem fonte clara de DoD → lista vazia
+  + ressalva no `next_action_human` (nunca inventa critério).
 
 > **Canonização (ADR-0004 / decisão de governança 2026-06-01):** a fonte canônica de backlog
 > de um HUB é **`ROADMAP_<HUB>.md §7`**. `docs/status/BACKLOG_<HUB>.md` é tratado como
@@ -247,6 +251,12 @@ intake_manifest:
   state: RED                         # GREEN | YELLOW | RED
   state_reason: "Greenfield: sem lib/marketplace*; ADR de adapter inexistente; Estoque multi-depósito pendente"
   size: L
+  definition_of_done:                # provisório — derivado do roadmap; confirmado/refinado no Gate #1
+    source: "ROADMAP_MARKETPLACE §8 Fase 1 (Saída) + §7 backlog (item 1)"
+    provisional: true
+    criteria:
+      - "ADR de arquitetura do adapter unificado aprovada"
+      - "OAuth ML conectando + tela 'canais conectados' funcional"
   protected_area: false
   mode: ENGINE                       # SAFE_LITE(light|reforçado) | ENGINE
   benchmark_required: true
@@ -331,9 +341,16 @@ prefere a **pista Engine** em itens M+/arquitetura/ADR (papel de arquiteto) e en
 
 ## 16. Versionamento e fonte da verdade
 
-- **v1** (2026-06-01) — primeira versão. Mudança no schema do manifest (§12) ou no
-  `intake_request` (§2.2) = bump para **v2** (v1 preservado), espelhando a disciplina do
-  front matter de skills (ADR-0002).
+- **v1** (2026-06-01) — primeira versão. Disciplina de versionamento (espelha o front matter
+  de skills, ADR-0002):
+  - **Mudança aditiva** (novo campo **opcional de saída**, pré-primeiro-uso operacional do
+    manifest) permanece **v1** e é registrada nesta lista — não quebra o contrato
+    `intake_request → intake_manifest` (nenhum consumidor depende da ausência do campo).
+  - **Mudança quebrante** (remover/renomear/retipar campo de §12, ou alterar `intake_request`
+    §2.2) = bump para **v2** (v1 preservado).
+  - **v1 + `definition_of_done`** (2026-06-01, aditivo) — o manifest passa a carregar o DoD
+    provisório derivado do roadmap (§4 passo R, §12). Fecha o gap "descobrir critérios de
+    pronto" do bootstrap CoWork. Campo de saída opcional, nada removido/renomeado → compatível.
 - **Fonte da verdade:**
   - **Roteamento + manifest:** este arquivo.
   - **Pipeline:** [`EXECUTION_ENGINE.md`](./EXECUTION_ENGINE.md).
