@@ -876,3 +876,57 @@ docs_atualizados:
 flags: []                               # NÃO tocou área protegida: UI client (components/* + app/dashboard/marketing); sem lib core/services/schema/auth/proxy
 notes: "DT-15 — eliminação do resíduo client-side de LEGACY_PRIMARY_STORE_ID FORA de PDV/vendas (escopo completo). ESCOPO (fechado): 6 arquivos / 9 sites em DOIS padrões. PADRÃO A (swap puro `(lojaAtivaId ?? \"\").trim()`): app/dashboard/marketing/page.tsx:70 (header em fetches), configuracoes-sistema.tsx:230/732 (chave LS) + :1147 (display → '—'), backup-importador/importador-dados-externos.tsx:2602 (chave LS), CadastrosHub.tsx:77+248. PADRÃO B (swap + GUARD de loja vazia, pois storeId ia na URL path /api/stores/{id} → '' geraria /api/stores//): centro-personalizacao-financeira-rafacell.tsx:102 (+ guard no load effect L120 e no save L182) e first-access-wizard.tsx:24 (ONBOARDING — mantém lojaAtivaRaw?.id como 2ª fonte + guard em finish() L111). Remoção do import LEGACY nos 6 arquivos. PERFIL: SAFE-lite LIGHT — client-only, servidor já impõe nas rotas header-based. VALIDAÇÃO: tsc --noEmit limpo (EXIT 0 — cobre CadastrosHub, confirmado NÃO tsc-excluído) · vitest 234 passed | 3 expected fail (+6 do bloco DT-15 no guard estendido lib/multi-loja-client-no-legacy-fallback.test.ts) · build verde. RED→GREEN: bloco DT-15 = 6 failed antes do fix, 11 passed (4 DT-13 + 1 sanity + 6 DT-15) depois. BUILD OOM (transparência): build falhou 3× com OOM ('JavaScript heap out of memory' / 'memory allocation failed' em 'Collecting page data using 11 workers', APÓS '✓ Compiled successfully', SEM erro JS apontando os arquivos editados); 1ª falha foi erro de execução meu (rodei vitest da suíte inteira E build em paralelo → competição de memória); passou EXIT 0 elevando o heap do Node na INVOCAÇÃO (NODE_OPTIONS=--max-old-space-size=6144, SEM tocar config do repo). Árvore de rotas completa: /dashboard/marketing saiu ○ (Static prerenderizado) — prova de que o change não quebra render. Flake ambiental, não efeito do DT-15. AUDIT FOCADA LIGHT: 0 findings — zero LEGACY residual (grep=0 nos 6 arq.), display mostra '—', 3 guards PRECEDEM os 3 fetches /api/stores/${...} (centro L120/L182, onboarding L111). CONFIRMAÇÃO ONBOARDING FUNCIONAL: wizard dispara em cadastroBasicoIncompleto (loja EXISTE, incompleta) → storeId resolve não-vazio (lojaAtivaId/lojaAtivaRaw seeded por F-11) → finish() prossegue; guard só barra o caso degenerado 'nenhuma loja' (onde geraria /api/stores//). CONFIRMAÇÃO SEM /api/stores//: todos os path-usages dos 6 arq. guardados — centro (DT-15), onboarding (DT-15), e os pré-existentes de configuracoes-sistema L282/283/472/489 já guardados por if(!lojaAtivaId) L277/L467 (não eram do DT-15). CLIENT-SIDE NÃO 100%: DT-13 + DT-15 limparam TODOS os COMPONENTES de UI, mas PERMANECE F-11 (lib/loja-ativa.tsx, provider-fonte que semeia lojaAtivaId — raiz; mudança mais arriscada; SEM DT próprio por ora, rastreado como finding F-11 + notas) + F-04/DT-07 (webhook). store-defaults.ts (canônico), lib/stores-api-access.ts (F-15 server), lib/ops-loja-id.ts (P3) permanecem por design. ÁREAS PROTEGIDAS: nenhuma tocada. COMMIT/PUSH: PENDENTES. TIMESTAMPS: PROXY (evidência = runs vitest ~15:00→15:02 de 2026-05-31); duration null (critério das ENTRY 010-013). REFERÊNCIAS: DIVIDA_TECNICA DT-15 (§3, paga) + Nota DT-13+DT-15 · ADR-0003 · ADR-0004 (SAFE-lite) · ENTRY 013 (DT-13, client PDV/vendas) · AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01 §F-11 (provider-fonte)."
 ```
+
+---
+
+```yaml
+# ─── ENTRY 015 ────────────────────────────────────────────────────
+ticket_id: GOVERNANCA-S-001          # autoria de protocolo de governança (INTAKE_PROTOCOL); HUB=cross; não é debt-item
+skill_id: SKILL_DOC_REFRESH          # closest fit no schema v1 (docs-only governança); autoria de protocolo novo não tem skill dedicada — SKILL_INTAKE_ROUTER DIFERIDA (decisão #2)
+skill_version: v1
+ia: opus
+modo: SAFE                           # perfil real = SAFE-lite LIGHT (ADR-0004); docs-only; valor mantido SAFE (schema v1 congelado)
+started_at: 2026-06-01T00:00:00-03:00   # PROXY — sessão de autoria do INTAKE_PROTOCOL; hora real não rastreada
+ended_at: 2026-06-01T00:00:00-03:00     # PROXY — fim do DOC_REFRESH (Gate #2)
+duration: null                          # precisão não rastreada (não fabricar — critério das ENTRY 010-014)
+fases_completas: [SAFE_LITE_LIGHT]      # Gate#1 (desenho) → write → Gate#2 (conteúdo) → DOC_REFRESH (fora do pipeline de 17 fases)
+fase_falha: null
+resultado: encerrada                    # execução completa; commit/push PENDENTES de decisão humana
+pr: null
+branch: main                            # working tree em main; sem branch skill/* (docs-only dispensa); sem commit ainda
+commit_anterior: a5a790e                # HEAD = DT-15 (commitado/pushado) sob o qual o INTAKE_PROTOCOL foi escrito
+commit_final: null                      # commit/push adiados por decisão do humano
+rollback: false
+diff:
+  added: ~400                           # APROX — INTAKE_PROTOCOL.md (+344, novo) + 6 edições de DOC_REFRESH; número final no git diff --stat pré-commit
+  removed: ~3
+  files_modified: 7                     # INTAKE_PROTOCOL (novo) + GOVERNANCA + SPRINT_PROTOCOL + execution/INDEX + skills/INDEX + CURRENT_STATUS_OVERVIEW + EXECUTION_LOG (esta ENTRY)
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-06-01T00:00:00-03:00   # date-proxy
+    pending: null
+    notes: "Gate #1 em DUAS camadas: (a) DESENHO arquitetural aprovado (14 pontos + 5 decisões: home docs/execution; SKILL_INTAKE_ROUTER diferida; intake read-only sem ENTRY; sem gate novo; canonização ROADMAP §7); (b) Gate #1 da ESCRITA aprovado (diff preview + seções + arquivos impactados + compat ENGINE/SAFE-lite/HUMAN_GATES + DoD; Tier A de reconciliação)."
+  gate_2:
+    approved_by: Rafael
+    approved_at: 2026-06-01T00:00:00-03:00
+    pending: null
+    notes: "Gate #2 aprovado: conteúdo do INTAKE_PROTOCOL.md + reconciliação Tier A; integridade de refs 11/11; DOC_REFRESH autorizado (skills/INDEX + execution/INDEX §2 + EXECUTION_LOG ENTRY append-only + CURRENT_STATUS_OVERVIEW §6 + memória); manter append-only; NÃO criar SKILL_INTAKE_ROUTER; NÃO criar gate; NÃO tocar PROMPTS_OFICIAIS; commit/push adiados."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}   # docs-only; auto-revisão: integridade de links 11/11 resolve; sem contradição com decisões #1-#5
+benchmark: null
+sprint: null                            # SAFE-lite docs/governança; proposta inline (Gate #1 da escrita); sem arquivo em docs/sprints/proposals
+proposta: null                          # Gate #1 da escrita inline na conversa
+auditoria: null                         # auto-revisão inline (docs-only): grep de links + checagem de coerência das decisões
+adr_criada: null                        # governado por ADR-0004 (SAFE-lite) + ADR-0002 (front matter v1 NÃO tocado); SEM ADR novo
+memoria_criada: null                    # memória Claude Code fora do repo (~/.claude): project_intake_protocol.md + pointer no MEMORY.md; sem artefato no repo
+docs_atualizados:
+  - docs/execution/INTAKE_PROTOCOL.md        # NOVO — o protocolo (344 linhas, v1, 16 seções)
+  - docs/governance/GOVERNANCA.md            # §8 — backlog canônico = ROADMAP §7 (Tier A, aditivo)
+  - docs/governance/SPRINT_PROTOCOL.md       # §4.1 — backlog canônico = ROADMAP §7 (Tier A, aditivo)
+  - docs/execution/INDEX.md                  # §2 — linha INTAKE_PROTOCOL (pós-R1)
+  - docs/skills/INDEX.md                     # tabela Execution Engine — linha INTAKE_PROTOCOL (pós-R1)
+  - docs/ai/CURRENT_STATUS_OVERVIEW.md       # front matter last_update + §6 entrada nova (2026-06-01)
+  - docs/status/EXECUTION_LOG.md             # esta ENTRY 015 (append-only)
+flags: []                               # NÃO tocou área protegida: docs/** apenas; sem código/schema/auth/proxy/core/services
+notes: "INTAKE_PROTOCOL — criação da camada de ENTRADA determinística do Execution Engine (Bloco pós-R1). O QUE É: dispatcher READ-ONLY pré-pipeline que materializa a FASE 1 INTAKE para comando livre ('Trabalhe no X') + descoberta read-only da FASE 2 (roadmap+status) + classificação da FASE 4 (size) + escolha de modo (ADR-0004), emitindo um Intake Manifest que vira insumo do Gate #1 EXISTENTE. Roteia e PARA — não executa. ESCOPO (fechado): 1 arquivo novo (docs/execution/INTAKE_PROTOCOL.md, 344 linhas, 16 seções cobrindo as 14 entradas da arquitetura aprovada) + reconciliação Tier A (canonização ROADMAP §7 como backlog). 5 DECISÕES DO HUMANO honradas: (1) home = docs/execution/INTAKE_PROTOCOL.md; (2) SKILL_INTAKE_ROUTER NÃO criada — diferida (sem callable até haver runtime que precise); (3) intake 100% read-only — NÃO grava ENTRY de intake no log (log exclusivo de execução; esta ENTRY 015 é da AUTORIA do doc, não de um intake); (4) SEM gate novo — manifest termina no Gate #1; (5) canonização: ROADMAP_<HUB>.md §7 = fonte canônica de backlog, BACKLOG_<HUB>.md = alias histórico/opcional. RECONCILIAÇÃO TIER A (aditiva/reversível, NÃO apaga referência histórica): GOVERNANCA §8 (tabela 'onde olhar') + SPRINT_PROTOCOL §4.1 (inputs de sprint). PROMPTS_OFICIAIS NÃO tocado (decisão do humano — diferido). COMPAT (verificada, sem contradição): EXECUTION_ENGINE = upstream da FASE 1, não adiciona/remove/reordena nenhuma das 17 fases, pipeline v1 preservado (§9); SAFE-lite = o protocolo SELECIONA o modo via árvore §7, reusa §11.1/§11.2/§11.4/§11.5, sem modo novo (a própria escrita foi SAFE-lite light = dogfooding); HUMAN_GATES = nenhum gate novo, manifest é insumo do Gate #1 (§2), papéis (§8)/formatos (§5)/'humano sempre clica merge' (founding #4) intactos. VALIDAÇÃO: docs-only → tsc/build N/A (nenhum .ts/.tsx); integridade de referências = 11 links markdown no arquivo novo → 7 alvos distintos, TODOS resolvem (EXECUTION_ENGINE/HUMAN_GATES/SAFE_GUARDS/SKILL_TAXONOMY/roadmaps INDEX/APPROVAL_BATCH_V1/ADR-0004-safe-lite-modo-padrao). TAMANHO: 344 linhas (abaixo do guard de 500 do SAFE_GUARDS §4; par dos protocolos vizinhos ENGINE 309 / TAXONOMY 367). ÁREAS PROTEGIDAS: nenhuma (docs/** apenas; front matter v1 de skills NÃO tocado → ADR-0002 preservado). GREENFIELD: o protocolo detecta greenfield (sem código em lib/<hub>*) e roteia para diagnóstico + SKILL_PROPOSE_ADR, NUNCA auto-exec (SKILL_EXEC_MARKETPLACE proibida até Fase 1) — responde 'Trabalhe no Marketplace' com manifest RED + caminho desbloqueador. COMMIT/PUSH: PENDENTES — aguardam decisão do humano. TIMESTAMPS: PROXY (autoria em 2026-06-01); duration null (critério das ENTRY 010-014). REFERÊNCIAS: docs/execution/INTAKE_PROTOCOL.md (novo) · docs/execution/EXECUTION_ENGINE.md (§11 SAFE-lite) · docs/execution/HUMAN_GATES.md · docs/decisions/ADR-0004-safe-lite-modo-padrao.md · docs/decisions/ADR-0002 (front matter v1, NÃO tocado) · ENTRY 014 (DT-15, última execução antes desta)."
+```

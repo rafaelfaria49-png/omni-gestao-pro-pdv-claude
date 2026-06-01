@@ -61,7 +61,7 @@ Cada fase tem checklist próprio (§§ 5–9).
 
 ### 4.1 Inputs
 
-- `docs/status/BACKLOG_<HUB>.md` — itens priorizados.
+- `docs/roadmaps/ROADMAP_<HUB>.md §7` — backlog canônico (itens priorizados). `docs/status/BACKLOG_<HUB>.md` quando existir (alias histórico).
 - `docs/ai/CURRENT_STATUS.md` — estado atual (P0/P1 abertos).
 - `docs/roadmaps/ROADMAP_<HUB>.md` — fase atual do HUB.
 - `docs/status/BLOCKERS.md` — bloqueios que precisam virar sprint.

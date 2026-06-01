@@ -32,6 +32,7 @@ versao: v1
 | 29 | [`EXECUTION_ENGINE.md`](./EXECUTION_ENGINE.md) | Pipeline oficial de 17 fases |
 | 30 | [`SAFE_GUARDS.md`](./SAFE_GUARDS.md) + [`HUMAN_GATES.md`](./HUMAN_GATES.md) | Limites de segurança + gates obrigatórios |
 | 31 | [`SKILL_TAXONOMY.md`](./SKILL_TAXONOMY.md) | 6 categorias + allow/deny-list + skills proibidas |
+| pós-R1 | [`INTAKE_PROTOCOL.md`](./INTAKE_PROTOCOL.md) | Roteamento read-only de "Trabalhe no X" → Intake Manifest → Gate #1 (materializa a FASE 1; não altera pipeline/modos/gates) |
 | 36 | `BENCHMARK_PROTOCOL.md` (a criar) | Pipeline de benchmark por sprint |
 | 37 | `OVERNIGHT_PROTOCOL.md` (a criar) | Modo overnight |
 | 38 | `COWORK_PROTOCOL.md` (a criar) | Modo multi-IA simultâneo |

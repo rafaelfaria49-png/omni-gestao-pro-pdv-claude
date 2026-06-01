@@ -2,7 +2,7 @@
 title: CURRENT_STATUS · Overview enxuto
 status: vivo
 owner: produto + Sonnet (atualiza a cada sprint encerrada)
-last_update: 2026-05-31
+last_update: 2026-06-01
 fonte_detalhada: docs/ai/CURRENT_STATUS.md
 ---
 
@@ -93,6 +93,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 
 > Apêndice — listar entradas mais recentes do `CURRENT_STATUS.md` para contexto rápido.
 
+- **2026-06-01** — Governança: **`INTAKE_PROTOCOL.md`** criado (`docs/execution/`, pós-R1) — roteador **read-only** que materializa a `FASE 1` (comando livre "Trabalhe no X" → Intake Manifest → **Gate #1 existente**); não altera Engine/SAFE-lite/gates. Canoniza **`ROADMAP §7`** como backlog (reconciliação Tier A em `GOVERNANCA §8` + `SPRINT_PROTOCOL §4.1`). `SKILL_INTAKE_ROUTER` diferida.
 - **2026-05-31** — DT-15 (SAFE-lite): resíduo `LEGACY_PRIMARY_STORE_ID` client-side em marketing/config/onboarding/cadastros eliminado (6 arq./9 sites + 3 guards de loja vazia). Com DT-13, **client de componentes limpo**. **Ainda não 100%** — resta **F-11** (provider-fonte `lib/loja-ativa.tsx`).
 - **2026-05-31** — DT-13 (SAFE-lite): resíduo `LEGACY_PRIMARY_STORE_ID` client-side nas **4 telas de PDV/vendas** eliminado (`(lojaAtivaId ?? "").trim()` + guard estático).
 - **2026-05-30** — DT-14 (SAFE-lite reforçado): fallback nullish `?? "loja-1"` em `carteiras/*` + `dre` eliminado (forma que escapou da S-001 por ser `??` e multi-linha) — `loja-1` **server-side 100%** fechado; ADR-0003.

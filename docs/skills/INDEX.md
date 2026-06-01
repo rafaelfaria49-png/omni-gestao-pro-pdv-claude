@@ -89,6 +89,7 @@ Camada de **execução semi-autônoma governada** sobreposta ao Sistema Operacio
 | [`execution/SAFE_GUARDS.md`](../execution/SAFE_GUARDS.md) | ✅ Bloco 30 | Allow/deny-list, limites de tamanho, comandos proibidos, snapshot+rollback |
 | [`execution/HUMAN_GATES.md`](../execution/HUMAN_GATES.md) | ✅ Bloco 30 | Gate #1 (proposta) + Gate #2 (merge), formato de aprovação, SLA |
 | [`execution/SKILL_TAXONOMY.md`](../execution/SKILL_TAXONOMY.md) | ✅ Bloco 31 | 6 categorias de skill, matriz de elegibilidade por modo, skills proibidas |
+| [`execution/INTAKE_PROTOCOL.md`](../execution/INTAKE_PROTOCOL.md) | ✅ pós-R1 | Roteamento read-only de "Trabalhe no X" → Intake Manifest → Gate #1 (materializa a FASE 1; não cria fase/gate/modo) |
 | [`skills/executoras/TEMPLATE_SKILL.md`](./executoras/TEMPLATE_SKILL.md) | ✅ Bloco 32 | Template oficial — **front matter v1 CONGELADO** (mudança exige ADR) |
 | [`skills/executoras/README.md`](./executoras/README.md) | ✅ Bloco 32 | Catálogo das skills por categoria + estado + como criar/modificar |
 | [`status/EXECUTION_LOG.md`](../status/EXECUTION_LOG.md) | ✅ Bloco 32 | Log append-only de execuções — **schema v1 CONGELADO** |

@@ -101,7 +101,7 @@ substitui_na_pratica: docs/skills/rules/CORE_RULES.md (mantido como referência 
 | "Como rodar uma sprint?" | `docs/governance/SPRINT_PROTOCOL.md` (quando existir) |
 | "Como rodar uma auditoria?" | `docs/governance/AUDIT_PROTOCOL.md` (quando existir) |
 | "O que está no roadmap do HUB X?" | `docs/roadmaps/ROADMAP_<HUB>.md` |
-| "O que está pendente no HUB X?" | `docs/status/BACKLOG_<HUB>.md` |
+| "O que está pendente no HUB X?" | `docs/roadmaps/ROADMAP_<HUB>.md §7` (backlog canônico) · `docs/status/BACKLOG_<HUB>.md` (histórico/opcional) |
 | "Por que decidimos Y?" | `docs/decisions/*.md` (ADRs) |
 | "O que aconteceu no incidente Z?" | `docs/memory/incidents/*.md` |
 | "Qual é o estado atual?" | `docs/ai/CURRENT_STATUS.md` |
