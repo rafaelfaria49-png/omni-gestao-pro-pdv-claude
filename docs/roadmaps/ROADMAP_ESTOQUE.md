@@ -3,8 +3,8 @@ title: Roadmap — HUB Estoque
 hub: estoque
 status: vivo
 owner: produto + Sonnet (técnico)
-last_update: 2026-06-01
-sprint_atual: nenhuma — ADR-0007 (modelo de depósitos) aceito; Sprint Fase 0 a abrir
+last_update: 2026-06-02
+sprint_atual: nenhuma — ADR-0007 aceito; **Fase 0 (arquitetura) concluída · Gate #1A aprovado (02/06)**; proposta `SPRINT_BL07_FASE1` pronta, aguarda autorização de área protegida para abrir
 ---
 
 # 📦 Roadmap — HUB Estoque
@@ -115,9 +115,13 @@ Estoque alimenta PDV, OS e Marketplace via consumos auditados. Importação atua
 **Objetivo:** modelar `Deposito`, migrar saldos, suportar transferência.
 **Modelo decidido:** ✅ **ADR-0007** (2026-06-01) — `Deposito` + `EstoqueSaldo` materializado +
 `depositoId` nullable no ledger + `Produto.stock` como cache agregado (aditivo, não-quebrante).
-**Fase 0 (fundação, a abrir):** migração aditiva + backfill no Depósito Padrão, **zero mudança de
+**Fase 0 (arquitetura) ✅ concluída (02/06/2026 · Gate #1A):** dossiê
+[`BL07_FASE0_ARQUITETURA.md`](../architecture/estoque/BL07_FASE0_ARQUITETURA.md) (estado atual, gap
+analysis, modelo, fluxos, riscos P0–P3) + proposta faseada
+[`SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md).
+**Fase 1 (fundação, a abrir):** migração aditiva + backfill no Depósito Padrão, **zero mudança de
 comportamento** (PDV/OS/import inalterados). Seleção de depósito, UI de transferência e reserva
-Marketplace ficam em fases posteriores.
+Marketplace ficam em fases posteriores (Fase 2/3).
 **Saída:** lojas com N depósitos funcionando; transferências auditadas.
 
 ### Fase 3 — Conferência e entrada
@@ -155,16 +159,23 @@ Marketplace ficam em fases posteriores.
 | **NF-e XML mal formada** crash do parser | Técnico — P1 | Validador + quarentena |
 | **Importador massivo** sobrescrever silenciosamente | Técnico — P0 | ✅ Travado: chave forte vs fraca, defesa multi-loja em 3 camadas |
 
+> **Análise de risco consolidada da Fase 0 (P0–P3, multi-loja/fiscal/LGPD/concorrência/performance):**
+> [`BL07_FASE0_ARQUITETURA.md` — Parte 5](../architecture/estoque/BL07_FASE0_ARQUITETURA.md#parte-5--riscos).
+> Destaque: **CONC-02** (drift agravado pelo ledger best-effort da OS) e **MIG-01** (migração) são P0 da Fase 1.
+
 ---
 
 ## 11. Sprint atual
 
-**Nenhuma.** Último marco: Adapter OS → Estoque Fase 2 (21/05/2026). Decisão recente:
-**ADR-0007** (modelo de depósitos) aceito no Gate #1 em 2026-06-01.
+**Nenhuma em execução.** Marcos recentes: Adapter OS → Estoque Fase 2 (21/05/2026); **ADR-0007**
+(modelo) aceito no Gate #1 (01/06); **Fase 0 — arquitetura e planejamento ✅ concluída · Gate #1A
+aprovado (02/06/2026)**.
 
-Próxima sugerida: **`ESTOQUE-S-00x` — Fundação multi-depósito (Fase 0)** — implementa o ADR-0007
-(migração aditiva + backfill no Depósito Padrão, zero mudança de comportamento). **Ainda não aberta**
-(aguarda autorização para tocar `schema.prisma` + services de estoque core).
+Próxima sugerida: **`SPRINT_BL07_FASE1` — Fundação multi-depósito** — implementa o ADR-0007 (migração
+aditiva + backfill no Depósito Padrão, zero mudança de comportamento). Proposta pronta em
+[`docs/sprints/proposals/SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md). **Ainda
+não aberta** (aguarda **autorização explícita** para tocar `schema.prisma` + services de estoque
+core). Esforço estimado **L–XL (~5–8 dias-dev)**.
 
 ---
 
@@ -192,7 +203,8 @@ Estoque tem **ledger profissional** com auditoria de usuário/documento/custo, i
 | Blocker | Bloqueia |
 |---|---|
 | ~~ADR de multi-depósito~~ | ✅ Resolvido — **ADR-0007** aceito (2026-06-01) |
-| Sprint Fase 0 multi-depósito não aberta (BL-07) | Fase 2 / adapter Marketplace |
+| ~~Fase 0 arquitetura multi-depósito~~ | ✅ Concluída — **Gate #1A** aprovado (2026-06-02) |
+| Sprint Fase 1 (Fundação) não aberta (BL-07) — aguarda autorização de área protegida | Fase 2 / adapter Marketplace |
 | Marketplace HUB sem código | Adapter sync |
 | Decisão FIFO vs Médio | Fase 4 |
 
@@ -201,6 +213,7 @@ Estoque tem **ledger profissional** com auditoria de usuário/documento/custo, i
 ## 15. Referências
 
 - **ADRs relacionados:** **ADR-0007** (modelo de depósitos — aceito 2026-06-01) · ADR-0003 (scoping multi-loja) · ADR-0004 (SAFE-lite)
+- **Fase 0 (arquitetura · Gate #1A 2026-06-02):** [`docs/architecture/estoque/BL07_FASE0_ARQUITETURA.md`](../architecture/estoque/BL07_FASE0_ARQUITETURA.md) (dossiê D1–D5) · [`docs/sprints/proposals/SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md) (proposta faseada) · [`README`](../architecture/estoque/README.md)
 - **Sprints relacionadas:** entradas "Estoque", "adapter OS→Estoque", "Importador" em `CURRENT_STATUS.md`
 - **Docs de módulo:** `docs/modules/` (verificar/criar `ESTOQUE.md`)
 - **Memórias persistentes:** `project_sku_gc_saneamento`, `project_import_nao_sobrescreve_estoque`, `project_importador_produtos_lotes`, `project_importador_produtos_match_seguro`

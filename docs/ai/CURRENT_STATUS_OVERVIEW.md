@@ -2,7 +2,7 @@
 title: CURRENT_STATUS · Overview enxuto
 status: vivo
 owner: produto + Sonnet (atualiza a cada sprint encerrada)
-last_update: 2026-06-01
+last_update: 2026-06-02
 fonte_detalhada: docs/ai/CURRENT_STATUS.md
 ---
 
@@ -25,7 +25,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | 1 | **PDV** | 🟢 maduro | **Pausa operacional** (uso real, pré-BL-07): modal s/ F11, busca F3 pro, bipe, anti-negativo, UX Smart Genius. Base: 4 PDVs convergentes, lock, INSERT, F7, À Prazo, fechamento premium | 🔴 PDV Next não persiste vendas (server-side) |
 | 1 | **Operações/OS** | 🟢 maduro | Adapters Fase 2 ✅, hydration FK ✅, ADR-0001 oficial | 🟡 rota legada `/dashboard/os` ainda em paralelo |
 | 1 | **Financeiro** | 🟢 backend + UI real | financeiro-v2 plugado a dados reais (FinanceiroRealProvider) ✅; services, adapters, idempotência, importador parcelado, crédito persistente | 🟡 DRE/Fluxo: evolução visual/funcional (não é mock) |
-| 1 | **Estoque** | 🟢 ledger maduro | Ledger profissional ✅, importador defensivo ✅, saneamento SKU ✅ | 🟠 sem multi-depósito (bloqueia Marketplace) |
+| 1 | **Estoque** | 🟢 ledger maduro | Ledger profissional ✅, importador defensivo ✅, saneamento SKU ✅; **BL-07 Fase 0 arquitetura ✅ (Gate #1A 02/06)** — dossiê + proposta `SPRINT_BL07_FASE1` | 🟠 sem multi-depósito (bloqueia Marketplace); Fase 1 (Fundação) aguarda autorização de área protegida |
 | 2 | **Operações/OS** (cross-onda) | (acima) | NFS-e, comunicação WhatsApp | 🔴 sem NFS-e |
 | 2 | **CRM** | 🟡 base sólida | FK Venda→Cliente ✅, modal PF/PJ ✅, crédito persistente ✅, importador defensivo ✅ | 🟡 sem tela 360° consolidada, sem segmentação |
 | 2 | **WhatsApp** | 🟡 infra ok | Webhook canônico ✅, HMAC ✅, **router multi-loja por `phone_number_id`** (ADR-0006, S-003) ✅, credencial outbound por loja ✅, envio manual ✅ | 🔴 sem opt-out persistente, sem orquestrador de massa · ⚙️ cutover (`db:push`+backfill) pendente |
@@ -56,7 +56,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 1. **SPRINT_NN_PDV** — Persistência server-side do PDV Next (P0; fecha Fase 1 PDV).
 2. ~~**SPRINT_NN_MULTI_LOJA** — F-04: router WhatsApp por `phone_number_id`~~ — ✅ **concluída** (`MULTI_LOJA-S-003`; ADR-0006; Gate #2 01/06). *Fechou o **último vetor `loja-1`**; multi-loja 100% (server+client+WhatsApp). Resta o cutover operacional (`db:push`+backfill+deploy).*
 3. **SPRINT_NN_WHATSAPP** — Opt-out persistente + monitor qualidade (P0; previne banimento Meta).
-4. **SPRINT_NN_ESTOQUE / BL-07** — Multi-depósito Fase 0 (`ESTOQUE-S-00x`); modelo já decidido (**ADR-0007**, BL-12 ✅). **Próxima grande frente estrutural** após o PDV operacional; desbloqueia Marketplace.
+4. **SPRINT_BL07_FASE1 / BL-07** — Multi-depósito **Fundação**; modelo decidido (**ADR-0007**, BL-12 ✅) + **Fase 0 arquitetura concluída** (Gate #1A 02/06 — [dossiê](../architecture/estoque/BL07_FASE0_ARQUITETURA.md) + [proposta](../sprints/proposals/SPRINT_BL07_FASE1.md)). **Próxima grande frente estrutural** após o PDV operacional; desbloqueia Marketplace. Aguarda autorização de área protegida (`schema.prisma` + services core).
 
 > **Sequência oficial:** (1) finalizar **PDV operacional** → (2) **BL-07** (estoque multi-depósito, Fase 0) → (3) **Fiscal** (NFC-e/SAT). **Importador Universal IA adiado.**
 > financeiro-v2 saiu do top-5: deixou de ser mock (DT-02 paga, R0-L5). Evolução de UI DRE/Fluxo segue no `ROADMAP_FINANCEIRO`.
@@ -84,7 +84,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | 1 | PDV Next sem persistência server-side | PDV | P0 |
 | 2 | ~~Webhook WhatsApp single-store — DT-07~~ | Multi-loja/WhatsApp | ✅ **pago** (S-003 · ADR-0006 · Gate #2 01/06) |
 | 3 | Opt-out WhatsApp ausente | WhatsApp | P0 |
-| 4 | Sem multi-depósito Estoque | Estoque | P0 (bloqueia Marketplace) |
+| 4 | Sem multi-depósito Estoque (DT-08) | Estoque | P0 (bloqueia Marketplace) — Fase 0 arquitetura ✅; Fase 1 a abrir |
 | 5 | Rota legada `/dashboard/os` paralela | OS | P1 |
 | 6 | Pool de executores Omni Agent pequeno | Omni Agent | P1 |
 
@@ -96,6 +96,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 
 > Apêndice — listar entradas mais recentes do `CURRENT_STATUS.md` para contexto rápido.
 
+- **2026-06-02** — **BL-07 Estoque Multi-Depósito · Fase 0 (arquitetura) CONCLUÍDA — Gate #1A:** dossiê de arquitetura ([`BL07_FASE0_ARQUITETURA.md`](../architecture/estoque/BL07_FASE0_ARQUITETURA.md): estado atual, gap analysis Tiny/Bling/GestãoClick/Smart Genius/AvantPro/Linx/NetSuite, modelo multi-depósito, fluxos, riscos P0–P3) + proposta de sprint faseada ([`SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md), Fases 1–4). Riscos P0 destacados: migração (MIG-01), drift agravado pelo **ledger best-effort da OS** (CONC-02), oversell Marketplace (NEG-01). **Só governança** — sem código/schema/Prisma/APIs. Fase 1 (Fundação) aguarda autorização de área protegida.
 - **2026-06-01** — **MULTI_LOJA-S-003 (F-04/DT-07) — Gate #2 APROVADO:** router WhatsApp multi-loja por `phone_number_id` (mapa `WhatsAppPhoneNumber`) + credencial outbound por loja, **sem fallback `loja-1`**; `webhookDefaultStoreId` removido. **ADR-0006 `aceito`**, DT-07 **pago**. Migração `0010` aditiva (cutover `db:push`+backfill pendente). Build OK · vitest **258 passed | 2 expected fail**. Auditoria: [`AUDITORIA_F-04_WHATSAPP_ROUTER_MULTI_LOJA.md`](../audits/AUDITORIA_F-04_WHATSAPP_ROUTER_MULTI_LOJA.md). **Era o último vetor `loja-1`** → agora zero fallback silencioso em todo o projeto (server+client+WhatsApp).
 - **2026-06-01** — Governança: **`COWORK_RELEASE_PLAN.md`** criado — auditoria dos 4 gargalos (COWORK frozen · `SKILL_LOCK_HUB` · approval de skills · `BENCHMARK_PROTOCOL`) + mapa de desbloqueio em 2 trilhos + design do `SKILL_LOCK_HUB` + veredito. **Conclusão:** bootstrap **~98%** (design); CoWork **supervisionado destravável com 1 decisão** (ADR-0005, sem build novo); **autônomo** exige 3 builds. 1º HUB recomendado: **Multi-Loja** (não-protegido, ex.: BL-08). `execution/INDEX §3` atualizado (R0/R1 concluídos; liberação COWORK pendente de decisão).
 - **2026-06-01** — Governança: **Bootstrap CoWork — maturidade pós-INTAKE** avaliada e 2 gaps doc-fixáveis fechados (SAFE-lite light): (1) **porta de entrada** cabeada (`skills/INDEX` + `execution/INDEX §1`) — comando livre "Trabalhe no X" agora aponta o `INTAKE_PROTOCOL` como 1ª ação; (2) **DoD provisório** passa a viajar no Intake Manifest (`INTAKE §4/§12 definition_of_done`). Veredito: **roteamento de intake ~95%** (maduro); **execução CoWork ~60%** (congelada por decisão + builds: COWORK frozen, `SKILL_LOCK_HUB`, skills draft, `BENCHMARK_PROTOCOL`). Simulação "Trabalhe no Marketplace" → `RED/BLOCKED` correto. Relatório: [`docs/execution/BOOTSTRAP_COWORK_MATURITY.md`](../execution/BOOTSTRAP_COWORK_MATURITY.md).

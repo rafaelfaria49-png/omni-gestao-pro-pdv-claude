@@ -1,7 +1,50 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 02 Jun 2026 — **Pausa operacional PDV** (estabilização em uso real, pré-BL-07): **modais F1/F3 do Clássico finalizados** (largura/grid equilibrados, sem overflow). Antes: modal sem F11 + busca F3 profissional; F-04 WhatsApp ✅ (ADR-0006); ADR-0007 aceito → BL-12 resolvido
+> Última atualização: 02 Jun 2026 — **BL-07 Estoque Multi-Depósito · Fase 0 (arquitetura) CONCLUÍDA — Gate #1A aprovado** (wiring de governança): dossiê de arquitetura + proposta de sprint faseada persistidos; BL-07 pronto para abrir **Fase 1 (Fundação)** sob autorização de área protegida. Antes: Pausa operacional PDV (modais F1/F3 do Clássico); F-04 WhatsApp ✅ (ADR-0006); ADR-0007 aceito → BL-12 resolvido
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### BL-07 Estoque Multi-Depósito — Fase 0 (arquitetura) concluída · Gate #1A aprovado (02/06/2026)
+
+**O que é:** wiring de governança da conclusão da **Fase 0** do **BL-07** (estoque multi-depósito).
+A Fase 0 (arquitetura e planejamento — **read-only**, sem código/schema/migração) produziu o pacote
+de arquitetura + a proposta de sprint faseada. **Gate #1A aprovado** por Rafael em 02/06/2026.
+Sucede o **Gate #1** de **ADR-0007** (decisão de modelo, 01/06): agora a *arquitetura completa* está
+detalhada e o BL-07 está pronto para abrir a **Fase 1 (Fundação)** sob autorização de área protegida.
+
+**Documentos criados (somente documentação):**
+
+| Arquivo | Papel |
+|---|---|
+| `docs/architecture/estoque/BL07_FASE0_ARQUITETURA.md` | Dossiê: **D1** estado atual · **D2** gap analysis (Tiny/Bling/GestãoClick/Smart Genius/AvantPro/Linx/NetSuite) · **D3** modelo multi-depósito · **D4** fluxos obrigatórios · **D5** riscos P0–P3 |
+| `docs/sprints/proposals/SPRINT_BL07_FASE1.md` | Proposta de sprint faseada — **Fase 1 (Fundação)** detalhada + **Fases 2/3/4** com estimativa de esforço |
+| `docs/architecture/estoque/README.md` | Índice do pacote + resumo executivo |
+
+**Estado atual mapeado (do código):** estoque é **single-depósito implícito** (`Produto.stock` único
++ ledger `MovimentacaoEstoque` **sem `depositoId`**). PDV tem anti-negativo **atômico** (DT-B,
+`ops-upsert-venda.ts`); **o ledger da OS é best-effort** (`try/catch` em `os-estoque.ts` — risco de
+drift por depósito); **Marketplace não sincroniza saldo** (só lista catálogo). Sem
+reserva/comprometido/disponível/em trânsito.
+
+**Riscos encontrados (top P0 — detalhe na Parte 5 do dossiê):**
+- **MIG-01** — migração quebra ledger histórico → DDL **aditiva** + backfill transacional + gate de invariante.
+- **CONC-02** — drift `EstoqueSaldo`×`Produto.stock` agravado pelo **ledger best-effort da OS** → promover OS a **atômico**.
+- **CONC-01** — race de baixa por (produto, depósito) → estender predicado atômico `saldo>=qty` (DT-B) ao `EstoqueSaldo`.
+- **MLOJA-01** — vazamento cross-tenant via depósito → `storeId` FK + `@@unique([storeId,nome])` + `where storeId` (ADR-0003).
+- **NEG-01/R-05** — oversell Marketplace → reserva otimista **só na Fase 3** (não antecipar adapter).
+
+**Dependências para abrir a Fase 1 (Fundação):**
+1. **Autorização explícita de área protegida** — tocar `prisma/schema.prisma` + services de estoque core (PDV/OS) — **ainda não concedida**.
+2. Gate #1A ✅ (esta entrada).
+3. Esforço estimado **L–XL (~5–8 dias-dev)**; DoD: **drift = 0** (`Σ EstoqueSaldo == Produto.stock`), 0 `depositoId` nulo, **comportamento idêntico** ao pré-migração.
+
+**Plano faseado:** Fase 1 Fundação → Fase 2 Operação (seleção de depósito + transferência intra-loja)
+→ Fase 3 Reserva & Marketplace (anti-oversell) → Fase 4 Inteligência & Fiscal (NF-e XML, curva ABC, FIFO).
+
+**Esta entrada é só governança/rastreabilidade** — sem mudança de código/schema/Prisma/APIs/runtime.
+Referências: [`BL07_FASE0_ARQUITETURA.md`](../architecture/estoque/BL07_FASE0_ARQUITETURA.md) ·
+[`SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md) · ADR-0007 · `ROADMAP_ESTOQUE` · BL-07 · DT-08.
 
 ---
 
