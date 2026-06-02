@@ -1,7 +1,38 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 02 Jun 2026 — **Operações HUB · Nova OS operacional**: botão "Criar OS" corrigido (id de cliente falso violava a FK), **cadastro de cliente no modal**, **busca de peças** (nome/SKU/EAN), **serviço/peça manual**, **financeiro editável** (lucro recalcula), checklist com estados visíveis. `tsc`/`build` ✅. Anterior: **BL-07 Fase 1** (Fundação) concluída + cutover (multi-depósito **dormente**, drift=0); próximo estrutural: **BL-07 Fase 2** (DT-17 aberto até lá).
+> Última atualização: 02 Jun 2026 — **Operações HUB · read layer da OS conectado**: o orçamento sintetizado passa a incluir **peças** (Kanban/Painel/Histórico/Detalhe deixam de mostrar R$ 0,00), "receita estimada" = pipeline não-cancelado, e `OSDetalhe` ganha seção de **peças** + **custo interno/lucro**. Mesmo dia (antes): **Nova OS operacional** (cria OS de verdade + cliente/serviços/peças/financeiro). `tsc`/`build` ✅. Estrutural pendente: **BL-07 Fase 2** (DT-17 aberto até lá).
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Operações HUB — read layer da OS conectado (Kanban/Painel/Histórico/Detalhe) (02/06/2026)
+
+**Contexto:** após a Nova OS passar a criar OS de verdade (commit `8f7df4c`), o restante do módulo
+exibia os dados de leitura zerados — Kanban com card sem valor, Painel e Histórico em **R$ 0,00**
+mesmo com serviço/peça preenchidos.
+
+**Causa raiz (read layer):** `lib/operacoes/services/hydration-service.ts → mergeOrcamentoFromPrismaRow`
+sintetizava o `orcamento` da OS **só a partir de serviços** — **peças eram ignoradas**. Como todo o HUB
+lê `os.orcamento.total` (card do Kanban, ticket do Painel, total do Histórico, resumo do Detalhe), uma OS
+com valor em peças ficava **R$ 0,00** (e OS só com peças não gerava orçamento algum; a coluna `valorTotal`
+do Prisma, escrita pelo `createOS`, também é só de serviços). Além disso o Painel somava "receita estimada"
+**só de OS entregues** e o `OSDetalhe` não tinha seção de peças nem linha de custo/lucro.
+
+**Correções (somente read layer / DTOs — sem schema, sem write path):**
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/operacoes/services/hydration-service.ts` | Orçamento sintetizado passa a incluir **peças** (linhas + soma no total). Propaga para Kanban (`OSCard`), Painel (ticket), Histórico (total investido) e Detalhe. **Guard preservado:** só sintetiza para OS **sem** orçamento real |
+| `components/operacoes/lovable/pages/DashboardOperacional.tsx` | "Receita estimada" = pipeline de **todas as OS não-canceladas** (não só entregues) |
+| `components/operacoes/lovable/pages/OSDetalhe.tsx` | Nova seção **"Peças utilizadas"** + resumo com **Valor ao cliente · Custo interno (oculto do cliente) · Lucro estimado** + tipo de senha |
+
+**Pendente (sinalizado, fora do escopo "read layer"):** a coluna `valorTotal` do Prisma (escrita por
+`createOS`) ainda é **só de serviços** — o HUB não depende mais dela, mas leitores externos (rota legada
+`/api/ops/ordens`, relatórios) veem valor sem peças. Ajuste futuro é no **write path** (`createOS`), **sem
+schema**.
+
+**Validação:** `npx tsc --noEmit` ✅ (exit 0) · `npm run build` ✅ (exit 0, 97 rotas). Não tocado: schema,
+auth/proxy, PDV, Marketplace, WhatsApp, Fiscal, Financeiro HUB, BL-07.
 
 ---
 

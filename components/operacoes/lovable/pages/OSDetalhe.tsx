@@ -124,6 +124,16 @@ export default function OSDetalhe() {
   const cycle = (s: "ok" | "ruim" | "nao_testado"): "ok" | "ruim" | "nao_testado" =>
     s === "nao_testado" ? "ok" : s === "ok" ? "ruim" : "nao_testado";
 
+  // Financeiro estimado da OS (serviços + peças). Custo interno fica oculto do cliente.
+  const custoInternoEstimado =
+    (os.servicosCatalogo ?? []).reduce((s, x) => s + (x.custoInterno || 0), 0) +
+    (os.pecas ?? []).reduce((s, p) => s + (p.custoUnitario || 0) * p.quantidade, 0);
+  const valorClienteEstimado =
+    os.orcamento?.total ??
+    ((os.servicosCatalogo ?? []).reduce((s, x) => s + (x.valorVenda || 0), 0) +
+      (os.pecas ?? []).reduce((s, p) => s + (p.valorUnitario || 0) * p.quantidade, 0));
+  const lucroEstimado = valorClienteEstimado - custoInternoEstimado;
+
   return (
     <OperacoesLayout>
       <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -205,8 +215,16 @@ export default function OSDetalhe() {
             <div className="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">Resumo financeiro</div>
             <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
               <div>
-                <dt className="text-xs text-muted-foreground">Valor orçamento</dt>
-                <dd className="font-medium">{os.orcamento ? brl(os.orcamento.total) : "—"}</dd>
+                <dt className="text-xs text-muted-foreground">Valor ao cliente</dt>
+                <dd className="font-medium">{brl(valorClienteEstimado)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Custo interno <span className="text-[10px]">(oculto do cliente)</span></dt>
+                <dd className="font-medium text-amber-600">{brl(custoInternoEstimado)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Lucro estimado</dt>
+                <dd className={cn("font-medium", lucroEstimado >= 0 ? "text-emerald-600" : "text-rose-600")}>{brl(lucroEstimado)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Valor total (Prisma)</dt>
@@ -262,7 +280,13 @@ export default function OSDetalhe() {
               </div>
             )}
             {os.senhaEquipamento && (
-              <div className="mt-2 text-xs text-muted-foreground">Senha do equipamento: <span className="font-mono">{os.senhaEquipamento}</span></div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Senha do equipamento
+                {os.senhaEquipamentoTipo
+                  ? ` (${os.senhaEquipamentoTipo === "numerica" ? "numérica/PIN" : os.senhaEquipamentoTipo === "padrao" ? "padrão" : "texto"})`
+                  : ""}
+                : <span className="font-mono">{os.senhaEquipamento}</span>
+              </div>
             )}
           </section>
 
@@ -304,6 +328,26 @@ export default function OSDetalhe() {
                       <div className="text-[11px] text-muted-foreground">Garantia: {s.prazoGarantiaDias} dias</div>
                     </div>
                     <div className="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">{brl(s.valorVenda)}</div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {os.pecas && os.pecas.length > 0 && (
+            <section className="rounded-xl ring-1 ring-slate-900/5 dark:ring-white/10 shadow-sm bg-card p-5">
+              <div className="mb-3 text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">Peças utilizadas</div>
+              <ul className="space-y-2">
+                {os.pecas.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between rounded-md border border-border bg-background/40 p-3">
+                    <div>
+                      <div className="text-sm font-medium">{p.nome}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {p.quantidade}× {brl(p.valorUnitario)}
+                        {p.produtoOrigem === "manual" ? " · item manual" : p.sku ? ` · ${p.sku}` : ""}
+                      </div>
+                    </div>
+                    <div className="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-200">{brl(p.valorUnitario * p.quantidade)}</div>
                   </li>
                 ))}
               </ul>

@@ -25,7 +25,11 @@ export default function DashboardOperacionalPage() {
     const taxa = totalOrcs ? Math.round((aprov / totalOrcs) * 100) : 0;
     const garantias = ordens.filter((o) => o.garantia.ativa).length;
     const retrabalho = ordens.filter((o) => o.tags?.includes("retorno-garantia")).length;
-    const receita = entregues.reduce((s, o) => s + (o.orcamento?.total ?? 0), 0);
+    // Receita ESTIMADA = pipeline de todas as OS não-canceladas (não só as entregues),
+    // senão uma OS recém-criada com valor aparece como R$ 0,00.
+    const receita = ordens
+      .filter((o) => o.status !== "cancelada")
+      .reduce((s, o) => s + (o.orcamento?.total ?? 0), 0);
     return { abertas: abertas.length, atrasadas, aguardando, prontas, ticket, tempoMedio, taxa, garantias, retrabalho, receita };
   }, [ordens]);
 

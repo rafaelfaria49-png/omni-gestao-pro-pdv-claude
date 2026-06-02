@@ -1,4 +1,4 @@
-import type { GarantiaOrdemServicoLeitura, Orcamento, OrdemServico, OSStatus, Servico } from "@/types/os";
+import type { GarantiaOrdemServicoLeitura, Orcamento, OrdemServico, OSStatus, PecaUsada, Servico } from "@/types/os";
 import { normalizeOperacaoStatus, prismaStatusToOperacaoStatus } from "@/components/operacoes/lovable/utils/os-status";
 import { asOperacoesPayload } from "@/lib/operacoes/services/os-helpers";
 
@@ -74,24 +74,36 @@ function mergeOrcamentoFromPrismaRow(r: PrismaOSRow, m: OrdemServico): Orcamento
   }
 
   const cat = Array.isArray(m.servicosCatalogo) ? m.servicosCatalogo : [];
-  let servicos: Servico[] = [];
-  if (cat.length > 0) {
-    servicos = cat.map((s, i) => ({
-      id: s.servicoId || `cat_${i}`,
-      descricao: s.descricao,
-      valor: s.valorVenda,
-      desconto: 0,
-      prazoGarantiaDias: s.prazoGarantiaDias,
-      termoGarantia: s.termoGarantia,
-    }));
-  } else if (monetaryFallback > 0) {
-    servicos = [{ id: `svc_${r.id}`, descricao: "Serviços (valor registrado)", valor: monetaryFallback, desconto: 0 }];
-  } else {
-    return undefined;
+  const pecasPayload = Array.isArray(m.pecas) ? m.pecas : [];
+
+  let servicos: Servico[] = cat.map((s, i) => ({
+    id: s.servicoId || `cat_${i}`,
+    descricao: s.descricao,
+    valor: s.valorVenda,
+    desconto: 0,
+    prazoGarantiaDias: s.prazoGarantiaDias,
+    termoGarantia: s.termoGarantia,
+  }));
+  // Peças entram no orçamento sintetizado E no total. Antes eram ignoradas — uma OS
+  // só com peças (ou com a maior parte do valor em peças) aparecia como R$ 0,00.
+  const pecas: PecaUsada[] = pecasPayload.map((p) => ({ ...p }));
+
+  // Sem nenhuma linha real: cai para o valor monetário registrado no Prisma (serviço
+  // genérico) ou não sintetiza nada.
+  if (servicos.length === 0 && pecas.length === 0) {
+    if (monetaryFallback > 0) {
+      servicos = [{ id: `svc_${r.id}`, descricao: "Serviços (valor registrado)", valor: monetaryFallback, desconto: 0 }];
+    } else {
+      return undefined;
+    }
   }
 
   const sumServ = servicos.reduce((acc, s) => acc + Math.max(0, s.valor - (s.desconto ?? 0)), 0);
-  const total = Math.max(sumServ, monetaryFallback);
+  const sumPecas = pecas.reduce(
+    (acc, p) => acc + Math.max(0, (p.quantidade || 0) * (p.valorUnitario || 0) - (p.desconto ?? 0)),
+    0,
+  );
+  const total = Math.max(sumServ + sumPecas, monetaryFallback);
 
   const baseOrc: Orcamento =
     cur ??
@@ -108,7 +120,7 @@ function mergeOrcamentoFromPrismaRow(r: PrismaOSRow, m: OrdemServico): Orcamento
 
   return {
     ...baseOrc,
-    pecas: baseOrc.pecas ?? [],
+    pecas,
     servicos,
     desconto: typeof baseOrc.desconto === "number" ? baseOrc.desconto : 0,
     total,
