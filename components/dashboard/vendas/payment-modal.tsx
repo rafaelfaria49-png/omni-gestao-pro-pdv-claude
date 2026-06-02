@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import type { KeyboardEvent as ReactKeyboardEvent } from "react"
 import {
   Banknote,
   CreditCard,
@@ -9,6 +10,7 @@ import {
   X,
   Plus,
   Calculator,
+  Check,
   Eye,
   EyeOff,
   Receipt,
@@ -162,6 +164,12 @@ interface PaymentModalProps {
    * pagamentos — só descobre a UX nativa do modal para Clássico/Supermercado.
    */
   multipayHint?: boolean
+  /**
+   * Layout enterprise em 2 colunas + navegação por teclado (setas/Enter/Esc),
+   * sem rolagem no desktop. Opt-in: ligado pelo PDV Clássico (flagship). Os demais
+   * shells (Supermercado / Venda Completa / Black Edition) mantêm o layout padrão.
+   */
+  twoColumn?: boolean
 }
 
 export function PaymentModal({ 
@@ -183,6 +191,7 @@ export function PaymentModal({
   onInstantPayIntentConsumed,
   onCustomerCpfUpdate,
   multipayHint = false,
+  twoColumn = false,
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
   const [isConfirming, setIsConfirming] = useState(false)
@@ -207,6 +216,9 @@ export function PaymentModal({
   const [supervisorPin, setSupervisorPin] = useState("")
   const [supervisorBusy, setSupervisorBusy] = useState(false)
   const [supervisorErr, setSupervisorErr] = useState<string | null>(null)
+  const [highlightedFormaId, setHighlightedFormaId] = useState<FormaPagamentoConfigId | null>(null)
+  const formaBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const confirmBtnRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     if (!isOpen) {
@@ -572,6 +584,105 @@ export function PaymentModal({
     toast,
   ])
 
+  /** Lista enriquecida (runtime + ícone + disabled + tooltip): fonte única do grid clássico e da lista enterprise. */
+  const formaRuntimeList = useMemo(() => {
+    return formasModal.flatMap((forma) => {
+      const runtime = toPaymentMethodType(forma.id)
+      if (!runtime) return []
+      const Icon = getFormaPagamentoIcon(forma.icon)
+      const isCartao = runtime === "cartao_debito" || runtime === "cartao_credito"
+      const exigirCliente = forma.exigirCliente ?? (runtime === "a_prazo" || runtime === "carne")
+      const disabled =
+        (isCartao && !cartaoLiberado) ||
+        (runtime === "credito_vale" && customerStoreCredit <= 0) ||
+        (exigirCliente && !selectedCustomer) ||
+        (forma.exigirAutorizacao && !adminSessionOk)
+      const title =
+        isCartao && !cartaoLiberado
+          ? "Ative pelo menos uma maquininha em Configurações → Financeiro (cartões)"
+          : runtime === "a_prazo" && !selectedCustomer
+            ? "Selecione o cliente no PDV para liberar venda à prazo"
+            : runtime === "carne" && !selectedCustomer
+              ? "Selecione o cliente no PDV para carnê ou boleto"
+              : forma.exigirAutorizacao && !adminSessionOk
+                ? "Exige autorização do supervisor"
+                : runtime === "a_prazo"
+                  ? "Configura parcelas e vencimento — gera título em Contas a Receber"
+                  : undefined
+      return [{ forma, runtime, Icon, disabled, title }]
+    })
+  }, [formasModal, cartaoLiberado, customerStoreCredit, selectedCustomer, adminSessionOk])
+
+  const enabledFormaList = useMemo(
+    () => formaRuntimeList.filter((f) => !f.disabled),
+    [formaRuntimeList],
+  )
+
+  /** Aplica a forma escolhida (clique ou Enter). Mesma regra do botão do grid clássico. */
+  const activateForma = useCallback(
+    (forma: FormaPagamentoConfig, runtime: PaymentMethodType) => {
+      if (!guardFormaRules(forma, runtime)) return
+      if (runtime === "a_prazo") {
+        setSelectedType("a_prazo")
+        if (!aPrazoPrimeiroVencDate) {
+          const d = new Date()
+          d.setDate(d.getDate() + 30)
+          setAPrazoPrimeiroVencDate(d.toISOString().split("T")[0])
+        }
+        return
+      }
+      if (runtime === "carne") {
+        setSelectedType("carne")
+        return
+      }
+      if (runtime === "dinheiro" && !multipayHint) {
+        setSelectedType("dinheiro")
+        return
+      }
+      setSelectedType(runtime)
+      handleAddPayment(runtime, forma.id)
+    },
+    [guardFormaRules, aPrazoPrimeiroVencDate, multipayHint, handleAddPayment],
+  )
+
+  /** Navegação por setas na lista de formas (layout enterprise / twoColumn). */
+  const handlePaymentListKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      const navKeys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"]
+      if (!navKeys.includes(e.key)) return
+      if (enabledFormaList.length === 0) return
+      e.preventDefault()
+      const dir = e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : -1
+      const curIdx = enabledFormaList.findIndex((f) => f.forma.id === highlightedFormaId)
+      const baseIdx = curIdx < 0 ? (dir > 0 ? -1 : 0) : curIdx
+      const nextIdx = (baseIdx + dir + enabledFormaList.length) % enabledFormaList.length
+      const next = enabledFormaList[nextIdx]
+      if (!next) return
+      setHighlightedFormaId(next.forma.id)
+      formaBtnRefs.current[next.forma.id]?.focus()
+    },
+    [enabledFormaList, highlightedFormaId],
+  )
+
+  // Layout enterprise: ao escolher Dinheiro, foca o campo de valor para digitar e ver o troco.
+  useEffect(() => {
+    if (!isOpen || !twoColumn || multipayHint) return
+    if (selectedType !== "dinheiro") return
+    const t = window.setTimeout(() => {
+      valueInputRef.current?.focus()
+      valueInputRef.current?.select()
+    }, 30)
+    return () => window.clearTimeout(t)
+  }, [isOpen, twoColumn, multipayHint, selectedType])
+
+  // Layout enterprise: quando o total fica quitado, foca "Confirmar" para finalizar com Enter.
+  useEffect(() => {
+    if (!isOpen || !twoColumn) return
+    if (payments.length === 0 || faltaPagar > 0.02) return
+    const t = window.setTimeout(() => confirmBtnRef.current?.focus(), 40)
+    return () => window.clearTimeout(t)
+  }, [isOpen, twoColumn, payments.length, faltaPagar])
+
   const getPaymentIcon = (type: string) => {
     switch (type) {
       case "dinheiro": return <Banknote className="w-4 h-4" />
@@ -607,6 +718,695 @@ export function PaymentModal({
       default:
         return payment.type
     }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Layout ENTERPRISE (twoColumn) — PDV Clássico (flagship).
+  // 2 colunas, sem rolagem no desktop, navegação por teclado (setas/Enter/Esc).
+  // Os demais shells caem no `return` padrão (single-column) logo abaixo.
+  // ════════════════════════════════════════════════════════════════════════
+  if (twoColumn) {
+    return (
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => {
+          if (!open) onClose()
+        }}
+      >
+        <DialogContent
+          onOpenAutoFocus={
+            multipayHint
+              ? undefined
+              : (e) => {
+                  // Ao abrir: 1ª forma útil selecionada e pronta para Enter.
+                  e.preventDefault()
+                  const first = enabledFormaList[0]
+                  if (first) {
+                    setHighlightedFormaId(first.forma.id)
+                    requestAnimationFrame(() => formaBtnRefs.current[first.forma.id]?.focus())
+                  }
+                }
+          }
+          onEscapeKeyDown={(e) => {
+            // Esc volta uma etapa (sai do sub-fluxo) antes de fechar o modal.
+            if (selectedType) {
+              e.preventDefault()
+              setSelectedType(null)
+              requestAnimationFrame(() => {
+                if (highlightedFormaId) formaBtnRefs.current[highlightedFormaId]?.focus()
+              })
+            }
+          }}
+          className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-card border-border"
+        >
+          <DialogHeader className="p-5 pb-3 border-b border-border shrink-0">
+            <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
+              <Calculator className="w-6 h-6 text-primary" />
+              Finalizar Pagamento
+            </DialogTitle>
+            <p className="text-[11px] text-muted-foreground">
+              Setas escolhem a forma · Enter confirma a seleção · Esc volta uma etapa
+            </p>
+          </DialogHeader>
+
+          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-2 lg:overflow-hidden">
+            {/* ── Coluna esquerda: financeiro ── */}
+            <div className="min-w-0 space-y-4 p-5 lg:overflow-y-auto lg:border-r lg:border-border">
+              <div className="rounded-lg border border-border bg-secondary/40 p-4 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-medium">{formatCurrency(cartSubtotal)}</span>
+                </div>
+                {impostoEstimado > 0.009 ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Imposto estimado</span>
+                    <span className="font-medium">{formatCurrency(impostoEstimado)}</span>
+                  </div>
+                ) : null}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Desconto (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min={0}
+                      value={discountReais || ""}
+                      onChange={(e) => onDiscountReaisChange(parseFloat(e.target.value) || 0)}
+                      className="h-10 bg-secondary border-border"
+                      placeholder="0,00"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Desconto (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      max={100}
+                      value={discountPercent || ""}
+                      onChange={(e) => onDiscountPercentChange(parseFloat(e.target.value) || 0)}
+                      className="h-10 bg-secondary border-border"
+                      placeholder="0"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  O percentual incide sobre o subtotal; o valor em R$ soma ao desconto (limitado ao subtotal).
+                </p>
+              </div>
+
+              <PdvVisorTotal
+                label="Total a pagar"
+                valorFormatado={formatCurrency(total)}
+                glow="none"
+                className="bg-primary/5 border border-primary/25 rounded-2xl py-4 text-center [&_p]:text-3xl [&_p]:font-bold"
+              />
+
+              {faltaPagar > 0 && (
+                <div className="space-y-3">
+                  <Label className="text-sm text-muted-foreground">
+                    {selectedType === "dinheiro" && !multipayHint ? "Valor recebido" : "Valor a adicionar"}
+                  </Label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground select-none">R$</span>
+                    <Input
+                      ref={valueInputRef}
+                      type="text"
+                      inputMode="numeric"
+                      placeholder={faltaPagar.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      value={currentValue}
+                      onChange={(e) => setCurrentValue(formatMoneyInput(e.target.value))}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter") return
+                        e.preventDefault()
+                        if (selectedType === "dinheiro" && !multipayHint) {
+                          handleAddPayment("dinheiro")
+                          return
+                        }
+                        const hi = formaRuntimeList.find((f) => f.forma.id === highlightedFormaId && !f.disabled)
+                        if (hi) activateForma(hi.forma, hi.runtime)
+                      }}
+                      className="pl-12 h-12 text-lg font-semibold bg-secondary border-border"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleQuickValue(50)} className="border-border hover:bg-primary hover:text-primary-foreground">R$ 50</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleQuickValue(100)} className="border-border hover:bg-primary hover:text-primary-foreground">R$ 100</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleQuickValue(200)} className="border-border hover:bg-primary hover:text-primary-foreground">R$ 200</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleQuickValue(faltaPagar)} className="border-border hover:bg-primary hover:text-primary-foreground">Restante</Button>
+                  </div>
+
+                  {selectedType === "dinheiro" && !multipayHint && (
+                    <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Total a cobrar</span>
+                        <span className="font-semibold tabular-nums">{formatCurrency(faltaPagar)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Recebido em dinheiro</span>
+                        <span className="font-semibold tabular-nums">
+                          {dinheiroRecebido > 0 ? formatCurrency(dinheiroRecebido) : <span className="text-muted-foreground/50">—</span>}
+                        </span>
+                      </div>
+                      {trocoEstimado > 0 && (
+                        <div className="flex justify-between items-center font-bold border-t border-emerald-500/30 pt-2 text-emerald-700 dark:text-emerald-300">
+                          <span>Troco a dar</span>
+                          <span className="tabular-nums text-lg">{formatCurrency(trocoEstimado)}</span>
+                        </div>
+                      )}
+                      <Button
+                        type="button"
+                        className="w-full mt-1 h-10 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                        onClick={() => handleAddPayment("dinheiro")}
+                      >
+                        {dinheiroRecebido > 0
+                          ? `Confirmar Dinheiro${trocoEstimado > 0 ? ` · Troco ${formatCurrency(trocoEstimado)}` : ""}`
+                          : "Confirmar valor exato"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {descontoManualAtivo && !adminSessionOk ? (
+                <div className="rounded-xl border-2 border-amber-500/35 bg-amber-500/10 px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-amber-700 dark:text-amber-200">
+                    Desconto manual exige supervisor
+                  </p>
+                  <p className="mt-1 text-xs text-foreground/80 dark:text-white/70">
+                    Para confirmar a venda com desconto, informe a <strong>Senha do Supervisor</strong>.
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                    <div className="flex-1 space-y-1">
+                      <Label className="text-xs text-muted-foreground">Senha do Supervisor</Label>
+                      <Input
+                        type="password"
+                        value={supervisorPin}
+                        onChange={(e) => setSupervisorPin(e.target.value)}
+                        className="h-11 bg-background"
+                        placeholder="PIN"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11"
+                      disabled={supervisorBusy || supervisorPin.trim().length === 0}
+                      onClick={async () => {
+                        setSupervisorErr(null)
+                        setSupervisorBusy(true)
+                        try {
+                          const r = await fetch("/api/auth/admin", {
+                            method: "POST",
+                            credentials: "include",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ pin: supervisorPin.trim() }),
+                          })
+                          if (!r.ok) {
+                            setSupervisorErr("Senha inválida.")
+                            setAdminSessionOk(false)
+                            setAuthorizedAdmin(null)
+                            return
+                          }
+                          const j = (await r.json().catch(() => null)) as { admin?: { id?: string; name?: string } }
+                          setAdminSessionOk(true)
+                          setAuthorizedAdmin(j?.admin?.id ? { id: String(j.admin.id), name: String(j.admin.name || "Admin") } : { id: "admin", name: "Admin" })
+                          setSupervisorPin("")
+                        } catch {
+                          setSupervisorErr("Falha ao validar senha.")
+                          setAdminSessionOk(false)
+                          setAuthorizedAdmin(null)
+                        } finally {
+                          setSupervisorBusy(false)
+                        }
+                      }}
+                    >
+                      Autorizar
+                    </Button>
+                  </div>
+                  {supervisorErr ? <p className="mt-2 text-xs text-destructive">{supervisorErr}</p> : null}
+                </div>
+              ) : null}
+
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowMerchantPanel(!showMerchantPanel)}
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showMerchantPanel ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  {showMerchantPanel ? "Ocultar informações do lojista" : "Ver informações do lojista"}
+                </button>
+                {showMerchantPanel && (
+                  <Card className="bg-muted/30 border-dashed border-muted">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Custo da Peça</p>
+                          <p className="font-semibold text-foreground">{formatCurrency(custoPeca)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Lucro da Operação</p>
+                          <p className="font-semibold text-green-500">{formatCurrency(lucro)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Margem</p>
+                          <p className="font-semibold text-primary">{margemLucro}%</p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+
+            {/* ── Coluna direita: pagamento ── */}
+            <div className="min-w-0 space-y-3 p-5 lg:overflow-y-auto">
+              {multipayHint && faltaPagar > 0.009 && (
+                <div className="rounded-xl border-2 border-violet-500/40 bg-violet-500/10 px-4 py-3 dark:bg-violet-500/15">
+                  <div className="flex items-start gap-3">
+                    <Layers className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-violet-800 dark:text-violet-100">Pagamento Múltiplo</p>
+                      <p className="text-xs text-violet-900/80 dark:text-violet-100/80">
+                        Informe o valor parcial ao lado e escolha a forma. Repita até zerar o restante.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {exibirCapturaCpf && selectedCustomer && (
+                <Card className="border-amber-500/50 bg-amber-500/10">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base text-amber-950 dark:text-amber-100">
+                      CPF ou CNPJ obrigatório (carnê / à prazo)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Cliente <strong>{selectedCustomer.name}</strong> não possui documento válido. Informe o CPF (11 dígitos) ou CNPJ (14 dígitos).
+                    </p>
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                      <div className="flex-1 space-y-1">
+                        <Label>CPF ou CNPJ</Label>
+                        <Input
+                          className="h-11 bg-background"
+                          placeholder="Somente números"
+                          value={cpfDraft}
+                          onChange={(e) => setCpfDraft(e.target.value)}
+                          inputMode="numeric"
+                          autoComplete="off"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        className="shrink-0"
+                        disabled={!documentoClienteValido(cpfDraft)}
+                        onClick={() => {
+                          const d = normalizeDocDigits(cpfDraft)
+                          if (!selectedCustomer || !documentoClienteValido(d)) return
+                          onCustomerCpfUpdate?.(selectedCustomer.id, d)
+                          toast({ title: "Documento salvo", description: "CPF/CNPJ atualizado no cadastro do cliente." })
+                        }}
+                      >
+                        Salvar
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {faltaPagar > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label className="text-sm text-muted-foreground">Forma de pagamento</Label>
+                    <span className="text-[11px] text-muted-foreground">↑↓ navega · Enter seleciona</span>
+                  </div>
+                  {selectedCustomer && customerStoreCredit > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Crédito em haver disponível: <span className="text-primary font-medium">{formatCurrency(customerStoreCredit)}</span>
+                    </p>
+                  )}
+                  {maquininhasAtivasPdv.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Taxas de cartão não configuradas — venda registrada sem abatimento de taxa.
+                    </p>
+                  )}
+                  {cartaoLiberado && maquininhasAtivasPdv.length > 1 && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Maquininha (nome no caixa)</Label>
+                      <Select value={maquininhaPdvId} onValueChange={setMaquininhaPdvId}>
+                        <SelectTrigger className="h-10 bg-secondary border-border">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {maquininhasAtivasPdv.map((m) => (
+                            <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div
+                    role="group"
+                    aria-label="Formas de pagamento"
+                    onKeyDown={handlePaymentListKeyDown}
+                    className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                  >
+                    {formaRuntimeList.map(({ forma, runtime, Icon, disabled, title }) => {
+                      const isSelected = selectedType === runtime
+                      const isHighlighted = highlightedFormaId === forma.id
+                      return (
+                        <button
+                          key={forma.id}
+                          ref={(el) => {
+                            formaBtnRefs.current[forma.id] = el
+                          }}
+                          type="button"
+                          disabled={disabled}
+                          title={title}
+                          onFocus={() => setHighlightedFormaId(forma.id)}
+                          onClick={() => activateForma(forma, runtime)}
+                          className={cn(
+                            "flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3 text-left text-sm font-semibold text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                            formaPagamentoOutlineClasses(forma.cor, isSelected),
+                            isHighlighted && !disabled && "ring-2 ring-primary ring-offset-2 ring-offset-card",
+                          )}
+                        >
+                          <Icon className="h-5 w-5 shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{forma.label}</span>
+                          {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {payments.length > 0 && (
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="bg-green-500/10 border-green-500/30">
+                    <CardContent className="pt-3 pb-3">
+                      <p className="text-xs text-green-400 uppercase mb-1">Pago</p>
+                      <p className="text-xl font-bold text-green-500">{formatCurrency(totalPaid)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card
+                    className={
+                      faltaPagar > 0.009
+                        ? "border-amber-500/30 bg-amber-500/10"
+                        : troco > 0
+                          ? "border-emerald-500/35 bg-emerald-500/10"
+                          : "border-green-500/30 bg-green-500/10"
+                    }
+                  >
+                    <CardContent className="pt-3 pb-3">
+                      <p className={`mb-1 text-xs uppercase ${faltaPagar > 0.009 ? "text-amber-400" : troco > 0 ? "text-emerald-400" : "text-green-400"}`}>
+                        {faltaPagar > 0.009 ? "Restante" : troco > 0 ? "Troco" : "Completo"}
+                      </p>
+                      <p className={`text-xl font-bold ${faltaPagar > 0.009 ? "text-amber-500" : troco > 0 ? "text-emerald-500" : "text-green-500"}`}>
+                        {formatCurrency(faltaPagar > 0.009 ? faltaPagar : troco > 0 ? troco : 0)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+
+              {payments.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm text-muted-foreground">Formas adicionadas</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {payments.map((payment) => (
+                      <Badge key={payment.id} variant="secondary" className="px-3 py-2 text-sm flex items-center gap-2 bg-secondary">
+                        {getPaymentIcon(payment.type)}
+                        {getPaymentLabel(payment)}
+                        {payment.installments && ` ${payment.installments}x`}
+                        : {formatCurrency(payment.value)}
+                        <button onClick={() => handleRemovePayment(payment.id)} className="ml-1 hover:text-primary transition-colors">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedType === "a_prazo" && faltaPagar > 0 && (
+                <Card className="border-violet-500/50 bg-violet-500/5">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <CalendarClock className="w-5 h-5 text-violet-500" />
+                      Configurar À Prazo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-sm">Total à prazo</Label>
+                        <div className="h-10 px-3 flex items-center bg-secondary rounded-md border border-border">
+                          <span className="font-semibold">{formatCurrency(aPrazoBundleTotal)}</span>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm">Parcelas do saldo</Label>
+                        <Select value={aPrazoParcelas} onValueChange={setAPrazoParcelas}>
+                          <SelectTrigger className="bg-secondary border-border">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
+                              <SelectItem key={n} value={n.toString()}>
+                                {n}x de {formatCurrency(Math.round((aPrazoSaldoVal / n) * 100) / 100)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Entrada (opcional)</Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground select-none">R$</span>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="0,00"
+                            value={aPrazoEntradaStr}
+                            onChange={(e) => setAPrazoEntradaStr(formatMoneyInput(e.target.value))}
+                            className="pl-12 h-10 bg-secondary border-border"
+                          />
+                        </div>
+                        <Select value={aPrazoEntradaType} onValueChange={(v) => setAPrazoEntradaType(v as PaymentMethodType)}>
+                          <SelectTrigger className="w-32 bg-secondary border-border shrink-0">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                            <SelectItem value="pix">Pix</SelectItem>
+                            <SelectItem value="cartao_debito">Débito</SelectItem>
+                            <SelectItem value="cartao_credito">Crédito</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-sm">Primeiro vencimento</Label>
+                        <Input
+                          type="date"
+                          value={aPrazoPrimeiroVencDate}
+                          onChange={(e) => setAPrazoPrimeiroVencDate(e.target.value)}
+                          className="h-10 bg-secondary border-border"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm">Saldo financiado</Label>
+                        <div className="h-10 px-3 flex items-center bg-violet-500/10 rounded-md border border-violet-500/30">
+                          <span className="font-bold text-violet-700 dark:text-violet-300">{formatCurrency(aPrazoSaldoVal)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {aPrazoSaldoVal > 0.009 && aPrazoPrimeiroVencDate && (
+                      <div className="space-y-1 text-xs text-muted-foreground">
+                        {Array.from({ length: aPrazoParcelasN }, (_, i) => {
+                          const [y, m, d] = aPrazoPrimeiroVencDate.split("-")
+                          const vd = new Date(Number(y), Number(m) - 1, Number(d))
+                          vd.setDate(vd.getDate() + i * 30)
+                          const valorP =
+                            i === aPrazoParcelasN - 1
+                              ? Math.round((aPrazoSaldoVal - aPrazoParcelaBase * (aPrazoParcelasN - 1)) * 100) / 100
+                              : aPrazoParcelaBase
+                          return (
+                            <p key={i + 1}>
+                              {i + 1}/{aPrazoParcelasN} — {formatCurrency(valorP)} — vence em {vd.toLocaleDateString("pt-BR")}
+                            </p>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-2">
+                      {aPrazoEntradaVal > 0.009 && (
+                        <Badge className="bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15">
+                          Entrada {formatCurrency(aPrazoEntradaVal)}
+                        </Badge>
+                      )}
+                      <Badge className="bg-violet-500/15 border border-violet-500/40 text-violet-700 dark:text-violet-300 hover:bg-violet-500/15">
+                        Financiado {formatCurrency(aPrazoSaldoVal)}{aPrazoParcelasN > 1 ? ` em ${aPrazoParcelasN}x` : ""}
+                      </Badge>
+                    </div>
+
+                    <Button
+                      className="w-full bg-violet-600 hover:bg-violet-500 text-white font-bold"
+                      disabled={aPrazoSaldoVal <= 0.009 || !documentoClienteValido(cpfEfetivo)}
+                      onClick={handleConfirmarAPrazo}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Confirmar À Prazo{aPrazoParcelasN > 1 ? ` ${aPrazoParcelasN}x` : ""}
+                    </Button>
+                    {!documentoClienteValido(cpfEfetivo) && (
+                      <p className="text-xs text-destructive text-center">
+                        Informe e salve o CPF/CNPJ do cliente para continuar.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedType === "carne" && faltaPagar > 0 && (
+                <Card className="border-primary bg-primary/5">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-primary" />
+                      Configurar Carnê
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-sm">Parcelas</Label>
+                        <Select value={carneInstallments} onValueChange={setCarneInstallments}>
+                          <SelectTrigger className="bg-secondary border-border">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => (
+                              <SelectItem key={n} value={n.toString()}>
+                                {n}x de {formatCurrency((parseMoneyString(currentValue) || faltaPagar) / n)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm">Valor Total Carnê</Label>
+                        <div className="h-10 px-3 flex items-center bg-secondary rounded-md border border-border">
+                          <span className="font-semibold">{formatCurrency(parseMoneyString(currentValue) || faltaPagar)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button className="flex-1 bg-primary hover:bg-primary/90" onClick={() => handleAddPayment("carne")}>
+                        <Plus className="w-4 h-4 mr-2" />
+                        Adicionar Carnê {carneInstallments}x
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                        onClick={handleGerarBoletoCarne}
+                      >
+                        <Receipt className="w-4 h-4 mr-2" />
+                        Gerar Boleto/Carnê
+                      </Button>
+                    </div>
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      {gerarParcelasCarne(parseMoneyString(currentValue) || faltaPagar, parseInt(carneInstallments || "1", 10)).map((p) => (
+                        <p key={p.numero}>{p.numero}/{carneInstallments} - {formatCurrency(p.valor)} - vence em {p.vencimento}</p>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+
+          {/* ── Rodapé fixo ── */}
+          <div className="p-5 border-t border-border bg-card shrink-0">
+            {faltaPagar > 0.02 && payments.length > 0 && (
+              <p className="mb-2 text-center text-xs text-muted-foreground">
+                Falta <span className="font-bold text-amber-500">{formatCurrency(faltaPagar)}</span> para concluir
+              </p>
+            )}
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={onClose} className="flex-1 h-12 border-border">
+                Cancelar
+              </Button>
+              <Button
+                ref={confirmBtnRef}
+                onClick={() => {
+                  if (isConfirming) return
+                  if (docInvalidoParaConfirmar) {
+                    toast({
+                      variant: "destructive",
+                      title: "CPF/CNPJ obrigatório",
+                      description: "Complete e salve o documento do cliente para carnê ou faturamento à prazo.",
+                    })
+                    return
+                  }
+                  if (descontoManualAtivo && !adminSessionOk) {
+                    toast({
+                      variant: "destructive",
+                      title: "Supervisor obrigatório",
+                      description: "Autorize o desconto manual para confirmar a venda.",
+                    })
+                    return
+                  }
+                  setIsConfirming(true)
+                  setTimeout(() => {
+                    try {
+                      const normalized = normalizePaymentsToMatchTotal(payments, total)
+                      const adminIdForAudit = descontoManualAtivo ? (authorizedAdmin?.id || undefined) : undefined
+                      onConfirm?.(normalized, {
+                        cashierId,
+                        discountAuthorizedByAdminId: descontoManualAtivo ? adminIdForAudit : undefined,
+                        discountReais: Number(discountReais) || 0,
+                        discountPercent: Number(discountPercent) || 0,
+                      })
+                      onClose()
+                    } catch (err) {
+                      setIsConfirming(false)
+                      toast({
+                        variant: "destructive",
+                        title: "Erro ao confirmar",
+                        description: err instanceof Error ? err.message : "Erro desconhecido",
+                      })
+                    }
+                  }, 50)
+                }}
+                disabled={isConfirming || faltaPagar > 0.02 || docInvalidoParaConfirmar || (descontoManualAtivo && !adminSessionOk)}
+                className="flex-1 h-12 bg-emerald-600 font-bold text-zinc-950 hover:bg-emerald-500 disabled:opacity-50"
+              >
+                {isConfirming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isConfirming
+                  ? "Processando..."
+                  : faltaPagar > 0.02
+                    ? `Falta ${formatCurrency(faltaPagar)}`
+                    : docInvalidoParaConfirmar
+                      ? "Informe o CPF/CNPJ"
+                      : "Confirmar Pagamento"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   return (

@@ -1602,6 +1602,7 @@ export function PdvClassic({
 
       <PaymentModal
         isOpen={isPaymentModalOpen}
+        twoColumn
         onClose={() => {
           setIsPaymentModalOpen(false)
           setInstantPayIntent(null)
