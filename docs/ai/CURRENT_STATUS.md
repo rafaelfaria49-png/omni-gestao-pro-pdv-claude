@@ -1,17 +1,23 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 02 Jun 2026 — **BL-07 Estoque Multi-Depósito · Fase 1 (Fundação) EM ANDAMENTO** (autorização de área protegida concedida): models `Deposito`+`ProdutoDeposito`, migração aditiva `0011`, service layer **dormente**, backfill + bootstrap escritos — **zero mudança de comportamento**. Vitest **14/14** ✅; `tsc`/`build` **pendentes** (dev server em uso). Antes: Fase 0 (arquitetura) — Gate #1A; F-04 WhatsApp ✅ (ADR-0006)
+> Última atualização: 02 Jun 2026 — **BL-07 Estoque Multi-Depósito · Fase 1 (Fundação) CONCLUÍDA + cutover executado**: tabelas `depositos`/`produto_depositos` aplicadas (`db:push`), backfill em **10 lojas**, **invariante verde** (Σ ProdutoDeposito == Σ Produto.stock, drift=0); `prisma generate`/`tsc`/`build` ✅. Camada **dormente** — zero mudança de comportamento. Próximo oficial: **BL-07 Fase 2**. (DT-17 aberto até a Fase 2.)
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 ---
 
-### BL-07 Estoque Multi-Depósito — Fase 1 (Fundação) EM ANDAMENTO (02/06/2026)
+### BL-07 Estoque Multi-Depósito — Fase 1 (Fundação) CONCLUÍDA · cutover executado (02/06/2026)
 
-**Estado:** 🔄 em andamento — código escrito; **validação `tsc`/`build` PENDENTE** (dev server em
-uso real travando o `prisma generate`; o operador para o servidor num momento seguro e a validação
-roda em seguida). **Vitest do núcleo: 14/14 ✅** (roda sem regenerar o client — `import type` apenas).
-**Autorização de área protegida concedida** (schema + services de estoque core) — escopo da
-`SPRINT_BL07_FASE1`.
+**Estado:** ✅ **CONCLUÍDA** — código (commit `a0e24ef` + push) **e** cutover de banco executados,
+sob autorização de área protegida (`SPRINT_BL07_FASE1`). Validação completa: `prisma generate` ✅ ·
+`npx tsc --noEmit` ✅ · `npm run build` ✅ · Vitest **279 passed | 2 expected fail** (14 novos do núcleo).
+
+**Cutover (02/06/2026) — executado com sucesso:**
+- `npm run db:push` → *"Your database is now in sync with your Prisma schema"* (aditivo; **sem
+  data-loss**). Tabelas **`depositos`** e **`produto_depositos`** criadas.
+- `npm run db:backfill-deposito -- --exec` → **10 lojas** com **Depósito Principal** criado;
+  `ProdutoDeposito` populado a partir de `Produto.stock`.
+- **Invariante VERDE:** `Σ ProdutoDeposito == Σ Produto.stock` em todas as lojas (**drift total = 0**).
+  Re-dry-run confirmou `principal=ok` nas 10 lojas.
 
 **Princípio honrado:** **ZERO mudança de comportamento operacional.** É **só fundação** — nenhum
 consumidor (PDV/OS/relatórios) foi alterado; `Produto.stock` segue intacto como cache agregado e
@@ -40,9 +46,11 @@ depósito **e** produto são da mesma loja (anti-vazamento cross-tenant) — cob
   esses campos; ficam para fase posterior (ou atualização do ADR).
 - `storeId` em `ProdutoDeposito` é escalar indexado (sem FK direta a Store) — integridade via FKs de produto/depósito.
 
-**Pendências para fechar a Fase 1:** (1) parar o dev server → `prisma generate` → `npx tsc --noEmit`
-→ `npm run build`; (2) cutover (não executado): `npm run db:push` (aplica `0011`) → `db:backfill-deposito --exec`.
-**Sem commit/push** — parar para revisão (instrução do humano).
+**Encerramento:** Fase 1 **concluída** (código `a0e24ef` + push + cutover de banco com invariante verde).
+**Dívida aberta:** **DT-17** (P2) permanece — `ProdutoDeposito` passa a driftar de `Produto.stock` com
+a operação normal (consumidores ainda não cabeados); mitigado pela camada **dormente** + `db:backfill-deposito`
+re-runnable (re-sincroniza). **Próximo passo oficial: BL-07 Fase 2** (cabear write-paths PDV/OS por
+depósito + `depositoId` NOT NULL + seleção/transferência) — **não iniciada**.
 
 ---
 

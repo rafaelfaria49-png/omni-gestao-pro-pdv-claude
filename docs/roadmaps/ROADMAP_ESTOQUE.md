@@ -4,7 +4,7 @@ hub: estoque
 status: vivo
 owner: produto + Sonnet (técnico)
 last_update: 2026-06-02
-sprint_atual: **SPRINT_BL07_FASE1 (Fundação) — 🔄 em andamento (02/06)**; autorização de área protegida concedida; código escrito (models + migração 0011 + services dormentes + backfill + bootstrap), vitest 14/14, `tsc`/`build` pendentes; sem commit (revisão)
+sprint_atual: **SPRINT_BL07_FASE1 (Fundação) — ✅ CONCLUÍDA + cutover (02/06)**: db:push + backfill (10 lojas, invariante verde Σ==stock), tsc/build ✅, commit a0e24ef. Próximo oficial: **BL-07 Fase 2** (não iniciada). DT-17 aberto até a Fase 2
 ---
 
 # 📦 Roadmap — HUB Estoque
@@ -119,10 +119,11 @@ Estoque alimenta PDV, OS e Marketplace via consumos auditados. Importação atua
 [`BL07_FASE0_ARQUITETURA.md`](../architecture/estoque/BL07_FASE0_ARQUITETURA.md) (estado atual, gap
 analysis, modelo, fluxos, riscos P0–P3) + proposta faseada
 [`SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md).
-**Fase 1 (fundação) 🔄 em andamento (02/06):** models `Deposito`+`ProdutoDeposito`, migração aditiva
-`0011`, núcleo/service dormentes, backfill + bootstrap escritos; **zero mudança de comportamento**
-(PDV/OS/import inalterados; `Produto.stock` intacto). Vitest 14/14; `tsc`/`build` pendentes (dev
-server). Seleção de depósito, UI de transferência e reserva Marketplace ficam em fases posteriores (Fase 2/3).
+**Fase 1 (fundação) ✅ CONCLUÍDA + cutover (02/06):** models `Deposito`+`ProdutoDeposito`, migração
+`0011` **aplicada** (`db:push`), núcleo/service dormentes, backfill **executado** (**10 lojas** com
+Depósito Principal; invariante verde `Σ ProdutoDeposito == Σ Produto.stock`, drift=0). **Zero mudança
+de comportamento** (PDV/OS/import inalterados; `Produto.stock` intacto). `tsc`/`build`/vitest ✅.
+Seleção de depósito, UI de transferência e reserva Marketplace ficam em fases posteriores (Fase 2/3).
 **Saída:** lojas com N depósitos funcionando; transferências auditadas.
 
 ### Fase 3 — Conferência e entrada
@@ -168,13 +169,15 @@ server). Seleção de depósito, UI de transferência e reserva Marketplace fica
 
 ## 11. Sprint atual
 
-**`SPRINT_BL07_FASE1` — Fundação multi-depósito · 🔄 EM ANDAMENTO (02/06/2026).** Autorização de área
-protegida **concedida**. Implementado (aditivo, zero mudança de comportamento): models
-`Deposito`+`ProdutoDeposito`, migração `0011`, núcleo puro `lib/estoque/deposito-core.ts` + service
-dormente, `scripts/backfill-deposito.mjs`, hook best-effort em store creation, 14 testes
-(**vitest 14/14 ✅**). **Pendente:** `prisma generate` + `npx tsc --noEmit` + `npm run build` (dev
-server em uso real trava o generate) e o cutover (`db:push` `0011` + `db:backfill-deposito --exec`).
-Marcos: Adapter OS→Estoque Fase 2 (21/05); ADR-0007 Gate #1 (01/06); Fase 0 arquitetura Gate #1A (02/06).
+**`SPRINT_BL07_FASE1` — Fundação multi-depósito · ✅ CONCLUÍDA + cutover (02/06/2026).** Implementado
+(aditivo, zero mudança de comportamento) e commitado em `a0e24ef`: models `Deposito`+`ProdutoDeposito`,
+migração `0011`, núcleo puro `lib/estoque/deposito-core.ts` + service dormente,
+`scripts/backfill-deposito.mjs`, hook best-effort em store creation, 14 testes. **Cutover executado:**
+`db:push` (tabelas criadas, aditivo) + `db:backfill-deposito --exec` (**10 lojas** com Depósito
+Principal; `ProdutoDeposito` populado de `Produto.stock`; **invariante verde** Σ==stock, drift=0).
+Validação: `prisma generate` ✅ · `npx tsc --noEmit` ✅ · `npm run build` ✅ · vitest 279|2.
+**Próximo oficial: BL-07 Fase 2** (cabear write-paths PDV/OS por depósito + `depositoId` NOT NULL +
+seleção/transferência) — **não iniciada**. DT-17 (P2) aberto até a Fase 2.
 Proposta/dossiê: [`SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md) ·
 [`BL07_FASE0_ARQUITETURA.md`](../architecture/estoque/BL07_FASE0_ARQUITETURA.md).
 
@@ -205,7 +208,8 @@ Estoque tem **ledger profissional** com auditoria de usuário/documento/custo, i
 |---|---|
 | ~~ADR de multi-depósito~~ | ✅ Resolvido — **ADR-0007** aceito (2026-06-01) |
 | ~~Fase 0 arquitetura multi-depósito~~ | ✅ Concluída — **Gate #1A** aprovado (2026-06-02) |
-| Sprint Fase 1 (Fundação) — 🔄 **em andamento** (código escrito; `tsc`/`build` + cutover pendentes) | Fase 2 / adapter Marketplace |
+| ~~Sprint Fase 1 (Fundação) + cutover~~ | ✅ **Concluída** (02/06; 10 lojas, invariante verde, `a0e24ef`) |
+| **BL-07 Fase 2** (operacionalização: write-paths + `depositoId` NOT NULL) — não iniciada | adapter Marketplace (sync de saldo real) |
 | Marketplace HUB sem código | Adapter sync |
 | Decisão FIFO vs Médio | Fase 4 |
 

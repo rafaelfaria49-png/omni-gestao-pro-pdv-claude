@@ -1257,3 +1257,56 @@ files_created:
 flags: ["--with-protected-areas: prisma/schema.prisma", "--with-protected-areas: lib/estoque/* (services core + models)"]   # área protegida tocada COM autorização explícita
 notes: "BL-07 Fase 1 (Fundação multi-depósito) — implementa ADR-0007 com PRINCÍPIO INEGOCIÁVEL: ZERO mudança de comportamento operacional. É SÓ FUNDAÇÃO (aditiva e dormente). ESCOPO ENTREGUE (ETAPA 1-8): (1) MODELAGEM — schema.prisma + models Deposito (id, storeId, nome, codigo, ativo, principal, timestamps) e ProdutoDeposito (storeId, produtoId, depositoId, quantidade — SÓ saldo físico) + back-relations em Produto/Store; nada existente alterado/dropado. (2) MIGRATION — 0011_deposito_produto_deposito (CREATE TABLE x2 IF NOT EXISTS + índices + FKs guardadas estilo 0009/0010 + índice parcial único 'um principal por loja'; rollback = DROP das 2 tabelas; apply via db:push). (3) DEPÓSITO PRINCIPAL — ensureDepositoPrincipal idempotente (find-or-create; é o guard primário da invariante) + script backfill-deposito.mjs (lojas existentes: principal + ProdutoDeposito a partir de Produto.stock; gate de invariante Σ==stock; dry-run default) + npm run db:backfill-deposito + hook BEST-EFFORT em app/api/stores/route.ts (cria principal ao criar loja, NUNCA bloqueia a criação). (4) CACHE — Produto.stock INTACTO (fonte operacional + cache agregado); ProdutoDeposito é fonte estrutural por depósito; PDV/relatórios/dashboards/integrações não tocados. (5) SERVICE LAYER — lib/estoque/deposito-core.ts (PURO, client injetado, import type — testável sem regenerar client, padrão ops-upsert-venda) + lib/estoque/estoque-deposito-service.ts (wrapper prisma); getEstoqueAgregado/getEstoquePorDeposito/setEstoqueDeposito/ensureDepositoPrincipal/backfill — TODAS DORMENTES (nenhum consumidor de produção chama; cabeamento = Fase 2). (6) PROTEÇÕES MULTI-LOJA (ETAPA 6) — assertStoreId lança sem fallback loja-1 (ADR-0003); where.storeId em toda query; setEstoqueDeposito valida depósito E produto da mesma loja (anti-vazamento cross-tenant); coberto por testes. (7) TESTES — lib/estoque/deposito-core.test.ts 14/14 PASSED (helpers puros, ensure principal idempotente + por-loja, upsert create/update, isolamento cross-tenant, agregação, backfill idempotente/re-sync). (8) GOVERNANÇA — CURRENT_STATUS/OVERVIEW/ROADMAP_ESTOQUE/BLOCKERS/DIVIDA_TECNICA + esta ENTRY. VALIDAÇÃO: vitest do núcleo 14/14 ✅ (roda sem regenerar client — só import type). tsc/build PENDENTES: o dev server (next dev em 0.0.0.0:3000, rodando desde 01/06) trava o prisma generate (EPERM no query_engine .dll) e o PDV está em operação real na loja → o operador escolheu PARAR MANUALMENTE o servidor num momento seguro; tsc/build rodam logo após. DIVERGÊNCIAS CONSCIENTES vs ADR-0007 (a reconciliar no Gate #2 ou ADR follow-up): model nomeado ProdutoDeposito (não EstoqueSaldo); campo principal (não isDefault); SEM custoMedio por depósito, SEM tipo/metadata em Deposito, SEM depositoId em MovimentacaoEstoque — Fase 1 minimalista ('somente saldo físico', per diretriz do humano); storeId em ProdutoDeposito é escalar indexado (sem FK direta a Store; integridade via FKs produto/depósito). DÍVIDA NOVA: DT-17 (P2) — ProdutoDeposito pode driftar de Produto.stock até a Fase 2 cabear write-paths (mitigado: camada dormente + backfill re-runnable); + campos diferidos vs ADR-0007. ÁREAS PROTEGIDAS tocadas COM autorização: prisma/schema.prisma (+2 models +2 back-relations), lib/estoque/* (novos). app/api/stores/route.ts: +1 import + 1 hook best-effort (não-protegido; integração do bootstrap). package.json: +1 script. NÃO TOCADO (forbidden list respeitada): PDV (lib/ops-upsert-venda, components/*/vendas), Financeiro, WhatsApp, Marketplace, Fiscal, Auth, Proxy, Omni Agent, lib/operacoes/* (OS adapter os-estoque INTACTO). COMMIT/PUSH: PENDENTES — parar antes do commit para revisão (instrução explícita). CUTOVER (não executado): npm run db:push (aplica 0011) → npm run db:backfill-deposito --exec (com invariante verde) → deploy. REFERÊNCIAS: docs/decisions/ADR-0007-modelo-depositos.md (aceito) · docs/architecture/estoque/BL07_FASE0_ARQUITETURA.md · docs/sprints/proposals/SPRINT_BL07_FASE1.md · ENTRY 020 (pausa PDV) · ENTRY 019 (F-04 WhatsApp). Gate #1A (commit bc826ee) = wiring de governança da Fase 0."
 ```
+
+---
+
+```yaml
+# ─── ENTRY 022 ────────────────────────────────────────────────────
+ticket_id: BL07-FASE1-CUTOVER        # cutover de banco + encerramento formal da Fase 1 (paga parcial DT-08; mantém DT-17 aberto)
+skill_id: SKILL_EXEC_DEBT_ITEM       # closest fit (operacionaliza a fundação no banco + DOC_REFRESH de encerramento)
+skill_version: v1
+ia: claude_code
+modo: SAFE                           # perfil real = SAFE-lite REFORÇADO: tocou o BANCO DE PRODUÇÃO (db:push + backfill --exec) COM autorização explícita; sem código/schema novos
+started_at: 2026-06-02T00:00:00-03:00   # PROXY — cutover + encerramento de governança
+ended_at: 2026-06-02T00:00:00-03:00     # PROXY
+duration: null                          # precisão não rastreada (critério ENTRY 010-021)
+fases_completas: [CUTOVER, GOVERNANCE_CLOSE]   # db:push → dry-run → --exec → re-dry-run → generate/tsc/build → wiring de governança (fora do pipeline de 17 fases)
+fase_falha: null
+resultado: encerrada                    # cutover OK (invariante verde) + governança atualizada; docs NÃO commitados (instrução: sem commit)
+pr: null
+branch: main                            # working tree em main; SEM commit/push nesta etapa
+commit_anterior: a0e24ef                # HEAD = BL-07 Fase 1 (código). O cutover é operação de banco — não gera commit
+commit_final: null                      # sem commit (instrução explícita); docs de encerramento ficam no working tree
+rollback: false
+diff:                                   # APENAS docs de governança nesta etapa (cutover = operação de banco, 0 mudança de repo)
+  added: ~95
+  removed: ~38
+  files_modified: 6                     # CURRENT_STATUS, OVERVIEW, ROADMAP_ESTOQUE, BLOCKERS, DIVIDA_TECNICA, EXECUTION_LOG (esta ENTRY)
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-06-02T00:00:00-03:00   # date-proxy
+    pending: null
+    notes: "Cutover controlado autorizado com ordem obrigatória explícita (git status → HEAD==origin/main → db:push → dry-run → conferência → --exec se ok → re-dry-run → generate/tsc/build). Restrições: sem commit/push, sem Fase 2, sem alterar código/schema/migração/PDV/Marketplace/Fiscal."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "N/A — encerramento de governança docs-only; commit/push NÃO solicitados (instrução: sem commit)."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}   # cutover sem incidente; DT-17 (P2) já rastreado, segue aberto
+benchmark: null
+sprint: null                            # tracking em SPRINT_BL07_FASE1 (proposta) + DIVIDA_TECNICA DT-08/DT-17
+proposta: docs/sprints/proposals/SPRINT_BL07_FASE1.md
+auditoria: null
+adr_criada: null                        # ADR-0007 (aceito; Adendo §9 já registrado na ENTRY 021)
+memoria_criada: memory/project_estoque_multi_deposito_fundacao   # atualizada (cutover executado)
+docs_atualizados:
+  - docs/ai/CURRENT_STATUS.md                  # entrada Fase 1 → CONCLUÍDA + cutover (header + corpo)
+  - docs/ai/CURRENT_STATUS_OVERVIEW.md         # §1 (Estoque) + §6 entrada nova de encerramento
+  - docs/roadmaps/ROADMAP_ESTOQUE.md           # front matter + §8 Fase 2 + §11 + §14
+  - docs/status/BLOCKERS.md                     # BL-07 row + §5 #1
+  - docs/status/DIVIDA_TECNICA.md               # DT-08 (Fase 1+cutover) + DT-17 (⏳, drift pós-cutover)
+  - docs/status/EXECUTION_LOG.md                # esta ENTRY 022 (append-only)
+flags: ["--with-protected-areas: banco de produção (db:push + backfill --exec, autorizado)"]
+notes: "BL-07 Fase 1 — CUTOVER CONTROLADO + ENCERRAMENTO FORMAL. SEQUÊNCIA EXECUTADA (ordem obrigatória do humano): (1) git status limpo; (2) HEAD==origin/main==a0e24ef; (3) `npm run db:push` → 'Your database is now in sync with your Prisma schema. Done in 1.39s' (pooler 5432; ADITIVO, SEM data-loss, SEM abort) — tabelas `depositos` + `produto_depositos` criadas + client regenerado; (4) `npm run db:backfill-deposito` (dry-run) → 10 lojas, todas principal=CRIAR, produtos mapeados, Σstock por loja, drift=0, 0 erros; (5) conferência OK; (6) `npm run db:backfill-deposito -- --exec` → 10 lojas principal=criado, ProdutoDeposito populado de Produto.stock, **[OK] invariante verde: Σ ProdutoDeposito == Σ Produto.stock em todas as lojas (drift total = 0)**; (7) re-dry-run → todas principal=ok (persistido); (8) `npx prisma generate` ✅ · `npx tsc --noEmit` ✅ (exit 0) · `npm run build` ✅ (exit 0, árvore completa). RESULTADO POR LOJA (produtos/Σstock): loja-1 265/2900, loja-2 4639/22348, loja-5 800/3803, loja-6 499/2580, loja-7 231/17, loja-8 499/2580, loja-9 231/2872, loja-10 231/2865, loja-11 4639/22348, loja-teste-caixa 1597/8255 — drift=0 em todas. CRITÉRIO DE SUCESSO 100%: depositos✅ produto_depositos✅ 1 principal/loja✅(10/10) ProdutoDeposito por produto✅ Σ==Σ✅ zero divergência✅ app igual✅(build/tsc/dormente). ESTADO: Fase 1 CONCLUÍDA (código a0e24ef + push + cutover). Multi-depósito FUNDADO mas DORMENTE — nenhum consumidor (PDV/OS/relatórios) lê/escreve ProdutoDeposito; Produto.stock segue fonte operacional. DT-08 segue 🔄 (operacionalização = Fase 2). DT-17 (P2) ⏳ ABERTO ATÉ FASE 2 — atenção: a invariante está verde AGORA, mas o drift passa a acumular com a operação normal (vendas/OS/entradas só mexem em Produto.stock); mitigado por dormência + db:backfill-deposito re-runnable (recomenda-se re-backfill antes de abrir a Fase 2). EFEITO COLATERAL TRANSPARENTE: db:push sincroniza o schema INTEIRO — se whatsapp_phone_numbers (migração 0010, cutover WhatsApp pendente) não existisse, foi criada agora (vazia, inócua; roteamento só ativa com linhas+env). ÁREAS PROTEGIDAS: banco de produção tocado COM autorização (db:push aplica DDL aditiva da migração 0011 já commitada; backfill grava ProdutoDeposito). NÃO TOCADO: código, schema (apenas APLICADO o já-commitado), migração (não editada), PDV, Marketplace, Fiscal, Auth, Proxy, Omni Agent. COMMIT/PUSH: NÃO feitos (instrução). FASE 2: NÃO iniciada. PRÓXIMO PASSO OFICIAL: BL-07 Fase 2 (cabear write-paths PDV/OS por depósito + depositoId NOT NULL + seleção/transferência). REFERÊNCIAS: ENTRY 021 (implementação Fase 1) · commit a0e24ef · ADR-0007 §9 (reconciliação) · docs/sprints/proposals/SPRINT_BL07_FASE1.md."
+```
