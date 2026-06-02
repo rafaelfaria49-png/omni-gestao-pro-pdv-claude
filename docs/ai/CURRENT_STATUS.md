@@ -1,7 +1,49 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 02 Jun 2026 — **BL-07 Estoque Multi-Depósito · Fase 1 (Fundação) CONCLUÍDA + cutover executado**: tabelas `depositos`/`produto_depositos` aplicadas (`db:push`), backfill em **10 lojas**, **invariante verde** (Σ ProdutoDeposito == Σ Produto.stock, drift=0); `prisma generate`/`tsc`/`build` ✅. Camada **dormente** — zero mudança de comportamento. Próximo oficial: **BL-07 Fase 2**. (DT-17 aberto até a Fase 2.)
+> Última atualização: 02 Jun 2026 — **Operações HUB · Nova OS operacional**: botão "Criar OS" corrigido (id de cliente falso violava a FK), **cadastro de cliente no modal**, **busca de peças** (nome/SKU/EAN), **serviço/peça manual**, **financeiro editável** (lucro recalcula), checklist com estados visíveis. `tsc`/`build` ✅. Anterior: **BL-07 Fase 1** (Fundação) concluída + cutover (multi-depósito **dormente**, drift=0); próximo estrutural: **BL-07 Fase 2** (DT-17 aberto até lá).
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Operações HUB — Nova OS operacional: cria OS de verdade + cliente/serviços/peças/financeiro (02/06/2026)
+
+**Contexto:** a tela **Nova Ordem de Serviço** (`/dashboard/operacoes-v2`, modal Lovable) estava crua e o
+botão **"Criar OS" falhava em silêncio** ao digitar um cliente novo. A auditoria também localizou a
+implementação real anterior na rota legada `/dashboard/os` (`OsPageClient.tsx`, DT-04) — seus padrões
+maduros (busca de cliente + novo cliente inline, senha por tipo, financeiro editável, erro real) foram
+**portados** para a Nova OS oficial (ADR-0001), sem reverter para a legada.
+
+**Causa raiz do botão:** o modal enviava `clienteId: clienteId || c_tmp_${...}` — um id **falso** quando
+nenhum cliente existente era selecionado. `OrdemServico.clienteId` é **FK real** (`schema.prisma:657`,
+`onDelete: Restrict`) → `createOS` violava a FK → exceção → `catch` genérico "Falha ao criar OS".
+Selecionar cliente existente funcionava; **digitar um cliente novo quebrava**.
+
+**Correções (escopo: Operações HUB / Nova OS apenas):**
+
+| Item | Antes | Agora |
+|---|---|---|
+| Criar OS | id de cliente falso → FK violada → erro genérico | resolve cliente **real** (selecionado ou criado) + **mensagem de erro real** |
+| Cliente | Select simples | **busca** (nome/tel/CPF) + **cadastro de novo cliente no modal** (reusa `createCliente`) |
+| Senha | texto livre | tipo **Numérica/PIN · Texto · Padrão (desenho)** com input adaptado |
+| Checklist | N/T selecionado ~invisível | **OK=verde · Ruim=vermelho · N/T=azul**, sempre marcado |
+| Serviços | dropdown vazio = "risco" | empty-state honesto + busca + **serviço manual** (custo/valor/garantia/obs) |
+| Peças | lista gigante sem busca | **busca por nome/SKU/EAN** + preço/estoque + **item avulso manual** |
+| Financeiro | valores travados | **custo/valor editáveis por linha**, lucro recalcula, custo **oculto do cliente** |
+| UX | rodapé rolava | rodapé **fixo**, estado "Criando…", erro visível |
+
+**Arquivos:** `components/operacoes/lovable/components/operacoes/NovaOSModal.tsx` (rework),
+`api/clientes.ts` (+`criarCliente` reusa `createCliente`), `store/osStore.tsx` (expõe `criarCliente`),
+`types/os.ts` (+`senhaEquipamentoTipo`/`observacao` opcionais). **Não alterado:** `prisma/schema.prisma`,
+`createOS`, auth/proxy, PDV, Financeiro HUB, WhatsApp, Marketplace, Fiscal, BL-07.
+
+**Fase futura (documentada):** grid visual de desbloqueio de 9 pontos (hoje placeholder honesto em texto);
+itens manuais não movimentam estoque (avisado na UI); reaproveitar `ConsultoriaIA` na Nova OS; decomissionar
+a rota legada `/dashboard/os` (DT-04).
+
+**Validação:** `npx tsc --noEmit` ✅ (exit 0) · `npm run build` ✅ (exit 0, 97 rotas; a 1ª execução teve o
+flake conhecido de OOM de worker no Windows em "Generating static pages" → re-run com
+`--max-old-space-size=8192` passou limpo). A Nova OS **persiste de verdade** via `createOS` (Server Action
+Prisma) — não é mock.
 
 ---
 

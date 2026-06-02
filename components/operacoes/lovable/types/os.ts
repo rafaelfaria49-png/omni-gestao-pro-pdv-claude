@@ -276,8 +276,10 @@ export interface OrdemServico {
 
   // Novos campos operacionais
   checklist?: ChecklistItem[];
-  servicosCatalogo?: { servicoId: string; descricao: string; custoInterno: number; valorVenda: number; prazoGarantiaDias: number; termoGarantia: string }[];
+  servicosCatalogo?: { servicoId: string; descricao: string; custoInterno: number; valorVenda: number; prazoGarantiaDias: number; termoGarantia: string; observacao?: string }[];
   senhaEquipamento?: string;
+  /** Como a senha foi registrada: numérica/PIN, texto alfanumérico ou descrição do padrão (desenho). */
+  senhaEquipamentoTipo?: "numerica" | "texto" | "padrao";
   observacaoCliente?: string;
 
   /** Base para faturamento real (payload apenas; sem modelo financeiro ainda). */

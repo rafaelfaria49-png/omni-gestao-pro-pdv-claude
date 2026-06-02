@@ -15,7 +15,7 @@ import type {
   PecaUsada,
   Tecnico,
 } from "@/types/os";
-import type { ProdutoDTO } from "@/app/actions/cadastros";
+import type { ProdutoDTO, ClienteKind } from "@/app/actions/cadastros";
 import type { ClienteRecord } from "@/data/clientesSeed";
 import type { PecaEstoque } from "@/types/estoque";
 import type { Loja } from "@/types/loja";
@@ -92,6 +92,8 @@ interface OSContextValue {
 
   // catálogo de serviços e atendimentos rápidos
   upsertServico: (servico: CatalogoServico) => Promise<void>;
+  /** Cadastra um cliente real e o adiciona à lista local (usado pela Nova OS). */
+  criarCliente: (input: { nome: string; telefone?: string; documento?: string; tipo?: ClienteKind }) => Promise<ClienteRecord>;
   criarAtendimento: (input: Omit<AtendimentoRapido, "id" | "criadoEm">) => Promise<AtendimentoRapido>;
 }
 
@@ -253,6 +255,11 @@ export function OSProvider({ children, initialStoreId }: { children: ReactNode; 
       upsertServico: async (servico) => {
         await servicosApi.upsertServico(servico);
         setServicosCatalogo(await servicosApi.listServicos(storeId));
+      },
+      criarCliente: async (input) => {
+        const novo = await clientesApi.criarCliente(storeId, input);
+        setClientes((prev) => [novo, ...prev]);
+        return novo;
       },
       criarAtendimento: async (input) => {
         const novo = await atendimentosApi.criarAtendimento(input);
