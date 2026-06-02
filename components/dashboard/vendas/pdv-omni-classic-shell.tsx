@@ -677,7 +677,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       {!isModoRapido ? <ShortcutBar onAction={props.onShortcutAction} /> : null}
 
       <Dialog open={props.productSearchOpen} onOpenChange={props.onProductSearchOpenChange}>
-        <DialogContent className="w-[96vw] max-w-[1300px] border-border bg-card text-foreground">
+        <DialogContent className="w-[94vw] max-w-[1280px] sm:max-w-[1280px] border-border bg-card text-foreground">
           <DialogHeader>
             <DialogTitle>Pesquisar Produto (F3)</DialogTitle>
             <DialogDescription className="text-muted-foreground/75">
@@ -714,11 +714,10 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             </div>
           ) : (
             <div className="rounded-md border border-border">
-              <div className="grid grid-cols-[120px_140px_minmax(0,1fr)_52px_92px_120px] items-center gap-3 border-b border-border bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="grid grid-cols-[minmax(320px,1fr)_120px_130px_88px_116px] items-center gap-3 border-b border-border bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <span>Produto</span>
                 <span>Cód. / SKU</span>
                 <span>EAN</span>
-                <span>Produto</span>
-                <span className="text-center">Un.</span>
                 <span className="text-right">Estoque</span>
                 <span className="text-right">Preço</span>
               </div>
@@ -740,17 +739,16 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                         props.onAddProductFromSearch(p)
                       }}
                       className={cn(
-                        "grid w-full grid-cols-[120px_140px_minmax(0,1fr)_52px_92px_120px] items-center gap-3 border-b border-border/50 px-3 py-2 text-left text-sm text-foreground transition-colors cursor-pointer",
+                        "grid w-full grid-cols-[minmax(320px,1fr)_120px_130px_88px_116px] items-center gap-3 border-b border-border/50 px-3 py-2 text-left text-sm text-foreground transition-colors cursor-pointer",
                         isActive ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : "hover:bg-muted/65",
                       )}
                     >
-                      <div className="break-all font-mono text-xs text-foreground" title={sku}>{sku}</div>
-                      <div className="break-all font-mono text-xs text-muted-foreground/75" title={ean || "sem EAN"}>{ean || "—"}</div>
                       <div className="min-w-0">
-                        <div className="break-words font-medium leading-snug text-foreground" title={p.name}>{p.name}</div>
-                        <div className="break-words text-[11px] text-muted-foreground/55">{p.category}</div>
+                        <div className="line-clamp-2 break-words font-medium leading-snug text-foreground" title={p.name}>{p.name}</div>
+                        <div className="truncate text-[11px] text-muted-foreground/55">{p.category}</div>
                       </div>
-                      <div className="text-center text-xs text-muted-foreground/70">{p.vendaPorPeso ? "KG" : "UN"}</div>
+                      <div className="truncate font-mono text-xs text-foreground" title={sku}>{sku}</div>
+                      <div className="truncate font-mono text-xs text-muted-foreground/75" title={ean || "sem EAN"}>{ean || "—"}</div>
                       <div
                         className={cn(
                           "text-right text-xs tabular-pdv",

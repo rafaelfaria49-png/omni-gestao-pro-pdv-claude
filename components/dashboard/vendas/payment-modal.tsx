@@ -765,7 +765,7 @@ export function PaymentModal({
               })
             }
           }}
-          className="w-[96vw] max-w-[1400px] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-card border-border"
+          className="w-[94vw] max-w-[1450px] sm:max-w-[1450px] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-card border-border"
         >
           <DialogHeader className="px-5 py-2.5 border-b border-border shrink-0">
             <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -888,9 +888,7 @@ export function PaymentModal({
                         className="w-full mt-1 h-10 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
                         onClick={() => handleAddPayment("dinheiro")}
                       >
-                        {dinheiroRecebido > 0
-                          ? `Confirmar Dinheiro${trocoEstimado > 0 ? ` · Troco ${formatCurrency(trocoEstimado)}` : ""}`
-                          : "Confirmar valor exato"}
+                        {dinheiroRecebido > 0 ? "Confirmar Dinheiro" : "Confirmar valor exato"}
                       </Button>
                     </div>
                   )}
