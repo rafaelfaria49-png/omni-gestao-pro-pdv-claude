@@ -677,7 +677,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       {!isModoRapido ? <ShortcutBar onAction={props.onShortcutAction} /> : null}
 
       <Dialog open={props.productSearchOpen} onOpenChange={props.onProductSearchOpenChange}>
-        <DialogContent className="w-[94vw] max-w-[1280px] sm:max-w-[1280px] border-border bg-card text-foreground">
+        <DialogContent className="w-[94vw] max-w-[1000px] sm:max-w-[1000px] border-border bg-card text-foreground">
           <DialogHeader>
             <DialogTitle>Pesquisar Produto (F3)</DialogTitle>
             <DialogDescription className="text-muted-foreground/75">
@@ -714,7 +714,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             </div>
           ) : (
             <div className="rounded-md border border-border">
-              <div className="grid grid-cols-[minmax(320px,1fr)_120px_130px_88px_116px] items-center gap-3 border-b border-border bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="grid grid-cols-[minmax(220px,50fr)_minmax(96px,15fr)_minmax(104px,15fr)_minmax(64px,10fr)_minmax(88px,10fr)] items-center gap-3 border-b border-border bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>Produto</span>
                 <span>Cód. / SKU</span>
                 <span>EAN</span>
@@ -739,7 +739,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                         props.onAddProductFromSearch(p)
                       }}
                       className={cn(
-                        "grid w-full grid-cols-[minmax(320px,1fr)_120px_130px_88px_116px] items-center gap-3 border-b border-border/50 px-3 py-2 text-left text-sm text-foreground transition-colors cursor-pointer",
+                        "grid w-full grid-cols-[minmax(220px,50fr)_minmax(96px,15fr)_minmax(104px,15fr)_minmax(64px,10fr)_minmax(88px,10fr)] items-center gap-3 border-b border-border/50 px-3 py-2 text-left text-sm text-foreground transition-colors cursor-pointer",
                         isActive ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : "hover:bg-muted/65",
                       )}
                     >

@@ -1,6 +1,6 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 01 Jun 2026 — **Pausa operacional PDV** (estabilização em uso real, pré-BL-07): modal de pagamento sem F11 + busca F3 profissional. Antes: F-04 WhatsApp ✅ (ADR-0006); ADR-0007 aceito → BL-12 resolvido
+> Última atualização: 02 Jun 2026 — **Pausa operacional PDV** (estabilização em uso real, pré-BL-07): **modais F1/F3 do Clássico finalizados** (largura/grid equilibrados, sem overflow). Antes: modal sem F11 + busca F3 profissional; F-04 WhatsApp ✅ (ADR-0006); ADR-0007 aceito → BL-12 resolvido
 > Referência rápida para retomar o projeto ou fazer onboarding.
 
 ---
@@ -31,6 +31,7 @@ troca caótica de prioridade.
 | **Modal de pagamento** 2 colunas + teclado (Clássico) ✅ | `03b4ac2` |
 | **Modal de pagamento sem F11** (largura `max-w-[1250px]`, compactação, scroll único, Confirmar muted) + **busca F3 profissional** (tabela Cód./SKU·EAN·Produto·Un·Estoque·Preço + teclado ↑↓/Enter + contador) ✅ | `292e073` |
 | **UX inspirada no Smart Genius** (formas em lista vertical, busca operacional) ✅ | `292e073` |
+| **Modais F1/F3 do Clássico — largura/grid corrigidos e equilibrados** (causa-raiz: `sm:max-w-lg` do `DialogContent` vencia; override `sm:max-w-[…]` via `cn`/twMerge. **F1** pagamento: 1000px, colunas 45/55, botão "Confirmar Dinheiro" enxuto. **F3** busca: 1000px, grid 5-col `Produto·SKU·EAN·Estoque·Preço` ~50/15/15/10/10 com `minmax` anti-colapso + `line-clamp-2`, sem barra horizontal). **Ajuste visual apenas** — lógica/teclado/cálculos/APIs intactos; demais shells byte-idênticos ✅ | `90f433a` · `4e229b9` · *(equilíbrio neste commit)* |
 
 **Prioridade imediata (sequência oficial):** (1) **finalizar PDV operacional** → (2) abrir **BL-07**
 (estoque multi-depósito, Fase 0) → (3) iniciar **Fiscal** (NFC-e/SAT). **Importador Universal IA
@@ -38,6 +39,18 @@ fica adiado.**
 
 **Esta entrada é só governança/documentação** — sem mudança de código/schema/runtime de PDV. As
 correções de PDV acima já foram entregues e validadas (`tsc`/`build`) nos commits citados.
+
+**HANDOFF · 02/06/2026 · PDV (Clássico)**
+De: Claude Code (Opus) → próxima sessão
+
+- ✅ **Concluído:** modais **F1** (Finalizar Pagamento) e **F3** (Pesquisar Produto) do Clássico — largura/grid equilibrados em **1000px**, sem barra horizontal, sem colapso "letra-por-letra", sem scroll vertical inicial; botão de dinheiro enxuto ("Confirmar Dinheiro"). `npx tsc --noEmit` 0 erros · `next build --webpack` OK (97 páginas).
+- 🟡 **Em aberto:** validação visual final pelo operador na loja (`npm run dev:clean` + hard refresh).
+- ⛔ **Bloqueado por:** nada.
+- **Próxima ação:** considerar a **pausa operacional do PDV encerrada** e abrir **BL-07** (estoque multi-depósito, Fase 0 — ADR-0007 já aceito). **Não reabrir escopo de PDV** sem novo pedido explícito.
+- **Arquivos críticos:** `components/dashboard/vendas/payment-modal.tsx` (branch `twoColumn`) · `components/dashboard/vendas/pdv-omni-classic-shell.tsx` (modal F3) · causa-raiz em `components/ui/dialog.tsx:64` (`sm:max-w-lg`).
+- **Não tocar:** demais shells PDV (Supermercado / Venda Completa / Black — byte-idênticos), lógica/teclado/cálculos/eventos/APIs, estoque, financeiro, schema, auth, proxy.
+- **Critério de pronto:** operador confirma F1/F3 visualmente equilibrados em uso real.
+- **Risco:** baixo (somente classes Tailwind de largura/grid/espaçamento).
 
 ---
 

@@ -765,7 +765,7 @@ export function PaymentModal({
               })
             }
           }}
-          className="w-[94vw] max-w-[1450px] sm:max-w-[1450px] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-card border-border"
+          className="w-[94vw] max-w-[1000px] sm:max-w-[1000px] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-card border-border"
         >
           <DialogHeader className="px-5 py-2.5 border-b border-border shrink-0">
             <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -777,7 +777,7 @@ export function PaymentModal({
             </p>
           </DialogHeader>
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-2">
+          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[45fr_55fr]">
             {/* ── Coluna esquerda: financeiro ── */}
             <div className="min-w-0 space-y-3 p-4 lg:border-r lg:border-border">
               <div className="rounded-lg border border-border bg-secondary/40 p-3 space-y-2">
@@ -1079,7 +1079,7 @@ export function PaymentModal({
                     role="group"
                     aria-label="Formas de pagamento"
                     onKeyDown={handlePaymentListKeyDown}
-                    className="flex flex-col gap-1"
+                    className="flex flex-col gap-1.5"
                   >
                     {formaRuntimeList.map(({ forma, runtime, Icon, disabled, title }) => {
                       const isSelected = selectedType === runtime
@@ -1096,7 +1096,7 @@ export function PaymentModal({
                           onFocus={() => setHighlightedFormaId(forma.id)}
                           onClick={() => activateForma(forma, runtime)}
                           className={cn(
-                            "flex w-full items-center gap-3 rounded-lg border-2 px-3.5 py-1.5 text-left text-sm font-semibold text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                            "flex w-full items-center gap-3 rounded-lg border-2 px-3.5 py-2 text-left text-sm font-semibold text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                             formaPagamentoOutlineClasses(forma.cor, isSelected),
                             isHighlighted && !disabled && "ring-2 ring-primary ring-offset-2 ring-offset-card",
                           )}
