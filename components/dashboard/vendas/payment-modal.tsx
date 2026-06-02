@@ -765,9 +765,9 @@ export function PaymentModal({
               })
             }
           }}
-          className="w-[96vw] max-w-[1250px] max-h-[92vh] flex flex-col p-0 overflow-hidden bg-card border-border"
+          className="w-[96vw] max-w-[1400px] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-card border-border"
         >
-          <DialogHeader className="px-5 py-3 border-b border-border shrink-0">
+          <DialogHeader className="px-5 py-2.5 border-b border-border shrink-0">
             <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
               <Calculator className="w-6 h-6 text-primary" />
               Finalizar Pagamento
@@ -827,7 +827,7 @@ export function PaymentModal({
                 label="Total a pagar"
                 valorFormatado={formatCurrency(total)}
                 glow="none"
-                className="bg-primary/5 border border-primary/25 rounded-xl py-3 text-center [&_p]:text-2xl [&_p]:font-bold"
+                className="bg-primary/5 border border-primary/25 rounded-xl py-2.5 text-center [&_p]:text-2xl [&_p]:font-bold"
               />
 
               {faltaPagar > 0 && (
@@ -1081,7 +1081,7 @@ export function PaymentModal({
                     role="group"
                     aria-label="Formas de pagamento"
                     onKeyDown={handlePaymentListKeyDown}
-                    className="flex flex-col gap-1.5"
+                    className="flex flex-col gap-1"
                   >
                     {formaRuntimeList.map(({ forma, runtime, Icon, disabled, title }) => {
                       const isSelected = selectedType === runtime
@@ -1098,7 +1098,7 @@ export function PaymentModal({
                           onFocus={() => setHighlightedFormaId(forma.id)}
                           onClick={() => activateForma(forma, runtime)}
                           className={cn(
-                            "flex w-full items-center gap-3 rounded-lg border-2 px-3.5 py-2 text-left text-sm font-semibold text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                            "flex w-full items-center gap-3 rounded-lg border-2 px-3.5 py-1.5 text-left text-sm font-semibold text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                             formaPagamentoOutlineClasses(forma.cor, isSelected),
                             isHighlighted && !disabled && "ring-2 ring-primary ring-offset-2 ring-offset-card",
                           )}
@@ -1350,7 +1350,7 @@ export function PaymentModal({
           </div>
 
           {/* ── Rodapé fixo ── */}
-          <div className="px-5 py-3 border-t border-border bg-card shrink-0">
+          <div className="px-5 py-2.5 border-t border-border bg-card shrink-0">
             {faltaPagar > 0.02 && payments.length > 0 && (
               <p className="mb-2 text-center text-[11px] text-muted-foreground">
                 Falta <span className="font-bold text-amber-500">{formatCurrency(faltaPagar)}</span> para concluir
