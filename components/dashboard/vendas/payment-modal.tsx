@@ -11,6 +11,7 @@ import {
   Plus,
   Calculator,
   Check,
+  ChevronRight,
   Eye,
   EyeOff,
   Receipt,
@@ -305,6 +306,13 @@ export function PaymentModal({
     const p = Number(discountPercent) || 0
     return r > 0.009 || p > 0.009
   }, [discountPercent, discountReais])
+
+  /** Habilita o botão Confirmar (twoColumn): só quando o pagamento pode realmente ser fechado. */
+  const podeConfirmar =
+    !isConfirming &&
+    faltaPagar <= 0.02 &&
+    !docInvalidoParaConfirmar &&
+    !(descontoManualAtivo && !adminSessionOk)
 
   // ── Computações à prazo ──────────────────────────────────────────────────────
   const aPrazoBundleTotal = Math.min(
@@ -757,9 +765,9 @@ export function PaymentModal({
               })
             }
           }}
-          className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col p-0 overflow-hidden bg-card border-border"
+          className="w-[96vw] max-w-[1250px] max-h-[92vh] flex flex-col p-0 overflow-hidden bg-card border-border"
         >
-          <DialogHeader className="p-5 pb-3 border-b border-border shrink-0">
+          <DialogHeader className="px-5 py-3 border-b border-border shrink-0">
             <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
               <Calculator className="w-6 h-6 text-primary" />
               Finalizar Pagamento
@@ -769,10 +777,10 @@ export function PaymentModal({
             </p>
           </DialogHeader>
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-2 lg:overflow-hidden">
+          <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-2">
             {/* ── Coluna esquerda: financeiro ── */}
-            <div className="min-w-0 space-y-4 p-5 lg:overflow-y-auto lg:border-r lg:border-border">
-              <div className="rounded-lg border border-border bg-secondary/40 p-4 space-y-3">
+            <div className="min-w-0 space-y-3 p-4 lg:border-r lg:border-border">
+              <div className="rounded-lg border border-border bg-secondary/40 p-3 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="font-medium">{formatCurrency(cartSubtotal)}</span>
@@ -819,7 +827,7 @@ export function PaymentModal({
                 label="Total a pagar"
                 valorFormatado={formatCurrency(total)}
                 glow="none"
-                className="bg-primary/5 border border-primary/25 rounded-2xl py-4 text-center [&_p]:text-3xl [&_p]:font-bold"
+                className="bg-primary/5 border border-primary/25 rounded-xl py-3 text-center [&_p]:text-2xl [&_p]:font-bold"
               />
 
               {faltaPagar > 0 && (
@@ -982,7 +990,7 @@ export function PaymentModal({
             </div>
 
             {/* ── Coluna direita: pagamento ── */}
-            <div className="min-w-0 space-y-3 p-5 lg:overflow-y-auto">
+            <div className="min-w-0 space-y-3 p-4">
               {multipayHint && faltaPagar > 0.009 && (
                 <div className="rounded-xl border-2 border-violet-500/40 bg-violet-500/10 px-4 py-3 dark:bg-violet-500/15">
                   <div className="flex items-start gap-3">
@@ -1073,7 +1081,7 @@ export function PaymentModal({
                     role="group"
                     aria-label="Formas de pagamento"
                     onKeyDown={handlePaymentListKeyDown}
-                    className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                    className="flex flex-col gap-1.5"
                   >
                     {formaRuntimeList.map(({ forma, runtime, Icon, disabled, title }) => {
                       const isSelected = selectedType === runtime
@@ -1090,14 +1098,18 @@ export function PaymentModal({
                           onFocus={() => setHighlightedFormaId(forma.id)}
                           onClick={() => activateForma(forma, runtime)}
                           className={cn(
-                            "flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3 text-left text-sm font-semibold text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                            "flex w-full items-center gap-3 rounded-lg border-2 px-3.5 py-2 text-left text-sm font-semibold text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
                             formaPagamentoOutlineClasses(forma.cor, isSelected),
                             isHighlighted && !disabled && "ring-2 ring-primary ring-offset-2 ring-offset-card",
                           )}
                         >
                           <Icon className="h-5 w-5 shrink-0" />
-                          <span className="min-w-0 flex-1 truncate">{forma.label}</span>
-                          {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" />}
+                          <span className="min-w-0 flex-1">{forma.label}</span>
+                          {isSelected ? (
+                            <Check className="h-4 w-4 shrink-0 text-primary" />
+                          ) : isHighlighted && !disabled ? (
+                            <ChevronRight className="h-4 w-4 shrink-0 text-primary" />
+                          ) : null}
                         </button>
                       )
                     })}
@@ -1338,14 +1350,14 @@ export function PaymentModal({
           </div>
 
           {/* ── Rodapé fixo ── */}
-          <div className="p-5 border-t border-border bg-card shrink-0">
+          <div className="px-5 py-3 border-t border-border bg-card shrink-0">
             {faltaPagar > 0.02 && payments.length > 0 && (
-              <p className="mb-2 text-center text-xs text-muted-foreground">
+              <p className="mb-2 text-center text-[11px] text-muted-foreground">
                 Falta <span className="font-bold text-amber-500">{formatCurrency(faltaPagar)}</span> para concluir
               </p>
             )}
             <div className="flex gap-3">
-              <Button variant="outline" onClick={onClose} className="flex-1 h-12 border-border">
+              <Button variant="outline" onClick={onClose} className="flex-1 h-11 border-border">
                 Cancelar
               </Button>
               <Button
@@ -1390,8 +1402,13 @@ export function PaymentModal({
                     }
                   }, 50)
                 }}
-                disabled={isConfirming || faltaPagar > 0.02 || docInvalidoParaConfirmar || (descontoManualAtivo && !adminSessionOk)}
-                className="flex-1 h-12 bg-emerald-600 font-bold text-zinc-950 hover:bg-emerald-500 disabled:opacity-50"
+                disabled={!podeConfirmar}
+                className={cn(
+                  "flex-1 h-11 font-bold transition-colors",
+                  podeConfirmar
+                    ? "bg-emerald-600 text-zinc-950 hover:bg-emerald-500"
+                    : "bg-muted text-muted-foreground",
+                )}
               >
                 {isConfirming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isConfirming

@@ -351,13 +351,55 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
   }, [props.qtyEditOpen])
 
   const [productDialogQuery, setProductDialogQuery] = useState("")
+  const [productActiveIdx, setProductActiveIdx] = useState(0)
+  const productSearchInputRef = useRef<HTMLInputElement>(null)
+  const productActiveItemRef = useRef<HTMLButtonElement>(null)
+
   useEffect(() => {
-    if (props.productSearchOpen) setProductDialogQuery("")
+    if (!props.productSearchOpen) return
+    setProductDialogQuery("")
+    setProductActiveIdx(0)
+    const id = window.setTimeout(() => productSearchInputRef.current?.focus(), 60)
+    return () => window.clearTimeout(id)
   }, [props.productSearchOpen])
 
   const productsForDialog = useMemo(
     () => filterPdvCatalogBySearch(props.products, productDialogQuery),
     [props.products, productDialogQuery]
+  )
+
+  // Novo filtro → volta a seleção para o primeiro resultado.
+  useEffect(() => {
+    setProductActiveIdx(0)
+  }, [productDialogQuery])
+
+  // Mantém a linha activa visível ao navegar por teclado (↑/↓).
+  useEffect(() => {
+    productActiveItemRef.current?.scrollIntoView({ block: "nearest" })
+  }, [productActiveIdx])
+
+  const handleProductDialogKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      const list = productsForDialog
+      if (e.key === "ArrowDown") {
+        e.preventDefault()
+        setProductActiveIdx((prev) => Math.min(prev + 1, list.length - 1))
+        return
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault()
+        setProductActiveIdx((prev) => Math.max(prev - 1, 0))
+        return
+      }
+      if (e.key === "Enter") {
+        const sel = list[productActiveIdx]
+        if (!sel) return
+        e.preventDefault()
+        props.onProductSearchOpenChange(false)
+        props.onAddProductFromSearch(sel)
+      }
+    },
+    [productsForDialog, productActiveIdx, props]
   )
 
   return (
@@ -635,70 +677,103 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       {!isModoRapido ? <ShortcutBar onAction={props.onShortcutAction} /> : null}
 
       <Dialog open={props.productSearchOpen} onOpenChange={props.onProductSearchOpenChange}>
-        <DialogContent className="max-w-2xl border-border bg-card text-foreground">
+        <DialogContent className="w-[96vw] max-w-[1100px] border-border bg-card text-foreground">
           <DialogHeader>
             <DialogTitle>Pesquisar Produto (F3)</DialogTitle>
             <DialogDescription className="text-muted-foreground/75">
-              Filtrar por nome, categoria, SKU, código ou EAN. Lista vazia mostra todo o catálogo.
+              Nome, categoria, SKU, código ou EAN · ↑↓ navega · Enter adiciona · Esc fecha. Lista vazia mostra o catálogo.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            value={productDialogQuery}
-            onChange={(e) => setProductDialogQuery(e.target.value)}
-            placeholder="Digite para filtrar…"
-            className="h-10 border-border bg-background text-foreground"
-            autoComplete="off"
-          />
-          <div className="max-h-72 overflow-y-auto rounded-md border border-border">
-            {productsForDialog.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground/60">
-                <PackageOpen className="h-9 w-9 opacity-40" strokeWidth={1.5} />
-                <p className="font-medium text-foreground">Nenhum produto encontrado</p>
-                <p className="text-xs">Ajuste o termo ou limpe o filtro para ver o catálogo completo.</p>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={productSearchInputRef}
+              value={productDialogQuery}
+              onChange={(e) => setProductDialogQuery(e.target.value)}
+              onKeyDown={handleProductDialogKeyDown}
+              placeholder="Digite nome, código, SKU ou EAN…"
+              className="h-11 border-border bg-background pl-9 text-foreground"
+              autoComplete="off"
+            />
+          </div>
+          <div className="flex items-center justify-between gap-2 px-0.5 text-xs">
+            <span className={cn("font-medium", productsForDialog.length === 0 ? "text-muted-foreground/70" : "text-foreground")}>
+              {productsForDialog.length === 0
+                ? "Nenhum produto encontrado"
+                : `${productsForDialog.length} ${productsForDialog.length === 1 ? "produto encontrado" : "produtos encontrados"}`}
+            </span>
+            <span className="truncate text-muted-foreground/55">
+              {productDialogQuery.trim() ? `Filtro: “${productDialogQuery.trim()}”` : "Catálogo completo"}
+            </span>
+          </div>
+          {productsForDialog.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-border px-4 py-12 text-center text-sm text-muted-foreground/60">
+              <PackageOpen className="h-9 w-9 opacity-40" strokeWidth={1.5} />
+              <p className="font-medium text-foreground">Nenhum produto encontrado</p>
+              <p className="text-xs">Ajuste o termo ou limpe o filtro para ver o catálogo completo.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-md border border-border">
+              <div className="grid min-w-[720px] grid-cols-[110px_130px_minmax(0,1fr)_52px_92px_116px] items-center gap-2 border-b border-border bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                <span>Cód. / SKU</span>
+                <span>EAN</span>
+                <span>Produto</span>
+                <span className="text-center">Un.</span>
+                <span className="text-right">Estoque</span>
+                <span className="text-right">Preço</span>
               </div>
-            ) : (
-              productsForDialog.map((p) => {
-                const isService = p.category === "Servicos"
-                const unlimited = p.stock >= 999
-                const codeLabel = [p.sku, p.codigoBarras || p.barcode].filter(Boolean).join(" · ")
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      props.onProductSearchOpenChange(false)
-                      props.onAddProductFromSearch(p)
-                    }}
-                    className="grid w-full grid-cols-[1fr_72px_108px] items-center gap-2 border-b border-border/50 px-3 py-2 text-left text-sm hover:bg-muted/65 cursor-pointer text-foreground"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate font-medium text-foreground" title={p.name}>{p.name}</div>
-                      <div className="truncate font-mono text-[10px] text-muted-foreground/60">
-                        {codeLabel || p.id}{p.vendaPorPeso ? " · KG" : " · UN"}
-                      </div>
-                    </div>
-                    <div
+              <div className="max-h-[52vh] min-w-[720px] overflow-y-auto">
+                {productsForDialog.map((p, idx) => {
+                  const isService = p.category === "Servicos"
+                  const unlimited = p.stock >= 999
+                  const sku = p.sku || p.codigo || p.id
+                  const ean = p.codigoBarras || p.barcode || ""
+                  const isActive = idx === productActiveIdx
+                  return (
+                    <button
+                      key={p.id}
+                      ref={isActive ? productActiveItemRef : undefined}
+                      type="button"
+                      onMouseEnter={() => setProductActiveIdx(idx)}
+                      onClick={() => {
+                        props.onProductSearchOpenChange(false)
+                        props.onAddProductFromSearch(p)
+                      }}
                       className={cn(
-                        "text-right text-xs tabular-pdv",
-                        isService || unlimited
-                          ? "text-muted-foreground/40"
-                          : p.stock <= 0
-                            ? "text-destructive/80"
-                            : p.stock <= 5
-                              ? "text-amber-500"
-                              : "text-muted-foreground/70",
+                        "grid w-full grid-cols-[110px_130px_minmax(0,1fr)_52px_92px_116px] items-center gap-2 border-b border-border/50 px-3 py-2.5 text-left text-sm text-foreground transition-colors cursor-pointer",
+                        isActive ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : "hover:bg-muted/65",
                       )}
                     >
-                      {isService ? "Serviço" : unlimited ? "—" : `${p.stock} un`}
-                    </div>
-                    <span className="text-right font-semibold tabular-pdv text-[hsl(var(--pos-action))]">
-                      {p.vendaPorPeso ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg` : `R$ ${fmt(p.price)}`}
-                    </span>
-                  </button>
-                )
-              })
-            )}
-          </div>
+                      <div className="truncate font-mono text-xs text-foreground" title={sku}>{sku}</div>
+                      <div className="truncate font-mono text-xs text-muted-foreground/75" title={ean || "sem EAN"}>{ean || "—"}</div>
+                      <div className="min-w-0">
+                        <div className="line-clamp-2 font-medium leading-snug text-foreground" title={p.name}>{p.name}</div>
+                        <div className="truncate text-[11px] text-muted-foreground/55">{p.category}</div>
+                      </div>
+                      <div className="text-center text-xs text-muted-foreground/70">{p.vendaPorPeso ? "KG" : "UN"}</div>
+                      <div
+                        className={cn(
+                          "text-right text-xs tabular-pdv",
+                          isService || unlimited
+                            ? "text-muted-foreground/40"
+                            : p.stock <= 0
+                              ? "text-destructive/80"
+                              : p.stock <= 5
+                                ? "text-amber-500"
+                                : "text-muted-foreground/70",
+                        )}
+                      >
+                        {isService ? "Serviço" : unlimited ? "—" : `${p.stock} un`}
+                      </div>
+                      <span className="text-right font-semibold tabular-pdv text-[hsl(var(--pos-action))]">
+                        {p.vendaPorPeso ? `R$ ${fmt(p.precoPorKg ?? p.price)}/kg` : `R$ ${fmt(p.price)}`}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
