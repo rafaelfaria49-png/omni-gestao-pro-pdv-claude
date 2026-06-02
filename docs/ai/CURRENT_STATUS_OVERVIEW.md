@@ -22,7 +22,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 
 | Onda | HUB | Maturidade | Frente principal | Bloqueio crítico |
 |---|---|---|---|---|
-| 1 | **PDV** | 🟢 maduro | Fase 1 ~70%: 4 PDVs convergentes, multi-terminais com lock, INSERT, F7, À Prazo, fechamento premium | 🔴 PDV Next não persiste vendas (server-side) |
+| 1 | **PDV** | 🟢 maduro | **Pausa operacional** (uso real, pré-BL-07): modal s/ F11, busca F3 pro, bipe, anti-negativo, UX Smart Genius. Base: 4 PDVs convergentes, lock, INSERT, F7, À Prazo, fechamento premium | 🔴 PDV Next não persiste vendas (server-side) |
 | 1 | **Operações/OS** | 🟢 maduro | Adapters Fase 2 ✅, hydration FK ✅, ADR-0001 oficial | 🟡 rota legada `/dashboard/os` ainda em paralelo |
 | 1 | **Financeiro** | 🟢 backend + UI real | financeiro-v2 plugado a dados reais (FinanceiroRealProvider) ✅; services, adapters, idempotência, importador parcelado, crédito persistente | 🟡 DRE/Fluxo: evolução visual/funcional (não é mock) |
 | 1 | **Estoque** | 🟢 ledger maduro | Ledger profissional ✅, importador defensivo ✅, saneamento SKU ✅ | 🟠 sem multi-depósito (bloqueia Marketplace) |
@@ -44,6 +44,7 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 | Sprint | HUB | Status | Owner IA | Data início |
 |---|---|---|---|---|
 | R0 — Reconciliação governança | cross | em curso (L0 ✅; baseline `AUDITORIA_R0_RECONCILIACAO_GOVERNANCA.md`) | Opus + Rafael | 2026-05-30 |
+| Pausa operacional PDV (estabilização em uso real, pré-BL-07) | PDV | em curso | Opus + Rafael | 2026-06-01 |
 
 ---
 
@@ -51,11 +52,13 @@ fonte_detalhada: docs/ai/CURRENT_STATUS.md
 
 > Em ordem recomendada — quem encerra a atual, abre a próxima.
 
+0. **Pausa operacional PDV** (em curso — **prioridade imediata**) — estabilizar o PDV em **uso real**: fluxo, teclado, busca/F3, bipe, finalização, toast, modal de pagamento, UX Smart Genius. **Precede o BL-07.**
 1. **SPRINT_NN_PDV** — Persistência server-side do PDV Next (P0; fecha Fase 1 PDV).
 2. ~~**SPRINT_NN_MULTI_LOJA** — F-04: router WhatsApp por `phone_number_id`~~ — ✅ **concluída** (`MULTI_LOJA-S-003`; ADR-0006; Gate #2 01/06). *Fechou o **último vetor `loja-1`**; multi-loja 100% (server+client+WhatsApp). Resta o cutover operacional (`db:push`+backfill+deploy).*
 3. **SPRINT_NN_WHATSAPP** — Opt-out persistente + monitor qualidade (P0; previne banimento Meta).
-4. **SPRINT_NN_ESTOQUE** — Modelagem multi-depósito (P0; desbloqueia Marketplace).
+4. **SPRINT_NN_ESTOQUE / BL-07** — Multi-depósito Fase 0 (`ESTOQUE-S-00x`); modelo já decidido (**ADR-0007**, BL-12 ✅). **Próxima grande frente estrutural** após o PDV operacional; desbloqueia Marketplace.
 
+> **Sequência oficial:** (1) finalizar **PDV operacional** → (2) **BL-07** (estoque multi-depósito, Fase 0) → (3) **Fiscal** (NFC-e/SAT). **Importador Universal IA adiado.**
 > financeiro-v2 saiu do top-5: deixou de ser mock (DT-02 paga, R0-L5). Evolução de UI DRE/Fluxo segue no `ROADMAP_FINANCEIRO`.
 
 ---

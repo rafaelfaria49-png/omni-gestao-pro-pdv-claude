@@ -3,8 +3,8 @@ title: Roadmap — HUB Estoque
 hub: estoque
 status: vivo
 owner: produto + Sonnet (técnico)
-last_update: 2026-05-27
-sprint_atual: nenhuma (próxima a planejar)
+last_update: 2026-06-01
+sprint_atual: nenhuma — ADR-0007 (modelo de depósitos) aceito; Sprint Fase 0 a abrir
 ---
 
 # 📦 Roadmap — HUB Estoque
@@ -58,7 +58,7 @@ Estoque alimenta PDV, OS e Marketplace via consumos auditados. Importação atua
 
 | Gap | Severidade | Origem |
 |---|---|---|
-| **Sem multi-depósito** real | 🔴 P0 | gap de produto |
+| **Sem multi-depósito** real (modelo decidido em ADR-0007; falta implementar — Sprint Fase 0) | 🔴 P0 | gap de produto |
 | **Sem transferência entre lojas/depósitos** | 🟡 P1 | gap de produto |
 | **Inventário cíclico** inexistente | 🟡 P1 | gap de produto |
 | **Curva ABC** ausente | 🟡 P1 | gap de BI |
@@ -94,7 +94,7 @@ Estoque alimenta PDV, OS e Marketplace via consumos auditados. Importação atua
 
 | Item | Tamanho | Pré-req |
 |---|---|---|
-| Modelar `Deposito` + migração de saldos atuais | L | ADR de modelo |
+| Modelar `Deposito` + migração de saldos atuais | L | ✅ ADR-0007 (aceito) — Sprint Fase 0 a abrir |
 | Adapter `marketplace-estoque.ts` (sync ML/Shopee) | L | Bloco 13 iniciado |
 | Parser NF-e XML → entrada com conferência | M | — |
 | Tela de inventário cíclico | M | Decisão de UX |
@@ -113,6 +113,11 @@ Estoque alimenta PDV, OS e Marketplace via consumos auditados. Importação atua
 
 ### Fase 2 — Multi-depósito
 **Objetivo:** modelar `Deposito`, migrar saldos, suportar transferência.
+**Modelo decidido:** ✅ **ADR-0007** (2026-06-01) — `Deposito` + `EstoqueSaldo` materializado +
+`depositoId` nullable no ledger + `Produto.stock` como cache agregado (aditivo, não-quebrante).
+**Fase 0 (fundação, a abrir):** migração aditiva + backfill no Depósito Padrão, **zero mudança de
+comportamento** (PDV/OS/import inalterados). Seleção de depósito, UI de transferência e reserva
+Marketplace ficam em fases posteriores.
 **Saída:** lojas com N depósitos funcionando; transferências auditadas.
 
 ### Fase 3 — Conferência e entrada
@@ -154,15 +159,18 @@ Estoque alimenta PDV, OS e Marketplace via consumos auditados. Importação atua
 
 ## 11. Sprint atual
 
-**Nenhuma.** Último marco: Adapter OS → Estoque Fase 2 (21/05/2026).
+**Nenhuma.** Último marco: Adapter OS → Estoque Fase 2 (21/05/2026). Decisão recente:
+**ADR-0007** (modelo de depósitos) aceito no Gate #1 em 2026-06-01.
 
-Próxima sugerida: **SPRINT_NN_ESTOQUE — Modelagem multi-depósito** (item P0 do backlog).
+Próxima sugerida: **`ESTOQUE-S-00x` — Fundação multi-depósito (Fase 0)** — implementa o ADR-0007
+(migração aditiva + backfill no Depósito Padrão, zero mudança de comportamento). **Ainda não aberta**
+(aguarda autorização para tocar `schema.prisma` + services de estoque core).
 
 ---
 
 ## 12. Status atual
 
-Estoque tem **ledger profissional** com auditoria de usuário/documento/custo, importador defensivo (não sobrescreve), saneamento de SKU concluído e Item Avulso isolado. Maior gap estrutural é a **ausência de multi-depósito** — toda loja opera como "depósito único", o que limita expansão e impossibilita o adapter Marketplace de operar com reserva real. Curva ABC, cost layering e conferência via NF-e XML são gaps de inteligência críticos para SMBs que crescem.
+Estoque tem **ledger profissional** com auditoria de usuário/documento/custo, importador defensivo (não sobrescreve), saneamento de SKU concluído e Item Avulso isolado. Maior gap estrutural é a **ausência de multi-depósito** — toda loja opera como "depósito único", o que limita expansão e impossibilita o adapter Marketplace de operar com reserva real. O **modelo já foi decidido** (ADR-0007, 2026-06-01); falta a implementação (Sprint Fase 0, ainda não aberta). Curva ABC, cost layering e conferência via NF-e XML são gaps de inteligência críticos para SMBs que crescem.
 
 ---
 
@@ -183,7 +191,8 @@ Estoque tem **ledger profissional** com auditoria de usuário/documento/custo, i
 
 | Blocker | Bloqueia |
 |---|---|
-| ADR de multi-depósito | Fase 2 |
+| ~~ADR de multi-depósito~~ | ✅ Resolvido — **ADR-0007** aceito (2026-06-01) |
+| Sprint Fase 0 multi-depósito não aberta (BL-07) | Fase 2 / adapter Marketplace |
 | Marketplace HUB sem código | Adapter sync |
 | Decisão FIFO vs Médio | Fase 4 |
 
@@ -191,7 +200,7 @@ Estoque tem **ledger profissional** com auditoria de usuário/documento/custo, i
 
 ## 15. Referências
 
-- **ADRs relacionados:** ADR multi-depósito (a criar)
+- **ADRs relacionados:** **ADR-0007** (modelo de depósitos — aceito 2026-06-01) · ADR-0003 (scoping multi-loja) · ADR-0004 (SAFE-lite)
 - **Sprints relacionadas:** entradas "Estoque", "adapter OS→Estoque", "Importador" em `CURRENT_STATUS.md`
 - **Docs de módulo:** `docs/modules/` (verificar/criar `ESTOQUE.md`)
 - **Memórias persistentes:** `project_sku_gc_saneamento`, `project_import_nao_sobrescreve_estoque`, `project_importador_produtos_lotes`, `project_importador_produtos_match_seguro`

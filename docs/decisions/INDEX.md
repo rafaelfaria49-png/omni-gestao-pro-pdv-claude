@@ -2,7 +2,7 @@
 title: Decisões Arquiteturais (ADRs) — OmniGestão Pro
 status: vivo
 owner: produto/arquitetura
-last_update: 2026-05-30
+last_update: 2026-06-01
 ---
 
 # 🧭 Decisões Arquiteturais — Índice oficial
@@ -85,6 +85,7 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 | 0003 | Eliminar fallback `LEGACY_PRIMARY_STORE_ID` em leituras de API | multi_loja | ✅ Aceita | 2026-05-29 | [`ADR-0003-eliminar-fallback-legacy-primary-store-id.md`](./ADR-0003-eliminar-fallback-legacy-primary-store-id.md) |
 | 0004 | SAFE-lite como modo padrão; Engine de 17 fases como modo pesado reservado | governança | ✅ Aceita | 2026-05-30 | [`ADR-0004-safe-lite-modo-padrao.md`](./ADR-0004-safe-lite-modo-padrao.md) |
 | 0006 | Roteamento WhatsApp multi-loja por `phone_number_id` (fim do webhook single-store) | whatsapp / multi_loja | ✅ Aceita | 2026-06-01 | [`ADR-0006-whatsapp-router-multi-loja.md`](./ADR-0006-whatsapp-router-multi-loja.md) |
+| 0007 | Modelo de Depósitos (multi-depósito por loja) — fundação de saldo segmentado | estoque / multi_loja | ✅ Aceita | 2026-06-01 | [`ADR-0007-modelo-depositos.md`](./ADR-0007-modelo-depositos.md) |
 
 > **Nota sobre o ADR legado:** `OS_ROUTE_OFICIAL.md` foi escrito antes desta convenção e não segue o template/naming atual. Mantido como histórico. Quando precisar ser referenciado, citar como **ADR-0001 (legado)**. Migração para o naming `ADR-0001-os-route-oficial.md` é uma tarefa **opcional** e exige autorização (renomear histórico pode quebrar links externos).
 
@@ -96,7 +97,7 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 |---|--------|-----|------------|------|
 | 0005 (draft) | Liberação controlada do modo COWORK (Fase 1 supervisionada) | governança | Opus | 2026-06-01 |
 
-> **0005 (CoWork)** vive como draft em [`drafts/ADR_PROPOSAL_0005_LIBERAR_COWORK.md`](./drafts/ADR_PROPOSAL_0005_LIBERAR_COWORK.md) (aguarda decisão humana). **0006 (WhatsApp)** foi **aceito** no Gate #2 da sprint `MULTI_LOJA-S-003` (ver §3). O número `0006` decorre de `0005` já estar reservado ao CoWork (não se renumera histórico publicado).
+> **0005 (CoWork)** vive como draft em [`drafts/ADR_PROPOSAL_0005_LIBERAR_COWORK.md`](./drafts/ADR_PROPOSAL_0005_LIBERAR_COWORK.md) (aguarda decisão humana). **0006 (WhatsApp)** foi **aceito** no Gate #2 da sprint `MULTI_LOJA-S-003` (ver §3). **0007 (Depósitos)** foi **aceito** no Gate #1 em 2026-06-01 (decisão; implementação aguarda abertura da Sprint Fase 0 `ESTOQUE-S-00x`). O número `0006` decorre de `0005` já estar reservado ao CoWork (não se renumera histórico publicado).
 
 ---
 
@@ -115,14 +116,14 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 - **Operações/OS:** ADR-0001 (legado)
 - **PDV:** —
 - **Financeiro:** —
-- **Estoque:** —
+- **Estoque:** ADR-0007 (modelo de depósitos — aceita)
 - **Marketplace:** —
 - **CRM:** —
 - **WhatsApp:** ADR-0006 (router multi-loja por `phone_number_id` — aceita)
 - **Marketing IA:** —
 - **Omni Agent:** —
 - **BI:** —
-- **Multi-loja:** ADR-0003 (eliminar fallback `loja-1`) · ADR-0006 (router WhatsApp — aceita)
+- **Multi-loja:** ADR-0003 (eliminar fallback `loja-1`) · ADR-0006 (router WhatsApp — aceita) · ADR-0007 (modelo de depósitos — aceita)
 - **Governança:** ADR-0002 (congelamento Skill Front Matter v1) · ADR-0004 (SAFE-lite modo padrão)
 
 ---

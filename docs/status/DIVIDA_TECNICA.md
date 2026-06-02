@@ -39,7 +39,7 @@ fonte_overview: docs/ai/CURRENT_STATUS_OVERVIEW.md §5
 | DT-04 | Rota legada `/dashboard/os` paralela à oficial | Operações/OS | P1 | ⏳ | 2026-04-xx | SPRINT_NN_OS | ADR-0001 diz que oficial é `/operacoes-v2` |
 | DT-05 | PIN supervisor contra `User.pin` (não `AdminUser`) | PDV / Auth | P1 | ⏳ | 2026-05-xx | a planejar | Memória `project_vendas_hub_correcao_operacional` |
 | DT-06 | Item Avulso sem CFOP/categoria padrão | PDV | P2 | ⏳ | 2026-05-23 | bloqueia Fase 2 fiscal PDV | — |
-| DT-08 | Sem multi-depósito no Estoque | Estoque | P0 | ⏳ | herdada | SPRINT_NN_ESTOQUE | Bloqueia adapter Marketplace |
+| DT-08 | Sem multi-depósito no Estoque | Estoque | P0 | ⏳ | herdada | ESTOQUE-S-00x (Fase 0) | Bloqueia adapter Marketplace. **Modelo decidido — ADR-0007** (2026-06-01); inclui dívida deliberada `depositoId` nullable → NOT NULL (passo pós-Fase-0). Sprint ainda não aberta |
 | DT-09 | budget-policy-service com regras hardcoded | OS | P1 | ⏳ | herdada | a planejar | Falta UI por loja |
 | DT-10 | Pool de executores Omni Agent pequeno | Omni Agent | P1 | ⏳ | herdada | a planejar | Só `recebimentoFinanceiro` real |
 | DT-11 | Painel inicial com mocks misturados | BI | P0 | ⏳ | herdada | SPRINT_NN_BI | Confunde decisão de negócio |

@@ -1,7 +1,43 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 01 Jun 2026 — MULTI_LOJA-S-003 (F-04/DT-07, router WhatsApp multi-loja) — **Gate #2 aprovado** (cutover operacional pendente)
+> Última atualização: 01 Jun 2026 — **Pausa operacional PDV** (estabilização em uso real, pré-BL-07): modal de pagamento sem F11 + busca F3 profissional. Antes: F-04 WhatsApp ✅ (ADR-0006); ADR-0007 aceito → BL-12 resolvido
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Pausa operacional PDV — estabilização em uso real (pré-BL-07 · 01/06/2026)
+
+**Por quê (desvio controlado, não caótico):** o PDV entrou em **operação real na loja** e
+apareceram problemas reais de fluxo, teclado, busca, bipe, finalização, toast e UX operacional.
+Antes de abrir a próxima grande frente estrutural (**BL-07 — Estoque multi-depósito**, já com modelo
+decidido em **ADR-0007**), foi aberta uma **pausa operacional** para estabilizar o PDV em uso real.
+É uma **pausa controlada na sequência do roadmap** — registrada aqui para rastreabilidade, não uma
+troca caótica de prioridade.
+
+**Contexto imediatamente anterior (já concluído):**
+- **WhatsApp Multi-Loja F-04/DT-07** ✅ (ADR-0006, `MULTI_LOJA-S-003`, Gate #2 01/06) — fechou o
+  último vetor `loja-1` do projeto.
+- **ADR-0007 (modelo de depósitos)** ✅ aceito no Gate #1 (01/06) → **BL-12 resolvido**. A
+  **implementação** (multi-depósito, Sprint Fase 0 `ESTOQUE-S-00x`) vira **BL-07**, a **próxima grande
+  frente estrutural** — ainda **não aberta**.
+
+**Correções operacionais de PDV já entregues nesta pausa (Clássico em foco):**
+
+| Correção | Commit |
+|----------|--------|
+| **DT-B — baixa de estoque anti-negativo** no PDV ✅ | `ec04043` |
+| **Busca multi-termo** + **bipe** + atalho **INSERT** (item avulso) ✅ | `b9c147d` |
+| Toast/UX operacional · Quantidade seleciona ao focar · Resumo do Caixa em 2 colunas ✅ | `3bc0e70` |
+| **Modal de pagamento** 2 colunas + teclado (Clássico) ✅ | `03b4ac2` |
+| **Modal de pagamento sem F11** (largura `max-w-[1250px]`, compactação, scroll único, Confirmar muted) + **busca F3 profissional** (tabela Cód./SKU·EAN·Produto·Un·Estoque·Preço + teclado ↑↓/Enter + contador) ✅ | `292e073` |
+| **UX inspirada no Smart Genius** (formas em lista vertical, busca operacional) ✅ | `292e073` |
+
+**Prioridade imediata (sequência oficial):** (1) **finalizar PDV operacional** → (2) abrir **BL-07**
+(estoque multi-depósito, Fase 0) → (3) iniciar **Fiscal** (NFC-e/SAT). **Importador Universal IA
+fica adiado.**
+
+**Esta entrada é só governança/documentação** — sem mudança de código/schema/runtime de PDV. As
+correções de PDV acima já foram entregues e validadas (`tsc`/`build`) nos commits citados.
 
 ---
 

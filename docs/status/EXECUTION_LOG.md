@@ -2,7 +2,7 @@
 title: Execution Log — registro append-only de execuções de skill
 status: vivo (append-only)
 owner: Execution Engine (automático) + revisão humana mensal
-last_update: 2026-05-31
+last_update: 2026-06-01
 schema_version: v1
 ---
 
@@ -1139,4 +1139,60 @@ docs_atualizados:
   - docs/status/EXECUTION_LOG.md                            # esta ENTRY 019 (append-only)
 flags: ["--with-protected-areas: prisma/schema.prisma", "--with-protected-areas: lib/whatsapp/*"]   # área protegida tocada COM autorização explícita (F-04 exige o mapa em schema)
 notes: "MULTI_LOJA-S-003 (F-04/DT-07) — router WhatsApp multi-loja por phone_number_id; FECHA O ÚLTIMO VETOR loja-1 DO PROJETO (server-side 100% via S-001/S-002+DT-14; client-side 100% via DT-13/15/16; agora WhatsApp). ESCOPO (fechado): inbound roteia por phone_number_id (mapa novo WhatsAppPhoneNumber → storeId), outbound resolve credencial POR LOJA (tokenEnvKey → env, token nunca no DB), fluxos sem phone_number_id (Evolution/owner-AI/debug) via resolveSoleActiveStoreId (só se houver EXATAMENTE 1 loja ativa; 0/>1 → null+auditoria, sem loja-1). webhookDefaultStoreId REMOVIDO (grep=0). CP1: prisma/schema.prisma model WhatsAppPhoneNumber + migração 0010 (aditiva, CREATE TABLE IF NOT EXISTS + FK guardada; aplicar via npm run db:push). CP2: lib/whatsapp-meta-cloud-webhook.ts roteia por phone_number_id, número não-mapeado/inativo descarta+audita. CP3: lib/whatsapp.ts deixa de ler env global (caller injeta WhatsAppCloudCredentials) + lib/whatsapp/store-credentials.ts (resolveCredentialsFromRow puro/testável) + requireStoreCloudCreds (lança+audita sem credencial). CP4: owner-AI (lib/whatsapp-webhook-ai.ts), rotas debug, omni-agent status POR LOJA. CP5 (este fechamento): build verde + ADR-0006 (proposta) + AUDITORIA F-04 + DOC_REFRESH + DT-07 preparado. DECISÃO DE NUMERAÇÃO (humano): ADR-0005 já commitado para CoWork (f652a87) → WhatsApp Router = ADR-0006 (próximo livre); NÃO renumerar histórico publicado; comentários ADR-0005→ADR-0006 corrigidos em 8 artefatos CP1-CP4 (comment-only, sem alterar runtime: 7 .ts + migração 0010). ENTRY: o plano dizia '017', mas o log já chegou a 018 (GOVERNANCA-S-003) → esta é a ENTRY 019 (append-only sequencial). PERFIL: SAFE-lite REFORÇADO — toca área protegida (schema + lib/whatsapp/*) COM autorização explícita; é roteamento multi-tenant de mensageria. VALIDAÇÃO: npx tsc --noEmit limpo (EXIT 0) · npm run build OK (EXIT 0, árvore de rotas completa, NODE_OPTIONS=--max-old-space-size=8192 na 1ª execução — sem flake) · vitest 258 passed | 2 expected fail (era 245 | 3 no DT-16; o expected-fail do baseline F-04 agora passa + store-credentials.test.ts/whatsapp-service-routing.test.ts). AUDIT (AUDITORIA_F-04, publicada): F-01 inbound RESOLVIDO, F-02 outbound RESOLVIDO; F-03 onboarding por loja (P2, dívida consciente: número precisa ser cadastrado em whatsapp_phone_numbers + env do token; backfill script disponível); F-04 heurística Evolution single-number (P3); F-05 webhook 200 a número não-mapeado (P3, anti-retry intencional). 0 P0/P1. ÁREAS PROTEGIDAS: schema.prisma + lib/whatsapp/* tocadas COM autorização (flags). NÃO tocado: auth, proxy, services lib/financeiro/* + lib/operacoes/*, PDV core. COMMIT/PUSH: PENDENTES — parar no fim do CP5. TIMESTAMPS: PROXY (2026-06-01); duration null (critério ENTRY 010-018). REFERÊNCIAS: docs/decisions/ADR-0006-whatsapp-router-multi-loja.md (proposta) · docs/audits/AUDITORIA_F-04_WHATSAPP_ROUTER_MULTI_LOJA.md · docs/status/DIVIDA_TECNICA.md DT-07 (§2, 🔄) · docs/audits/AUDITORIA_MULTI_LOJA_PRE_PILOTO_v01.md §F-04 (baseline) · docs/decisions/ADR-0003 (doutrina falha visível) · docs/decisions/ADR-0004 (SAFE-lite) · ENTRY 016 (DT-16, fechou client-side) · ENTRY 018 (GOVERNANCA-S-003, última execução antes desta)."
+```
+
+---
+
+```yaml
+# ─── ENTRY 020 ────────────────────────────────────────────────────
+ticket_id: PDV-OPS-PAUSE-REGISTER    # registro de governança: pausa operacional do PDV antes do BL-07; não é debt-item
+skill_id: SKILL_DOC_REFRESH          # docs-only (mesmo fit da ENTRY 015); sem skill dedicada para registro de desvio de roadmap
+skill_version: v1
+ia: claude_code
+modo: SAFE                           # docs-only / SAFE-lite light; valor mantido SAFE (schema v1 congelado)
+started_at: 2026-06-01T00:00:00-03:00   # PROXY — sessão de registro; hora fina não rastreada
+ended_at: 2026-06-01T00:00:00-03:00     # PROXY
+duration: null                          # precisão não rastreada (critério das ENTRY 010-019)
+fases_completas: [SAFE_LITE_LIGHT]      # docs-only (fora do pipeline de 17 fases)
+fase_falha: null
+resultado: encerrada
+pr: null
+branch: main                            # commitado em main (convenção das ENTRY 009/010/012-016/019)
+commit_anterior: 292e073                # HEAD = código PDV (modal s/ F11 + busca F3), já commitado/pushado
+commit_final: commit governança (docs)  # ENTRY 020 entra no MESMO commit de docs → hash não auto-referenciável aqui (ver §commit)
+rollback: false
+diff:
+  added: ~90                            # APROX — entrada nova no CURRENT_STATUS + edições OVERVIEW/ROADMAP_PDV/EXECUTION_LOG; número final no git diff --stat
+  removed: ~8
+  files_modified: 9                     # 4 governança PDV (CURRENT_STATUS, OVERVIEW, ROADMAP_PDV, EXECUTION_LOG) + 5 ADR-0007 pré-existentes no working tree (INDEX, ROADMAP_ESTOQUE, BLOCKERS, DIVIDA_TECNICA, ADR-0007 novo)
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-06-01T00:00:00-03:00
+    pending: null
+    notes: "Pedido direto: registrar o desvio operacional do PDV como pausa controlada antes do BL-07 (escopo docs-only; não abrir BL-07 nem Fiscal; não tocar código/schema/PDV runtime)."
+  gate_2:
+    approved_by: Rafael
+    approved_at: 2026-06-01T00:00:00-03:00
+    pending: null
+    notes: "Commit + push autorizados no mesmo turno ('faca push e comit')."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}   # docs-only; coerência com ADR-0007/BL-12/BL-07 e com a sequência oficial verificada
+benchmark: null
+sprint: null
+proposta: null
+auditoria: null
+adr_criada: null                        # nenhuma; ADR-0007 já aceito (pré-existente no working tree, commitado junto)
+memoria_criada: memory/project_pdv_f3_busca_tabela (novo) + project_payment_modal_twocolumn (atualizada)   # memórias Claude Code fora do repo (~/.claude)
+docs_atualizados:
+  - docs/ai/CURRENT_STATUS.md                # entrada nova no topo (pausa operacional PDV) + last_update
+  - docs/ai/CURRENT_STATUS_OVERVIEW.md       # §1 (PDV), §2 (frente ativa), §3 (sequência oficial)
+  - docs/roadmaps/ROADMAP_PDV.md             # front matter sprint_atual + §11 + §12
+  - docs/status/EXECUTION_LOG.md             # esta ENTRY 020 (append-only)
+  - docs/decisions/ADR-0007-modelo-depositos.md   # pré-existente no working tree (ADR-0007, novo) — commitado junto
+  - docs/decisions/INDEX.md                  # pré-existente — ADR-0007 aceito no índice
+  - docs/roadmaps/ROADMAP_ESTOQUE.md         # pré-existente — ADR-0007 / Fase 0
+  - docs/status/BLOCKERS.md                  # pré-existente — BL-12 resolvido, BL-07 #1
+  - docs/status/DIVIDA_TECNICA.md            # pré-existente — DT-08 referencia ADR-0007
+flags: []                               # docs/** apenas; sem código/schema/auth/proxy/core/PDV runtime
+notes: "Registro de governança do DESVIO OPERACIONAL DO PDV — pausa CONTROLADA na sequência do roadmap antes de abrir BL-07 (estoque multi-depósito). MOTIVO: o PDV entrou em operação real na loja e apareceram problemas de fluxo/teclado/busca/bipe/finalização/toast/UX; estabilizá-lo é prioridade antes de uma frente estrutural pesada. CONTEXTO ANTERIOR (concluído): WhatsApp Multi-Loja F-04/DT-07 (ADR-0006, MULTI_LOJA-S-003, ENTRY 019) fechou o último vetor loja-1; ADR-0007 (modelo de depósitos) aceito no Gate #1 (01/06) -> BL-12 resolvido (ver BLOCKERS §3); BL-07 (implementação multi-depósito, Sprint Fase 0 ESTOQUE-S-00x) passa a ser a próxima grande frente estrutural, AINDA NÃO ABERTA. CORREÇÕES PDV recentes (já entregues/validadas, commits): DT-B anti-negativo (ec04043), busca multi-termo + bipe + INSERT (b9c147d), toast/UX + Resumo do Caixa 2-col (3bc0e70), modal de pagamento 2 colunas + teclado (03b4ac2), modal de pagamento SEM F11 + busca F3 profissional (292e073), UX Smart Genius. PRIORIDADE IMEDIATA (sequência oficial): (1) finalizar PDV operacional -> (2) abrir BL-07 (estoque multi-depósito, Fase 0) -> (3) iniciar Fiscal (NFC-e/SAT); Importador Universal IA ADIADO. ESCOPO (fechado, docs-only): CURRENT_STATUS.md (entrada nova no topo) + CURRENT_STATUS_OVERVIEW.md (§1/§2/§3) + ROADMAP_PDV.md (front matter + §11/§12) + esta ENTRY 020. NÃO abriu BL-07, NÃO abriu Fiscal, NÃO tocou código/schema/PDV runtime. BLOCKERS.md e DIVIDA_TECNICA.md NÃO precisaram de edição nova (DT-B não é linha rastreada; ADR-0007/BL-12/BL-07 já estava nos diffs pré-existentes do working tree, commitados no mesmo commit de governança). VALIDAÇÃO: docs-only -> tsc/build N/A. COMMIT: este registro entra no commit de governança (docs) junto com os diffs ADR-0007 pré-existentes; push autorizado no mesmo turno. REFERÊNCIAS: ENTRY 019 (F-04 WhatsApp, última execução antes desta) · docs/decisions/ADR-0007-modelo-depositos.md (aceito) · docs/status/BLOCKERS.md §3 (BL-12 resolvido) · commits ec04043/b9c147d/3bc0e70/03b4ac2/292e073 (correções PDV)."
 ```

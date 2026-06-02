@@ -3,8 +3,8 @@ title: Roadmap — HUB PDV
 hub: pdv
 status: vivo
 owner: produto + Sonnet (técnico)
-last_update: 2026-05-27
-sprint_atual: nenhuma (próxima a planejar)
+last_update: 2026-06-01
+sprint_atual: Pausa operacional PDV (estabilização em uso real, pré-BL-07)
 ---
 
 # 🛒 Roadmap — HUB PDV (Ponto de Venda)
@@ -180,10 +180,17 @@ Priorizadas (P0 = bloqueia operação, P3 = nice-to-have):
 
 ## 11. Sprint atual
 
-**Nenhuma.** Última sprint encerrada: `Lote 5 — Remoção do else branch JSX morto no PDV Clássico` (2026-05-26).
+**Pausa operacional PDV — estabilização em uso real (aberta 2026-06-01, pré-BL-07).** Desvio
+**controlado** da sequência do roadmap: o PDV entrou em **operação real na loja** e correções de
+fluxo, teclado, busca, bipe, finalização, toast e UX viraram prioridade **antes** de abrir o **BL-07**
+(estoque multi-depósito — modelo já decidido em **ADR-0007**). Entregas recentes desta pausa:
+DT-B anti-negativo (`ec04043`), busca multi-termo + bipe + atalho INSERT (`b9c147d`), toast/UX +
+Resumo do Caixa em 2 colunas (`3bc0e70`), modal de pagamento 2 colunas + teclado (`03b4ac2`), modal
+de pagamento **sem F11** + **busca F3 profissional** (`292e073`), UX inspirada no **Smart Genius**.
 
-Próxima sprint sugerida (a planejar):
-- **SPRINT_NN_PDV — Persistência server-side do PDV Next** (item P0 do backlog §7).
+Próxima sprint sugerida (após a pausa): **SPRINT_NN_PDV — Persistência server-side do PDV Next**
+(item P0 do backlog §7). **Sequência oficial:** finalizar PDV operacional → **BL-07** (estoque
+multi-depósito, Fase 0 `ESTOQUE-S-00x`) → **Fiscal** (NFC-e/SAT). **Importador Universal IA adiado.**
 
 ---
 
@@ -191,7 +198,7 @@ Próxima sprint sugerida (a planejar):
 
 > Resumo consolidado em 1 parágrafo.
 
-PDV está **operacional e estável** nos 3 perfis principais (Clássico, Supermercado, Assistência) com keymap-base, pagamento múltiplo, F9 recebimento, F7 venda em espera, INSERT item avulso, À Prazo Enterprise, multi-terminais com lock + heartbeat, e fechamento de caixa premium — tudo convergente e persistido. **Risco crítico isolado: PDV Next (Black Edition) ainda não persiste no servidor**, vivendo em localStorage — vendas podem ser perdidas em caso de crash. Próximo passo lógico é fechar a Fase 1 plugando essa persistência antes de partir para fiscal (Fase 2). Cancelamento de venda audita corretamente e o fechamento de caixa não vaza mais payload desatualizado (bug resolvido em `vendas-list` + `caixa-fechamento-resumo`).
+PDV está **operacional e estável** nos 3 perfis principais (Clássico, Supermercado, Assistência) com keymap-base, pagamento múltiplo, F9 recebimento, F7 venda em espera, INSERT item avulso, À Prazo Enterprise, multi-terminais com lock + heartbeat, e fechamento de caixa premium — tudo convergente e persistido. **Risco crítico isolado: PDV Next (Black Edition) ainda não persiste no servidor**, vivendo em localStorage — vendas podem ser perdidas em caso de crash. Próximo passo lógico é fechar a Fase 1 plugando essa persistência antes de partir para fiscal (Fase 2). Cancelamento de venda audita corretamente e o fechamento de caixa não vaza mais payload desatualizado (bug resolvido em `vendas-list` + `caixa-fechamento-resumo`). **Pausa operacional em curso (01/06/2026):** estabilização do PDV em uso real — modal de pagamento **sem F11**, **busca F3 profissional** (tabela + teclado, tipo Smart Genius), bipe, busca multi-termo e anti-negativo (DT-B) — **precede a abertura do BL-07**.
 
 ---
 

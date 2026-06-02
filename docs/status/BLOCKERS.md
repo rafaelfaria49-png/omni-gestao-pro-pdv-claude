@@ -2,7 +2,7 @@
 title: Blockers — o que está travando avanço AGORA
 status: vivo
 owner: produto + Sonnet
-last_update: 2026-05-30
+last_update: 2026-06-01
 ---
 
 # 🚧 Blockers — Tracking vivo
@@ -43,12 +43,11 @@ last_update: 2026-05-30
 | BL-04 | Decisão "cliente por loja vs por organização" | DECISÃO | 🟡 | ⏳ | humano (produto) | CRM Fase 5 + Multi-loja Fase 4 | — |
 | BL-05 | Modelo de billing/limite por loja (Omni Agent) | DECISÃO | 🟡 | ⏳ | humano (produto) | Omni Agent Fase 2 (limite duro) | — |
 | BL-06 | Hardware fiscal para homologação NFC-e | RECURSO | 🟡 | ⏳ | operação | PDV Fase 2 (loja-piloto) | — |
-| BL-07 | Estoque multi-depósito (Fase 2) | DEPENDÊNCIA | 🔴 | ⏳ | Sonnet | Marketplace sync de saldo | DT-08 |
+| BL-07 | Estoque multi-depósito (Fase 2) | DEPENDÊNCIA | 🔴 | ⏳ | Sonnet | Marketplace sync de saldo | DT-08 · modelo decidido (ADR-0007); aguarda Sprint Fase 0 |
 | BL-08 | Lint customizado de `storeId` ausente | TÉCNICO | 🟢 | ⏳ | Sonnet | — (não bloqueia mais; defesa-em-profundidade) | Era pré-req de DT-03, mas DT-03 foi eliminado **sem** o lint (S-001/S-002: guard 400 + testes). Agora melhoria **P2** desejável: detectar query sem `where.storeId` em CI |
 | BL-09 | Storage S3-compatible para mídia WhatsApp | RECURSO | 🟡 | ⏳ | humano (infra) | WhatsApp Fase 3 (mídia end-to-end) | — |
 | BL-10 | Algoritmo de similaridade para dedup CRM | TÉCNICO | 🟡 | ⏳ | Sonnet | CRM Fase 3 (deduplicação assistida) | Spike pendente |
 | BL-11 | BSP definido (Twilio? GupShup? direto Meta?) | DECISÃO | 🟡 | ⏳ | humano (produto) | WhatsApp marketing massa | — |
-| BL-12 | ADR multi-depósito (modelo `Deposito`) | DECISÃO | 🔴 | ⏳ | Opus + Sonnet | Estoque Fase 2 → desbloqueia Marketplace | — |
 | BL-14 | PDV Next sem persistência server-side | TÉCNICO | 🔴 | ⏳ | Sonnet | Encerramento Fase 1 PDV | DT-01 / R-03 |
 
 ---
@@ -58,13 +57,14 @@ last_update: 2026-05-30
 | # | Blocker | Destravado em | Como |
 |---|---|---|---|
 | BL-13 | financeiro-v2 mock | 2026-05-30 (R0-L5) | UI plugada a dados reais (FinanceiroRealProvider) já em commits pré-baseline; confirmado no R0. Resta evolução de UI DRE/Fluxo (não bloqueante) |
+| BL-12 | ADR multi-depósito (modelo `Deposito`) | 2026-06-01 (Gate #1) | **Decisão tomada — ADR-0007 aceito.** Modelo: `Deposito` + `EstoqueSaldo` materializado + `depositoId` nullable no ledger + `Produto.stock` como cache agregado (alternativa C, aditiva, Fase 0 sem mudança de comportamento). A *implementação* (BL-07) segue ⏳ aguardando abertura da Sprint Fase 0 `ESTOQUE-S-00x`. |
 
 ---
 
 ## 4. Mapa de dependência (quem destrava o quê)
 
 ```
-BL-12 (ADR Depósito) → BL-07 (Multi-depósito) → Marketplace Fase 1
+BL-12 (ADR Depósito) ✅ ADR-0007 → BL-07 (Multi-depósito, Sprint Fase 0) → Marketplace Fase 1
 BL-01 (provedor fiscal) → PDV Fase 2 + OS Fase 2
 BL-11 (BSP) + BL-02 (templates Meta) → WhatsApp Fase 2 → Marketing IA Fase 1
 BL-14 (PDV Next persist) → fecha Fase 1 PDV
@@ -74,7 +74,7 @@ BL-14 (PDV Next persist) → fecha Fase 1 PDV
 
 ## 5. Top 3 prioridades de destravamento
 
-1. **BL-12** (ADR multi-depósito) — destrava BL-07, que destrava Marketplace inteiro. Maior alavanca do projeto.
+1. **BL-07** (multi-depósito — implementação) — o modelo já foi decidido (BL-12 ✅ ADR-0007 em 2026-06-01); falta abrir a Sprint Fase 0 `ESTOQUE-S-00x`. Destrava o Marketplace inteiro. Maior alavanca do projeto. *(BL-12, antes o nº1, foi destravado pelo Gate #1 — ver §3.)*
 2. **BL-01** (provedor fiscal) — destrava 2 HUBs (PDV+OS) na fase fiscal; concorrência aperta (R-11).
 > *BL-08 (lint `storeId`) saiu desta lista no R0: rebaixado a P2 — DT-03 já foi eliminado sem ele (S-001/S-002). Nenhum item promovido no lugar; repriorização fica fora do escopo do R0.*
 
