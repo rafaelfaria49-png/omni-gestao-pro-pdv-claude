@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Receipt, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,6 +33,9 @@ export function PdvPostSaleDialog({
 }: PdvPostSaleDialogProps) {
   const { toast } = useToast()
   const [printing, setPrinting] = useState(false)
+  // Refs das duas ações para navegação por teclado (foco/seta) — escopo: só teclado/foco.
+  const confirmRef = useRef<HTMLButtonElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
 
   function close() {
     onOpenChange(false)
@@ -81,7 +84,27 @@ export function PdvPostSaleDialog({
         if (!o && !printing) close()
       }}
     >
-      <DialogContent className="max-w-sm border-border bg-card">
+      <DialogContent
+        className="max-w-sm border-border bg-card"
+        onOpenAutoFocus={(e) => {
+          // Foco determinístico no botão padrão ("Sim, imprimir") ao abrir.
+          // Corrige Enter/Tab que não pegavam por o foco não cair dentro do diálogo.
+          e.preventDefault()
+          confirmRef.current?.focus()
+        }}
+        onKeyDown={(e) => {
+          // ←/→ alternam entre as duas ações (padrão de diálogo de varejo).
+          // Enter/Espaço/Tab seguem o comportamento nativo do botão focado + focus-trap do Radix.
+          if (printing) return
+          if (e.key === "ArrowRight") {
+            e.preventDefault()
+            cancelRef.current?.focus()
+          } else if (e.key === "ArrowLeft") {
+            e.preventDefault()
+            confirmRef.current?.focus()
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
             <Receipt className="h-5 w-5 text-primary" />
@@ -93,6 +116,7 @@ export function PdvPostSaleDialog({
         </p>
         <div className="flex gap-3 pt-1">
           <Button
+            ref={confirmRef}
             type="button"
             className="flex-1 h-11 gap-2 bg-[hsl(var(--pos-action))] font-semibold text-[hsl(var(--pos-action-foreground))] hover:bg-[hsl(var(--pos-action))]/90 disabled:opacity-60"
             disabled={printing}
@@ -106,6 +130,7 @@ export function PdvPostSaleDialog({
             {printing ? "Imprimindo…" : "Sim, imprimir"}
           </Button>
           <Button
+            ref={cancelRef}
             type="button"
             variant="outline"
             className="flex-1 h-11 border-border"
