@@ -53,6 +53,7 @@ model Store {
 
   clientes               Cliente[]
   produtos               Produto[]
+  depositos              Deposito[]
   servicos               Servico[]
   ordensServico          OrdemServico[]
   contasReceber          ContaReceberTitulo[]
@@ -760,6 +761,7 @@ model Produto {
   marketplaceProductLinks MarketplaceProductLink[]
   marketplaceSyncLogs     MarketplaceSyncLog[]
   movimentacoesEstoque    MovimentacaoEstoque[]
+  produtoDepositos        ProdutoDeposito[]
 
   @@unique([storeId, sku], name: "storeId_sku")
   @@unique([storeId, barcode], name: "storeId_barcode")
@@ -812,6 +814,59 @@ model MovimentacaoEstoque {
   @@index([storeId, produtoId])
   @@index([storeId, createdAt])
   @@map("movimentacoes_estoque")
+}
+
+/**
+ * Depósito — localização LÓGICA de estoque dentro de uma loja (NÃO é estabelecimento fiscal).
+ * BL-07 Fase 1 — fundação multi-depósito (ADR-0007 · SPRINT_BL07_FASE1). Aditivo e
+ * não-quebrante: nada do comportamento atual muda. Todo saldo continua refletido em
+ * Produto.stock (cache agregado); este modelo passa a ser a fonte estrutural por depósito.
+ * Invariante "exatamente 1 principal por loja": garantida pelo guard de serviço
+ * (ensureDepositoPrincipal, idempotente) + índice parcial único na migração 0011 (reforço).
+ */
+model Deposito {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  nome      String   @map("nome")
+  /** Código estável por loja (ex.: "PRINCIPAL"). Único por loja. */
+  codigo    String   @map("codigo")
+  ativo     Boolean  @default(true) @map("ativo")
+  /** Depósito principal da loja — destino de todo consumo até as fases de seleção (Fase 2). */
+  principal Boolean  @default(false) @map("principal")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @default(now()) @updatedAt @map("updatedAt")
+
+  produtoDepositos ProdutoDeposito[]
+
+  @@unique([storeId, codigo], name: "storeId_codigo")
+  @@index([storeId])
+  @@map("depositos")
+}
+
+/**
+ * Saldo FÍSICO de um produto em um depósito (BL-07 Fase 1 — fundação multi-depósito).
+ * Fonte estrutural do saldo por depósito; a soma por loja espelha Produto.stock (cache agregado).
+ * Fase 1: SOMENTE saldo físico — sem reserva, sem comprometido, sem trânsito (essas dimensões
+ * são Fase 3, ver BL07_FASE0_ARQUITETURA §3.4). `storeId` denormalizado para isolamento
+ * multi-loja (ETAPA 6); integridade referencial garantida pelas FKs de produto e depósito.
+ */
+model ProdutoDeposito {
+  id         String   @id @default(cuid())
+  storeId    String   @map("storeId")
+  produtoId  String   @map("produtoId")
+  produto    Produto  @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  depositoId String   @map("depositoId")
+  deposito   Deposito @relation(fields: [depositoId], references: [id], onDelete: Cascade)
+  quantidade Int      @default(0) @map("quantidade")
+  createdAt  DateTime @default(now()) @map("createdAt")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updatedAt")
+
+  @@unique([produtoId, depositoId], name: "produtoId_depositoId")
+  @@index([storeId])
+  @@index([storeId, produtoId])
+  @@index([depositoId])
+  @@map("produto_depositos")
 }
 
 model Tecnico {

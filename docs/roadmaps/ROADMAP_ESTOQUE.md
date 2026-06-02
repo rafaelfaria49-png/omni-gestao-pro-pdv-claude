@@ -4,7 +4,7 @@ hub: estoque
 status: vivo
 owner: produto + Sonnet (técnico)
 last_update: 2026-06-02
-sprint_atual: nenhuma — ADR-0007 aceito; **Fase 0 (arquitetura) concluída · Gate #1A aprovado (02/06)**; proposta `SPRINT_BL07_FASE1` pronta, aguarda autorização de área protegida para abrir
+sprint_atual: **SPRINT_BL07_FASE1 (Fundação) — 🔄 em andamento (02/06)**; autorização de área protegida concedida; código escrito (models + migração 0011 + services dormentes + backfill + bootstrap), vitest 14/14, `tsc`/`build` pendentes; sem commit (revisão)
 ---
 
 # 📦 Roadmap — HUB Estoque
@@ -119,9 +119,10 @@ Estoque alimenta PDV, OS e Marketplace via consumos auditados. Importação atua
 [`BL07_FASE0_ARQUITETURA.md`](../architecture/estoque/BL07_FASE0_ARQUITETURA.md) (estado atual, gap
 analysis, modelo, fluxos, riscos P0–P3) + proposta faseada
 [`SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md).
-**Fase 1 (fundação, a abrir):** migração aditiva + backfill no Depósito Padrão, **zero mudança de
-comportamento** (PDV/OS/import inalterados). Seleção de depósito, UI de transferência e reserva
-Marketplace ficam em fases posteriores (Fase 2/3).
+**Fase 1 (fundação) 🔄 em andamento (02/06):** models `Deposito`+`ProdutoDeposito`, migração aditiva
+`0011`, núcleo/service dormentes, backfill + bootstrap escritos; **zero mudança de comportamento**
+(PDV/OS/import inalterados; `Produto.stock` intacto). Vitest 14/14; `tsc`/`build` pendentes (dev
+server). Seleção de depósito, UI de transferência e reserva Marketplace ficam em fases posteriores (Fase 2/3).
 **Saída:** lojas com N depósitos funcionando; transferências auditadas.
 
 ### Fase 3 — Conferência e entrada
@@ -167,15 +168,15 @@ Marketplace ficam em fases posteriores (Fase 2/3).
 
 ## 11. Sprint atual
 
-**Nenhuma em execução.** Marcos recentes: Adapter OS → Estoque Fase 2 (21/05/2026); **ADR-0007**
-(modelo) aceito no Gate #1 (01/06); **Fase 0 — arquitetura e planejamento ✅ concluída · Gate #1A
-aprovado (02/06/2026)**.
-
-Próxima sugerida: **`SPRINT_BL07_FASE1` — Fundação multi-depósito** — implementa o ADR-0007 (migração
-aditiva + backfill no Depósito Padrão, zero mudança de comportamento). Proposta pronta em
-[`docs/sprints/proposals/SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md). **Ainda
-não aberta** (aguarda **autorização explícita** para tocar `schema.prisma` + services de estoque
-core). Esforço estimado **L–XL (~5–8 dias-dev)**.
+**`SPRINT_BL07_FASE1` — Fundação multi-depósito · 🔄 EM ANDAMENTO (02/06/2026).** Autorização de área
+protegida **concedida**. Implementado (aditivo, zero mudança de comportamento): models
+`Deposito`+`ProdutoDeposito`, migração `0011`, núcleo puro `lib/estoque/deposito-core.ts` + service
+dormente, `scripts/backfill-deposito.mjs`, hook best-effort em store creation, 14 testes
+(**vitest 14/14 ✅**). **Pendente:** `prisma generate` + `npx tsc --noEmit` + `npm run build` (dev
+server em uso real trava o generate) e o cutover (`db:push` `0011` + `db:backfill-deposito --exec`).
+Marcos: Adapter OS→Estoque Fase 2 (21/05); ADR-0007 Gate #1 (01/06); Fase 0 arquitetura Gate #1A (02/06).
+Proposta/dossiê: [`SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md) ·
+[`BL07_FASE0_ARQUITETURA.md`](../architecture/estoque/BL07_FASE0_ARQUITETURA.md).
 
 ---
 
@@ -204,7 +205,7 @@ Estoque tem **ledger profissional** com auditoria de usuário/documento/custo, i
 |---|---|
 | ~~ADR de multi-depósito~~ | ✅ Resolvido — **ADR-0007** aceito (2026-06-01) |
 | ~~Fase 0 arquitetura multi-depósito~~ | ✅ Concluída — **Gate #1A** aprovado (2026-06-02) |
-| Sprint Fase 1 (Fundação) não aberta (BL-07) — aguarda autorização de área protegida | Fase 2 / adapter Marketplace |
+| Sprint Fase 1 (Fundação) — 🔄 **em andamento** (código escrito; `tsc`/`build` + cutover pendentes) | Fase 2 / adapter Marketplace |
 | Marketplace HUB sem código | Adapter sync |
 | Decisão FIFO vs Médio | Fase 4 |
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { requireAdmin } from "@/lib/require-admin"
 import { filterStoresForSession, requireStoresSession } from "@/lib/stores-api-access"
+import { ensureDepositoPrincipal } from "@/lib/estoque/estoque-deposito-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -91,6 +92,14 @@ export async function POST(req: Request) {
       create: { storeId: id },
       update: {},
     })
+
+    // BL-07 Fase 1: garante o "Depósito Principal" da nova loja (fundação multi-depósito,
+    // ADR-0007). Best-effort — NUNCA bloqueia a criação da loja (zero mudança de comportamento).
+    try {
+      await ensureDepositoPrincipal(id)
+    } catch (e) {
+      console.error("[stores] falha ao criar Depósito Principal (ignorado):", e instanceof Error ? e.message : e)
+    }
 
     return NextResponse.json({ ok: true, store })
   } catch (e) {

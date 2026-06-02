@@ -43,7 +43,7 @@ last_update: 2026-06-02
 | BL-04 | Decisão "cliente por loja vs por organização" | DECISÃO | 🟡 | ⏳ | humano (produto) | CRM Fase 5 + Multi-loja Fase 4 | — |
 | BL-05 | Modelo de billing/limite por loja (Omni Agent) | DECISÃO | 🟡 | ⏳ | humano (produto) | Omni Agent Fase 2 (limite duro) | — |
 | BL-06 | Hardware fiscal para homologação NFC-e | RECURSO | 🟡 | ⏳ | operação | PDV Fase 2 (loja-piloto) | — |
-| BL-07 | Estoque multi-depósito (Fase 2) | DEPENDÊNCIA | 🔴 | 🔄 | Sonnet | Marketplace sync de saldo | DT-08 · modelo decidido (ADR-0007); **Fase 0 arquitetura ✅ — Gate #1A 02/06** (dossiê + proposta `SPRINT_BL07_FASE1`); aguarda **autorização de área protegida** p/ abrir Fase 1 (Fundação) |
+| BL-07 | Estoque multi-depósito (Fase 2) | DEPENDÊNCIA | 🔴 | 🔄 | Sonnet | Marketplace sync de saldo | DT-08 · ADR-0007 + Fase 0 arquitetura (Gate #1A) ✅. **Fase 1 (Fundação) 🔄 em andamento (02/06)** — autorização de área protegida **concedida**; models/migração `0011`/services dormentes/backfill escritos, vitest 14/14; `tsc`/`build` + cutover pendentes. Sem commit (revisão) |
 | BL-08 | Lint customizado de `storeId` ausente | TÉCNICO | 🟢 | ⏳ | Sonnet | — (não bloqueia mais; defesa-em-profundidade) | Era pré-req de DT-03, mas DT-03 foi eliminado **sem** o lint (S-001/S-002: guard 400 + testes). Agora melhoria **P2** desejável: detectar query sem `where.storeId` em CI |
 | BL-09 | Storage S3-compatible para mídia WhatsApp | RECURSO | 🟡 | ⏳ | humano (infra) | WhatsApp Fase 3 (mídia end-to-end) | — |
 | BL-10 | Algoritmo de similaridade para dedup CRM | TÉCNICO | 🟡 | ⏳ | Sonnet | CRM Fase 3 (deduplicação assistida) | Spike pendente |
@@ -74,7 +74,7 @@ BL-14 (PDV Next persist) → fecha Fase 1 PDV
 
 ## 5. Top 3 prioridades de destravamento
 
-1. **BL-07** (multi-depósito — implementação) — modelo decidido (BL-12 ✅ ADR-0007, 01/06) e **Fase 0 (arquitetura) concluída** (Gate #1A, 02/06 — dossiê + proposta `SPRINT_BL07_FASE1`). Falta **autorização de área protegida** para abrir a **Fase 1 (Fundação)**. Destrava o Marketplace inteiro. Maior alavanca do projeto. *(BL-12 e a Fase 0 já não são o gargalo — ver §3 e ROADMAP_ESTOQUE §11.)*
+1. **BL-07** (multi-depósito — implementação) — modelo (ADR-0007) + Fase 0 arquitetura (Gate #1A) ✅. **Fase 1 (Fundação) 🔄 em andamento** (02/06): autorização de área protegida concedida; código escrito (models/migração `0011`/services dormentes/backfill/bootstrap), **vitest 14/14**; resta `tsc`/`build` + cutover (`db:push` `0011` + `db:backfill-deposito --exec`). Destrava o Marketplace inteiro. Maior alavanca do projeto.
 2. **BL-01** (provedor fiscal) — destrava 2 HUBs (PDV+OS) na fase fiscal; concorrência aperta (R-11).
 > *BL-08 (lint `storeId`) saiu desta lista no R0: rebaixado a P2 — DT-03 já foi eliminado sem ele (S-001/S-002). Nenhum item promovido no lugar; repriorização fica fora do escopo do R0.*
 

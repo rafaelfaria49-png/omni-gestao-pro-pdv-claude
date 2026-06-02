@@ -97,7 +97,7 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 |---|--------|-----|------------|------|
 | 0005 (draft) | Liberação controlada do modo COWORK (Fase 1 supervisionada) | governança | Opus | 2026-06-01 |
 
-> **0005 (CoWork)** vive como draft em [`drafts/ADR_PROPOSAL_0005_LIBERAR_COWORK.md`](./drafts/ADR_PROPOSAL_0005_LIBERAR_COWORK.md) (aguarda decisão humana). **0006 (WhatsApp)** foi **aceito** no Gate #2 da sprint `MULTI_LOJA-S-003` (ver §3). **0007 (Depósitos)** foi **aceito** no Gate #1 em 2026-06-01 (decisão; implementação aguarda abertura da Sprint Fase 0 `ESTOQUE-S-00x`). O número `0006` decorre de `0005` já estar reservado ao CoWork (não se renumera histórico publicado).
+> **0005 (CoWork)** vive como draft em [`drafts/ADR_PROPOSAL_0005_LIBERAR_COWORK.md`](./drafts/ADR_PROPOSAL_0005_LIBERAR_COWORK.md) (aguarda decisão humana). **0006 (WhatsApp)** foi **aceito** no Gate #2 da sprint `MULTI_LOJA-S-003` (ver §3). **0007 (Depósitos)** foi **aceito** no Gate #1 em 2026-06-01 (decisão); **Fase 1 (Fundação) implementada** em 2026-06-02 (`SPRINT_BL07_FASE1`, validada `tsc`/`build`/vitest) — ver **Adendo §9** do ADR (reconciliação as-built: `ProdutoDeposito`≡`EstoqueSaldo`, `principal`≡`isDefault`; `custoMedio`/`tipo`/`depositoId@ledger` diferidos p/ Fase 2/3). Cutover (`db:push`+backfill) pendente. O número `0006` decorre de `0005` já estar reservado ao CoWork (não se renumera histórico publicado).
 
 ---
 

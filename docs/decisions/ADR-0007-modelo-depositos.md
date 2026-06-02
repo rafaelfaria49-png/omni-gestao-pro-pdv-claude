@@ -237,3 +237,47 @@ entre depósitos = **par de lançamentos** (saída origem + entrada destino) lig
 - Gate #1 aprovado por Rafael em 2026-06-01 com a diretriz explícita: **persistir o ADR
   e atualizar a documentação relacionada, sem abrir a Sprint Fase 0** (sem implementação,
   sem schema, sem services, sem commit de código operacional).
+
+---
+
+## 9. Adendo — Reconciliação com a implementação (Fase 1 · 02/06/2026)
+
+> A **Fase 1 (Fundação)** foi implementada em `SPRINT_BL07_FASE1` (autorização explícita de área
+> protegida). Validação **verde**: `prisma generate` · `npx tsc --noEmit` · `npm run build` · Vitest
+> 14/14 (núcleo) / 279 passed | 2 expected fail (suíte). **Aditiva, não-quebrante e dormente** —
+> nenhum consumidor (PDV/OS/relatórios) alterado; `Produto.stock` intacto. A decisão da §2 **permanece
+> válida**; este adendo apenas registra o *as-built* e o que foi **conscientemente diferido**.
+
+### 9.1 Mapeamento de nomes (as-built ↔ ADR)
+| ADR-0007 (§2) | Implementado (Fase 1) | Nota |
+|---|---|---|
+| `EstoqueSaldo` (saldo materializado por depósito) | **`ProdutoDeposito`** (`produto_depositos`) | mesmo papel; nome alinhado ao domínio Produto↔Depósito |
+| `Deposito.isDefault` | **`Deposito.principal`** | semântica idêntica (1 por loja) |
+| `EstoqueSaldo.saldo` | `ProdutoDeposito.quantidade` | saldo físico |
+| `Deposito` (`depositos`), scoping `storeId` | igual | `@@unique([storeId, codigo])`, FK→`stores` cascade |
+
+### 9.2 Diferido conscientemente (vs §2 do ADR) — diretriz "somente saldo físico"
+- **`EstoqueSaldo.custoMedio` por depósito** — **não** implementado na Fase 1. Custo médio segue
+  global em `Produto.precoCusto`. Reintroduzir quando o custeio por depósito for necessário (Fase 2+).
+- **`Deposito.tipo` / `metadata`** — não implementados (modelo mínimo). Adicionar na Fase 2 (seleção
+  de depósito: `marketplace`/`transito`/`assistencia`).
+- **`MovimentacaoEstoque.depositoId` (nullable)** — **não** adicionado na Fase 1 (ledger intocado).
+  É a peça da **Fase 2** que cabeia os write-paths (PDV/OS) ao depósito; até lá `ProdutoDeposito`
+  é fundação dormente.
+- **`storeId` em `ProdutoDeposito`** é escalar **indexado** (sem FK direta a `Store`); integridade
+  via FKs de produto e depósito + `assertStoreId` (sem fallback `loja-1`, ADR-0003).
+
+### 9.3 Invariante e dívida
+- Guard "1 principal/loja": `ensureDepositoPrincipal` idempotente (índice parcial único na migração
+  `0011` é reforço; `db:push` não cria índices parciais).
+- Invariante de migração (§2.2 passo 5): `Σ ProdutoDeposito.quantidade == Σ Produto.stock` por loja —
+  verificada pelo `scripts/backfill-deposito.mjs`.
+- **Dívida nova `DT-17` (P2):** `ProdutoDeposito` pode driftar de `Produto.stock` até a Fase 2 cabear
+  os write-paths (mitigado: camada dormente + backfill re-runnable).
+
+### 9.4 Artefatos
+- Schema: `prisma/schema.prisma` (`Deposito`, `ProdutoDeposito`). Migração: `0011_deposito_produto_deposito`.
+- Services: `lib/estoque/deposito-core.ts` (puro) + `lib/estoque/estoque-deposito-service.ts` (dormente).
+- Backfill: `scripts/backfill-deposito.mjs` (`npm run db:backfill-deposito`). Bootstrap: hook em `app/api/stores/route.ts`.
+- Arquitetura: [`docs/architecture/estoque/BL07_FASE0_ARQUITETURA.md`](../architecture/estoque/BL07_FASE0_ARQUITETURA.md) · Sprint: [`docs/sprints/proposals/SPRINT_BL07_FASE1.md`](../sprints/proposals/SPRINT_BL07_FASE1.md).
+- **Cutover pendente** (não executado): `npm run db:push` (aplica `0011`) → `npm run db:backfill-deposito --exec` → observar.

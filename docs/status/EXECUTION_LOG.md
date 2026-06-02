@@ -2,7 +2,7 @@
 title: Execution Log — registro append-only de execuções de skill
 status: vivo (append-only)
 owner: Execution Engine (automático) + revisão humana mensal
-last_update: 2026-06-01
+last_update: 2026-06-02
 schema_version: v1
 ---
 
@@ -1195,4 +1195,65 @@ docs_atualizados:
   - docs/status/DIVIDA_TECNICA.md            # pré-existente — DT-08 referencia ADR-0007
 flags: []                               # docs/** apenas; sem código/schema/auth/proxy/core/PDV runtime
 notes: "Registro de governança do DESVIO OPERACIONAL DO PDV — pausa CONTROLADA na sequência do roadmap antes de abrir BL-07 (estoque multi-depósito). MOTIVO: o PDV entrou em operação real na loja e apareceram problemas de fluxo/teclado/busca/bipe/finalização/toast/UX; estabilizá-lo é prioridade antes de uma frente estrutural pesada. CONTEXTO ANTERIOR (concluído): WhatsApp Multi-Loja F-04/DT-07 (ADR-0006, MULTI_LOJA-S-003, ENTRY 019) fechou o último vetor loja-1; ADR-0007 (modelo de depósitos) aceito no Gate #1 (01/06) -> BL-12 resolvido (ver BLOCKERS §3); BL-07 (implementação multi-depósito, Sprint Fase 0 ESTOQUE-S-00x) passa a ser a próxima grande frente estrutural, AINDA NÃO ABERTA. CORREÇÕES PDV recentes (já entregues/validadas, commits): DT-B anti-negativo (ec04043), busca multi-termo + bipe + INSERT (b9c147d), toast/UX + Resumo do Caixa 2-col (3bc0e70), modal de pagamento 2 colunas + teclado (03b4ac2), modal de pagamento SEM F11 + busca F3 profissional (292e073), UX Smart Genius. PRIORIDADE IMEDIATA (sequência oficial): (1) finalizar PDV operacional -> (2) abrir BL-07 (estoque multi-depósito, Fase 0) -> (3) iniciar Fiscal (NFC-e/SAT); Importador Universal IA ADIADO. ESCOPO (fechado, docs-only): CURRENT_STATUS.md (entrada nova no topo) + CURRENT_STATUS_OVERVIEW.md (§1/§2/§3) + ROADMAP_PDV.md (front matter + §11/§12) + esta ENTRY 020. NÃO abriu BL-07, NÃO abriu Fiscal, NÃO tocou código/schema/PDV runtime. BLOCKERS.md e DIVIDA_TECNICA.md NÃO precisaram de edição nova (DT-B não é linha rastreada; ADR-0007/BL-12/BL-07 já estava nos diffs pré-existentes do working tree, commitados no mesmo commit de governança). VALIDAÇÃO: docs-only -> tsc/build N/A. COMMIT: este registro entra no commit de governança (docs) junto com os diffs ADR-0007 pré-existentes; push autorizado no mesmo turno. REFERÊNCIAS: ENTRY 019 (F-04 WhatsApp, última execução antes desta) · docs/decisions/ADR-0007-modelo-depositos.md (aceito) · docs/status/BLOCKERS.md §3 (BL-12 resolvido) · commits ec04043/b9c147d/3bc0e70/03b4ac2/292e073 (correções PDV)."
+```
+
+---
+
+```yaml
+# ─── ENTRY 021 ────────────────────────────────────────────────────
+ticket_id: BL07-FASE1                  # Estoque multi-depósito — Fundação (paga DT-08; tracking SPRINT_BL07_FASE1)
+skill_id: SKILL_EXEC_DEBT_ITEM         # closest fit no schema v1 (mesmo das ENTRY 012-016/019); escopo real = SPRINT (maior que cap S) sob autorização humana explícita
+skill_version: v1
+ia: claude_code
+modo: SAFE                             # perfil real = SAFE-lite REFORÇADO (ADR-0004): área protegida (schema + lib/estoque core + models) COM autorização; valor mantido SAFE (schema v1 congelado)
+started_at: 2026-06-02T00:00:00-03:00  # PROXY — sessão ETAPA 1-8; hora fina não rastreada
+ended_at: 2026-06-02T00:00:00-03:00    # PROXY — fim da escrita + governança (antes do gate de validação tsc/build)
+duration: null                         # precisão não rastreada (critério das ENTRY 010-020)
+fases_completas: [SAFE_LITE_REFORCADO] # ETAPA1(schema)→2(migração 0011)→3(bootstrap+backfill)→4(cache)→5(service dormente)→6(proteções)→7(testes vitest)→8(governança) — fora do pipeline de 17 fases
+fase_falha: null
+resultado: encerrada                   # sessão de escrita encerrada e auto-revisada; tsc/build + commit PENDENTES (mesmo padrão da ENTRY 005: "encerrada" = sessão concluída, downstream aguardando)
+pr: null
+branch: main                           # working tree em main; sem branch skill/*; SEM commit (instrução: parar para revisão)
+commit_anterior: bc826ee               # HEAD = Gate #1A (wiring de governança Fase 0)
+commit_final: null                     # SEM commit — parar antes do commit para revisão
+rollback: false
+diff:
+  added: ~880                          # APROX — schema (~60) + migração 0011 (~95) + deposito-core (~190) + service (~50) + test (~230) + backfill.mjs (~95) + hook stores (~10) + package.json (1) + governança (~150); número final no git diff --stat pré-commit
+  removed: ~2
+  files_modified: ~14                  # 3 código modificados (schema, app/api/stores/route, package.json) + 4 novos código (core, service, test, backfill) + 1 migração nova + 6 docs governança (incl. esta ENTRY)
+gates:
+  gate_1:
+    approved_by: Rafael
+    approved_at: 2026-06-02T00:00:00-03:00   # date-proxy
+    pending: null
+    notes: "AUTORIZAÇÃO EXPLÍCITA CONCEDIDA: pode tocar prisma/schema.prisma, migrations, services de estoque core e models de estoque. Objetivo: implementar a FUNDAÇÃO do ADR-0007 com ZERO mudança de comportamento. NÃO tocar PDV/Financeiro/WhatsApp/Marketplace/Fiscal/Auth/Proxy/Omni Agent/Operações não-estoque."
+  gate_2:
+    approved_by: null
+    approved_at: null
+    pending: null
+    notes: "AGUARDANDO — humano pediu para PARAR antes do commit para revisão. tsc/build PENDENTES (dev server em uso real trava prisma generate; operador para num momento seguro). Sem commit/push."
+audit_findings: {P0: 0, P1: 0, P2: 0, P3: 0}   # nenhuma AUDIT skill rodou (Fase 12 N/A). Dívida deliberada nova registrada: DT-17 (P2)
+benchmark: null
+sprint: null                           # proposta em docs/sprints/proposals; não promovida a docs/sprints/ oficial ainda
+proposta: docs/sprints/proposals/SPRINT_BL07_FASE1.md
+auditoria: null                        # informada por docs/architecture/estoque/BL07_FASE0_ARQUITETURA.md (Fase 0)
+adr_criada: null                       # ADR-0007 pré-existente (aceito); Adendo §9 de RECONCILIAÇÃO adicionado nesta sessão (as-built Fase 1: ProdutoDeposito≡EstoqueSaldo, principal≡isDefault; custoMedio/tipo/depositoId@ledger diferidos)
+memoria_criada: memory/project_estoque_multi_deposito_fundacao   # memória Claude Code fora do repo (~/.claude)
+docs_atualizados:
+  - docs/ai/CURRENT_STATUS.md                  # entrada nova no topo (Fase 1 em andamento) + header
+  - docs/ai/CURRENT_STATUS_OVERVIEW.md         # §1 (Estoque) + §6 entrada nova + last_update
+  - docs/roadmaps/ROADMAP_ESTOQUE.md           # front matter + §8 Fase 2 + §11 + §14
+  - docs/status/BLOCKERS.md                     # BL-07 row + §5 #1
+  - docs/status/DIVIDA_TECNICA.md               # DT-08 atualizado + DT-17 novo (P2)
+  - docs/decisions/ADR-0007-modelo-depositos.md # Adendo §9 — reconciliação as-built Fase 1
+  - docs/decisions/INDEX.md                      # nota 0007 atualizada (Fase 1 implementada)
+  - docs/status/EXECUTION_LOG.md                # esta ENTRY 021 (append-only)
+files_created:
+  - prisma/migrations/0011_deposito_produto_deposito/migration.sql   # DDL aditiva (2 tabelas + índices + FKs guardadas + índice parcial 1 principal/loja)
+  - lib/estoque/deposito-core.ts                # núcleo puro (client injetado, import type) — ensure principal, agregado, por-depósito, set, backfill, assertStoreId
+  - lib/estoque/estoque-deposito-service.ts     # wrapper fino ligado ao prisma (DORMENTE — nenhum consumidor chama)
+  - lib/estoque/deposito-core.test.ts           # 14 testes (vitest 14/14): principal idempotente, upsert, agregação, backfill/re-sync, isolamento multi-loja
+  - scripts/backfill-deposito.mjs               # bootstrap lojas existentes + gate de invariante (Σ==stock); dry-run default, --exec
+flags: ["--with-protected-areas: prisma/schema.prisma", "--with-protected-areas: lib/estoque/* (services core + models)"]   # área protegida tocada COM autorização explícita
+notes: "BL-07 Fase 1 (Fundação multi-depósito) — implementa ADR-0007 com PRINCÍPIO INEGOCIÁVEL: ZERO mudança de comportamento operacional. É SÓ FUNDAÇÃO (aditiva e dormente). ESCOPO ENTREGUE (ETAPA 1-8): (1) MODELAGEM — schema.prisma + models Deposito (id, storeId, nome, codigo, ativo, principal, timestamps) e ProdutoDeposito (storeId, produtoId, depositoId, quantidade — SÓ saldo físico) + back-relations em Produto/Store; nada existente alterado/dropado. (2) MIGRATION — 0011_deposito_produto_deposito (CREATE TABLE x2 IF NOT EXISTS + índices + FKs guardadas estilo 0009/0010 + índice parcial único 'um principal por loja'; rollback = DROP das 2 tabelas; apply via db:push). (3) DEPÓSITO PRINCIPAL — ensureDepositoPrincipal idempotente (find-or-create; é o guard primário da invariante) + script backfill-deposito.mjs (lojas existentes: principal + ProdutoDeposito a partir de Produto.stock; gate de invariante Σ==stock; dry-run default) + npm run db:backfill-deposito + hook BEST-EFFORT em app/api/stores/route.ts (cria principal ao criar loja, NUNCA bloqueia a criação). (4) CACHE — Produto.stock INTACTO (fonte operacional + cache agregado); ProdutoDeposito é fonte estrutural por depósito; PDV/relatórios/dashboards/integrações não tocados. (5) SERVICE LAYER — lib/estoque/deposito-core.ts (PURO, client injetado, import type — testável sem regenerar client, padrão ops-upsert-venda) + lib/estoque/estoque-deposito-service.ts (wrapper prisma); getEstoqueAgregado/getEstoquePorDeposito/setEstoqueDeposito/ensureDepositoPrincipal/backfill — TODAS DORMENTES (nenhum consumidor de produção chama; cabeamento = Fase 2). (6) PROTEÇÕES MULTI-LOJA (ETAPA 6) — assertStoreId lança sem fallback loja-1 (ADR-0003); where.storeId em toda query; setEstoqueDeposito valida depósito E produto da mesma loja (anti-vazamento cross-tenant); coberto por testes. (7) TESTES — lib/estoque/deposito-core.test.ts 14/14 PASSED (helpers puros, ensure principal idempotente + por-loja, upsert create/update, isolamento cross-tenant, agregação, backfill idempotente/re-sync). (8) GOVERNANÇA — CURRENT_STATUS/OVERVIEW/ROADMAP_ESTOQUE/BLOCKERS/DIVIDA_TECNICA + esta ENTRY. VALIDAÇÃO: vitest do núcleo 14/14 ✅ (roda sem regenerar client — só import type). tsc/build PENDENTES: o dev server (next dev em 0.0.0.0:3000, rodando desde 01/06) trava o prisma generate (EPERM no query_engine .dll) e o PDV está em operação real na loja → o operador escolheu PARAR MANUALMENTE o servidor num momento seguro; tsc/build rodam logo após. DIVERGÊNCIAS CONSCIENTES vs ADR-0007 (a reconciliar no Gate #2 ou ADR follow-up): model nomeado ProdutoDeposito (não EstoqueSaldo); campo principal (não isDefault); SEM custoMedio por depósito, SEM tipo/metadata em Deposito, SEM depositoId em MovimentacaoEstoque — Fase 1 minimalista ('somente saldo físico', per diretriz do humano); storeId em ProdutoDeposito é escalar indexado (sem FK direta a Store; integridade via FKs produto/depósito). DÍVIDA NOVA: DT-17 (P2) — ProdutoDeposito pode driftar de Produto.stock até a Fase 2 cabear write-paths (mitigado: camada dormente + backfill re-runnable); + campos diferidos vs ADR-0007. ÁREAS PROTEGIDAS tocadas COM autorização: prisma/schema.prisma (+2 models +2 back-relations), lib/estoque/* (novos). app/api/stores/route.ts: +1 import + 1 hook best-effort (não-protegido; integração do bootstrap). package.json: +1 script. NÃO TOCADO (forbidden list respeitada): PDV (lib/ops-upsert-venda, components/*/vendas), Financeiro, WhatsApp, Marketplace, Fiscal, Auth, Proxy, Omni Agent, lib/operacoes/* (OS adapter os-estoque INTACTO). COMMIT/PUSH: PENDENTES — parar antes do commit para revisão (instrução explícita). CUTOVER (não executado): npm run db:push (aplica 0011) → npm run db:backfill-deposito --exec (com invariante verde) → deploy. REFERÊNCIAS: docs/decisions/ADR-0007-modelo-depositos.md (aceito) · docs/architecture/estoque/BL07_FASE0_ARQUITETURA.md · docs/sprints/proposals/SPRINT_BL07_FASE1.md · ENTRY 020 (pausa PDV) · ENTRY 019 (F-04 WhatsApp). Gate #1A (commit bc826ee) = wiring de governança da Fase 0."
 ```

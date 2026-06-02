@@ -1,7 +1,48 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 02 Jun 2026 — **BL-07 Estoque Multi-Depósito · Fase 0 (arquitetura) CONCLUÍDA — Gate #1A aprovado** (wiring de governança): dossiê de arquitetura + proposta de sprint faseada persistidos; BL-07 pronto para abrir **Fase 1 (Fundação)** sob autorização de área protegida. Antes: Pausa operacional PDV (modais F1/F3 do Clássico); F-04 WhatsApp ✅ (ADR-0006); ADR-0007 aceito → BL-12 resolvido
+> Última atualização: 02 Jun 2026 — **BL-07 Estoque Multi-Depósito · Fase 1 (Fundação) EM ANDAMENTO** (autorização de área protegida concedida): models `Deposito`+`ProdutoDeposito`, migração aditiva `0011`, service layer **dormente**, backfill + bootstrap escritos — **zero mudança de comportamento**. Vitest **14/14** ✅; `tsc`/`build` **pendentes** (dev server em uso). Antes: Fase 0 (arquitetura) — Gate #1A; F-04 WhatsApp ✅ (ADR-0006)
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### BL-07 Estoque Multi-Depósito — Fase 1 (Fundação) EM ANDAMENTO (02/06/2026)
+
+**Estado:** 🔄 em andamento — código escrito; **validação `tsc`/`build` PENDENTE** (dev server em
+uso real travando o `prisma generate`; o operador para o servidor num momento seguro e a validação
+roda em seguida). **Vitest do núcleo: 14/14 ✅** (roda sem regenerar o client — `import type` apenas).
+**Autorização de área protegida concedida** (schema + services de estoque core) — escopo da
+`SPRINT_BL07_FASE1`.
+
+**Princípio honrado:** **ZERO mudança de comportamento operacional.** É **só fundação** — nenhum
+consumidor (PDV/OS/relatórios) foi alterado; `Produto.stock` segue intacto como cache agregado e
+fonte operacional. A camada nova é **dormente** (preparada para a Fase 2 cabear os write-paths).
+
+**O que foi implementado (aditivo):**
+
+| Camada | Arquivo | Papel |
+|---|---|---|
+| Schema | `prisma/schema.prisma` | + models `Deposito` (id, storeId, nome, codigo, ativo, principal, timestamps) e `ProdutoDeposito` (storeId, produtoId, depositoId, quantidade) + back-relations em `Produto` e `Store`. Nada existente alterado/dropado |
+| Migração | `prisma/migrations/0011_deposito_produto_deposito/migration.sql` | DDL **aditiva** (CREATE TABLE ×2 + índices + FKs guardadas + índice parcial `1 principal/loja`). Rollback = DROP das 2 tabelas |
+| Núcleo (puro) | `lib/estoque/deposito-core.ts` | Lógica testável com client injetado (`import type`): ensure principal, agregado, por-depósito, set, backfill. `assertStoreId` sem fallback loja-1 |
+| Service | `lib/estoque/estoque-deposito-service.ts` | Wrapper fino ligado ao `prisma` (dormente — nenhum consumidor chama) |
+| Backfill | `scripts/backfill-deposito.mjs` + `npm run db:backfill-deposito` | Bootstrap lojas existentes (principal + ProdutoDeposito a partir de `Produto.stock`) + gate de invariante (Σ == stock); dry-run default |
+| Bootstrap | `app/api/stores/route.ts` | 1 hook **best-effort** (`ensureDepositoPrincipal`) ao criar loja — nunca bloqueia a criação |
+| Testes | `lib/estoque/deposito-core.test.ts` | 14 testes: principal idempotente, ProdutoDeposito upsert, agregação, backfill/re-sync, **isolamento multi-loja** |
+
+**Proteções multi-loja (ETAPA 6):** `storeId` obrigatório em toda função (`assertStoreId` lança sem
+fallback `loja-1` — ADR-0003); `where.storeId` em todas as queries; `setEstoqueDeposito` valida que
+depósito **e** produto são da mesma loja (anti-vazamento cross-tenant) — coberto por teste.
+
+**Divergências conscientes vs ADR-0007 (a reconciliar no Gate #2 ou ADR de follow-up):**
+- Modelo nomeado **`ProdutoDeposito`** (não `EstoqueSaldo`); campo **`principal`** (não `isDefault`).
+- **Sem `custoMedio` por depósito**, **sem `tipo`/`metadata`** em `Deposito`, **sem `depositoId` em
+  `MovimentacaoEstoque`** — Fase 1 minimalista ("somente saldo físico", per diretriz). ADR-0007 previa
+  esses campos; ficam para fase posterior (ou atualização do ADR).
+- `storeId` em `ProdutoDeposito` é escalar indexado (sem FK direta a Store) — integridade via FKs de produto/depósito.
+
+**Pendências para fechar a Fase 1:** (1) parar o dev server → `prisma generate` → `npx tsc --noEmit`
+→ `npm run build`; (2) cutover (não executado): `npm run db:push` (aplica `0011`) → `db:backfill-deposito --exec`.
+**Sem commit/push** — parar para revisão (instrução do humano).
 
 ---
 
