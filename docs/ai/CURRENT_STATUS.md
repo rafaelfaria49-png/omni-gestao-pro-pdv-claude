@@ -1,7 +1,105 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 02 Jun 2026 — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
+> Última atualização: 03 Jun 2026 — **Operações V3 · Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Operações V3 — Fase 1A: Workspace + Orçamento real ligados (03/06/2026)
+
+**O que é:** primeira frente **funcional** da V3. O **OS Workspace V3** (`/dashboard/operacoes-v3`)
+deixa de ser somente leitura no fluxo **OS → Orçamento → envio**: abre uma OS real (`getOrdem`),
+distingue **prévia sintetizada** vs **orçamento materializado** e executa **ações reais de orçamento**
+reusando — **sem backend novo** — as mesmas funções já usadas pelo HUB V2. **V2 intacta.** Escopo tocado
+**somente** em `components/operacoes-v3/**` e `lib/operacoes-v3/**`.
+
+**O que agora funciona (real):**
+- **Gerar orçamento da OS** — CTA aparece quando não há orçamento ou só há a prévia sintetizada;
+  chama `gerarOrcamentoDaOS` → materializa um **rascunho editável** a partir dos itens da OS.
+- **Enviar ao cliente / Reenviar** — quando há orçamento real em `rascunho`/`enviado`; chama
+  `enviarOrcamentoAoCliente` → status `enviado`.
+- Após sucesso, a tela **recarrega** a OS e a lista (estado de pendência + erro honesto na própria seção).
+- **Seção "3. Orçamento" acima de "5. Financeiro"** (ordem obrigatória), mostrando serviços, peças,
+  desconto (se existir) e **total final**, com badge de status (rascunho/enviado/aprovado/prévia/sem orçamento).
+
+**Actions reais usadas** (via fronteira `lib/operacoes-v3/orcamento-actions.ts` → `@/api/os`, idênticas às do HUB V2):
+`gerarOrcamentoDaOS` · `enviarOrcamentoAoCliente`. A fronteira só **normaliza a assinatura** para
+`(storeId, osId)` e fixa o `autor` da timeline — **não** é backend duplicado.
+
+**Placeholders honestos (não chamam write-path — Fase 1B+):** **Aprovar** e **Reprovar** orçamento
+(têm efeito financeiro real: `approveOrcamento` materializa Conta a Receber / `rejectOrcamento` cancela
+cobrança) → toast honesto. Também placeholders: Receber pagamento, Diagnóstico/Execução/Entrega/Garantia
+estruturados, impressão de documento/etiqueta, portal do cliente, e toda a barra de comando contextual.
+
+**Segurança (verificado no código, não só documentado):**
+- `gerarOrcamentoDaOS`/`enviarOrcamentoAoCliente` fazem patch só de `{ orcamento, timeline }` — **sem**
+  campos de faturamento → o gate de `syncFinanceiroAfterOSPayloadUpdate` **não cria/cancela Conta a Receber**.
+- **Sem dupla baixa de estoque:** a V3 **não** chama consumo de estoque; o `syncOperacaoItensComOrcamento`
+  do "enviar" só espelha `ordem_servico_item` (rascunho), **nunca** toca `Produto.stock`/`MovimentacaoEstoque`
+  (e ainda respeita `estoqueConsumido`). A correção de fonte única de peças da **OS-P0.1** continua sendo a
+  fonte única — não foi duplicada.
+- **Financeiro permanece "a conectar"** (estado de recebimento real vive no Financeiro, fora deste read layer).
+
+**Arquivos (Fase 1A):**
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/operacoes-v3/orcamento-actions.ts` **(novo)** | Fronteira de ações seguras: wrappers `(storeId, osId)` para `gerarOrcamentoDaOS`/`enviarOrcamentoAoCliente`; documenta o que **não** é reexportado (aprovar/reprovar) |
+| `components/operacoes-v3/hooks/use-orcamento-v3.ts` **(novo)** | Hook client: estado `pending`/`error` + `gerar()`/`enviar()` |
+| `components/operacoes-v3/pages/OSWorkspaceV3.tsx` | Liga CTA Gerar/Enviar, badge de status do orçamento, Aprovar/Reprovar como placeholder honesto |
+| `components/operacoes-v3/hooks/use-ordem-v3.ts` | `reload()` para refazer a leitura após ação real |
+
+**Validação:** `npx tsc --noEmit` ✅ (0 erros) · `npm run build` ✅ (exit 0, 98 rotas;
+`/dashboard/operacoes-v3` estática, `/dashboard/operacoes-v2` presente e intacta).
+**Não commitado — aguardando revisão.**
+
+**Não alterado:** V2, schema Prisma, migrations, auth/proxy, `@/api/os` e demais write-paths do HUB
+(`createOS`/`updateOSStatus`/`applyOperacaoHubAcao`/`approveOrcamento`/`rejectOrcamento`/`gerarCobranca*`),
+PDV, Financeiro HUB, WhatsApp, Marketplace, Fiscal, BL-07.
+
+**Próximo (Fase 1B/2):** ligar **Aprovar/Reprovar** com confirmação explícita (efeito financeiro real) ·
+conectar o estado real de **pagamento/recebimento** (Financeiro) · diagnóstico/execução/entrega estruturados ·
+edição de itens do orçamento (desconto por linha) dentro do Workspace.
+
+---
+
+### Operações V3 — casca navegável isolada criada (02/06/2026)
+
+**O que é:** nova **casca operacional** da Operações numa rota paralela e **isolada**
+(`/dashboard/operacoes-v3`), espelhando o padrão de isolamento da **Configurações V3** (Server
+Component fino + `<Suspense>` → Client Component com **navegação por estado interno**; loja ativa via
+`useLojaAtiva`). **Não substitui a V2** (`/dashboard/operacoes-v2` intacta) e **não toca
+backend/schema/write-paths**. Escopo criado **somente** em `app/dashboard/operacoes-v3/**` e
+`components/operacoes-v3/**` (~35 arquivos novos).
+
+**19 telas navegáveis** + **OS Workspace** (tela principal: cabeçalho sticky · barra de comando
+contextual por status · 8 seções colapsáveis · lateral de contexto · rodapé utilitário — **sem JSON cru**).
+
+| Nível | Telas |
+|---|---|
+| **Real (leitura)** | Dashboard (contagens/atrasadas/garantias/receita estimada) · Fila (Kanban/Lista) · Bancada (por técnico) · SLA · Workspace (`getOrdem`) · Orçamentos (funil) · Garantias · Histórico de clientes |
+| **Parcial** | Técnicos (carga real; produtividade *a conectar*) · Serviços (agregado real das OS; catálogo/CRUD *a conectar*) |
+| **Placeholder honesto** | Atendimento Rápido e PDV de Serviço (cascas de formulário, **sem write**) · Retornos · Portal · Notificações · Peças & Pedidos · Rastreio Físico · Relatórios · Configurações do módulo |
+
+**Leitura via** `listOrdens`/`getOrdem` de `app/actions/ordens.ts` (acessores que **não lançam** —
+retornam `[]`/`null`). **Toda ação de escrita** (mudar status, receber, aprovar, gerar OS, imprimir…)
+é **placeholder honesto** (toast "disponível na próxima fase") — **nenhum write-path é chamado**.
+**Pagamento** real (em aberto/parcial/quitado) vive no Financeiro e não está acoplado a este read
+layer → exibido como **"a conectar"** (sem simular recebimento); idem "Recebido hoje"/"Saldo aberto".
+
+**Tokens:** apenas semânticos (`bg-card`, `text-foreground`, `border-border`, `bg-primary/10`, status
+`success/warning/info/destructive`). `shadow-card`/`shadow-soft` **não** são utilitários globais →
+usado `shadow-sm`. Casca **self-contained** (não importa o kit shadcn global).
+
+**Validação:** `npx tsc --noEmit` ✅ (0 erros) · `npm run build` ✅ (98 rotas; `/dashboard/operacoes-v3`
+estática; `/dashboard/operacoes-v2` presente e intacta). **Não commitado — aguardando revisão.**
+
+**Não alterado:** V2, schema Prisma, auth/proxy, write-paths de OS (`createOS`/`updateOS*`/
+`applyOperacaoHubAcao`/`gerarCobranca*`…), PDV, Financeiro HUB, WhatsApp, Marketplace, Fiscal, BL-07.
+
+**Próximo passo sugerido:** revisão visual (`npm run dev` → `/dashboard/operacoes-v3`) → decidir
+entrada na sidebar (hoje só por URL) → priorizar quais telas ligam dados/escrita reais primeiro,
+sem duplicar o motor da V2.
 
 ---
 
