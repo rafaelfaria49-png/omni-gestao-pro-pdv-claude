@@ -1,31 +1,37 @@
 "use client";
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, FileText, Globe, Plus, Printer, Search, Tag } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { ChecklistEstado, OrdemServico, PecaUsada } from "@/types/os";
+import { ArrowLeft, Camera, FileText, Globe, History, ListChecks, Pencil, Plus, Printer, Search, ShieldCheck, Tag } from "lucide-react";
+import type { OrdemServico } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { OSHeaderV3 } from "../components/OSHeaderV3";
 import { OSCommandBarV3 } from "../components/OSCommandBarV3";
 import { OSContextRailV3 } from "../components/OSContextRailV3";
 import { OSSectionV3 } from "../components/OSSectionV3";
 import { OSCardV3 } from "../components/OSCardV3";
+import { OSTimelineV3 } from "../components/OSTimelineV3";
+import { ChecklistEntradaV3 } from "../components/ChecklistEntradaV3";
+import { SenhaAcessoriosV3 } from "../components/SenhaAcessoriosV3";
+import { DiagnosticoTecnicoV3 } from "../components/DiagnosticoTecnicoV3";
+import { ServicosExecutadosV3 } from "../components/ServicosExecutadosV3";
+import { AnexosV3 } from "../components/AnexosV3";
+import { GarantiaOSV3 } from "../components/GarantiaOSV3";
+import { OSHistoricoV3 } from "../components/OSHistoricoV3";
 import { OrcamentoPanelV3 } from "../components/OrcamentoPanelV3";
+import { PrintPreviewV3 } from "../components/print/PrintPreviewV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
 import { ButtonV3 } from "../components/UiV3";
 import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
 import type { OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
+import { lerRecepcaoV3 } from "@/lib/operacoes-v3/workspace-model";
+import type { EmpresaPrintInputV3 } from "@/lib/operacoes-v3/print-model";
+import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useOperacoesV3 } from "../context/OperacoesV3Context";
 import { useOrdemV3 } from "../hooks/use-ordem-v3";
+import { useWorkspaceV3 } from "../hooks/use-workspace-v3";
 import { SCREEN_COPY } from "../data/screen-copy";
 import { formatBRL, formatData, formatDataHora } from "../lib/format";
 import { matchOrdem, pagamentoInfo } from "../lib/os-derive";
-
-const CHECK_DOT: Record<ChecklistEstado, string> = {
-  ok: "bg-success",
-  ruim: "bg-destructive",
-  nao_testado: "bg-info/60",
-};
 
 function KV({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -46,10 +52,6 @@ function LinhaItem({ descricao, detalhe, valor }: { descricao: string; detalhe?:
       <span className="shrink-0 text-sm font-medium tabular-nums text-foreground">{formatBRL(valor)}</span>
     </div>
   );
-}
-
-function pecaSubtotal(p: PecaUsada): number {
-  return Math.max(0, p.quantidade * p.valorUnitario - (p.desconto ?? 0));
 }
 
 // ---------------------------------------------------------------------------
@@ -82,7 +84,7 @@ function Picker() {
             className="w-full rounded-lg border border-border bg-background px-3 py-2 pl-9 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Selecione uma OS para abrir o workspace…"
+            placeholder="Selecione uma OS para abrir o prontuário…"
           />
         </div>
       </div>
@@ -92,7 +94,7 @@ function Picker() {
         <EmptyStateV3
           icon={<FileText className="h-8 w-8" />}
           titulo="Selecione uma ordem de serviço"
-          descricao="Escolha uma OS na fila ou busque acima para abrir a visão única e contínua."
+          descricao="Escolha uma OS na fila ou busque acima para abrir o prontuário completo do equipamento."
         />
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -109,10 +111,33 @@ function Picker() {
 
 function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => void }) {
   const { acaoEmConstrucao, navigate, openOS, storeId, reload: reloadLista, mudarStatus, notificar } = useOperacoesV3();
+  const { empresaDocumentos } = useLojaAtiva();
   const pag = pagamentoInfo(os);
+  const recepcao = lerRecepcaoV3(os);
+  const [printOpen, setPrintOpen] = useState(false);
 
-  // Toda mudança de status passa pela máquina única (via contexto). Em sucesso,
-  // recarrega também a OS aberta para manter Workspace ↔ Kanban sincronizados.
+  // Dados da empresa para o cabeçalho do documento (unidade ativa, com fallback honesto no helper).
+  const empresaPrint = useMemo<EmpresaPrintInputV3>(
+    () => ({
+      nomeFantasia: empresaDocumentos.nomeFantasia,
+      razaoSocial: empresaDocumentos.razaoSocial,
+      cnpj: empresaDocumentos.cnpj,
+      endereco: empresaDocumentos.endereco,
+      contato: empresaDocumentos.contato,
+      logoUrl: empresaDocumentos.identidadeVisual?.logoUrl,
+      responsavel: recepcao.recebidoPor,
+    }),
+    [empresaDocumentos, recepcao.recebidoPor],
+  );
+
+  const refresh = useCallback(() => {
+    reloadOrdem();
+    reloadLista();
+  }, [reloadOrdem, reloadLista]);
+
+  const wsActions = useWorkspaceV3(storeId, os.id, () => refresh());
+
+  // Toda mudança de status passa pela máquina única (via contexto).
   const onMudarStatus = useCallback(
     async (to: OperacaoStatusV3): Promise<boolean> => {
       const ok = await mudarStatus(os.id, to);
@@ -121,18 +146,35 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
     },
     [mudarStatus, os.id, reloadOrdem],
   );
-  const orc = os.orcamento;
-  const pecas = orc?.pecas?.length ? orc.pecas : os.pecas ?? [];
 
-  const refresh = useCallback(() => {
-    reloadOrdem();
-    reloadLista();
-  }, [reloadOrdem, reloadLista]);
+  const irPara = (id: string) =>
+    typeof document !== "undefined" && document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const acao = (label: string) => (
     <ButtonV3 variant="subtle" onClick={() => acaoEmConstrucao(label)}>
       {label}
     </ButtonV3>
+  );
+
+  // Ações rápidas do cabeçalho (item 2) — navegam dentro do próprio prontuário.
+  const quickActions = (
+    <>
+      <ButtonV3 variant="outline" onClick={() => irPara("checklist")}>
+        <Pencil className="h-4 w-4" aria-hidden /> Editar
+      </ButtonV3>
+      <ButtonV3 variant="outline" onClick={() => setPrintOpen(true)}>
+        <Printer className="h-4 w-4" aria-hidden /> Imprimir
+      </ButtonV3>
+      <ButtonV3 variant="outline" onClick={() => irPara("anexos")}>
+        <Camera className="h-4 w-4" aria-hidden /> Anexos
+      </ButtonV3>
+      <ButtonV3 variant="outline" onClick={() => irPara("garantia")}>
+        <ShieldCheck className="h-4 w-4" aria-hidden /> Garantia
+      </ButtonV3>
+      <ButtonV3 variant="outline" onClick={() => irPara("historico")}>
+        <History className="h-4 w-4" aria-hidden /> Histórico
+      </ButtonV3>
+    </>
   );
 
   return (
@@ -147,14 +189,15 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
         </ButtonV3>
       </div>
 
-      <OSHeaderV3 os={os} />
+      <OSHeaderV3 os={os} actions={quickActions} />
       <OSCommandBarV3 os={os} onMudarStatus={onMudarStatus} onAcao={acaoEmConstrucao} />
+      <OSTimelineV3 os={os} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        {/* Coluna principal — seções na ordem obrigatória */}
+        {/* Coluna principal — prontuário do equipamento */}
         <div className="min-w-0 space-y-3">
           <OSSectionV3
-            titulo="1. Identificação / Atendimento"
+            titulo="Identificação / Atendimento"
             tone="info"
             resumo={`${os.cliente?.nome ?? "Cliente"} · ${[os.equipamento?.marca, os.equipamento?.modelo].filter(Boolean).join(" ") || os.equipamento?.tipo || "Equipamento"}`}
           >
@@ -162,15 +205,12 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
               <KV label="Cliente" value={os.cliente?.nome} />
               <KV label="Documento" value={os.cliente?.documento} />
               <KV label="Telefone" value={os.cliente?.telefone} />
+              <KV label="E-mail" value={os.cliente?.email} />
               <KV label="Tipo" value={os.equipamento?.tipo} />
               <KV label="Marca / modelo" value={[os.equipamento?.marca, os.equipamento?.modelo].filter(Boolean).join(" ")} />
-              <KV label="Nº de série" value={os.equipamento?.numeroSerie} />
-              <KV label="Origem" value={os.origem} />
-              <KV
-                label="Senha"
-                value={os.senhaEquipamento ? `${os.senhaEquipamento}${os.senhaEquipamentoTipo ? ` (${os.senhaEquipamentoTipo})` : ""}` : ""}
-              />
-              <KV label="Acessórios" value={(os.equipamento?.acessorios ?? []).join(", ")} />
+              <KV label="Nº de série / IMEI" value={os.equipamento?.numeroSerie} />
+              <KV label="Origem" value={recepcao.origem ?? os.origem} />
+              <KV label="Recebido por" value={recepcao.recebidoPor} />
             </dl>
             {os.equipamento?.defeitoRelatado ? (
               <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
@@ -178,100 +218,57 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
                 <p className="mt-0.5 text-sm text-foreground">{os.equipamento.defeitoRelatado}</p>
               </div>
             ) : null}
-            {os.checklist && os.checklist.length > 0 ? (
-              <div className="mt-3">
-                <p className="mb-1.5 text-xs font-medium text-muted-foreground">Checklist de entrada</p>
-                <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
-                  {os.checklist.map((c) => (
-                    <div key={c.id} className="flex items-center gap-2 text-sm">
-                      <span className={cn("h-2 w-2 shrink-0 rounded-full", CHECK_DOT[c.estado])} aria-hidden />
-                      <span className="truncate text-foreground">{c.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </OSSectionV3>
 
-          <OSSectionV3
-            titulo="2. Diagnóstico"
-            tone="info"
-            statusVisual={os.status === "diagnostico" ? "em andamento" : undefined}
-            acaoPrincipal={acao("Registrar diagnóstico")}
-            resumo="Avaliação técnica do equipamento"
-            vazio={
-              <p className="text-sm text-muted-foreground">
-                Diagnóstico estruturado chega na próxima fase. Por ora, use as observações da OS (lateral).
-              </p>
-            }
-          >
-            {(os.equipamento?.defeitosComuns?.length ?? 0) > 0 || (os.equipamento?.checklistRecomendado?.length ?? 0) > 0 ? (
-              <div className="space-y-3">
-                {os.equipamento?.defeitosComuns?.length ? (
-                  <div>
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">Defeitos comuns deste modelo</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {os.equipamento.defeitosComuns.map((d) => (
-                        <span key={d} className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
-                          {d}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                {os.equipamento?.checklistRecomendado?.length ? (
-                  <div>
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">Checklist recomendado</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {os.equipamento.checklistRecomendado.map((d) => (
-                        <span key={d} className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
-                          {d}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : undefined}
-          </OSSectionV3>
-
-          {/* 3. Orçamento — área principal da OS (Fase 1C) */}
-          <OrcamentoPanelV3
+          {/* Checklist de entrada (item 4) — editável + persistível */}
+          <ChecklistEntradaV3
             os={os}
             storeId={storeId}
             onChanged={refresh}
-            onIniciarServico={() => onMudarStatus("em_execucao")}
+            salvar={wsActions.salvarChecklist}
+            pending={wsActions.pending === "checklist"}
             notificar={notificar}
           />
 
-          <OSSectionV3
-            titulo="4. Peças & reserva"
-            tone="neutral"
-            statusVisual={pecas.length > 0 ? `${pecas.length} item(ns)` : "sem peças"}
-            resumo="Peças vinculadas e reserva de estoque"
-            vazio={<p className="text-sm text-muted-foreground">Nenhuma peça vinculada. A reserva de estoque por OS chega na próxima fase.</p>}
-          >
-            {pecas.length > 0 ? (
-              <div>
-                {pecas.map((p) => (
-                  <LinhaItem
-                    key={p.id}
-                    descricao={p.nome}
-                    detalhe={`${p.quantidade} × ${formatBRL(p.valorUnitario)}${p.sku ? ` · SKU ${p.sku}` : ""}`}
-                    valor={pecaSubtotal(p)}
-                  />
-                ))}
-                <p className="mt-2 text-xs text-muted-foreground">Reserva/baixa de estoque por OS: a conectar.</p>
-              </div>
-            ) : undefined}
-          </OSSectionV3>
+          {/* Senha + acessórios (item 5) — editável + persistível */}
+          <SenhaAcessoriosV3
+            os={os}
+            storeId={storeId}
+            onChanged={refresh}
+            salvar={wsActions.salvarSenhaAcessorios}
+            pending={wsActions.pending === "senha"}
+            notificar={notificar}
+          />
+
+          {/* Diagnóstico técnico (item 6) — editável + persistível */}
+          <DiagnosticoTecnicoV3
+            os={os}
+            storeId={storeId}
+            onChanged={refresh}
+            salvar={wsActions.salvarDiagnostico}
+            pending={wsActions.pending === "diagnostico"}
+            notificar={notificar}
+          />
+
+          {/* Orçamento — área comercial (Fase 1C anterior) */}
+          <div id="orcamento">
+            <OrcamentoPanelV3
+              os={os}
+              storeId={storeId}
+              onChanged={refresh}
+              onIniciarServico={() => onMudarStatus("em_execucao")}
+              notificar={notificar}
+            />
+          </div>
+
+          {/* Serviços executados (item 7) — somente leitura, sem custo interno */}
+          <ServicosExecutadosV3 os={os} />
 
           <OSSectionV3
-            titulo="5. Financeiro / Pagamento"
+            titulo="Financeiro / Pagamento"
             tone="warning"
-            statusVisual={pag.estado === "sem-cobranca" ? "sem cobrança" : "pagamento a conectar"}
+            statusVisual={pag.estado === "sem-cobranca" ? "sem cobrança" : "recebimento no PDV de Serviço"}
             resumo={`Total ${formatBRL(pag.total)}`}
-            acaoPrincipal={acao("Receber pagamento")}
           >
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <KV label="Total da OS" value={formatBRL(pag.total)} />
@@ -285,33 +282,27 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
               <div className="mt-3">
                 <p className="mb-1 text-xs font-medium text-muted-foreground">Parcelas</p>
                 {os.faturamentoParcelas.map((parc) => (
-                  <LinhaItem
-                    key={parc.numero}
-                    descricao={`Parcela ${parc.numero}`}
-                    detalhe={`Vence ${formatData(parc.vencimentoIso)}`}
-                    valor={parc.valor}
-                  />
+                  <LinhaItem key={parc.numero} descricao={`Parcela ${parc.numero}`} detalhe={`Vence ${formatData(parc.vencimentoIso)}`} valor={parc.valor} />
                 ))}
               </div>
             ) : null}
             <p className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
-              O status real do recebimento (em aberto / parcial / quitado) vive no Financeiro e será conectado depois.
+              O recebimento real (PIX/dinheiro/cartão, parcial e quitação) é feito no PDV de Serviço e baixado no Financeiro — conectado em fase futura.
             </p>
           </OSSectionV3>
 
           <OSSectionV3
-            titulo="6. Execução"
+            titulo="Execução"
             tone={os.status === "em_execucao" ? "primary" : "neutral"}
             statusVisual={os.status === "em_execucao" ? "em andamento" : undefined}
-            acaoPrincipal={acao("Atualizar execução")}
-            resumo="Reparo e checklist técnico de bancada"
+            resumo="Checklist técnico de bancada (pós-reparo)"
             vazio={<p className="text-sm text-muted-foreground">Sem checklist técnico registrado nesta OS.</p>}
           >
             {os.checklistTecnico && os.checklistTecnico.length > 0 ? (
               <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                 {os.checklistTecnico.map((c) => (
                   <div key={c.id} className="flex items-center gap-2 text-sm">
-                    <span className={cn("h-2 w-2 shrink-0 rounded-full", c.ok ? "bg-success" : "bg-muted-foreground/40")} aria-hidden />
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${c.ok ? "bg-success" : "bg-muted-foreground/40"}`} aria-hidden />
                     <span className="truncate text-foreground">{c.label}</span>
                   </div>
                 ))}
@@ -320,10 +311,9 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
           </OSSectionV3>
 
           <OSSectionV3
-            titulo="7. Entrega"
+            titulo="Entrega"
             tone={os.status === "entregue" ? "success" : "neutral"}
             statusVisual={os.retirada?.confirmado ? "retirada confirmada" : os.entregueEm ? "entregue" : undefined}
-            acaoPrincipal={acao("Registrar entrega")}
             resumo="Retirada e conferência pelo cliente"
             vazio={<p className="text-sm text-muted-foreground">Entrega ainda não registrada.</p>}
           >
@@ -337,23 +327,14 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             ) : undefined}
           </OSSectionV3>
 
-          <OSSectionV3
-            titulo="8. Garantia"
-            tone={os.garantia?.ativa ? "success" : "neutral"}
-            statusVisual={os.garantia?.ativa ? "ativa" : undefined}
-            acaoPrincipal={acao("Gerar termo de garantia")}
-            resumo="Cobertura pós-reparo"
-            vazio={<p className="text-sm text-muted-foreground">Sem garantia registrada para esta OS.</p>}
-          >
-            {os.garantia?.ativa || (os.garantiasOperacionais?.length ?? 0) > 0 ? (
-              <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <KV label="Prazo" value={os.garantia?.prazoDias ? `${os.garantia.prazoDias} dias` : ""} />
-                <KV label="Início" value={os.garantia?.inicioEm ? formatData(os.garantia.inicioEm) : ""} />
-                <KV label="Validade" value={os.garantia?.fimEm ? formatData(os.garantia.fimEm) : ""} />
-                {os.garantia?.termo ? <KV label="Termo" value={os.garantia.termo} /> : null}
-              </dl>
-            ) : undefined}
-          </OSSectionV3>
+          {/* Garantia (item 9) */}
+          <GarantiaOSV3 os={os} onAcao={acaoEmConstrucao} />
+
+          {/* Fotos & anexos (item 8) — estrutura MVP */}
+          <AnexosV3 os={os} onAcao={acaoEmConstrucao} />
+
+          {/* Histórico completo (item 10) — auditável */}
+          <OSHistoricoV3 os={os} />
         </div>
 
         {/* Lateral de contexto */}
@@ -362,9 +343,9 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
 
       {/* Rodapé utilitário */}
       <footer className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
-        <ButtonV3 variant="outline" onClick={() => acaoEmConstrucao("Imprimir documento da OS")}>
+        <ButtonV3 variant="outline" onClick={() => setPrintOpen(true)}>
           <Printer className="h-4 w-4" />
-          Documento
+          Imprimir OS
         </ButtonV3>
         <ButtonV3 variant="outline" onClick={() => acaoEmConstrucao("Imprimir etiqueta")}>
           <Tag className="h-4 w-4" />
@@ -374,8 +355,13 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
           <Globe className="h-4 w-4" />
           Portal do cliente
         </ButtonV3>
-        <span className="ml-auto text-xs text-muted-foreground">Visão somente leitura — sem dados de debug.</span>
+        <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+          <ListChecks className="h-3.5 w-3.5" aria-hidden />
+          Prontuário do equipamento — tudo da OS em uma tela.
+        </span>
       </footer>
+
+      <PrintPreviewV3 open={printOpen} os={os} empresa={empresaPrint} onClose={() => setPrintOpen(false)} />
     </div>
   );
 }

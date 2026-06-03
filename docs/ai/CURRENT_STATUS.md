@@ -1,7 +1,131 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 03 Jun 2026 — **Operações V3 · Nova OS Enterprise + separação OS × PDV de Serviço**: novo botão primário **"Nova OS"** em 5 pontos (topo do módulo, Dashboard, Fila, Atendimento rápido e Workspace sem OS) que abre o **modal "Nova OS Enterprise"** — fluxo **completo** de abertura no balcão, em 8 passos (Cliente · Equipamento · Recepção · Problema/Diagnóstico · Itens · Pagamento · Garantia · Resumo), com cadastro/seleção de cliente real, equipamento+senha (inclui **padrão 3×3**), acessórios, recepção (origem/prioridade/local físico/previsão), itens **cobrado/brinde/interno** com custo interno × valor ao cliente × lucro, **pagamento apenas PREVISTO** (não recebe, não cria Conta a Receber, não mexe no caixa — recebimento real fica no **PDV de Serviço**) e **garantia prevista**. Cria a OS **de verdade** pelo caminho seguro (`criarOS`/`criarCliente`); extras viajam no `payload` (JSONB, sem schema). A OS nasce em **ABERTA** e aparece na hora em Fila/Dashboard/Workspace. **Atendimento rápido** foi rotulado como check-in **simplificado** e aponta para a Nova OS Enterprise. **Sem** baixa de estoque nesta fase. `tsc` ✅ · `build` ✅ · `vitest` **+8 (modelo Nova OS)**. **Aguardando revisão** (sem commit). Anterior — **Fase 1C (orçamento cidadão de 1ª classe)**: o orçamento virou a **área principal** do Workspace V3 — painel editável real com **serviços, peças e brindes** (item cobrado/brinde/interno), **subtotal/desconto/total**, **custo interno · valor ao cliente · lucro estimado** (somente leitura), **estados** (rascunho/enviado/aprovado/recusado/expirado) com badge, **histórico de versões**, e ações reais **Salvar/Enviar/Aprovar/Recusar** — tudo **sem Financeiro/Conta a Receber/estoque/WhatsApp**. Aprovar avança a **máquina de status** da OS (1B); aprovado mostra **"ORÇAMENTO APROVADO" + "Iniciar serviço"**. Dashboard ganhou métricas reais de orçamento (rascunho/enviados/aprovados/recusados). Campos extras (brinde/custo de serviço/versões) vivem no `payload` (JSONB) — **sem tocar schema nem `@/types/os`**. `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **306 passed | 2 expected fail** (+8 do modelo). **Aguardando revisão** (sem commit). Anterior — **Fase 1B (máquina única de status)**: criada UMA fonte de verdade para o fluxo da OS (`lib/operacoes-v3/status-machine.ts`, pura) com os **10 status oficiais** (inclui **RECEBIDA**) e o grafo exato do blueprint. **Kanban (arrastar), Workspace e Action Bar** passam a alterar status pela **mesma engine**, via **um único write-path** (`status-actions.ts`) que grava **status + timeline apenas** — sem estoque/financeiro/garantia (sem schema, V2 intacta). Transições inválidas bloqueadas com mensagem amigável; RECEBIDA persiste em `payload.operacaoStatusV3` (JSONB). `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **298 passed | 2 expected fail** (11 novos da máquina). **Aguardando revisão** (sem commit). Anterior — **Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
+> Última atualização: 03 Jun 2026 — **Operações V3 · Fase 1D (Impressão Enterprise da OS)**: o botão **Imprimir** do OS Workspace agora gera um **documento profissional A4** da OS pronto para entregar/imprimir/salvar em PDF — modelo **híbrido** (completo como Gestão Click, limpo como Smart System). Preview num **modal portado ao `body`** (sem rota nova, sem sidebar/topo do app no papel) com CSS `@media print` que imprime só o documento. Conteúdo: cabeçalho com **logo + dados da empresa** (da unidade ativa, fallback honesto centralizado), nº/status/datas, cliente, equipamento + **senha padrão 3×3 visual**, acessórios, condição, defeito, **checklist** compacto, **diagnóstico/solução**, **tabela de itens** (serviço/peça/brinde) com **item interno e custo SEMPRE ocultos do cliente**, resumo financeiro **previsto** (sem recebimento real), **termo de garantia** gerado por modelo (helper `garantia-textos.ts`, oxidação/sem-garantia deixam claro que não há cobertura) e **assinaturas** cliente/técnico. Helpers puros: `lib/operacoes-v3/print-model.ts` + `garantia-textos.ts`. Estrutura preparada para futuras vias (interna/etiqueta/termo). `tsc` ✅ (0 erros) · `vitest lib/operacoes-v3` ✅ **55 passed** (+15 do modelo de impressão/garantia) · `build` **compila limpo**, geração estática aborta no flake de worker/memória do Windows (mesmas fases anteriores) — ambiental. **Aguardando revisão** (sem commit). Anterior — **OS Workspace Enterprise (prontuário do equipamento)**: o Workspace virou o **centro operacional** da assistência — ao abrir uma OS, técnico/atendente operam quase tudo numa tela só. Novidades: **cabeçalho rico** (nº, status, cliente, marca/modelo, IMEI/série, entrada, previsão, técnico + ações rápidas Editar/Imprimir/Anexos/Garantia/Histórico que rolam para as âncoras); **linha do tempo operacional** de 8 etapas (criada→recebida→diagnóstico→orçamento→aprovada→em reparo→pronta→entregue) derivada do status + eventos reais (**nunca inventa data**); **checklist de entrada** editável (13 itens, 3 estados) **persistido**; bloco **Senha & acessórios** editável (numérica/texto/**padrão 3×3**) **persistido**; **diagnóstico técnico** (inicial/final/causa/solução) **persistido**; **serviços executados** (read-only, **nunca mostra custo interno**); **fotos & anexos** (estrutura MVP antes/depois); **garantia da OS** (situação ativa/prevista/expirada, preparada p/ impressão); **histórico completo** auditável. Persistência **side-effect-free** em `payload` (JSONB: `checklist`, `senhaEquipamento`/`Tipo`, `equipamento.acessorios`, `diagnosticoV3`) — **sem tocar schema, Financeiro, estoque, WhatsApp, V2**. Recebimento/caixa/financeiro/portal/BI **fora de escopo** desta fase. `tsc` ✅ (0 erros) · `vitest` **+13 (modelo workspace) → 40 da V3** · `build` **compila limpo**, mas a **geração estática** aborta no flake de memória do Windows (`VirtualAlloc failed`, worker 0xC0000409) — ambiental, mesma falha das fases anteriores, não vem deste código (rota dinâmica). **Aguardando revisão** (sem commit). Anterior — **Nova OS Enterprise + separação OS × PDV de Serviço**: novo botão primário **"Nova OS"** em 5 pontos (topo do módulo, Dashboard, Fila, Atendimento rápido e Workspace sem OS) que abre o **modal "Nova OS Enterprise"** — fluxo **completo** de abertura no balcão, em 8 passos (Cliente · Equipamento · Recepção · Problema/Diagnóstico · Itens · Pagamento · Garantia · Resumo), com cadastro/seleção de cliente real, equipamento+senha (inclui **padrão 3×3**), acessórios, recepção (origem/prioridade/local físico/previsão), itens **cobrado/brinde/interno** com custo interno × valor ao cliente × lucro, **pagamento apenas PREVISTO** (não recebe, não cria Conta a Receber, não mexe no caixa — recebimento real fica no **PDV de Serviço**) e **garantia prevista**. Cria a OS **de verdade** pelo caminho seguro (`criarOS`/`criarCliente`); extras viajam no `payload` (JSONB, sem schema). A OS nasce em **ABERTA** e aparece na hora em Fila/Dashboard/Workspace. **Atendimento rápido** foi rotulado como check-in **simplificado** e aponta para a Nova OS Enterprise. **Sem** baixa de estoque nesta fase. `tsc` ✅ · `build` ✅ · `vitest` **+8 (modelo Nova OS)**. **Aguardando revisão** (sem commit). Anterior — **Fase 1C (orçamento cidadão de 1ª classe)**: o orçamento virou a **área principal** do Workspace V3 — painel editável real com **serviços, peças e brindes** (item cobrado/brinde/interno), **subtotal/desconto/total**, **custo interno · valor ao cliente · lucro estimado** (somente leitura), **estados** (rascunho/enviado/aprovado/recusado/expirado) com badge, **histórico de versões**, e ações reais **Salvar/Enviar/Aprovar/Recusar** — tudo **sem Financeiro/Conta a Receber/estoque/WhatsApp**. Aprovar avança a **máquina de status** da OS (1B); aprovado mostra **"ORÇAMENTO APROVADO" + "Iniciar serviço"**. Dashboard ganhou métricas reais de orçamento (rascunho/enviados/aprovados/recusados). Campos extras (brinde/custo de serviço/versões) vivem no `payload` (JSONB) — **sem tocar schema nem `@/types/os`**. `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **306 passed | 2 expected fail** (+8 do modelo). **Aguardando revisão** (sem commit). Anterior — **Fase 1B (máquina única de status)**: criada UMA fonte de verdade para o fluxo da OS (`lib/operacoes-v3/status-machine.ts`, pura) com os **10 status oficiais** (inclui **RECEBIDA**) e o grafo exato do blueprint. **Kanban (arrastar), Workspace e Action Bar** passam a alterar status pela **mesma engine**, via **um único write-path** (`status-actions.ts`) que grava **status + timeline apenas** — sem estoque/financeiro/garantia (sem schema, V2 intacta). Transições inválidas bloqueadas com mensagem amigável; RECEBIDA persiste em `payload.operacaoStatusV3` (JSONB). `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **298 passed | 2 expected fail** (11 novos da máquina). **Aguardando revisão** (sem commit). Anterior — **Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Operações V3 — Fase 1D · Impressão Enterprise da OS (03/06/2026)
+
+**O que é:** o botão **Imprimir** do OS Workspace gera um **documento profissional A4** da OS (via
+cliente), pronto para imprimir/entregar ou **salvar como PDF** pelo navegador. Documento **híbrido** —
+completo como o modelo Gestão Click, limpo como o Smart System. **Apenas documento**: nada de
+recebimento, caixa, Financeiro, PDV, schema ou V2.
+
+**Como abrir:** no Workspace de uma OS, **Imprimir** (cabeçalho) ou **Imprimir OS** (rodapé) abre o
+**preview modal** `PrintPreviewV3`, **portado para `document.body`** (escapa do AppShell). O preview tem
+toolbar **Imprimir / Voltar** (`data-no-print`) e injeta CSS `@media print` (`@page A4`) que esconde toda
+a app e imprime **somente** `#og-print-root`. **Escolha de engenharia:** modal (não rota nova) — mais
+seguro/simples, sem mexer no layout do dashboard nem no gate de auth, reusando a OS já carregada.
+
+**Dados que entram no documento:** cabeçalho (logo + nome/CNPJ/endereço/cidade-UF/telefone/e-mail da
+**unidade ativa** via `useLojaAtiva().empresaDocumentos`, com **fallback honesto centralizado** em
+`dadosEmpresaPrintV3`), nº da OS em destaque, status, data de criação e de impressão; cliente
+(nome/telefone/doc/e-mail); equipamento (tipo/marca/modelo/IMEI-série, **senha padrão 3×3 desenhada**,
+acessórios, condição, defeito relatado); checklist de entrada compacto (item: OK/Ruim/N/T);
+diagnóstico (inicial/final/causa/solução) + observações; tabela de itens; resumo financeiro previsto;
+termo de garantia; assinaturas cliente/técnico + declaração de ciência.
+
+**O que fica OCULTO do cliente (regras críticas):** **item interno** (`kind="interno"`) não aparece;
+**custo interno NUNCA** aparece (a tabela só expõe valor ao cliente/subtotal); **observação interna**
+(`interna=true`) é filtrada. **Brinde** aparece como "Brinde" / **R$ 0,00**. Tudo testado.
+
+**Garantia:** gerada por **modelo** no helper centralizado `lib/operacoes-v3/garantia-textos.ts`
+(`gerarTermoGarantiaV3`) — cobertura + exclusões claras, linguagem não-abusiva; **oxidação** e
+**sem garantia** deixam explícito que **não há cobertura**; **personalizado** usa o texto livre da OS.
+Lido da `aberturaV3.garantiaPrevista` (modelo/prazo/termo) definida na Nova OS.
+
+**Financeiro (só previsão, sem recebimento real):** subtotal/desconto/total do orçamento +
+**sinal/recebido previsto**, **saldo previsto**, **forma**, **vencimento** e **observação** — lidos de
+`aberturaV3.pagamentoPrevisto`. Nada é registrado em caixa/Conta a Receber.
+
+| Camada | Arquivo | Papel |
+|---|---|---|
+| Garantia | `lib/operacoes-v3/garantia-textos.ts` **(novo)** | Termo profissional por modelo (cobertura/exclusões; oxidação/sem-garantia sem cobertura) |
+| Modelo impressão | `lib/operacoes-v3/print-model.ts` **(novo, puro)** | Empresa (fallback), itens imprimíveis (oculta interno/custo), financeiro previsto, checklist/senha, `montarDocumentoOSV3` |
+| Testes | `lib/operacoes-v3/print-model.test.ts` **(novo)** | 15 testes (oculta interno/custo, brinde 0, financeiro, senha 3×3, garantia, doc completo) |
+| Documento A4 | `components/operacoes-v3/components/print/OSPrintDocumentV3.tsx` **(novo)** | Render puro do `DocumentoOSV3` (variante cliente; preparado p/ interna/etiqueta) |
+| Preview | `components/operacoes-v3/components/print/PrintPreviewV3.tsx` **(novo)** | Modal portado ao body + CSS print + toolbar |
+| Workspace | `components/operacoes-v3/pages/OSWorkspaceV3.tsx` **(alterado)** | Botões Imprimir abrem o preview; mapeia empresa da unidade ativa |
+
+**Exceção de tokens (documentada):** o documento A4 usa **cores fixas branco/preto/cinza**
+(`bg-white`/`text-black`/`text-zinc-*`/`border-zinc-*`), confinadas a `OSPrintDocumentV3.tsx` — é um
+documento impresso (não UI da app), conforme exceção do CORE_RULES §7.
+
+**⚠️ Limitações conscientes:** só a **via cliente** (interna/etiqueta/termo-separado ficam estruturados
+para o futuro via prop `variante`); endereço completo do cliente não é impresso porque a OS não persiste
+esses campos (Nova OS guarda só nome/telefone/doc/e-mail no snapshot da OS) — campos ausentes são
+ocultados, sem inventar dado; sem recebimento/caixa/Financeiro/estoque.
+
+**Validação:** `npx tsc --noEmit` ✅ (0 erros) · `npx vitest run lib/operacoes-v3` ✅ **55 passed**
+(11 status + 8 orçamento + 8 nova OS + 13 workspace + **15 impressão/garantia**) · `npm run build` →
+**compilação webpack limpa** (3 execuções), mas a **coleta/geração de páginas** aborta com flakes de
+worker do Windows (`spawn UNKNOWN` / código 134 SIGABRT / `VirtualAlloc failed`) — **ambiental/memória**,
+idêntico às fases anteriores, **não** oriundo deste código (rota `/dashboard/operacoes-v3` é dinâmica).
+Conforme combinado, confirmados **tsc + vitest**. **Não commitado.**
+
+**Não alterado:** schema Prisma, migrations, auth/proxy, **Operações V2**, `@/types/os`, **PDV**,
+**Financeiro HUB**, **WhatsApp**, **Marketplace**, **Fiscal**, **BL-07**.
+
+---
+
+### Operações V3 — OS Workspace Enterprise · prontuário do equipamento (03/06/2026)
+
+> Pedido do usuário rotulado como "Fase 1C"; como já houve uma Fase 1C (orçamento), aqui é
+> documentado como **OS Workspace Enterprise** para evitar colisão de nome.
+
+**O que é:** transforma o **OS Workspace** na tela principal de trabalho do técnico e do atendente
+(referências: Gestão Click, Smart System, fluxo RafaCell). Ao abrir uma OS, abre-se um **prontuário do
+equipamento** com (quase) toda a operação numa tela só — **sem PDV, Financeiro, WhatsApp ou visual
+premium** nesta fase.
+
+**Modelo (sem schema, sem `@/types/os`):** `lib/operacoes-v3/workspace-model.ts` (puro) lê os campos
+operacionais do que já existe + extras no `payload`: checklist (`payload.checklist`, compatível V2),
+senha (`senhaEquipamento`/`senhaEquipamentoTipo`), acessórios (`equipamento.acessorios`), diagnóstico
+técnico (`payload.diagnosticoV3`, **campo novo**), recepção (`payload.aberturaV3.recepcao`, da Nova OS),
+e a **timeline operacional derivada** (status + eventos; nunca inventa data/responsável).
+
+**Write-paths side-effect-free:** `lib/operacoes-v3/workspace-actions.ts` (`"use server"`) grava SOMENTE
+o `payload` via Prisma + um evento de auditoria na timeline — **não** muda status, **não** mexe em
+`valorTotal`, **não** chama `updateOSPayload` do V2 (que sincroniza Financeiro). Três ações:
+`salvarChecklistEntradaV3`, `salvarSenhaAcessoriosV3`, `salvarDiagnosticoV3`.
+
+| Camada | Arquivo | Papel |
+|---|---|---|
+| Modelo puro | `lib/operacoes-v3/workspace-model.ts` **(novo)** | Checklist/senha/diagnóstico/recepção readers + `construirTimelineOperacionalV3` + `lerHistoricoV3` |
+| Write-path | `lib/operacoes-v3/workspace-actions.ts` **(novo, use server)** | Salva checklist/senha-acessórios/diagnóstico no payload + timeline; sem efeitos colaterais |
+| Testes | `lib/operacoes-v3/workspace-model.test.ts` **(novo)** | 13 testes (checklist, senha, diagnóstico, recepção, timeline por status/evento/cancelada, histórico) |
+| Hook | `components/operacoes-v3/hooks/use-workspace-v3.ts` **(novo)** | `salvarChecklist/salvarSenhaAcessorios/salvarDiagnostico` (pending/erro) |
+| Timeline | `components/operacoes-v3/components/OSTimelineV3.tsx` **(novo)** | Stepper de 8 etapas (item 3) |
+| Checklist | `components/operacoes-v3/components/ChecklistEntradaV3.tsx` **(novo)** | 13 itens × 3 estados, editável + salvar (item 4) |
+| Senha/acess. | `components/operacoes-v3/components/SenhaAcessoriosV3.tsx` **(novo)** | Senha (3 tipos, padrão 3×3) + acessórios, editável + salvar (item 5) |
+| Diagnóstico | `components/operacoes-v3/components/DiagnosticoTecnicoV3.tsx` **(novo)** | Inicial/final/causa/solução, editável + salvar (item 6) |
+| Serviços | `components/operacoes-v3/components/ServicosExecutadosV3.tsx` **(novo)** | Read-only; qtd + valor ao cliente; **nunca custo** (item 7) |
+| Anexos | `components/operacoes-v3/components/AnexosV3.tsx` **(novo)** | Estrutura MVP antes/depois (item 8) |
+| Garantia | `components/operacoes-v3/components/GarantiaOSV3.tsx` **(novo)** | Situação + validade + termo, preparada p/ impressão (item 9) |
+| Histórico | `components/operacoes-v3/components/OSHistoricoV3.tsx` **(novo)** | Timeline completa auditável (item 10) |
+| Pad 3×3 | `components/operacoes-v3/components/PatternPadV3.tsx` **(novo)** | Extraído da Nova OS; reusado no Workspace |
+| Cabeçalho | `components/operacoes-v3/components/OSHeaderV3.tsx` **(enriquecido)** | + IMEI/série, entrada, previsão, marca/modelo + slot de ações rápidas (item 2) |
+| Workspace | `components/operacoes-v3/pages/OSWorkspaceV3.tsx` **(reescrito)** | Prontuário contínuo com âncoras (#checklist/#senha/#diagnostico/#orcamento/#servicos/#garantia/#anexos/#historico) |
+
+**Campos adicionados ao payload:** `diagnosticoV3 { inicial, final, causa, solucao, atualizadoEm, atualizadoPor }`
+(novo); `checklist` passa a ser gravado pela V3 (lista V3 de 13 itens) mantendo o shape `ChecklistItem`;
+`senhaEquipamento`/`senhaEquipamentoTipo` e `equipamento.acessorios` reescritos pelo bloco Senha. Cada
+edição anexa um evento à `timeline` (`checklist_finalizado` / `observacao` / `diagnostico_registrado`).
+
+**⚠️ Limitações conscientes (escopo):** anexos são **estrutura MVP** (sem upload real — "Adicionar" é toast
+honesto); impressão de OS/termo de garantia é **placeholder**; recebimento/caixa/Financeiro/portal/BI/
+estoque real **não** implementados; a timeline de "Recebida" (intake) usa a data de entrada/criação, pois
+o status `recebida` da máquina V3 é um marco posterior — as duas semânticas coexistem sem inventar dado.
+
+**Validação:** `npx tsc --noEmit` ✅ (0 erros) · `npx vitest run lib/operacoes-v3` ✅ **40 passed**
+(11 status + 8 orçamento + 8 nova OS + 13 workspace) · `npm run build` → **compilação webpack limpa**
+(4 execuções), mas a etapa de **geração estática** aborta com `VirtualAlloc failed` (worker Windows,
+0xC0000409) — falha **ambiental/memória** idêntica às fases 1C e Nova OS, **não** oriunda deste código
+(a rota `/dashboard/operacoes-v3` é dinâmica, não entra na geração estática). **Não commitado.**
+
+**Não alterado:** schema Prisma, migrations, auth/proxy, **Operações V2** e write-paths do HUB,
+`@/types/os`, **PDV**, **Financeiro HUB**, **WhatsApp**, **Marketplace**, **Fiscal**, **BL-07**.
 
 ---
 
