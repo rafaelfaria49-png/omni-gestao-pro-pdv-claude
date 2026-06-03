@@ -1,25 +1,25 @@
 "use client";
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, CheckCircle2, FileText, Globe, Loader2, Printer, Search, Send, Sparkles, Tag, XCircle } from "lucide-react";
+import { ArrowLeft, FileText, Globe, Printer, Search, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { ChecklistEstado, OrdemServico, PecaUsada, Servico } from "@/types/os";
+import type { ChecklistEstado, OrdemServico, PecaUsada } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { OSHeaderV3 } from "../components/OSHeaderV3";
 import { OSCommandBarV3 } from "../components/OSCommandBarV3";
 import { OSContextRailV3 } from "../components/OSContextRailV3";
 import { OSSectionV3 } from "../components/OSSectionV3";
 import { OSCardV3 } from "../components/OSCardV3";
+import { OrcamentoPanelV3 } from "../components/OrcamentoPanelV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
 import { ButtonV3 } from "../components/UiV3";
 import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
 import type { OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
 import { useOperacoesV3 } from "../context/OperacoesV3Context";
 import { useOrdemV3 } from "../hooks/use-ordem-v3";
-import { useOrcamentoV3 } from "../hooks/use-orcamento-v3";
 import { SCREEN_COPY } from "../data/screen-copy";
 import { formatBRL, formatData, formatDataHora } from "../lib/format";
-import { matchOrdem, orcamentoTotal, pagamentoInfo } from "../lib/os-derive";
+import { matchOrdem, pagamentoInfo } from "../lib/os-derive";
 
 const CHECK_DOT: Record<ChecklistEstado, string> = {
   ok: "bg-success",
@@ -50,9 +50,6 @@ function LinhaItem({ descricao, detalhe, valor }: { descricao: string; detalhe?:
 
 function pecaSubtotal(p: PecaUsada): number {
   return Math.max(0, p.quantidade * p.valorUnitario - (p.desconto ?? 0));
-}
-function servicoSubtotal(s: Servico): number {
-  return Math.max(0, s.valor - (s.desconto ?? 0));
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +102,7 @@ function Picker() {
 // ---------------------------------------------------------------------------
 
 function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => void }) {
-  const { acaoEmConstrucao, navigate, openOS, storeId, reload: reloadLista, mudarStatus } = useOperacoesV3();
+  const { acaoEmConstrucao, navigate, openOS, storeId, reload: reloadLista, mudarStatus, notificar } = useOperacoesV3();
   const pag = pagamentoInfo(os);
 
   // Toda mudança de status passa pela máquina única (via contexto). Em sucesso,
@@ -125,58 +122,11 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
     reloadOrdem();
     reloadLista();
   }, [reloadOrdem, reloadLista]);
-  const orcActions = useOrcamentoV3(storeId, os.id, refresh);
-
-  // Orçamento real = materializado (não é a prévia sintetizada dos itens da OS).
-  const orcReal = orc && orc.sintetizado !== true ? orc : null;
-  const podeGerarOrcamento = !orc || orc.sintetizado === true;
-  const orcEditavel = !!orcReal && (orcReal.status === "rascunho" || orcReal.status === "enviado");
-  const orcAprovado = orcReal?.status === "aprovado";
 
   const acao = (label: string) => (
     <ButtonV3 variant="subtle" onClick={() => acaoEmConstrucao(label)}>
       {label}
     </ButtonV3>
-  );
-
-  const orcamentoAcoes = (
-    <div className="flex flex-wrap items-center gap-2">
-      {podeGerarOrcamento ? (
-        <ButtonV3 variant="primary" disabled={orcActions.pending !== null} onClick={() => orcActions.gerar()}>
-          {orcActions.pending === "gerar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          Gerar orçamento da OS
-        </ButtonV3>
-      ) : null}
-      {orcEditavel ? (
-        <ButtonV3 variant="primary" disabled={orcActions.pending !== null} onClick={() => orcActions.enviar()}>
-          {orcActions.pending === "enviar" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          {orcReal?.status === "enviado" ? "Reenviar ao cliente" : "Enviar ao cliente"}
-        </ButtonV3>
-      ) : null}
-      {orcEditavel ? (
-        <>
-          <ButtonV3 variant="outline" onClick={() => acaoEmConstrucao("Aprovar orçamento (gera cobrança no Financeiro)")}>
-            <CheckCircle2 className="h-4 w-4" />
-            Aprovar
-          </ButtonV3>
-          <ButtonV3 variant="danger" onClick={() => acaoEmConstrucao("Reprovar orçamento (cancela cobrança no Financeiro)")}>
-            <XCircle className="h-4 w-4" />
-            Reprovar
-          </ButtonV3>
-        </>
-      ) : null}
-      {orcAprovado ? (
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-success/30 bg-success/10 px-3 py-1.5 text-sm font-medium text-success">
-          <CheckCircle2 className="h-4 w-4" aria-hidden />
-          Orçamento aprovado
-        </span>
-      ) : null}
-      {orcActions.error ? (
-        <p className="w-full rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-1.5 text-xs text-destructive">
-          {orcActions.error}
-        </p>
-      ) : null}
-    </div>
   );
 
   return (
@@ -279,56 +229,14 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             ) : undefined}
           </OSSectionV3>
 
-          <OSSectionV3
-            titulo="3. Orçamento"
-            tone={orc?.status === "aprovado" ? "success" : orc ? "warning" : "neutral"}
-            statusVisual={orc ? (orc.sintetizado ? "prévia (não materializado)" : orc.status) : "sem orçamento"}
-            resumo={orc ? `Total ${formatBRL(orcamentoTotal(os))}` : "Ainda não há orçamento"}
-            acaoPrincipal={orcamentoAcoes}
-            vazio={
-              <p className="text-sm text-muted-foreground">
-                Esta OS ainda não tem orçamento. Use <strong className="font-medium text-foreground">Gerar orçamento da OS</strong> acima
-                para materializar um rascunho editável a partir dos itens já lançados.
-              </p>
-            }
-          >
-            {orc ? (
-              <div className="space-y-3">
-                {orc.sintetizado ? (
-                  <p className="rounded-lg border border-dashed border-warning/40 bg-warning/10 px-3 py-1.5 text-xs text-warning">
-                    Prévia derivada dos itens da OS — ainda não materializada como orçamento editável.
-                  </p>
-                ) : null}
-                {orc.servicos.length > 0 ? (
-                  <div>
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">Serviços</p>
-                    {orc.servicos.map((s) => (
-                      <LinhaItem key={s.id} descricao={s.descricao} valor={servicoSubtotal(s)} />
-                    ))}
-                  </div>
-                ) : null}
-                {orc.pecas.length > 0 ? (
-                  <div>
-                    <p className="mb-1 text-xs font-medium text-muted-foreground">Peças</p>
-                    {orc.pecas.map((p) => (
-                      <LinhaItem
-                        key={p.id}
-                        descricao={p.nome}
-                        detalhe={`${p.quantidade} × ${formatBRL(p.valorUnitario)}`}
-                        valor={pecaSubtotal(p)}
-                      />
-                    ))}
-                  </div>
-                ) : null}
-                <div className="flex items-center justify-between border-t border-border pt-2">
-                  <span className="text-sm text-muted-foreground">
-                    {orc.desconto > 0 ? `Desconto ${formatBRL(orc.desconto)}` : "Total"}
-                  </span>
-                  <span className="text-lg font-semibold tabular-nums text-foreground">{formatBRL(orcamentoTotal(os))}</span>
-                </div>
-              </div>
-            ) : undefined}
-          </OSSectionV3>
+          {/* 3. Orçamento — área principal da OS (Fase 1C) */}
+          <OrcamentoPanelV3
+            os={os}
+            storeId={storeId}
+            onChanged={refresh}
+            onIniciarServico={() => onMudarStatus("em_execucao")}
+            notificar={notificar}
+          />
 
           <OSSectionV3
             titulo="4. Peças & reserva"

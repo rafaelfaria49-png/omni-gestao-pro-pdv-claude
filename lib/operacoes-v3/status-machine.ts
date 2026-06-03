@@ -218,3 +218,21 @@ export function projetarStatusV2(v3: OperacaoStatusV3): OSStatus {
   if (v3 === "recebida") return "pronta";
   return v3 as OSStatus;
 }
+
+// ----------------------------------------------------------------------------
+// Acoplamento ciclo do ORÇAMENTO → status da OS (Fase 1C).
+// Centralizado aqui (única fonte). O ciclo do orçamento pode AVANÇAR a OS até
+// estes checkpoints; se a OS já estiver à frente, retorna null (sem regressão).
+// ----------------------------------------------------------------------------
+
+/** Status da OS após ENVIAR o orçamento, ou null se nada deve mudar. */
+export function statusOSAposEnviarOrcamento(current: unknown): OperacaoStatusV3 | null {
+  const s = statusV3FromOS({ status: current });
+  return s === "aberta" || s === "diagnostico" ? "aguardando_aprovacao" : null;
+}
+
+/** Status da OS após APROVAR o orçamento, ou null se nada deve mudar. */
+export function statusOSAposAprovarOrcamento(current: unknown): OperacaoStatusV3 | null {
+  const s = statusV3FromOS({ status: current });
+  return s === "aberta" || s === "diagnostico" || s === "aguardando_aprovacao" ? "aprovado" : null;
+}

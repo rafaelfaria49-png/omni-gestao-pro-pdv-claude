@@ -1,7 +1,70 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 03 Jun 2026 — **Operações V3 · Fase 1B (máquina única de status)**: criada UMA fonte de verdade para o fluxo da OS (`lib/operacoes-v3/status-machine.ts`, pura) com os **10 status oficiais** (inclui **RECEBIDA**) e o grafo exato do blueprint. **Kanban (arrastar), Workspace e Action Bar** passam a alterar status pela **mesma engine**, via **um único write-path** (`status-actions.ts`) que grava **status + timeline apenas** — sem estoque/financeiro/garantia (sem schema, V2 intacta). Transições inválidas bloqueadas com mensagem amigável; RECEBIDA persiste em `payload.operacaoStatusV3` (JSONB). `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **298 passed | 2 expected fail** (11 novos da máquina). **Aguardando revisão** (sem commit). Anterior — **Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
+> Última atualização: 03 Jun 2026 — **Operações V3 · Fase 1C (orçamento cidadão de 1ª classe)**: o orçamento virou a **área principal** do Workspace V3 — painel editável real com **serviços, peças e brindes** (item cobrado/brinde/interno), **subtotal/desconto/total**, **custo interno · valor ao cliente · lucro estimado** (somente leitura), **estados** (rascunho/enviado/aprovado/recusado/expirado) com badge, **histórico de versões**, e ações reais **Salvar/Enviar/Aprovar/Recusar** — tudo **sem Financeiro/Conta a Receber/estoque/WhatsApp**. Aprovar avança a **máquina de status** da OS (1B); aprovado mostra **"ORÇAMENTO APROVADO" + "Iniciar serviço"**. Dashboard ganhou métricas reais de orçamento (rascunho/enviados/aprovados/recusados). Campos extras (brinde/custo de serviço/versões) vivem no `payload` (JSONB) — **sem tocar schema nem `@/types/os`**. `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **306 passed | 2 expected fail** (+8 do modelo). **Aguardando revisão** (sem commit). Anterior — **Fase 1B (máquina única de status)**: criada UMA fonte de verdade para o fluxo da OS (`lib/operacoes-v3/status-machine.ts`, pura) com os **10 status oficiais** (inclui **RECEBIDA**) e o grafo exato do blueprint. **Kanban (arrastar), Workspace e Action Bar** passam a alterar status pela **mesma engine**, via **um único write-path** (`status-actions.ts`) que grava **status + timeline apenas** — sem estoque/financeiro/garantia (sem schema, V2 intacta). Transições inválidas bloqueadas com mensagem amigável; RECEBIDA persiste em `payload.operacaoStatusV3` (JSONB). `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **298 passed | 2 expected fail** (11 novos da máquina). **Aguardando revisão** (sem commit). Anterior — **Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Operações V3 — Fase 1C: orçamento como cidadão de 1ª classe (03/06/2026)
+
+**O que é:** consolida o **orçamento** como o centro da OS no Workspace V3. Antes, a seção de
+orçamento era um resumo simples; agora é um **painel operacional editável** (área principal), com
+estrutura profissional de orçamento — **sem nenhum efeito financeiro/estoque/garantia/WhatsApp**.
+
+**Modelo (sem schema, sem tocar `@/types/os`):** os campos extras da V3 — `kindV3` (cobrado/brinde/
+interno) por linha, `custoV3` de serviço e o **histórico de versões** — vivem como propriedades
+adicionais dentro do `payload` (JSONB) e sobrevivem à hidratação pelo spread (mesma disciplina do
+`operacaoStatusV3` da Fase 1B). Fonte de verdade pura: `lib/operacoes-v3/orcamento-model.ts`.
+
+**Brindes (item 6):** `cobrado` impacta custo **e** valor ao cliente; `brinde` e `interno` impactam
+**custo/lucro**, **não** o valor ao cliente. Ex.: Troca de tela (cobrado) + Película (brinde) +
+Capinha (brinde) → o cliente paga só a troca; o custo das brindes reduz o lucro.
+
+**Estados + timeline (itens 2/3):** badge dos 5 estados (rascunho/enviado/aprovado/recusado/**expirado**
+derivado por `validoAte`). Cada ação grava evento de timeline real (`orcamento_criado/atualizado/
+enviado/aprovado/recusado`), exibido na "Linha do tempo" do Workspace.
+
+**Histórico de versões (item 4):** cada **Salvar** empilha um snapshot anterior em
+`payload.orcamentoVersoesV3` (nunca perde informação); visualização das versões no próprio painel.
+
+**Lucro estimado (item 7):** custo interno · valor ao cliente · lucro — **somente leitura**, sem
+integração financeira.
+
+**Ações reais (itens 8/9/10), todas side-effect-free:** `enviarOrcamentoV3` (→ enviado; avança a OS a
+*aguardando aprovação* pela máquina 1B), `aprovarOrcamentoV3` (→ aprovado; avança a OS a *aprovada*),
+`recusarOrcamentoV3` (→ recusado + timeline, sem outros efeitos), `salvarOrcamentoV3` (edita itens/
+desconto/brindes + versão). **Não** usam `approveOrcamento`/`rejectOrcamento` do V2 (que materializam/
+cancelam Conta a Receber).
+
+**Aprovado (item 11):** banner **"ORÇAMENTO APROVADO"** + botão **"Iniciar serviço"** (avança a OS a
+*em execução* pela máquina única).
+
+**Dashboard (item 12):** métricas reais de orçamento — em rascunho · enviados · aprovados · recusados
+(da leitura já existente, `contarOrcamentosPorStatusV3`).
+
+| Camada | Arquivo | Papel |
+|---|---|---|
+| Modelo puro | `lib/operacoes-v3/orcamento-model.ts` **(novo)** | Tipos V3 (kind/custo/versão), totais com brindes, lucro, status efetivo (expirado), contagem p/ dashboard |
+| Write-path | `lib/operacoes-v3/orcamento-actions.ts` **(reescrito, use server)** | `salvar/enviar/aprovar/recusar` — só payload (orçamento+status OS+timeline+versões); sem financeiro/estoque/garantia |
+| Máquina | `lib/operacoes-v3/status-machine.ts` | + `statusOSAposEnviarOrcamento` / `statusOSAposAprovarOrcamento` (acoplamento orçamento→OS centralizado) |
+| Testes | `lib/operacoes-v3/orcamento-model.test.ts` **(novo)** | 8 testes (brindes, desconto, lucro, expirado, contagem) |
+| Painel | `components/operacoes-v3/components/OrcamentoPanelV3.tsx` **(novo)** | Editor de serviços/peças/brindes + totais + lucro + estados + ações + versões + banner aprovado |
+| Hook | `components/operacoes-v3/hooks/use-orcamento-v3.ts` | Expõe gerar/salvar/enviar/aprovar/recusar (pending/erro) |
+| Workspace | `pages/OSWorkspaceV3.tsx` | Seção 3 substituída pelo `OrcamentoPanelV3` (área principal) |
+| Dashboard | `pages/DashboardV3.tsx` | Bloco de métricas de orçamento (real) |
+
+**⚠️ Limitação consciente (escopo):** Aprovar/Iniciar serviço **não** materializam Conta a Receber,
+**não** consomem estoque, **não** geram garantia (continuam exclusivos do V2/fases futuras). A coluna
+`ordem_servico_item` (mirror do V2) **não** é sincronizada nas edições V3. Seguro enquanto a V3 é casca
+isolada por URL; **não** usar como caminho de faturamento em produção antes do cabeamento (1D/2).
+
+**Validação:** `npx tsc --noEmit` ✅ · `npm run build` ✅ (exit 0, 98 rotas; flakes do Windows —
+lock do `prisma generate` e worker nativo em "Collecting page data" — contornados com `next build`
+direto + `--max-old-space-size=8192`) · `vitest` **306 passed | 2 expected fail** (+8). **Não commitado.**
+
+**Não alterado:** schema Prisma, migrations, auth/proxy, **V2** e write-paths do HUB (`approveOrcamento`/
+`rejectOrcamento`/`updateOSStatus`/`updateOSPayload`), `@/types/os`, Financeiro HUB, PDV, WhatsApp,
+Marketplace, Fiscal, BL-07.
 
 ---
 

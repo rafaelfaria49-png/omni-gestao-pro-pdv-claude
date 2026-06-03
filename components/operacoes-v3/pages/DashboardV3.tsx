@@ -5,13 +5,17 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  FileText,
   Inbox,
   Loader,
   PiggyBank,
+  Send,
   ShieldCheck,
   TrendingUp,
   Wallet,
+  XCircle,
 } from "lucide-react";
+import { contarOrcamentosPorStatusV3 } from "@/lib/operacoes-v3/orcamento-model";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { MetricCardV3 } from "../components/MetricCardV3";
 import { OSCardV3 } from "../components/OSCardV3";
@@ -63,6 +67,7 @@ export function DashboardV3() {
       counts,
       atrasadas,
       aguardando,
+      orcamentos: contarOrcamentosPorStatusV3(ordens),
       garantias: garantiasAtivas(ordens).length,
       receita: receitaEstimada(ordens),
       total: ordens.length,
@@ -93,6 +98,16 @@ export function DashboardV3() {
           <MetricCardV3 label="Recebido hoje" estado="a-conectar" hint="Vem do Financeiro" icon={<Wallet className="h-4 w-4" />} />
           <MetricCardV3 label="Saldo em aberto" estado="a-conectar" hint="Vem do Financeiro" icon={<PiggyBank className="h-4 w-4" />} />
           <MetricCardV3 label="Garantias ativas" value={dados.garantias} tone="neutral" icon={<ShieldCheck className="h-4 w-4" />} />
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Orçamentos</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MetricCardV3 label="Em rascunho" value={dados.orcamentos.rascunho} tone="neutral" icon={<FileText className="h-4 w-4" />} />
+            <MetricCardV3 label="Enviados" value={dados.orcamentos.enviado} tone="info" icon={<Send className="h-4 w-4" />} />
+            <MetricCardV3 label="Aprovados" value={dados.orcamentos.aprovado} tone="success" icon={<CheckCircle2 className="h-4 w-4" />} />
+            <MetricCardV3 label="Recusados" value={dados.orcamentos.recusado} tone="danger" icon={<XCircle className="h-4 w-4" />} />
+          </div>
         </div>
 
         {dados.total === 0 ? (

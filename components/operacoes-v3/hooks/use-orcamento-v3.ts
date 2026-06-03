@@ -1,26 +1,34 @@
 "use client";
 
 // ============================================================================
-// Operações V3 — Fase 1A · Ações REAIS de orçamento (gerar / enviar)
+// Operações V3 — Fase 1C · Ações REAIS de orçamento (cidadão de 1ª classe)
 // ----------------------------------------------------------------------------
-// Envolve as actions seguras de `lib/operacoes-v3/orcamento-actions` com estado
-// de pendência + erro. Em sucesso, chama `onSuccess` (recarrega a OS/lista).
-// Aprovar/Reprovar NÃO vivem aqui: têm efeito financeiro e ficam como
-// placeholder honesto no Workspace nesta fase.
+// Envolve as actions side-effect-free de `lib/operacoes-v3/orcamento-actions`
+// com estado de pendência + erro. Em sucesso chama `onSuccess` (recarrega OS).
+// Nenhuma ação aqui cria Financeiro/Conta a Receber, estoque ou WhatsApp.
 // ============================================================================
 
 import { useCallback, useState } from "react";
 import type { OrdemServico } from "@/types/os";
-import { gerarOrcamentoDaOS, enviarOrcamentoAoCliente } from "@/lib/operacoes-v3/orcamento-actions";
+import {
+  aprovarOrcamentoV3,
+  enviarOrcamentoV3,
+  gerarOrcamentoDaOS,
+  recusarOrcamentoV3,
+  salvarOrcamentoV3,
+} from "@/lib/operacoes-v3/orcamento-actions";
+import type { SalvarOrcamentoV3Input } from "@/lib/operacoes-v3/orcamento-model";
 
-export type OrcamentoAcaoV3 = "gerar" | "enviar";
+export type OrcamentoAcaoV3 = "gerar" | "salvar" | "enviar" | "aprovar" | "recusar";
 
 export interface OrcamentoV3Actions {
-  /** Ação em execução (para desabilitar/indicar loading), ou null. */
   pending: OrcamentoAcaoV3 | null;
   error: string | null;
   gerar: () => Promise<boolean>;
+  salvar: (input: SalvarOrcamentoV3Input) => Promise<boolean>;
   enviar: () => Promise<boolean>;
+  aprovar: () => Promise<boolean>;
+  recusar: (motivo?: string) => Promise<boolean>;
 }
 
 export function useOrcamentoV3(
@@ -53,7 +61,16 @@ export function useOrcamentoV3(
   );
 
   const gerar = useCallback(() => run("gerar", gerarOrcamentoDaOS), [run]);
-  const enviar = useCallback(() => run("enviar", enviarOrcamentoAoCliente), [run]);
+  const salvar = useCallback(
+    (input: SalvarOrcamentoV3Input) => run("salvar", (sid, id) => salvarOrcamentoV3(sid, id, input)),
+    [run],
+  );
+  const enviar = useCallback(() => run("enviar", enviarOrcamentoV3), [run]);
+  const aprovar = useCallback(() => run("aprovar", aprovarOrcamentoV3), [run]);
+  const recusar = useCallback(
+    (motivo?: string) => run("recusar", (sid, id) => recusarOrcamentoV3(sid, id, motivo)),
+    [run],
+  );
 
-  return { pending, error, gerar, enviar };
+  return { pending, error, gerar, salvar, enviar, aprovar, recusar };
 }
