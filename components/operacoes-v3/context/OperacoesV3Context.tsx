@@ -9,6 +9,7 @@
 
 import { createContext, useContext } from "react";
 import type { OrdemServico } from "@/types/os";
+import type { OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
 import type { ScreenId } from "../data/types";
 
 export interface OperacoesV3ContextValue {
@@ -24,6 +25,16 @@ export interface OperacoesV3ContextValue {
   primeiraCarga: boolean;
   error: string | null;
   reload: () => void;
+
+  /**
+   * Aplica uma transição de status pela máquina única da V3 (write real).
+   * Já recarrega a lista e exibe toast (sucesso ou motivo do bloqueio).
+   * Retorna `true` em sucesso. Kanban, Workspace e Action Bar usam este caminho.
+   */
+  mudarStatus: (osId: string, to: OperacaoStatusV3) => Promise<boolean>;
+
+  /** Toast neutro (ex.: transição bloqueada validada no cliente). */
+  notificar: (msg: string) => void;
 
   /** Toast honesto para ações ainda não disponíveis nesta fase (sem write-path). */
   acaoEmConstrucao: (label?: string) => void;

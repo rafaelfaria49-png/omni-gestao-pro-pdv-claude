@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, History, Phone, Search, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { StatusBadgeV3 } from "../components/StatusBadgeV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
@@ -96,7 +97,7 @@ export function HistoricoClientesV3() {
                       <span className="shrink-0 text-xs font-medium tabular-nums text-foreground">
                         {orcamentoTotal(os) > 0 ? formatBRL(orcamentoTotal(os)) : "—"}
                       </span>
-                      <StatusBadgeV3 status={os.status} className="shrink-0" />
+                      <StatusBadgeV3 status={statusV3FromOS(os)} className="shrink-0" />
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                     </button>
                   </li>

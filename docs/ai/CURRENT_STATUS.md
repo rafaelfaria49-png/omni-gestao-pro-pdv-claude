@@ -1,7 +1,58 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 03 Jun 2026 — **Operações V3 · Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
+> Última atualização: 03 Jun 2026 — **Operações V3 · Fase 1B (máquina única de status)**: criada UMA fonte de verdade para o fluxo da OS (`lib/operacoes-v3/status-machine.ts`, pura) com os **10 status oficiais** (inclui **RECEBIDA**) e o grafo exato do blueprint. **Kanban (arrastar), Workspace e Action Bar** passam a alterar status pela **mesma engine**, via **um único write-path** (`status-actions.ts`) que grava **status + timeline apenas** — sem estoque/financeiro/garantia (sem schema, V2 intacta). Transições inválidas bloqueadas com mensagem amigável; RECEBIDA persiste em `payload.operacaoStatusV3` (JSONB). `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **298 passed | 2 expected fail** (11 novos da máquina). **Aguardando revisão** (sem commit). Anterior — **Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Operações V3 — Fase 1B: máquina única de status (03/06/2026)
+
+**O que é:** uma **única fonte de verdade** para o fluxo operacional da OS na V3. Antes, o status era
+mexido por caminhos potencialmente divergentes (Kanban, botões, Workspace, action bar). Agora **toda**
+mudança de status passa pela mesma engine pura + um único write-path.
+
+**Os 10 status oficiais:** `aberta · diagnostico · aguardando_aprovacao · aprovado · aguardando_peca ·
+em_execucao · pronta · recebida · entregue · cancelada`. Grafo (avanço linear): aberta→diagnóstico→
+aguardando_aprovação→aprovada→{aguardando_peça | em_execução}; aguardando_peça→em_execução→pronta→
+**recebida**→entregue; qualquer não-final→cancelada. Estados finais (entregue/cancelada) são imutáveis.
+
+**RECEBIDA sem tocar schema:** o status V3 autoritativo vive em **`payload.operacaoStatusV3`** (JSONB,
+sobrevive à hidratação pelo spread do payload). `payload.status` recebe a **projeção V2** (recebida→
+"pronta") para manter o V2 legado e a coluna Prisma colapsada coerentes. Leitura efetiva via
+`statusV3FromOS` (prefere o campo V3; legado nunca produz "recebida").
+
+| Camada | Arquivo | Papel |
+|---|---|---|
+| Engine pura | `lib/operacoes-v3/status-machine.ts` **(novo)** | Tipos, meta (label/tone/final), grafo `TRANSICOES_V3`, `podeTransicionarV3`, `proximasTransicoesV3`, `acaoPrimariaV3`, `statusV3FromOS`, `projetarStatusV2`. **Única fonte de regra.** |
+| Write-path | `lib/operacoes-v3/status-actions.ts` **(novo)** | `aplicarTransicaoStatusV3` — valida pela engine, grava **status + timeline apenas** (auth + storeId). **Não** chama `updateOSStatus`/`updateOSPayload` do V2 (evita estoque/financeiro/garantia/Omni). |
+| Testes | `lib/operacoes-v3/status-machine.test.ts` **(novo)** | 11 testes: grafo do blueprint, bloqueios, finais, derivação/projeção, Kanban (9 colunas). |
+| Contexto/Shell | `context/OperacoesV3Context.tsx` · `OperacoesV3Shell.tsx` | Expõem `mudarStatus` (write + reload + toast) e `notificar`; badge "somente leitura" → "status + orçamento reais". |
+| Action Bar | `components/OSCommandBarV3.tsx` | Ação primária recomendada + transições válidas + Cancelar (todas reais). Caminhos inválidos **não são oferecidos**. |
+| Kanban | `pages/FilaOSV3.tsx` | **Arrastar card** entre colunas → valida na engine → `mudarStatus` (ou toast amigável). Colunas/agrupamento por status V3 efetivo. |
+| Badges | `components/StatusBadgeV3.tsx` · `OSHeaderV3` · `OSCardV3` · `HistoricoClientesV3` · Lista | Renderizam o status V3 efetivo (incl. **Recebida**). |
+| Workspace | `pages/OSWorkspaceV3.tsx` | Command bar ligada ao write real; recarrega OS + lista (Kanban ↔ Workspace sincronizados). |
+
+**Bloqueio + mensagem amigável:** `podeTransicionarV3` roda no **cliente** (pré-valida o drop do Kanban →
+toast imediato) **e** no **servidor** (a action rejeita com o mesmo motivo). Mesma regra, sem divergência.
+
+**Timeline:** cada transição grava um evento `mudanca_status` (`{ de, para, engine: "operacoes-v3" }`),
+exibido na "Linha do tempo" do Workspace após o reload.
+
+**⚠️ Divergência consciente (escopo da fase):** a transição para **ENTREGUE na V3 é status-only** — **não**
+consome estoque, **não** cria garantia, **não** materializa Financeiro (diferente do `updateOSStatus` do
+V2). Isso é intencional (fase exclui estoque/financeiro/garantia) e seguro enquanto a V3 é casca isolada
+por URL, **mas** não deve virar o caminho de finalização em produção antes do cabeamento (Fase 1C/2).
+
+**Validação:** `npx tsc --noEmit` ✅ (0 erros) · `npm run build` ✅ (exit 0, 98 rotas) ·
+`vitest` **298 passed | 2 expected fail** (era 279 | 2; +11 da máquina; sem regressões).
+**Não commitado — aguardando revisão.**
+
+**Não alterado:** schema Prisma, migrations, auth/proxy, **V2** e seus write-paths
+(`updateOSStatus`/`updateOSPayload`/`operacao-hub-flow`), `@/api/os`, PDV, Financeiro HUB, WhatsApp,
+Marketplace, Fiscal, BL-07.
+
+**Próximo (1C/2):** cabear ENTREGUE/CANCELADA aos efeitos reais (estoque/garantia/financeiro) de forma
+governada · diagnóstico/execução estruturados · pagamento real (Financeiro).
 
 ---
 

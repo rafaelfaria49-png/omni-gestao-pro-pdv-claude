@@ -3,6 +3,7 @@
 import { Clock, Smartphone, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrdemServico } from "@/types/os";
+import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import { StatusBadgeV3 } from "./StatusBadgeV3";
 import { PaymentBadgeV3 } from "./PaymentBadgeV3";
 import { formatBRL, formatRelativo } from "../lib/format";
@@ -38,7 +39,7 @@ export function OSCardV3({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-sm font-semibold text-foreground">{os.codigo}</span>
-        <StatusBadgeV3 status={os.status} />
+        <StatusBadgeV3 status={statusV3FromOS(os)} />
       </div>
 
       <div className="mt-2 flex items-center gap-1.5 text-sm text-foreground">

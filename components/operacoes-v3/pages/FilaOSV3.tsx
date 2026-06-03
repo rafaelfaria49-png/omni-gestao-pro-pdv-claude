@@ -3,8 +3,15 @@
 import { useMemo, useState } from "react";
 import { CalendarRange, KanbanSquare, Search, Table2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PIPELINE } from "@/types/os";
-import type { OSStatus } from "@/types/os";
+import type { OrdemServico } from "@/types/os";
+import {
+  KANBAN_PIPELINE_V3,
+  podeTransicionarV3,
+  statusMetaV3,
+  statusV3FromOS,
+  STATUS_V3_LIST,
+  type OperacaoStatusV3,
+} from "@/lib/operacoes-v3/status-machine";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { OSCardV3 } from "../components/OSCardV3";
 import { StatusBadgeV3 } from "../components/StatusBadgeV3";
@@ -29,14 +36,14 @@ const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
 
 export function FilaOSV3() {
-  const { ordens, loading, primeiraCarga, storeId, openOS } = useOperacoesV3();
+  const { ordens, loading, primeiraCarga, storeId, openOS, mudarStatus, notificar } = useOperacoesV3();
   const [tab, setTab] = useState<Tab>("kanban");
   const [q, setQ] = useState("");
-  const [statusFiltro, setStatusFiltro] = useState<OSStatus | "todas">("todas");
+  const [statusFiltro, setStatusFiltro] = useState<OperacaoStatusV3 | "todas">("todas");
 
   const filtradas = useMemo(() => ordens.filter((o) => matchOrdem(o, q)), [ordens, q]);
   const listadas = useMemo(
-    () => filtradas.filter((o) => statusFiltro === "todas" || o.status === statusFiltro),
+    () => filtradas.filter((o) => statusFiltro === "todas" || statusV3FromOS(o) === statusFiltro),
     [filtradas, statusFiltro],
   );
 
@@ -86,12 +93,12 @@ export function FilaOSV3() {
           <select
             className={cn(inputCls, "w-auto")}
             value={statusFiltro}
-            onChange={(e) => setStatusFiltro(e.target.value as OSStatus | "todas")}
+            onChange={(e) => setStatusFiltro(e.target.value as OperacaoStatusV3 | "todas")}
           >
             <option value="todas">Todos os status</option>
-            {PIPELINE.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
+            {STATUS_V3_LIST.map((s) => (
+              <option key={s} value={s}>
+                {statusMetaV3(s).label}
               </option>
             ))}
           </select>
@@ -102,7 +109,7 @@ export function FilaOSV3() {
       {primeiraCarga && loading ? (
         <LoadingBlockV3 />
       ) : tab === "kanban" ? (
-        <KanbanView ordens={filtradas} onOpen={openOS} />
+        <KanbanView ordens={filtradas} onOpen={openOS} mudarStatus={mudarStatus} notificar={notificar} />
       ) : tab === "lista" ? (
         <ListaView ordens={listadas} onOpen={openOS} />
       ) : (
@@ -120,28 +127,84 @@ export function FilaOSV3() {
 function KanbanView({
   ordens,
   onOpen,
+  mudarStatus,
+  notificar,
 }: {
-  ordens: ReturnType<typeof useOperacoesV3>["ordens"];
+  ordens: OrdemServico[];
   onOpen: (id: string) => void;
+  mudarStatus: (osId: string, to: OperacaoStatusV3) => Promise<boolean>;
+  notificar: (msg: string) => void;
 }) {
-  const colunas = PIPELINE.filter((p) => p.id !== "cancelada");
+  const [drag, setDrag] = useState<{ osId: string; from: OperacaoStatusV3 } | null>(null);
+  const [overCol, setOverCol] = useState<OperacaoStatusV3 | null>(null);
+
+  const limparDrag = () => {
+    setDrag(null);
+    setOverCol(null);
+  };
+
+  const soltarEm = (col: OperacaoStatusV3) => {
+    const atual = drag;
+    limparDrag();
+    if (!atual) return;
+    if (atual.from === col) return; // mesma coluna → no-op
+    const veredito = podeTransicionarV3(atual.from, col);
+    if (!veredito.ok) {
+      notificar(veredito.motivo ?? "Transição de status não permitida.");
+      return;
+    }
+    void mudarStatus(atual.osId, col);
+  };
+
   return (
     <div>
       <p className="mb-2 text-xs text-muted-foreground">
-        Arrastar para mudar status chega na próxima fase — aqui as colunas são somente leitura.
+        Arraste um card para outra coluna para mudar o status — validado pela máquina única da V3.
       </p>
       <div className="flex gap-3 overflow-x-auto pb-2">
-        {colunas.map((col) => {
-          const cards = ordens.filter((o) => o.status === col.id);
+        {KANBAN_PIPELINE_V3.map((col) => {
+          const meta = statusMetaV3(col);
+          const cards = ordens.filter((o) => statusV3FromOS(o) === col);
+          const alvoValido = drag ? podeTransicionarV3(drag.from, col).ok : false;
+          const isOver = overCol === col;
           return (
-            <div key={col.id} className="flex w-72 shrink-0 flex-col rounded-xl border border-border bg-muted/20">
+            <div
+              key={col}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setOverCol(col);
+              }}
+              onDragLeave={() => setOverCol((c) => (c === col ? null : c))}
+              onDrop={(e) => {
+                e.preventDefault();
+                soltarEm(col);
+              }}
+              className={cn(
+                "flex w-72 shrink-0 flex-col rounded-xl border bg-muted/20 transition-colors",
+                isOver && alvoValido
+                  ? "border-primary ring-2 ring-primary/30"
+                  : drag && alvoValido
+                    ? "border-primary/40"
+                    : "border-border",
+              )}
+            >
               <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
-                <span className="truncate text-sm font-semibold text-foreground">{col.label}</span>
+                <span className="truncate text-sm font-semibold text-foreground">{meta.label}</span>
                 <span className="rounded-full bg-card px-2 py-0.5 text-xs text-muted-foreground">{cards.length}</span>
               </div>
               <div className="min-h-[80px] space-y-2 p-2">
                 {cards.length > 0 ? (
-                  cards.map((os) => <OSCardV3 key={os.id} os={os} onOpen={onOpen} />)
+                  cards.map((os) => (
+                    <div
+                      key={os.id}
+                      draggable
+                      onDragStart={() => setDrag({ osId: os.id, from: statusV3FromOS(os) })}
+                      onDragEnd={limparDrag}
+                      className="cursor-grab active:cursor-grabbing"
+                    >
+                      <OSCardV3 os={os} onOpen={onOpen} />
+                    </div>
+                  ))
                 ) : (
                   <p className="px-2 py-6 text-center text-xs text-muted-foreground">—</p>
                 )}
@@ -158,7 +221,7 @@ function ListaView({
   ordens,
   onOpen,
 }: {
-  ordens: ReturnType<typeof useOperacoesV3>["ordens"];
+  ordens: OrdemServico[];
   onOpen: (id: string) => void;
 }) {
   if (ordens.length === 0) {
@@ -201,7 +264,7 @@ function ListaView({
                 <td className="px-3 py-2 font-medium text-foreground">{os.codigo}</td>
                 <td className="max-w-[160px] truncate px-3 py-2 text-foreground">{os.cliente?.nome ?? "—"}</td>
                 <td className="max-w-[160px] truncate px-3 py-2 text-muted-foreground">{equip}</td>
-                <td className="px-3 py-2"><StatusBadgeV3 status={os.status} /></td>
+                <td className="px-3 py-2"><StatusBadgeV3 status={statusV3FromOS(os)} /></td>
                 <td className="px-3 py-2"><PaymentBadgeV3 estado={pag.estado} showValor={false} /></td>
                 <td className="max-w-[120px] truncate px-3 py-2 text-muted-foreground">{os.tecnico?.nome ?? "—"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-right text-muted-foreground">

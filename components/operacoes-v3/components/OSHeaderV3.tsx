@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Clock, MapPin, Smartphone, User, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrdemServico } from "@/types/os";
+import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import { StatusBadgeV3 } from "./StatusBadgeV3";
 import { PaymentBadgeV3 } from "./PaymentBadgeV3";
 import { formatBRL, formatDataHora } from "../lib/format";
@@ -37,7 +38,7 @@ export function OSHeaderV3({ os }: { os: OrdemServico }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h2 className="truncate text-lg font-semibold text-foreground">{os.codigo}</h2>
-          <StatusBadgeV3 status={os.status} />
+          <StatusBadgeV3 status={statusV3FromOS(os)} />
           <PaymentBadgeV3 estado={pag.estado} total={pag.total} />
         </div>
         <div className="text-right">

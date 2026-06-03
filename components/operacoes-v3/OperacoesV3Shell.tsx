@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { RefreshCw, Sparkles } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { cn } from "@/lib/utils";
+import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
+import { statusMetaV3, type OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
 import { OperacoesV3Context, type OperacoesV3ContextValue } from "./context/OperacoesV3Context";
 import { OperacoesV3Nav } from "./OperacoesV3Nav";
 import { useOrdensV3 } from "./hooks/use-ordens-v3";
@@ -80,12 +82,37 @@ export function OperacoesV3Shell() {
     setActiveScreen("workspace");
   }, []);
 
-  const acaoEmConstrucao = useCallback((label?: string) => {
-    const msg = label ? `${label} — disponível na próxima fase.` : "Ação disponível na próxima fase.";
+  const notificar = useCallback((msg: string) => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, msg }]);
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2800);
   }, []);
+
+  const acaoEmConstrucao = useCallback(
+    (label?: string) => {
+      notificar(label ? `${label} — disponível na próxima fase.` : "Ação disponível na próxima fase.");
+    },
+    [notificar],
+  );
+
+  const mudarStatus = useCallback(
+    async (osId: string, to: OperacaoStatusV3): Promise<boolean> => {
+      if (!storeId) {
+        notificar("Selecione uma unidade ativa para alterar o status.");
+        return false;
+      }
+      try {
+        await aplicarTransicaoStatusV3(storeId, osId, to);
+        reload();
+        notificar(`Status atualizado para "${statusMetaV3(to).label}".`);
+        return true;
+      } catch (e) {
+        notificar(e instanceof Error ? e.message : "Não foi possível alterar o status.");
+        return false;
+      }
+    },
+    [storeId, reload, notificar],
+  );
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });
@@ -103,9 +130,11 @@ export function OperacoesV3Shell() {
       primeiraCarga,
       error,
       reload,
+      mudarStatus,
+      notificar,
       acaoEmConstrucao,
     }),
-    [storeId, activeScreen, selectedOsId, navigate, openOS, ordens, loading, primeiraCarga, error, reload, acaoEmConstrucao],
+    [storeId, activeScreen, selectedOsId, navigate, openOS, ordens, loading, primeiraCarga, error, reload, mudarStatus, notificar, acaoEmConstrucao],
   );
 
   const ActiveScreen = SCREENS[activeScreen];
@@ -125,7 +154,7 @@ export function OperacoesV3Shell() {
               Operações <span className="text-primary">V3</span>
             </p>
             <span className="hidden items-center rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground sm:inline-flex">
-              casca isolada · somente leitura
+              casca isolada · status + orçamento reais
             </span>
           </div>
           <div className="ml-auto flex items-center gap-2">

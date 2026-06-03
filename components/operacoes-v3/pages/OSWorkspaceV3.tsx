@@ -13,6 +13,7 @@ import { OSCardV3 } from "../components/OSCardV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
 import { ButtonV3 } from "../components/UiV3";
 import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
+import type { OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
 import { useOperacoesV3 } from "../context/OperacoesV3Context";
 import { useOrdemV3 } from "../hooks/use-ordem-v3";
 import { useOrcamentoV3 } from "../hooks/use-orcamento-v3";
@@ -104,8 +105,19 @@ function Picker() {
 // ---------------------------------------------------------------------------
 
 function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => void }) {
-  const { acaoEmConstrucao, navigate, openOS, storeId, reload: reloadLista } = useOperacoesV3();
+  const { acaoEmConstrucao, navigate, openOS, storeId, reload: reloadLista, mudarStatus } = useOperacoesV3();
   const pag = pagamentoInfo(os);
+
+  // Toda mudança de status passa pela máquina única (via contexto). Em sucesso,
+  // recarrega também a OS aberta para manter Workspace ↔ Kanban sincronizados.
+  const onMudarStatus = useCallback(
+    async (to: OperacaoStatusV3): Promise<boolean> => {
+      const ok = await mudarStatus(os.id, to);
+      if (ok) reloadOrdem();
+      return ok;
+    },
+    [mudarStatus, os.id, reloadOrdem],
+  );
   const orc = os.orcamento;
   const pecas = orc?.pecas?.length ? orc.pecas : os.pecas ?? [];
 
@@ -180,7 +192,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
       </div>
 
       <OSHeaderV3 os={os} />
-      <OSCommandBarV3 os={os} onAcao={acaoEmConstrucao} />
+      <OSCommandBarV3 os={os} onMudarStatus={onMudarStatus} onAcao={acaoEmConstrucao} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         {/* Coluna principal — seções na ordem obrigatória */}
