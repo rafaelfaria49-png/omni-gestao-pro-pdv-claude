@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, FileText, Globe, Printer, Search, Tag } from "lucide-react";
+import { ArrowLeft, FileText, Globe, Plus, Printer, Search, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ChecklistEstado, OrdemServico, PecaUsada } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
@@ -55,7 +55,7 @@ function pecaSubtotal(p: PecaUsada): number {
 // ---------------------------------------------------------------------------
 
 function Picker() {
-  const { ordens, loading, primeiraCarga, openOS, navigate } = useOperacoesV3();
+  const { ordens, loading, primeiraCarga, openOS, navigate, abrirNovaOS } = useOperacoesV3();
   const [q, setQ] = useState("");
   const lista = useMemo(() => ordens.filter((o) => matchOrdem(o, q)).slice(0, 24), [ordens, q]);
 
@@ -64,9 +64,15 @@ function Picker() {
       titulo={SCREEN_COPY.workspace.titulo}
       subtitulo={SCREEN_COPY.workspace.subtitulo}
       actions={
-        <ButtonV3 variant="outline" onClick={() => navigate("fila")}>
-          Ver fila completa
-        </ButtonV3>
+        <>
+          <ButtonV3 variant="outline" onClick={() => navigate("fila")}>
+            Ver fila completa
+          </ButtonV3>
+          <ButtonV3 variant="primary" onClick={abrirNovaOS}>
+            <Plus className="h-4 w-4" aria-hidden />
+            Nova OS
+          </ButtonV3>
+        </>
       }
     >
       <div className="mb-4">

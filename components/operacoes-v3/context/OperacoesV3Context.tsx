@@ -33,6 +33,9 @@ export interface OperacoesV3ContextValue {
    */
   mudarStatus: (osId: string, to: OperacaoStatusV3) => Promise<boolean>;
 
+  /** Abre o modal "Nova OS Enterprise" (fluxo completo de abertura de OS). */
+  abrirNovaOS: () => void;
+
   /** Toast neutro (ex.: transição bloqueada validada no cliente). */
   notificar: (msg: string) => void;
 

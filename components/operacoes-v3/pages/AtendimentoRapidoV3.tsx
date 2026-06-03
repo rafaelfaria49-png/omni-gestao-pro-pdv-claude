@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { KeyRound, ListChecks, Smartphone, User } from "lucide-react";
+import { KeyRound, ListChecks, Smartphone, Sparkles, User } from "lucide-react";
 import { CHECKLIST_PADRAO } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { ConstructionBadgeV3 } from "../components/ConstructionBadgeV3";
@@ -34,22 +34,37 @@ const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
 
 export function AtendimentoRapidoV3() {
-  const { acaoEmConstrucao } = useOperacoesV3();
+  const { acaoEmConstrucao, abrirNovaOS } = useOperacoesV3();
   return (
     <SectionShellV3
       titulo={SCREEN_COPY.atendimento.titulo}
       subtitulo={SCREEN_COPY.atendimento.subtitulo}
       badge={<ConstructionBadgeV3 />}
+      actions={
+        <ButtonV3 variant="primary" onClick={abrirNovaOS}>
+          <Sparkles className="h-4 w-4" aria-hidden />
+          Nova OS completa
+        </ButtonV3>
+      }
     >
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          acaoEmConstrucao("Gerar OS de entrada");
+          abrirNovaOS();
         }}
         className="space-y-4"
       >
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2.5">
+          <p className="min-w-0 text-xs text-foreground">
+            Este é o <strong>check-in simplificado</strong>. Para abrir a ordem de serviço de verdade (cliente, equipamento, itens, pagamento previsto e garantia), use a <strong>Nova OS Enterprise</strong>.
+          </p>
+          <ButtonV3 variant="primary" onClick={abrirNovaOS} className="shrink-0">
+            <Sparkles className="h-4 w-4" aria-hidden />
+            Abrir Nova OS
+          </ButtonV3>
+        </div>
         <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          Casca de check-in: os campos são editáveis para validar o fluxo, mas <strong>nada é gravado</strong> nesta fase.
+          Casca de check-in: os campos são editáveis para validar o fluxo, mas <strong>nada é gravado</strong> aqui. A criação real fica na Nova OS Enterprise.
         </p>
 
         <Card icon={<User className="h-4 w-4" />} titulo="Cliente">
@@ -116,12 +131,13 @@ export function AtendimentoRapidoV3() {
         </Card>
 
         <footer className="flex flex-wrap items-center justify-end gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
-          <span className="mr-auto text-xs text-muted-foreground">Etapa visual — sem persistência.</span>
+          <span className="mr-auto text-xs text-muted-foreground">Etapa visual — a criação real fica na Nova OS Enterprise.</span>
           <ButtonV3 variant="outline" type="button" onClick={() => acaoEmConstrucao("Imprimir etiqueta de entrada")}>
             Imprimir etiqueta
           </ButtonV3>
-          <ButtonV3 variant="primary" type="submit">
-            Gerar OS de entrada
+          <ButtonV3 variant="primary" type="button" onClick={abrirNovaOS}>
+            <Sparkles className="h-4 w-4" aria-hidden />
+            Abrir Nova OS Enterprise
           </ButtonV3>
         </footer>
       </form>

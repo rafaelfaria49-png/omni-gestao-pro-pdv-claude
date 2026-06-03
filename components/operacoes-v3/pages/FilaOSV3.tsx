@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarRange, KanbanSquare, Search, Table2 } from "lucide-react";
+import { CalendarRange, KanbanSquare, Plus, Search, Table2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrdemServico } from "@/types/os";
 import {
@@ -17,6 +17,7 @@ import { OSCardV3 } from "../components/OSCardV3";
 import { StatusBadgeV3 } from "../components/StatusBadgeV3";
 import { PaymentBadgeV3 } from "../components/PaymentBadgeV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
+import { ButtonV3 } from "../components/UiV3";
 import { ConstructionBadgeV3 } from "../components/ConstructionBadgeV3";
 import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
 import { useOperacoesV3 } from "../context/OperacoesV3Context";
@@ -36,7 +37,7 @@ const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
 
 export function FilaOSV3() {
-  const { ordens, loading, primeiraCarga, storeId, openOS, mudarStatus, notificar } = useOperacoesV3();
+  const { ordens, loading, primeiraCarga, storeId, openOS, mudarStatus, notificar, abrirNovaOS } = useOperacoesV3();
   const [tab, setTab] = useState<Tab>("kanban");
   const [q, setQ] = useState("");
   const [statusFiltro, setStatusFiltro] = useState<OperacaoStatusV3 | "todas">("todas");
@@ -56,25 +57,31 @@ export function FilaOSV3() {
   }
 
   const tabs = (
-    <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
-      {TABS.map((t) => {
-        const Icon = t.icon;
-        return (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-              tab === t.id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" aria-hidden />
-            {t.label}
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
+        {TABS.map((t) => {
+          const Icon = t.icon;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                tab === t.id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden />
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+      <ButtonV3 variant="primary" onClick={abrirNovaOS}>
+        <Plus className="h-4 w-4" aria-hidden />
+        Nova OS
+      </ButtonV3>
+    </>
   );
 
   return (

@@ -9,6 +9,7 @@ import {
   Inbox,
   Loader,
   PiggyBank,
+  Plus,
   Send,
   ShieldCheck,
   TrendingUp,
@@ -57,7 +58,7 @@ function ListaCurta({
 }
 
 export function DashboardV3() {
-  const { ordens, loading, primeiraCarga, storeId, navigate, openOS } = useOperacoesV3();
+  const { ordens, loading, primeiraCarga, storeId, navigate, openOS, abrirNovaOS } = useOperacoesV3();
 
   const dados = useMemo(() => {
     const counts = countByStatus(ordens);
@@ -75,9 +76,15 @@ export function DashboardV3() {
   }, [ordens]);
 
   const actions = (
-    <ButtonV3 variant="outline" onClick={() => navigate("fila")}>
-      Abrir fila de OS
-    </ButtonV3>
+    <>
+      <ButtonV3 variant="outline" onClick={() => navigate("fila")}>
+        Abrir fila de OS
+      </ButtonV3>
+      <ButtonV3 variant="primary" onClick={abrirNovaOS}>
+        <Plus className="h-4 w-4" aria-hidden />
+        Nova OS
+      </ButtonV3>
+    </>
   );
 
   let body: ReactNode;

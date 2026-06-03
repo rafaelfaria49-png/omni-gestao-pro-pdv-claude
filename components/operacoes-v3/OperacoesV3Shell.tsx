@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { Plus, RefreshCw, Sparkles } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { cn } from "@/lib/utils";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
 import { statusMetaV3, type OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
 import { OperacoesV3Context, type OperacoesV3ContextValue } from "./context/OperacoesV3Context";
+import { NovaOSEnterpriseModalV3 } from "./components/NovaOSEnterpriseModalV3";
 import { OperacoesV3Nav } from "./OperacoesV3Nav";
 import { useOrdensV3 } from "./hooks/use-ordens-v3";
 import { navItem } from "./data/navigation";
@@ -69,6 +70,7 @@ export function OperacoesV3Shell() {
 
   const [activeScreen, setActiveScreen] = useState<ScreenId>("dashboard");
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
+  const [novaOSOpen, setNovaOSOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const mainRef = useRef<HTMLElement>(null);
 
@@ -87,6 +89,24 @@ export function OperacoesV3Shell() {
     setToasts((t) => [...t, { id, msg }]);
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 2800);
   }, []);
+
+  const abrirNovaOS = useCallback(() => {
+    if (!storeId) {
+      notificar("Selecione uma unidade ativa para abrir uma OS.");
+      return;
+    }
+    setNovaOSOpen(true);
+  }, [storeId, notificar]);
+
+  const onOSCriada = useCallback(
+    (osId: string) => {
+      setNovaOSOpen(false);
+      reload();
+      notificar("OS criada com sucesso.");
+      openOS(osId);
+    },
+    [reload, notificar, openOS],
+  );
 
   const acaoEmConstrucao = useCallback(
     (label?: string) => {
@@ -131,10 +151,11 @@ export function OperacoesV3Shell() {
       error,
       reload,
       mudarStatus,
+      abrirNovaOS,
       notificar,
       acaoEmConstrucao,
     }),
-    [storeId, activeScreen, selectedOsId, navigate, openOS, ordens, loading, primeiraCarga, error, reload, mudarStatus, notificar, acaoEmConstrucao],
+    [storeId, activeScreen, selectedOsId, navigate, openOS, ordens, loading, primeiraCarga, error, reload, mudarStatus, abrirNovaOS, notificar, acaoEmConstrucao],
   );
 
   const ActiveScreen = SCREENS[activeScreen];
@@ -163,6 +184,10 @@ export function OperacoesV3Shell() {
               <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} aria-hidden />
               Atualizar
             </ButtonV3>
+            <ButtonV3 variant="primary" onClick={abrirNovaOS} disabled={!storeId}>
+              <Plus className="h-4 w-4" aria-hidden />
+              Nova OS
+            </ButtonV3>
           </div>
         </header>
 
@@ -189,6 +214,13 @@ export function OperacoesV3Shell() {
             ))}
           </div>
         ) : null}
+
+        <NovaOSEnterpriseModalV3
+          open={novaOSOpen}
+          storeId={storeId}
+          onClose={() => setNovaOSOpen(false)}
+          onCreated={onOSCriada}
+        />
       </div>
     </OperacoesV3Context.Provider>
   );

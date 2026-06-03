@@ -1,7 +1,73 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 03 Jun 2026 — **Operações V3 · Fase 1C (orçamento cidadão de 1ª classe)**: o orçamento virou a **área principal** do Workspace V3 — painel editável real com **serviços, peças e brindes** (item cobrado/brinde/interno), **subtotal/desconto/total**, **custo interno · valor ao cliente · lucro estimado** (somente leitura), **estados** (rascunho/enviado/aprovado/recusado/expirado) com badge, **histórico de versões**, e ações reais **Salvar/Enviar/Aprovar/Recusar** — tudo **sem Financeiro/Conta a Receber/estoque/WhatsApp**. Aprovar avança a **máquina de status** da OS (1B); aprovado mostra **"ORÇAMENTO APROVADO" + "Iniciar serviço"**. Dashboard ganhou métricas reais de orçamento (rascunho/enviados/aprovados/recusados). Campos extras (brinde/custo de serviço/versões) vivem no `payload` (JSONB) — **sem tocar schema nem `@/types/os`**. `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **306 passed | 2 expected fail** (+8 do modelo). **Aguardando revisão** (sem commit). Anterior — **Fase 1B (máquina única de status)**: criada UMA fonte de verdade para o fluxo da OS (`lib/operacoes-v3/status-machine.ts`, pura) com os **10 status oficiais** (inclui **RECEBIDA**) e o grafo exato do blueprint. **Kanban (arrastar), Workspace e Action Bar** passam a alterar status pela **mesma engine**, via **um único write-path** (`status-actions.ts`) que grava **status + timeline apenas** — sem estoque/financeiro/garantia (sem schema, V2 intacta). Transições inválidas bloqueadas com mensagem amigável; RECEBIDA persiste em `payload.operacaoStatusV3` (JSONB). `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **298 passed | 2 expected fail** (11 novos da máquina). **Aguardando revisão** (sem commit). Anterior — **Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
+> Última atualização: 03 Jun 2026 — **Operações V3 · Nova OS Enterprise + separação OS × PDV de Serviço**: novo botão primário **"Nova OS"** em 5 pontos (topo do módulo, Dashboard, Fila, Atendimento rápido e Workspace sem OS) que abre o **modal "Nova OS Enterprise"** — fluxo **completo** de abertura no balcão, em 8 passos (Cliente · Equipamento · Recepção · Problema/Diagnóstico · Itens · Pagamento · Garantia · Resumo), com cadastro/seleção de cliente real, equipamento+senha (inclui **padrão 3×3**), acessórios, recepção (origem/prioridade/local físico/previsão), itens **cobrado/brinde/interno** com custo interno × valor ao cliente × lucro, **pagamento apenas PREVISTO** (não recebe, não cria Conta a Receber, não mexe no caixa — recebimento real fica no **PDV de Serviço**) e **garantia prevista**. Cria a OS **de verdade** pelo caminho seguro (`criarOS`/`criarCliente`); extras viajam no `payload` (JSONB, sem schema). A OS nasce em **ABERTA** e aparece na hora em Fila/Dashboard/Workspace. **Atendimento rápido** foi rotulado como check-in **simplificado** e aponta para a Nova OS Enterprise. **Sem** baixa de estoque nesta fase. `tsc` ✅ · `build` ✅ · `vitest` **+8 (modelo Nova OS)**. **Aguardando revisão** (sem commit). Anterior — **Fase 1C (orçamento cidadão de 1ª classe)**: o orçamento virou a **área principal** do Workspace V3 — painel editável real com **serviços, peças e brindes** (item cobrado/brinde/interno), **subtotal/desconto/total**, **custo interno · valor ao cliente · lucro estimado** (somente leitura), **estados** (rascunho/enviado/aprovado/recusado/expirado) com badge, **histórico de versões**, e ações reais **Salvar/Enviar/Aprovar/Recusar** — tudo **sem Financeiro/Conta a Receber/estoque/WhatsApp**. Aprovar avança a **máquina de status** da OS (1B); aprovado mostra **"ORÇAMENTO APROVADO" + "Iniciar serviço"**. Dashboard ganhou métricas reais de orçamento (rascunho/enviados/aprovados/recusados). Campos extras (brinde/custo de serviço/versões) vivem no `payload` (JSONB) — **sem tocar schema nem `@/types/os`**. `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **306 passed | 2 expected fail** (+8 do modelo). **Aguardando revisão** (sem commit). Anterior — **Fase 1B (máquina única de status)**: criada UMA fonte de verdade para o fluxo da OS (`lib/operacoes-v3/status-machine.ts`, pura) com os **10 status oficiais** (inclui **RECEBIDA**) e o grafo exato do blueprint. **Kanban (arrastar), Workspace e Action Bar** passam a alterar status pela **mesma engine**, via **um único write-path** (`status-actions.ts`) que grava **status + timeline apenas** — sem estoque/financeiro/garantia (sem schema, V2 intacta). Transições inválidas bloqueadas com mensagem amigável; RECEBIDA persiste em `payload.operacaoStatusV3` (JSONB). `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **298 passed | 2 expected fail** (11 novos da máquina). **Aguardando revisão** (sem commit). Anterior — **Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Operações V3 — Nova OS Enterprise + separação OS × PDV de Serviço (03/06/2026)
+
+**O que é:** a V3 não tinha um botão claro de **abertura completa** de OS — o "Atendimento rápido"
+era só casca visual sem persistência. Esta frente cria o **fluxo principal de abertura** da OS no
+balcão e **separa papéis**: **Nova OS Enterprise = abrir** a ordem; **PDV de Serviço = receber/baixar**
+o pagamento depois (fase posterior). Os dois não se misturam.
+
+**Botão "Nova OS" (item 1)** — primário, visível em **5 pontos**: topo do módulo (header do Shell),
+**Dashboard**, **Fila de OS**, **Atendimento rápido** e **OS Workspace quando não há OS selecionada**.
+Todos abrem o mesmo modal (estado único no Shell via `abrirNovaOS` no contexto).
+
+**Atendimento rápido (item 2)** — mantido, mas **claramente rotulado** como check-in **simplificado**,
+com banner e CTAs que levam à Nova OS Enterprise (a criação real mora lá).
+
+**Modal "Nova OS Enterprise" (item 3)** — modal grande, utilizável no balcão **sem F11** (stepper de 8
+passos com corpo rolável + rodapé fixo com totais). Seções: **A. Cliente** (buscar real + cadastrar
+novo: nome/tel/doc/e-mail/endereço/cidade/UF/CEP), **B. Equipamento** (tipo/marca/modelo/IMEI/senha —
+numérica/texto/**padrão visual 3×3** — + acessórios: chip/capinha/película/carregador/cabo/cartão +
+outros), **C. Recepção** (entrada/previsão/origem balcão·WhatsApp·retorno·garantia/recebido por/
+prioridade/local físico), **D+E. Problema + Diagnóstico** (defeito/condição/obs internas + diagnóstico/
+solução previstos), **F. Itens** (serviço/peça × **cobrado/brinde/interno** + custo interno × valor ao
+cliente + baixa estoque sim/não), **G. Orçamento inicial** (subtotal/desconto/total/custo/lucro ao vivo),
+**H. Pagamento previsto** (forma/vencimento/sinal/obs — **só previsão**), **I. Garantia prevista**
+(10 modelos + personalizado + termo), **J. Resumo** + "Criar Ordem de Serviço".
+
+**Persistência (item 4) — caminho seguro:** a OS é criada de verdade por **`criarOS`** (`@/api/os` →
+`createOS`, que numera/audita) e cliente novo por **`criarCliente`** (`@/api/clientes` → `createCliente`).
+Itens cobrados viram `pecas`/`servicosCatalogo`; **brinde/interno** entram com **valor ao cliente R$ 0,00**
+(preservando o custo). Os extras da abertura (recepção, diagnóstico, pagamento previsto, garantia
+prevista, condição, itens com `kind`/`baixaEstoque`, totais) viajam em **`payload.aberturaV3`** (JSONB)
++ `operacaoStatusV3: "aberta"` — **sem tocar schema nem `@/types/os`**. A OS nasce **ABERTA** e aparece
+imediatamente na Fila/Dashboard/Workspace V3.
+
+| Camada | Arquivo | Papel |
+|---|---|---|
+| Modelo puro | `lib/operacoes-v3/nova-os-model.ts` **(novo)** | Tipos do rascunho (A→J), opções (origem/garantia/acessórios/forma), `computeTotaisNovaOSV3` (regra de brindes), `validarNovaOSDraftV3` |
+| Write-path | `lib/operacoes-v3/nova-os-actions.ts` **(novo, use server)** | `criarOSEnterpriseV3` — auth + guard (`operacoes.criarOs`) + cria cliente/OS pelo caminho seguro; extras no `payload`. Sem estoque/financeiro/WhatsApp |
+| Testes | `lib/operacoes-v3/nova-os-model.test.ts` **(novo)** | 8 testes (totais brinde/interno, desconto, validação, garantia) |
+| Modal | `components/operacoes-v3/components/NovaOSEnterpriseModalV3.tsx` **(novo)** | Stepper 8 passos, busca/cadastro de cliente, padrão 3×3, itens, totais ao vivo, resumo |
+| Contexto/Shell | `context/OperacoesV3Context.tsx` · `OperacoesV3Shell.tsx` | `abrirNovaOS` + render do modal + botão "Nova OS" no header |
+| Botões | `pages/DashboardV3.tsx` · `pages/FilaOSV3.tsx` · `pages/AtendimentoRapidoV3.tsx` · `pages/OSWorkspaceV3.tsx` | CTA "Nova OS" em cada tela; Atendimento rápido sinalizado como simplificado |
+
+**Separação Nova OS × PDV de Serviço (item 5):** o modal **não** recebe pagamento — exibe explicitamente
+*"Pagamento previsto salvo. Recebimento real será feito no PDV de Serviço."* O PDV de Serviço (receber
+PIX/dinheiro/cartão, parcial/sinal, quitar, lançar no caixa, aparecer no fechamento) fica para fase
+posterior.
+
+**Impressão (item 6):** **não** implementada agora; os dados salvos (`payload.aberturaV3` + cliente/
+equipamento/itens/garantia) já permitem gerar a OS impressa depois.
+
+**⚠️ Limitações conscientes (escopo):** (a) **não baixa estoque** (flag `baixaEstoqueV3` só registrada);
+(b) **não cria Conta a Receber** nem recebe pagamento (só previsão em `payload`); (c) o **desconto** do
+orçamento inicial fica em `payload.aberturaV3` (a geração do orçamento real, Fase 1C, recomputa a partir
+dos itens — reaplicar desconto ao editar o orçamento); (d) `createOS` soma no `valorTotal` apenas
+`servicosCatalogo.valorVenda` (peças entram quando o orçamento é gerado) — comportamento pré-existente do
+V2, não alterado.
+
+**Validação:** `npx tsc --noEmit` ✅ (0 erros) · `npm run build` ✅ (webpack; 1º run abortou no flake do
+worker Windows em "Collecting page data", **passou no retry** — compilação limpa em ambos) · `vitest`
+**+8** (modelo Nova OS, 8/8). **Não commitado.**
+
+**Não alterado:** schema Prisma, migrations, auth/proxy, **Operações V2** e write-paths do HUB, `@/types/os`,
+**PDV** (vendas), **Financeiro HUB**, **WhatsApp**, **Fiscal**, **Marketplace**, **BL-07**.
 
 ---
 
