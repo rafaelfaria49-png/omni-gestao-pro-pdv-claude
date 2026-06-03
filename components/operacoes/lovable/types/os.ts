@@ -101,6 +101,9 @@ export interface Orcamento {
   servicos: Servico[];
   desconto: number;
   total: number;
+  /** Marca um orçamento derivado automaticamente dos itens da OS (prévia somente-leitura),
+   *  ainda não materializado como rascunho editável. Ver hydration-service / gerarOrcamentoDaOS. */
+  sintetizado?: boolean;
   criadoEm: string;
   atualizadoEm?: string;
   enviadoEm?: string;

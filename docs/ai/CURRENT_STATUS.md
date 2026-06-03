@@ -1,7 +1,43 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 02 Jun 2026 — **Operações HUB · read layer da OS conectado**: o orçamento sintetizado passa a incluir **peças** (Kanban/Painel/Histórico/Detalhe deixam de mostrar R$ 0,00), "receita estimada" = pipeline não-cancelado, e `OSDetalhe` ganha seção de **peças** + **custo interno/lucro**. Mesmo dia (antes): **Nova OS operacional** (cria OS de verdade + cliente/serviços/peças/financeiro). `tsc`/`build` ✅. Estrutural pendente: **BL-07 Fase 2** (DT-17 aberto até lá).
+> Última atualização: 02 Jun 2026 — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Operações HUB — Sprint OS-P0.1 · PASSO 1: Nova OS → orçamento real (02/06/2026)
+
+**Contexto:** baseado na auditoria forense + Diagrama de Remediação aprovado. O PASSO 1 religa a
+**fratura intake → orçamento**: a Nova OS gravava `servicosCatalogo`/`pecas` mas **nenhum orçamento**;
+a hidratação sintetizava um orçamento "aprovado" **read-only**, travando desconto/edição/envio/aprovação.
+
+**O que foi feito (variante de menor risco — "Gerar orçamento da OS"):**
+- Síntese da hidratação marcada com `Orcamento.sintetizado: true` (é prévia, não orçamento real).
+- `OrcamentoPanel` mostra CTA **"Gerar orçamento da OS"** → `gerarOrcamentoDaOS` materializa um
+  orçamento **rascunho editável** a partir dos itens da OS → destrava **desconto/edição/enviar/aprovar**.
+- **Fonte única de peças** no consumo de estoque (`selectEstoquePecaSource`): orçamento quando tiver
+  peças, senão `payload.pecas` — **resolve a dupla baixa** (antes as duas fontes eram somadas por `produtoId`).
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/operacoes/services/orcamento-builder.ts` **(novo, puro)** | `buildOrcamentoRascunhoFromOS` + `selectEstoquePecaSource` |
+| `lib/operacoes/services/orcamento-builder.test.ts` **(novo)** | 8 testes (build + fonte única + brinde R$0) |
+| `components/operacoes/lovable/types/os.ts` | `Orcamento.sintetizado?` (aditivo) |
+| `lib/operacoes/services/hydration-service.ts` | marca síntese `sintetizado: true` |
+| `lib/operacoes/adapters/os-estoque.ts` | `listCandidatePecas` → fonte única |
+| `components/operacoes/lovable/api/os.ts` | `gerarOrcamentoDaOS` (rascunho via `updateOSPayload`) |
+| `components/operacoes/lovable/store/osStore.tsx` | expõe `gerarOrcamentoDaOS` |
+| `.../components/operacoes/OrcamentoPanel.tsx` | CTA "Gerar orçamento da OS" + guard de `draft` |
+
+**Decisões de menor risco:** orçamento criado como `rascunho` → **não dispara Contas a Receber**
+(financeiro intocado); **não** chama `syncOperacaoItensComOrcamento` (evita `ordem_servico_item` cedo);
+`gerarOrcamentoDaOS` idempotente (não sobrescreve orçamento real). **Garantia intocada.**
+
+**Validação:** `npx tsc --noEmit` ✅ · `vitest` **8/8** (`orcamento-builder`) · `npm run build` ✅ (97 rotas).
+
+**Pendente:** **PASSO 2** — unificar action bar × Kanban drag (numa OS ainda não materializada,
+"Enviar/Aprovar orçamento" da action bar ainda estoura; caminho correto = **Gerar orçamento** primeiro).
+**PASSO 3** — forma de pagamento + desconto no fechamento de balcão.
 
 ---
 

@@ -75,6 +75,8 @@ interface OSContextValue {
   approveOrcamento: (osId: string, autor?: string) => void;
   rejectOrcamento: (osId: string, motivo?: string, autor?: string) => void;
   criarOrcamentoRascunho: (osId: string, autor?: string) => void;
+  /** Materializa um orçamento rascunho editável a partir dos itens da OS (PASSO 1). */
+  gerarOrcamentoDaOS: (osId: string, autor?: string) => Promise<OrdemServico>;
   salvarOrcamento: (osId: string, orcamento: Orcamento, evento: SalvarOrcamentoEvento, autor?: string) => void;
   enviarOrcamentoAoCliente: (osId: string, autor?: string) => void;
   addEvento: (osId: string, conteudo: string, tipo?: EventoTipo, autor?: string) => void;
@@ -216,6 +218,11 @@ export function OSProvider({ children, initialStoreId }: { children: ReactNode; 
       },
       criarOrcamentoRascunho: (osId, autor = DEFAULT_AUTOR) => {
         void osApi.criarOrcamentoRascunho(storeId, osId, autor).then(replaceOS);
+      },
+      gerarOrcamentoDaOS: async (osId, autor = DEFAULT_AUTOR) => {
+        const updated = await osApi.gerarOrcamentoDaOS(storeId, osId, autor);
+        replaceOS(updated);
+        return updated;
       },
       salvarOrcamento: (osId, orcamento, evento, autor = DEFAULT_AUTOR) => {
         void osApi.salvarOrcamento(storeId, osId, orcamento, autor, evento).then(replaceOS);

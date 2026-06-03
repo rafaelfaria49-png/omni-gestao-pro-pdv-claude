@@ -125,6 +125,9 @@ function mergeOrcamentoFromPrismaRow(r: PrismaOSRow, m: OrdemServico): Orcamento
     desconto: typeof baseOrc.desconto === "number" ? baseOrc.desconto : 0,
     total,
     atualizadoEm: m.atualizadoEm,
+    // Prévia derivada dos itens da OS — o painel oferece "Gerar orçamento" para materializar
+    // um rascunho editável (PASSO 1). NÃO é um orçamento real persistido no payload.
+    sintetizado: true,
   };
 }
 

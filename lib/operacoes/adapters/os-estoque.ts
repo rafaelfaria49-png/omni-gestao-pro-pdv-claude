@@ -2,6 +2,7 @@ import type { Prisma } from "@/generated/prisma";
 import type { OrdemServico, Orcamento, PecaUsada, EventoTimeline } from "@/types/os";
 import { prisma } from "@/lib/prisma";
 import { nowIso } from "@/lib/operacoes/services/os-helpers";
+import { selectEstoquePecaSource } from "@/lib/operacoes/services/orcamento-builder";
 
 export type EstoqueMovimentoPayload = {
   id: string;
@@ -62,10 +63,9 @@ function listCandidatePecas(os: Partial<OrdemServico>): { source: EstoqueBuildIt
   const direct = Array.isArray((os as { pecas?: unknown }).pecas) ? ((os as { pecas?: unknown }).pecas as PecaUsada[]) : [];
   const orc: Orcamento | undefined = isRecord((os as { orcamento?: unknown }).orcamento) ? ((os as { orcamento?: unknown }).orcamento as Orcamento) : undefined;
   const orcPecas = Array.isArray((orc as { pecas?: unknown } | undefined)?.pecas) ? ((orc as { pecas?: unknown }).pecas as PecaUsada[]) : [];
-  return [
-    { source: "payload.pecas", rows: direct },
-    { source: "payload.orcamento.pecas", rows: orcPecas },
-  ];
+  // Fonte ÚNICA de peças (anti dupla-baixa): o orçamento é autoritativo quando tem peças
+  // (pode ter sido editado); senão usa payload.pecas. Antes, ambas eram somadas por produtoId.
+  return [selectEstoquePecaSource(direct, orcPecas)];
 }
 
 async function resolveProdutoId(params: { storeId: string; peca: PecaUsada }): Promise<{ produtoId: string; nome: string; precoUnitario?: number } | null> {

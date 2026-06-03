@@ -42,6 +42,7 @@ import { listTecnicos as listTecnicosCadastros } from "@/app/actions/cadastros";
 import { normalizeOperacaoStatus } from "@/components/operacoes/lovable/utils/os-status";
 import { normalizePecaUsada, normalizePecasUsadas } from "@/components/operacoes/lovable/utils/pecas-normalization";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
+import { buildOrcamentoRascunhoFromOS } from "@/lib/operacoes/services/orcamento-builder";
 
 function requireStoreId(storeId: string): string {
   assertActiveStoreId(storeId, "Operações HUB");
@@ -168,6 +169,33 @@ export async function criarOrcamentoRascunho(storeId: string, osId: string, auto
     timeline,
   } as Partial<OrdemServico>);
   await syncOperacaoItensComOrcamento(sid, osId);
+  return patched as unknown as OrdemServico;
+}
+
+/**
+ * PASSO 1 — Materializa um orçamento RASCUNHO editável a partir dos itens já gravados pela
+ * Nova OS (`servicosCatalogo` + `pecas`), substituindo a prévia sintetizada (read-only).
+ * Destrava edição/desconto/envio/aprovação. NÃO mexe em faturamento (rascunho) nem em estoque.
+ * Idempotente: não sobrescreve um orçamento real (não sintetizado) já existente.
+ */
+export async function gerarOrcamentoDaOS(storeId: string, osId: string, autor = "Você"): Promise<OrdemServico> {
+  const sid = requireStoreId(storeId);
+  const rows = await listOS(sid);
+  const current = rows.find((o) => o.id === osId);
+  if (!current) throw new Error("OS não encontrada");
+
+  const orcAtual = (current as { orcamento?: Orcamento }).orcamento;
+  if (orcAtual && orcAtual.sintetizado !== true) {
+    // Já existe orçamento real persistido — não recriar.
+    return current as unknown as OrdemServico;
+  }
+
+  const orcamento = buildOrcamentoRascunhoFromOS(current as unknown as OrdemServico, { uid, nowIso });
+  const timeline = [
+    ...readTimeline((current as { timeline?: unknown }).timeline),
+    newEvent("orcamento_criado", autor, "usuario", "Orçamento gerado a partir dos itens da OS (rascunho editável)."),
+  ];
+  const patched = await updateOSPayload(sid, osId, { orcamento, timeline } as Partial<OrdemServico>);
   return patched as unknown as OrdemServico;
 }
 

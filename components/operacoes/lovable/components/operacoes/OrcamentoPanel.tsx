@@ -46,6 +46,7 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
     servicosCatalogo,
     produtosCatalogo,
     criarOrcamentoRascunho,
+    gerarOrcamentoDaOS,
     salvarOrcamento,
     enviarOrcamentoAoCliente,
     approveOrcamento,
@@ -53,12 +54,28 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
     validateOrcamentoEstoque,
   } = useOS();
 
-  const [draft, setDraft] = useState<Orcamento | null>(() => (os.orcamento ? cloneOrcamento(os.orcamento) : null));
+  // Prévia sintetizada (derivada dos itens da OS) NÃO vira draft editável — exige materializar.
+  const [draft, setDraft] = useState<Orcamento | null>(() =>
+    os.orcamento && !os.orcamento.sintetizado ? cloneOrcamento(os.orcamento) : null,
+  );
   const [pickServico, setPickServico] = useState("");
   const [pickProduto, setPickProduto] = useState("");
+  const [gerando, setGerando] = useState(false);
+
+  const handleGerarOrcamento = async () => {
+    setGerando(true);
+    try {
+      await gerarOrcamentoDaOS(os.id, DEFAULT_AUTOR);
+      toast.success("Orçamento gerado a partir dos itens da OS");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível gerar o orçamento");
+    } finally {
+      setGerando(false);
+    }
+  };
 
   useEffect(() => {
-    setDraft(os.orcamento ? cloneOrcamento(os.orcamento) : null);
+    setDraft(os.orcamento && !os.orcamento.sintetizado ? cloneOrcamento(os.orcamento) : null);
   }, [os.id, os.atualizadoEm, os.orcamento]);
 
   const servicosAtivos = useMemo(() => servicosCatalogo.filter((s) => s.ativo), [servicosCatalogo]);
@@ -85,15 +102,35 @@ export function OrcamentoPanel({ os }: { os: OrdemServico }) {
     return oEffective.servicos.reduce((s, x) => s + Math.max(0, x.valor - (x.desconto ?? 0)), 0);
   }, [oEffective]);
 
-  if (!os.orcamento && !draft) {
+  if ((!os.orcamento || os.orcamento.sintetizado) && !draft) {
+    const isSintetizado = !!os.orcamento?.sintetizado;
+    const previaTotal = os.orcamento?.total ?? 0;
     return (
       <div className="rounded-xl border border-dashed border-border p-6 text-center">
         <FileText className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-        <div className="text-sm font-medium">Nenhum orçamento criado</div>
-        <p className="mt-1 text-xs text-muted-foreground">Adicione peças e serviços para gerar um orçamento.</p>
-        <Button className="mt-4" size="sm" onClick={() => criarOrcamentoRascunho(os.id, DEFAULT_AUTOR)}>
-          Criar orçamento
-        </Button>
+        <div className="text-sm font-medium">
+          {isSintetizado ? "Orçamento ainda não materializado" : "Nenhum orçamento criado"}
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {isSintetizado
+            ? `Prévia dos itens da OS: ${brl(previaTotal)}. Gere o orçamento para editar valores, aplicar desconto e enviar/aprovar.`
+            : "Adicione peças e serviços para gerar um orçamento."}
+        </p>
+        <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
+          {isSintetizado && (
+            <Button size="sm" disabled={gerando} onClick={() => void handleGerarOrcamento()}>
+              {gerando ? "Gerando…" : "Gerar orçamento da OS"}
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant={isSintetizado ? "outline" : "default"}
+            disabled={gerando}
+            onClick={() => criarOrcamentoRascunho(os.id, DEFAULT_AUTOR)}
+          >
+            Criar em branco
+          </Button>
+        </div>
       </div>
     );
   }
