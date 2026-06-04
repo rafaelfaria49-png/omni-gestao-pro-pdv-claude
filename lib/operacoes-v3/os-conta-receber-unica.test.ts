@@ -15,6 +15,7 @@ const h = vi.hoisted(() => {
   const titulos = new Map<string, Row>();
   const byId = new Map<string, Row>();
   const ordens = new Map<string, any>();
+  const caixaOps: any[] = [];
   let seq = 0;
   let caixaAberta = true;
 
@@ -100,7 +101,11 @@ const h = vi.hoisted(() => {
       findFirst: async () => (caixaAberta ? { id: "sess-1", operador: "Tester", abertaEm: new Date() } : null),
     },
     caixaOperacao: {
-      create: async () => ({ id: `op-${++seq}` }),
+      create: async ({ data }: any) => {
+        const row = { id: `op-${++seq}`, ...data };
+        caixaOps.push(row);
+        return row;
+      },
     },
   };
 
@@ -108,6 +113,7 @@ const h = vi.hoisted(() => {
     prisma,
     titulos,
     ordens,
+    caixaOps,
     setCaixa: (v: boolean) => {
       caixaAberta = v;
     },
@@ -115,6 +121,7 @@ const h = vi.hoisted(() => {
       titulos.clear();
       byId.clear();
       ordens.clear();
+      caixaOps.length = 0;
       seq = 0;
       caixaAberta = true;
     },
@@ -133,7 +140,7 @@ vi.mock("@/lib/financeiro/services/movimentacoes-service", () => ({
   createMovimentacaoEntradaFromReceber: vi.fn(async () => ({})),
 }));
 
-import { receberOSV3, lerPagamentoOSV3 } from "./pdv-servico-actions";
+import { receberOSV3, lerPagamentoOSV3, estornarRecebimentoOSV3 } from "./pdv-servico-actions";
 import { aplicarTransicaoStatusV3 } from "./status-actions";
 import { localKeyContaReceberOSV3 } from "./payment-model";
 import { upsertContaReceberFromOS } from "@/lib/financeiro/adapters/os-faturamento";
@@ -279,5 +286,88 @@ describe("Correção 2A.1 — chave única: nunca duas Contas a Receber por OS",
     await receberOSV3(STORE, OS, { valor: 200, forma: dinheiro, sessaoId: "sess-1" });
     await upsertContaReceberFromOS(faturamentoV2(480));
     for (const k of h.titulos.keys()) expect(k).not.toContain("receber:os:");
+  });
+});
+
+describe("Fase 2B — split, intenção, estorno", () => {
+  function caixaRec(tipo: string) {
+    return h.caixaOps.filter((o) => o.tipo === tipo);
+  }
+
+  it("split: soma das formas baixa o saldo e cria 1 operação de caixa POR FORMA", async () => {
+    seedOS(480);
+    const res = await receberOSV3(STORE, OS, {
+      linhas: [
+        { forma: "pix", valor: 100 },
+        { forma: "dinheiro", valor: 50 },
+        { forma: "credito", valor: 200 },
+      ],
+      sessaoId: "sess-1",
+      intencao: "entrada",
+    });
+    expect(res.op).toBe("parcial");
+    expect(res.pagamento).toMatchObject({ total: 480, recebido: 350, saldo: 130, status: "parcial" });
+    expect(h.titulos.size).toBe(1);
+    // uma operação de caixa por forma (fechamento separa por forma)
+    const ops = caixaRec("recebimento_cr");
+    expect(ops).toHaveLength(3);
+    expect(ops.map((o: any) => o.payload.formaPagamento).sort()).toEqual(["credito", "dinheiro", "pix"]);
+    expect(ops.reduce((s: number, o: any) => s + o.valor, 0)).toBe(350);
+    // comprovante reflete o split
+    expect(res.recibo.formas).toHaveLength(3);
+    expect(res.recibo.valorPago).toBe(350);
+    expect(res.recibo.intencaoLabel).toBe("Entrada");
+  });
+
+  it("split que cobre o saldo é registrado como Quitação", async () => {
+    seedOS(480);
+    const res = await receberOSV3(STORE, OS, {
+      linhas: [
+        { forma: "pix", valor: 280 },
+        { forma: "dinheiro", valor: 200 },
+      ],
+      sessaoId: "sess-1",
+      intencao: "parcial",
+    });
+    expect(res.op).toBe("liquidar");
+    expect(res.pagamento.status).toBe("quitado");
+    expect(res.recibo.intencaoLabel).toBe("Quitação");
+  });
+
+  it("split acima do saldo é rejeitado (não recebe mais que o saldo)", async () => {
+    seedOS(480);
+    await expect(
+      receberOSV3(STORE, OS, {
+        linhas: [
+          { forma: "pix", valor: 300 },
+          { forma: "dinheiro", valor: 300 },
+        ],
+        sessaoId: "sess-1",
+      }),
+    ).rejects.toThrow();
+    // nada recebido
+    const lido = await lerPagamentoOSV3(STORE, OS);
+    expect(lido.recebido).toBe(0);
+  });
+
+  it("estorno auditado reverte o último recebimento e registra operação de caixa", async () => {
+    seedOS(480);
+    await receberOSV3(STORE, OS, { valor: 200, forma: dinheiro, sessaoId: "sess-1" });
+    let lido = await lerPagamentoOSV3(STORE, OS);
+    expect(lido.recebido).toBe(200);
+
+    const res = await estornarRecebimentoOSV3(STORE, OS, { sessaoId: "sess-1", motivo: "Correção" });
+    expect(res.estornado).toBe(200);
+    expect(res.pagamento).toMatchObject({ recebido: 0, saldo: 480, status: "aberto" });
+    expect(h.titulos.size).toBe(1); // sem duplicar título
+    expect(caixaRec("estorno_recebimento_cr")).toHaveLength(1);
+
+    lido = await lerPagamentoOSV3(STORE, OS);
+    expect(lido.recebido).toBe(0);
+  });
+
+  it("estorno sem recebimento prévio é rejeitado", async () => {
+    seedOS(480);
+    await expect(estornarRecebimentoOSV3(STORE, OS, { sessaoId: "sess-1" })).rejects.toThrow();
   });
 });

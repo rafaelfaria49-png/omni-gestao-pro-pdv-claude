@@ -144,6 +144,42 @@ export function validarSplitV3(linhas: SplitLinhaV3[], saldo: number): Recebimen
   return validarRecebimentoV3(somaSplitV3(linhasValidas), saldo);
 }
 
+/** Descrição humana do split: "PIX R$ 100,00 + Dinheiro R$ 50,00 + Crédito R$ 200,00". */
+export function descreverSplitV3(linhas: SplitLinhaV3[]): string {
+  return (Array.isArray(linhas) ? linhas : [])
+    .filter((l) => money(l.valor) > EPS)
+    .map((l) => `${formaLabelRecebimentoV3(l.forma)} R$ ${money(l.valor).toFixed(2).replace(".", ",")}`)
+    .join(" + ");
+}
+
+// ----------------------------------------------------------------------------
+// Fase 2B — Intenção do recebimento (rótulo na timeline/comprovante)
+// ----------------------------------------------------------------------------
+// Todos usam o MESMO motor de recebimento; "intenção" é só o rótulo operacional.
+// "quitacao" é DERIVADA (quando o recebimento zera o saldo), não escolhida.
+
+export type RecebimentoIntencaoV3 = "sinal" | "entrada" | "parcial" | "quitacao";
+
+/** Rótulos selecionáveis no PDV (quitação é automática quando zera o saldo). */
+export const INTENCOES_RECEBIMENTO_V3: { value: RecebimentoIntencaoV3; label: string }[] = [
+  { value: "sinal", label: "Sinal" },
+  { value: "entrada", label: "Entrada" },
+  { value: "parcial", label: "Pagamento parcial" },
+];
+
+const INTENCAO_LABEL_V3: Record<RecebimentoIntencaoV3, string> = {
+  sinal: "Sinal",
+  entrada: "Entrada",
+  parcial: "Pagamento parcial",
+  quitacao: "Quitação",
+};
+
+/** Rótulo efetivo: se o recebimento quitou, é sempre "Quitação"; senão usa a intenção escolhida. */
+export function rotuloIntencaoV3(intencao: RecebimentoIntencaoV3 | undefined, quitou: boolean): string {
+  if (quitou) return INTENCAO_LABEL_V3.quitacao;
+  return INTENCAO_LABEL_V3[intencao ?? "parcial"];
+}
+
 // ----------------------------------------------------------------------------
 // Correção 2A.1 — CHAVE ÚNICA da Conta a Receber da OS
 // ----------------------------------------------------------------------------
@@ -173,5 +209,69 @@ export function montarPagamentoMirrorV3(input: {
     atualizadoEm: input.now ?? new Date().toISOString(),
     ultimaForma: input.ultimaForma,
     tituloLocalKey: input.tituloLocalKey,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Fase 2B — Comprovante de recebimento (modelo puro p/ impressão simples)
+// ----------------------------------------------------------------------------
+// NÃO é a impressão da OS (essa fica intacta). É um recibo do recebimento real.
+
+export interface ComprovanteFormaV3 {
+  forma: string;
+  label: string;
+  valor: number;
+}
+
+export interface ComprovanteReciboV3 {
+  numeroOS: string;
+  cliente: string;
+  equipamento: string;
+  formas: ComprovanteFormaV3[];
+  intencaoLabel: string;
+  valorPago: number;
+  totalOS: number;
+  recebidoAcumulado: number;
+  saldoRestante: number;
+  statusPagamento: PagamentoStatusV3;
+  statusLabel: string;
+  dataHora: string;
+  operador: string;
+  observacao?: string;
+}
+
+/** Monta o comprovante a partir da OS + linhas + estado de pagamento (após o recebimento). */
+export function montarComprovanteReciboV3(input: {
+  os: OrdemServico;
+  linhas: SplitLinhaV3[];
+  valorPago: number;
+  pagamento: PagamentoV3;
+  intencaoLabel: string;
+  operador: string;
+  dataHora: string;
+  observacao?: string;
+}): ComprovanteReciboV3 {
+  const { os, linhas, valorPago, pagamento, intencaoLabel, operador, dataHora, observacao } = input;
+  const equipamento =
+    [os.equipamento?.marca, os.equipamento?.modelo].filter(Boolean).join(" ").trim() ||
+    os.equipamento?.tipo ||
+    "—";
+  return {
+    numeroOS: os.codigo ?? os.id ?? "—",
+    cliente: os.cliente?.nome ?? "—",
+    equipamento,
+    formas: (Array.isArray(linhas) ? linhas : [])
+      .filter((l) => money(l.valor) > EPS)
+      .map((l) => ({ forma: l.forma, label: formaLabelRecebimentoV3(l.forma), valor: money(l.valor) })),
+    intencaoLabel,
+    valorPago: money(valorPago),
+    totalOS: money(pagamento.total),
+    recebidoAcumulado: money(pagamento.recebido),
+    saldoRestante: money(pagamento.saldo),
+    statusPagamento: pagamento.status,
+    statusLabel: PAGAMENTO_STATUS_META_V3[pagamento.status].label,
+    dataHora,
+    operador,
+    observacao: observacao?.trim() || undefined,
   };
 }
