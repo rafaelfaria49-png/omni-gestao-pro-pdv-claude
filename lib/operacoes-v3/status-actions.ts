@@ -12,8 +12,12 @@
 //   • entregue → consumo de estoque + criação de garantia + evento Omni Agent
 //   • cancelada/reabertura → restauração de estoque
 //   • qualquer patch → sync de Financeiro (Conta a Receber)
-// Aqui é status + timeline, nada mais. Estoque/Financeiro/Garantia entram em
-// fase posterior (1C/2). Não toca schema, V2, PDV, WhatsApp, Marketplace, BL-07.
+// Aqui é status + timeline. EXCEÇÃO (Correção 2A.1): ao CANCELAR, faz um
+// best-effort de cancelar a Conta a Receber ÚNICA da OS (mesma chave do PDV de
+// Serviço / adapter V2) para não deixar título órfão — não materializa nada novo,
+// não toca estoque/garantia, não bloqueia a transição se o financeiro falhar.
+// Estoque/Garantia entram em fase posterior (1C/2). Não toca schema, V2, PDV,
+// WhatsApp, Marketplace, BL-07.
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
@@ -24,6 +28,8 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
+import { cancelContaReceber } from "@/lib/financeiro/services/contas-receber-service";
+import { localKeyContaReceberOSV3 } from "./payment-model";
 import { operacaoStatusToPrismaStatus } from "@/components/operacoes/lovable/utils/os-status";
 import {
   type OperacaoStatusV3,
@@ -112,6 +118,23 @@ export async function aplicarTransicaoStatusV3(
       payload: nextPayload as unknown as Prisma.InputJsonValue,
     },
   });
+
+  // Correção 2A.1 — proteção de cancelamento: cancela a Conta a Receber ÚNICA da OS
+  // (mesma chave do PDV de Serviço / adapter V2) para não deixar título órfão em
+  // aberto. Best-effort e idempotente: título inexistente é no-op; título já pago/
+  // estornado é preservado pelo próprio serviço. Falha financeira NÃO desfaz o status.
+  if (to === "cancelada") {
+    try {
+      await cancelContaReceber({
+        storeId: sid,
+        localKey: localKeyContaReceberOSV3(sid, id),
+        motivo: "OS cancelada (Operações V3).",
+        userLabel: operadorLabel(session),
+      });
+    } catch (e) {
+      console.error("[aplicarTransicaoStatusV3 cancelCR]", e);
+    }
+  }
 
   revalidatePath("/dashboard/operacoes-v3");
   return nextPayload as unknown as OrdemServico;

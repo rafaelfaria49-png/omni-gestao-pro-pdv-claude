@@ -1,7 +1,134 @@
 # OmniGestão Pro — Estado Atual do Projeto
 
-> Última atualização: 03 Jun 2026 — **Operações V3 · Fase 1D (Impressão Enterprise da OS)**: o botão **Imprimir** do OS Workspace agora gera um **documento profissional A4** da OS pronto para entregar/imprimir/salvar em PDF — modelo **híbrido** (completo como Gestão Click, limpo como Smart System). Preview num **modal portado ao `body`** (sem rota nova, sem sidebar/topo do app no papel) com CSS `@media print` que imprime só o documento. Conteúdo: cabeçalho com **logo + dados da empresa** (da unidade ativa, fallback honesto centralizado), nº/status/datas, cliente, equipamento + **senha padrão 3×3 visual**, acessórios, condição, defeito, **checklist** compacto, **diagnóstico/solução**, **tabela de itens** (serviço/peça/brinde) com **item interno e custo SEMPRE ocultos do cliente**, resumo financeiro **previsto** (sem recebimento real), **termo de garantia** gerado por modelo (helper `garantia-textos.ts`, oxidação/sem-garantia deixam claro que não há cobertura) e **assinaturas** cliente/técnico. Helpers puros: `lib/operacoes-v3/print-model.ts` + `garantia-textos.ts`. Estrutura preparada para futuras vias (interna/etiqueta/termo). `tsc` ✅ (0 erros) · `vitest lib/operacoes-v3` ✅ **55 passed** (+15 do modelo de impressão/garantia) · `build` **compila limpo**, geração estática aborta no flake de worker/memória do Windows (mesmas fases anteriores) — ambiental. **Aguardando revisão** (sem commit). Anterior — **OS Workspace Enterprise (prontuário do equipamento)**: o Workspace virou o **centro operacional** da assistência — ao abrir uma OS, técnico/atendente operam quase tudo numa tela só. Novidades: **cabeçalho rico** (nº, status, cliente, marca/modelo, IMEI/série, entrada, previsão, técnico + ações rápidas Editar/Imprimir/Anexos/Garantia/Histórico que rolam para as âncoras); **linha do tempo operacional** de 8 etapas (criada→recebida→diagnóstico→orçamento→aprovada→em reparo→pronta→entregue) derivada do status + eventos reais (**nunca inventa data**); **checklist de entrada** editável (13 itens, 3 estados) **persistido**; bloco **Senha & acessórios** editável (numérica/texto/**padrão 3×3**) **persistido**; **diagnóstico técnico** (inicial/final/causa/solução) **persistido**; **serviços executados** (read-only, **nunca mostra custo interno**); **fotos & anexos** (estrutura MVP antes/depois); **garantia da OS** (situação ativa/prevista/expirada, preparada p/ impressão); **histórico completo** auditável. Persistência **side-effect-free** em `payload` (JSONB: `checklist`, `senhaEquipamento`/`Tipo`, `equipamento.acessorios`, `diagnosticoV3`) — **sem tocar schema, Financeiro, estoque, WhatsApp, V2**. Recebimento/caixa/financeiro/portal/BI **fora de escopo** desta fase. `tsc` ✅ (0 erros) · `vitest` **+13 (modelo workspace) → 40 da V3** · `build` **compila limpo**, mas a **geração estática** aborta no flake de memória do Windows (`VirtualAlloc failed`, worker 0xC0000409) — ambiental, mesma falha das fases anteriores, não vem deste código (rota dinâmica). **Aguardando revisão** (sem commit). Anterior — **Nova OS Enterprise + separação OS × PDV de Serviço**: novo botão primário **"Nova OS"** em 5 pontos (topo do módulo, Dashboard, Fila, Atendimento rápido e Workspace sem OS) que abre o **modal "Nova OS Enterprise"** — fluxo **completo** de abertura no balcão, em 8 passos (Cliente · Equipamento · Recepção · Problema/Diagnóstico · Itens · Pagamento · Garantia · Resumo), com cadastro/seleção de cliente real, equipamento+senha (inclui **padrão 3×3**), acessórios, recepção (origem/prioridade/local físico/previsão), itens **cobrado/brinde/interno** com custo interno × valor ao cliente × lucro, **pagamento apenas PREVISTO** (não recebe, não cria Conta a Receber, não mexe no caixa — recebimento real fica no **PDV de Serviço**) e **garantia prevista**. Cria a OS **de verdade** pelo caminho seguro (`criarOS`/`criarCliente`); extras viajam no `payload` (JSONB, sem schema). A OS nasce em **ABERTA** e aparece na hora em Fila/Dashboard/Workspace. **Atendimento rápido** foi rotulado como check-in **simplificado** e aponta para a Nova OS Enterprise. **Sem** baixa de estoque nesta fase. `tsc` ✅ · `build` ✅ · `vitest` **+8 (modelo Nova OS)**. **Aguardando revisão** (sem commit). Anterior — **Fase 1C (orçamento cidadão de 1ª classe)**: o orçamento virou a **área principal** do Workspace V3 — painel editável real com **serviços, peças e brindes** (item cobrado/brinde/interno), **subtotal/desconto/total**, **custo interno · valor ao cliente · lucro estimado** (somente leitura), **estados** (rascunho/enviado/aprovado/recusado/expirado) com badge, **histórico de versões**, e ações reais **Salvar/Enviar/Aprovar/Recusar** — tudo **sem Financeiro/Conta a Receber/estoque/WhatsApp**. Aprovar avança a **máquina de status** da OS (1B); aprovado mostra **"ORÇAMENTO APROVADO" + "Iniciar serviço"**. Dashboard ganhou métricas reais de orçamento (rascunho/enviados/aprovados/recusados). Campos extras (brinde/custo de serviço/versões) vivem no `payload` (JSONB) — **sem tocar schema nem `@/types/os`**. `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **306 passed | 2 expected fail** (+8 do modelo). **Aguardando revisão** (sem commit). Anterior — **Fase 1B (máquina única de status)**: criada UMA fonte de verdade para o fluxo da OS (`lib/operacoes-v3/status-machine.ts`, pura) com os **10 status oficiais** (inclui **RECEBIDA**) e o grafo exato do blueprint. **Kanban (arrastar), Workspace e Action Bar** passam a alterar status pela **mesma engine**, via **um único write-path** (`status-actions.ts`) que grava **status + timeline apenas** — sem estoque/financeiro/garantia (sem schema, V2 intacta). Transições inválidas bloqueadas com mensagem amigável; RECEBIDA persiste em `payload.operacaoStatusV3` (JSONB). `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **298 passed | 2 expected fail** (11 novos da máquina). **Aguardando revisão** (sem commit). Anterior — **Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
+> Última atualização: 04 Jun 2026 — **Operações V3 · Correção 2A.1 (Conta a Receber única por OS)**: eliminada a possibilidade de **duas Contas a Receber para a mesma OS**. V2 (adapter `os-faturamento.ts`) e V3 (PDV de Serviço) passam a usar **UMA única `localKey` por OS** (`os-faturamento:{storeId}:{osId}`, via contrato `buildContaReceberLocalKey`); como `ContaReceberTitulo` é `@@unique(storeId, localKey)`, o banco garante **um título por OS**. `resolverTituloOS` **reaproveita** o título existente (criado pela V2 **ou** por recebimento V3 anterior) e **não cria mais `receber:os:*`**; cancelar a OS na V3 faz **best-effort** de cancelar o título único (sem órfão). Sem migration/schema, sem tocar Financeiro HUB/PDV/V2. `tsc` ✅ · `vitest` ✅ **366 passed | 2 expected fail** (+8 de chave única: V2→V3, V3→V2, parcial, total, cancelamento, round-trip) · `build` ✅ (98 rotas). **Não commitado.** Anterior — **Fase 2A (PDV de Serviço Real)**: o **PDV de Serviço** recebe pagamento de OS de verdade reusando Conta a Receber + Caixa (caixa aberto + período não fechado; baixa total/parcial; `caixaOperacao recebimento_cr` entra no fechamento; espelho `payload.pagamentoV3` + timeline; status de pagamento em Header/Fila/Workspace; formas dinheiro/PIX/débito/crédito, demais "a conectar"). `tsc` ✅ · `vitest` ✅ · `build` ✅. **Não commitado.** Anterior — **Operações V3 · Fase 1E (Garantias Profissionais + Documentos Operacionais)**: a camada documental virou cidadã de 1ª classe. **Biblioteca de garantias** centralizada (`garantia-textos.ts`) com 11 modelos (inclui **Placa**), cada um com título, **prazo padrão**, cobertura, exclusões e observações; **sugestão automática** do modelo a partir do serviço (troca de tela→garantia de tela, etc.). **4 documentos** imprimíveis (`documentos.ts` + preview multi-tipo): **OS via cliente** (1D), **Termo de Garantia** dedicado, **Via Interna** (custo/lucro/observações internas — **nunca ao cliente**) e **Etiqueta técnica** (estrutura inicial). Workspace ganhou **aba Garantia** editável (escolher modelo/prazo + aplicar sugestão + salvar → timeline `garantia_gerada`/alterada) e botões **Imprimir OS / Imprimir Garantia / Via Interna / Etiqueta**; impressão registra `documento_impresso` (auditável). Tudo **side-effect-free** no `payload` — sem schema/Financeiro/caixa/V2. `tsc` ✅ (0 erros) · `vitest lib/operacoes-v3` ✅ **61 passed** (+6 de garantias/documentos). **Aguardando revisão** (sem commit). Anterior — **Fase 1D (Impressão Enterprise da OS)**: o botão **Imprimir** do OS Workspace agora gera um **documento profissional A4** da OS pronto para entregar/imprimir/salvar em PDF — modelo **híbrido** (completo como Gestão Click, limpo como Smart System). Preview num **modal portado ao `body`** (sem rota nova, sem sidebar/topo do app no papel) com CSS `@media print` que imprime só o documento. Conteúdo: cabeçalho com **logo + dados da empresa** (da unidade ativa, fallback honesto centralizado), nº/status/datas, cliente, equipamento + **senha padrão 3×3 visual**, acessórios, condição, defeito, **checklist** compacto, **diagnóstico/solução**, **tabela de itens** (serviço/peça/brinde) com **item interno e custo SEMPRE ocultos do cliente**, resumo financeiro **previsto** (sem recebimento real), **termo de garantia** gerado por modelo (helper `garantia-textos.ts`, oxidação/sem-garantia deixam claro que não há cobertura) e **assinaturas** cliente/técnico. Helpers puros: `lib/operacoes-v3/print-model.ts` + `garantia-textos.ts`. Estrutura preparada para futuras vias (interna/etiqueta/termo). `tsc` ✅ (0 erros) · `vitest lib/operacoes-v3` ✅ **55 passed** (+15 do modelo de impressão/garantia) · `build` **compila limpo**, geração estática aborta no flake de worker/memória do Windows (mesmas fases anteriores) — ambiental. **Aguardando revisão** (sem commit). Anterior — **OS Workspace Enterprise (prontuário do equipamento)**: o Workspace virou o **centro operacional** da assistência — ao abrir uma OS, técnico/atendente operam quase tudo numa tela só. Novidades: **cabeçalho rico** (nº, status, cliente, marca/modelo, IMEI/série, entrada, previsão, técnico + ações rápidas Editar/Imprimir/Anexos/Garantia/Histórico que rolam para as âncoras); **linha do tempo operacional** de 8 etapas (criada→recebida→diagnóstico→orçamento→aprovada→em reparo→pronta→entregue) derivada do status + eventos reais (**nunca inventa data**); **checklist de entrada** editável (13 itens, 3 estados) **persistido**; bloco **Senha & acessórios** editável (numérica/texto/**padrão 3×3**) **persistido**; **diagnóstico técnico** (inicial/final/causa/solução) **persistido**; **serviços executados** (read-only, **nunca mostra custo interno**); **fotos & anexos** (estrutura MVP antes/depois); **garantia da OS** (situação ativa/prevista/expirada, preparada p/ impressão); **histórico completo** auditável. Persistência **side-effect-free** em `payload` (JSONB: `checklist`, `senhaEquipamento`/`Tipo`, `equipamento.acessorios`, `diagnosticoV3`) — **sem tocar schema, Financeiro, estoque, WhatsApp, V2**. Recebimento/caixa/financeiro/portal/BI **fora de escopo** desta fase. `tsc` ✅ (0 erros) · `vitest` **+13 (modelo workspace) → 40 da V3** · `build` **compila limpo**, mas a **geração estática** aborta no flake de memória do Windows (`VirtualAlloc failed`, worker 0xC0000409) — ambiental, mesma falha das fases anteriores, não vem deste código (rota dinâmica). **Aguardando revisão** (sem commit). Anterior — **Nova OS Enterprise + separação OS × PDV de Serviço**: novo botão primário **"Nova OS"** em 5 pontos (topo do módulo, Dashboard, Fila, Atendimento rápido e Workspace sem OS) que abre o **modal "Nova OS Enterprise"** — fluxo **completo** de abertura no balcão, em 8 passos (Cliente · Equipamento · Recepção · Problema/Diagnóstico · Itens · Pagamento · Garantia · Resumo), com cadastro/seleção de cliente real, equipamento+senha (inclui **padrão 3×3**), acessórios, recepção (origem/prioridade/local físico/previsão), itens **cobrado/brinde/interno** com custo interno × valor ao cliente × lucro, **pagamento apenas PREVISTO** (não recebe, não cria Conta a Receber, não mexe no caixa — recebimento real fica no **PDV de Serviço**) e **garantia prevista**. Cria a OS **de verdade** pelo caminho seguro (`criarOS`/`criarCliente`); extras viajam no `payload` (JSONB, sem schema). A OS nasce em **ABERTA** e aparece na hora em Fila/Dashboard/Workspace. **Atendimento rápido** foi rotulado como check-in **simplificado** e aponta para a Nova OS Enterprise. **Sem** baixa de estoque nesta fase. `tsc` ✅ · `build` ✅ · `vitest` **+8 (modelo Nova OS)**. **Aguardando revisão** (sem commit). Anterior — **Fase 1C (orçamento cidadão de 1ª classe)**: o orçamento virou a **área principal** do Workspace V3 — painel editável real com **serviços, peças e brindes** (item cobrado/brinde/interno), **subtotal/desconto/total**, **custo interno · valor ao cliente · lucro estimado** (somente leitura), **estados** (rascunho/enviado/aprovado/recusado/expirado) com badge, **histórico de versões**, e ações reais **Salvar/Enviar/Aprovar/Recusar** — tudo **sem Financeiro/Conta a Receber/estoque/WhatsApp**. Aprovar avança a **máquina de status** da OS (1B); aprovado mostra **"ORÇAMENTO APROVADO" + "Iniciar serviço"**. Dashboard ganhou métricas reais de orçamento (rascunho/enviados/aprovados/recusados). Campos extras (brinde/custo de serviço/versões) vivem no `payload` (JSONB) — **sem tocar schema nem `@/types/os`**. `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **306 passed | 2 expected fail** (+8 do modelo). **Aguardando revisão** (sem commit). Anterior — **Fase 1B (máquina única de status)**: criada UMA fonte de verdade para o fluxo da OS (`lib/operacoes-v3/status-machine.ts`, pura) com os **10 status oficiais** (inclui **RECEBIDA**) e o grafo exato do blueprint. **Kanban (arrastar), Workspace e Action Bar** passam a alterar status pela **mesma engine**, via **um único write-path** (`status-actions.ts`) que grava **status + timeline apenas** — sem estoque/financeiro/garantia (sem schema, V2 intacta). Transições inválidas bloqueadas com mensagem amigável; RECEBIDA persiste em `payload.operacaoStatusV3` (JSONB). `tsc` ✅ · `build` ✅ (98 rotas) · `vitest` **298 passed | 2 expected fail** (11 novos da máquina). **Aguardando revisão** (sem commit). Anterior — **Fase 1A (Workspace + Orçamento real)**: o OS Workspace V3 deixou de ser só leitura — abre uma OS real e **materializa/envia orçamento real** reusando as actions já existentes do HUB (`gerarOrcamentoDaOS` + `enviarOrcamentoAoCliente`), sem backend novo, sem materializar Conta a Receber nem mexer em estoque. **Aprovar/Reprovar** seguem **placeholder honesto** (têm efeito financeiro real → Fase 1B). `tsc` ✅ · `build` ✅ (98 rotas). **Aguardando revisão** (sem commit). Anterior — 02 Jun, **casca navegável isolada**: criada em `/dashboard/operacoes-v3` (rota paralela, **somente leitura**, V2 intacta). `tsc` ✅ · `build` ✅ (98 rotas). Anterior — **Operações HUB · Sprint OS-P0.1 (PASSO 1)**: Nova OS → **orçamento real** (CTA "Gerar orçamento da OS" materializa um rascunho editável dos itens → destrava desconto/edição/envio/aprovação) + **fonte única de peças** (corrige dupla baixa de estoque). Financeiro/garantia intocados. Mesmo dia (antes): read layer da OS conectado + Nova OS operacional. `tsc`/`vitest`/`build` ✅. Próximo: **PASSO 2** (unificar action bar × Kanban drag).
 > Referência rápida para retomar o projeto ou fazer onboarding.
+
+---
+
+### Operações V3 — Correção 2A.1 · Conta a Receber única por OS (04/06/2026)
+
+**Problema (auditoria 2A):** a V3 (PDV de Serviço) criava título `receber:os:*` enquanto o adapter
+V2 criava `os-faturamento:*` — chaves diferentes → risco **real** de **duas Contas a Receber para a
+mesma OS** (e, na ordem V3→V2, recebimento duplicado / título órfão).
+
+**Correção:** **chave ÚNICA por OS** compartilhada por V2 e V3 — `os-faturamento:{storeId}:{osId}`,
+gerada pelo contrato oficial `buildContaReceberLocalKey({ kind: "adapter_os_faturamento" })`. Como
+`ContaReceberTitulo` é `@@unique(storeId, localKey)`, o **banco** garante **um único título por OS**.
+`resolverTituloOS` **reaproveita** o título existente (criado pela V2 OU por recebimento V3 anterior)
+e **nunca cria `receber:os:*`**. Cancelar a OS na V3 faz **best-effort** de cancelar o título único
+(sem órfão); o cancelamento V2 já mira a mesma chave.
+
+| Arquivo | Mudança |
+|---|---|
+| `lib/operacoes-v3/payment-model.ts` | `localKeyReceberOSV3`/`localKeyAdapterOSV3` → **uma** `localKeyContaReceberOSV3` via contrato (mata o drift de string) |
+| `lib/operacoes-v3/pdv-servico-actions.ts` | `resolverTituloOS` com chave única (reaproveita; sem `receber:os:*`) |
+| `lib/operacoes-v3/status-actions.ts` | cancelar OS → `cancelContaReceber` best-effort na chave única (exceção 2A.1 documentada) |
+| `lib/operacoes-v3/payment-model.test.ts` | teste de chave = adapter V2, nunca `receber:os:*` |
+| `lib/operacoes-v3/os-conta-receber-unica.test.ts` **(novo)** | 8 testes de integração (Prisma em memória + funções de produção + adapter V2 real) |
+
+**Compatibilidade:** V2 intacta (adapter/serviços só **chamados**, não alterados); o pagamento feito
+na V3 é **preservado** se a V2 faturar depois (o `historico` sobrevive ao upsert do adapter). **Sem
+dado legado a migrar** (a 2A nunca foi releasada → não há `receber:os:*` em nenhum banco).
+
+**Validação:** `tsc` ✅ · `vitest` ✅ **366 passed | 2 expected fail** (35 arquivos) · `build` ✅ (98
+rotas via `next build --webpack`; `npm run build` esbarra no lock do prisma engine no Windows —
+ambiental). **Não commitado.**
+
+**Não alterado:** schema/migration, Financeiro HUB, adapter `os-faturamento.ts`, contas-receber-service,
+PDV de vendas, V2, WhatsApp, Marketplace, BL-07.
+
+---
+
+### Operações V3 — Fase 2A · PDV de Serviço Real (recebimento da OS) (03/06/2026)
+
+**O que é:** o **PDV de Serviço** passa a **receber pagamento de OS de verdade**, reusando os serviços
+financeiros existentes (Conta a Receber + Caixa) — sem motor duplicado, sem tocar PDV de vendas/V2/
+schema. Exige **caixa ABERTO** + período não fechado; garante um **título de Conta a Receber
+idempotente**; baixa **total/parcial** via `liquidarContaReceber`/`registrarPagamentoParcial` (proteção
+contra valor > saldo já nos services); lança **movimentação** e registra **`caixaOperacao
+recebimento_cr`** (entra no **caixa do dia/fechamento**); espelha o status (`sem_cobranca/aberto/
+parcial/quitado`) em `payload.pagamentoV3` + evento na timeline.
+
+**UI/UX:** tela PDV de Serviço (seleção de OS cobrável, formas dinheiro/PIX/débito/crédito —
+parcelado/crediário/carteira "a conectar" —, validação, gate de caixa). **Status de pagamento** em
+Header/Fila/Workspace; botão **"Receber no PDV de Serviço"** no Workspace.
+
+| Arquivo | Papel |
+|---|---|
+| `lib/operacoes-v3/payment-model.ts` **(novo, puro)** | saldo/status, validação, formas, split, espelho, chave do título |
+| `lib/operacoes-v3/payment-model.test.ts` **(novo)** | testes do modelo |
+| `lib/operacoes-v3/pdv-servico-actions.ts` **(novo, use server)** | recebimento real (caixa + CR + movimentação + espelho + timeline) |
+| `components/operacoes-v3/hooks/use-pdv-servico-v3.ts` **(novo)** | estado client (ler/receber) |
+| `components/operacoes-v3/pages/PdvServicoV3.tsx` **(reescrito)** | tela de recebimento |
+| `components/operacoes-v3/components/OSHeaderV3.tsx` · `pages/FilaOSV3.tsx` · `pages/OSWorkspaceV3.tsx` | status de pagamento real + handoff p/ PDV de Serviço |
+
+**⚠️ Limitações (→ 2B):** split multi-forma modelado mas não cabeado; parcelado/crediário/carteira "a
+conectar"; sem comprovante de recebimento; sem estorno V3; "Entregar e receber" só navega (não muda
+status). O **risco de chave duplicada** desta fase foi **corrigido na Correção 2A.1** (acima).
+
+**Validação:** `tsc` ✅ · `vitest` ✅ (lib/operacoes-v3 **71 passed** ao fim da 2A) · `build` ✅.
+**Não commitado.**
+
+**Não alterado:** schema/migration, Financeiro HUB, V2, `@/types/os`, PDV de vendas, WhatsApp,
+Marketplace, BL-07.
+
+---
+
+### Operações V3 — Fase 1E · Garantias Profissionais + Documentos Operacionais (03/06/2026)
+
+**O que é:** profissionaliza a camada documental — garantia e documentos como recursos de 1ª classe.
+Tudo **side-effect-free** (só `payload` + timeline); **sem** schema/Financeiro/caixa/PDV/V2.
+
+**1. Biblioteca de garantias** (`lib/operacoes-v3/garantia-textos.ts`, centralizado): `GARANTIA_CATALOGO_V3`
+com 11 modelos — tela, bateria, conector, câmera, alto-falante, microfone, software, **placa** (novo),
+oxidação, sem garantia, personalizado. Cada um: **título · prazo padrão · cobertura · exclusões ·
+observações**. `gerarTermoGarantiaV3` monta o termo; oxidação/sem-garantia deixam claro que **não há
+cobertura**. "Placa" também entrou no seletor da Nova OS (`GARANTIA_MODELOS_V3`).
+
+**2. Sugestão automática (item 4):** `sugerirGarantiaPorDescricaoV3` (palavras-chave) +
+`sugerirGarantiaDaOSV3` (varre os serviços cobrados da OS) → "Troca de tela" sugere garantia de tela,
+"bateria" → bateria, "reballing/placa" → placa, etc. O usuário pode alterar manualmente.
+
+**3. Documentos (`lib/operacoes-v3/documentos.ts`):** catálogo `DocumentoTipoV3` —
+`os_cliente` (1D), `termo_garantia`, `comprovante_interno`, `etiqueta`. O preview (`PrintPreviewV3`) virou
+**multi-tipo**, renderizando o componente certo por tipo.
+- **Termo de Garantia** (`TermoGarantiaDocV3`): documento dedicado (cliente, equipamento, serviço
+  realizado, garantia aplicada, prazo, cobertura, exclusões, assinatura) — imprime só a garantia.
+- **Via Interna** (`OSPrintDocumentV3` variante `interna`): mostra **custo interno, lucro estimado, itens
+  internos e observações internas** + tarja "NÃO ENTREGAR AO CLIENTE". O cliente **nunca** vê esses dados.
+- **Etiqueta técnica** (`EtiquetaTecnicaV3`): nº OS, cliente, equipamento, status, técnico (estrutura
+  inicial; térmica fica para o futuro).
+
+**4. Workspace — aba Garantia (itens 5/6):** `GarantiaOSV3` agora mostra tipo/prazo/validade/situação,
+exibe a **sugestão** (com "Aplicar"), permite **escolher modelo/prazo e Salvar** (`salvarGarantiaOSV3` →
+`payload.aberturaV3.garantiaPrevista` + evento `garantia_gerada`/alterada na timeline) e **Imprimir termo**.
+Botões de documentos no rodapé: **Imprimir OS · Imprimir Garantia · Via Interna · Etiqueta**. Cada
+impressão registra `documento_impresso` (auditável, best-effort via `registrarImpressaoDocumentoV3`).
+
+**Diferença cliente × interno:** a via cliente **exclui** item interno, custo e observação interna; a via
+interna **inclui** custo/lucro/itens internos/obs internas. Garantido por testes.
+
+| Camada | Arquivo | Papel |
+|---|---|---|
+| Biblioteca | `lib/operacoes-v3/garantia-textos.ts` **(reescrito)** | Catálogo 11 modelos + termo + sugestão por descrição |
+| Documentos | `lib/operacoes-v3/documentos.ts` **(novo)** | Tipos/rótulos/estado dos 4 documentos |
+| Modelo impressão | `lib/operacoes-v3/print-model.ts` **(estendido)** | Variante interna (`blocoInternoV3`), `montarTermoGarantiaDocV3`, `montarEtiquetaV3`, `sugerirGarantiaDaOSV3` |
+| Write-paths | `lib/operacoes-v3/garantia-actions.ts` **(novo, use server)** | `salvarGarantiaOSV3` + `registrarImpressaoDocumentoV3` (payload + timeline) |
+| Hook | `components/operacoes-v3/hooks/use-garantia-v3.ts` **(novo)** | salvar garantia + registrar impressão |
+| Docs print | `components/operacoes-v3/components/print/{TermoGarantiaDocV3,EtiquetaTecnicaV3}.tsx` **(novos)** + `OSPrintDocumentV3` (interna) + `PrintPreviewV3` (multi-tipo) | Componentes A4 |
+| Aba garantia | `components/operacoes-v3/components/GarantiaOSV3.tsx` **(reescrito)** | Editar + sugestão + imprimir termo |
+| Workspace | `components/operacoes-v3/pages/OSWorkspaceV3.tsx` **(alterado)** | Botões de documentos + estado `printTipo` |
+| Testes | `lib/operacoes-v3/print-model.test.ts` **(estendido)** | +6 (catálogo/placa, sugestão, documentos, via interna, termo, etiqueta) |
+
+**⚠️ Limitações:** renovação/retorno de garantia = futuro (estrutura preparada); etiqueta sem térmica;
+endereço completo do cliente não impresso (a OS não persiste esses campos). Sem recebimento/caixa.
+
+**Validação:** `npx tsc --noEmit` ✅ (0 erros) · `npx vitest run lib/operacoes-v3` ✅ **61 passed**
+(11 status + 8 orçamento + 8 nova OS + 13 workspace + 21 impressão/garantia/documentos). `build` rodado
+ao final do lote (junto da Fase 2A). **Não commitado.**
+
+**Não alterado:** schema Prisma, migrations, auth/proxy, **V2**, `@/types/os`, **PDV**, **Financeiro HUB**,
+**Caixa**, **WhatsApp**, **Marketplace**, **Fiscal**, **BL-07**.
 
 ---
 

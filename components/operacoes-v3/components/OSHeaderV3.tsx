@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils";
 import type { OrdemServico } from "@/types/os";
 import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import { lerRecepcaoV3 } from "@/lib/operacoes-v3/workspace-model";
+import { lerPagamentoV3 } from "@/lib/operacoes-v3/payment-model";
 import { StatusBadgeV3 } from "./StatusBadgeV3";
 import { PaymentBadgeV3 } from "./PaymentBadgeV3";
 import { formatBRL, formatDataHora } from "../lib/format";
-import { isAtrasada, isEmRisco, pagamentoInfo } from "../lib/os-derive";
+import { isAtrasada, isEmRisco, type PagamentoEstado } from "../lib/os-derive";
 
 function Field({ icon, label, value, tone }: { icon: ReactNode; label: string; value: ReactNode; tone?: string }) {
   return (
@@ -25,7 +26,8 @@ function Field({ icon, label, value, tone }: { icon: ReactNode; label: string; v
 
 /** Cabeçalho fixo/sticky da OS no Workspace. Campos sem dado → traço (—). */
 export function OSHeaderV3({ os, actions }: { os: OrdemServico; actions?: ReactNode }) {
-  const pag = pagamentoInfo(os);
+  const pagV3 = lerPagamentoV3(os);
+  const pagEstado: PagamentoEstado = pagV3.status === "sem_cobranca" ? "sem-cobranca" : pagV3.status;
   const atrasada = isAtrasada(os);
   const risco = isEmRisco(os);
   const recepcao = lerRecepcaoV3(os);
@@ -37,13 +39,16 @@ export function OSHeaderV3({ os, actions }: { os: OrdemServico; actions?: ReactN
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <h2 className="truncate text-lg font-semibold text-foreground">{os.codigo}</h2>
           <StatusBadgeV3 status={statusV3FromOS(os)} />
-          <PaymentBadgeV3 estado={pag.estado} total={pag.total} />
+          <PaymentBadgeV3 estado={pagEstado} total={pagV3.total} recebido={pagV3.recebido} />
         </div>
         <div className="text-right">
           <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total da OS</p>
           <p className="text-xl font-semibold tabular-nums text-foreground">
-            {pag.total > 0 ? formatBRL(pag.total) : "—"}
+            {pagV3.total > 0 ? formatBRL(pagV3.total) : "—"}
           </p>
+          {pagV3.saldo > 0 && pagV3.recebido > 0 ? (
+            <p className="text-[11px] text-muted-foreground">saldo {formatBRL(pagV3.saldo)}</p>
+          ) : null}
         </div>
       </div>
 

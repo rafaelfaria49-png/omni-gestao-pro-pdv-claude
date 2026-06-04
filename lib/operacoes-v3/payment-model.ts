@@ -1,0 +1,177 @@
+// ============================================================================
+// Operações V3 — Fase 2A · MODELO de pagamento da OS (puro, fonte de verdade)
+// ----------------------------------------------------------------------------
+// Módulo PURO (sem I/O, sem React, sem Prisma). Calcula saldo/status e valida
+// recebimentos. NÃO recebe dinheiro — quem recebe é a action `pdv-servico-actions`
+// orquestrando os serviços financeiros existentes (Conta a Receber + Caixa).
+//
+// O status de pagamento é espelhado em `payload.pagamentoV3` (JSONB) a cada
+// recebimento, para leitura barata em Header/Fila/Workspace/PDV (sem N+1).
+// ============================================================================
+
+import type { OrdemServico } from "@/types/os";
+import { computeTotaisV3, orcamentoRealV3 } from "./orcamento-model";
+import { buildContaReceberLocalKey } from "@/lib/financeiro/contracts/local-key";
+
+const EPS = 0.009;
+
+export type PagamentoStatusV3 = "sem_cobranca" | "aberto" | "parcial" | "quitado";
+
+export interface PagamentoV3 {
+  total: number;
+  recebido: number;
+  saldo: number;
+  status: PagamentoStatusV3;
+  atualizadoEm?: string;
+  ultimaForma?: string;
+  /** localKey do título de Conta a Receber vinculado (idempotência). */
+  tituloLocalKey?: string;
+}
+
+export const PAGAMENTO_STATUS_META_V3: Record<PagamentoStatusV3, { label: string; tone: "neutral" | "warning" | "info" | "success" }> = {
+  sem_cobranca: { label: "Sem cobrança", tone: "neutral" },
+  aberto: { label: "Em aberto", tone: "warning" },
+  parcial: { label: "Parcial", tone: "info" },
+  quitado: { label: "Quitado", tone: "success" },
+};
+
+export function money(v: unknown): number {
+  const n = typeof v === "number" ? v : Number(v);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+}
+
+/** Calcula recebido (clamp), saldo e status a partir do total e do recebido. */
+export function computeSaldoV3(total: number, recebido: number): { total: number; recebido: number; saldo: number; status: PagamentoStatusV3 } {
+  const t = Math.max(0, money(total));
+  const r = Math.min(Math.max(0, money(recebido)), t);
+  const saldo = Math.max(0, money(t - r));
+  let status: PagamentoStatusV3;
+  if (t <= EPS) status = "sem_cobranca";
+  else if (r <= EPS) status = "aberto";
+  else if (r + EPS >= t) status = "quitado";
+  else status = "parcial";
+  return { total: t, recebido: r, saldo, status };
+}
+
+/** Total cobrável da OS (orçamento real; fallback para valorTotal/pag). */
+export function totalCobravelV3(os: OrdemServico): number {
+  const orc = orcamentoRealV3(os);
+  if (orc) return money(computeTotaisV3({ servicos: orc.servicos, pecas: orc.pecas, desconto: orc.desconto }).total);
+  const vt = (os as { prismaValorTotal?: number; valorTotal?: number }).valorTotal ?? (os as { prismaValorTotal?: number }).prismaValorTotal;
+  return money(typeof vt === "number" ? vt : 0);
+}
+
+/** Lê o estado de pagamento da OS. Prefere o espelho `payload.pagamentoV3`; senão deriva (recebido 0). */
+export function lerPagamentoV3(os: OrdemServico | null | undefined): PagamentoV3 {
+  const mirror = (os as { pagamentoV3?: Partial<PagamentoV3> } | null | undefined)?.pagamentoV3;
+  if (mirror && typeof mirror === "object" && typeof mirror.total === "number") {
+    const base = computeSaldoV3(mirror.total, mirror.recebido ?? 0);
+    return {
+      ...base,
+      atualizadoEm: typeof mirror.atualizadoEm === "string" ? mirror.atualizadoEm : undefined,
+      ultimaForma: typeof mirror.ultimaForma === "string" ? mirror.ultimaForma : undefined,
+      tituloLocalKey: typeof mirror.tituloLocalKey === "string" ? mirror.tituloLocalKey : undefined,
+    };
+  }
+  const total = os ? totalCobravelV3(os) : 0;
+  return { ...computeSaldoV3(total, 0) };
+}
+
+// ----------------------------------------------------------------------------
+// Validação de recebimento (proteção contra valor > saldo)
+// ----------------------------------------------------------------------------
+
+export interface RecebimentoVeredito {
+  ok: boolean;
+  motivo?: string;
+  /** "liquidar" quando o valor cobre o saldo; senão "parcial". */
+  op?: "liquidar" | "parcial";
+}
+
+export function validarRecebimentoV3(valor: number, saldo: number): RecebimentoVeredito {
+  const v = money(valor);
+  const s = money(saldo);
+  if (s <= EPS) return { ok: false, motivo: "Esta OS já está quitada (sem saldo a receber)." };
+  if (!(v > EPS)) return { ok: false, motivo: "Informe um valor maior que zero." };
+  if (v > s + EPS) return { ok: false, motivo: `Valor acima do saldo a receber (${s.toFixed(2)}).` };
+  return { ok: true, op: v + EPS >= s ? "liquidar" : "parcial" };
+}
+
+// ----------------------------------------------------------------------------
+// Formas de pagamento (recebimento real x "a conectar")
+// ----------------------------------------------------------------------------
+
+export type FormaRecebimentoV3 = "dinheiro" | "pix" | "debito" | "credito" | "parcelado" | "crediario" | "carteira";
+
+export const FORMAS_RECEBIMENTO_V3: { value: FormaRecebimentoV3; label: string; suportada: boolean }[] = [
+  { value: "dinheiro", label: "Dinheiro", suportada: true },
+  { value: "pix", label: "PIX", suportada: true },
+  { value: "debito", label: "Débito", suportada: true },
+  { value: "credito", label: "Crédito", suportada: true },
+  { value: "parcelado", label: "Parcelado", suportada: false },
+  { value: "crediario", label: "Crediário", suportada: false },
+  { value: "carteira", label: "Carteira / crédito do cliente", suportada: false },
+];
+
+export function formaSuportadaV3(forma: string): boolean {
+  return FORMAS_RECEBIMENTO_V3.find((f) => f.value === forma)?.suportada ?? false;
+}
+export function formaLabelRecebimentoV3(forma: string): string {
+  return FORMAS_RECEBIMENTO_V3.find((f) => f.value === forma)?.label ?? forma;
+}
+
+// ----------------------------------------------------------------------------
+// Split de pagamento (várias formas num recebimento) — validação de soma
+// ----------------------------------------------------------------------------
+
+export interface SplitLinhaV3 {
+  forma: FormaRecebimentoV3;
+  valor: number;
+}
+
+export function somaSplitV3(linhas: SplitLinhaV3[]): number {
+  return money((Array.isArray(linhas) ? linhas : []).reduce((acc, l) => acc + Math.max(0, money(l.valor)), 0));
+}
+
+/** Valida um split contra o saldo: soma > 0, ≤ saldo, todas as formas suportadas. */
+export function validarSplitV3(linhas: SplitLinhaV3[], saldo: number): RecebimentoVeredito {
+  const linhasValidas = (Array.isArray(linhas) ? linhas : []).filter((l) => money(l.valor) > EPS);
+  if (linhasValidas.length === 0) return { ok: false, motivo: "Adicione ao menos uma forma com valor." };
+  for (const l of linhasValidas) {
+    if (!formaSuportadaV3(l.forma)) return { ok: false, motivo: `Forma "${formaLabelRecebimentoV3(l.forma)}" ainda não suportada para recebimento.` };
+  }
+  return validarRecebimentoV3(somaSplitV3(linhasValidas), saldo);
+}
+
+// ----------------------------------------------------------------------------
+// Correção 2A.1 — CHAVE ÚNICA da Conta a Receber da OS
+// ----------------------------------------------------------------------------
+// V2 (adapter `lib/financeiro/adapters/os-faturamento.ts`) e V3 (PDV de Serviço)
+// compartilham a MESMA localKey por OS. Como `ContaReceberTitulo` é unique por
+// `(storeId, localKey)`, o banco passa a garantir UM ÚNICO título por OS —
+// eliminando a possibilidade de duas Contas a Receber simultâneas para a mesma OS.
+//
+// Delegamos ao contrato oficial (`buildContaReceberLocalKey` kind
+// `adapter_os_faturamento` = `os-faturamento:{storeId}:{osId}`) em vez de montar a
+// string à mão, para não duplicar o contrato nem sofrer drift silencioso.
+export function localKeyContaReceberOSV3(storeId: string, osId: string): string {
+  return buildContaReceberLocalKey({ kind: "adapter_os_faturamento", storeId, ordemServicoId: osId });
+}
+
+/** Monta o espelho a gravar no payload da OS após um recebimento. */
+export function montarPagamentoMirrorV3(input: {
+  total: number;
+  recebido: number;
+  ultimaForma?: string;
+  tituloLocalKey?: string;
+  now?: string;
+}): PagamentoV3 {
+  const base = computeSaldoV3(input.total, input.recebido);
+  return {
+    ...base,
+    atualizadoEm: input.now ?? new Date().toISOString(),
+    ultimaForma: input.ultimaForma,
+    tituloLocalKey: input.tituloLocalKey,
+  };
+}

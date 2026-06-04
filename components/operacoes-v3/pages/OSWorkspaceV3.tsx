@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, Camera, FileText, Globe, History, ListChecks, Pencil, Plus, Printer, Search, ShieldCheck, Tag } from "lucide-react";
+import { ArrowLeft, Camera, CreditCard, FileText, Globe, History, ListChecks, Lock, Pencil, Plus, Printer, Search, ShieldCheck, Tag } from "lucide-react";
 import type { OrdemServico } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { OSHeaderV3 } from "../components/OSHeaderV3";
@@ -22,34 +22,25 @@ import { PrintPreviewV3 } from "../components/print/PrintPreviewV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
 import { ButtonV3 } from "../components/UiV3";
 import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
-import type { OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
+import { statusV3FromOS, type OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
 import { lerRecepcaoV3 } from "@/lib/operacoes-v3/workspace-model";
+import { lerPagamentoV3, PAGAMENTO_STATUS_META_V3 } from "@/lib/operacoes-v3/payment-model";
 import type { EmpresaPrintInputV3 } from "@/lib/operacoes-v3/print-model";
+import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { useOperacoesV3 } from "../context/OperacoesV3Context";
 import { useOrdemV3 } from "../hooks/use-ordem-v3";
 import { useWorkspaceV3 } from "../hooks/use-workspace-v3";
+import { useGarantiaV3 } from "../hooks/use-garantia-v3";
 import { SCREEN_COPY } from "../data/screen-copy";
-import { formatBRL, formatData, formatDataHora } from "../lib/format";
-import { matchOrdem, pagamentoInfo } from "../lib/os-derive";
+import { formatBRL, formatDataHora } from "../lib/format";
+import { matchOrdem } from "../lib/os-derive";
 
 function KV({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="truncate text-sm text-foreground">{value || "—"}</dd>
-    </div>
-  );
-}
-
-function LinhaItem({ descricao, detalhe, valor }: { descricao: string; detalhe?: string; valor: number }) {
-  return (
-    <div className="flex items-center justify-between gap-2 border-b border-border/60 py-1.5 last:border-0">
-      <div className="min-w-0">
-        <p className="truncate text-sm text-foreground">{descricao}</p>
-        {detalhe ? <p className="truncate text-xs text-muted-foreground">{detalhe}</p> : null}
-      </div>
-      <span className="shrink-0 text-sm font-medium tabular-nums text-foreground">{formatBRL(valor)}</span>
     </div>
   );
 }
@@ -112,9 +103,10 @@ function Picker() {
 function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => void }) {
   const { acaoEmConstrucao, navigate, openOS, storeId, reload: reloadLista, mudarStatus, notificar } = useOperacoesV3();
   const { empresaDocumentos } = useLojaAtiva();
-  const pag = pagamentoInfo(os);
+  const pagV3 = lerPagamentoV3(os);
+  const osStatus = statusV3FromOS(os);
   const recepcao = lerRecepcaoV3(os);
-  const [printOpen, setPrintOpen] = useState(false);
+  const [printTipo, setPrintTipo] = useState<DocumentoTipoV3 | null>(null);
 
   // Dados da empresa para o cabeçalho do documento (unidade ativa, com fallback honesto no helper).
   const empresaPrint = useMemo<EmpresaPrintInputV3>(
@@ -136,6 +128,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
   }, [reloadOrdem, reloadLista]);
 
   const wsActions = useWorkspaceV3(storeId, os.id, () => refresh());
+  const garantiaActions = useGarantiaV3(storeId, os.id, () => refresh());
 
   // Toda mudança de status passa pela máquina única (via contexto).
   const onMudarStatus = useCallback(
@@ -162,7 +155,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
       <ButtonV3 variant="outline" onClick={() => irPara("checklist")}>
         <Pencil className="h-4 w-4" aria-hidden /> Editar
       </ButtonV3>
-      <ButtonV3 variant="outline" onClick={() => setPrintOpen(true)}>
+      <ButtonV3 variant="outline" onClick={() => setPrintTipo("os_cliente")}>
         <Printer className="h-4 w-4" aria-hidden /> Imprimir
       </ButtonV3>
       <ButtonV3 variant="outline" onClick={() => irPara("anexos")}>
@@ -266,28 +259,31 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
 
           <OSSectionV3
             titulo="Financeiro / Pagamento"
-            tone="warning"
-            statusVisual={pag.estado === "sem-cobranca" ? "sem cobrança" : "recebimento no PDV de Serviço"}
-            resumo={`Total ${formatBRL(pag.total)}`}
+            tone={pagV3.status === "quitado" ? "success" : pagV3.status === "parcial" ? "info" : "warning"}
+            statusVisual={PAGAMENTO_STATUS_META_V3[pagV3.status].label}
+            resumo={`Total ${formatBRL(pagV3.total)} · saldo ${formatBRL(pagV3.saldo)}`}
+            acaoPrincipal={
+              pagV3.status !== "sem_cobranca" && pagV3.saldo > 0 ? (
+                <ButtonV3
+                  variant="primary"
+                  onClick={() => navigate("pdv-servico", os.id)}
+                >
+                  <CreditCard className="h-4 w-4" aria-hidden />
+                  {(osStatus === "pronta" || osStatus === "recebida") ? "Entregar e receber" : "Receber no PDV de Serviço"}
+                </ButtonV3>
+              ) : undefined
+            }
           >
             <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <KV label="Total da OS" value={formatBRL(pag.total)} />
-              <KV label="Forma de cobrança" value={os.faturamentoFormaPagamento ?? os.faturamentoModoCobranca} />
-              <KV
-                label="Faturamento"
-                value={os.faturamentoStatus === "pendente" ? "Conta a receber pendente" : os.faturamentoStatus === "cancelado" ? "Cancelado" : ""}
-              />
+              <KV label="Total da OS" value={formatBRL(pagV3.total)} />
+              <KV label="Recebido" value={formatBRL(pagV3.recebido)} />
+              <KV label="Saldo a receber" value={formatBRL(pagV3.saldo)} />
+              <KV label="Status do pagamento" value={PAGAMENTO_STATUS_META_V3[pagV3.status].label} />
+              <KV label="Última forma" value={pagV3.ultimaForma} />
+              <KV label="Pagamento previsto (abertura)" value={os.faturamentoFormaPagamento ?? os.faturamentoModoCobranca} />
             </dl>
-            {os.faturamentoParcelas && os.faturamentoParcelas.length > 0 ? (
-              <div className="mt-3">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Parcelas</p>
-                {os.faturamentoParcelas.map((parc) => (
-                  <LinhaItem key={parc.numero} descricao={`Parcela ${parc.numero}`} detalhe={`Vence ${formatData(parc.vencimentoIso)}`} valor={parc.valor} />
-                ))}
-              </div>
-            ) : null}
             <p className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
-              O recebimento real (PIX/dinheiro/cartão, parcial e quitação) é feito no PDV de Serviço e baixado no Financeiro — conectado em fase futura.
+              O recebimento real (Dinheiro/PIX/Débito/Crédito, parcial e quitação) é feito no <strong>PDV de Serviço</strong> — baixa em Conta a Receber + entra no caixa do dia. Exige caixa aberto.
             </p>
           </OSSectionV3>
 
@@ -327,8 +323,16 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             ) : undefined}
           </OSSectionV3>
 
-          {/* Garantia (item 9) */}
-          <GarantiaOSV3 os={os} onAcao={acaoEmConstrucao} />
+          {/* Garantia (Fase 1E): aba editável + sugestão + imprimir termo */}
+          <GarantiaOSV3
+            os={os}
+            storeId={storeId}
+            onChanged={refresh}
+            onImprimirTermo={() => setPrintTipo("termo_garantia")}
+            salvarGarantia={garantiaActions.salvarGarantia}
+            pending={garantiaActions.pending}
+            notificar={notificar}
+          />
 
           {/* Fotos & anexos (item 8) — estrutura MVP */}
           <AnexosV3 os={os} onAcao={acaoEmConstrucao} />
@@ -341,17 +345,25 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
         <OSContextRailV3 os={os} onAbrirHistorico={() => navigate("historico")} onAcao={acaoEmConstrucao} />
       </div>
 
-      {/* Rodapé utilitário */}
+      {/* Rodapé utilitário — documentos (Fase 1E) */}
       <footer className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
-        <ButtonV3 variant="outline" onClick={() => setPrintOpen(true)}>
+        <ButtonV3 variant="outline" onClick={() => setPrintTipo("os_cliente")}>
           <Printer className="h-4 w-4" />
           Imprimir OS
         </ButtonV3>
-        <ButtonV3 variant="outline" onClick={() => acaoEmConstrucao("Imprimir etiqueta")}>
+        <ButtonV3 variant="outline" onClick={() => setPrintTipo("termo_garantia")}>
+          <ShieldCheck className="h-4 w-4" />
+          Imprimir Garantia
+        </ButtonV3>
+        <ButtonV3 variant="outline" onClick={() => setPrintTipo("comprovante_interno")}>
+          <Lock className="h-4 w-4" />
+          Via Interna
+        </ButtonV3>
+        <ButtonV3 variant="outline" onClick={() => setPrintTipo("etiqueta")}>
           <Tag className="h-4 w-4" />
           Etiqueta
         </ButtonV3>
-        <ButtonV3 variant="outline" onClick={() => acaoEmConstrucao("Abrir portal do cliente")}>
+        <ButtonV3 variant="ghost" onClick={() => acaoEmConstrucao("Abrir portal do cliente")}>
           <Globe className="h-4 w-4" />
           Portal do cliente
         </ButtonV3>
@@ -361,7 +373,13 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
         </span>
       </footer>
 
-      <PrintPreviewV3 open={printOpen} os={os} empresa={empresaPrint} onClose={() => setPrintOpen(false)} />
+      <PrintPreviewV3
+        tipo={printTipo}
+        os={os}
+        empresa={empresaPrint}
+        onClose={() => setPrintTipo(null)}
+        onPrinted={(t) => garantiaActions.registrarImpressao(t)}
+      />
     </div>
   );
 }

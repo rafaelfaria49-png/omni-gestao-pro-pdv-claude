@@ -23,7 +23,8 @@ import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
 import { useOperacoesV3 } from "../context/OperacoesV3Context";
 import { SCREEN_COPY } from "../data/screen-copy";
 import { formatBRL, formatRelativo } from "../lib/format";
-import { matchOrdem, orcamentoTotal, pagamentoInfo } from "../lib/os-derive";
+import { matchOrdem, orcamentoTotal, type PagamentoEstado } from "../lib/os-derive";
+import { lerPagamentoV3 } from "@/lib/operacoes-v3/payment-model";
 
 type Tab = "kanban" | "lista" | "calendario";
 
@@ -257,7 +258,8 @@ function ListaView({
         </thead>
         <tbody>
           {ordens.map((os) => {
-            const pag = pagamentoInfo(os);
+            const pagV3 = lerPagamentoV3(os);
+            const pagEstado: PagamentoEstado = pagV3.status === "sem_cobranca" ? "sem-cobranca" : pagV3.status;
             const equip =
               [os.equipamento?.marca, os.equipamento?.modelo].filter(Boolean).join(" ").trim() ||
               os.equipamento?.tipo ||
@@ -272,7 +274,7 @@ function ListaView({
                 <td className="max-w-[160px] truncate px-3 py-2 text-foreground">{os.cliente?.nome ?? "—"}</td>
                 <td className="max-w-[160px] truncate px-3 py-2 text-muted-foreground">{equip}</td>
                 <td className="px-3 py-2"><StatusBadgeV3 status={statusV3FromOS(os)} /></td>
-                <td className="px-3 py-2"><PaymentBadgeV3 estado={pag.estado} showValor={false} /></td>
+                <td className="px-3 py-2"><PaymentBadgeV3 estado={pagEstado} showValor={false} /></td>
                 <td className="max-w-[120px] truncate px-3 py-2 text-muted-foreground">{os.tecnico?.nome ?? "—"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-right text-muted-foreground">
                   {os.sla?.prazo ? formatRelativo(os.sla.prazo) : "—"}
