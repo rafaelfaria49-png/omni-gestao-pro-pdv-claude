@@ -68,9 +68,15 @@ function LinhaItem({ item }: { item: PrintItemV3 }) {
 export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
   const { empresa, cliente, equipamento, senha, recepcao, checklist, diagnostico, financeiro, garantia } = doc;
   const temDiagnostico = !!(diagnostico.inicial || diagnostico.final || diagnostico.causa || diagnostico.solucao || doc.observacoesCliente.length);
+  const interna = doc.variante === "interna";
 
   return (
     <div id="og-print-root" className="mx-auto w-full max-w-[794px] bg-white px-8 py-6 text-black">
+      {interna ? (
+        <div className="mb-2 rounded border border-black bg-zinc-100 px-3 py-1 text-center text-[11px] font-bold uppercase tracking-wide text-black">
+          Via interna — não entregar ao cliente
+        </div>
+      ) : null}
       {/* Cabeçalho */}
       <header className="flex items-start justify-between gap-4 border-b-2 border-black pb-3">
         <div className="flex min-w-0 items-start gap-3">
@@ -240,10 +246,37 @@ export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
         )}
       </Secao>
 
+      {/* Bloco INTERNO (somente via interna) */}
+      {interna && doc.interno ? (
+        <section className="mt-3 break-inside-avoid rounded border border-black p-2">
+          <h2 className="mb-1 text-[11px] font-bold uppercase tracking-wide text-black">Uso interno — confidencial</h2>
+          <div className="grid grid-cols-2 gap-x-4">
+            <p className="text-[12px] text-black"><span className="text-zinc-500">Custo interno: </span>{formatBRL(doc.interno.custo)}</p>
+            <p className="text-[12px] text-black"><span className="text-zinc-500">Lucro estimado: </span>{formatBRL(doc.interno.lucro)}</p>
+          </div>
+          {doc.interno.itensInternos.length ? (
+            <div className="mt-1">
+              <p className="text-[11px] font-medium text-zinc-700">Itens internos:</p>
+              <ul className="ml-4 list-disc text-[11px] text-black">
+                {doc.interno.itensInternos.map((it, i) => <li key={i}>{it.qtd}× {it.descricao} — {formatBRL(it.custo)}</li>)}
+              </ul>
+            </div>
+          ) : null}
+          {doc.interno.observacoesInternas.length ? (
+            <div className="mt-1">
+              <p className="text-[11px] font-medium text-zinc-700">Observações internas:</p>
+              {doc.interno.observacoesInternas.map((o, i) => <p key={i} className="text-[11px] text-black">• {o}</p>)}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {/* Assinaturas */}
       <section className="mt-6 break-inside-avoid">
         <p className="text-[10px] text-zinc-600">
-          Declaro que recebi o equipamento e estou ciente das condições descritas nesta Ordem de Serviço.
+          {interna
+            ? "Via interna de controle — documento de uso da assistência."
+            : "Declaro que recebi o equipamento e estou ciente das condições descritas nesta Ordem de Serviço."}
         </p>
         <div className="mt-8 grid grid-cols-2 gap-10">
           <div className="text-center">

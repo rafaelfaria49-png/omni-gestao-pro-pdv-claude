@@ -1,16 +1,27 @@
 import { describe, expect, it } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import {
+  blocoInternoV3,
   checklistImprimivelV3,
   dadosEmpresaPrintV3,
   itensImprimiveisV3,
   montarDocumentoOSV3,
+  montarEtiquetaV3,
+  montarTermoGarantiaDocV3,
   observacoesClienteV3,
   resumoFinanceiroImprimivelV3,
   senhaImprimivelV3,
+  sugerirGarantiaDaOSV3,
   termoGarantiaDaOSV3,
 } from "./print-model";
-import { gerarTermoGarantiaV3, termoGarantiaTextoV3 } from "./garantia-textos";
+import {
+  GARANTIA_CATALOGO_V3,
+  gerarTermoGarantiaV3,
+  prazoPadraoGarantiaV3,
+  sugerirGarantiaPorDescricaoV3,
+  termoGarantiaTextoV3,
+} from "./garantia-textos";
+import { documentosDisponiveisV3, DOCUMENTO_META_V3 } from "./documentos";
 
 function os(over: Record<string, unknown>): OrdemServico {
   return { id: "os1", codigo: "OS-2026-0001", criadoEm: "2026-06-01T10:00:00Z", timeline: [], ...over } as unknown as OrdemServico;
@@ -161,6 +172,92 @@ describe("print — garantia", () => {
     const t = termoGarantiaDaOSV3(os({ aberturaV3: { garantiaPrevista: { modelo: "bateria", prazoDias: 90 } } }));
     expect(t.modeloId).toBe("bateria");
     expect(t.prazoDias).toBe(90);
+  });
+});
+
+describe("1E — biblioteca de garantias", () => {
+  it("catálogo inclui placa e os modelos profissionais", () => {
+    const ids = GARANTIA_CATALOGO_V3.map((m) => m.id);
+    expect(ids).toContain("placa");
+    expect(ids).toContain("tela");
+    expect(ids).toContain("oxidacao");
+    const placa = GARANTIA_CATALOGO_V3.find((m) => m.id === "placa")!;
+    expect(placa.semCobertura).toBe(false);
+    expect(placa.cobertura.length).toBeGreaterThan(0);
+    expect(prazoPadraoGarantiaV3("software")).toBe(30);
+    expect(prazoPadraoGarantiaV3("oxidacao")).toBe(0);
+  });
+
+  it("sugestão por descrição mapeia serviço → modelo", () => {
+    expect(sugerirGarantiaPorDescricaoV3("Troca de tela frontal")).toBe("tela");
+    expect(sugerirGarantiaPorDescricaoV3("Substituição de bateria")).toBe("bateria");
+    expect(sugerirGarantiaPorDescricaoV3("Reparo de placa / reballing")).toBe("placa");
+    expect(sugerirGarantiaPorDescricaoV3("Desbloqueio de software")).toBe("software");
+    expect(sugerirGarantiaPorDescricaoV3("Algo aleatório")).toBeNull();
+  });
+
+  it("sugere garantia a partir dos serviços cobrados da OS (ignora interno)", () => {
+    const o = os({
+      orcamento: orcamento(
+        [
+          { id: "s0", descricao: "Mão de obra interna", valor: 0, kindV3: "interno" },
+          { id: "s1", descricao: "Troca de bateria", valor: 200, kindV3: "cobrado" },
+        ],
+        [],
+      ),
+    });
+    expect(sugerirGarantiaDaOSV3(o)).toBe("bateria");
+  });
+});
+
+describe("1E — documentos", () => {
+  it("catálogo de documentos: interno nunca é do cliente", () => {
+    expect(DOCUMENTO_META_V3.comprovante_interno.cliente).toBe(false);
+    expect(DOCUMENTO_META_V3.os_cliente.cliente).toBe(true);
+    expect(documentosDisponiveisV3().every((d) => d.disponivel)).toBe(true);
+  });
+
+  it("via interna expõe custo/lucro/itens internos/obs internas; cliente não", () => {
+    const o = os({
+      orcamento: orcamento(
+        [
+          { id: "s1", descricao: "Troca de tela", valor: 300, custoV3: 120, kindV3: "cobrado" },
+          { id: "s2", descricao: "Ajuste interno", valor: 0, custoV3: 40, kindV3: "interno" },
+        ],
+        [],
+      ),
+      observacoes: [{ id: "1", autor: "T", conteudo: "Nota interna", interna: true, criadoEm: "x" }],
+    });
+    const interno = blocoInternoV3(o);
+    expect(interno.custo).toBe(160); // 120 + 40
+    expect(interno.itensInternos).toHaveLength(1);
+    expect(interno.observacoesInternas).toEqual(["Nota interna"]);
+
+    const cliente = montarDocumentoOSV3(o, undefined, { variante: "cliente" });
+    expect(cliente.interno).toBeUndefined();
+    const viaInterna = montarDocumentoOSV3(o, undefined, { variante: "interna" });
+    expect(viaInterna.interno?.custo).toBe(160);
+  });
+
+  it("termo de garantia e etiqueta montam com dados reais", () => {
+    const o = os({
+      codigo: "OS-9",
+      cliente: { id: "c", nome: "Ana", telefone: "(11) 9", documento: "1", email: "" },
+      equipamento: { tipo: "Smartphone", marca: "Apple", modelo: "iPhone 13", numeroSerie: "IMEI9", defeitoRelatado: "x" },
+      tecnico: { id: "t", nome: "João", especialidades: [], online: true },
+      orcamento: orcamento([{ id: "s1", descricao: "Troca de tela", valor: 300, kindV3: "cobrado" }], []),
+      aberturaV3: { garantiaPrevista: { modelo: "tela", prazoDias: 90 } },
+    });
+    const termo = montarTermoGarantiaDocV3(o, { nomeFantasia: "RafaCell" });
+    expect(termo.numero).toBe("OS-9");
+    expect(termo.termo.modeloId).toBe("tela");
+    expect(termo.servicoRealizado).toContain("Troca de tela");
+
+    const etq = montarEtiquetaV3(o);
+    expect(etq.numero).toBe("OS-9");
+    expect(etq.cliente).toBe("Ana");
+    expect(etq.equipamento).toBe("Apple iPhone 13");
+    expect(etq.tecnico).toBe("João");
   });
 });
 

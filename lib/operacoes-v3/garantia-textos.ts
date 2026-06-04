@@ -1,29 +1,45 @@
 // ============================================================================
-// Operações V3 — Fase 1D · Textos de GARANTIA (centralizado, puro)
+// Operações V3 — Fase 1E · BIBLIOTECA DE GARANTIAS (catálogo profissional)
 // ----------------------------------------------------------------------------
-// Gera um termo de garantia profissional, claro e SEM linguagem abusiva, a
-// partir do modelo escolhido na Nova OS. Texto longo vive AQUI (não espalhado
-// nos componentes). Módulo puro (sem I/O, sem React).
+// Fonte ÚNICA dos textos de garantia (título, prazo padrão, cobertura,
+// exclusões, observações) + gerador do termo + sugestão por descrição.
+// Texto longo vive AQUI (não espalhado em componentes). Módulo puro.
 //
-// Modelos = os mesmos ids de `GARANTIA_MODELOS_V3` (nova-os-model):
-//   tela · bateria · conector · camera · alto_falante · microfone · software ·
-//   oxidacao · sem_garantia · personalizado
+// Modelos: tela · bateria · conector · camera · alto_falante · microfone ·
+//          software · placa · oxidacao · sem_garantia · personalizado
 // ============================================================================
 
-export interface TermoGarantiaV3 {
-  /** id do modelo (ou "personalizado"/"desconhecido"). */
-  modeloId: string;
-  /** Título amigável do termo. */
+export type GarantiaModeloIdV3 =
+  | "tela"
+  | "bateria"
+  | "conector"
+  | "camera"
+  | "alto_falante"
+  | "microfone"
+  | "software"
+  | "placa"
+  | "oxidacao"
+  | "sem_garantia"
+  | "personalizado";
+
+export interface GarantiaModeloCatalogoV3 {
+  id: GarantiaModeloIdV3;
   titulo: string;
-  /** Prazo em dias (quando aplicável). */
-  prazoDias?: number;
-  /** true quando NÃO há cobertura (oxidação / sem garantia). */
+  /** Prazo padrão em dias (0 quando não há cobertura). */
+  prazoDiasPadrao: number;
   semCobertura: boolean;
-  /** O que a garantia cobre (linhas curtas). */
   cobertura: string[];
-  /** O que a garantia NÃO cobre (exclusões). */
   exclusoes: string[];
-  /** Observação adicional (ex.: texto personalizado). */
+  observacoes?: string;
+}
+
+export interface TermoGarantiaV3 {
+  modeloId: string;
+  titulo: string;
+  prazoDias?: number;
+  semCobertura: boolean;
+  cobertura: string[];
+  exclusoes: string[];
   observacao?: string;
 }
 
@@ -36,70 +52,128 @@ const EXCLUSOES_COMUNS: string[] = [
   "Defeitos diferentes do serviço executado e descrito nesta Ordem de Serviço.",
 ];
 
-interface ModeloDef {
-  titulo: string;
-  cobertura: string[];
-}
+// ----------------------------------------------------------------------------
+// Catálogo profissional
+// ----------------------------------------------------------------------------
 
-const MODELOS: Record<string, ModeloDef> = {
-  tela: {
+export const GARANTIA_CATALOGO_V3: GarantiaModeloCatalogoV3[] = [
+  {
+    id: "tela",
     titulo: "Garantia — Troca de tela",
+    prazoDiasPadrao: 90,
+    semCobertura: false,
     cobertura: [
       "Tela/touch instalada nesta assistência contra defeitos de funcionamento (falhas de toque, linhas, manchas ou ausência de imagem) não decorrentes de mau uso.",
     ],
+    exclusoes: EXCLUSOES_COMUNS,
   },
-  bateria: {
+  {
+    id: "bateria",
     titulo: "Garantia — Troca de bateria",
+    prazoDiasPadrao: 90,
+    semCobertura: false,
     cobertura: [
       "Bateria substituída contra defeito de fabricação (não carrega, descarga anormal, desligamento sem motivo) dentro do prazo.",
     ],
+    exclusoes: EXCLUSOES_COMUNS,
   },
-  conector: {
+  {
+    id: "conector",
     titulo: "Garantia — Conector de carga",
+    prazoDiasPadrao: 90,
+    semCobertura: false,
     cobertura: [
       "Conector/flex de carga substituído contra falha de carregamento não causada por mau uso do cabo ou da fonte.",
     ],
+    exclusoes: EXCLUSOES_COMUNS,
   },
-  camera: {
+  {
+    id: "camera",
     titulo: "Garantia — Câmera",
-    cobertura: [
-      "Módulo de câmera substituído contra defeito de captura ou foco que não tenha origem em impacto/queda.",
-    ],
+    prazoDiasPadrao: 90,
+    semCobertura: false,
+    cobertura: ["Módulo de câmera substituído contra defeito de captura ou foco que não tenha origem em impacto/queda."],
+    exclusoes: EXCLUSOES_COMUNS,
   },
-  alto_falante: {
+  {
+    id: "alto_falante",
     titulo: "Garantia — Alto-falante",
-    cobertura: [
-      "Alto-falante substituído contra ausência ou distorção de áudio por defeito da peça.",
-    ],
+    prazoDiasPadrao: 90,
+    semCobertura: false,
+    cobertura: ["Alto-falante substituído contra ausência ou distorção de áudio por defeito da peça."],
+    exclusoes: EXCLUSOES_COMUNS,
   },
-  microfone: {
+  {
+    id: "microfone",
     titulo: "Garantia — Microfone",
-    cobertura: [
-      "Microfone substituído contra falha de captação de voz por defeito da peça.",
-    ],
+    prazoDiasPadrao: 90,
+    semCobertura: false,
+    cobertura: ["Microfone substituído contra falha de captação de voz por defeito da peça."],
+    exclusoes: EXCLUSOES_COMUNS,
   },
-  software: {
+  {
+    id: "software",
     titulo: "Garantia — Serviço de software",
-    cobertura: [
-      "Serviço de software executado (atualização, formatação, desbloqueio) contra falha do procedimento realizado.",
-      "Não cobre perda de dados, aplicativos, contas ou senhas — a responsabilidade pelo backup é do cliente.",
-    ],
+    prazoDiasPadrao: 30,
+    semCobertura: false,
+    cobertura: ["Serviço de software executado (atualização, formatação, desbloqueio) contra falha do procedimento realizado."],
+    exclusoes: EXCLUSOES_COMUNS,
+    observacoes: "Não cobre perda de dados, aplicativos, contas ou senhas — a responsabilidade pelo backup é do cliente.",
   },
-};
-
-const SEM_COBERTURA: Record<string, ModeloDef & { motivo: string }> = {
-  oxidacao: {
+  {
+    id: "placa",
+    titulo: "Garantia — Reparo de placa",
+    prazoDiasPadrao: 90,
+    semCobertura: false,
+    cobertura: [
+      "Reparo de placa/componente realizado (reballing, troca de CI, correção de curto) contra reincidência do mesmo defeito tratado nesta OS.",
+    ],
+    exclusoes: EXCLUSOES_COMUNS,
+    observacoes: "Reparos de placa podem ter limitação técnica; defeitos em outros componentes da placa não estão cobertos.",
+  },
+  {
+    id: "oxidacao",
     titulo: "Sem garantia — Oxidação / contato com líquido",
+    prazoDiasPadrao: 0,
+    semCobertura: true,
     cobertura: [],
-    motivo:
+    exclusoes: [],
+    observacoes:
       "O aparelho apresenta sinais de oxidação ou contato com líquido. O reparo é uma TENTATIVA de recuperação e pode apresentar falhas a qualquer momento. Por esse motivo, este serviço é entregue SEM GARANTIA.",
   },
-  sem_garantia: {
+  {
+    id: "sem_garantia",
     titulo: "Sem garantia",
+    prazoDiasPadrao: 0,
+    semCobertura: true,
     cobertura: [],
-    motivo: "Conforme acordado na abertura desta Ordem de Serviço, este serviço é entregue SEM GARANTIA.",
+    exclusoes: [],
+    observacoes: "Conforme acordado na abertura desta Ordem de Serviço, este serviço é entregue SEM GARANTIA.",
   },
-};
+  {
+    id: "personalizado",
+    titulo: "Garantia — Personalizada",
+    prazoDiasPadrao: 90,
+    semCobertura: false,
+    cobertura: ["Garantia limitada ao serviço/peça descritos nesta Ordem de Serviço."],
+    exclusoes: EXCLUSOES_COMUNS,
+  },
+];
+
+const CATALOGO_POR_ID = new Map<string, GarantiaModeloCatalogoV3>(GARANTIA_CATALOGO_V3.map((m) => [m.id, m]));
+
+/** Modelo do catálogo por id (fallback: personalizado). */
+export function garantiaCatalogoV3(id?: string): GarantiaModeloCatalogoV3 {
+  return CATALOGO_POR_ID.get((id ?? "").trim()) ?? CATALOGO_POR_ID.get("personalizado")!;
+}
+
+export function prazoPadraoGarantiaV3(id?: string): number {
+  return garantiaCatalogoV3(id).prazoDiasPadrao;
+}
+
+// ----------------------------------------------------------------------------
+// Gerador do termo
+// ----------------------------------------------------------------------------
 
 export interface GerarTermoInputV3 {
   modeloId?: string;
@@ -108,66 +182,34 @@ export interface GerarTermoInputV3 {
   termoCustom?: string;
 }
 
-/** Gera o termo estruturado a partir do modelo/prazo/observação. */
 export function gerarTermoGarantiaV3(input: GerarTermoInputV3): TermoGarantiaV3 {
-  const modeloId = (input.modeloId ?? "").trim() || "sem_garantia";
-  const prazoDias = typeof input.prazoDias === "number" && input.prazoDias > 0 ? input.prazoDias : undefined;
+  const idBruto = (input.modeloId ?? "").trim();
+  const conhecido = idBruto && CATALOGO_POR_ID.has(idBruto);
+  const modeloId = conhecido ? idBruto : idBruto ? "desconhecido" : "sem_garantia";
+  const def = garantiaCatalogoV3(conhecido ? idBruto : idBruto ? "personalizado" : "sem_garantia");
   const custom = (input.termoCustom ?? "").trim();
+  const prazoDias =
+    typeof input.prazoDias === "number" && input.prazoDias > 0 ? input.prazoDias : def.prazoDiasPadrao > 0 ? def.prazoDiasPadrao : undefined;
 
-  // Sem cobertura (oxidação / sem garantia)
-  const semDef = SEM_COBERTURA[modeloId];
-  if (semDef) {
-    return {
-      modeloId,
-      titulo: semDef.titulo,
-      semCobertura: true,
-      cobertura: [],
-      exclusoes: [],
-      observacao: semDef.motivo,
-    };
+  if (def.semCobertura) {
+    return { modeloId, titulo: def.titulo, semCobertura: true, cobertura: [], exclusoes: [], observacao: def.observacoes };
   }
 
-  // Personalizado
-  if (modeloId === "personalizado") {
-    return {
-      modeloId,
-      titulo: "Garantia — Personalizada",
-      prazoDias,
-      semCobertura: false,
-      cobertura: custom
-        ? [custom]
-        : ["Garantia limitada ao serviço/peça descritos nesta Ordem de Serviço."],
-      exclusoes: [...EXCLUSOES_COMUNS],
-      observacao: undefined,
-    };
-  }
-
-  // Modelos padrão (ou desconhecido → genérico)
-  const def = MODELOS[modeloId];
-  if (!def) {
-    return {
-      modeloId: "desconhecido",
-      titulo: "Garantia do serviço",
-      prazoDias,
-      semCobertura: false,
-      cobertura: ["Garantia limitada ao serviço/peça descritos nesta Ordem de Serviço, contra defeito de funcionamento."],
-      exclusoes: [...EXCLUSOES_COMUNS],
-      observacao: custom || undefined,
-    };
-  }
+  // Personalizado / desconhecido usam o texto livre quando houver.
+  const cobertura = (idBruto === "personalizado" || !conhecido) && custom ? [custom] : [...def.cobertura];
 
   return {
-    modeloId,
-    titulo: def.titulo,
+    modeloId: conhecido ? modeloId : idBruto === "personalizado" ? "personalizado" : "desconhecido",
+    titulo: conhecido ? def.titulo : idBruto === "personalizado" ? def.titulo : "Garantia do serviço",
     prazoDias,
     semCobertura: false,
-    cobertura: [...def.cobertura],
-    exclusoes: [...EXCLUSOES_COMUNS],
-    observacao: custom || undefined,
+    cobertura,
+    exclusoes: [...def.exclusoes],
+    observacao: custom && idBruto !== "personalizado" && conhecido ? `${def.observacoes ? def.observacoes + " " : ""}${custom}` : def.observacoes,
   };
 }
 
-/** Versão em texto corrido (útil para impressão simples / testes / cópia). */
+/** Versão em texto corrido (impressão simples / testes / cópia). */
 export function termoGarantiaTextoV3(termo: TermoGarantiaV3): string {
   const linhas: string[] = [termo.titulo];
   if (termo.prazoDias) linhas.push(`Prazo: ${termo.prazoDias} dias a partir da entrega.`);
@@ -185,4 +227,29 @@ export function termoGarantiaTextoV3(termo: TermoGarantiaV3): string {
   }
   if (termo.observacao) linhas.push(termo.observacao);
   return linhas.join("\n");
+}
+
+// ----------------------------------------------------------------------------
+// Sugestão automática de garantia por descrição de serviço (item 4)
+// ----------------------------------------------------------------------------
+
+const SUGESTAO_KEYWORDS: { id: GarantiaModeloIdV3; termos: string[] }[] = [
+  { id: "tela", termos: ["tela", "display", "touch", "lcd", "frontal", "oled"] },
+  { id: "bateria", termos: ["bateria", "battery", "pilha"] },
+  { id: "conector", termos: ["conector", "carga", "flex de carga", "dock", "v8", "usb"] },
+  { id: "camera", termos: ["camera", "câmera", "lente", "traseira"] },
+  { id: "alto_falante", termos: ["alto-falante", "alto falante", "falante", "auto-falante", "speaker", "campainha", "auricular"] },
+  { id: "microfone", termos: ["microfone", "mic ", " mic"] },
+  { id: "placa", termos: ["placa", "reball", "reballing", "ci ", "curto", "chip", "solda"] },
+  { id: "software", termos: ["software", "formatação", "formatacao", "desbloqueio", "atualização", "atualizacao", "sistema", "icloud", "frp", "senha"] },
+];
+
+/** Sugere o modelo de garantia a partir de uma descrição de serviço; null se nada bate. */
+export function sugerirGarantiaPorDescricaoV3(descricao: string | null | undefined): GarantiaModeloIdV3 | null {
+  const q = (descricao ?? "").toLowerCase();
+  if (!q.trim()) return null;
+  for (const { id, termos } of SUGESTAO_KEYWORDS) {
+    if (termos.some((t) => q.includes(t))) return id;
+  }
+  return null;
 }

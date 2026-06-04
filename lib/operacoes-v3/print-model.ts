@@ -15,7 +15,9 @@ import {
   computeTotaisV3,
   linhaKind,
   orcamentoRealV3,
+  pecaCusto,
   pecaValorCliente,
+  servicoCusto,
   servicoValorCliente,
   type PecaV3,
   type ServicoV3,
@@ -31,7 +33,12 @@ import {
   type RecepcaoV3,
 } from "./workspace-model";
 import { pagamentoFormaLabelV3, type NovaOSPagamentoFormaV3 } from "./nova-os-model";
-import { gerarTermoGarantiaV3, type TermoGarantiaV3 } from "./garantia-textos";
+import {
+  gerarTermoGarantiaV3,
+  sugerirGarantiaPorDescricaoV3,
+  type GarantiaModeloIdV3,
+  type TermoGarantiaV3,
+} from "./garantia-textos";
 
 // ----------------------------------------------------------------------------
 // Empresa (cabeçalho) — fallback honesto, centralizado
@@ -258,6 +265,14 @@ export function termoGarantiaDaOSV3(os: OrdemServico): TermoGarantiaV3 {
 
 export type VariantePrintV3 = "cliente" | "interna";
 
+/** Bloco exclusivo da VIA INTERNA (nunca entregue ao cliente). */
+export interface InternoPrintV3 {
+  custo: number;
+  lucro: number;
+  itensInternos: { descricao: string; categoria: "Serviço" | "Peça"; qtd: number; custo: number }[];
+  observacoesInternas: string[];
+}
+
 export interface ClientePrintV3 {
   nome: string;
   telefone: string;
@@ -292,6 +307,35 @@ export interface DocumentoOSV3 {
   itens: PrintItemV3[];
   financeiro: ResumoFinanceiroPrintV3;
   garantia: TermoGarantiaV3;
+  /** Presente apenas na variante "interna". */
+  interno?: InternoPrintV3;
+}
+
+/** Bloco interno (custo/lucro/itens internos/observações internas) — apenas via interna. */
+export function blocoInternoV3(os: OrdemServico): InternoPrintV3 {
+  const orc = orcamentoRealV3(os);
+  const servicos = orc?.servicos ?? [];
+  const pecas = orc?.pecas ?? (os.pecas as PecaV3[] | undefined) ?? [];
+  const totais = orc
+    ? computeTotaisV3({ servicos, pecas, desconto: orc.desconto })
+    : { subtotal: 0, desconto: 0, total: 0, custo: 0, lucro: 0 };
+
+  const itensInternos: InternoPrintV3["itensInternos"] = [];
+  for (const sv of servicos) {
+    if (linhaKind(sv) !== "interno") continue;
+    itensInternos.push({ descricao: sv.descricao || "Serviço", categoria: "Serviço", qtd: 1, custo: servicoCusto(sv) });
+  }
+  for (const p of pecas) {
+    if (linhaKind(p) !== "interno") continue;
+    itensInternos.push({ descricao: p.nome || "Peça", categoria: "Peça", qtd: Math.max(1, Math.trunc(p.quantidade || 1)), custo: pecaCusto(p) });
+  }
+
+  const observacoesInternas = (Array.isArray(os.observacoes) ? (os.observacoes as ObservacaoTecnica[]) : [])
+    .filter((o) => o && o.interna === true)
+    .map((o) => s(o.conteudo))
+    .filter(Boolean);
+
+  return { custo: totais.custo, lucro: totais.lucro, itensInternos, observacoesInternas };
 }
 
 export function montarDocumentoOSV3(
@@ -300,11 +344,13 @@ export function montarDocumentoOSV3(
   opts?: { variante?: VariantePrintV3; now?: Date },
 ): DocumentoOSV3 {
   const now = opts?.now ?? new Date();
+  const variante: VariantePrintV3 = opts?.variante ?? "cliente";
   const condicao = s((os as { aberturaV3?: { condicaoAparelho?: unknown } }).aberturaV3?.condicaoAparelho);
   const sa = lerSenhaAcessoriosV3(os);
 
   return {
-    variante: opts?.variante ?? "cliente",
+    variante,
+    interno: variante === "interna" ? blocoInternoV3(os) : undefined,
     empresa: dadosEmpresaPrintV3(empresa),
     numero: os.codigo || "—",
     statusLabel: statusMetaV3(statusV3FromOS(os)).label,
@@ -333,5 +379,89 @@ export function montarDocumentoOSV3(
     itens: itensImprimiveisV3(os),
     financeiro: resumoFinanceiroImprimivelV3(os),
     garantia: termoGarantiaDaOSV3(os),
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Sugestão de garantia a partir dos serviços COBRADOS da OS (item 4)
+// ----------------------------------------------------------------------------
+
+export function sugerirGarantiaDaOSV3(os: OrdemServico): GarantiaModeloIdV3 | null {
+  for (const sv of fonteServicos(os)) {
+    if (linhaKind(sv) === "interno") continue;
+    const hit = sugerirGarantiaPorDescricaoV3(sv.descricao);
+    if (hit) return hit;
+  }
+  // tenta também pelo defeito relatado / peças
+  const peca = fontePecas(os).find((p) => linhaKind(p) !== "interno" && sugerirGarantiaPorDescricaoV3(p.nome));
+  if (peca) return sugerirGarantiaPorDescricaoV3(peca.nome);
+  return sugerirGarantiaPorDescricaoV3(os.equipamento?.defeitoRelatado);
+}
+
+// ----------------------------------------------------------------------------
+// Documento C — Termo de Garantia (dedicado)
+// ----------------------------------------------------------------------------
+
+export interface TermoGarantiaDocV3 {
+  empresa: EmpresaPrintV3;
+  numero: string;
+  impressoEm: string;
+  cliente: ClientePrintV3;
+  equipamento: { marca: string; modelo: string; numeroSerie: string };
+  servicoRealizado: string[];
+  termo: TermoGarantiaV3;
+}
+
+export function montarTermoGarantiaDocV3(
+  os: OrdemServico,
+  empresa?: EmpresaPrintInputV3,
+  opts?: { now?: Date },
+): TermoGarantiaDocV3 {
+  const now = opts?.now ?? new Date();
+  const servicoRealizado = itensImprimiveisV3(os)
+    .filter((i) => i.categoria === "Serviço" || !i.brinde)
+    .map((i) => i.descricao);
+  return {
+    empresa: dadosEmpresaPrintV3(empresa),
+    numero: os.codigo || "—",
+    impressoEm: now.toISOString(),
+    cliente: {
+      nome: s(os.cliente?.nome),
+      telefone: s(os.cliente?.telefone) || s(os.cliente?.whatsapp),
+      documento: s(os.cliente?.documento),
+      email: s(os.cliente?.email),
+    },
+    equipamento: {
+      marca: s(os.equipamento?.marca),
+      modelo: s(os.equipamento?.modelo),
+      numeroSerie: s(os.equipamento?.numeroSerie),
+    },
+    servicoRealizado,
+    termo: termoGarantiaDaOSV3(os),
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Documento D — Etiqueta técnica (estrutura inicial)
+// ----------------------------------------------------------------------------
+
+export interface EtiquetaV3 {
+  numero: string;
+  cliente: string;
+  equipamento: string;
+  statusLabel: string;
+  tecnico: string;
+  entrada?: string;
+}
+
+export function montarEtiquetaV3(os: OrdemServico): EtiquetaV3 {
+  const equip = [s(os.equipamento?.marca), s(os.equipamento?.modelo)].filter(Boolean).join(" ") || s(os.equipamento?.tipo);
+  return {
+    numero: os.codigo || "—",
+    cliente: s(os.cliente?.nome) || "—",
+    equipamento: equip || "—",
+    statusLabel: statusMetaV3(statusV3FromOS(os)).label,
+    tecnico: s(os.tecnico?.nome),
+    entrada: lerRecepcaoV3(os).dataEntrada,
   };
 }

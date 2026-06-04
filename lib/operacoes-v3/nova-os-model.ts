@@ -185,6 +185,7 @@ export const GARANTIA_MODELOS_V3: { id: string; label: string; prazoDias?: numbe
   { id: "alto_falante", label: "Alto-falante", prazoDias: 90 },
   { id: "microfone", label: "Microfone", prazoDias: 90 },
   { id: "software", label: "Software", prazoDias: 30 },
+  { id: "placa", label: "Placa", prazoDias: 90 },
   { id: "oxidacao", label: "Oxidação / sem garantia", prazoDias: 0 },
   { id: "sem_garantia", label: "Sem garantia", prazoDias: 0 },
   { id: "personalizado", label: "Personalizado" },

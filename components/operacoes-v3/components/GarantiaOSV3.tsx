@@ -1,24 +1,35 @@
 "use client";
 
 // ============================================================================
-// Operações V3 — Garantia da OS (item 9) · SOMENTE LEITURA + preparo p/ impressão.
-// Lê garantia efetiva (os.garantia / garantiasOperacionais) e a garantia PREVISTA
-// da abertura (aberturaV3.garantiaPrevista). Impressão = placeholder honesto.
+// Operações V3 — Fase 1E · Garantia da OS (aba): tipo/prazo/validade/situação +
+// sugestão automática por serviço + edição (salva no payload) + imprimir termo.
+// Leitura: garantia efetiva (os.garantia/garantiasOperacionais) e a garantia
+// PREVISTA da abertura (aberturaV3.garantiaPrevista). Preparada p/ renovação.
 // ============================================================================
 
-import { Printer, ShieldCheck } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, Printer, Save, ShieldCheck, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrdemServico } from "@/types/os";
+import {
+  GARANTIA_CATALOGO_V3,
+  garantiaCatalogoV3,
+  prazoPadraoGarantiaV3,
+} from "@/lib/operacoes-v3/garantia-textos";
+import { sugerirGarantiaDaOSV3 } from "@/lib/operacoes-v3/print-model";
 import { ButtonV3 } from "./UiV3";
 import { formatData } from "../lib/format";
 
 type Situacao = "ativa" | "expirada" | "prevista" | "sem";
 
-function lerGarantiaPrevista(os: OrdemServico): { label?: string; prazoDias?: number; termo?: string } {
-  const g = (os as { aberturaV3?: { garantiaPrevista?: { label?: unknown; prazoDias?: unknown; termo?: unknown } } }).aberturaV3?.garantiaPrevista;
+const inputCls =
+  "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
+
+function lerGarantiaPrevista(os: OrdemServico): { modelo?: string; prazoDias?: number; termo?: string } {
+  const g = (os as { aberturaV3?: { garantiaPrevista?: { modelo?: unknown; prazoDias?: unknown; termo?: unknown } } }).aberturaV3?.garantiaPrevista;
   if (!g) return {};
   return {
-    label: typeof g.label === "string" ? g.label : undefined,
+    modelo: typeof g.modelo === "string" ? g.modelo : undefined,
     prazoDias: typeof g.prazoDias === "number" ? g.prazoDias : undefined,
     termo: typeof g.termo === "string" ? g.termo : undefined,
   };
@@ -40,34 +51,79 @@ const SITUACAO_META: Record<Situacao, { label: string; cls: string }> = {
   sem: { label: "Sem garantia", cls: "border-border bg-muted text-muted-foreground" },
 };
 
-export function GarantiaOSV3({ os, onAcao }: { os: OrdemServico; onAcao: (label: string) => void }) {
+export function GarantiaOSV3({
+  os,
+  storeId,
+  onChanged,
+  onImprimirTermo,
+  salvarGarantia,
+  pending,
+  notificar,
+}: {
+  os: OrdemServico;
+  storeId: string | null;
+  onChanged: () => void;
+  onImprimirTermo: () => void;
+  salvarGarantia: (input: { modeloId: string; prazoDias?: number }) => Promise<boolean>;
+  pending: boolean;
+  notificar: (msg: string) => void;
+}) {
+  const prevista = useMemo(() => lerGarantiaPrevista(os), [os]);
+  const sugestao = useMemo(() => sugerirGarantiaDaOSV3(os), [os]);
   const g = os.garantia;
   const operacionais = os.garantiasOperacionais ?? [];
-  const prevista = lerGarantiaPrevista(os);
 
+  const [modeloId, setModeloId] = useState(prevista.modelo ?? "sem_garantia");
+  const [prazoDias, setPrazoDias] = useState<number>(prevista.prazoDias ?? prazoPadraoGarantiaV3(prevista.modelo));
+  const [dirty, setDirty] = useState(false);
+
+  const editKey = `${os.id}:${os.atualizadoEm ?? ""}`;
+  useEffect(() => {
+    setModeloId(prevista.modelo ?? "sem_garantia");
+    setPrazoDias(prevista.prazoDias ?? prazoPadraoGarantiaV3(prevista.modelo));
+    setDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editKey]);
+
+  // Situação efetiva
   let situacao: Situacao = "sem";
-  let prazoDias: number | undefined;
   let inicio: string | undefined;
   let fim: string | undefined;
-  let termo: string | undefined;
-  let modelo: string | undefined;
-
   const opAtiva = operacionais.find((o) => o.status === "ativa");
   if (g?.ativa || opAtiva) {
-    prazoDias = g?.prazoDias ?? opAtiva?.prazoDias;
     inicio = g?.inicioEm ?? opAtiva?.dataInicio;
     fim = g?.fimEm ?? opAtiva?.dataFim;
-    termo = g?.termo ?? opAtiva?.cobertura;
     const fimMs = fim ? Date.parse(fim) : NaN;
     situacao = Number.isFinite(fimMs) && fimMs < Date.now() ? "expirada" : "ativa";
-  } else if (prevista.label || prevista.prazoDias) {
+  } else if (prevista.modelo && prevista.modelo !== "sem_garantia") {
     situacao = "prevista";
-    prazoDias = prevista.prazoDias;
-    termo = prevista.termo;
-    modelo = prevista.label;
   }
-
   const meta = SITUACAO_META[situacao];
+  const modeloLabel = garantiaCatalogoV3(modeloId).titulo;
+
+  const aplicarModelo = (id: string) => {
+    setModeloId(id);
+    setPrazoDias(prazoPadraoGarantiaV3(id));
+    setDirty(true);
+  };
+
+  const aplicarSugestao = () => {
+    if (!sugestao) return;
+    aplicarModelo(sugestao);
+  };
+
+  const onSalvar = async () => {
+    if (!storeId) {
+      notificar("Selecione uma unidade ativa.");
+      return;
+    }
+    const ok = await salvarGarantia({ modeloId, prazoDias });
+    if (ok) {
+      setDirty(false);
+      onChanged();
+      notificar("Garantia salva.");
+    }
+  };
 
   return (
     <section id="garantia" className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
@@ -82,24 +138,63 @@ export function GarantiaOSV3({ os, onAcao }: { os: OrdemServico; onAcao: (label:
             {meta.label}
           </span>
         </div>
-        <ButtonV3 variant="outline" onClick={() => onAcao("Imprimir termo de garantia")}>
+        <ButtonV3 variant="outline" onClick={onImprimirTermo}>
           <Printer className="h-4 w-4" aria-hidden /> Imprimir termo
         </ButtonV3>
       </div>
 
       <div className="space-y-3 px-4 py-4">
-        {situacao === "sem" ? (
-          <p className="text-sm text-muted-foreground">Sem garantia registrada para esta OS. A garantia prevista é definida na abertura e passa a valer na entrega.</p>
-        ) : (
-          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <KV label="Modelo de garantia" value={modelo} />
-            <KV label="Prazo" value={prazoDias ? `${prazoDias} dias` : ""} />
-            <KV label="Início" value={inicio ? formatData(inicio) : situacao === "prevista" ? "Na entrega" : ""} />
-            <KV label="Validade" value={fim ? formatData(fim) : ""} />
-            {termo ? <KV label="Cobertura / termo" value={termo} /> : null}
-          </dl>
-        )}
-        <p className="text-[11px] text-muted-foreground">A geração/impressão do termo será conectada em fase futura — os dados já estão prontos.</p>
+        {sugestao && sugestao !== modeloId ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+            <p className="min-w-0 text-xs text-foreground">
+              <Sparkles className="mr-1 inline h-3.5 w-3.5 text-primary" aria-hidden />
+              Sugestão pelo serviço: <strong>{garantiaCatalogoV3(sugestao).titulo}</strong>
+            </p>
+            <ButtonV3 variant="subtle" className="shrink-0 px-2 py-1 text-xs" onClick={aplicarSugestao}>
+              Aplicar sugestão
+            </ButtonV3>
+          </div>
+        ) : null}
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block min-w-0">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Modelo de garantia</span>
+            <select className={inputCls} value={modeloId} onChange={(e) => aplicarModelo(e.target.value)}>
+              {GARANTIA_CATALOGO_V3.map((m) => (
+                <option key={m.id} value={m.id}>{m.titulo}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block min-w-0">
+            <span className="mb-1 block text-xs font-medium text-muted-foreground">Prazo (dias)</span>
+            <input
+              className={inputCls}
+              type="number"
+              min={0}
+              value={prazoDias}
+              onChange={(e) => { setPrazoDias(Math.max(0, Math.trunc(Number(e.target.value) || 0))); setDirty(true); }}
+            />
+          </label>
+        </div>
+
+        <dl className="grid gap-3 sm:grid-cols-3">
+          <KV label="Tipo" value={modeloLabel} />
+          <KV label="Prazo" value={prazoDias > 0 ? `${prazoDias} dias` : "Sem cobertura"} />
+          <KV label="Validade" value={fim ? formatData(fim) : situacao === "prevista" ? "A partir da entrega" : "—"} />
+        </dl>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <ButtonV3 variant="primary" disabled={pending || !dirty} onClick={onSalvar}>
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Save className="h-4 w-4" aria-hidden />}
+            Salvar garantia
+          </ButtonV3>
+          {dirty ? (
+            <ButtonV3 variant="ghost" disabled={pending} onClick={() => { setModeloId(prevista.modelo ?? "sem_garantia"); setPrazoDias(prevista.prazoDias ?? prazoPadraoGarantiaV3(prevista.modelo)); setDirty(false); }}>
+              Descartar
+            </ButtonV3>
+          ) : null}
+        </div>
+        <p className="text-[11px] text-muted-foreground">A garantia é prevista agora e passa a valer na entrega. Renovação/retorno chegam em fase futura.</p>
       </div>
     </section>
   );
