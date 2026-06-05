@@ -10,6 +10,7 @@ import {
   Loader,
   PiggyBank,
   Plus,
+  RotateCcw,
   Send,
   ShieldCheck,
   TrendingUp,
@@ -17,6 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { contarOrcamentosPorStatusV3 } from "@/lib/operacoes-v3/orcamento-model";
+import { kpisPosVendaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { MetricCardV3 } from "../components/MetricCardV3";
 import { OSCardV3 } from "../components/OSCardV3";
@@ -70,6 +72,7 @@ export function DashboardV3() {
       aguardando,
       orcamentos: contarOrcamentosPorStatusV3(ordens),
       garantias: garantiasAtivas(ordens).length,
+      posVenda: kpisPosVendaV3(ordens),
       receita: receitaEstimada(ordens),
       total: ordens.length,
     };
@@ -114,6 +117,16 @@ export function DashboardV3() {
             <MetricCardV3 label="Enviados" value={dados.orcamentos.enviado} tone="info" icon={<Send className="h-4 w-4" />} />
             <MetricCardV3 label="Aprovados" value={dados.orcamentos.aprovado} tone="success" icon={<CheckCircle2 className="h-4 w-4" />} />
             <MetricCardV3 label="Recusados" value={dados.orcamentos.recusado} tone="danger" icon={<XCircle className="h-4 w-4" />} />
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Pós-venda</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <MetricCardV3 label="Garantias ativas" value={dados.posVenda.garantiasAtivas} tone="success" icon={<ShieldCheck className="h-4 w-4" />} />
+            <MetricCardV3 label="Garantias vencendo" value={dados.posVenda.garantiasVencendo} tone="warning" hint="Próximos 15 dias" icon={<Clock className="h-4 w-4" />} />
+            <MetricCardV3 label="Retornos em aberto" value={dados.posVenda.retornosAbertos} tone="danger" icon={<RotateCcw className="h-4 w-4" />} />
+            <MetricCardV3 label="Taxa de retorno" value={`${dados.posVenda.taxaRetorno}%`} hint="OS com retorno ÷ entregues" tone="neutral" icon={<TrendingUp className="h-4 w-4" />} />
           </div>
         </div>
 

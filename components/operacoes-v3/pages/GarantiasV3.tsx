@@ -1,8 +1,14 @@
 "use client";
 
+// ============================================================================
+// Operações V3 — Fase 3A · Garantias (ativas / vencendo / vencidas / previstas)
+// ----------------------------------------------------------------------------
+// Usa o modelo de pós-venda (garantia conta a partir da ENTREGA). Mostra
+// cliente, equipamento, tipo, início, vencimento e dias restantes.
+// ============================================================================
+
 import { useMemo } from "react";
 import { ShieldCheck, ShieldX } from "lucide-react";
-import type { OrdemServico } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { MetricCardV3 } from "../components/MetricCardV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
@@ -10,38 +16,13 @@ import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
 import { useOperacoesV3 } from "../context/OperacoesV3Context";
 import { SCREEN_COPY } from "../data/screen-copy";
 import { formatData } from "../lib/format";
-import { isGarantiaAtiva } from "../lib/os-derive";
+import { classificarGarantiasV3, type GarantiaLinhaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 
 const DIAS_VENCENDO = 15;
 
-type GarantiaClasse = "ativa" | "vencendo" | "expirada" | "nenhuma";
-
-function garantiaFim(os: OrdemServico): string | null {
-  return os.garantia?.fimEm ?? os.garantiasOperacionais?.[0]?.dataFim ?? null;
-}
-function garantiaPrazo(os: OrdemServico): number | null {
-  return os.garantia?.prazoDias ?? os.garantiasOperacionais?.[0]?.prazoDias ?? null;
-}
-function temGarantia(os: OrdemServico): boolean {
-  return Boolean(os.garantia?.ativa || os.garantia?.fimEm || (os.garantiasOperacionais?.length ?? 0) > 0);
-}
-
-function classifica(os: OrdemServico): GarantiaClasse {
-  if (!temGarantia(os)) return "nenhuma";
-  if (isGarantiaAtiva(os)) {
-    const fim = garantiaFim(os);
-    if (fim) {
-      const dias = (new Date(fim).getTime() - Date.now()) / 86400000;
-      if (!Number.isNaN(dias) && dias <= DIAS_VENCENDO) return "vencendo";
-    }
-    return "ativa";
-  }
-  return "expirada";
-}
-
-function GarantiaCard({ os, onOpen }: { os: OrdemServico; onOpen: (id: string) => void }) {
-  const prazo = garantiaPrazo(os);
-  const fim = garantiaFim(os);
+function GarantiaCard({ linha, onOpen }: { linha: GarantiaLinhaV3; onOpen: (id: string) => void }) {
+  const { os, garantia } = linha;
+  const dias = garantia.diasRestantes;
   return (
     <button
       type="button"
@@ -50,43 +31,41 @@ function GarantiaCard({ os, onOpen }: { os: OrdemServico; onOpen: (id: string) =
     >
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-sm font-semibold text-foreground">{os.codigo}</span>
-        {prazo ? <span className="shrink-0 text-xs text-muted-foreground">{prazo} dias</span> : null}
+        {typeof dias === "number" ? (
+          <span className={`shrink-0 text-xs ${dias < 0 ? "text-destructive" : dias <= DIAS_VENCENDO ? "text-warning" : "text-muted-foreground"}`}>
+            {dias >= 0 ? `${dias} dias` : `vencida há ${Math.abs(dias)}d`}
+          </span>
+        ) : (
+          <span className="shrink-0 text-xs text-muted-foreground">na entrega</span>
+        )}
       </div>
       <p className="mt-1 truncate text-sm text-foreground">{os.cliente?.nome ?? "Cliente não identificado"}</p>
       <p className="truncate text-xs text-muted-foreground">
         {[os.equipamento?.marca, os.equipamento?.modelo].filter(Boolean).join(" ") || os.equipamento?.tipo || "Equipamento"}
       </p>
-      <p className="mt-2 text-xs text-muted-foreground">Válida até {formatData(fim)}</p>
+      <p className="mt-1 truncate text-[11px] text-muted-foreground">{garantia.label}</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {garantia.inicio ? `Início ${formatData(garantia.inicio)} · ` : ""}
+        {garantia.vencimento ? `até ${formatData(garantia.vencimento)}` : "aguardando entrega"}
+      </p>
     </button>
   );
 }
 
-function Segmento({
-  titulo,
-  ordens,
-  onOpen,
-  vazio,
-}: {
-  titulo: string;
-  ordens: OrdemServico[];
-  onOpen: (id: string) => void;
-  vazio: string;
-}) {
+function Segmento({ titulo, linhas, onOpen, vazio }: { titulo: string; linhas: GarantiaLinhaV3[]; onOpen: (id: string) => void; vazio: string }) {
   return (
     <section>
       <h3 className="mb-2 text-sm font-semibold text-foreground">
-        {titulo} <span className="text-muted-foreground">({ordens.length})</span>
+        {titulo} <span className="text-muted-foreground">({linhas.length})</span>
       </h3>
-      {ordens.length > 0 ? (
+      {linhas.length > 0 ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {ordens.map((os) => (
-            <GarantiaCard key={os.id} os={os} onOpen={onOpen} />
+          {linhas.map((l) => (
+            <GarantiaCard key={l.os.id} linha={l} onOpen={onOpen} />
           ))}
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-5 text-center text-sm text-muted-foreground">
-          {vazio}
-        </p>
+        <p className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-5 text-center text-sm text-muted-foreground">{vazio}</p>
       )}
     </section>
   );
@@ -95,18 +74,7 @@ function Segmento({
 export function GarantiasV3() {
   const { ordens, loading, primeiraCarga, storeId, openOS } = useOperacoesV3();
 
-  const seg = useMemo(() => {
-    const ativas: OrdemServico[] = [];
-    const vencendo: OrdemServico[] = [];
-    const expiradas: OrdemServico[] = [];
-    for (const os of ordens) {
-      const c = classifica(os);
-      if (c === "ativa") ativas.push(os);
-      else if (c === "vencendo") vencendo.push(os);
-      else if (c === "expirada") expiradas.push(os);
-    }
-    return { ativas, vencendo, expiradas };
-  }, [ordens]);
+  const seg = useMemo(() => classificarGarantiasV3(ordens, { vencendoDias: DIAS_VENCENDO }), [ordens]);
 
   if (!storeId) {
     return (
@@ -116,28 +84,30 @@ export function GarantiasV3() {
     );
   }
 
-  const totalComGarantia = seg.ativas.length + seg.vencendo.length + seg.expiradas.length;
+  const total = seg.ativas.length + seg.vencendo.length + seg.vencidas.length + seg.previstas.length;
 
   return (
     <SectionShellV3 titulo={SCREEN_COPY.garantias.titulo} subtitulo={SCREEN_COPY.garantias.subtitulo}>
       {primeiraCarga && loading ? (
         <LoadingBlockV3 />
-      ) : totalComGarantia === 0 ? (
+      ) : total === 0 ? (
         <EmptyStateV3
           icon={<ShieldX className="h-8 w-8" />}
           titulo="Nenhuma garantia registrada"
-          descricao="Quando uma OS for entregue com garantia, ela aparece aqui segmentada por validade."
+          descricao="Quando uma OS com garantia for entregue, ela aparece aqui segmentada por validade. Garantias previstas aguardam a entrega."
         />
       ) : (
         <div className="space-y-5">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MetricCardV3 label="Ativas" value={seg.ativas.length} tone="success" icon={<ShieldCheck className="h-4 w-4" />} />
             <MetricCardV3 label="Vencendo (≤15d)" value={seg.vencendo.length} tone="warning" />
-            <MetricCardV3 label="Expiradas" value={seg.expiradas.length} tone="neutral" />
+            <MetricCardV3 label="Vencidas" value={seg.vencidas.length} tone="danger" />
+            <MetricCardV3 label="Previstas" value={seg.previstas.length} tone="info" />
           </div>
-          <Segmento titulo="Ativas" ordens={seg.ativas} onOpen={openOS} vazio="Nenhuma garantia ativa." />
-          <Segmento titulo="Vencendo em breve" ordens={seg.vencendo} onOpen={openOS} vazio="Nada vencendo nos próximos 15 dias." />
-          <Segmento titulo="Expiradas" ordens={seg.expiradas} onOpen={openOS} vazio="Nenhuma garantia expirada." />
+          <Segmento titulo="Ativas" linhas={seg.ativas} onOpen={openOS} vazio="Nenhuma garantia ativa." />
+          <Segmento titulo="Vencendo em breve" linhas={seg.vencendo} onOpen={openOS} vazio="Nada vencendo nos próximos 15 dias." />
+          <Segmento titulo="Vencidas" linhas={seg.vencidas} onOpen={openOS} vazio="Nenhuma garantia vencida." />
+          <Segmento titulo="Previstas (aguardando entrega)" linhas={seg.previstas} onOpen={openOS} vazio="Nenhuma garantia prevista." />
         </div>
       )}
     </SectionShellV3>

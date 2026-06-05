@@ -16,6 +16,7 @@ import type { OrdemServico } from "@/types/os";
 import {
   montarDocumentoOSV3,
   montarEtiquetaV3,
+  montarTermoEntregaV3,
   montarTermoGarantiaDocV3,
   type EmpresaPrintInputV3,
 } from "@/lib/operacoes-v3/print-model";
@@ -23,6 +24,7 @@ import { documentoMetaV3, type DocumentoTipoV3 } from "@/lib/operacoes-v3/docume
 import { ButtonV3 } from "../UiV3";
 import { OSPrintDocumentV3 } from "./OSPrintDocumentV3";
 import { TermoGarantiaDocV3 } from "./TermoGarantiaDocV3";
+import { TermoEntregaDocV3 } from "./TermoEntregaDocV3";
 import { EtiquetaTecnicaV3 } from "./EtiquetaTecnicaV3";
 
 const PRINT_CSS = `
@@ -65,6 +67,8 @@ export function PrintPreviewV3({
         return <OSPrintDocumentV3 doc={montarDocumentoOSV3(os, empresa, { variante: "interna" })} />;
       case "termo_garantia":
         return <TermoGarantiaDocV3 doc={montarTermoGarantiaDocV3(os, empresa)} />;
+      case "termo_entrega":
+        return <TermoEntregaDocV3 doc={montarTermoEntregaV3(os, empresa)} />;
       case "etiqueta":
         return <EtiquetaTecnicaV3 etiqueta={montarEtiquetaV3(os)} />;
       default:

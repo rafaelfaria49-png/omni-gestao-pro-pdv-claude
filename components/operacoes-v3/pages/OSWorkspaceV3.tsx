@@ -16,6 +16,7 @@ import { DiagnosticoTecnicoV3 } from "../components/DiagnosticoTecnicoV3";
 import { ServicosExecutadosV3 } from "../components/ServicosExecutadosV3";
 import { AnexosV3 } from "../components/AnexosV3";
 import { GarantiaOSV3 } from "../components/GarantiaOSV3";
+import { PosVendaV3 } from "../components/PosVendaV3";
 import { OSHistoricoV3 } from "../components/OSHistoricoV3";
 import { OrcamentoPanelV3 } from "../components/OrcamentoPanelV3";
 import { PrintPreviewV3 } from "../components/print/PrintPreviewV3";
@@ -101,7 +102,7 @@ function Picker() {
 // ---------------------------------------------------------------------------
 
 function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => void }) {
-  const { acaoEmConstrucao, navigate, openOS, storeId, reload: reloadLista, mudarStatus, notificar } = useOperacoesV3();
+  const { acaoEmConstrucao, navigate, openOS, storeId, ordens, reload: reloadLista, mudarStatus, notificar } = useOperacoesV3();
   const { empresaDocumentos } = useLojaAtiva();
   const pagV3 = lerPagamentoV3(os);
   const osStatus = statusV3FromOS(os);
@@ -332,6 +333,17 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             salvarGarantia={garantiaActions.salvarGarantia}
             pending={garantiaActions.pending}
             notificar={notificar}
+          />
+
+          {/* Pós-venda (Fase 3A): entrega + garantia (situação) + retornos + histórico do cliente */}
+          <PosVendaV3
+            os={os}
+            storeId={storeId}
+            ordens={ordens}
+            onChanged={refresh}
+            notificar={notificar}
+            onImprimirEntrega={() => setPrintTipo("termo_entrega")}
+            onAbrirRetornos={() => navigate("retornos")}
           />
 
           {/* Fotos & anexos (item 8) — estrutura MVP */}

@@ -116,6 +116,7 @@ export async function registrarImpressaoDocumentoV3(
   const label: Record<DocumentoTipoV3, string> = {
     os_cliente: "Ordem de Serviço (via cliente)",
     termo_garantia: "Termo de Garantia",
+    termo_entrega: "Termo de Entrega",
     comprovante_interno: "Via Interna",
     etiqueta: "Etiqueta técnica",
   };

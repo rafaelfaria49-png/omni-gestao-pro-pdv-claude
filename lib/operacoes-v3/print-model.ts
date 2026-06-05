@@ -39,6 +39,7 @@ import {
   type GarantiaModeloIdV3,
   type TermoGarantiaV3,
 } from "./garantia-textos";
+import { lerEntregaV3 } from "./pos-venda-model";
 
 // ----------------------------------------------------------------------------
 // Empresa (cabeçalho) — fallback honesto, centralizado
@@ -463,5 +464,50 @@ export function montarEtiquetaV3(os: OrdemServico): EtiquetaV3 {
     statusLabel: statusMetaV3(statusV3FromOS(os)).label,
     tecnico: s(os.tecnico?.nome),
     entrada: lerRecepcaoV3(os).dataEntrada,
+  };
+}
+
+// ----------------------------------------------------------------------------
+// Documento E — Termo de Entrega (Fase 3A)
+// ----------------------------------------------------------------------------
+
+export interface TermoEntregaDocV3 {
+  empresa: EmpresaPrintV3;
+  numero: string;
+  impressoEm: string;
+  cliente: ClientePrintV3;
+  equipamento: { tipo: string; marca: string; modelo: string; numeroSerie: string };
+  servicoRealizado: string[];
+  dataEntrega?: string;
+  recebidoPor?: string;
+  observacao?: string;
+}
+
+export function montarTermoEntregaV3(os: OrdemServico, empresa?: EmpresaPrintInputV3, opts?: { now?: Date }): TermoEntregaDocV3 {
+  const now = opts?.now ?? new Date();
+  const entrega = lerEntregaV3(os);
+  const servicoRealizado = itensImprimiveisV3(os)
+    .filter((i) => i.categoria === "Serviço" || !i.brinde)
+    .map((i) => i.descricao);
+  return {
+    empresa: dadosEmpresaPrintV3(empresa),
+    numero: os.codigo || "—",
+    impressoEm: now.toISOString(),
+    cliente: {
+      nome: s(os.cliente?.nome),
+      telefone: s(os.cliente?.telefone) || s(os.cliente?.whatsapp),
+      documento: s(os.cliente?.documento),
+      email: s(os.cliente?.email),
+    },
+    equipamento: {
+      tipo: s(os.equipamento?.tipo),
+      marca: s(os.equipamento?.marca),
+      modelo: s(os.equipamento?.modelo),
+      numeroSerie: s(os.equipamento?.numeroSerie),
+    },
+    servicoRealizado,
+    dataEntrega: entrega.entregueEm,
+    recebidoPor: entrega.recebidoPor,
+    observacao: entrega.observacao,
   };
 }
