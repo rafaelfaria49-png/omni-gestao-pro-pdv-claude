@@ -14,11 +14,14 @@ import {
   Send,
   ShieldCheck,
   TrendingUp,
+  UserX,
   Wallet,
+  Wrench,
   XCircle,
 } from "lucide-react";
 import { contarOrcamentosPorStatusV3 } from "@/lib/operacoes-v3/orcamento-model";
 import { kpisPosVendaV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { producaoDoDiaV3 } from "@/lib/operacoes-v3/producao-model";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { MetricCardV3 } from "../components/MetricCardV3";
 import { OSCardV3 } from "../components/OSCardV3";
@@ -73,6 +76,7 @@ export function DashboardV3() {
       orcamentos: contarOrcamentosPorStatusV3(ordens),
       garantias: garantiasAtivas(ordens).length,
       posVenda: kpisPosVendaV3(ordens),
+      producao: producaoDoDiaV3(ordens),
       receita: receitaEstimada(ordens),
       total: ordens.length,
     };
@@ -117,6 +121,17 @@ export function DashboardV3() {
             <MetricCardV3 label="Enviados" value={dados.orcamentos.enviado} tone="info" icon={<Send className="h-4 w-4" />} />
             <MetricCardV3 label="Aprovados" value={dados.orcamentos.aprovado} tone="success" icon={<CheckCircle2 className="h-4 w-4" />} />
             <MetricCardV3 label="Recusados" value={dados.orcamentos.recusado} tone="danger" icon={<XCircle className="h-4 w-4" />} />
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Produção</p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            <MetricCardV3 label="Em diagnóstico" value={dados.producao.emDiagnostico} tone="info" icon={<Wrench className="h-4 w-4" />} />
+            <MetricCardV3 label="Em execução" value={dados.producao.emExecucao} tone="primary" icon={<Loader className="h-4 w-4" />} />
+            <MetricCardV3 label="Prontas" value={dados.producao.prontas} tone="success" icon={<CheckCircle2 className="h-4 w-4" />} />
+            <MetricCardV3 label="Atrasadas" value={dados.producao.atrasadas} tone="danger" icon={<AlertTriangle className="h-4 w-4" />} />
+            <MetricCardV3 label="Sem técnico" value={dados.producao.semTecnico} tone="warning" icon={<UserX className="h-4 w-4" />} />
           </div>
         </div>
 

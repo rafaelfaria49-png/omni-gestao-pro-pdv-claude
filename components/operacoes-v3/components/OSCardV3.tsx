@@ -6,6 +6,7 @@ import type { OrdemServico } from "@/types/os";
 import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
 import { StatusBadgeV3 } from "./StatusBadgeV3";
 import { PaymentBadgeV3 } from "./PaymentBadgeV3";
+import { PrioridadeBadgeV3 } from "./PrioridadeBadgeV3";
 import { formatBRL, formatRelativo } from "../lib/format";
 import { isAtrasada, isEmRisco, pagamentoInfo } from "../lib/os-derive";
 
@@ -38,7 +39,10 @@ export function OSCardV3({
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-sm font-semibold text-foreground">{os.codigo}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-sm font-semibold text-foreground">{os.codigo}</span>
+          <PrioridadeBadgeV3 os={os} />
+        </span>
         <StatusBadgeV3 status={statusV3FromOS(os)} />
       </div>
 

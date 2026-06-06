@@ -17,6 +17,7 @@ import { ServicosExecutadosV3 } from "../components/ServicosExecutadosV3";
 import { AnexosV3 } from "../components/AnexosV3";
 import { GarantiaOSV3 } from "../components/GarantiaOSV3";
 import { PosVendaV3 } from "../components/PosVendaV3";
+import { ProducaoTecnicoV3 } from "../components/ProducaoTecnicoV3";
 import { OSHistoricoV3 } from "../components/OSHistoricoV3";
 import { OrcamentoPanelV3 } from "../components/OrcamentoPanelV3";
 import { PrintPreviewV3 } from "../components/print/PrintPreviewV3";
@@ -213,6 +214,16 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
               </div>
             ) : null}
           </OSSectionV3>
+
+          {/* Produção / Técnico (Fase 3B): técnico, prioridade, SLA, localização, status de bancada */}
+          <ProducaoTecnicoV3
+            os={os}
+            storeId={storeId}
+            ordens={ordens}
+            onChanged={refresh}
+            notificar={notificar}
+            onMudarStatus={onMudarStatus}
+          />
 
           {/* Checklist de entrada (item 4) — editável + persistível */}
           <ChecklistEntradaV3
