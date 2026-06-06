@@ -20,6 +20,7 @@ import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { garantiaCatalogoV3 } from "./garantia-textos";
 import type { DocumentoTipoV3 } from "./documentos";
+import { emitirEventoOperacaoV3 } from "./event-publisher";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -103,7 +104,17 @@ export async function salvarGarantiaOSV3(
     timeline: appendTimeline(payload, evento),
     atualizadoEm: nowIso(),
   } as OSPayloadFull;
-  return gravar(id, next);
+  const salva = await gravar(id, next);
+
+  // Espinha de eventos (3C.0): garantia prevista definida/alterada.
+  emitirEventoOperacaoV3({
+    tipo: "os_garantia_criada",
+    os: salva,
+    storeId: (storeId ?? "").trim(),
+    origem: "garantia",
+    metadata: { modelo: modelo.id, prazoDias, alterada },
+  });
+  return salva;
 }
 
 /** Registra na timeline que um documento foi impresso (auditoria). Best-effort. */

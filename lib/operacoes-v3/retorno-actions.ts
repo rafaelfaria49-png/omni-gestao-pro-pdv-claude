@@ -18,6 +18,7 @@ import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { lerGarantiaV3, lerRetornosV3, type RetornoV3 } from "./pos-venda-model";
+import { emitirEventoOperacaoV3 } from "./event-publisher";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -90,7 +91,17 @@ export async function abrirRetornoV3(storeId: string, osId: string, input: { mot
 
   const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
   const next: OSPayloadFull = { ...payload, retornosV3: retornos, timeline: [...timeline, evento], atualizadoEm: nowIso() } as OSPayloadFull;
-  return gravar(id, next);
+  const salva = await gravar(id, next);
+
+  // Espinha de eventos (3C.0): retorno em garantia aberto.
+  emitirEventoOperacaoV3({
+    tipo: "os_retorno_aberto",
+    os: salva,
+    storeId: (storeId ?? "").trim(),
+    origem: "retorno",
+    metadata: { retornoId: retorno.id, motivo, garantiaAtivaNaAbertura },
+  });
+  return salva;
 }
 
 /** Finaliza um retorno (conclui o retrabalho). Registra observação + timeline. */
@@ -121,5 +132,15 @@ export async function finalizarRetornoV3(storeId: string, osId: string, retornoI
 
   const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
   const next: OSPayloadFull = { ...payload, retornosV3: retornos, timeline: [...timeline, evento], atualizadoEm: now } as OSPayloadFull;
-  return gravar(id, next);
+  const salva = await gravar(id, next);
+
+  // Espinha de eventos (3C.0): retorno concluído.
+  emitirEventoOperacaoV3({
+    tipo: "os_retorno_finalizado",
+    os: salva,
+    storeId: (storeId ?? "").trim(),
+    origem: "retorno",
+    metadata: { retornoId: rid, motivo: alvo.motivo },
+  });
+  return salva;
 }

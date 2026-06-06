@@ -22,6 +22,7 @@ import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { operacaoStatusToPrismaStatus } from "@/components/operacoes/lovable/utils/os-status";
 import { projetarStatusV2, statusV3FromOS } from "./status-machine";
+import { emitirEventoOperacaoV3 } from "./event-publisher";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -105,6 +106,16 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
       status: operacaoStatusToPrismaStatus(projetarStatusV2("entregue")),
       payload: next as unknown as Prisma.InputJsonValue,
     },
+  });
+
+  // Espinha de eventos (3C.0): entrega formal do equipamento. Este é o caminho
+  // canônico de "entregue" (a entrega não passa pela máquina de status).
+  emitirEventoOperacaoV3({
+    tipo: "os_entregue",
+    os: next as unknown as OrdemServico,
+    storeId: sid,
+    origem: "entrega",
+    metadata: { de: from, recebidoPor, viaEntregaFormal: true },
   });
 
   revalidatePath("/dashboard/operacoes-v3");

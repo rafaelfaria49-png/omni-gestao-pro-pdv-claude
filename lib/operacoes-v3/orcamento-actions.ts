@@ -38,6 +38,7 @@ import {
   type OrcamentoVersaoV3,
   type SalvarOrcamentoV3Input,
 } from "./orcamento-model";
+import { emitirEventoOperacaoV3 } from "./event-publisher";
 
 /** Materializa o rascunho a partir dos itens da OS (reuso seguro do @/api/os). */
 export async function gerarOrcamentoDaOS(storeId: string, osId: string): Promise<OrdemServico> {
@@ -179,11 +180,21 @@ export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<
     atualizadoEm: nowIso(),
   });
   const reenvio = atual.status === "enviado";
-  return gravar(sid, id, payload, {
+  const os = await gravar(sid, id, payload, {
     orcamento: enviado,
     statusOS: statusOSAposEnviarOrcamento(payload.status),
     eventos: [makeEvento("orcamento_enviado", operadorLabel(session), reenvio ? "Orçamento reenviado ao cliente." : "Orçamento enviado ao cliente.")],
   });
+
+  // Espinha de eventos (3C.0): orçamento materializado e enviado ao cliente.
+  emitirEventoOperacaoV3({
+    tipo: "os_orcamento_criado",
+    os,
+    storeId: sid,
+    origem: "orcamento",
+    metadata: { reenvio, total: computeTotaisV3(enviado).total, validoAte: enviado.validoAte },
+  });
+  return os;
 }
 
 export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise<OrdemServico> {
@@ -197,11 +208,21 @@ export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise
     respondidoEm: nowIso(),
     atualizadoEm: nowIso(),
   });
-  return gravar(sid, id, payload, {
+  const os = await gravar(sid, id, payload, {
     orcamento: aprovado,
     statusOS: statusOSAposAprovarOrcamento(payload.status),
     eventos: [makeEvento("orcamento_aprovado", operadorLabel(session), "Orçamento aprovado.")],
   });
+
+  // Espinha de eventos (3C.0): aprovação do orçamento.
+  emitirEventoOperacaoV3({
+    tipo: "os_orcamento_aprovado",
+    os,
+    storeId: sid,
+    origem: "orcamento",
+    metadata: { total: computeTotaisV3(aprovado).total },
+  });
+  return os;
 }
 
 export async function recusarOrcamentoV3(storeId: string, osId: string, motivo?: string): Promise<OrdemServico> {

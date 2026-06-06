@@ -29,6 +29,7 @@ import {
   type NovaOSDraftV3,
   validarNovaOSDraftV3,
 } from "./nova-os-model";
+import { emitirEventoOperacaoV3 } from "./event-publisher";
 
 function operadorLabel(session: Session | null): string {
   const u = session?.user;
@@ -212,6 +213,16 @@ export async function criarOSEnterpriseV3(
   };
 
   const criada = await criarOSImpl(input as unknown as Parameters<typeof criarOSImpl>[0], operador);
+
+  // Espinha de eventos (3C.0): anuncia a abertura — produtora-only, best-effort.
+  emitirEventoOperacaoV3({
+    tipo: "os_criada",
+    os: criada as unknown as OrdemServico,
+    storeId: sid,
+    origem: "nova-os",
+    metadata: { origemRecepcao: draft.recepcao.origem, total: totais.total },
+  });
+
   revalidatePath("/dashboard/operacoes-v3");
   return { os: criada as unknown as OrdemServico };
 }

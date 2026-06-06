@@ -30,6 +30,8 @@ import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { cancelContaReceber } from "@/lib/financeiro/services/contas-receber-service";
 import { localKeyContaReceberOSV3 } from "./payment-model";
+import { emitirEventoOperacaoV3 } from "./event-publisher";
+import { statusV3ParaEvento } from "./event-model";
 import { operacaoStatusToPrismaStatus } from "@/components/operacoes/lovable/utils/os-status";
 import {
   type OperacaoStatusV3,
@@ -134,6 +136,20 @@ export async function aplicarTransicaoStatusV3(
     } catch (e) {
       console.error("[aplicarTransicaoStatusV3 cancelCR]", e);
     }
+  }
+
+  // Espinha de eventos (3C.0): só os status com evento de negócio dedicado
+  // (pronta / aguardando_peca / entregue) anunciam. O `status` do evento sai do
+  // próprio `nextPayload`, garantindo coerência com a timeline recém-escrita.
+  const tipoEvento = statusV3ParaEvento(to);
+  if (tipoEvento) {
+    emitirEventoOperacaoV3({
+      tipo: tipoEvento,
+      os: nextPayload as unknown as OrdemServico,
+      storeId: sid,
+      origem: "status-machine",
+      metadata: { de: from, para: to },
+    });
   }
 
   revalidatePath("/dashboard/operacoes-v3");
