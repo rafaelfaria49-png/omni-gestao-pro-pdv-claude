@@ -82,7 +82,7 @@ export const EVENTOS_V3: Record<OperacaoEventoV3Tipo, EventoMetaV3> = {
     tipo: "os_entregue",
     label: "OS entregue",
     descricao: "O equipamento foi entregue ao cliente.",
-    origemEsperada: "entrega-actions:registrarEntregaV3 · status-actions(entregue)",
+    origemEsperada: "entrega-actions:registrarEntregaV3 (caminho único — status-actions delega)",
   },
   os_garantia_criada: {
     tipo: "os_garantia_criada",

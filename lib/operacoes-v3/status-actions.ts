@@ -32,7 +32,8 @@ import { cancelContaReceber } from "@/lib/financeiro/services/contas-receber-ser
 import { localKeyContaReceberOSV3 } from "./payment-model";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { statusV3ParaEvento } from "./event-model";
-import { consumirEstoqueOSV3, restaurarEstoqueOSV3 } from "./estoque-sync";
+import { restaurarEstoqueOSV3 } from "./estoque-sync";
+import { registrarEntregaV3 } from "./entrega-actions";
 import { operacaoStatusToPrismaStatus } from "@/components/operacoes/lovable/utils/os-status";
 import {
   type OperacaoStatusV3,
@@ -70,12 +71,27 @@ export async function aplicarTransicaoStatusV3(
   assertActiveStoreId(sid, "Operações V3");
   if (!id) throw new Error("OS não informada.");
 
+  // ENTREGA UNIFICADA (SPRINT_3D.2 · bug B1): "entregue" tem UM ÚNICO caminho
+  // canônico — `registrarEntregaV3` — que registra a entrega formal (entregaV3 +
+  // retirada + entregueEm), INICIA a garantia (derivada de entregaV3), baixa o
+  // estoque (adapter oficial) e emite `os_entregue`, tudo de forma idempotente.
+  // Nenhum write-path finaliza a entrega "status-only". Toda superfície (Kanban,
+  // Command Bar, Bancada, Workspace, PDV de Serviço, ações rápidas) chega aqui via
+  // `mudarStatus` e é roteada para o fluxo oficial — sem duplicar efeitos. O
+  // próprio `registrarEntregaV3` faz auth (`entregarOs`) e valida o estado de
+  // origem (Pronta/Recebida), então a delegação acontece antes do resto.
+  if (to === "entregue") {
+    return registrarEntregaV3(sid, id);
+  }
+
   // Auth — mesma política do HUB, sem importar o guard privado do V2.
   const session = await auth();
   if (!session?.user?.id) throw new Error("Faça login para alterar o status da OS.");
   const guard = await requireEnterpriseWith(
     sid,
-    (p) => (to === "entregue" ? p.operacoes.entregarOs : to === "cancelada" ? p.operacoes.cancelarOs : p.operacoes.editarOs),
+    // "entregue" já foi delegado a registrarEntregaV3 (que faz seu próprio guard
+    // `entregarOs`), então aqui só restam cancelamento e demais transições.
+    (p) => (to === "cancelada" ? p.operacoes.cancelarOs : p.operacoes.editarOs),
     "Sem permissão para alterar o status desta OS.",
   );
   if (!guard.ok) throw new Error(guard.error);
@@ -139,20 +155,13 @@ export async function aplicarTransicaoStatusV3(
     }
   }
 
-  // SPRINT_3D.1 — estoque REAL pelo adapter oficial, espelhando a semântica do V2
-  // (baixa só em "entregue"; restaura ao cancelar). Idempotente e best-effort: a
-  // falha NÃO desfaz a transição (vira `estoque_sync_erro` na timeline). Quando a
-  // OS não chegou a consumir, a restauração é no-op dentro do adapter.
+  // SPRINT_3D.1 — restauração REAL de estoque ao CANCELAR, via adapter oficial.
+  // Idempotente e best-effort: a falha NÃO desfaz a transição (vira
+  // `estoque_sync_erro` na timeline). Quando a OS não chegou a consumir, é no-op
+  // no adapter. (A BAIXA em "entregue" vive só no fluxo canônico `registrarEntregaV3`,
+  // para onde a transição "entregue" é delegada acima — sem duplicar efeitos.)
   let estoqueStatus: string | undefined;
-  if (to === "entregue") {
-    const r = await consumirEstoqueOSV3({
-      storeId: sid,
-      osId: id,
-      osPayload: { ...(nextPayload as unknown as OrdemServico), id, storeId: sid },
-      operador: operadorLabel(session),
-    });
-    estoqueStatus = r.status;
-  } else if (to === "cancelada") {
+  if (to === "cancelada") {
     const r = await restaurarEstoqueOSV3({ storeId: sid, osId: id, operador: operadorLabel(session) });
     estoqueStatus = r.status;
   }

@@ -64,7 +64,13 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
   if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
 
   const from = statusV3FromOS(payload);
-  if (from === "entregue") throw new Error("Esta OS já foi entregue.");
+  // Idempotência (SPRINT_3D.2): entrega já registrada → NO-OP. Não re-executa
+  // entrega/garantia/estoque/evento; devolve o estado atual. Isso torna seguro o
+  // caminho unificado (Kanban/Command Bar/PDV/PosVenda) contra duplo-clique e
+  // chamadas concorrentes de superfícies diferentes — efeitos rodam UMA vez.
+  if (from === "entregue") {
+    return payload as unknown as OrdemServico;
+  }
   if (from !== "pronta" && from !== "recebida") {
     throw new Error("A OS precisa estar Pronta ou Recebida para registrar a entrega.");
   }
@@ -121,8 +127,9 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
     operador,
   });
 
-  // Espinha de eventos (3C.0): entrega formal do equipamento. Este é o caminho
-  // canônico de "entregue" (a entrega não passa pela máquina de status).
+  // Espinha de eventos (3C.0): entrega formal do equipamento. Este é o ÚNICO
+  // caminho canônico de "entregue" (SPRINT_3D.2) — a máquina de status delega a
+  // transição "entregue" para cá, então `os_entregue` é emitido uma única vez.
   emitirEventoOperacaoV3({
     tipo: "os_entregue",
     os: next as unknown as OrdemServico,
