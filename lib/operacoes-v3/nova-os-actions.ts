@@ -89,16 +89,24 @@ export async function criarOSEnterpriseV3(
   //    preservando o custo interno. createOS soma `servicosCatalogo.valorVenda` no valorTotal.
   const pecas = draft.itens
     .filter((it) => it.categoria === "peca")
-    .map((it) => ({
-      id: `nova-${it.id}`,
-      nome: it.descricao.trim(),
-      quantidade: Math.max(1, Math.trunc(it.quantidade) || 1),
-      valorUnitario: it.kind === "cobrado" ? Math.max(0, it.valorUnitario) : 0,
-      custoUnitario: Math.max(0, it.custoUnitario),
-      produtoOrigem: "manual" as const,
-      kindV3: it.kind,
-      baixaEstoqueV3: it.baixaEstoque,
-    }));
+    .map((it) => {
+      // SPRINT_3D.1B — peça vinculada ao catálogo carrega produtoId/sku/barcode,
+      // o que faz o adapter oficial baixar estoque na entrega (sem "nothing_to_consume").
+      const produtoId = it.produtoId?.trim() || "";
+      return {
+        id: `nova-${it.id}`,
+        nome: it.descricao.trim(),
+        quantidade: Math.max(1, Math.trunc(it.quantidade) || 1),
+        valorUnitario: it.kind === "cobrado" ? Math.max(0, it.valorUnitario) : 0,
+        custoUnitario: Math.max(0, it.custoUnitario),
+        produtoOrigem: produtoId ? ("prisma" as const) : ("manual" as const),
+        ...(produtoId ? { produtoId } : {}),
+        ...(it.sku?.trim() ? { sku: it.sku.trim() } : {}),
+        ...(it.barcode?.trim() ? { barcode: it.barcode.trim() } : {}),
+        kindV3: it.kind,
+        baixaEstoqueV3: it.baixaEstoque,
+      };
+    });
 
   const servicosCatalogo = draft.itens
     .filter((it) => it.categoria === "servico")

@@ -97,6 +97,11 @@ export interface NovaOSItemV3 {
   baixaEstoque: boolean;
   /** Garantia em dias (apenas serviços). */
   garantiaDias?: number;
+  /** Vínculo opcional com o catálogo oficial (SPRINT_3D.1B): habilita a baixa
+   *  real de estoque quando a OS é entregue. Ausente = item manual. */
+  produtoId?: string;
+  sku?: string;
+  barcode?: string;
 }
 
 export interface NovaOSPagamentoPrevistoV3 {

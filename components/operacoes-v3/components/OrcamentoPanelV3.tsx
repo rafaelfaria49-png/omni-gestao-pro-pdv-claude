@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Gift,
   History,
+  Link2,
   Loader2,
   Lock,
   Package,
@@ -32,9 +33,33 @@ import {
   type ServicoV3,
 } from "@/lib/operacoes-v3/orcamento-model";
 import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
+import {
+  pecaFromProdutoV3,
+  pecaVinculadaAoEstoqueV3,
+  vincularPecaProdutoV3,
+  type ProdutoCatalogoV3,
+} from "@/lib/operacoes-v3/produto-link";
 import { useOrcamentoV3 } from "../hooks/use-orcamento-v3";
 import { formatBRL, formatDataHora } from "../lib/format";
 import { ButtonV3 } from "./UiV3";
+import { ProductPickerV3 } from "./ProductPickerV3";
+
+/** Selo de vínculo da peça: "Estoque" (vinculada ao catálogo) × "Manual". */
+function PecaVinculoBadgeV3({ peca }: { peca: PecaV3 }) {
+  const vinc = pecaVinculadaAoEstoqueV3(peca);
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+        vinc ? "border-success/30 bg-success/10 text-success" : "border-border bg-muted text-muted-foreground",
+      )}
+      title={vinc ? `Vinculada ao estoque${peca.sku ? ` · SKU ${peca.sku}` : ""}` : "Item manual — não baixa estoque"}
+    >
+      {vinc ? <Package className="h-2.5 w-2.5" aria-hidden /> : <Pencil className="h-2.5 w-2.5" aria-hidden />}
+      {vinc ? "Estoque" : "Manual"}
+    </span>
+  );
+}
 
 const inputCls =
   "w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
@@ -104,6 +129,26 @@ export function OrcamentoPanelV3({
   const [verVersoes, setVerVersoes] = useState(false);
   const [recusando, setRecusando] = useState(false);
   const [motivo, setMotivo] = useState("");
+  // Product Picker (SPRINT_3D.1B): target = id da peça a vincular, ou null = nova peça.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerTargetId, setPickerTargetId] = useState<string | null>(null);
+
+  const abrirPickerNovaPeca = () => {
+    setPickerTargetId(null);
+    setPickerOpen(true);
+  };
+  const abrirPickerVincular = (id: string) => {
+    setPickerTargetId(id);
+    setPickerOpen(true);
+  };
+  const onSelecionarProduto = (produto: ProdutoCatalogoV3) => {
+    if (pickerTargetId) {
+      mutP(pickerTargetId, vincularPecaProdutoV3(produto));
+    } else {
+      setPecas((r) => [...r, pecaFromProdutoV3(produto)]);
+      setDirty(true);
+    }
+  };
 
   const editKey = orc ? `${orc.id}:${orc.status}:${orc.atualizadoEm ?? ""}` : "none";
   useEffect(() => {
@@ -256,6 +301,7 @@ export function OrcamentoPanelV3({
             <span className="truncate text-sm text-foreground">{p.nome || "Peça"}</span>
             <span className="shrink-0 text-xs text-muted-foreground">{p.quantidade}×</span>
             <KindBadge kind={kind} />
+            <PecaVinculoBadgeV3 peca={p} />
           </div>
           <span className="shrink-0 text-sm font-medium tabular-nums text-foreground">
             {kind === "cobrado" ? formatBRL(Math.max(0, p.quantidade * p.valorUnitario - (p.desconto ?? 0))) : "—"}
@@ -264,15 +310,23 @@ export function OrcamentoPanelV3({
       );
     }
     return (
-      <div key={p.id} className="grid grid-cols-12 items-center gap-1.5 py-1">
-        <input className={cn(inputCls, "col-span-12 sm:col-span-4")} value={p.nome} placeholder="Peça" onChange={(e) => mutP(p.id, { nome: e.target.value })} />
-        <input className={cn(inputCls, "col-span-3 sm:col-span-1 text-right tabular-nums")} type="number" min={0} step="1" value={p.quantidade} placeholder="Qtd" onChange={(e) => mutP(p.id, { quantidade: Math.max(0, Math.floor(num(e.target.value))) })} />
-        <div className="col-span-4 sm:col-span-2"><KindSelect value={kind} onChange={(k) => mutP(p.id, { kindV3: k })} /></div>
-        <input className={cn(inputCls, "col-span-4 sm:col-span-2 text-right tabular-nums disabled:opacity-50")} type="number" min={0} step="0.01" disabled={kind !== "cobrado"} value={kind === "cobrado" ? p.valorUnitario : 0} placeholder="Unit." onChange={(e) => mutP(p.id, { valorUnitario: num(e.target.value) })} />
-        <input className={cn(inputCls, "col-span-3 sm:col-span-2 text-right tabular-nums")} type="number" min={0} step="0.01" value={p.custoUnitario ?? 0} placeholder="Custo" onChange={(e) => mutP(p.id, { custoUnitario: num(e.target.value) })} />
-        <button type="button" className="col-span-1 inline-flex justify-center text-muted-foreground hover:text-destructive" onClick={() => { setPecas((r) => r.filter((x) => x.id !== p.id)); setDirty(true); }} aria-label="Remover peça">
-          <Trash2 className="h-4 w-4" />
-        </button>
+      <div key={p.id} className="border-b border-border/40 py-1 last:border-0">
+        <div className="grid grid-cols-12 items-center gap-1.5">
+          <input className={cn(inputCls, "col-span-12 sm:col-span-4")} value={p.nome} placeholder="Peça" onChange={(e) => mutP(p.id, { nome: e.target.value })} />
+          <input className={cn(inputCls, "col-span-3 sm:col-span-1 text-right tabular-nums")} type="number" min={0} step="1" value={p.quantidade} placeholder="Qtd" onChange={(e) => mutP(p.id, { quantidade: Math.max(0, Math.floor(num(e.target.value))) })} />
+          <div className="col-span-4 sm:col-span-2"><KindSelect value={kind} onChange={(k) => mutP(p.id, { kindV3: k })} /></div>
+          <input className={cn(inputCls, "col-span-4 sm:col-span-2 text-right tabular-nums disabled:opacity-50")} type="number" min={0} step="0.01" disabled={kind !== "cobrado"} value={kind === "cobrado" ? p.valorUnitario : 0} placeholder="Unit." onChange={(e) => mutP(p.id, { valorUnitario: num(e.target.value) })} />
+          <input className={cn(inputCls, "col-span-3 sm:col-span-2 text-right tabular-nums")} type="number" min={0} step="0.01" value={p.custoUnitario ?? 0} placeholder="Custo" onChange={(e) => mutP(p.id, { custoUnitario: num(e.target.value) })} />
+          <button type="button" className="col-span-1 inline-flex justify-center text-muted-foreground hover:text-destructive" onClick={() => { setPecas((r) => r.filter((x) => x.id !== p.id)); setDirty(true); }} aria-label="Remover peça">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mt-1 flex items-center gap-2 pl-0.5">
+          <PecaVinculoBadgeV3 peca={p} />
+          <button type="button" onClick={() => abrirPickerVincular(p.id)} className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline">
+            <Link2 className="h-3 w-3" aria-hidden /> {pecaVinculadaAoEstoqueV3(p) ? "Trocar produto" : "Vincular ao catálogo"}
+          </button>
+        </div>
       </div>
     );
   };
@@ -321,9 +375,14 @@ export function OrcamentoPanelV3({
               <Package className="h-3.5 w-3.5" aria-hidden /> Peças
             </p>
             {editavel ? (
-              <ButtonV3 variant="subtle" className="px-2 py-1 text-xs" onClick={addPeca}>
-                <Plus className="h-3.5 w-3.5" /> Peça
-              </ButtonV3>
+              <div className="flex items-center gap-1.5">
+                <ButtonV3 variant="outline" className="px-2 py-1 text-xs" onClick={abrirPickerNovaPeca}>
+                  <Package className="h-3.5 w-3.5" /> Catálogo
+                </ButtonV3>
+                <ButtonV3 variant="subtle" className="px-2 py-1 text-xs" onClick={addPeca}>
+                  <Plus className="h-3.5 w-3.5" /> Peça
+                </ButtonV3>
+              </div>
             ) : null}
           </div>
           {pecas.length > 0 ? pecas.map(linhaPeca) : <p className="text-xs text-muted-foreground">Nenhuma peça.</p>}
@@ -438,6 +497,14 @@ export function OrcamentoPanelV3({
           </div>
         ) : null}
       </div>
+
+      <ProductPickerV3
+        open={pickerOpen}
+        storeId={storeId}
+        onSelect={onSelecionarProduto}
+        onClose={() => setPickerOpen(false)}
+        titulo={pickerTargetId ? "Vincular peça a um produto" : "Adicionar peça do catálogo"}
+      />
     </section>
   );
 }

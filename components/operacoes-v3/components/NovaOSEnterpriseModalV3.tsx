@@ -58,8 +58,10 @@ import {
   type NovaOSRecepcaoV3,
 } from "@/lib/operacoes-v3/nova-os-model";
 import type { OrcamentoLinhaKindV3 } from "@/lib/operacoes-v3/orcamento-model";
+import type { ProdutoCatalogoV3 } from "@/lib/operacoes-v3/produto-link";
 import { ButtonV3 } from "./UiV3";
 import { PatternPadV3 } from "./PatternPadV3";
+import { ProductPickerV3 } from "./ProductPickerV3";
 import { formatBRL } from "../lib/format";
 
 interface ClienteOpcao {
@@ -127,6 +129,11 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
   const [itKind, setItKind] = useState<OrcamentoLinhaKindV3>("cobrado");
   const [itBaixa, setItBaixa] = useState(false);
   const [itGarantia, setItGarantia] = useState(90);
+  // Vínculo com o catálogo (SPRINT_3D.1B) — habilita baixa real de estoque.
+  const [itProdutoId, setItProdutoId] = useState("");
+  const [itSku, setItSku] = useState("");
+  const [itBarcode, setItBarcode] = useState("");
+  const [itPickerOpen, setItPickerOpen] = useState(false);
 
   // Reset ao abrir
   useEffect(() => {
@@ -144,6 +151,9 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     setItKind("cobrado");
     setItBaixa(false);
     setItGarantia(90);
+    setItProdutoId("");
+    setItSku("");
+    setItBarcode("");
   }, [open]);
 
   // Carrega clientes ao abrir
@@ -199,12 +209,27 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     });
   };
 
+  // SPRINT_3D.1B — escolher um produto do catálogo preenche o item e o vincula
+  // (categoria = peça, baixa de estoque ligada), guardando produtoId/sku/barcode.
+  const onSelecionarProdutoItem = (produto: ProdutoCatalogoV3) => {
+    setItCategoria("peca");
+    setItKind("cobrado");
+    setItDescricao(produto.nome);
+    setItCusto(produto.custo);
+    setItValor(produto.preco);
+    setItBaixa(true);
+    setItProdutoId(produto.id);
+    setItSku(produto.sku);
+    setItBarcode(produto.barcode);
+  };
+
   const addItem = () => {
     const descricao = itDescricao.trim();
     if (!descricao) {
       setErro("Informe a descrição do item.");
       return;
     }
+    const vinculado = itCategoria === "peca" && itProdutoId.trim();
     const novo: NovaOSItemV3 = {
       id: `${Date.now()}-${Math.round(Math.random() * 1e4)}`,
       categoria: itCategoria,
@@ -215,6 +240,9 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
       kind: itKind,
       baixaEstoque: itCategoria === "peca" ? itBaixa : false,
       garantiaDias: itCategoria === "servico" ? Math.max(0, Math.trunc(itGarantia)) : undefined,
+      ...(vinculado
+        ? { produtoId: itProdutoId.trim(), sku: itSku.trim() || undefined, barcode: itBarcode.trim() || undefined }
+        : {}),
     };
     setDraft((d) => ({ ...d, itens: [...d.itens, novo] }));
     setErro(null);
@@ -224,6 +252,9 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     setItValor(0);
     setItKind("cobrado");
     setItBaixa(false);
+    setItProdutoId("");
+    setItSku("");
+    setItBarcode("");
   };
 
   const removeItem = (id: string) => setDraft((d) => ({ ...d, itens: d.itens.filter((i) => i.id !== id) }));
@@ -554,6 +585,12 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
             <div className="space-y-4">
               {/* Form de adição */}
               <div className="rounded-xl border border-border bg-background/40 p-3">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-muted-foreground">Adicionar item</p>
+                  <ButtonV3 variant="outline" className="px-2 py-1 text-xs" onClick={() => setItPickerOpen(true)}>
+                    <Package className="h-3.5 w-3.5" aria-hidden /> Buscar no catálogo
+                  </ButtonV3>
+                </div>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <Campo label="Categoria">
                     <select className={inputCls} value={itCategoria} onChange={(e) => setItCategoria(e.target.value as NovaOSItemCategoriaV3)}>
@@ -595,7 +632,17 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
                     </ButtonV3>
                   </div>
                 </div>
-                <p className="mt-2 text-[11px] text-muted-foreground">Brinde e item interno têm valor ao cliente R$ 0,00 (mantêm o custo interno). Estoque não é baixado nesta fase.</p>
+                {itProdutoId ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+                      <Package className="h-3 w-3" aria-hidden /> Vinculado ao estoque{itSku ? ` · SKU ${itSku}` : ""}
+                    </span>
+                    <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground" onClick={() => { setItProdutoId(""); setItSku(""); setItBarcode(""); }}>
+                      Tornar manual
+                    </button>
+                  </div>
+                ) : null}
+                <p className="mt-2 text-[11px] text-muted-foreground">Brinde e item interno têm valor ao cliente R$ 0,00 (mantêm o custo interno). Peças <strong>vinculadas ao catálogo</strong> baixam estoque na entrega; itens manuais, não.</p>
               </div>
 
               {/* Lista de itens */}
@@ -620,7 +667,7 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
                           <tr key={it.id} className="border-b border-border/60 last:border-0">
                             <td className="px-3 py-2">
                               <p className="truncate font-medium text-foreground">{it.descricao}</p>
-                              <p className="text-[11px] text-muted-foreground">{it.categoria === "servico" ? "Serviço" : "Peça"}{it.categoria === "peca" && it.baixaEstoque ? " · baixa estoque" : ""}</p>
+                              <p className="text-[11px] text-muted-foreground">{it.categoria === "servico" ? "Serviço" : "Peça"}{it.categoria === "peca" && it.baixaEstoque ? " · baixa estoque" : ""}{it.produtoId ? " · vinculado ao estoque" : ""}</p>
                             </td>
                             <td className="px-3 py-2">
                               <select className={cn(inputCls, "h-8 px-2 py-1 text-xs")} value={it.kind} onChange={(e) => { const k = e.target.value as OrcamentoLinhaKindV3; updItem(it.id, { kind: k, valorUnitario: k === "cobrado" ? it.valorUnitario : 0 }); }}>
@@ -793,6 +840,14 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
             </ButtonV3>
           </div>
         </footer>
+
+        <ProductPickerV3
+          open={itPickerOpen}
+          storeId={storeId}
+          onSelect={onSelecionarProdutoItem}
+          onClose={() => setItPickerOpen(false)}
+          titulo="Adicionar peça do catálogo"
+        />
       </div>
     </div>
   );
