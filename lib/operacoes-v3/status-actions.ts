@@ -32,6 +32,7 @@ import { cancelContaReceber } from "@/lib/financeiro/services/contas-receber-ser
 import { localKeyContaReceberOSV3 } from "./payment-model";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { statusV3ParaEvento } from "./event-model";
+import { consumirEstoqueOSV3, restaurarEstoqueOSV3 } from "./estoque-sync";
 import { operacaoStatusToPrismaStatus } from "@/components/operacoes/lovable/utils/os-status";
 import {
   type OperacaoStatusV3,
@@ -138,6 +139,24 @@ export async function aplicarTransicaoStatusV3(
     }
   }
 
+  // SPRINT_3D.1 — estoque REAL pelo adapter oficial, espelhando a semântica do V2
+  // (baixa só em "entregue"; restaura ao cancelar). Idempotente e best-effort: a
+  // falha NÃO desfaz a transição (vira `estoque_sync_erro` na timeline). Quando a
+  // OS não chegou a consumir, a restauração é no-op dentro do adapter.
+  let estoqueStatus: string | undefined;
+  if (to === "entregue") {
+    const r = await consumirEstoqueOSV3({
+      storeId: sid,
+      osId: id,
+      osPayload: { ...(nextPayload as unknown as OrdemServico), id, storeId: sid },
+      operador: operadorLabel(session),
+    });
+    estoqueStatus = r.status;
+  } else if (to === "cancelada") {
+    const r = await restaurarEstoqueOSV3({ storeId: sid, osId: id, operador: operadorLabel(session) });
+    estoqueStatus = r.status;
+  }
+
   // Espinha de eventos (3C.0): só os status com evento de negócio dedicado
   // (pronta / aguardando_peca / entregue) anunciam. O `status` do evento sai do
   // próprio `nextPayload`, garantindo coerência com a timeline recém-escrita.
@@ -148,7 +167,7 @@ export async function aplicarTransicaoStatusV3(
       os: nextPayload as unknown as OrdemServico,
       storeId: sid,
       origem: "status-machine",
-      metadata: { de: from, para: to },
+      metadata: { de: from, para: to, ...(estoqueStatus ? { estoque: estoqueStatus } : {}) },
     });
   }
 

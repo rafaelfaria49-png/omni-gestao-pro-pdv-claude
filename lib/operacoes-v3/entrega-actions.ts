@@ -23,6 +23,7 @@ import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { operacaoStatusToPrismaStatus } from "@/components/operacoes/lovable/utils/os-status";
 import { projetarStatusV2, statusV3FromOS } from "./status-machine";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
+import { consumirEstoqueOSV3 } from "./estoque-sync";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -108,6 +109,18 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
     },
   });
 
+  // SPRINT_3D.1 — baixa REAL de estoque ao entregar, via adapter oficial
+  // (`consumeEstoqueFromOS`). Idempotente (não baixa a mesma OS duas vezes) e
+  // best-effort: uma falha NÃO desfaz a entrega — vira `estoque_sync_erro` na
+  // timeline. Passa o payload pós-entrega (com id/storeId garantidos) para o
+  // adapter resolver as peças do orçamento/`payload.pecas`.
+  const estoque = await consumirEstoqueOSV3({
+    storeId: sid,
+    osId: id,
+    osPayload: { ...(next as unknown as OrdemServico), id, storeId: sid },
+    operador,
+  });
+
   // Espinha de eventos (3C.0): entrega formal do equipamento. Este é o caminho
   // canônico de "entregue" (a entrega não passa pela máquina de status).
   emitirEventoOperacaoV3({
@@ -115,7 +128,7 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
     os: next as unknown as OrdemServico,
     storeId: sid,
     origem: "entrega",
-    metadata: { de: from, recebidoPor, viaEntregaFormal: true },
+    metadata: { de: from, recebidoPor, viaEntregaFormal: true, estoque: estoque.status, estoqueItens: estoque.itens },
   });
 
   revalidatePath("/dashboard/operacoes-v3");
