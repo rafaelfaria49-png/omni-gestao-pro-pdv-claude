@@ -9,7 +9,7 @@
 // ============================================================================
 
 import { useState, type ReactNode } from "react";
-import { CheckCircle2, Loader2, PackageCheck, Printer, RotateCcw, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Loader2, PackageCheck, PenLine, Printer, RotateCcw, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrdemServico } from "@/types/os";
 import { statusV3FromOS } from "@/lib/operacoes-v3/status-machine";
@@ -22,6 +22,7 @@ import {
   retornosDoClienteV3,
 } from "@/lib/operacoes-v3/pos-venda-model";
 import { ButtonV3 } from "./UiV3";
+import { SignaturePadV3 } from "./SignaturePadV3";
 import { usePosVendaV3 } from "../hooks/use-pos-venda-v3";
 import { formatData, formatDataHora } from "../lib/format";
 
@@ -70,7 +71,7 @@ export function PosVendaV3({
   onImprimirEntrega: () => void;
   onAbrirRetornos: () => void;
 }) {
-  const { pending, error, entregar, abrirRetorno, finalizarRetorno } = usePosVendaV3(storeId, os.id, onChanged);
+  const { pending, error, entregar, abrirRetorno, finalizarRetorno, salvarAssinaturaRetirada } = usePosVendaV3(storeId, os.id, onChanged);
 
   const status = statusV3FromOS(os);
   const entrega = lerEntregaV3(os);
@@ -84,14 +85,25 @@ export function PosVendaV3({
   const [recebidoPor, setRecebidoPor] = useState("");
   const [obsEntrega, setObsEntrega] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [assinaturaRetirada, setAssinaturaRetirada] = useState<string | null>(null);
 
   const onEntregar = async () => {
-    const ok = await entregar({ recebidoPor: recebidoPor.trim() || undefined, observacao: obsEntrega.trim() || undefined });
+    const ok = await entregar({
+      recebidoPor: recebidoPor.trim() || undefined,
+      observacao: obsEntrega.trim() || undefined,
+      assinaturaRetirada: assinaturaRetirada ?? undefined,
+    });
     if (ok) {
       setRecebidoPor("");
       setObsEntrega("");
+      setAssinaturaRetirada(null);
       notificar("Entrega registrada.");
     }
+  };
+  const onAssinarRetirada = async (dataUrl: string) => {
+    const ok = await salvarAssinaturaRetirada(dataUrl, entrega.recebidoPor);
+    if (ok) notificar("Assinatura de retirada capturada.");
+    else if (error) notificar(error);
   };
   const onAbrir = async () => {
     if (!motivo.trim()) return;
@@ -132,6 +144,20 @@ export function PosVendaV3({
               <KV label="Entregue por" value={entrega.entreguePor} />
               <KV label="Observação" value={entrega.observacao} />
             </dl>
+            {entrega.assinaturaRetiradaDataUrl ? (
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Assinatura de retirada:</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={entrega.assinaturaRetiradaDataUrl} alt="Assinatura de retirada" className="h-12 rounded border border-border bg-card object-contain px-2" />
+              </div>
+            ) : (
+              <div className="mt-2">
+                <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <PenLine className="h-3 w-3" aria-hidden /> Assinatura de retirada (capturar agora)
+                </p>
+                <SignaturePadV3 onSave={onAssinarRetirada} salvando={pending === "assinatura"} label="Salvar assinatura" height={120} />
+              </div>
+            )}
           </div>
         ) : deliverable ? (
           <div className="rounded-lg border border-border bg-background p-3">
@@ -139,6 +165,20 @@ export function PosVendaV3({
             <div className="grid gap-2 sm:grid-cols-2">
               <input className={inputCls} value={recebidoPor} onChange={(e) => setRecebidoPor(e.target.value)} placeholder={`Recebido por (padrão: ${os.cliente?.nome ?? "cliente"})`} />
               <input className={inputCls} value={obsEntrega} onChange={(e) => setObsEntrega(e.target.value)} placeholder="Observação (opcional)" />
+            </div>
+            <div className="mt-2">
+              <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <PenLine className="h-3 w-3" aria-hidden /> Assinatura de retirada (opcional)
+              </p>
+              {assinaturaRetirada ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={assinaturaRetirada} alt="Assinatura de retirada" className="h-14 rounded border border-border bg-card object-contain px-2" />
+                  <ButtonV3 variant="ghost" onClick={() => setAssinaturaRetirada(null)}>Refazer</ButtonV3>
+                </div>
+              ) : (
+                <SignaturePadV3 onSave={(d) => setAssinaturaRetirada(d)} label="Capturar assinatura" hint="O cliente assina ao retirar o aparelho." height={120} />
+              )}
             </div>
             <ButtonV3 variant="primary" className="mt-2" disabled={pending === "entrega"} onClick={onEntregar}>
               {pending === "entrega" ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}

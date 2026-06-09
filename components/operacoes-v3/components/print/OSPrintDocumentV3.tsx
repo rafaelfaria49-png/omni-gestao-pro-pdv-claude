@@ -173,6 +173,13 @@ export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
       {/* Prova de entrada (SPRINT_3E.1) — estado físico + acessórios + credenciais mascaradas */}
       {provaEntrada.temDados ? (
         <Secao titulo="Prova de entrada">
+          {provaEntrada.identificacao.serial || provaEntrada.identificacao.operadora || provaEntrada.identificacao.cor ? (
+            <p className="mb-1 text-[11px] text-black">
+              {provaEntrada.identificacao.serial ? <span><span className="text-zinc-600">Serial: </span>{provaEntrada.identificacao.serial}</span> : null}
+              {provaEntrada.identificacao.operadora ? <span className="ml-3"><span className="text-zinc-600">Operadora: </span>{provaEntrada.identificacao.operadora}</span> : null}
+              {provaEntrada.identificacao.cor ? <span className="ml-3"><span className="text-zinc-600">Cor: </span>{provaEntrada.identificacao.cor}</span> : null}
+            </p>
+          ) : null}
           <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
             {provaEntrada.estadoFisico.map((c) => (
               <p key={c.label} className="text-[11px] text-black">
@@ -315,6 +322,10 @@ export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
         </p>
         <div className="mt-8 grid grid-cols-2 gap-10">
           <div className="text-center">
+            {!interna && provaEntrada.assinaturaClienteDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={provaEntrada.assinaturaClienteDataUrl} alt="" className="mx-auto mb-1 h-12 object-contain" />
+            ) : null}
             <div className="border-t border-black pt-1 text-[11px] text-black">Assinatura do cliente</div>
           </div>
           <div className="text-center">

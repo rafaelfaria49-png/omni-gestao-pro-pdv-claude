@@ -8,10 +8,10 @@
 // ============================================================================
 
 import { useCallback, useState } from "react";
-import { registrarEntregaV3, type RegistrarEntregaInputV3 } from "@/lib/operacoes-v3/entrega-actions";
+import { registrarEntregaV3, salvarAssinaturaRetiradaV3, type RegistrarEntregaInputV3 } from "@/lib/operacoes-v3/entrega-actions";
 import { abrirRetornoV3, finalizarRetornoV3 } from "@/lib/operacoes-v3/retorno-actions";
 
-export type PosVendaPending = "entrega" | "retorno" | "finalizar" | null;
+export type PosVendaPending = "entrega" | "retorno" | "finalizar" | "assinatura" | null;
 
 export interface PosVendaState {
   pending: PosVendaPending;
@@ -19,6 +19,7 @@ export interface PosVendaState {
   entregar: (input: RegistrarEntregaInputV3) => Promise<boolean>;
   abrirRetorno: (motivo: string) => Promise<boolean>;
   finalizarRetorno: (retornoId: string, observacao?: string) => Promise<boolean>;
+  salvarAssinaturaRetirada: (dataUrl: string, por?: string) => Promise<boolean>;
 }
 
 export function usePosVendaV3(storeId: string | null, osId: string | null, onChanged?: () => void): PosVendaState {
@@ -55,6 +56,10 @@ export function usePosVendaV3(storeId: string | null, osId: string | null, onCha
     (retornoId: string, observacao?: string) => run("finalizar", (sid, id) => finalizarRetornoV3(sid, id, retornoId, { observacao })),
     [run],
   );
+  const salvarAssinaturaRetirada = useCallback(
+    (dataUrl: string, por?: string) => run("assinatura", (sid, id) => salvarAssinaturaRetiradaV3(sid, id, dataUrl, por)),
+    [run],
+  );
 
-  return { pending, error, entregar, abrirRetorno, finalizarRetorno };
+  return { pending, error, entregar, abrirRetorno, finalizarRetorno, salvarAssinaturaRetirada };
 }

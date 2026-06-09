@@ -26,6 +26,7 @@ import {
   bytesDeDataUrlV3,
   lerProvaEntradaV3,
   provaEntradaCriadaV3,
+  validarAssinaturaV3,
   validarFotoEntradaV3,
   type AcessorioEntradaV3,
   type AvariaV3,
@@ -34,6 +35,7 @@ import {
   type EstadoFisicoItemV3,
   type EstadoFisicoStatusV3,
   type FotoEntradaV3,
+  type IdentificacaoV3,
   type ProvaEntradaV3,
 } from "./prova-entrada-model";
 
@@ -78,16 +80,19 @@ async function gravar(id: string, next: OSPayloadFull): Promise<OrdemServico> {
   return next as unknown as OrdemServico;
 }
 
-/** Aplica a prova + evento ao payload e persiste. Define versão/criadoEm/criadoPor. */
+/** Aplica a prova + evento ao payload e persiste. Define versão/criadoEm/criadoPor.
+ *  `patchPayload` permite sincronizar campos legados (ex.: senhaEquipamento). */
 async function persistirProva(
   id: string,
   payload: OSPayloadFull,
   prova: ProvaEntradaV3,
   operador: string,
   evento: EventoTimeline,
+  patchPayload?: Record<string, unknown>,
 ): Promise<OrdemServico> {
   const next: OSPayloadFull = {
     ...payload,
+    ...(patchPayload ?? {}),
     provaEntradaV3: {
       ...prova,
       versao: Math.max(1, prova.versao || 0) || 1,
@@ -167,6 +172,56 @@ export async function salvarProvaEntradaV3(storeId: string, osId: string, input:
     jaCriada ? "Prova de entrada atualizada." : "Prova de entrada registrada (estado físico, avarias e credenciais).",
     { evento: jaCriada ? "prova_entrada_atualizada" : "prova_entrada_criada", avariados: resumo, avarias: next.avarias.length },
   );
+  // Consolidação (item 4): a senha agora é editada aqui — sincroniza o campo legado
+  // `senhaEquipamento` (lido pela impressão da OS / pad 3×3) para fonte única.
+  const senha = next.credenciais.senha;
+  const patch = senha
+    ? { senhaEquipamento: senha, senhaEquipamentoTipo: next.credenciais.senhaTipo ?? "texto" }
+    : undefined;
+  return persistirProva(id, payload, next, operador, evento, patch);
+}
+
+// ----------------------------------------------------------------------------
+// SPRINT_3E.2 — Identificação completa (item 1)
+// ----------------------------------------------------------------------------
+
+export async function salvarIdentificacaoV3(storeId: string, osId: string, input: IdentificacaoV3): Promise<OrdemServico> {
+  const { id, session, payload } = await carregar(storeId, osId);
+  const operador = operadorLabel(session);
+  const atual = lerProvaEntradaV3(payload as unknown as OrdemServico);
+  const next: ProvaEntradaV3 = {
+    ...atual,
+    identificacao: {
+      imei: str(input?.imei) || undefined,
+      serial: str(input?.serial) || undefined,
+      operadora: str(input?.operadora) || undefined,
+      modelo: str(input?.modelo) || undefined,
+      cor: str(input?.cor) || undefined,
+    },
+  };
+  const evento = makeEvento("observacao", operador, "Identificação do aparelho atualizada (IMEI/serial/operadora).", { evento: "identificacao_atualizada" });
+  return persistirProva(id, payload, next, operador, evento);
+}
+
+// ----------------------------------------------------------------------------
+// SPRINT_3E.2 — Assinatura digital do cliente na ENTRADA (item 2)
+// ----------------------------------------------------------------------------
+
+export async function salvarAssinaturaClienteV3(storeId: string, osId: string, dataUrl: string, por?: string): Promise<OrdemServico> {
+  const { id, session, payload } = await carregar(storeId, osId);
+  const veredito = validarAssinaturaV3(dataUrl ?? "");
+  if (!veredito.ok) throw new Error(veredito.motivo ?? "Assinatura inválida.");
+  const operador = operadorLabel(session);
+  const atual = lerProvaEntradaV3(payload as unknown as OrdemServico);
+  const next: ProvaEntradaV3 = {
+    ...atual,
+    assinaturaCliente: {
+      dataUrl: dataUrl.trim(),
+      criadoEm: nowIso(),
+      por: str(por) || str((payload as unknown as OrdemServico).cliente?.nome) || undefined,
+    },
+  };
+  const evento = makeEvento("observacao", operador, "Assinatura do cliente capturada (entrada).", { evento: "assinatura_cliente_capturada" });
   return persistirProva(id, payload, next, operador, evento);
 }
 

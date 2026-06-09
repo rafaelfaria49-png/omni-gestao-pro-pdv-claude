@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { OrdemServico } from "@/types/os";
 import {
+  ASSINATURA_MAX_BYTES_V3,
   COMPONENTES_FISICOS_V3,
   FOTO_MAX_V3,
   credenciaisMascaradasV3,
@@ -10,6 +11,7 @@ import {
   mascararSegredoV3,
   provaEntradaCriadaV3,
   resumoEstadoFisicoV3,
+  validarAssinaturaV3,
   validarFotoEntradaV3,
 } from "./prova-entrada-model";
 
@@ -93,6 +95,45 @@ describe("prova-entrada-model · validação de foto", () => {
   it("rejeita imagem grande demais", () => {
     const grande = "data:image/jpeg;base64," + "A".repeat(700 * 1024);
     expect(validarFotoEntradaV3(grande, 0).ok).toBe(false);
+  });
+});
+
+describe("prova-entrada-model · identificação + assinatura (SPRINT_3E.2)", () => {
+  it("OS sem prova → identificação semeada do equipamento (compat)", () => {
+    const p = lerProvaEntradaV3(os({ equipamento: { numeroSerie: "359..IMEI", modelo: "iPhone 13" } }));
+    expect(p.identificacao.imei).toBe("359..IMEI");
+    expect(p.identificacao.modelo).toBe("iPhone 13");
+    expect(p.identificacao.serial).toBeUndefined();
+    expect(p.assinaturaCliente).toBeUndefined();
+  });
+
+  it("lê identificação salva (serial/operadora/cor) e assinatura do cliente", () => {
+    const p = lerProvaEntradaV3(
+      os({
+        provaEntradaV3: {
+          versao: 1,
+          criadoEm: "x",
+          identificacao: { imei: "1", serial: "S-9", operadora: "Vivo", cor: "Preto" },
+          assinaturaCliente: { dataUrl: imgUrl, criadoEm: "x", por: "Maria" },
+        },
+      }),
+    );
+    expect(p.identificacao).toMatchObject({ imei: "1", serial: "S-9", operadora: "Vivo", cor: "Preto" });
+    expect(p.assinaturaCliente?.dataUrl).toBe(imgUrl);
+    expect(p.assinaturaCliente?.por).toBe("Maria");
+  });
+
+  it("descarta assinatura inválida (não-imagem)", () => {
+    const p = lerProvaEntradaV3(os({ provaEntradaV3: { versao: 1, criadoEm: "x", assinaturaCliente: { dataUrl: "nope" } } }));
+    expect(p.assinaturaCliente).toBeUndefined();
+  });
+
+  it("validarAssinaturaV3 aceita imagem e rejeita grande/inválida", () => {
+    expect(validarAssinaturaV3(imgUrl).ok).toBe(true);
+    expect(validarAssinaturaV3("data:text/plain;base64,xx").ok).toBe(false);
+    // base64 → bytes ≈ len * 3/4, então o comprimento precisa exceder MAX * 4/3.
+    const grande = "data:image/png;base64," + "A".repeat(Math.ceil((ASSINATURA_MAX_BYTES_V3 * 4) / 3) + 100);
+    expect(validarAssinaturaV3(grande).ok).toBe(false);
   });
 });
 

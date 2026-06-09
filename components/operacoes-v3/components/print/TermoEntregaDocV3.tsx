@@ -56,6 +56,8 @@ export function TermoEntregaDocV3({ doc }: { doc: TermoEntregaDoc }) {
           <h2 className="mb-1 border-b border-zinc-400 pb-0.5 text-[11px] font-bold uppercase tracking-wide text-zinc-700">Equipamento</h2>
           <Campo rotulo="Aparelho" valor={equip} />
           <Campo rotulo="IMEI / Série" valor={equipamento.numeroSerie} />
+          <Campo rotulo="Serial" valor={equipamento.serial} />
+          <Campo rotulo="Operadora" valor={equipamento.operadora} />
         </section>
       </div>
 
@@ -83,7 +85,13 @@ export function TermoEntregaDocV3({ doc }: { doc: TermoEntregaDoc }) {
           condições de garantia informadas nesta Ordem de Serviço.
         </p>
         <div className="mt-10 grid grid-cols-2 gap-10">
-          <div className="text-center"><div className="border-t border-black pt-1 text-[11px] text-black">Assinatura do cliente</div></div>
+          <div className="text-center">
+            {doc.assinaturaRetiradaDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={doc.assinaturaRetiradaDataUrl} alt="" className="mx-auto mb-1 h-12 object-contain" />
+            ) : null}
+            <div className="border-t border-black pt-1 text-[11px] text-black">Assinatura do cliente</div>
+          </div>
           <div className="text-center"><div className="border-t border-black pt-1 text-[11px] text-black">Responsável pela entrega</div></div>
         </div>
         <p className="mt-4 text-right text-[10px] text-zinc-600">Data: ____ / ____ / ________</p>

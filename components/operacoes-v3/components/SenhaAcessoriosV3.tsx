@@ -3,6 +3,10 @@
 // ============================================================================
 // Operações V3 — Senha + acessórios recebidos (item 5) · editável + persistível.
 // Persiste em senhaEquipamento/Tipo + equipamento.acessorios via workspace-actions.
+//
+// @deprecated SPRINT_3E.2 — CONSOLIDADO na Prova de Entrada (ProvaEntradaV3:
+// credenciais com senha/padrão 3×3 + acessórios). NÃO é mais renderizado no
+// OS Workspace. Mantido apenas para referência/rollback.
 // ============================================================================
 
 import { useEffect, useMemo, useState } from "react";

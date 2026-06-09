@@ -50,6 +50,7 @@ import {
   resumoEstadoFisicoV3,
   tipoAvariaLabelV3,
   type EstadoFisicoStatusV3,
+  type IdentificacaoV3,
 } from "./prova-entrada-model";
 
 // ----------------------------------------------------------------------------
@@ -278,22 +279,37 @@ export function termoGarantiaDaOSV3(os: OrdemServico): TermoGarantiaV3 {
 
 export interface ProvaEntradaPrintV3 {
   temDados: boolean;
+  identificacao: IdentificacaoV3;
   estadoFisico: { label: string; status: EstadoFisicoStatusV3; statusLabel: string }[];
   resumo: { ok: number; avariado: number; ausente: number; total: number };
   avarias: { tipo: string; local: string; descricao?: string }[];
   acessorios: { label: string; presente: boolean }[];
   credenciais: { rotulo: string; valor: string }[];
   totalFotos: number;
+  /** Assinatura digital do cliente (entrada) — data URL, exibida na OS. */
+  assinaturaClienteDataUrl?: string;
+}
+
+function temIdentificacaoExtraV3(i: IdentificacaoV3): boolean {
+  return !!(s(i.serial) || s(i.operadora) || s(i.cor));
 }
 
 export function provaEntradaImprimivelV3(os: OrdemServico): ProvaEntradaPrintV3 {
   const p = lerProvaEntradaV3(os);
   const resumo = resumoEstadoFisicoV3(p.estadoFisico);
   const acessoriosLabel = new Map(ACESSORIOS_ENTRADA_V3.map((a) => [a.id, a.label]));
+  const assinaturaClienteDataUrl = s(p.assinaturaCliente?.dataUrl).startsWith("data:image/") ? s(p.assinaturaCliente?.dataUrl) : undefined;
   const temDados =
-    provaEntradaCriadaV3(os) || resumo.avariado > 0 || resumo.ausente > 0 || p.avarias.length > 0 || p.fotos.length > 0 || credenciaisMascaradasV3(p.credenciais).length > 0;
+    provaEntradaCriadaV3(os) ||
+    resumo.avariado > 0 ||
+    resumo.ausente > 0 ||
+    p.avarias.length > 0 ||
+    p.fotos.length > 0 ||
+    credenciaisMascaradasV3(p.credenciais).length > 0 ||
+    temIdentificacaoExtraV3(p.identificacao);
   return {
     temDados,
+    identificacao: p.identificacao,
     estadoFisico: p.estadoFisico.map((i) => ({
       label: componenteFisicoLabelV3(i.componente),
       status: i.status,
@@ -304,6 +320,7 @@ export function provaEntradaImprimivelV3(os: OrdemServico): ProvaEntradaPrintV3 
     acessorios: p.acessorios.map((a) => ({ label: acessoriosLabel.get(a.id) ?? a.id, presente: a.presente })),
     credenciais: credenciaisMascaradasV3(p.credenciais),
     totalFotos: p.fotos.length,
+    assinaturaClienteDataUrl,
   };
 }
 
@@ -526,16 +543,19 @@ export interface TermoEntregaDocV3 {
   numero: string;
   impressoEm: string;
   cliente: ClientePrintV3;
-  equipamento: { tipo: string; marca: string; modelo: string; numeroSerie: string };
+  equipamento: { tipo: string; marca: string; modelo: string; numeroSerie: string; serial?: string; operadora?: string };
   servicoRealizado: string[];
   dataEntrega?: string;
   recebidoPor?: string;
   observacao?: string;
+  /** Assinatura digital de retirada (data URL) — SPRINT_3E.2. */
+  assinaturaRetiradaDataUrl?: string;
 }
 
 export function montarTermoEntregaV3(os: OrdemServico, empresa?: EmpresaPrintInputV3, opts?: { now?: Date }): TermoEntregaDocV3 {
   const now = opts?.now ?? new Date();
   const entrega = lerEntregaV3(os);
+  const ident = lerProvaEntradaV3(os).identificacao;
   const servicoRealizado = itensImprimiveisV3(os)
     .filter((i) => i.categoria === "Serviço" || !i.brinde)
     .map((i) => i.descricao);
@@ -553,11 +573,14 @@ export function montarTermoEntregaV3(os: OrdemServico, empresa?: EmpresaPrintInp
       tipo: s(os.equipamento?.tipo),
       marca: s(os.equipamento?.marca),
       modelo: s(os.equipamento?.modelo),
-      numeroSerie: s(os.equipamento?.numeroSerie),
+      numeroSerie: s(ident.imei) || s(os.equipamento?.numeroSerie),
+      serial: s(ident.serial) || undefined,
+      operadora: s(ident.operadora) || undefined,
     },
     servicoRealizado,
     dataEntrega: entrega.entregueEm,
     recebidoPor: entrega.recebidoPor,
     observacao: entrega.observacao,
+    assinaturaRetiradaDataUrl: entrega.assinaturaRetiradaDataUrl,
   };
 }

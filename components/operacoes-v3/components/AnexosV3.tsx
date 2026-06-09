@@ -4,6 +4,10 @@
 // Operações V3 — Fotos & anexos (item 8) · estrutura MVP.
 // Organiza os anexos existentes em ANTES / DEPOIS / outros. O upload real fica
 // para fase futura — "Adicionar" é honesto (toast de construção), sem mock.
+//
+// @deprecated SPRINT_3E.2 — SUBSTITUÍDO pela Prova de Entrada (ProvaEntradaV3),
+// que faz upload REAL de fotos (frontal/traseira/lateral/defeito). Este bloco era
+// placeholder e NÃO é mais renderizado no OS Workspace. Mantido para rollback.
 // ============================================================================
 
 import { Camera, ImageIcon, Paperclip, Plus } from "lucide-react";

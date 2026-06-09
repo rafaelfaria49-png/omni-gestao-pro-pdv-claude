@@ -44,17 +44,22 @@ export interface EntregaV3View {
   /** Quem retirou o aparelho (cliente/portador). */
   recebidoPor?: string;
   observacao?: string;
+  /** Assinatura digital de retirada (data URL) — SPRINT_3E.2. */
+  assinaturaRetiradaDataUrl?: string;
 }
 
 export function lerEntregaV3(os: OrdemServico | null | undefined): EntregaV3View {
   const e = (os as { entregaV3?: Record<string, unknown> } | null | undefined)?.entregaV3;
   const entregueEm = s(e?.entregueEm) || s(os?.entregueEm) || s(os?.retirada?.retiradoEm) || undefined;
+  const assin = (e?.assinaturaRetirada ?? undefined) as { dataUrl?: unknown } | undefined;
+  const assinaturaRetiradaDataUrl = s(assin?.dataUrl).startsWith("data:image/") ? s(assin?.dataUrl) : undefined;
   return {
     entregue: !!entregueEm,
     entregueEm,
     entreguePor: s(e?.entreguePor) || undefined,
     recebidoPor: s(e?.recebidoPor) || s(os?.retirada?.retiradoPor) || undefined,
     observacao: s(e?.observacao) || s(os?.retirada?.observacao) || undefined,
+    assinaturaRetiradaDataUrl,
   };
 }
 

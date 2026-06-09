@@ -177,6 +177,39 @@ export function acessorioEntradaLabelV3(id: AcessorioEntradaIdV3): string {
 }
 
 // ----------------------------------------------------------------------------
+// SPRINT_3E.2 — Identificação completa do aparelho + assinatura do cliente
+// ----------------------------------------------------------------------------
+
+export interface IdentificacaoV3 {
+  imei?: string;
+  /** Serial SEPARADO do IMEI (muitos aparelhos têm os dois). */
+  serial?: string;
+  operadora?: string;
+  modelo?: string;
+  cor?: string;
+}
+
+export const OPERADORAS_V3: string[] = ["Vivo", "Claro", "TIM", "Oi", "Desbloqueado", "Outra"];
+
+export interface AssinaturaV3 {
+  /** Data URL PNG do traçado (transparente). */
+  dataUrl: string;
+  criadoEm: string;
+  /** Quem assinou (cliente/portador), quando informado. */
+  por?: string;
+}
+
+/** Limite da assinatura (traçado leve — bem menor que uma foto). */
+export const ASSINATURA_MAX_BYTES_V3 = 200 * 1024;
+
+export function validarAssinaturaV3(dataUrl: string): VeredictoFotoV3 {
+  const v = (dataUrl ?? "").trim();
+  if (!v.startsWith("data:image/")) return { ok: false, motivo: "Assinatura inválida." };
+  if (bytesDeDataUrlV3(v) > ASSINATURA_MAX_BYTES_V3) return { ok: false, motivo: "Assinatura muito grande." };
+  return { ok: true };
+}
+
+// ----------------------------------------------------------------------------
 // Agregado
 // ----------------------------------------------------------------------------
 
@@ -185,11 +218,14 @@ export interface ProvaEntradaV3 {
   criadoEm: string;
   criadoPor?: string;
   atualizadoEm?: string;
+  identificacao: IdentificacaoV3;
   estadoFisico: EstadoFisicoItemV3[];
   avarias: AvariaV3[];
   fotos: FotoEntradaV3[];
   credenciais: CredenciaisEntradaV3;
   acessorios: AcessorioEntradaV3[];
+  /** Assinatura digital do cliente NA ENTRADA (data URL). */
+  assinaturaCliente?: AssinaturaV3;
 }
 
 function s(v: unknown): string {
@@ -229,6 +265,32 @@ function sementeCredenciaisV3(os: OrdemServico | null | undefined): CredenciaisE
   const tipo = os?.senhaEquipamentoTipo;
   const senhaTipo: SenhaTipoV3 | undefined = tipo === "numerica" || tipo === "texto" || tipo === "padrao" ? tipo : undefined;
   return senha ? { senha, senhaTipo } : {};
+}
+
+/** Semeia a identificação a partir do equipamento já cadastrado (compat). */
+function sementeIdentificacaoV3(os: OrdemServico | null | undefined): IdentificacaoV3 {
+  const imei = s(os?.equipamento?.numeroSerie);
+  const modelo = s(os?.equipamento?.modelo);
+  return { imei: imei || undefined, modelo: modelo || undefined };
+}
+
+function normalizarIdentificacao(raw: unknown, os: OrdemServico | null | undefined): IdentificacaoV3 {
+  const seed = sementeIdentificacaoV3(os);
+  const o = (raw ?? {}) as Record<string, unknown>;
+  return {
+    imei: s(o.imei) || seed.imei,
+    serial: s(o.serial) || undefined,
+    operadora: s(o.operadora) || undefined,
+    modelo: s(o.modelo) || seed.modelo,
+    cor: s(o.cor) || undefined,
+  };
+}
+
+function normalizarAssinatura(raw: unknown): AssinaturaV3 | undefined {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const dataUrl = s(o.dataUrl);
+  if (!dataUrl.startsWith("data:image/")) return undefined;
+  return { dataUrl, criadoEm: s(o.criadoEm), por: s(o.por) || undefined };
 }
 
 function normalizarEstadoFisico(raw: unknown): EstadoFisicoItemV3[] {
@@ -314,11 +376,13 @@ export function lerProvaEntradaV3(os: OrdemServico | null | undefined): ProvaEnt
     return {
       versao: 0,
       criadoEm: "",
+      identificacao: sementeIdentificacaoV3(os),
       estadoFisico: estadoFisicoPadraoV3(),
       avarias: [],
       fotos: [],
       credenciais: sementeCredenciaisV3(os),
       acessorios: sementeAcessoriosV3(os),
+      assinaturaCliente: undefined,
     };
   }
   return {
@@ -326,11 +390,13 @@ export function lerProvaEntradaV3(os: OrdemServico | null | undefined): ProvaEnt
     criadoEm: s(raw.criadoEm),
     criadoPor: s(raw.criadoPor) || undefined,
     atualizadoEm: s(raw.atualizadoEm) || undefined,
+    identificacao: normalizarIdentificacao(raw.identificacao, os),
     estadoFisico: normalizarEstadoFisico(raw.estadoFisico),
     avarias: normalizarAvarias(raw.avarias),
     fotos: normalizarFotos(raw.fotos),
     credenciais: normalizarCredenciais(raw.credenciais),
     acessorios: normalizarAcessorios(raw.acessorios, os),
+    assinaturaCliente: normalizarAssinatura(raw.assinaturaCliente),
   };
 }
 

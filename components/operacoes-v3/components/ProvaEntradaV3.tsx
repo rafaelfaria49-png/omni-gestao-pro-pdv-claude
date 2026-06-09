@@ -9,7 +9,7 @@
 // ============================================================================
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Camera, ClipboardCheck, KeyRound, Loader2, Plus, Save, ShieldAlert, Trash2, Upload } from "lucide-react";
+import { Camera, ClipboardCheck, KeyRound, Loader2, PenLine, Plus, Save, ShieldAlert, Smartphone, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { OrdemServico } from "@/types/os";
 import {
@@ -18,6 +18,7 @@ import {
   COMPONENTES_FISICOS_V3,
   ESTADO_FISICO_STATUS_META_V3,
   FOTO_MAX_V3,
+  OPERADORAS_V3,
   TIPOS_AVARIA_V3,
   componenteFisicoLabelV3,
   lerProvaEntradaV3,
@@ -29,10 +30,14 @@ import {
   type CredenciaisEntradaV3,
   type EstadoFisicoItemV3,
   type EstadoFisicoStatusV3,
+  type IdentificacaoV3,
+  type SenhaTipoV3,
   type TipoAvariaV3,
 } from "@/lib/operacoes-v3/prova-entrada-model";
 import { useProvaEntradaV3 } from "../hooks/use-prova-entrada-v3";
 import { ButtonV3 } from "./UiV3";
+import { PatternPadV3 } from "./PatternPadV3";
+import { SignaturePadV3 } from "./SignaturePadV3";
 
 const inputCls =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40";
@@ -86,9 +91,15 @@ export function ProvaEntradaV3({
   notificar: (msg: string) => void;
 }) {
   const prova = useMemo(() => lerProvaEntradaV3(os), [os]);
-  const { pending, error, salvarProva, salvarAcessorios, adicionarFoto, removerFoto } = useProvaEntradaV3(storeId, os.id, onChanged);
+  const { pending, error, salvarProva, salvarAcessorios, adicionarFoto, removerFoto, salvarIdentificacao, salvarAssinaturaCliente } = useProvaEntradaV3(
+    storeId,
+    os.id,
+    onChanged,
+  );
 
   // --- estado editável (estado físico + avarias + credenciais) ---
+  const [ident, setIdent] = useState<IdentificacaoV3>(prova.identificacao);
+  const [identDirty, setIdentDirty] = useState(false);
   const [estado, setEstado] = useState<EstadoFisicoItemV3[]>(prova.estadoFisico);
   const [avarias, setAvarias] = useState<AvariaV3[]>(prova.avarias);
   const [cred, setCred] = useState<CredenciaisEntradaV3>(prova.credenciais);
@@ -108,14 +119,33 @@ export function ProvaEntradaV3({
 
   const editKey = `${os.id}:${os.atualizadoEm ?? ""}`;
   useEffect(() => {
+    setIdent(prova.identificacao);
     setEstado(prova.estadoFisico);
     setAvarias(prova.avarias);
     setCred(prova.credenciais);
     setAcessorios(prova.acessorios);
+    setIdentDirty(false);
     setDirty(false);
     setAcDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editKey]);
+
+  const mutIdent = (patch: Partial<IdentificacaoV3>) => {
+    setIdent((v) => ({ ...v, ...patch }));
+    setIdentDirty(true);
+  };
+  const onSalvarIdent = async () => {
+    const ok = await salvarIdentificacao(ident);
+    if (ok) {
+      setIdentDirty(false);
+      notificar("Identificação salva.");
+    } else if (error) notificar(error);
+  };
+  const onAssinarCliente = async (dataUrl: string) => {
+    const ok = await salvarAssinaturaCliente(dataUrl, os.cliente?.nome);
+    if (ok) notificar("Assinatura do cliente capturada.");
+    else if (error) notificar(error);
+  };
 
   const resumo = resumoEstadoFisicoV3(estado);
 
@@ -204,6 +234,42 @@ export function ProvaEntradaV3({
       </div>
 
       <div className="space-y-5 px-4 py-4">
+        {/* 0. Identificação do aparelho (SPRINT_3E.2) */}
+        <div>
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <Smartphone className="h-3.5 w-3.5" aria-hidden /> Identificação do aparelho
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block">
+              <span className="mb-1 block text-[11px] text-muted-foreground">IMEI</span>
+              <input className={inputCls} value={ident.imei ?? ""} onChange={(e) => mutIdent({ imei: e.target.value })} placeholder="IMEI" maxLength={40} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] text-muted-foreground">Serial</span>
+              <input className={inputCls} value={ident.serial ?? ""} onChange={(e) => mutIdent({ serial: e.target.value })} placeholder="Nº de série" maxLength={40} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] text-muted-foreground">Operadora</span>
+              <input className={inputCls} list="operadoras-v3" value={ident.operadora ?? ""} onChange={(e) => mutIdent({ operadora: e.target.value })} placeholder="Vivo, Claro…" maxLength={30} />
+              <datalist id="operadoras-v3">{OPERADORAS_V3.map((o) => <option key={o} value={o} />)}</datalist>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] text-muted-foreground">Modelo</span>
+              <input className={inputCls} value={ident.modelo ?? ""} onChange={(e) => mutIdent({ modelo: e.target.value })} placeholder="Modelo" maxLength={60} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-[11px] text-muted-foreground">Cor (opcional)</span>
+              <input className={inputCls} value={ident.cor ?? ""} onChange={(e) => mutIdent({ cor: e.target.value })} placeholder="Cor" maxLength={30} />
+            </label>
+            <div className="flex items-end">
+              <ButtonV3 variant="outline" className="w-full" disabled={busy || !identDirty} onClick={onSalvarIdent}>
+                {pending === "identificacao" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Salvar identificação
+              </ButtonV3>
+            </div>
+          </div>
+        </div>
+
         {/* 1. Estado físico estruturado */}
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Estado físico</p>
@@ -278,8 +344,12 @@ export function ProvaEntradaV3({
               <input className={inputCls} value={cred.pin ?? ""} onChange={(e) => mutCred({ pin: e.target.value })} placeholder="Ex.: 0000" maxLength={20} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[11px] text-muted-foreground">Senha / desenho</span>
-              <input className={inputCls} value={cred.senha ?? ""} onChange={(e) => mutCred({ senha: e.target.value })} placeholder="Senha de desbloqueio" maxLength={60} />
+              <span className="mb-1 block text-[11px] text-muted-foreground">Tipo de senha</span>
+              <select className={inputCls} value={cred.senhaTipo ?? "numerica"} onChange={(e) => mutCred({ senhaTipo: e.target.value as SenhaTipoV3 })}>
+                <option value="numerica">Numérica / PIN</option>
+                <option value="texto">Texto</option>
+                <option value="padrao">Padrão (desenho)</option>
+              </select>
             </label>
             <label className="block">
               <span className="mb-1 block text-[11px] text-muted-foreground">Conta Google</span>
@@ -290,6 +360,17 @@ export function ProvaEntradaV3({
               <input className={inputCls} value={cred.contaApple ?? ""} onChange={(e) => mutCred({ contaApple: e.target.value })} placeholder="email@icloud.com" maxLength={120} />
             </label>
           </div>
+          {cred.senhaTipo === "padrao" ? (
+            <div className="mt-2">
+              <span className="mb-1 block text-[11px] text-muted-foreground">Senha padrão (desenho)</span>
+              <PatternPadV3 value={cred.senha ?? ""} onChange={(v) => mutCred({ senha: v })} />
+            </div>
+          ) : (
+            <label className="mt-2 block">
+              <span className="mb-1 block text-[11px] text-muted-foreground">Senha de desbloqueio</span>
+              <input className={inputCls} value={cred.senha ?? ""} onChange={(e) => mutCred({ senha: e.target.value })} placeholder="Senha" maxLength={60} />
+            </label>
+          )}
           <div className="mt-2 flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm text-foreground">
               <input type="checkbox" className="accent-primary" checked={cred.faceId === true} onChange={(e) => mutCred({ faceId: e.target.checked })} />
@@ -314,6 +395,23 @@ export function ProvaEntradaV3({
               Descartar
             </ButtonV3>
           ) : null}
+        </div>
+
+        {/* 2b. Assinatura do cliente (entrada) — SPRINT_3E.2 */}
+        <div className="border-t border-border pt-4">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <PenLine className="h-3.5 w-3.5" aria-hidden /> Assinatura do cliente (entrada)
+          </p>
+          {prova.assinaturaCliente?.dataUrl ? (
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={prova.assinaturaCliente.dataUrl} alt="Assinatura do cliente" className="h-16 rounded border border-border bg-card object-contain px-2" />
+              <span className="text-[11px] text-muted-foreground">
+                Assinatura registrada{prova.assinaturaCliente.por ? ` · ${prova.assinaturaCliente.por}` : ""}. Assine novamente para substituir.
+              </span>
+            </div>
+          ) : null}
+          <SignaturePadV3 onSave={onAssinarCliente} salvando={pending === "assinatura"} label="Salvar assinatura" hint="O cliente assina confirmando a entrada e as condições." />
         </div>
 
         {/* 3. Fotos */}

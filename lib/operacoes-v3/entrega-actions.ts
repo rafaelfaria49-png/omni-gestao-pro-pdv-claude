@@ -24,6 +24,7 @@ import { operacaoStatusToPrismaStatus } from "@/components/operacoes/lovable/uti
 import { projetarStatusV2, statusV3FromOS } from "./status-machine";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { consumirEstoqueOSV3 } from "./estoque-sync";
+import { validarAssinaturaV3 } from "./prova-entrada-model";
 
 type OSPayloadFull = OrdemServico & Record<string, unknown>;
 
@@ -45,6 +46,8 @@ export interface RegistrarEntregaInputV3 {
   /** Quem retirou o aparelho (cliente/portador). Default: nome do cliente. */
   recebidoPor?: string;
   observacao?: string;
+  /** Assinatura digital de retirada (data URL PNG) — SPRINT_3E.2. */
+  assinaturaRetirada?: string;
 }
 
 export async function registrarEntregaV3(storeId: string, osId: string, input: RegistrarEntregaInputV3 = {}): Promise<OrdemServico> {
@@ -80,6 +83,10 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
   const observacao = (input.observacao ?? "").trim() || undefined;
   const now = nowIso();
 
+  // Assinatura de retirada (opcional) — validada e embarcada no entregaV3.
+  const assinaturaInput = (input.assinaturaRetirada ?? "").trim();
+  const assinaturaRetirada = assinaturaInput && validarAssinaturaV3(assinaturaInput).ok ? assinaturaInput : undefined;
+
   const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
   const eventos: EventoTimeline[] = [];
   // Passagem implícita por RECEBIDA quando a entrega parte de PRONTA (auditável).
@@ -94,6 +101,9 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
       observacao,
     }),
   );
+  if (assinaturaRetirada) {
+    eventos.push(makeEvento("observacao", operador, "Assinatura de retirada capturada.", { evento: "assinatura_retirada_capturada" }));
+  }
 
   const next: OSPayloadFull = {
     ...payload,
@@ -102,7 +112,13 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
     status: projetarStatusV2("entregue"),
     entregueEm: now,
     retirada: { confirmado: true, retiradoPor: recebidoPor, retiradoEm: now, observacao },
-    entregaV3: { entregueEm: now, entreguePor: operador, recebidoPor, observacao },
+    entregaV3: {
+      entregueEm: now,
+      entreguePor: operador,
+      recebidoPor,
+      observacao,
+      ...(assinaturaRetirada ? { assinaturaRetirada: { dataUrl: assinaturaRetirada, criadoEm: now, por: recebidoPor } } : {}),
+    },
     timeline: [...timeline, ...eventos],
     atualizadoEm: now,
   } as OSPayloadFull;
@@ -138,6 +154,52 @@ export async function registrarEntregaV3(storeId: string, osId: string, input: R
     metadata: { de: from, recebidoPor, viaEntregaFormal: true, estoque: estoque.status, estoqueItens: estoque.itens },
   });
 
+  revalidatePath("/dashboard/operacoes-v3");
+  return next as unknown as OrdemServico;
+}
+
+/**
+ * SPRINT_3E.2 — captura/atualiza a assinatura de retirada APÓS a entrega já
+ * registrada (caso não tenha sido assinada no momento). Só atualiza `entregaV3`
+ * + timeline; não muda status/estoque.
+ */
+export async function salvarAssinaturaRetiradaV3(storeId: string, osId: string, dataUrl: string, por?: string): Promise<OrdemServico> {
+  const sid = (storeId ?? "").trim();
+  const id = (osId ?? "").trim();
+  assertActiveStoreId(sid, "Operações V3");
+  if (!id) throw new Error("OS não informada.");
+
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Faça login para registrar a assinatura.");
+  const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.entregarOs, "Sem permissão para registrar a assinatura de retirada.");
+  if (!guard.ok) throw new Error(guard.error);
+
+  const veredito = validarAssinaturaV3(dataUrl ?? "");
+  if (!veredito.ok) throw new Error(veredito.motivo ?? "Assinatura inválida.");
+
+  const row = await prisma.ordemServico.findFirst({ where: { id, storeId: sid }, select: { id: true, payload: true } });
+  if (!row) throw new Error("OS não encontrada.");
+  const payload = row.payload as unknown as OSPayloadFull | null;
+  if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
+
+  if (statusV3FromOS(payload) !== "entregue") {
+    throw new Error("A assinatura de retirada só pode ser registrada após a entrega.");
+  }
+
+  const now = nowIso();
+  const operador = operadorLabel(session);
+  const entregaV3 = (payload.entregaV3 && typeof payload.entregaV3 === "object" ? payload.entregaV3 : {}) as Record<string, unknown>;
+  const recebidoPor =
+    (por ?? "").trim() || (typeof entregaV3.recebidoPor === "string" ? entregaV3.recebidoPor : "") || (payload as unknown as OrdemServico).cliente?.nome || "Cliente";
+  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+  const next: OSPayloadFull = {
+    ...payload,
+    entregaV3: { ...entregaV3, assinaturaRetirada: { dataUrl: dataUrl.trim(), criadoEm: now, por: recebidoPor } },
+    timeline: [...timeline, makeEvento("observacao", operador, "Assinatura de retirada capturada.", { evento: "assinatura_retirada_capturada" })],
+    atualizadoEm: now,
+  } as OSPayloadFull;
+
+  await prisma.ordemServico.update({ where: { id }, data: { payload: next as unknown as Prisma.InputJsonValue } });
   revalidatePath("/dashboard/operacoes-v3");
   return next as unknown as OrdemServico;
 }

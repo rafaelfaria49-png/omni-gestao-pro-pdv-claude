@@ -12,10 +12,8 @@ import { OSCardV3 } from "../components/OSCardV3";
 import { OSTimelineV3 } from "../components/OSTimelineV3";
 import { ChecklistEntradaV3 } from "../components/ChecklistEntradaV3";
 import { ProvaEntradaV3 } from "../components/ProvaEntradaV3";
-import { SenhaAcessoriosV3 } from "../components/SenhaAcessoriosV3";
 import { DiagnosticoTecnicoV3 } from "../components/DiagnosticoTecnicoV3";
 import { ServicosExecutadosV3 } from "../components/ServicosExecutadosV3";
-import { AnexosV3 } from "../components/AnexosV3";
 import { GarantiaOSV3 } from "../components/GarantiaOSV3";
 import { PosVendaV3 } from "../components/PosVendaV3";
 import { ProducaoTecnicoV3 } from "../components/ProducaoTecnicoV3";
@@ -239,15 +237,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             notificar={notificar}
           />
 
-          {/* Senha + acessórios (item 5) — editável + persistível */}
-          <SenhaAcessoriosV3
-            os={os}
-            storeId={storeId}
-            onChanged={refresh}
-            salvar={wsActions.salvarSenhaAcessorios}
-            pending={wsActions.pending === "senha"}
-            notificar={notificar}
-          />
+          {/* Senha/acessórios consolidados na Prova de Entrada (SPRINT_3E.2) — bloco legado removido. */}
 
           {/* Diagnóstico técnico (item 6) — editável + persistível */}
           <DiagnosticoTecnicoV3
@@ -361,8 +351,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             onAbrirRetornos={() => navigate("retornos")}
           />
 
-          {/* Fotos & anexos (item 8) — estrutura MVP */}
-          <AnexosV3 os={os} onAcao={acaoEmConstrucao} />
+          {/* Fotos consolidadas na Prova de Entrada (SPRINT_3E.2) — AnexosV3 (placeholder) removido. */}
 
           {/* Histórico completo (item 10) — auditável */}
           <OSHistoricoV3 os={os} />
