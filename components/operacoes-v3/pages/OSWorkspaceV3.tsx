@@ -12,6 +12,7 @@ import { OSCardV3 } from "../components/OSCardV3";
 import { OSTimelineV3 } from "../components/OSTimelineV3";
 import { ChecklistEntradaV3 } from "../components/ChecklistEntradaV3";
 import { ProvaEntradaV3 } from "../components/ProvaEntradaV3";
+import { HistoricoAparelhoV3 } from "../components/HistoricoAparelhoV3";
 import { DiagnosticoTecnicoV3 } from "../components/DiagnosticoTecnicoV3";
 import { ServicosExecutadosV3 } from "../components/ServicosExecutadosV3";
 import { GarantiaOSV3 } from "../components/GarantiaOSV3";
@@ -216,6 +217,9 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
 
           {/* Prova de entrada (Fase 3E.1): estado físico, avarias, fotos, credenciais, acessórios */}
           <ProvaEntradaV3 os={os} storeId={storeId} onChanged={refresh} notificar={notificar} />
+
+          {/* Histórico do aparelho (Fase 3E.3): OS anteriores por IMEI/Serial + alertas + timeline */}
+          <HistoricoAparelhoV3 os={os} ordens={ordens} onOpen={openOS} />
 
           {/* Produção / Técnico (Fase 3B): técnico, prioridade, SLA, localização, status de bancada */}
           <ProducaoTecnicoV3
