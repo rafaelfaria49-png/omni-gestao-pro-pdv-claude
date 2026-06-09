@@ -11,6 +11,7 @@ import { OSSectionV3 } from "../components/OSSectionV3";
 import { OSCardV3 } from "../components/OSCardV3";
 import { OSTimelineV3 } from "../components/OSTimelineV3";
 import { ChecklistEntradaV3 } from "../components/ChecklistEntradaV3";
+import { ProvaEntradaV3 } from "../components/ProvaEntradaV3";
 import { SenhaAcessoriosV3 } from "../components/SenhaAcessoriosV3";
 import { DiagnosticoTecnicoV3 } from "../components/DiagnosticoTecnicoV3";
 import { ServicosExecutadosV3 } from "../components/ServicosExecutadosV3";
@@ -214,6 +215,9 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
               </div>
             ) : null}
           </OSSectionV3>
+
+          {/* Prova de entrada (Fase 3E.1): estado físico, avarias, fotos, credenciais, acessórios */}
+          <ProvaEntradaV3 os={os} storeId={storeId} onChanged={refresh} notificar={notificar} />
 
           {/* Produção / Técnico (Fase 3B): técnico, prioridade, SLA, localização, status de bancada */}
           <ProducaoTecnicoV3

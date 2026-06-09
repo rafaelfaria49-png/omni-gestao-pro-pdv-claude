@@ -66,7 +66,7 @@ function LinhaItem({ item }: { item: PrintItemV3 }) {
 
 /** A4 (≈ 794px @ 96dpi). `id="og-print-root"` é o alvo do CSS de impressão. */
 export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
-  const { empresa, cliente, equipamento, senha, recepcao, checklist, diagnostico, financeiro, garantia } = doc;
+  const { empresa, cliente, equipamento, senha, recepcao, checklist, diagnostico, financeiro, garantia, provaEntrada } = doc;
   const temDiagnostico = !!(diagnostico.inicial || diagnostico.final || diagnostico.causa || diagnostico.solucao || doc.observacoesCliente.length);
   const interna = doc.variante === "interna";
 
@@ -167,6 +167,41 @@ export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
               </p>
             ))}
           </div>
+        </Secao>
+      ) : null}
+
+      {/* Prova de entrada (SPRINT_3E.1) — estado físico + acessórios + credenciais mascaradas */}
+      {provaEntrada.temDados ? (
+        <Secao titulo="Prova de entrada">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
+            {provaEntrada.estadoFisico.map((c) => (
+              <p key={c.label} className="text-[11px] text-black">
+                <span className="text-zinc-600">{c.label}:</span>{" "}
+                <span className={c.status === "avariado" ? "font-bold" : c.status === "ausente" ? "font-bold text-zinc-700" : "text-zinc-500"}>{c.statusLabel}</span>
+              </p>
+            ))}
+          </div>
+          {provaEntrada.avarias.length ? (
+            <div className="mt-1">
+              <p className="text-[11px] font-medium text-zinc-700">Avarias registradas:</p>
+              <ul className="ml-3 list-disc text-[11px] text-black">
+                {provaEntrada.avarias.map((a, i) => (
+                  <li key={i}>{a.tipo} — {a.local}{a.descricao ? ` (${a.descricao})` : ""}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <p className="mt-1 text-[11px] text-black">
+            <span className="text-zinc-600">Acessórios recebidos: </span>
+            {provaEntrada.acessorios.filter((a) => a.presente).map((a) => a.label).join(", ") || "—"}
+          </p>
+          {provaEntrada.credenciais.length ? (
+            <p className="mt-0.5 text-[11px] text-black">
+              <span className="text-zinc-600">Credenciais (registradas, mascaradas): </span>
+              {provaEntrada.credenciais.map((c) => `${c.rotulo}: ${c.valor}`).join(" · ")}
+            </p>
+          ) : null}
+          {provaEntrada.totalFotos > 0 ? <p className="mt-0.5 text-[10px] text-zinc-500">{provaEntrada.totalFotos} foto(s) de entrada arquivada(s) no sistema.</p> : null}
         </Secao>
       ) : null}
 

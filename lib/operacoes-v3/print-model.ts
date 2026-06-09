@@ -40,6 +40,17 @@ import {
   type TermoGarantiaV3,
 } from "./garantia-textos";
 import { lerEntregaV3 } from "./pos-venda-model";
+import {
+  ACESSORIOS_ENTRADA_V3,
+  componenteFisicoLabelV3,
+  credenciaisMascaradasV3,
+  ESTADO_FISICO_STATUS_META_V3,
+  lerProvaEntradaV3,
+  provaEntradaCriadaV3,
+  resumoEstadoFisicoV3,
+  tipoAvariaLabelV3,
+  type EstadoFisicoStatusV3,
+} from "./prova-entrada-model";
 
 // ----------------------------------------------------------------------------
 // Empresa (cabeçalho) — fallback honesto, centralizado
@@ -261,6 +272,42 @@ export function termoGarantiaDaOSV3(os: OrdemServico): TermoGarantiaV3 {
 }
 
 // ----------------------------------------------------------------------------
+// Prova de entrada imprimível (SPRINT_3E.1) — estado físico + acessórios +
+// credenciais MASCARADAS. Item 6: nunca expõe o valor real das credenciais.
+// ----------------------------------------------------------------------------
+
+export interface ProvaEntradaPrintV3 {
+  temDados: boolean;
+  estadoFisico: { label: string; status: EstadoFisicoStatusV3; statusLabel: string }[];
+  resumo: { ok: number; avariado: number; ausente: number; total: number };
+  avarias: { tipo: string; local: string; descricao?: string }[];
+  acessorios: { label: string; presente: boolean }[];
+  credenciais: { rotulo: string; valor: string }[];
+  totalFotos: number;
+}
+
+export function provaEntradaImprimivelV3(os: OrdemServico): ProvaEntradaPrintV3 {
+  const p = lerProvaEntradaV3(os);
+  const resumo = resumoEstadoFisicoV3(p.estadoFisico);
+  const acessoriosLabel = new Map(ACESSORIOS_ENTRADA_V3.map((a) => [a.id, a.label]));
+  const temDados =
+    provaEntradaCriadaV3(os) || resumo.avariado > 0 || resumo.ausente > 0 || p.avarias.length > 0 || p.fotos.length > 0 || credenciaisMascaradasV3(p.credenciais).length > 0;
+  return {
+    temDados,
+    estadoFisico: p.estadoFisico.map((i) => ({
+      label: componenteFisicoLabelV3(i.componente),
+      status: i.status,
+      statusLabel: ESTADO_FISICO_STATUS_META_V3[i.status].label,
+    })),
+    resumo,
+    avarias: p.avarias.map((a) => ({ tipo: tipoAvariaLabelV3(a.tipo), local: a.local, descricao: a.descricao })),
+    acessorios: p.acessorios.map((a) => ({ label: acessoriosLabel.get(a.id) ?? a.id, presente: a.presente })),
+    credenciais: credenciaisMascaradasV3(p.credenciais),
+    totalFotos: p.fotos.length,
+  };
+}
+
+// ----------------------------------------------------------------------------
 // Documento completo (via cliente)
 // ----------------------------------------------------------------------------
 
@@ -308,6 +355,8 @@ export interface DocumentoOSV3 {
   itens: PrintItemV3[];
   financeiro: ResumoFinanceiroPrintV3;
   garantia: TermoGarantiaV3;
+  /** Prova de entrada (estado físico + acessórios + credenciais mascaradas). */
+  provaEntrada: ProvaEntradaPrintV3;
   /** Presente apenas na variante "interna". */
   interno?: InternoPrintV3;
 }
@@ -380,6 +429,7 @@ export function montarDocumentoOSV3(
     itens: itensImprimiveisV3(os),
     financeiro: resumoFinanceiroImprimivelV3(os),
     garantia: termoGarantiaDaOSV3(os),
+    provaEntrada: provaEntradaImprimivelV3(os),
   };
 }
 
