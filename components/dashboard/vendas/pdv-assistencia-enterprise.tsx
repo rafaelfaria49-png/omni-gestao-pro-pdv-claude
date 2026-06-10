@@ -63,6 +63,8 @@ import { cn } from "@/lib/utils"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
+import { useSession } from "next-auth/react"
+import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
 import { type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -1399,6 +1401,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     [lojaAtivaId]
   )
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
+  const { data: session } = useSession()
+  const operatorLabel = pdvOperatorReceiptLabel(session)
   const { caixa } = useCaixa()
   const storeIdKey = useMemo(
     () => (lojaAtivaId ?? "").trim(),
@@ -2102,7 +2106,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       cnpj: _cnpj,
       enderecoLinha: getEnderecoDocumentos?.() ?? "",
       receiptFooter: _footer,
-      operador: cashierId,
+      operador: operatorLabel,
       clienteNome: customerName.trim() || undefined,
       clienteCpf: selectedClienteDoc ?? undefined,
       pagamentos: buildPagamentosResumo({

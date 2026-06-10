@@ -32,6 +32,9 @@ import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
+import { useSession } from "next-auth/react"
+import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
+import { PdvPendingSyncBadge } from "@/components/dashboard/vendas/pdv-pending-sync-badge"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
@@ -134,6 +137,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const { pdvParams } = useStoreSettings()
   const { toast } = useToast()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
+  const { data: session } = useSession()
+  const operatorLabel = pdvOperatorReceiptLabel(session)
 
   const storeId = useMemo(
     () => (lojaAtivaId ?? "").trim(),
@@ -517,7 +522,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         lojaNome: storeDisplayName,
         clienteNome: selectedCliente.name,
         clienteCpf: selectedCliente.document ?? null,
-        operador: cashierId,
+        operador: operatorLabel,
         tipoVenda: tipoVenda !== "comum" ? tipoVendaLabel : undefined,
         observacaoGeral: observacaoGeral || undefined,
         itens: cart.map((l) => ({
@@ -611,6 +616,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           </Button>
         </div>
       </div>
+
+      <PdvPendingSyncBadge className="mx-3 mt-2" />
 
       {/* ── Body: esquerda scrollável + sidebar direita fixa ── */}
       <div className="flex min-h-0 flex-1 overflow-hidden">

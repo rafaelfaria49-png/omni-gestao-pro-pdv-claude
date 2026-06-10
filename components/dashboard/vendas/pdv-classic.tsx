@@ -40,6 +40,8 @@ import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
+import { useSession } from "next-auth/react"
+import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 // useCaixa removido no Lote 4 — sangria/suprimento vivem no CaixaStatusBar.
 import { configPadrao, useConfigEmpresa } from "@/lib/config-empresa"
@@ -74,7 +76,6 @@ import { useToast } from "@/hooks/use-toast"
 import { useOperationsStore } from "@/lib/operations-store"
 import { PDV_KEYMAP } from "@/lib/pdv-keymap"
 import { useStoreSettings } from "@/lib/store-settings-provider"
-import type { PdvClassicLayoutKind } from "@/lib/store-settings-types"
 import { writePdvClassicLayout } from "@/lib/pdv-classic-layout"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import {
@@ -119,8 +120,6 @@ import {
   type HeldSale,
 } from "@/lib/pdv-hold"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
-
-type SaleMode = "balcao" | "completa"
 
 type Customer = {
   id: string
@@ -172,8 +171,6 @@ export interface VendasPDVProps {
   uiShell?: "omni-smart"
   /** Vindo do Vendas HUB (`?modo=rapido`): foco automático no campo de código/produto após o PDV montar. */
   isModoRapido?: boolean
-  /** Sub-layout interno do PDV Clássico (mesmo seletor atual). */
-  classicLayoutKind?: PdvClassicLayoutKind
 }
 
 export function PdvClassic({
@@ -185,7 +182,6 @@ export function PdvClassic({
   onVoiceOpenCaixaConsumed,
   uiShell = "omni-smart",
   isModoRapido = false,
-  classicLayoutKind,
 }: VendasPDVProps) {
   const router = useRouter()
   const { config } = useConfigEmpresa()
@@ -201,8 +197,9 @@ export function PdvClassic({
   // `saveOperation` removido — fluxo migrado para o CaixaStatusBar compartilhado.
   const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente, ordens } = useOperationsStore()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
+  const { data: session } = useSession()
+  const operatorLabel = pdvOperatorReceiptLabel(session)
   const { toast } = useToast()
-  const [saleMode, setSaleMode] = useState<SaleMode>("balcao")
   const [searchTerm, setSearchTerm] = useState("")
   const [customerSearch, setCustomerSearch] = useState("")
   const { clientes: filteredCustomers, isLoading: buscandoCliente } = useClienteSearch(customerSearch, lojaKey)
@@ -909,7 +906,7 @@ export function PdvClassic({
         cnpj: p.cnpj,
         enderecoLinha: getEnderecoDocumentos(),
         receiptFooter: p.footer,
-        operador: cashierId,
+        operador: operatorLabel,
         clienteNome: selectedCustomer?.name,
         clienteCpf: selectedCustomer?.cpf,
         itens: p.itens,
@@ -1647,7 +1644,7 @@ export function PdvClassic({
             cnpj: _rp.cnpj,
             enderecoLinha: getEnderecoDocumentos(),
             receiptFooter: _rp.footer,
-            operador: meta?.cashierId ?? cashierId,
+            operador: operatorLabel,
             clienteNome: selectedCustomer?.name,
             clienteCpf: selectedCustomer?.cpf,
             itens: _rp.itens,

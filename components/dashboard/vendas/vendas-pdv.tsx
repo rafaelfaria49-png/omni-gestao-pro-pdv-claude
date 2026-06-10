@@ -130,5 +130,5 @@ export function VendasPDV(props: VendasPDVProps) {
     )
   }
 
-  return <PdvClassic {...props} uiShell="omni-smart" classicLayoutKind={classicLayout} />
+  return <PdvClassic {...props} uiShell="omni-smart" />
 }

@@ -10,8 +10,8 @@ export type CertificadoA1Meta = {
   updatedAt?: string
 }
 
-/** Quando o PDV é o modelo "classic" (não supermercado): UI Lovable (atalhos F1–F9), tela completa legada ou fluxo Venda Completa Enterprise. */
-export type PdvClassicLayoutKind = "lovable" | "services" | "venda-completa"
+/** Quando o PDV é o modelo "classic" (não supermercado): UI Lovable (atalhos F1–F9) ou tela completa legada (`services`/Assistência). */
+export type PdvClassicLayoutKind = "lovable" | "services"
 
 export type StorePdvParams = {
   atalhosRapidos: Array<{ id: string; nome: string; preco: number; inventoryId?: string; categoria?: string; ativo?: boolean; favorito?: boolean; cor?: string; posicao?: number }>

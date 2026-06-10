@@ -21,7 +21,19 @@ export function readPdvClassicLayout(storeId?: string | null): PdvClassicLayoutK
       LEGACY_GLOBAL_PDV_CLASSIC_LAYOUT_KEY,
     )
     if (raw === "services") return "services"
-    if (raw === "venda-completa") return "venda-completa"
+    // Legado: "venda-completa" NÃO é um sub-layout do PDV Clássico — Venda Completa
+    // é uma tela própria (/dashboard/vendas/venda-completa). Resíduo desse valor em
+    // localStorage degradava o PDV em silêncio para o Clássico. Saneia para "lovable"
+    // e normaliza a chave para não reincidir. NÃO toca vendas/caixa (assistec-pro-ops-v1).
+    if (raw === "venda-completa") {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          '[pdv-classic-layout] valor legado "venda-completa" normalizado para "lovable" (não é um layout válido).',
+        )
+      }
+      writeStoreScopedString(STORE_SCOPED_PDV_CLASSIC_LAYOUT_KEY, storeId, "lovable")
+      return "lovable"
+    }
     return "lovable"
   } catch {
     return "lovable"

@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useToast } from "@/hooks/use-toast"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useOperationsStore } from "@/lib/operations-store"
+import { PdvPendingSyncBadge } from "@/components/dashboard/vendas/pdv-pending-sync-badge"
 
 interface CaixaStatusBarProps {
   /** Incrementado por comando de voz para abrir o fluxo de abertura de caixa. */
@@ -169,6 +170,7 @@ export function CaixaStatusBar({
   if (!caixa.isOpen) {
     return (
       <>
+        <PdvPendingSyncBadge className={cn("mb-2", variant === "pdv" && "mx-2 mt-2")} />
         <div
           className={cn(
             "bg-warning/10 border border-warning/30 rounded-lg p-4 mb-4",
@@ -212,6 +214,7 @@ export function CaixaStatusBar({
 
   return (
     <>
+      <PdvPendingSyncBadge className={cn("mb-2", variant === "pdv" && "mx-2 mt-2")} />
       <div
         className={cn(
           "bg-success/10 border border-success/30 rounded-lg mb-4 overflow-hidden",

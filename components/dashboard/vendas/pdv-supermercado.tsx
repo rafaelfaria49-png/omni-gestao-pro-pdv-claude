@@ -51,6 +51,8 @@ import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
 import { PdvPainelLateralTerminal, PdvVisorTotal } from "./painel-total"
 import { PdvTabelaItemLinha, PdvTabelaItens } from "./tabela-itens"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
+import { useSession } from "next-auth/react"
+import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
@@ -146,6 +148,8 @@ export function PdvSupermercado({
 
   const lojaKey = lojaAtivaId ?? opsLojaIdFromStorageKey(opsStorageKey)
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
+  const { data: session } = useSession()
+  const operatorLabel = pdvOperatorReceiptLabel(session)
 
   const productInputRef = useRef<HTMLInputElement | null>(null)
   const listEndRef = useRef<HTMLDivElement | null>(null)
@@ -1111,7 +1115,7 @@ export function PdvSupermercado({
             cnpj: _cnpj,
             enderecoLinha: getEnderecoDocumentos?.() ?? "",
             receiptFooter: _footer,
-            operador: meta?.cashierId ?? cashierId,
+            operador: operatorLabel,
             itens: cart.map((i) => ({ name: i.name, quantity: i.quantity, unitPrice: i.price, lineTotal: i.price * i.quantity })),
             subtotal,
             taxes: impostoEstimado,

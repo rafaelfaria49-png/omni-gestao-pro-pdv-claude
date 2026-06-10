@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation"
 import { AppOpsProviders } from "@/components/dashboard/app-ops-providers"
 import { FirstAccessWizard } from "@/components/onboarding/first-access-wizard"
 import { AppShell } from "@/components/painel-inicial/AppShell"
+import { PwaUpdatePrompt } from "@/components/pwa/pwa-update-prompt"
 
 export default function DashboardSegmentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -55,6 +56,7 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
   return (
     <AppOpsProviders>
       {shell}
+      <PwaUpdatePrompt />
     </AppOpsProviders>
   )
 }
