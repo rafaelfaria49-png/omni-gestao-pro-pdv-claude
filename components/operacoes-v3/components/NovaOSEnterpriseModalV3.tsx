@@ -20,6 +20,7 @@ import {
   Loader2,
   Package,
   Plus,
+  Save,
   Search,
   ShieldCheck,
   Smartphone,
@@ -57,6 +58,13 @@ import {
   type NovaOSProblemaV3,
   type NovaOSRecepcaoV3,
 } from "@/lib/operacoes-v3/nova-os-model";
+import {
+  clearNovaOSDraftV3,
+  isNovaOSDraftMeaningfulV3,
+  readNovaOSDraftV3,
+  writeNovaOSDraftV3,
+  type NovaOSDraftSnapshotV3,
+} from "@/lib/operacoes-v3/nova-os-draft-storage";
 import type { OrcamentoLinhaKindV3 } from "@/lib/operacoes-v3/orcamento-model";
 import type { ProdutoCatalogoV3 } from "@/lib/operacoes-v3/produto-link";
 import { ButtonV3 } from "./UiV3";
@@ -135,11 +143,15 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
   const [itBarcode, setItBarcode] = useState("");
   const [itPickerOpen, setItPickerOpen] = useState(false);
 
-  // Reset ao abrir
+  // Proteção de rascunho (anti-perda de dados)
+  const [restoreState, setRestoreState] = useState<NovaOSDraftSnapshotV3 | null>(null);
+  const [closeConfirm, setCloseConfirm] = useState(false);
+  const [pendingDiscard, setPendingDiscard] = useState<null | "reset" | "close">(null);
+  const [savedAt, setSavedAt] = useState<string | null>(null);
+
+  // Ao abrir: zera o sub-form transitório e oferece restaurar rascunho salvo.
   useEffect(() => {
     if (!open) return;
-    setStep(0);
-    setDraft(novaOSDraftVazioV3());
     setSalvando(false);
     setErro(null);
     setClienteBusca("");
@@ -154,7 +166,94 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     setItProdutoId("");
     setItSku("");
     setItBarcode("");
-  }, [open]);
+    setItPickerOpen(false);
+    setCloseConfirm(false);
+    setPendingDiscard(null);
+
+    setStep(0);
+    setDraft(novaOSDraftVazioV3());
+
+    const sid = (storeId ?? "").trim();
+    const saved = sid ? readNovaOSDraftV3(sid) : null;
+    if (saved && isNovaOSDraftMeaningfulV3(saved.draft)) {
+      setRestoreState(saved);
+      setSavedAt(saved.savedAt);
+    } else {
+      setRestoreState(null);
+      setSavedAt(null);
+    }
+  }, [open, storeId]);
+
+  // Auto-save (debounce) enquanto o operador preenche. Não roda enquanto o prompt
+  // de restauração está aberto (evita sobrescrever o rascunho com o form vazio).
+  useEffect(() => {
+    if (!open || restoreState || salvando) return;
+    const sid = (storeId ?? "").trim();
+    if (!sid || !isNovaOSDraftMeaningfulV3(draft)) return;
+    const t = setTimeout(() => {
+      const at = writeNovaOSDraftV3(sid, draft, step);
+      if (at) setSavedAt(at);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [open, restoreState, salvando, storeId, draft, step]);
+
+  // Fechamento guardado: se houver dados, confirma antes de fechar.
+  const requestClose = useCallback(() => {
+    if (salvando) return;
+    if (restoreState) {
+      onClose();
+      return;
+    }
+    if (isNovaOSDraftMeaningfulV3(draft)) {
+      setCloseConfirm(true);
+      return;
+    }
+    onClose();
+  }, [salvando, restoreState, draft, onClose]);
+
+  // ESC: confirma se houver dados; respeita sub-modais abertos.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (itPickerOpen) return; // o ProductPicker trata o próprio ESC
+      e.preventDefault();
+      e.stopPropagation();
+      if (pendingDiscard) {
+        setPendingDiscard(null);
+        return;
+      }
+      if (closeConfirm) {
+        setCloseConfirm(false);
+        return;
+      }
+      requestClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, itPickerOpen, pendingDiscard, closeConfirm, requestClose]);
+
+  const continuarRascunho = useCallback(() => {
+    if (!restoreState) return;
+    setDraft(restoreState.draft);
+    setStep(Math.min(Math.max(0, restoreState.step), STEPS.length - 1));
+    setRestoreState(null);
+  }, [restoreState]);
+
+  const confirmarDescarte = useCallback(() => {
+    const sid = (storeId ?? "").trim();
+    if (sid) clearNovaOSDraftV3(sid);
+    setSavedAt(null);
+    if (pendingDiscard === "close") {
+      onClose();
+    } else {
+      setDraft(novaOSDraftVazioV3());
+      setStep(0);
+    }
+    setRestoreState(null);
+    setCloseConfirm(false);
+    setPendingDiscard(null);
+  }, [storeId, pendingDiscard, onClose]);
 
   // Carrega clientes ao abrir
   useEffect(() => {
@@ -296,6 +395,8 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     setSalvando(true);
     try {
       const { os } = await criarOSEnterpriseV3(sid, draft);
+      clearNovaOSDraftV3(sid);
+      setSavedAt(null);
       onCreated(os.id);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível abrir a OS.");
@@ -310,7 +411,7 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6">
-      <button type="button" aria-label="Fechar" className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={() => !salvando && onClose()} />
+      <button type="button" aria-label="Fechar" className="absolute inset-0 bg-foreground/40 backdrop-blur-sm" onClick={requestClose} />
       <div className="relative flex max-h-[92vh] w-full max-w-4xl min-w-0 flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
         {/* Header */}
         <header className="flex flex-none items-center gap-3 border-b border-border px-5 py-3.5">
@@ -321,9 +422,16 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
             <h2 className="truncate text-base font-semibold text-foreground">Nova OS Enterprise</h2>
             <p className="truncate text-xs text-muted-foreground">Abertura completa da ordem de serviço — pagamento aqui é só previsão.</p>
           </div>
-          <button type="button" onClick={() => !salvando && onClose()} className="ml-auto rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-            <X className="h-4 w-4" aria-hidden />
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            {savedAt && !restoreState ? (
+              <span className="hidden items-center gap-1 text-[11px] text-muted-foreground sm:inline-flex" title="Rascunho salvo automaticamente nesta unidade">
+                <Save className="h-3 w-3 text-success" aria-hidden /> Rascunho salvo · {horaCurta(savedAt)}
+              </span>
+            ) : null}
+            <button type="button" onClick={requestClose} aria-label="Fechar" className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
         </header>
 
         {/* Step nav */}
@@ -825,7 +933,7 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
             </div>
           )}
           <div className="flex items-center justify-end gap-2">
-            <ButtonV3 variant="ghost" onClick={() => !salvando && onClose()} disabled={salvando}>Cancelar</ButtonV3>
+            <ButtonV3 variant="ghost" onClick={requestClose} disabled={salvando}>Cancelar</ButtonV3>
             <ButtonV3 variant="outline" onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0 || salvando}>
               <ChevronLeft className="h-4 w-4" aria-hidden /> Voltar
             </ButtonV3>
@@ -840,6 +948,54 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
             </ButtonV3>
           </div>
         </footer>
+
+        {/* Restaurar rascunho salvo */}
+        {restoreState ? (
+          <DraftOverlayV3>
+            <h3 className="text-sm font-semibold text-foreground">Você tem uma OS em andamento</h3>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Rascunho salvo às {horaCurta(restoreState.savedAt)}. Deseja continuar de onde parou ou começar uma nova?
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">A senha do aparelho não é salva no rascunho — reinforme se necessário.</p>
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <ButtonV3 variant="outline" className="text-destructive hover:text-destructive" onClick={() => setPendingDiscard("reset")}>
+                Descartar e começar nova
+              </ButtonV3>
+              <ButtonV3 variant="primary" onClick={continuarRascunho}>Continuar rascunho</ButtonV3>
+            </div>
+          </DraftOverlayV3>
+        ) : null}
+
+        {/* Confirmar fechamento com dados preenchidos */}
+        {closeConfirm ? (
+          <DraftOverlayV3>
+            <h3 className="text-sm font-semibold text-foreground">Existe uma OS em andamento</h3>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Deseja descartar o rascunho ou manter para continuar depois? Os dados ficam salvos automaticamente nesta unidade.
+            </p>
+            <div className="mt-4 flex flex-col gap-2">
+              <ButtonV3 variant="primary" onClick={() => setCloseConfirm(false)}>Continuar editando</ButtonV3>
+              <ButtonV3 variant="outline" onClick={() => { setCloseConfirm(false); onClose(); }}>Manter rascunho e sair</ButtonV3>
+              <ButtonV3 variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setPendingDiscard("close")}>
+                Descartar rascunho
+              </ButtonV3>
+            </div>
+          </DraftOverlayV3>
+        ) : null}
+
+        {/* Confirmar descarte definitivo do rascunho */}
+        {pendingDiscard ? (
+          <DraftOverlayV3>
+            <h3 className="text-sm font-semibold text-foreground">Descartar o rascunho?</h3>
+            <p className="mt-1.5 text-xs text-muted-foreground">Esta ação não pode ser desfeita. Os dados preenchidos serão apagados desta unidade.</p>
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <ButtonV3 variant="outline" onClick={() => setPendingDiscard(null)}>Cancelar</ButtonV3>
+              <ButtonV3 variant="primary" className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmarDescarte}>
+                Sim, descartar
+              </ButtonV3>
+            </div>
+          </DraftOverlayV3>
+        ) : null}
 
         <ProductPickerV3
           open={itPickerOpen}
@@ -874,6 +1030,21 @@ function ResumoBloco({ titulo, children }: { titulo: string; children: ReactNode
       {children}
     </div>
   );
+}
+
+/** Overlay centralizado para os diálogos de rascunho (restaurar / descartar / fechar). */
+function DraftOverlayV3({ children }: { children: ReactNode }) {
+  return (
+    <div className="absolute inset-0 z-[70] flex items-center justify-center bg-foreground/50 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-5 shadow-2xl">{children}</div>
+    </div>
+  );
+}
+
+function horaCurta(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
 // ---------------------------------------------------------------------------
