@@ -231,7 +231,7 @@ export function RecentActivityTable({
               m.kind === "venda"
                 ? "/dashboard/vendas-arquivo-geral"
                 : m.kind === "os"
-                  ? "/dashboard/operacoes-v2"
+                  ? "/dashboard/operacoes-v3"
                   : null;
             const content = (
               <>

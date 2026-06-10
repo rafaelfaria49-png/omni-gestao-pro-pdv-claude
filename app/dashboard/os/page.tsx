@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Painel legado desativado — semântica de estoque incompatível com Operações HUB V2. */
+/** Painel legado desativado — fluxo oficial de OS agora no Operações HUB V3. */
 export default function LegacyOsRedirectPage() {
-  redirect("/dashboard/operacoes-v2");
+  redirect("/dashboard/operacoes-v3");
 }

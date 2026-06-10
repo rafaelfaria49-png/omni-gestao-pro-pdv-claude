@@ -14,7 +14,7 @@ export const LEGACY_PAGE_REDIRECTS: Record<string, string> = {
   vendas: "/dashboard/vendas",
   "vendas-arquivo": "/dashboard/vendas-arquivo-geral",
   trocas: "/dashboard/vendas-arquivo-geral",
-  os: "/dashboard/operacoes-v2",
+  os: "/dashboard/operacoes-v3",
   "dashboard-omni": "/dashboard",
   "dashboard-360": "/dashboard",
   "fluxo-caixa": FINANCEIRO_HUB_PATH,
@@ -26,7 +26,7 @@ export const LEGACY_PAGE_REDIRECTS: Record<string, string> = {
   clientes: "/dashboard/clientes",
   "clientes-gestao": "/dashboard/clientes",
   produtos: "/dashboard/estoque",
-  servicos: "/dashboard/operacoes-v2",
+  servicos: "/dashboard/operacoes-v3",
   orcamentos: "/dashboard/orcamentos",
   "planejamento-compras": "/dashboard/estoque",
   credito: "/dashboard/clientes",
@@ -42,7 +42,7 @@ export const ROOT_SEGMENT_REDIRECTS: Record<string, string> = {
   "contas-pagar": "/dashboard/financeiro/contas-a-pagar",
   "contas-receber": "/dashboard/financeiro/contas-a-receber",
   "relatorios-financeiros": "/dashboard/relatorios",
-  os: "/dashboard/operacoes-v2",
+  os: "/dashboard/operacoes-v3",
 }
 
 /** Páginas antigas que exigiam assinatura ativa (proxy). */

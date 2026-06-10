@@ -68,7 +68,7 @@ export function QuickActions() {
         router.push("/dashboard/vendas");
         return;
       case "Nova OS":
-        router.push("/dashboard/operacoes-v2");
+        router.push("/dashboard/operacoes-v3");
         return;
       case "Cliente":
         router.push("/dashboard/clientes");
@@ -77,7 +77,7 @@ export function QuickActions() {
         router.push("/dashboard/estoque");
         return;
       case "Orçamento":
-        router.push("/dashboard/operacoes-v2");
+        router.push("/dashboard/operacoes-v3");
         return;
       case "Receber":
         router.push("/dashboard/financeiro/contas-a-receber");

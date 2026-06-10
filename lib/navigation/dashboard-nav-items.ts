@@ -54,10 +54,17 @@ export const workspaceNavItems: DashboardNavItem[] = [
 
 export const hubsNavItems: DashboardNavItem[] = [
   {
-    to: "/dashboard/operacoes-v2",
+    to: "/dashboard/operacoes-v3",
     label: "Operações HUB",
     icon: Activity,
-    badge: "Oficial",
+    badge: "V3",
+    visible: (p) => p.hubs.operacoes,
+  },
+  {
+    to: "/dashboard/operacoes-v2",
+    label: "Operações V2",
+    icon: Activity,
+    badge: "Legado",
     visible: (p) => p.hubs.operacoes,
   },
   {

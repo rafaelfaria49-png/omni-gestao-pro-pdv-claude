@@ -49,7 +49,7 @@ const novoItems: NovoItem[] = [
   },
   {
     label: "Nova OS",
-    href: "/dashboard/operacoes-v2",
+    href: "/dashboard/operacoes-v3",
     icon: Wrench,
     kbd: "N O",
     visible: (p) => p.hubs.operacoes,
@@ -273,7 +273,7 @@ export function Topbar() {
             <CommandItem
               onSelect={() => {
                 setSearchOpen(false);
-                router.push("/dashboard/operacoes-v2");
+                router.push("/dashboard/operacoes-v3");
               }}
               className="cursor-pointer"
             >
@@ -339,7 +339,7 @@ export function Topbar() {
             <CommandItem
               onSelect={() => {
                 setSearchOpen(false);
-                router.push("/dashboard/operacoes-v2");
+                router.push("/dashboard/operacoes-v3");
               }}
               className="cursor-pointer"
             >
