@@ -25,6 +25,7 @@ import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { listClientes, criarCliente } from "@/api/clientes";
 import { criarOSEnterpriseV3 } from "./nova-os-actions";
 import { getCaixaSessaoAbertaV3, receberOSV3 } from "./pdv-servico-actions";
+import { gerarOrcamentoDaOS, aprovarOrcamentoV3 } from "./orcamento-actions";
 import { projetarStatusV2 } from "./status-machine";
 import {
   CLIENTE_BALCAO_NOME_V3,
@@ -116,56 +117,124 @@ export async function finalizarAtendimentoRapidoV3(
   const { os } = await criarOSEnterpriseV3(sid, draft);
   const osId = os.id;
 
-  // 3. Recebe o pagamento (forma única) → conta a receber + caixaOperacao no fechamento.
-  const valor = Math.round(Number(input.servico.valor) * 100) / 100;
-  const receb = await receberOSV3(sid, osId, {
-    forma: input.formaPagamento,
-    valor,
-    sessaoId: sessao.sessaoId,
-    observacao: `Atendimento rápido: ${input.servico.nome.trim()}`,
-  });
-
-  // 4. Conclui: marca como ENTREGUE (serviço de balcão concluído na hora) + tag.
-  //    Patch direto do payload (born-done) — serviço-only, sem efeito de estoque.
   const operador = operadorLabel(session);
-  const dataHora = nowIso();
-  const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId: sid }, select: { id: true, payload: true } });
-  if (row) {
-    const payload = (row.payload as Record<string, unknown> | null) ?? {};
-    const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
-    const evento: EventoTimeline = {
-      id: eventId(),
-      tipo: "mudanca_status",
-      autor: operador,
-      autorTipo: "usuario",
-      conteudo: `Atendimento rápido concluído (${input.servico.nome.trim()}).`,
-      metadata: { para: "entregue", atendimentoRapido: true },
-      criadoEm: dataHora,
-    };
-    const nextPayload: Record<string, unknown> = {
-      ...payload,
-      operacaoStatusV3: "entregue",
-      status: projetarStatusV2("entregue"),
-      atendimentoRapidoV3: {
-        versao: 1,
-        servico: input.servico.nome.trim(),
-        valor,
-        forma: input.formaPagamento,
-        concluidoEm: dataHora,
-        operador,
-      },
-      timeline: [...timeline, evento],
-      atualizadoEm: dataHora,
-    };
-    await prisma.ordemServico.update({ where: { id: osId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
-  }
+  const valor = Math.round(Number(input.servico.valor) * 100) / 100;
+  const concluidoEm = input.dataConclusao?.trim() || nowIso();
 
-  revalidatePath("/dashboard/operacoes-v3");
-  return {
-    osId,
-    codigo: (os as OrdemServico).codigo,
-    clienteNome: cliente.nome,
-    valorRecebido: receb.valorRecebido,
-    recibo: receb.recibo,
+  try {
+    // 2b. (Opção B) Materializa e APROVA o orçamento REAL da OS → o recebimento passa a
+    //     enxergar o total cobrável pelo MESMO caminho do fluxo normal (`orcamentoRealV3`),
+    //     sem workaround em `payload.valorTotal`. `gerarOrcamentoDaOS` monta os serviços a
+    //     partir do `servicosCatalogo`; `aprovarOrcamentoV3` aprova e fixa o `valorTotal`.
+    await gerarOrcamentoDaOS(sid, osId);
+    await aprovarOrcamentoV3(sid, osId);
+
+    // 3. Recebe o pagamento (forma única) → conta a receber + caixaOperacao no fechamento.
+    const receb = await receberOSV3(sid, osId, {
+      forma: input.formaPagamento,
+      valor,
+      sessaoId: sessao.sessaoId,
+      observacao: `Atendimento rápido: ${input.servico.nome.trim()}`,
+    });
+
+    // 4. Conclui: marca como ENTREGUE (serviço de balcão concluído) + tag. Serviço-only → sem estoque.
+    await concluirAtendimentoRapidoV3(sid, osId, {
+      operador,
+      servico: input.servico.nome.trim(),
+      valor,
+      forma: input.formaPagamento,
+      concluidoEm,
+    });
+
+    revalidatePath("/dashboard/operacoes-v3");
+    return {
+      osId,
+      codigo: (os as OrdemServico).codigo,
+      clienteNome: cliente.nome,
+      valorRecebido: receb.valorRecebido,
+      recibo: receb.recibo,
+    };
+  } catch (e) {
+    // Parte 2 — compensação: se algo falhar DEPOIS de criar a OS (orçamento/recebimento),
+    // cancela logicamente + marca o erro, para NÃO deixar OS órfã aberta sem pagamento.
+    await cancelarAtendimentoRapidoComErroV3(sid, osId, operador, e).catch((err) =>
+      console.error("[atendimento-rapido] compensação falhou", err),
+    );
+    throw e;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Conclusão e compensação (patch de payload — serviço-only, sem efeito de estoque)
+// ----------------------------------------------------------------------------
+
+interface ConcluirInfoV3 {
+  operador: string;
+  servico: string;
+  valor: number;
+  forma: string;
+  concluidoEm: string;
+}
+
+async function concluirAtendimentoRapidoV3(sid: string, osId: string, info: ConcluirInfoV3): Promise<void> {
+  const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId: sid }, select: { id: true, payload: true } });
+  if (!row) return;
+  const payload = (row.payload as Record<string, unknown> | null) ?? {};
+  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+  const prev = (payload.atendimentoRapidoV3 as Record<string, unknown> | undefined) ?? {};
+  const evento: EventoTimeline = {
+    id: eventId(),
+    tipo: "mudanca_status",
+    autor: info.operador,
+    autorTipo: "usuario",
+    conteudo: `Atendimento rápido concluído (${info.servico}).`,
+    metadata: { para: "entregue", atendimentoRapido: true },
+    criadoEm: info.concluidoEm,
   };
+  const nextPayload: Record<string, unknown> = {
+    ...payload,
+    operacaoStatusV3: "entregue",
+    status: projetarStatusV2("entregue"),
+    entregueEm: info.concluidoEm,
+    atendimentoRapidoV3: {
+      ...prev,
+      versao: 1,
+      servico: info.servico,
+      valor: info.valor,
+      forma: info.forma,
+      concluidoEm: info.concluidoEm,
+      operador: info.operador,
+    },
+    timeline: [...timeline, evento],
+    atualizadoEm: nowIso(),
+  };
+  await prisma.ordemServico.update({ where: { id: osId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
+}
+
+async function cancelarAtendimentoRapidoComErroV3(sid: string, osId: string, operador: string, e: unknown): Promise<void> {
+  const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId: sid }, select: { id: true, payload: true } });
+  if (!row) return;
+  const payload = (row.payload as Record<string, unknown> | null) ?? {};
+  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+  const prev = (payload.atendimentoRapidoV3 as Record<string, unknown> | undefined) ?? {};
+  const msg = e instanceof Error ? e.message : String(e);
+  const dataHora = nowIso();
+  const evento: EventoTimeline = {
+    id: eventId(),
+    tipo: "mudanca_status",
+    autor: operador,
+    autorTipo: "usuario",
+    conteudo: `Atendimento rápido: recebimento não concluído — OS cancelada automaticamente. Motivo: ${msg}`,
+    metadata: { para: "cancelada", atendimentoRapido: true, erroRecebimento: true },
+    criadoEm: dataHora,
+  };
+  const nextPayload: Record<string, unknown> = {
+    ...payload,
+    operacaoStatusV3: "cancelada",
+    status: projetarStatusV2("cancelada"),
+    atendimentoRapidoV3: { ...prev, erroRecebimento: true, erroMensagem: msg, erroEm: dataHora },
+    timeline: [...timeline, evento],
+    atualizadoEm: dataHora,
+  };
+  await prisma.ordemServico.update({ where: { id: osId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
 }

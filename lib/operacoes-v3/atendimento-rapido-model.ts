@@ -44,6 +44,10 @@ export interface AtendimentoRapidoInputV3 {
   equipamento?: { marca?: string; modelo?: string };
   formaPagamento: FormaRecebimentoV3;
   observacao?: string;
+  /** Data/hora de entrada (ISO). Default = agora. Editável p/ registro retroativo. */
+  dataEntrada?: string;
+  /** Data/hora de conclusão (ISO). Default = agora. Editável p/ registro retroativo. */
+  dataConclusao?: string;
 }
 
 /** Forma de recebimento → forma "prevista" do snapshot da Nova OS. */
@@ -97,11 +101,12 @@ export function montarDraftAtendimentoRapidoV3(
   const marca = input.equipamento?.marca?.trim() || "Serviço rápido";
   const modelo = input.equipamento?.modelo?.trim() || "Balcão";
 
+  const dataEntrada = input.dataEntrada?.trim() || base.recepcao.dataEntrada;
   return {
     ...base,
     cliente: { ...base.cliente, id: cliente.id, nome: cliente.nome, telefone: cliente.telefone },
     equipamento: { ...base.equipamento, tipo: "Serviço", marca, modelo },
-    recepcao: { ...base.recepcao, origem: "balcao", localFisico: "balcao" },
+    recepcao: { ...base.recepcao, origem: "balcao", localFisico: "balcao", dataEntrada },
     problema: { ...base.problema, defeitoRelatado: `Atendimento rápido: ${servNome}` },
     itens: [
       {

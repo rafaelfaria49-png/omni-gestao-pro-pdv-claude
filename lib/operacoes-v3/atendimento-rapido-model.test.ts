@@ -83,4 +83,16 @@ describe("montarDraftAtendimentoRapidoV3", () => {
     const draft = montarDraftAtendimentoRapidoV3(baseInput({ servico: { nome: "Limpeza", valor: 30, descricao: "alto-falante" } }), cliente);
     expect(draft.itens[0].descricao).toContain("alto-falante");
   });
+
+  it("usa a dataEntrada informada na recepção (registro retroativo)", () => {
+    const iso = "2026-06-10T13:00:00.000Z";
+    const draft = montarDraftAtendimentoRapidoV3(baseInput({ dataEntrada: iso }), cliente);
+    expect(draft.recepcao.dataEntrada).toBe(iso);
+  });
+
+  it("sem dataEntrada usa o default (não vazio)", () => {
+    const draft = montarDraftAtendimentoRapidoV3(baseInput(), cliente);
+    expect(typeof draft.recepcao.dataEntrada).toBe("string");
+    expect(draft.recepcao.dataEntrada.length).toBeGreaterThan(0);
+  });
 });

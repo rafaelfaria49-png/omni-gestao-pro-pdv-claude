@@ -9,7 +9,7 @@
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertCircle, Check, Loader2, Lock, Search, Sparkles, User, Wallet, Wrench } from "lucide-react";
+import { AlertCircle, Check, Clock, Loader2, Lock, Search, Sparkles, User, Wallet, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listClientes } from "@/api/clientes";
 import {
@@ -68,6 +68,19 @@ function num(v: string): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+/** Valor `datetime-local` (sem timezone) para o "agora" local. */
+function nowLocalInput(): string {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+/** `datetime-local` → ISO (UTC). Vazio/ inválido → undefined. */
+function localInputToIso(v: string): string | undefined {
+  if (!v) return undefined;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
 export function AtendimentoRapidoV3() {
   const { storeId, reload, notificar, abrirNovaOS, openOS } = useOperacoesV3();
 
@@ -95,6 +108,10 @@ export function AtendimentoRapidoV3() {
   // Pagamento
   const [forma, setForma] = useState<FormaRecebimentoV3>(FORMAS_SUPORTADAS[0]?.value ?? "dinheiro");
   const [observacao, setObservacao] = useState("");
+
+  // Data/hora (default = agora; editável p/ registro retroativo)
+  const [dataEntrada, setDataEntrada] = useState<string>(() => nowLocalInput());
+  const [dataConclusao, setDataConclusao] = useState<string>(() => nowLocalInput());
 
   // Estado de submissão
   const [saving, setSaving] = useState(false);
@@ -161,6 +178,8 @@ export function AtendimentoRapidoV3() {
     setEquipModelo("");
     setForma(FORMAS_SUPORTADAS[0]?.value ?? "dinheiro");
     setObservacao("");
+    setDataEntrada(nowLocalInput());
+    setDataConclusao(nowLocalInput());
   }, []);
 
   const finalizar = useCallback(async () => {
@@ -179,6 +198,8 @@ export function AtendimentoRapidoV3() {
       equipamento: equipMarca.trim() || equipModelo.trim() ? { marca: equipMarca, modelo: equipModelo } : undefined,
       formaPagamento: forma,
       observacao: observacao || undefined,
+      dataEntrada: localInputToIso(dataEntrada),
+      dataConclusao: localInputToIso(dataConclusao),
     };
 
     setSaving(true);
@@ -194,7 +215,7 @@ export function AtendimentoRapidoV3() {
     } finally {
       setSaving(false);
     }
-  }, [sid, clienteModo, clienteSel, novoNome, novoTelefone, servicoNome, servicoValor, servicoDescricao, equipMarca, equipModelo, forma, observacao, notificar, resetForm, reload]);
+  }, [sid, clienteModo, clienteSel, novoNome, novoTelefone, servicoNome, servicoValor, servicoDescricao, equipMarca, equipModelo, forma, observacao, dataEntrada, dataConclusao, notificar, resetForm, reload]);
 
   return (
     <SectionShellV3
@@ -329,6 +350,18 @@ export function AtendimentoRapidoV3() {
             </Campo>
             <Campo label="Modelo">
               <input className={inputCls} value={equipModelo} onChange={(e) => setEquipModelo(e.target.value)} placeholder="Ex.: A54" maxLength={60} />
+            </Campo>
+          </div>
+        </Card>
+
+        {/* Data e hora */}
+        <Card icon={<Clock className="h-4 w-4" />} titulo="Data e hora">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Campo label="Entrada" hint="Padrão: agora. Edite para registro retroativo.">
+              <input className={inputCls} type="datetime-local" value={dataEntrada} onChange={(e) => setDataEntrada(e.target.value)} />
+            </Campo>
+            <Campo label="Conclusão" hint="Padrão: agora.">
+              <input className={inputCls} type="datetime-local" value={dataConclusao} onChange={(e) => setDataConclusao(e.target.value)} />
             </Campo>
           </div>
         </Card>
