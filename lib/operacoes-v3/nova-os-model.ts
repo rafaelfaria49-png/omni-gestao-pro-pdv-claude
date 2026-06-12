@@ -181,17 +181,27 @@ export const ITEM_KIND_V3: { value: OrcamentoLinhaKindV3; label: string }[] = [
   { value: "interno", label: "Interno" },
 ];
 
-/** Modelos de garantia prevista (item I). prazoDias undefined = personalizado. */
+/**
+ * Tabela de resolução id → label/prazo da garantia prevista (item I).
+ * prazoDias undefined = personalizado. Os textos completos dos modelos vivem no
+ * catálogo oficial `garantia-templates.ts` (passo Garantia da Nova OS); esta
+ * tabela mantém os ids alinhados para resolução de rótulo/prazo na persistência.
+ */
 export const GARANTIA_MODELOS_V3: { id: string; label: string; prazoDias?: number }[] = [
-  { id: "tela", label: "Troca de tela", prazoDias: 90 },
-  { id: "bateria", label: "Troca de bateria", prazoDias: 90 },
-  { id: "conector", label: "Conector de carga", prazoDias: 90 },
+  { id: "tela", label: "Troca de Tela", prazoDias: 90 },
+  { id: "bateria", label: "Troca de Bateria", prazoDias: 90 },
+  { id: "conector", label: "Conector de Carga", prazoDias: 90 },
   { id: "camera", label: "Câmera", prazoDias: 90 },
   { id: "alto_falante", label: "Alto-falante", prazoDias: 90 },
   { id: "microfone", label: "Microfone", prazoDias: 90 },
-  { id: "software", label: "Software", prazoDias: 30 },
   { id: "placa", label: "Placa", prazoDias: 90 },
-  { id: "oxidacao", label: "Oxidação / sem garantia", prazoDias: 0 },
+  { id: "software", label: "Software", prazoDias: 30 },
+  { id: "transferencia_dados", label: "Transferência de Dados", prazoDias: 0 },
+  { id: "recuperacao_conta", label: "Criação / Recuperação de Conta", prazoDias: 0 },
+  { id: "instalacao_app", label: "Instalação de Aplicativo", prazoDias: 0 },
+  { id: "limpeza_tecnica", label: "Limpeza Técnica", prazoDias: 0 },
+  { id: "atualizacao_config", label: "Atualização / Configuração", prazoDias: 30 },
+  { id: "oxidacao", label: "Oxidação", prazoDias: 0 },
   { id: "sem_garantia", label: "Sem garantia", prazoDias: 0 },
   { id: "personalizado", label: "Personalizado" },
 ];

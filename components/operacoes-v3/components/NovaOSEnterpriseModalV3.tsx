@@ -34,11 +34,14 @@ import { cn } from "@/lib/utils";
 import { listClientes } from "@/api/clientes";
 import { criarOSEnterpriseV3 } from "@/lib/operacoes-v3/nova-os-actions";
 import {
+  GARANTIA_TEMPLATES_V3,
+  garantiaTemplateV3,
+  preencherGarantiaPorTemplateV3,
+} from "@/lib/operacoes-v3/garantia-templates";
+import {
   ACESSORIOS_PADRAO_V3,
   computeTotaisNovaOSV3,
   FORMA_PAGAMENTO_V3,
-  GARANTIA_MODELOS_V3,
-  garantiaModeloV3,
   ITEM_CATEGORIA_V3,
   ITEM_KIND_V3,
   LOCAL_FISICO_V3,
@@ -148,6 +151,8 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
   const [closeConfirm, setCloseConfirm] = useState(false);
   const [pendingDiscard, setPendingDiscard] = useState<null | "reset" | "close">(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  // Garantia: marca quando o operador editou o termo à mão (não sobrescrever ao trocar de modelo).
+  const [garantiaTermoEditado, setGarantiaTermoEditado] = useState(false);
 
   // Ao abrir: zera o sub-form transitório e oferece restaurar rascunho salvo.
   useEffect(() => {
@@ -167,6 +172,7 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
     setItSku("");
     setItBarcode("");
     setItPickerOpen(false);
+    setGarantiaTermoEditado(false);
     setCloseConfirm(false);
     setPendingDiscard(null);
 
@@ -236,6 +242,9 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
   const continuarRascunho = useCallback(() => {
     if (!restoreState) return;
     setDraft(restoreState.draft);
+    // Rascunho com termo de garantia já preenchido = trata como editado à mão
+    // (não sobrescrever ao reabrir e trocar de modelo).
+    setGarantiaTermoEditado(!!restoreState.draft.garantia?.termo?.trim());
     setStep(Math.min(Math.max(0, restoreState.step), STEPS.length - 1));
     setRestoreState(null);
   }, [restoreState]);
@@ -366,9 +375,27 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
   };
   const limparCliente = () => setCliente({ id: undefined, nome: "", telefone: undefined, documento: undefined });
 
+  // Seleciona um modelo de garantia: preenche prazo + texto automaticamente.
+  // O texto NÃO é sobrescrito se o operador já editou o termo à mão.
   const escolherGarantia = (id: string) => {
-    const m = garantiaModeloV3(id);
-    setDraft((d) => ({ ...d, garantia: { modelo: m.id, label: m.label, prazoDias: m.prazoDias, termo: d.garantia.termo } }));
+    setDraft((d) => {
+      const p = preencherGarantiaPorTemplateV3(id, {
+        termoAtual: d.garantia.termo,
+        termoEditadoManual: garantiaTermoEditado,
+      });
+      if (!p) return d;
+      return { ...d, garantia: { modelo: p.modelo, label: p.label, prazoDias: p.prazoDias, termo: p.termo } };
+    });
+  };
+
+  // Restaura o texto oficial do modelo atualmente selecionado (desfaz a edição manual).
+  const restaurarTextoModelo = () => {
+    setDraft((d) => {
+      const p = preencherGarantiaPorTemplateV3(d.garantia.modelo, { termoEditadoManual: false });
+      if (!p) return d;
+      return { ...d, garantia: { ...d.garantia, prazoDias: p.prazoDias, termo: p.termo } };
+    });
+    setGarantiaTermoEditado(false);
   };
 
   const stepDoErro = (msg: string): number => {
@@ -846,9 +873,9 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
 
           {stepId === "garantia" && (
             <div className="space-y-3">
-              <span className="block text-xs font-medium text-muted-foreground">Modelo de garantia previsto</span>
+              <span className="block text-xs font-medium text-muted-foreground">Modelo de garantia — selecione para preencher prazo e termo</span>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {GARANTIA_MODELOS_V3.map((g) => {
+                {GARANTIA_TEMPLATES_V3.map((g) => {
                   const on = draft.garantia.modelo === g.id;
                   return (
                     <button
@@ -857,21 +884,34 @@ export function NovaOSEnterpriseModalV3({ open, storeId, onClose, onCreated }: P
                       onClick={() => escolherGarantia(g.id)}
                       className={cn("flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors", on ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:text-foreground")}
                     >
-                      <span className="min-w-0 truncate">{g.label}</span>
-                      <span className="shrink-0 text-xs text-muted-foreground">{g.prazoDias === undefined ? "custom" : `${g.prazoDias}d`}</span>
+                      <span className="min-w-0 truncate">{g.nome}</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{g.dias > 0 ? `${g.dias}d` : "s/ gar."}</span>
                     </button>
                   );
                 })}
               </div>
-              {draft.garantia.modelo === "personalizado" ? (
-                <Campo label="Prazo personalizado (dias)">
-                  <input className={inputCls} type="number" min={0} value={draft.garantia.prazoDias ?? ""} onChange={(e) => setDraft((d) => ({ ...d, garantia: { ...d.garantia, prazoDias: num(e.target.value) } }))} placeholder="Ex.: 60" />
-                </Campo>
-              ) : null}
-              <Campo label="Termo / condições da garantia (opcional)">
-                <textarea className={inputCls} rows={3} value={draft.garantia.termo ?? ""} onChange={(e) => setDraft((d) => ({ ...d, garantia: { ...d.garantia, termo: e.target.value } }))} placeholder="Condições que serão impressas no termo de garantia" maxLength={800} />
+              <Campo label="Prazo de garantia (dias)">
+                <input className={inputCls} type="number" min={0} value={draft.garantia.prazoDias ?? ""} onChange={(e) => setDraft((d) => ({ ...d, garantia: { ...d.garantia, prazoDias: num(e.target.value) } }))} placeholder="Ex.: 90" />
               </Campo>
-              <p className="text-[11px] text-muted-foreground">A garantia é apenas <strong>prevista</strong> agora; passa a valer na entrega do aparelho (fase de entrega).</p>
+              <Campo label="Termo / condições da garantia">
+                <textarea
+                  className={inputCls}
+                  rows={10}
+                  value={draft.garantia.termo ?? ""}
+                  onChange={(e) => {
+                    setGarantiaTermoEditado(true);
+                    setDraft((d) => ({ ...d, garantia: { ...d.garantia, termo: e.target.value } }));
+                  }}
+                  placeholder="Selecione um modelo acima para preencher automaticamente — ou escreva as condições da garantia."
+                  maxLength={2000}
+                />
+              </Campo>
+              {garantiaTermoEditado && garantiaTemplateV3(draft.garantia.modelo) ? (
+                <button type="button" onClick={restaurarTextoModelo} className="text-[11px] font-medium text-primary hover:underline">
+                  Restaurar texto do modelo
+                </button>
+              ) : null}
+              <p className="text-[11px] text-muted-foreground">O termo é preenchido pelo modelo e pode ser editado livremente. A garantia é apenas <strong>prevista</strong> agora; passa a valer na entrega do aparelho.</p>
             </div>
           )}
 
