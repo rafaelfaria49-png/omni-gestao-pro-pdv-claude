@@ -272,7 +272,7 @@ export function CaixaHistoricoClient() {
       <p>Total líquido: ${fmt(resumo.totalLiquido)}</p>
       <p>Total recebido: ${fmt(resumo.totalRecebido)}</p>
       <p>Ticket médio: ${fmt(resumo.ticketMedio)}</p>
-      ${resumo.qtdRecebimentosContas > 0 ? `<p>Receb. contas: ${fmt(resumo.recebimentosContas)} (${resumo.qtdRecebimentosContas})</p>` : ""}`
+      ${resumo.qtdRecebimentosContas > 0 ? `<p>Serviços recebidos: ${fmt(resumo.recebimentosContas)} (${resumo.qtdRecebimentosContas})</p>` : ""}`
     } else if (ledger) {
       secaoVendas = `<hr>
       <p>Dinheiro: ${fmt(ledger.vendasDinheiro ?? 0)}</p>
@@ -297,7 +297,7 @@ export function CaixaHistoricoClient() {
     ${s.saldoContado != null ? `<p>Saldo contado: ${fmt(s.saldoContado)}</p>` : ""}
     <p>Sangrias: ${fmt(sangrias)}</p>
     <p>Suprimentos: ${fmt(suprimentos)}</p>
-    ${recebimentosCr > 0 ? `<p>Receb. contas: ${fmt(recebimentosCr)}</p>` : ""}
+    ${recebimentosCr > 0 ? `<p>Serviços recebidos: ${fmt(recebimentosCr)}</p>` : ""}
     <p>Devoluções: ${fmt(totalDev)}</p>
     ${secaoVendas}
     </body></html>`
@@ -542,7 +542,7 @@ function SessaoDetalheView({
         />
         {totalRecebimentosCr > 0 && (
           <MiniKpi
-            label="Receb. contas"
+            label="Serviços recebidos"
             value={fmt(totalRecebimentosCr)}
             color="text-violet-600 dark:text-violet-400"
             icon={<TrendingUp className="h-3 w-3" />}
@@ -603,7 +603,7 @@ function SessaoDetalheView({
       {resumo && resumo.qtdRecebimentosContas > 0 && (
         <div className="rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2 text-sm">
           <p className="text-xs text-muted-foreground">
-            Recebimentos de contas no PDV ({resumo.qtdRecebimentosContas})
+            Serviços recebidos no PDV ({resumo.qtdRecebimentosContas})
           </p>
           <p className="text-base font-semibold text-violet-600 dark:text-violet-400">
             {fmt(resumo.recebimentosContas)}
@@ -660,7 +660,7 @@ function SessaoDetalheView({
                           : "border-emerald-500/30 text-emerald-500"
                     }
                   >
-                    {op.tipo === "recebimento_cr" ? "Receb. conta" : op.tipo}
+                    {op.tipo === "recebimento_cr" ? "Serviço" : op.tipo}
                   </Badge>
                   <span className="text-muted-foreground">{op.motivo || "—"}</span>
                 </div>

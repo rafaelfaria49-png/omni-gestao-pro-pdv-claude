@@ -180,7 +180,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       `A prazo (fiado):  ${fmt(resumo.aPrazo)}`,
       `Ticket médio:     ${fmt(resumo.ticketMedio)}`,
       resumo.qtdRecebimentosContas > 0
-        ? `Receb. contas:    ${fmt(resumo.recebimentosContas)} (${resumo.qtdRecebimentosContas} título(s))`
+        ? `Serviços recebidos: ${fmt(resumo.recebimentosContas)} (${resumo.qtdRecebimentosContas})`
         : "",
       resumo.recebimentosContasDinheiro > 0
         ? `  CR em dinheiro: ${fmt(resumo.recebimentosContasDinheiro)}`
@@ -480,7 +480,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                   <CardContent className="space-y-2 pt-4 pb-4">
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                       <Wallet className="h-4 w-4 text-violet-500" />
-                      Recebimentos de contas
+                      Serviços recebidos
                       {opsCarregando ? (
                         <span className="text-xs font-normal text-muted-foreground">(atualizando…)</span>
                       ) : null}
@@ -558,7 +558,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                     </div>
                     {resumo.recebimentosContasDinheiro > 0 && (
                       <div className="flex justify-between">
-                        <span className="text-violet-600 dark:text-violet-400">+ Receb. contas (dinheiro)</span>
+                        <span className="text-violet-600 dark:text-violet-400">+ Serviços recebidos (dinheiro)</span>
                         <span className="font-medium text-violet-600 dark:text-violet-400">
                           + {fmt(resumo.recebimentosContasDinheiro)}
                         </span>
