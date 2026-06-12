@@ -3,6 +3,7 @@ import { validarNovaOSDraftV3, computeTotaisNovaOSV3 } from "./nova-os-model";
 import {
   SERVICOS_RAPIDOS_V3,
   formaPrevistaDeRecebimentoV3,
+  formatDuracaoV3,
   montarDraftAtendimentoRapidoV3,
   validarAtendimentoRapidoV3,
   type AtendimentoRapidoInputV3,
@@ -30,6 +31,21 @@ describe("validarAtendimentoRapidoV3", () => {
   });
   it("exige nome quando cliente novo", () => {
     expect(validarAtendimentoRapidoV3(baseInput({ cliente: { modo: "novo" } }))).toMatch(/nome/i);
+  });
+});
+
+describe("formatDuracaoV3", () => {
+  it("formata horas e minutos", () => {
+    expect(formatDuracaoV3(60 * 60000)).toBe("1h 00min");
+    expect(formatDuracaoV3(90 * 60000)).toBe("1h 30min");
+  });
+  it("só minutos quando < 1h", () => {
+    expect(formatDuracaoV3(25 * 60000)).toBe("25min");
+    expect(formatDuracaoV3(0)).toBe("0min");
+  });
+  it("negativo/ inválido → —", () => {
+    expect(formatDuracaoV3(-1)).toBe("—");
+    expect(formatDuracaoV3(NaN)).toBe("—");
   });
 });
 

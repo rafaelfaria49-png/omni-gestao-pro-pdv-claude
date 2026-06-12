@@ -169,7 +169,7 @@ function KanbanView({
       <p className="mb-2 text-xs text-muted-foreground">
         Arraste um card para outra coluna para mudar o status — validado pela máquina única da V3.
       </p>
-      <div className="flex gap-3 overflow-x-auto pb-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
         {KANBAN_PIPELINE_V3.map((col) => {
           const meta = statusMetaV3(col);
           const cards = ordens.filter((o) => statusV3FromOS(o) === col);
@@ -188,7 +188,7 @@ function KanbanView({
                 soltarEm(col);
               }}
               className={cn(
-                "flex w-72 shrink-0 flex-col rounded-xl border bg-muted/20 transition-colors",
+                "flex min-w-0 flex-col rounded-xl border bg-muted/20 transition-colors",
                 isOver && alvoValido
                   ? "border-primary ring-2 ring-primary/30"
                   : drag && alvoValido

@@ -66,7 +66,7 @@ function LinhaItem({ item }: { item: PrintItemV3 }) {
 
 /** A4 (≈ 794px @ 96dpi). `id="og-print-root"` é o alvo do CSS de impressão. */
 export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
-  const { empresa, cliente, equipamento, senha, recepcao, checklist, diagnostico, financeiro, garantia, provaEntrada } = doc;
+  const { empresa, cliente, equipamento, senha, recepcao, checklist, diagnostico, financeiro, garantia, provaEntrada, atendimentoRapido } = doc;
   const temDiagnostico = !!(diagnostico.inicial || diagnostico.final || diagnostico.causa || diagnostico.solucao || doc.observacoesCliente.length);
   const interna = doc.variante === "interna";
 
@@ -120,7 +120,14 @@ export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
         <Secao titulo="Recepção">
           <Campo rotulo="Entrada" valor={recepcao.dataEntrada ? formatDataHora(recepcao.dataEntrada) : undefined} />
           <Campo rotulo="Previsão de entrega" valor={recepcao.previsaoEntrega ? formatDataHora(recepcao.previsaoEntrega) : undefined} />
-          <Campo rotulo="Origem" valor={recepcao.origem} />
+          {atendimentoRapido ? (
+            <p className="text-[12px] leading-snug text-black">
+              <span className="text-zinc-500">Origem: </span>
+              <span className="rounded border border-black px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">Atendimento Rápido</span>
+            </p>
+          ) : (
+            <Campo rotulo="Origem" valor={recepcao.origem} />
+          )}
           <Campo rotulo="Recebido por" valor={recepcao.recebidoPor} />
         </Secao>
       </div>
@@ -253,14 +260,18 @@ export function OSPrintDocumentV3({ doc }: { doc: DocumentoOSV3 }) {
           <div className="flex justify-between py-0.5"><span className="text-zinc-600">Subtotal</span><span>{formatBRL(financeiro.subtotal)}</span></div>
           {financeiro.desconto > 0 ? <div className="flex justify-between py-0.5"><span className="text-zinc-600">Desconto</span><span>- {formatBRL(financeiro.desconto)}</span></div> : null}
           <div className="flex justify-between border-t border-zinc-400 py-1 text-[14px] font-bold"><span>Total da OS</span><span>{formatBRL(financeiro.total)}</span></div>
-          {financeiro.recebido !== undefined ? <div className="flex justify-between py-0.5"><span className="text-zinc-600">Sinal/recebido (previsto)</span><span>{formatBRL(financeiro.recebido)}</span></div> : null}
-          {financeiro.saldo !== undefined ? <div className="flex justify-between py-0.5"><span className="text-zinc-600">Saldo previsto</span><span>{formatBRL(financeiro.saldo)}</span></div> : null}
+          {financeiro.recebido !== undefined ? <div className="flex justify-between py-0.5"><span className="text-zinc-600">{financeiro.pago ? "Recebido" : "Sinal/recebido (previsto)"}</span><span>{formatBRL(financeiro.recebido)}</span></div> : null}
+          {financeiro.saldo !== undefined ? <div className="flex justify-between py-0.5"><span className="text-zinc-600">{financeiro.pago ? "Saldo" : "Saldo previsto"}</span><span>{formatBRL(financeiro.saldo)}</span></div> : null}
         </div>
         <div className="mt-1">
-          <Campo rotulo="Forma de pagamento (prevista)" valor={financeiro.formaPagamento} />
+          <Campo rotulo={financeiro.pago ? "Pagamento confirmado" : "Forma de pagamento (prevista)"} valor={financeiro.formaPagamento} />
           <Campo rotulo="Vencimento previsto" valor={financeiro.vencimento ? formatData(financeiro.vencimento) : undefined} />
           <Campo rotulo="Observação" valor={financeiro.observacao} />
-          <p className="mt-0.5 text-[10px] italic text-zinc-500">Valores previstos. O recebimento é confirmado no momento do pagamento.</p>
+          <p className="mt-0.5 text-[10px] italic text-zinc-500">
+            {financeiro.pago
+              ? "Pagamento recebido e confirmado."
+              : "Valores previstos. O recebimento é confirmado no momento do pagamento."}
+          </p>
         </div>
       </Secao>
 

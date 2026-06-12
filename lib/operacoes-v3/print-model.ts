@@ -33,6 +33,7 @@ import {
   type RecepcaoV3,
 } from "./workspace-model";
 import { pagamentoFormaLabelV3, type NovaOSPagamentoFormaV3 } from "./nova-os-model";
+import { lerPagamentoV3 } from "./payment-model";
 import {
   gerarTermoGarantiaV3,
   sugerirGarantiaPorDescricaoV3,
@@ -179,6 +180,8 @@ export interface ResumoFinanceiroPrintV3 {
   formaPagamento?: string;
   vencimento?: string;
   observacao?: string;
+  /** true quando já houve recebimento real (`pagamentoV3.recebido > 0`). */
+  pago: boolean;
 }
 
 type PagamentoPrevisto = { forma?: unknown; vencimentoPrevisto?: unknown; observacao?: unknown; sinal?: unknown };
@@ -199,11 +202,29 @@ export function resumoFinanceiroImprimivelV3(os: OrdemServico): ResumoFinanceiro
       })();
 
   const pag = lerPagamentoPrevisto(os);
-  const sinal = typeof pag.sinal === "number" && pag.sinal > 0 ? pag.sinal : undefined;
   const forma = s(pag.forma);
   const vencimento = s(pag.vencimentoPrevisto);
   const observacao = s(pag.observacao);
 
+  // Pagamento REAL (espelho `pagamentoV3`): se já houve recebimento, o documento
+  // mostra "confirmado" em vez de "previsto" (ex.: Atendimento Rápido já pago).
+  const real = lerPagamentoV3(os);
+  const recebidoReal = real.recebido > 0 ? real.recebido : 0;
+  if (recebidoReal > 0) {
+    return {
+      subtotal: totais.subtotal,
+      desconto: totais.desconto,
+      total: totais.total,
+      recebido: recebidoReal,
+      saldo: Math.max(0, typeof real.saldo === "number" ? real.saldo : totais.total - recebidoReal),
+      formaPagamento: real.ultimaForma || (forma ? pagamentoFormaLabelV3(forma as NovaOSPagamentoFormaV3) : undefined),
+      vencimento: undefined,
+      observacao: observacao || undefined,
+      pago: true,
+    };
+  }
+
+  const sinal = typeof pag.sinal === "number" && pag.sinal > 0 ? pag.sinal : undefined;
   return {
     subtotal: totais.subtotal,
     desconto: totais.desconto,
@@ -213,6 +234,7 @@ export function resumoFinanceiroImprimivelV3(os: OrdemServico): ResumoFinanceiro
     formaPagamento: forma ? pagamentoFormaLabelV3(forma as NovaOSPagamentoFormaV3) : undefined,
     vencimento: vencimento || undefined,
     observacao: observacao || undefined,
+    pago: false,
   };
 }
 
@@ -360,6 +382,8 @@ export interface DocumentoOSV3 {
   empresa: EmpresaPrintV3;
   numero: string;
   statusLabel: string;
+  /** OS de Atendimento Rápido (impressão enxuta — sem checklist, origem destacada). */
+  atendimentoRapido: boolean;
   criadoEm?: string;
   impressoEm: string;
   cliente: ClientePrintV3;
@@ -405,6 +429,12 @@ export function blocoInternoV3(os: OrdemServico): InternoPrintV3 {
   return { custo: totais.custo, lucro: totais.lucro, itensInternos, observacoesInternas };
 }
 
+/** A OS é um Atendimento Rápido (tag gravada na conclusão)? */
+export function isAtendimentoRapidoV3(os: OrdemServico): boolean {
+  const t = (os as { atendimentoRapidoV3?: unknown }).atendimentoRapidoV3;
+  return !!(t && typeof t === "object");
+}
+
 export function montarDocumentoOSV3(
   os: OrdemServico,
   empresa?: EmpresaPrintInputV3,
@@ -415,12 +445,20 @@ export function montarDocumentoOSV3(
   const condicao = s((os as { aberturaV3?: { condicaoAparelho?: unknown } }).aberturaV3?.condicaoAparelho);
   const sa = lerSenhaAcessoriosV3(os);
 
+  // Atendimento Rápido → impressão enxuta: oculta o checklist (também oculto quando
+  // todos os itens estão "N/T", sem informação útil).
+  const atendimentoRapido = isAtendimentoRapidoV3(os);
+  const checklistFull = checklistImprimivelV3(os);
+  const checklistTodosNT = checklistFull.length > 0 && checklistFull.every((c) => c.estado === "nao_testado");
+  const checklist = atendimentoRapido || checklistTodosNT ? [] : checklistFull;
+
   return {
     variante,
     interno: variante === "interna" ? blocoInternoV3(os) : undefined,
     empresa: dadosEmpresaPrintV3(empresa),
     numero: os.codigo || "—",
     statusLabel: statusMetaV3(statusV3FromOS(os)).label,
+    atendimentoRapido,
     criadoEm: os.criadoEm,
     impressoEm: now.toISOString(),
     cliente: {
@@ -440,7 +478,7 @@ export function montarDocumentoOSV3(
     },
     senha: senhaImprimivelV3(os),
     recepcao: lerRecepcaoV3(os),
-    checklist: checklistImprimivelV3(os),
+    checklist,
     diagnostico: lerDiagnosticoV3(os),
     observacoesCliente: observacoesClienteV3(os),
     itens: itensImprimiveisV3(os),

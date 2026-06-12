@@ -50,6 +50,15 @@ export interface AtendimentoRapidoInputV3 {
   dataConclusao?: string;
 }
 
+/** Formata uma duração (ms) como "Xh YYmin" / "YYmin". Negativo/ inválido → "—". */
+export function formatDuracaoV3(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return h <= 0 ? `${m}min` : `${h}h ${String(m).padStart(2, "0")}min`;
+}
+
 /** Forma de recebimento → forma "prevista" do snapshot da Nova OS. */
 export function formaPrevistaDeRecebimentoV3(f: FormaRecebimentoV3): NovaOSPagamentoFormaV3 {
   switch (f) {

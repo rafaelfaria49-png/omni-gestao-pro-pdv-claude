@@ -9,7 +9,7 @@
 // ============================================================================
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertCircle, Check, Clock, Loader2, Lock, Search, Sparkles, User, Wallet, Wrench } from "lucide-react";
+import { AlertCircle, Check, Clock, Loader2, Lock, Plus, Search, Sparkles, User, Wallet, Wrench } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { listClientes } from "@/api/clientes";
 import {
@@ -19,6 +19,7 @@ import {
 import { getCaixaSessaoAbertaV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import {
   SERVICOS_RAPIDOS_V3,
+  formatDuracaoV3,
   type AtendimentoClienteModoV3,
   type AtendimentoRapidoInputV3,
 } from "@/lib/operacoes-v3/atendimento-rapido-model";
@@ -95,11 +96,18 @@ export function AtendimentoRapidoV3() {
   const [novoNome, setNovoNome] = useState("");
   const [novoTelefone, setNovoTelefone] = useState("");
 
-  // Serviço
-  const [servicoSelId, setServicoSelId] = useState<string>(SERVICOS_RAPIDOS_V3[0]?.id ?? "");
-  const [servicoNome, setServicoNome] = useState<string>(SERVICOS_RAPIDOS_V3[0]?.nome ?? "");
-  const [servicoValor, setServicoValor] = useState<number>(SERVICOS_RAPIDOS_V3[0]?.valorPadrao ?? 0);
+  // Serviço — abre VAZIO (sem pré-seleção)
+  const [servicoSelId, setServicoSelId] = useState<string>("");
+  const [servicoNome, setServicoNome] = useState<string>("");
+  const [servicoValor, setServicoValor] = useState<number>(0);
   const [servicoDescricao, setServicoDescricao] = useState("");
+
+  // Catálogo da SESSÃO: curados + adicionados em "Novo serviço" (não persistente)
+  const [customServicos, setCustomServicos] = useState<{ id: string; nome: string; valorPadrao: number }[]>([]);
+  const [novoServicoOpen, setNovoServicoOpen] = useState(false);
+  const [nsNome, setNsNome] = useState("");
+  const [nsValor, setNsValor] = useState(0);
+  const [nsDescricao, setNsDescricao] = useState("");
 
   // Equipamento (opcional)
   const [equipMarca, setEquipMarca] = useState("");
@@ -148,20 +156,52 @@ export function AtendimentoRapidoV3() {
     return base.slice(0, 20);
   }, [clientes, clienteBusca]);
 
+  const servicosDisponiveis = useMemo(() => [...SERVICOS_RAPIDOS_V3, ...customServicos], [customServicos]);
+
   const selecionarServico = (id: string) => {
     setServicoSelId(id);
-    const preset = SERVICOS_RAPIDOS_V3.find((s) => s.id === id);
+    if (id === "" || id === "__manual__") {
+      if (id === "__manual__") {
+        setServicoNome("");
+        setServicoValor(0);
+      }
+      return;
+    }
+    const preset = servicosDisponiveis.find((s) => s.id === id);
     if (preset) {
       setServicoNome(preset.nome);
       setServicoValor(preset.valorPadrao);
     }
   };
 
+  const adicionarNovoServico = () => {
+    const nome = nsNome.trim();
+    if (!nome) return;
+    const valor = Math.max(0, nsValor);
+    const novo = { id: `custom-${Date.now()}`, nome, valorPadrao: valor };
+    setCustomServicos((arr) => [...arr, novo]);
+    setServicoSelId(novo.id);
+    setServicoNome(nome);
+    setServicoValor(valor);
+    setServicoDescricao(nsDescricao.trim());
+    setNovoServicoOpen(false);
+    setNsNome("");
+    setNsValor(0);
+    setNsDescricao("");
+  };
+
+  // Data/hora: duração automática + validação (conclusão não pode ser antes da entrada).
+  const entradaMs = Date.parse(dataEntrada);
+  const conclusaoMs = Date.parse(dataConclusao);
+  const duracaoMs = Number.isFinite(entradaMs) && Number.isFinite(conclusaoMs) ? conclusaoMs - entradaMs : NaN;
+  const dataInvalida = Number.isFinite(duracaoMs) && duracaoMs < 0;
+
   const clienteOk =
     clienteModo === "balcao" ||
     (clienteModo === "existente" && !!clienteSel) ||
     (clienteModo === "novo" && novoNome.trim().length > 0);
-  const podeFinalizar = caixaAberta === true && clienteOk && servicoNome.trim().length > 0 && servicoValor > 0 && !saving;
+  const podeFinalizar =
+    caixaAberta === true && clienteOk && servicoNome.trim().length > 0 && servicoValor > 0 && !dataInvalida && !saving;
 
   const resetForm = useCallback(() => {
     setClienteModo("balcao");
@@ -169,11 +209,14 @@ export function AtendimentoRapidoV3() {
     setClienteSel(null);
     setNovoNome("");
     setNovoTelefone("");
-    const first = SERVICOS_RAPIDOS_V3[0];
-    setServicoSelId(first?.id ?? "");
-    setServicoNome(first?.nome ?? "");
-    setServicoValor(first?.valorPadrao ?? 0);
+    setServicoSelId("");
+    setServicoNome("");
+    setServicoValor(0);
     setServicoDescricao("");
+    setNovoServicoOpen(false);
+    setNsNome("");
+    setNsValor(0);
+    setNsDescricao("");
     setEquipMarca("");
     setEquipModelo("");
     setForma(FORMAS_SUPORTADAS[0]?.value ?? "dinheiro");
@@ -320,21 +363,52 @@ export function AtendimentoRapidoV3() {
         </Card>
 
         {/* Serviço */}
-        <Card icon={<Wrench className="h-4 w-4" />} titulo="Serviço">
+        <Card
+          icon={<Wrench className="h-4 w-4" />}
+          titulo="Serviço"
+          aside={
+            <ButtonV3 variant="outline" className="px-2 py-1 text-xs" onClick={() => setNovoServicoOpen((v) => !v)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden /> Novo serviço
+            </ButtonV3>
+          }
+        >
+          {novoServicoOpen ? (
+            <div className="mb-3 space-y-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
+              <div className="grid gap-2 sm:grid-cols-3">
+                <Campo label="Nome do serviço *">
+                  <input className={inputCls} value={nsNome} onChange={(e) => setNsNome(e.target.value)} placeholder="Ex.: Backup de fotos" maxLength={120} />
+                </Campo>
+                <Campo label="Valor padrão (R$)">
+                  <input className={inputCls} type="number" min={0} step="0.01" value={nsValor || ""} onChange={(e) => setNsValor(num(e.target.value))} placeholder="0,00" />
+                </Campo>
+                <Campo label="Descrição (opcional)">
+                  <input className={inputCls} value={nsDescricao} onChange={(e) => setNsDescricao(e.target.value)} placeholder="Detalhe" maxLength={160} />
+                </Campo>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Categoria: <strong>Serviço rápido</strong>. Este serviço será usado neste atendimento. Catálogo persistente será implementado em fase futura.
+              </p>
+              <div className="flex justify-end gap-2">
+                <ButtonV3 variant="ghost" className="px-2 py-1 text-xs" onClick={() => setNovoServicoOpen(false)}>Cancelar</ButtonV3>
+                <ButtonV3 variant="primary" className="px-2 py-1 text-xs" onClick={adicionarNovoServico} disabled={!nsNome.trim()}>Adicionar</ButtonV3>
+              </div>
+            </div>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <Campo label="Serviço">
               <select className={inputCls} value={servicoSelId} onChange={(e) => selecionarServico(e.target.value)}>
-                {SERVICOS_RAPIDOS_V3.map((s) => (
+                <option value="" disabled>Selecione um serviço…</option>
+                {servicosDisponiveis.map((s) => (
                   <option key={s.id} value={s.id}>{s.nome}</option>
                 ))}
-                <option value="">Outro / manual…</option>
+                <option value="__manual__">Outro / manual…</option>
               </select>
             </Campo>
             <Campo label="Valor (R$) *">
               <input className={inputCls} type="number" min={0} step="0.01" value={servicoValor || ""} onChange={(e) => setServicoValor(num(e.target.value))} placeholder="0,00" />
             </Campo>
             <Campo label="Descrição do serviço *" hint="Editável — ajuste o nome se for um serviço manual.">
-              <input className={inputCls} value={servicoNome} onChange={(e) => { setServicoNome(e.target.value); setServicoSelId(""); }} placeholder="Ex.: Transferência de dados" maxLength={120} />
+              <input className={inputCls} value={servicoNome} onChange={(e) => { setServicoNome(e.target.value); setServicoSelId("__manual__"); }} placeholder="Selecione acima ou digite o serviço" maxLength={120} />
             </Campo>
             <Campo label="Observação do serviço (opcional)">
               <input className={inputCls} value={servicoDescricao} onChange={(e) => setServicoDescricao(e.target.value)} placeholder="Detalhe rápido" maxLength={160} />
@@ -356,14 +430,29 @@ export function AtendimentoRapidoV3() {
 
         {/* Data e hora */}
         <Card icon={<Clock className="h-4 w-4" />} titulo="Data e hora">
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Use para registrar um atendimento feito em outro horário ou dia. Padrão: agora.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Campo label="Entrada" hint="Padrão: agora. Edite para registro retroativo.">
+            <Campo label="Entrada">
               <input className={inputCls} type="datetime-local" value={dataEntrada} onChange={(e) => setDataEntrada(e.target.value)} />
             </Campo>
-            <Campo label="Conclusão" hint="Padrão: agora.">
+            <Campo label="Conclusão">
               <input className={inputCls} type="datetime-local" value={dataConclusao} onChange={(e) => setDataConclusao(e.target.value)} />
             </Campo>
           </div>
+          {dataInvalida ? (
+            <p className="mt-2 flex items-center gap-1.5 text-[11px] text-destructive">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden /> A conclusão não pode ser antes da entrada.
+            </p>
+          ) : Number.isFinite(duracaoMs) ? (
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              Duração: <strong className="text-foreground">{formatDuracaoV3(duracaoMs)}</strong>
+            </p>
+          ) : null}
+          <p className="mt-1 text-[10px] text-muted-foreground/80">
+            O seletor usa o calendário nativo do navegador (sem botão “OK” próprio).
+          </p>
         </Card>
 
         {/* Pagamento */}
