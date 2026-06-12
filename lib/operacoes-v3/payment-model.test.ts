@@ -51,6 +51,19 @@ describe("pagamento — leitura da OS", () => {
   it("sem orçamento e sem espelho → sem cobrança", () => {
     expect(lerPagamentoV3(os({})).status).toBe("sem_cobranca");
   });
+
+  it("FIX PDV Serviço: total cai para a COLUNA Prisma (prismaValorTotal) quando o payload não tem orçamento real", () => {
+    // Reproduz OS-2026-00004: valor mora na coluna `valorTotal` do Prisma, não no JSONB.
+    // O servidor (carregarOS) passa a injetar `prismaValorTotal`; o total deve ser 300 (não 0).
+    const o = os({ prismaValorTotal: 300 });
+    expect(totalCobravelV3(o)).toBe(300);
+    expect(lerPagamentoV3(o)).toMatchObject({ total: 300, recebido: 0, saldo: 300, status: "aberto" });
+  });
+
+  it("orçamento real tem precedência sobre a coluna Prisma (mesma regra do seletor)", () => {
+    const o = os({ orcamento: orc([{ id: "s1", descricao: "Serviço", valor: 480, kindV3: "cobrado" }]), prismaValorTotal: 300 });
+    expect(totalCobravelV3(o)).toBe(480);
+  });
 });
 
 describe("pagamento — validação de recebimento", () => {

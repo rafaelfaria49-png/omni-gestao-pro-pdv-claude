@@ -149,6 +149,8 @@ export function PdvServicoV3() {
 
   const statusMeta = pagamento ? PAGAMENTO_STATUS_META_V3[pagamento.status] : null;
   const quitado = pagamento?.status === "quitado";
+  // OS sem valor cobrável (sem orçamento aprovado / sem total): orienta a gerar o orçamento.
+  const semValor = !!os && !loading && (pagamento?.total ?? 0) <= 0;
 
   return (
     <SectionShellV3 titulo={SCREEN_COPY["pdv-servico"].titulo} subtitulo={SCREEN_COPY["pdv-servico"].subtitulo}>
@@ -354,6 +356,8 @@ export function PdvServicoV3() {
 
               {!caixaAberto ? (
                 <p className="mt-2 text-center text-[11px] text-warning">Abra o caixa para liberar o recebimento.</p>
+              ) : semValor ? (
+                <p className="mt-2 flex items-center justify-center gap-1 text-center text-[11px] text-warning"><AlertTriangle className="h-3.5 w-3.5" /> Esta OS não tem valor a cobrar. Gere/aprove o orçamento antes de receber.</p>
               ) : quitado ? (
                 <p className="mt-2 flex items-center justify-center gap-1 text-center text-[11px] text-success"><CheckCircle2 className="h-3.5 w-3.5" /> OS quitada.</p>
               ) : (

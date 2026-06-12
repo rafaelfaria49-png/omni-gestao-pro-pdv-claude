@@ -98,12 +98,31 @@ export async function getCaixaSessaoAbertaV3(storeId: string): Promise<CaixaSess
 // Garantir título de Conta a Receber da OS (idempotente)
 // ----------------------------------------------------------------------------
 
-async function carregarOS(storeId: string, osId: string): Promise<{ id: string; payload: OSPayloadFull }> {
-  const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId }, select: { id: true, payload: true } });
+interface OSCarregadaV3 {
+  id: string;
+  payload: OSPayloadFull;
+  /** Valor monetário da OS na COLUNA Prisma (não no JSONB) — fallback de total. */
+  prismaValorTotal: number;
+  prismaValorBase: number;
+}
+
+async function carregarOS(storeId: string, osId: string): Promise<OSCarregadaV3> {
+  // Inclui `valorTotal`/`valorBase` (colunas Prisma) além do payload JSONB: o valor
+  // cobrável de muitas OS vive na COLUNA, não no JSON. O cliente já enxerga isso via
+  // hidratação (`prismaValorTotal`); aqui alinhamos a leitura do servidor à mesma fonte.
+  const row = await prisma.ordemServico.findFirst({
+    where: { id: osId, storeId },
+    select: { id: true, payload: true, valorTotal: true, valorBase: true },
+  });
   if (!row) throw new Error("OS não encontrada.");
   const payload = row.payload as unknown as OSPayloadFull | null;
   if (!payload || typeof payload !== "object") throw new Error("OS sem payload compatível.");
-  return { id: row.id, payload };
+  return {
+    id: row.id,
+    payload,
+    prismaValorTotal: Number(row.valorTotal ?? 0) || 0,
+    prismaValorBase: Number(row.valorBase ?? 0) || 0,
+  };
 }
 
 interface TituloOSResolvido {
@@ -116,8 +135,12 @@ interface TituloOSResolvido {
 // Correção 2A.1: CHAVE ÚNICA por OS (idêntica à do adapter V2, `os-faturamento:*`).
 // Se o título já existe — criado pelo faturamento V2 OU por um recebimento V3 anterior —
 // ele é REAPROVEITADO; nunca se cria um segundo título para a mesma OS.
-async function resolverTituloOS(storeId: string, osId: string, payload: OSPayloadFull, opts: { create: boolean }): Promise<TituloOSResolvido> {
-  const os = payload as unknown as OrdemServico;
+async function resolverTituloOS(storeId: string, osId: string, loaded: OSCarregadaV3, opts: { create: boolean }): Promise<TituloOSResolvido> {
+  const { payload, prismaValorTotal, prismaValorBase } = loaded;
+  // Mesma fonte de verdade do seletor/Workspace: orçamento REAL no payload (se houver),
+  // senão a coluna Prisma `valorTotal` (exposta como `prismaValorTotal`). Sem esse
+  // fallback, OS cujo valor mora só na coluna apareciam com Total R$ 0 no PDV de Serviço.
+  const os = { ...payload, prismaValorTotal, prismaValorBase } as unknown as OrdemServico;
   const total = totalCobravelV3(os);
   const localKey = localKeyContaReceberOSV3(storeId, osId);
 
@@ -145,8 +168,8 @@ async function resolverTituloOS(storeId: string, osId: string, payload: OSPayloa
 export async function lerPagamentoOSV3(storeId: string, osId: string): Promise<PagamentoV3 & { sessao: CaixaSessaoV3 }> {
   const sid = (storeId ?? "").trim();
   assertActiveStoreId(sid, "Operações V3");
-  const { payload } = await carregarOS(sid, osId);
-  const t = await resolverTituloOS(sid, osId, payload, { create: false });
+  const loaded = await carregarOS(sid, osId);
+  const t = await resolverTituloOS(sid, osId, loaded, { create: false });
   const sessao = await getCaixaSessaoAbertaV3(sid);
   return { ...montarPagamentoMirrorV3({ total: t.total, recebido: t.recebido, tituloLocalKey: t.localKey }), sessao };
 }
@@ -213,8 +236,9 @@ export async function receberOSV3(storeId: string, osId: string, input: ReceberO
   const sessao = await prisma.sessaoCaixa.findFirst({ where: { id: input.sessaoId, storeId: sid, status: "ABERTA" }, select: { id: true } });
   if (!sessao) throw new Error("Caixa fechado: abra o caixa no PDV antes de receber.");
 
-  const { id: osRowId, payload } = await carregarOS(sid, id);
-  const titulo = await resolverTituloOS(sid, id, payload, { create: true });
+  const loaded = await carregarOS(sid, id);
+  const { id: osRowId, payload } = loaded;
+  const titulo = await resolverTituloOS(sid, id, loaded, { create: true });
 
   // Valida a SOMA do split contra o saldo (proteção contra valor > saldo no motor único).
   const total = somaSplitV3(linhas);
@@ -343,8 +367,9 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
   const sessao = await prisma.sessaoCaixa.findFirst({ where: { id: input.sessaoId, storeId: sid, status: "ABERTA" }, select: { id: true } });
   if (!sessao) throw new Error("Caixa fechado: abra o caixa para estornar o recebimento.");
 
-  const { id: osRowId, payload } = await carregarOS(sid, id);
-  const titulo = await resolverTituloOS(sid, id, payload, { create: false });
+  const loaded = await carregarOS(sid, id);
+  const { id: osRowId, payload } = loaded;
+  const titulo = await resolverTituloOS(sid, id, loaded, { create: false });
   if (titulo.recebido <= 0) throw new Error("Não há recebimento para estornar nesta OS.");
   const recebidoAntes = titulo.recebido;
 
