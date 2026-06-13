@@ -22,6 +22,7 @@ import {
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PaymentModal, type PaymentMethod } from "@/components/dashboard/vendas/payment-modal"
@@ -52,7 +53,7 @@ export function PdvBlackEdition() {
   const router = useRouter()
   const { lojaAtivaId, lojaAtivaRaw } = useLojaAtiva()
   const { config } = useConfigEmpresa()
-  const { inventory, finalizeSaleTransaction } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction } = useOperationsStore()
   const { caixa, abrirCaixa, fecharCaixa } = useCaixa()
   const { toast } = useToast()
 
@@ -195,7 +196,7 @@ export function PdvBlackEdition() {
 
   // ── Bipe: Enter ────────────────────────────────────────────────────────────
   const handleBipeKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLInputElement>) => {
+    async (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key !== "Enter") return
       e.preventDefault()
       const raw = bipeCode.trim()
@@ -230,9 +231,23 @@ export function PdvBlackEdition() {
         return
       }
 
+      // Miss local → busca autoritativa no catálogo INTEIRO da loja (snapshot pode estar defasado).
+      const remote = await lookupPdvScanRemote({ code: query, storeId: (lojaAtivaId ?? "").trim(), setInventory })
+      if (remote.kind === "single") {
+        addProduct(remote.product, qty)
+        setBipeCode("")
+        return
+      }
+      if (remote.kind === "multiple") {
+        setProductSearchInitial(query)
+        setProductSearchOpen(true)
+        setBipeCode("")
+        return
+      }
+      toast({ title: "Produto não encontrado", description: `Produto não encontrado nesta loja para o código: ${query}` })
       bipeRef.current?.select()
     },
-    [bipeCode, products, addProduct]
+    [bipeCode, products, addProduct, lojaAtivaId, setInventory, toast]
   )
 
   // ── Remover linha (X / Delete) ─────────────────────────────────────────────

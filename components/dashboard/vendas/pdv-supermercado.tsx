@@ -47,6 +47,7 @@ import { useOperationsStore, type InventoryItem } from "@/lib/operations-store"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
 import { PdvPainelLateralTerminal, PdvVisorTotal } from "./painel-total"
 import { PdvTabelaItemLinha, PdvTabelaItens } from "./tabela-itens"
@@ -142,7 +143,7 @@ export function PdvSupermercado({
   const { toast } = useToast()
   const { lojaAtivaId, opsStorageKey, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   const { pdvParams, blob, save: saveStoreSettings, impressaoConfig } = useStoreSettings()
-  const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   
   const [editAtalhosOpen, setEditAtalhosOpen] = useState(false)
 
@@ -566,7 +567,7 @@ export function PdvSupermercado({
   )
 
   const submitSearch = useCallback(
-    (keyboardPickIndex?: number) => {
+    async (keyboardPickIndex?: number) => {
       if (
         keyboardPickIndex != null &&
         keyboardPickIndex >= 0 &&
@@ -616,13 +617,35 @@ export function PdvSupermercado({
         return
       }
 
+      // Sem candidatos locais → busca autoritativa no catálogo INTEIRO da loja (snapshot defasado).
+      if (candidates.length === 0) {
+        const remote = await lookupPdvScanRemote({ code: lookupTerm, storeId: lojaKey, setInventory })
+        if (remote.kind === "single") {
+          addToCart(remote.product as Product, multQty)
+          setSearchTerm("")
+          activeSuggestionIndexRef.current = -1
+          setActiveSuggestionIndex(-1)
+          queueMicrotask(hardFocusSearch)
+          return
+        }
+        if (remote.kind === "none" || remote.kind === "error") {
+          toast({
+            title: "Produto não encontrado",
+            description: `Produto não encontrado nesta loja para o código: ${lookupTerm}`,
+          })
+          hardFocusSearch()
+          return
+        }
+        // remote.kind === "multiple": itens injetados no estoque — operador escolhe na lista.
+      }
+
       toast({
         title: "Selecione o item",
         description: "Vários resultados. Use as setas ↑↓ e Enter para escolher sem o mouse.",
       })
       hardFocusSearch()
     },
-    [addToCart, filterCatalogByTerm, filteredProducts, findProductByEan, hardFocusSearch, searchTerm, toast]
+    [addToCart, filterCatalogByTerm, filteredProducts, findProductByEan, hardFocusSearch, searchTerm, toast, lojaKey, setInventory]
   )
 
   // Atalhos de teclado (evitar conflitos com o navegador)

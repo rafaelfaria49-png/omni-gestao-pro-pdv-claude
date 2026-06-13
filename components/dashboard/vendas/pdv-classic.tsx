@@ -84,6 +84,7 @@ import {
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-shell"
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
@@ -195,7 +196,7 @@ export function PdvClassic({
   // Caixa: apenas leitura do CaixaStatusBar/CaixaProvider via outros consumers.
   // `useCaixa()` legado (adicionarEntrada/Saida/sessaoId) só era usado pelo
   // `saveOperation` removido — fluxo migrado para o CaixaStatusBar compartilhado.
-  const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente, ordens } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, ordens } = useOperationsStore()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
   const operatorLabel = pdvOperatorReceiptLabel(session)
@@ -691,30 +692,47 @@ export function PdvClassic({
   }
 
   const handleShellBipeKeyDown = useCallback(
-    (e: ReactKeyboardEvent<HTMLInputElement>) => {
+    async (e: ReactKeyboardEvent<HTMLInputElement>) => {
       if (e.key !== "Enter") return
       e.preventDefault()
       const raw = bipeCode.trim()
       if (!raw) return
       const q = Number(shellNextQty.replace(",", ".")) || 1
+
+      const commitScan = (product: PdvCatalogProduct) => {
+        addToCart(product, q)
+        setBipeCode("")
+        setShellNextQty("1")
+        const _newCount = cart.length + 1
+        const _newSub = cart.reduce((s, i) => s + i.price * i.quantity, 0) + product.price * q
+        setShellInfo(
+          `✓ ${product.name} · ${_newCount} ${_newCount === 1 ? "item" : "itens"} · R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(_newSub)}`
+        )
+        queueMicrotask(() => shellBipeRef.current?.focus())
+      }
+
       const found = findPdvProductByScan(raw, products)
-      if (!found) {
-        toast({ title: "Produto não encontrado", description: `Código "${raw}" não localizado no cadastro.` })
-        setShellInfo(`✕ Produto "${raw}" não localizado no cadastro.`)
+      if (found) {
+        commitScan(found)
+        return
+      }
+
+      // Miss local → busca autoritativa no catálogo INTEIRO da loja (snapshot pode estar defasado).
+      const remote = await lookupPdvScanRemote({ code: raw, storeId: lojaKey, setInventory })
+      if (remote.kind === "single") {
+        commitScan(remote.product)
+        return
+      }
+      if (remote.kind === "multiple") {
+        setShellInfo(`Vários produtos para o código "${raw}". Use F3 para escolher.`)
         queueMicrotask(() => shellBipeRef.current?.focus())
         return
       }
-      addToCart(found, q)
-      setBipeCode("")
-      setShellNextQty("1")
-      const _newCount = cart.length + 1
-      const _newSub = cart.reduce((s, i) => s + i.price * i.quantity, 0) + found.price * q
-      setShellInfo(
-        `✓ ${found.name} · ${_newCount} ${_newCount === 1 ? "item" : "itens"} · R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(_newSub)}`
-      )
+      toast({ title: "Produto não encontrado", description: `Produto não encontrado nesta loja para o código: ${raw}` })
+      setShellInfo(`✕ Produto não encontrado nesta loja para o código: ${raw}`)
       queueMicrotask(() => shellBipeRef.current?.focus())
     },
-    [addToCart, bipeCode, cart, products, shellNextQty, toast]
+    [addToCart, bipeCode, cart, products, shellNextQty, toast, lojaKey, setInventory]
   )
 
   const handleBipeSuggestionSelect = useCallback(

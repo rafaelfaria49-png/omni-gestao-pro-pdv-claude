@@ -67,6 +67,7 @@ import { useSession } from "next-auth/react"
 import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
 import { type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 import { useCaixa } from "../caixa/caixa-provider"
@@ -1391,7 +1392,7 @@ function EditarAtalhosModal({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapido?: boolean } = {}) {
-  const { inventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { pdvParams, blob, save: saveStoreSettings, hydrated: settingsHydrated, impressaoConfig } = useStoreSettings()
   const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   // Chave dos atalhos: estritamente a unidade ativa, sem fallback silencioso para
@@ -2398,7 +2399,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 ref={inputRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => {
+                onKeyDown={async (e) => {
                   if (!search.trim()) return
                   if (e.key === "ArrowDown" && modoRapido) {
                     e.preventDefault()
@@ -2423,6 +2424,27 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                         setSearch("")
                       }
                     }
+                    return
+                  }
+                  // Enter sem resultado local → busca autoritativa no catálogo INTEIRO da loja
+                  // (snapshot pode estar defasado ou o item não veio na página carregada).
+                  if (e.key === "Enter" && fullSearch.length === 0) {
+                    e.preventDefault()
+                    const code = search.trim()
+                    const remote = await lookupPdvScanRemote({ code, storeId: (lojaAtivaId ?? "").trim(), setInventory })
+                    if (remote.kind === "single") {
+                      addItem(remote.product)
+                      setSearch("")
+                      return
+                    }
+                    if (remote.kind === "multiple") {
+                      // itens injetados no estoque — fullSearch recomputa e o operador escolhe na lista.
+                      return
+                    }
+                    toast({
+                      title: "Produto não encontrado",
+                      description: `Produto não encontrado nesta loja para o código: ${code}`,
+                    })
                   }
                 }}
                 placeholder="Bipe o produto ou busque por nome / código  [F3]"
