@@ -48,6 +48,7 @@ import { PaymentModal, type PaymentMethodType } from "./payment-modal"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
+import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
 import { PdvPainelLateralTerminal, PdvVisorTotal } from "./painel-total"
 import { PdvTabelaItemLinha, PdvTabelaItens } from "./tabela-itens"
@@ -276,24 +277,9 @@ export function PdvSupermercado({
 
   const searchTrim = searchTerm.trim()
 
+  // Busca unificada: mesma fonte que os demais PDVs (acento-insensível, multi-palavra, ranqueada).
   const filterCatalogByTerm = useCallback(
-    (raw: string) => {
-      const term = raw.trim().toLowerCase()
-      if (!term) return []
-      return products
-        .filter(
-          (p) =>
-            p.name.toLowerCase().includes(term) ||
-            p.category.toLowerCase().includes(term) ||
-            (p.barcode?.toLowerCase().includes(term) ?? false) ||
-            (p.codigoBarras?.toLowerCase().includes(term) ?? false) ||
-            (p.sku?.toLowerCase().includes(term) ?? false) ||
-            (p.codigo?.toLowerCase().includes(term) ?? false) ||
-            p.id.toLowerCase().includes(term) ||
-            (p.dbId?.toLowerCase().includes(term) ?? false)
-        )
-        .slice(0, 30)
-    },
+    (raw: string) => (raw.trim() ? filterPdvCatalogBySearch(products, raw).slice(0, 50) : []),
     [products]
   )
 

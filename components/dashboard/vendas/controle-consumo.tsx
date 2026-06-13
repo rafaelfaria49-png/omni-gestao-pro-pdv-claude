@@ -14,6 +14,7 @@ import {
   newPdvLineId,
   type PdvCatalogProduct,
 } from "@/lib/pdv-catalog"
+import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { PDV_IMPORT_COMANDA_KEY } from "@/lib/pdv-comanda-bridge"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
 import {
@@ -86,14 +87,11 @@ export function ControleConsumo({ onNavigateToPdv }: ControleConsumoProps) {
     [inventory]
   )
 
-  const filteredProducts = useMemo(() => {
-    const q = searchTerm.trim().toLowerCase()
-    if (!q) return products
-    return products.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) || p.category.toLowerCase().includes(q)
-    )
-  }, [products, searchTerm])
+  // Busca unificada: mesma fonte que os demais PDVs (acento-insensível, multi-palavra, ranqueada).
+  const filteredProducts = useMemo(
+    () => filterPdvCatalogBySearch(products, searchTerm),
+    [products, searchTerm]
+  )
 
   useEffect(() => {
     try {

@@ -13,10 +13,21 @@ const norm = (v: string | undefined | null) =>
   v == null || v === "" ? "" : normalizePdvSearchText(String(v))
 
 /**
+ * Versão "compacta": normaliza e remove separadores (espaço, hífen, barra, etc.) para que
+ * variações como "usb c", "usb-c" e "usbc" convirjam no mesmo token.
+ */
+export function compactPdvSearchText(raw: string): string {
+  return normalizePdvSearchText(raw).replace(/[^a-z0-9]/g, "")
+}
+
+const compact = (v: string) => v.replace(/[^a-z0-9]/g, "")
+
+/**
  * Pontua o produto contra o termo. 0 = não bate. >0 = bate (maior = prioridade maior).
  *
- * 4 = nome COMEÇA com o termo  (máxima prioridade — PDV operacional)
- * 3 = nome CONTÉM o termo
+ * 5 = código (SKU / EAN / barcode / id) IGUAL ao termo  (match exato — topo absoluto)
+ * 4 = nome COMEÇA com o termo  (alta prioridade — PDV operacional)
+ * 3 = nome CONTÉM o termo (inclui convergência de separadores: "usb c" ≡ "usb-c" ≡ "usbc")
  * 2 = categoria começa ou contém o termo  (abaixo de qualquer match por nome)
  * 1 = SKU / código / EAN / id contém o termo
  */
@@ -24,16 +35,23 @@ export function scorePdvSearch(p: PdvCatalogProduct, rawQuery: string): number {
   const term = normalizePdvSearchText(rawQuery)
   if (!term) return 4
 
-  const nameN = norm(p.name)
+  const codeParts = [p.sku, p.codigo, p.codigoBarras, p.barcode, p.id].map(norm).filter(Boolean)
+  // Match exato de código vence tudo (bipe digitado / SKU completo).
+  if (codeParts.some((c) => c === term)) return 5
 
+  const nameN = norm(p.name)
   if (nameN.startsWith(term)) return 4
   if (nameN.includes(term)) return 3
+
+  // Convergência de separadores no nome: "usbc" encontra "USB-C", etc. (≥3 chars evita ruído).
+  const termC = compactPdvSearchText(rawQuery)
+  if (termC.length >= 3 && compact(nameN).includes(termC)) return 3
 
   const catN = norm(p.category)
   if (catN.startsWith(term) || catN.includes(term)) return 2
 
-  const codeParts = [p.sku, p.codigo, p.codigoBarras, p.barcode, p.id].map(norm).filter(Boolean)
   if (codeParts.some((c) => c.includes(term))) return 1
+  if (termC.length >= 3 && codeParts.some((c) => compact(c).includes(termC))) return 1
 
   return 0
 }

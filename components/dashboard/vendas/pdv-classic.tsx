@@ -403,7 +403,7 @@ export function PdvClassic({
   const bipeSuggestions = useMemo(() => {
     const t = bipeCode.trim()
     if (!t) return []
-    return filterPdvCatalogBySearch(products, t).slice(0, 12)
+    return filterPdvCatalogBySearch(products, t).slice(0, 50)
   }, [bipeCode, products])
 
   const storeDisplayName = useMemo(() => {
