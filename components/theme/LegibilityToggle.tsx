@@ -47,7 +47,10 @@ export function LegibilityToggle() {
           side="bottom"
           className="z-50 max-w-[220px] border border-border bg-popover px-2.5 py-2 text-popover-foreground shadow-md"
         >
-          <div className="text-[12px] font-semibold">Alta legibilidade</div>
+          <div className="text-[12px] font-semibold">Alta Legibilidade</div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">
+            Atalho: <kbd className="font-mono font-semibold text-foreground">Alt + L</kbd>
+          </div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">
             Melhora contraste e leitura em monitores antigos.
           </div>
