@@ -36,6 +36,7 @@ import {
   aggregateCaixaOperacoes,
   computeFechamentoResumo,
   filterSalesDaSessao,
+  receitaTotalDoDia,
   type CaixaOperacaoLinha,
   type FechamentoResumo,
 } from "@/lib/caixa-fechamento-resumo"
@@ -144,6 +145,10 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     return Array.from(set)
   }, [sales, sessaoId, caixa.dataAbertura])
 
+  // Receita total do dia (faturamento) — vendas líquidas + serviços recebidos.
+  // Fonte única (helper) para casar com a reimpressão do histórico.
+  const receitaTotalDia = receitaTotalDoDia(resumo)
+
   // Saldo total movimentado (inclui pix/cartão) — mantém compatibilidade com getSaldoAtual.
   const saldoEsperado = getSaldoAtual()
   // Conferência de gaveta usa o DINHEIRO físico esperado (não inclui pix/cartão).
@@ -161,6 +166,12 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       sessaoId ? `Sessão: ${sessaoId}` : "",
       `Terminal: ${terminalLabel}`,
       operadoresSessao.length ? `Operador(es): ${operadoresSessao.join(", ")}` : "",
+      "--- RESUMO FINANCEIRO ---",
+      `Vendas produtos:  ${fmt(resumo.totalLiquido)}`,
+      `Serviços receb.:  ${fmt(resumo.recebimentosContas)}`,
+      resumo.outrosRecebimentos > 0 ? `Outros receb.:    ${fmt(resumo.outrosRecebimentos)}` : "",
+      "----------------------------",
+      `RECEITA TOTAL DIA:${fmt(receitaTotalDia)}`,
       "--- VENDAS POR ORIGEM ---",
       ...resumo.porOrigem.map((o) => `${o.label.padEnd(20)} ${fmt(o.valorBruto)} (${o.qtdItens} itens)`),
       "--- FORMAS DE PAGAMENTO ---",
@@ -429,6 +440,40 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                 </span>
                 <span className="truncate">{`Terminal: ${terminalLabel}`}</span>
               </div>
+
+              {/* Resumo financeiro — RECEITA TOTAL DO DIA (faturamento, separado da gaveta) */}
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="space-y-2 pt-4 pb-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    Resumo financeiro do dia
+                  </h3>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Vendas de produtos</span>
+                      <span className="font-medium text-foreground">{fmt(resumo.totalLiquido)}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Serviços recebidos</span>
+                      <span className="font-medium text-foreground">{fmt(resumo.recebimentosContas)}</span>
+                    </div>
+                    {resumo.outrosRecebimentos > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Outros recebimentos</span>
+                        <span className="font-medium text-foreground">{fmt(resumo.outrosRecebimentos)}</span>
+                      </div>
+                    )}
+                    <Separator className="bg-border" />
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-foreground">Receita total do dia</span>
+                      <span className="text-xl font-bold text-primary">{fmt(receitaTotalDia)}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Faturamento do dia (vendas + serviços recebidos). Não inclui abertura nem suprimentos.
+                  </p>
+                </CardContent>
+              </Card>
 
               {/* KPIs operacionais */}
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

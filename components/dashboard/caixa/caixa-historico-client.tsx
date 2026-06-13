@@ -33,7 +33,22 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useLojaAtiva } from "@/lib/loja-ativa"
-import type { FechamentoResumo } from "@/lib/caixa-fechamento-resumo"
+import { receitaTotalDoDia, type FechamentoResumo } from "@/lib/caixa-fechamento-resumo"
+
+/** Soma das vendas por forma no ledger legado (sessões sem resumoFechamento premium). */
+const LEDGER_VENDAS_KEYS = [
+  "vendasDinheiro",
+  "vendasPix",
+  "vendasCartaoDebito",
+  "vendasCartaoCredito",
+  "vendasCarne",
+  "vendasCreditoVale",
+] as const
+
+function vendasDoLedger(ledger: Record<string, number> | null): number {
+  if (!ledger) return 0
+  return LEDGER_VENDAS_KEYS.reduce((acc, k) => acc + (Number(ledger[k]) || 0), 0)
+}
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
@@ -249,6 +264,18 @@ export function CaixaHistoricoClient() {
     const resumo = (payload?.resumoFechamento ?? null) as FechamentoResumo | null
     const ledger = payload?.ledger as Record<string, number> | null
 
+    // Resumo financeiro (faturamento) — fonte única, robusta a sessões antigas.
+    const vendasProdutos = resumo ? resumo.totalLiquido : vendasDoLedger(ledger)
+    const servicosRecebidos = resumo ? resumo.recebimentosContas : recebimentosCr
+    const receitaTotalDia = receitaTotalDoDia({
+      totalLiquido: vendasProdutos,
+      recebimentosContas: servicosRecebidos,
+    })
+    const resumoFinanceiroHtml = `<hr><strong>RESUMO FINANCEIRO</strong>
+    <p>Vendas de produtos: ${fmt(vendasProdutos)}</p>
+    <p>Serviços recebidos: ${fmt(servicosRecebidos)}</p>
+    <p><strong>RECEITA TOTAL DO DIA: ${fmt(receitaTotalDia)}</strong></p>`
+
     let secaoVendas = ""
     if (resumo) {
       const origem = resumo.porOrigem
@@ -291,7 +318,8 @@ export function CaixaHistoricoClient() {
     <p>Abertura: ${fmtDt(s.abertaEm)}</p>
     <p>Fechamento: ${s.fechadaEm ? fmtDt(s.fechadaEm) : "Em aberto"}</p>
     <p>Status: ${s.status}</p>
-    <hr>
+    ${resumoFinanceiroHtml}
+    <hr><strong>CAIXA (GAVETA)</strong>
     <p>Saldo inicial: ${fmt(s.saldoInicial)}</p>
     <p>Saldo final esperado: ${fmt(s.saldoFinal ?? 0)}</p>
     ${s.saldoContado != null ? `<p>Saldo contado: ${fmt(s.saldoContado)}</p>` : ""}
@@ -500,6 +528,14 @@ function SessaoDetalheView({
   const ledger = payload?.ledger as Record<string, number> | null
   const resumo = (payload?.resumoFechamento ?? null) as FechamentoResumo | null
 
+  // Resumo financeiro (faturamento) — fonte única; cai no ledger para sessões antigas.
+  const vendasProdutos = resumo ? resumo.totalLiquido : vendasDoLedger(ledger)
+  const servicosRecebidos = resumo ? resumo.recebimentosContas : totalRecebimentosCr
+  const receitaTotalDia = receitaTotalDoDia({
+    totalLiquido: vendasProdutos,
+    recebimentosContas: servicosRecebidos,
+  })
+
   const diferenca =
     sessao.saldoContado != null && sessao.saldoFinal != null
       ? sessao.saldoContado - sessao.saldoFinal
@@ -549,6 +585,28 @@ function SessaoDetalheView({
           />
         )}
       </div>
+
+      {/* Resumo financeiro — RECEITA TOTAL DO DIA (faturamento, separado da gaveta) */}
+      {(vendasProdutos > 0 || servicosRecebidos > 0) && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2.5 text-sm">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Resumo financeiro
+          </p>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Vendas de produtos</span>
+            <span className="font-medium text-foreground">{fmt(vendasProdutos)}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">Serviços recebidos</span>
+            <span className="font-medium text-foreground">{fmt(servicosRecebidos)}</span>
+          </div>
+          <Separator className="my-1.5 bg-border" />
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-foreground">Receita total do dia</span>
+            <span className="text-base font-bold text-primary">{fmt(receitaTotalDia)}</span>
+          </div>
+        </div>
+      )}
 
       {/* Vendas pelo Venda.terminalId (mais preciso que janela temporal) */}
       {terminal && totaisTerminal && totaisTerminal.total != null && (

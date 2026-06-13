@@ -69,6 +69,17 @@ export interface FechamentoResumo {
   /** Parcela de recebimentos CR em dinheiro (impacta gaveta). */
   recebimentosContasDinheiro: number
   qtdRecebimentosContas: number
+  /**
+   * Outras entradas operacionais tratadas como RECEITA (hoje sempre 0).
+   * Suprimento NÃO entra aqui (é reforço de gaveta, não faturamento).
+   */
+  outrosRecebimentos: number
+  /**
+   * Receita total do dia (faturamento) = vendas líquidas (`totalLiquido`)
+   * + serviços recebidos (`recebimentosContas`) + `outrosRecebimentos`.
+   * NÃO inclui abertura de caixa nem suprimentos; sangria reduz gaveta, não receita.
+   */
+  receitaTotalDia: number
   /** Devoluções/estornos da sessão (informativo). */
   totalDevolucoes: number
   saldoInicial: number
@@ -271,6 +282,11 @@ export function computeFechamentoResumo(input: {
   const ticketMedio = qtdVendas > 0 ? round2(totalLiquido / qtdVendas) : 0
   const recCr = round2(recebimentosContas)
   const recCrDin = round2(recebimentosContasDinheiro)
+  // Receita = faturamento do dia. Vendas líquidas (já sem desconto e sem canceladas)
+  // + serviços recebidos (recebimento_cr) + outras entradas operacionais reais.
+  // Abertura, suprimento e sangria NÃO afetam a receita (são conferência de gaveta).
+  const outrosRecebimentos = 0
+  const receitaTotalDia = round2(totalLiquido + recCr + outrosRecebimentos)
   const saldoDinheiroEsperado = round2(
     saldoInicial + pg.dinheiro + suprimentos + recCrDin - sangrias,
   )
@@ -300,6 +316,8 @@ export function computeFechamentoResumo(input: {
     recebimentosContas: recCr,
     recebimentosContasDinheiro: recCrDin,
     qtdRecebimentosContas,
+    outrosRecebimentos,
+    receitaTotalDia,
     totalDevolucoes: round2(totalDevolucoes),
     saldoInicial: round2(saldoInicial),
     saldoDinheiroEsperado,
@@ -308,4 +326,26 @@ export function computeFechamentoResumo(input: {
     qtdVendasMultiplas,
     ticketMedio,
   }
+}
+
+/**
+ * Receita total do dia (faturamento) a partir de um resumo já calculado.
+ *
+ * Centraliza a definição única usada pelo modal de fechamento E pela reimpressão
+ * do histórico — inclusive para sessões antigas cujo `resumoFechamento` persistido
+ * não tinha os campos `outrosRecebimentos`/`receitaTotalDia` (recalcula com segurança
+ * a partir de `totalLiquido` + `recebimentosContas`).
+ *
+ * Regras: abertura de caixa e suprimento NÃO são receita; sangria reduz a gaveta,
+ * não a receita; desconto já está refletido em `totalLiquido` (vendas líquidas);
+ * vendas canceladas já foram excluídas do agregado.
+ */
+export function receitaTotalDoDia(
+  resumo: Pick<FechamentoResumo, "totalLiquido" | "recebimentosContas"> & { outrosRecebimentos?: number },
+): number {
+  return round2(
+    (Number(resumo.totalLiquido) || 0) +
+      (Number(resumo.recebimentosContas) || 0) +
+      (Number(resumo.outrosRecebimentos) || 0),
+  )
 }
