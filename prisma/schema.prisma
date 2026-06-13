@@ -103,6 +103,7 @@ model Store {
   creditos                 ClienteCredito[]
   usosCredito              UsoCreditoCliente[]
   pdvTerminais             PdvTerminal[]
+  inventarioSessoes        InventarioSessao[]
 
   @@index([profile])
   @@map("stores")
@@ -867,6 +868,75 @@ model ProdutoDeposito {
   @@index([storeId, produtoId])
   @@index([depositoId])
   @@map("produto_depositos")
+}
+
+/**
+ * INVENTARIO_ASSISTIDO_V1 — Sessão de conferência física (contagem) da loja.
+ * ADITIVO e INERTE: é um registro PARALELO que NUNCA altera `Produto.stock`. A única
+ * escrita de saldo acontece fora daqui, por revisão humana, reusando `registrarAjusteEstoque`
+ * (livro-razão `MovimentacaoEstoque`). Multi-loja: tudo escopado por `storeId` (ADR-0003).
+ */
+model InventarioSessao {
+  id           String    @id @default(cuid())
+  storeId      String    @map("storeId")
+  store        Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /** "aberta" | "finalizada" | "cancelada" */
+  status       String    @default("aberta") @map("status")
+  /** Nome do operador (sessão NextAuth) que conduz a contagem. */
+  operador     String?   @map("operador")
+  /** Depósito-alvo (BL-07 ready). Null = contagem agregada da loja (`Produto.stock`). */
+  depositoId   String?   @map("depositoId")
+  nome         String?   @map("nome")
+  observacao   String?   @map("observacao")
+  iniciadoEm   DateTime  @default(now()) @map("iniciadoEm")
+  finalizadoEm DateTime? @map("finalizadoEm")
+  /** Snapshot do relatório gerado no fechamento (A/B/C/D + filas), para auditoria histórica. */
+  payload      Json?     @map("payload") @db.JsonB
+  createdAt    DateTime  @default(now()) @map("createdAt")
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updatedAt")
+
+  contagens InventarioContagem[]
+
+  @@index([storeId])
+  @@index([storeId, status])
+  @@map("inventario_sessoes")
+}
+
+/**
+ * Linha de contagem — UMA por código distinto bipado na sessão (2º bipe = incremento).
+ * `produtoId` null ⇒ código não resolveu no catálogo ⇒ entra na FILA DE RECONCILIAÇÃO
+ * (status "reconciliacao"): pode ser produto com código errado, duplicado, sem barcode ou
+ * realmente inexistente — a decisão é SEMPRE humana (nunca cadastra/zera automático).
+ * Snapshots (`produtoNomeSnapshot`/`Sku`/`estoqueSistemaSnapshot`) sobrevivem à edição do produto.
+ */
+model InventarioContagem {
+  id                     String           @id @default(cuid())
+  storeId                String           @map("storeId")
+  sessaoId               String           @map("sessaoId")
+  sessao                 InventarioSessao @relation(fields: [sessaoId], references: [id], onDelete: Cascade)
+  /** Null = sem correspondência no catálogo (fila de reconciliação). */
+  produtoId              String?          @map("produtoId")
+  /** Código EAN/SKU/id efetivamente lido no leitor. */
+  codigoBipado           String           @map("codigoBipado")
+  produtoNomeSnapshot    String?          @map("produtoNomeSnapshot")
+  produtoSkuSnapshot     String?          @map("produtoSkuSnapshot")
+  /** `Produto.stock` no momento do 1º bipe (foto p/ divergência). */
+  estoqueSistemaSnapshot Int?             @map("estoqueSistemaSnapshot")
+  quantidadeContada      Int              @default(0) @map("quantidadeContada")
+  /** "encontrado" | "reconciliacao" */
+  status                 String           @default("encontrado") @map("status")
+  primeiroBipeEm         DateTime         @default(now()) @map("primeiroBipeEm")
+  ultimoBipeEm           DateTime         @default(now()) @map("ultimoBipeEm")
+  /** Histórico opcional de bipes/observações da linha. */
+  payload                Json?            @map("payload") @db.JsonB
+  createdAt              DateTime         @default(now()) @map("createdAt")
+  updatedAt              DateTime         @default(now()) @updatedAt @map("updatedAt")
+
+  @@unique([sessaoId, codigoBipado], name: "sessaoId_codigoBipado")
+  @@index([storeId])
+  @@index([sessaoId])
+  @@index([storeId, status])
+  @@map("inventario_contagens")
 }
 
 model Tecnico {
