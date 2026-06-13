@@ -196,6 +196,10 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       resumo.recebimentosContasDinheiro > 0
         ? `  CR em dinheiro: ${fmt(resumo.recebimentosContasDinheiro)}`
         : "",
+      "================================",
+      "    RECEITA TOTAL DO DIA",
+      `        ${fmt(receitaTotalDia)}`,
+      "================================",
       "--- CAIXA (GAVETA) ---",
       `Abertura:         ${fmt(resumo.saldoInicial)}`,
       `(+) Dinheiro:     ${fmt(pg.dinheiro)}`,
@@ -221,6 +225,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       <div style="font-size:10px;text-align:center;margin:4px 0">${escapeHtml(userAudit)}</div>
       <div style="border-top:1px dashed #000;margin:6px 0"></div>
       <pre style="white-space:pre-wrap;font-family:inherit;font-size:11px;margin:0">${escapeHtml(buildResumoTexto())}</pre>
+      <div style="height:14mm" aria-hidden="true"></div>
     `
     openThermalHtmlPrint(inner, "Fechamento de caixa")
   }

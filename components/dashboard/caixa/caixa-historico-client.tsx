@@ -328,6 +328,11 @@ export function CaixaHistoricoClient() {
     ${recebimentosCr > 0 ? `<p>Serviços recebidos: ${fmt(recebimentosCr)}</p>` : ""}
     <p>Devoluções: ${fmt(totalDev)}</p>
     ${secaoVendas}
+    <hr style="border-top:2px solid #000;margin-top:10px">
+    <div style="text-align:center;font-weight:700;font-size:13px">RECEITA TOTAL DO DIA</div>
+    <div style="text-align:center;font-weight:700;font-size:16px">${fmt(receitaTotalDia)}</div>
+    <hr style="border-top:2px solid #000">
+    <div style="height:14mm" aria-hidden="true"></div>
     </body></html>`
     const w = window.open("", "_blank", "width=500,height=600")
     if (w) { w.document.write(html); w.document.close(); w.print() }
