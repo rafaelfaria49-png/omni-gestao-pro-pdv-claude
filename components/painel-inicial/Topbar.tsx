@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Search, Plus, ShoppingCart, Wrench, UserPlus, Package, PanelLeftOpen, LayoutDashboard, MessageSquare, Users, Banknote, Settings, BarChart3 } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ia-mestre/ThemeSwitcher";
+import { LegibilityToggle } from "@/components/theme/LegibilityToggle";
 import { MobileNavSheet } from "@/components/painel-inicial/MobileNavSheet";
 import { useUserCredits } from "@/hooks/useUserCredits";
 import { useSidebarCollapsed } from "@/hooks/use-sidebar-collapsed";
@@ -178,6 +179,8 @@ export function Topbar() {
         </div>
 
         <ThemeSwitcher />
+
+        <LegibilityToggle />
 
         {!isPDV && creditsLabel ? (
           <div className="hidden sm:inline-flex items-center rounded-full border border-border bg-surface/60 px-3 py-1.5 text-[12px] font-medium text-muted-foreground">

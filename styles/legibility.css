@@ -1,0 +1,169 @@
+/**
+ * OmniGestão Pro — Modo Alta Legibilidade (global, opt-in)
+ *
+ * Ativado por `data-legibility="high"` no <html> (LegibilityProvider).
+ * Padrão = `normal` (visual premium intacto). Persistência em localStorage
+ * (chave `omni-legibility`) e atributo SSR default em app/layout.tsx.
+ *
+ * Objetivo: melhorar contraste, nitidez, fontes pequenas e bordas em
+ * monitores antigos / TN / baixo brilho — SEM tocar em lógica de negócio.
+ * Atua apenas na camada de tokens semânticos + neutralização de utilitárias.
+ *
+ * Especificidade: tokens são sobrescritos em `html[data-legibility="high"]`
+ * (0,1,1) para vencer as classes de tema (`.midnight`, `.soft-ice`… = 0,1,0),
+ * já que este arquivo é @importado ANTES dos blocos de tema em globals.css.
+ *
+ * Neutralização de utilitárias usa `[class~="…"]` (token exato, separado por
+ * espaço) para NÃO afetar variantes como `hover:text-muted-foreground/70`.
+ */
+
+/* ── 1. Reforço de tokens — temas de fundo CLARO (e default sem classe) ──── */
+html[data-legibility="high"] {
+  --muted-foreground: oklch(0.42 0 0);
+  --border: oklch(0.68 0 0);
+  --input: oklch(0.66 0 0);
+  --border-hover: oklch(0.5 0 0);
+
+  /* PDV OmniClassic (painéis claros em todos os temas) */
+  --pos-label: 215 25% 30%;
+  --pos-divider: 215 16% 74%;
+  --pos-input-border: 215 24% 56%;
+}
+
+/* ── 2. Reforço de tokens — temas de fundo ESCURO ────────────────────────── */
+html[data-legibility="high"].midnight,
+html[data-legibility="high"].black-edition,
+html[data-legibility="high"].quantum-violet,
+html[data-legibility="high"].coffee-gold,
+html[data-legibility="high"].ruby-black {
+  --muted-foreground: oklch(0.82 0 0);
+  --border: oklch(0.48 0 0);
+  --input: oklch(0.45 0 0);
+  --border-hover: oklch(0.62 0 0);
+}
+
+/* ── 3. Neutralizar opacidade fraca de TEXTO ─────────────────────────────── */
+/* O bump de token já corrige `text-muted-foreground` sólido; aqui colapsamos
+   as variantes /40../80 que misturam a cor com transparente (color-mix). */
+[data-legibility="high"] [class~="text-muted-foreground/40"],
+[data-legibility="high"] [class~="text-muted-foreground/45"],
+[data-legibility="high"] [class~="text-muted-foreground/50"],
+[data-legibility="high"] [class~="text-muted-foreground/55"],
+[data-legibility="high"] [class~="text-muted-foreground/60"],
+[data-legibility="high"] [class~="text-muted-foreground/65"],
+[data-legibility="high"] [class~="text-muted-foreground/70"],
+[data-legibility="high"] [class~="text-muted-foreground/75"],
+[data-legibility="high"] [class~="text-muted-foreground/80"] {
+  color: var(--color-muted-foreground) !important;
+}
+
+[data-legibility="high"] [class~="text-foreground/40"],
+[data-legibility="high"] [class~="text-foreground/50"],
+[data-legibility="high"] [class~="text-foreground/60"],
+[data-legibility="high"] [class~="text-foreground/70"],
+[data-legibility="high"] [class~="text-foreground/80"] {
+  color: var(--color-foreground) !important;
+}
+
+[data-legibility="high"] [class~="text-white/40"],
+[data-legibility="high"] [class~="text-white/50"],
+[data-legibility="high"] [class~="text-white/60"],
+[data-legibility="high"] [class~="text-white/70"] {
+  color: #fff !important;
+}
+
+[data-legibility="high"] [class~="text-primary/70"] {
+  color: var(--color-primary) !important;
+}
+
+/* ── 4. Bordas / divisórias fracas → cor cheia do token (já reforçado) ────── */
+[data-legibility="high"] [class~="border-border/40"],
+[data-legibility="high"] [class~="border-border/50"],
+[data-legibility="high"] [class~="border-border/60"],
+[data-legibility="high"] [class~="border-border/70"],
+[data-legibility="high"] [class~="border-border/80"] {
+  border-color: var(--color-border) !important;
+}
+
+/* ── 5. Piso de fonte ~12px para textos operacionais minúsculos ──────────── */
+/* `~=` casa o token exato → não bate em variantes responsivas (sm:text-[9px]). */
+[data-legibility="high"] [class~="text-[9px]"],
+[data-legibility="high"] [class~="text-[9.5px]"],
+[data-legibility="high"] [class~="text-[10px]"],
+[data-legibility="high"] [class~="text-[10.5px]"],
+[data-legibility="high"] [class~="text-[11px]"] {
+  font-size: 0.75rem !important; /* 12px */
+  line-height: 1.15 !important;
+}
+
+[data-legibility="high"] .text-xs {
+  font-size: 0.8125rem !important; /* 13px */
+  line-height: 1.2 !important;
+}
+
+/* ── 6. Foco de input/controle mais forte ────────────────────────────────── */
+[data-legibility="high"] :is(input, textarea, select, [contenteditable="true"]):focus-visible,
+[data-legibility="high"] [data-slot="input"]:focus-visible,
+[data-legibility="high"] [data-slot="textarea"]:focus-visible,
+[data-legibility="high"] [data-slot="select-trigger"]:focus-visible {
+  outline: 2px solid var(--color-ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* ── 7. Acessibilidade do sistema (auto, parcial e seguro) ───────────────── */
+/* Usuários que pedem mais contraste ao SO recebem os reforços de cor sem
+   precisar do toggle. Mantemos sem o piso de fonte aqui para evitar reflow
+   involuntário; o toggle in-app continua sendo o modo completo. */
+@media (prefers-contrast: more) {
+  :root,
+  :root.light,
+  :root.soft-ice,
+  :root.neon-ice,
+  :root.violet-ice,
+  :root.coffee-cream {
+    --muted-foreground: oklch(0.42 0 0);
+    --border: oklch(0.68 0 0);
+    --input: oklch(0.66 0 0);
+    --pos-label: 215 25% 30%;
+    --pos-divider: 215 16% 74%;
+    --pos-input-border: 215 24% 56%;
+  }
+
+  :root.midnight,
+  :root.black-edition,
+  :root.quantum-violet,
+  :root.coffee-gold,
+  :root.ruby-black {
+    --muted-foreground: oklch(0.82 0 0);
+    --border: oklch(0.48 0 0);
+    --input: oklch(0.45 0 0);
+  }
+
+  [class~="text-muted-foreground/40"],
+  [class~="text-muted-foreground/45"],
+  [class~="text-muted-foreground/50"],
+  [class~="text-muted-foreground/55"],
+  [class~="text-muted-foreground/60"],
+  [class~="text-muted-foreground/65"],
+  [class~="text-muted-foreground/70"],
+  [class~="text-muted-foreground/75"],
+  [class~="text-muted-foreground/80"] {
+    color: var(--color-muted-foreground) !important;
+  }
+
+  [class~="border-border/40"],
+  [class~="border-border/50"],
+  [class~="border-border/60"],
+  [class~="border-border/70"],
+  [class~="border-border/80"] {
+    border-color: var(--color-border) !important;
+  }
+}
+
+/* forced-colors (Windows Alto Contraste): deixamos o SO assumir as cores e
+   apenas garantimos que controles tenham borda perceptível. */
+@media (forced-colors: active) {
+  [data-legibility="high"] :is(input, textarea, select, button, [data-slot="input"], [data-slot="select-trigger"]) {
+    border: 1px solid ButtonText;
+  }
+}

@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import '../styles/operational-density.css';
+@import '../styles/legibility.css';
 
 @custom-variant dark (&:is(.dark *));
 @custom-variant soft-ice (&:is(.soft-ice *));

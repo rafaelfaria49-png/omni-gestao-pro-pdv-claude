@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Space_Grotesk } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/theme-provider'
+import { LegibilityProvider } from '@/components/theme/LegibilityProvider'
 import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
 import { APP_DISPLAY_NAME } from '@/lib/app-brand'
@@ -66,6 +67,7 @@ export default function RootLayout({
     <html
       lang="pt-BR"
       data-density="operational"
+      data-legibility="normal"
       suppressHydrationWarning
       className={`${inter.variable} ${spaceGrotesk.variable}`}
     >
@@ -81,9 +83,11 @@ export default function RootLayout({
           storageKey="omni-gestao-theme"
           disableTransitionOnChange={false}
         >
-          <SessionProvider>
-            {children}
-          </SessionProvider>
+          <LegibilityProvider>
+            <SessionProvider>
+              {children}
+            </SessionProvider>
+          </LegibilityProvider>
           <Toaster />
         </ThemeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
