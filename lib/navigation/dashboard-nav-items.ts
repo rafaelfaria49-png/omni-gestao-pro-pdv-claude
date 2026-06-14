@@ -14,6 +14,7 @@ import {
   Bot,
   History,
   BarChart3,
+  ClipboardCheck,
   type LucideIcon,
 } from "lucide-react"
 import { financeiroV2Enabled, roadmapHubsEnabled } from "@/lib/feature-flags"
@@ -77,6 +78,12 @@ export const hubsNavItems: DashboardNavItem[] = [
   },
   { to: "/dashboard/whatsapp", label: "WhatsApp HUB", icon: MessageCircle, visible: (p) => p.hubs.whatsapp },
   { to: "/dashboard/cadastros-v2", label: "Cadastros HUB", icon: Database, visible: (p) => p.hubs.cadastros },
+  {
+    to: "/dashboard/estoque/inventario",
+    label: "Inventário Assistido",
+    icon: ClipboardCheck,
+    visible: (p) => p.hubs.cadastros,
+  },
   { to: "/dashboard/vendas-hub", label: "Vendas HUB", icon: ShoppingCart, visible: (p) => p.hubs.vendas },
   {
     to: "/dashboard/caixa/historico",

@@ -9,15 +9,31 @@ import {
   AlertTriangle,
   PackageSearch,
   PackageX,
-  Search,
   PlusCircle,
   EyeOff,
   ClipboardList,
+  Wrench,
+  ShieldAlert,
+  Lock,
+  FileSpreadsheet,
+  FileDown,
+  MapPin,
 } from "lucide-react"
+import * as XLSX from "xlsx"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   Select,
   SelectContent,
@@ -39,10 +55,23 @@ import { cn } from "@/lib/utils"
 import {
   getRelatorioInventario,
   listInventarioSessoes,
+  aplicarAjusteInventario,
+  aplicarZeragemNaoBipado,
+  classificarReconciliacao,
   type RelatorioInventarioDTO,
   type RelatorioEncontradoDTO,
+  type RelatorioNaoBipadoDTO,
   type InventarioSessaoDTO,
 } from "@/app/actions/inventario"
+import {
+  construirPlanilhasInventario,
+  montarCsv,
+  nomeArquivoExport,
+} from "@/lib/estoque/inventario-export"
+import {
+  CLASSIFICACAO_RECONCILIACAO,
+  type ClassificacaoReconciliacao,
+} from "@/lib/estoque/inventario-reconciliacao"
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -68,6 +97,13 @@ function rotuloSessao(s: InventarioSessaoDTO): string {
   const nome = s.nome || "Sem nome"
   const status = SESSAO_STATUS_LABEL[s.status] ?? s.status
   return `${nome} · ${status} · ${formatDateTime(s.iniciadoEm)}`
+}
+
+const RECON_CLASS_META: Record<string, { label: string; className: string }> = {
+  pendente: { label: "Pendente", className: "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400" },
+  localizado: { label: "Localizado", className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
+  cadastrar_depois: { label: "Cadastrar depois", className: "border-primary/30 bg-primary/10 text-primary" },
+  ignorado: { label: "Ignorado", className: "border-muted-foreground/30 bg-muted text-muted-foreground" },
 }
 
 function DiferencaCell({ value }: { value: number }) {
@@ -131,7 +167,15 @@ function KpiCard({
 
 type FiltroEncontrados = "todos" | "sem-diferenca" | "com-diferenca"
 
-export function InventarioRelatorios() {
+type AjusteAlvo = {
+  tipo: "divergencia" | "ausencia"
+  produtoId: string
+  nome: string
+  sistema: number
+  novo: number
+}
+
+export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: string | null } = {}) {
   const { toast } = useToast()
   const { lojaAtivaId } = useLojaAtiva()
   const storeId = useMemo(() => (lojaAtivaId ?? "").trim(), [lojaAtivaId])
@@ -188,6 +232,11 @@ export function InventarioRelatorios() {
     if (sessaoId) void carregarRelatorio(sessaoId)
   }, [sessaoId, carregarRelatorio])
 
+  // Histórico → "Abrir relatório": seleciona a sessão pedida pela página.
+  useEffect(() => {
+    if (sessaoIdInicial) setSessaoId(sessaoIdInicial)
+  }, [sessaoIdInicial])
+
   const encontradosFiltrados = useMemo<RelatorioEncontradoDTO[]>(() => {
     const list = relatorio?.encontrados ?? []
     if (filtroA === "sem-diferenca") return list.filter((e) => e.diferenca === 0)
@@ -197,13 +246,109 @@ export function InventarioRelatorios() {
 
   const resumo = relatorio?.resumo
 
-  // Ações da fila de reconciliação — UI apenas (F4 fará o efeito real).
-  const acaoReconciliacaoIndisponivel = useCallback(() => {
-    toast({
-      title: "Ação ainda não disponível",
-      description: "Reconciliar, localizar e cadastrar serão liberados na próxima fase (F4). Nada foi alterado.",
-    })
-  }, [toast])
+  // ── F4 · Revisão e ajuste seguro ─────────────────────────────────────────────
+  const sessaoFinalizada = relatorio?.sessao.status === "finalizada"
+  const rotuloSessaoMotivo = useMemo(() => {
+    const s = relatorio?.sessao
+    return (s?.nome ?? "").trim() || s?.id || ""
+  }, [relatorio?.sessao])
+
+  const [ajusteAlvo, setAjusteAlvo] = useState<AjusteAlvo | null>(null)
+  const [motivoAjuste, setMotivoAjuste] = useState("")
+  const [aplicandoAjuste, setAplicandoAjuste] = useState(false)
+
+  const abrirAjusteDivergencia = useCallback(
+    (e: RelatorioEncontradoDTO) => {
+      setMotivoAjuste(`Inventário físico — sessão ${rotuloSessaoMotivo}`)
+      setAjusteAlvo({ tipo: "divergencia", produtoId: e.produtoId, nome: e.nome, sistema: e.estoqueSistema, novo: e.quantidadeContada })
+    },
+    [rotuloSessaoMotivo]
+  )
+
+  const abrirZeragem = useCallback(
+    (n: RelatorioNaoBipadoDTO) => {
+      setMotivoAjuste(`Ausência confirmada no inventário — sessão ${rotuloSessaoMotivo}`)
+      setAjusteAlvo({ tipo: "ausencia", produtoId: n.produtoId, nome: n.nome, sistema: n.estoqueSistema, novo: 0 })
+    },
+    [rotuloSessaoMotivo]
+  )
+
+  const confirmarAjuste = useCallback(async () => {
+    if (!ajusteAlvo || !relatorio || !storeId) return
+    const motivo = motivoAjuste.trim()
+    if (!motivo) {
+      toast({ title: "Motivo obrigatório", description: "Descreva o motivo do ajuste.", variant: "destructive" })
+      return
+    }
+    setAplicandoAjuste(true)
+    try {
+      const res =
+        ajusteAlvo.tipo === "divergencia"
+          ? await aplicarAjusteInventario(storeId, relatorio.sessao.id, ajusteAlvo.produtoId, { motivo })
+          : await aplicarZeragemNaoBipado(storeId, relatorio.sessao.id, ajusteAlvo.produtoId, { motivo })
+      if (!res.ok) {
+        toast({ title: "Não foi possível ajustar", description: res.reason, variant: "destructive" })
+        return
+      }
+      toast({
+        title: res.semMudanca ? "Estoque já estava correto" : "Ajuste aplicado",
+        description: res.semMudanca
+          ? `${ajusteAlvo.nome}: o estoque já era ${ajusteAlvo.novo}. Item marcado como ajustado.`
+          : `${ajusteAlvo.nome}: estoque ajustado para ${res.estoqueDepois}.`,
+      })
+      setAjusteAlvo(null)
+      await carregarRelatorio(relatorio.sessao.id)
+    } finally {
+      setAplicandoAjuste(false)
+    }
+  }, [ajusteAlvo, relatorio, storeId, motivoAjuste, toast, carregarRelatorio])
+
+  // ── Exportação (CSV / XLSX) ──────────────────────────────────────────────────
+  const exportarCsv = useCallback(() => {
+    if (!relatorio) return
+    const abas = construirPlanilhasInventario(relatorio)
+    const csv = montarCsv(abas)
+    // BOM para o Excel reconhecer UTF-8 (acentos).
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = nomeArquivoExport(relatorio.sessao, "csv")
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [relatorio])
+
+  const exportarXlsx = useCallback(() => {
+    if (!relatorio) return
+    const abas = construirPlanilhasInventario(relatorio)
+    const wb = XLSX.utils.book_new()
+    for (const aba of abas) {
+      const ws = XLSX.utils.aoa_to_sheet(aba.linhas)
+      // Nome da aba ≤ 31 chars (limite do Excel).
+      XLSX.utils.book_append_sheet(wb, ws, aba.nome.slice(0, 31))
+    }
+    XLSX.writeFile(wb, nomeArquivoExport(relatorio.sessao, "xlsx"))
+  }, [relatorio])
+
+  // ── Reconciliação: classificação operacional (não cadastra produto) ──────────
+  const [classificandoId, setClassificandoId] = useState<string | null>(null)
+  const classificar = useCallback(
+    async (contagemId: string, classificacao: ClassificacaoReconciliacao) => {
+      if (!relatorio || !storeId) return
+      setClassificandoId(contagemId)
+      try {
+        const res = await classificarReconciliacao(storeId, relatorio.sessao.id, contagemId, classificacao)
+        if (!res.ok) {
+          toast({ title: "Não foi possível classificar", description: res.reason, variant: "destructive" })
+          return
+        }
+        await carregarRelatorio(relatorio.sessao.id)
+      } finally {
+        setClassificandoId(null)
+      }
+    },
+    [relatorio, storeId, toast, carregarRelatorio]
+  )
 
   const header = (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -234,6 +379,26 @@ export function InventarioRelatorios() {
             </SelectContent>
           </Select>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={exportarCsv}
+          disabled={loading || !relatorio}
+          title="Exportar CSV (abas A/B/C/D)"
+        >
+          <FileDown className="h-4 w-4" /> CSV
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          onClick={exportarXlsx}
+          disabled={loading || !relatorio}
+          title="Exportar XLSX (abas A/B/C/D)"
+        >
+          <FileSpreadsheet className="h-4 w-4" /> XLSX
+        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -304,7 +469,27 @@ export function InventarioRelatorios() {
         />
       </div>
 
-      {/* Relatórios A/B/C/D */}
+      {/* Resumo de ajustes (F4) */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiCard
+          label="Divergências pendentes"
+          value={resumo?.divergenciasPendentes ?? 0}
+          icon={Wrench}
+          accent={(resumo?.divergenciasPendentes ?? 0) > 0 ? "amber" : "default"}
+          loading={loading}
+        />
+        <KpiCard label="Ajustes aplicados" value={resumo?.ajustesAplicados ?? 0} icon={CheckCircle2} accent="emerald" loading={loading} />
+        <KpiCard label="Zerados por ausência" value={resumo?.zeradosPorAusencia ?? 0} icon={PackageX} loading={loading} />
+        <KpiCard
+          label="Itens em reconciliação"
+          value={resumo?.reconciliacao ?? 0}
+          icon={ClipboardList}
+          accent={(resumo?.reconciliacao ?? 0) > 0 ? "amber" : "default"}
+          loading={loading}
+        />
+      </div>
+
+      {/* Relatórios A/B/C/D + Revisão de ajustes */}
       <Tabs defaultValue="encontrados" className="space-y-4">
         <TabsList className="flex w-full flex-wrap justify-start gap-1">
           <TabsTrigger value="encontrados" className="gap-2">
@@ -314,6 +499,10 @@ export function InventarioRelatorios() {
           <TabsTrigger value="divergencias" className="gap-2">
             <AlertTriangle className="h-4 w-4" /> Divergências
             <Badge variant="secondary" className="ml-1 tabular-nums">{resumo?.divergencias ?? 0}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="revisao" className="gap-2">
+            <Wrench className="h-4 w-4" /> Revisão de ajustes
+            <Badge variant="secondary" className="ml-1 tabular-nums">{resumo?.divergenciasPendentes ?? 0}</Badge>
           </TabsTrigger>
           <TabsTrigger value="reconciliacao" className="gap-2">
             <ClipboardList className="h-4 w-4" /> Reconciliação
@@ -432,6 +621,87 @@ export function InventarioRelatorios() {
           </Card>
         </TabsContent>
 
+        {/* REVISÃO DE AJUSTES (F4) — ação humana explícita, só com a sessão encerrada */}
+        <TabsContent value="revisao">
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Wrench className="h-4 w-4 text-primary" /> Revisão de ajustes
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Aplica o saldo contado às divergências. Cada ajuste é individual, exige confirmação e
+                motivo, e usa o registro auditado de estoque.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!sessaoFinalizada && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Esta sessão ainda está <strong>aberta</strong>. Encerre o inventário (aba “Contagem”)
+                    para liberar os ajustes — assim a contagem fica congelada antes de alterar o estoque.
+                  </span>
+                </div>
+              )}
+              {(relatorio?.divergencias ?? []).length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">Nenhuma divergência para ajustar.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Produto</TableHead>
+                        <TableHead>Código</TableHead>
+                        <TableHead className="text-right">Sistema</TableHead>
+                        <TableHead className="text-right">Contado</TableHead>
+                        <TableHead className="text-right">Diferença</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Ação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(relatorio?.divergencias ?? []).map((e) => (
+                        <TableRow key={e.produtoId}>
+                          <TableCell className="max-w-[22rem]">
+                            <span className="block truncate font-medium text-foreground">{e.nome}</span>
+                            {e.sku && <span className="block truncate text-xs text-muted-foreground">{e.sku}</span>}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">{e.codigo ?? "—"}</TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">{e.estoqueSistema}</TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums">{e.quantidadeContada}</TableCell>
+                          <TableCell className="text-right"><DiferencaCell value={e.diferenca} /></TableCell>
+                          <TableCell>
+                            {e.ajusteAplicado ? (
+                              <Badge variant="outline" className="whitespace-nowrap border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                Ajustado
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="whitespace-nowrap border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                Pendente
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {e.ajusteAplicado ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> Concluído
+                              </span>
+                            ) : (
+                              <Button size="sm" className="gap-1" disabled={!sessaoFinalizada} onClick={() => abrirAjusteDivergencia(e)}>
+                                <Wrench className="h-3.5 w-3.5" /> Aplicar ajuste
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         {/* C — FILA DE RECONCILIAÇÃO */}
         <TabsContent value="reconciliacao">
           <Card className="bg-card border-border">
@@ -440,8 +710,8 @@ export function InventarioRelatorios() {
                 <ClipboardList className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Relatório C — Fila de reconciliação
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Códigos bipados sem produto no catálogo. As ações abaixo serão executadas na F4 — por ora
-                nada é alterado.
+                Códigos bipados sem produto no catálogo. Classifique para organizar o trabalho — isto{" "}
+                <strong>não cadastra produto</strong> nem altera estoque.
               </p>
             </CardHeader>
             <CardContent>
@@ -455,34 +725,67 @@ export function InventarioRelatorios() {
                         <TableHead>Código bipado</TableHead>
                         <TableHead className="text-right">Qtd. observada</TableHead>
                         <TableHead>Data/hora</TableHead>
-                        <TableHead>Sessão</TableHead>
+                        <TableHead>Classificação</TableHead>
                         <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(relatorio?.reconciliacao ?? []).map((r) => (
-                        <TableRow key={r.id}>
-                          <TableCell className="font-mono text-xs">{r.codigoBipado}</TableCell>
-                          <TableCell className="text-right font-semibold tabular-nums">{r.quantidadeContada}</TableCell>
-                          <TableCell className="text-muted-foreground">{formatDateTime(r.ultimoBipeEm)}</TableCell>
-                          <TableCell className="max-w-[14rem]">
-                            <span className="block truncate">{r.sessaoNome || "Sem nome"}</span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap items-center justify-end gap-1">
-                              <Button size="sm" variant="outline" className="gap-1" onClick={acaoReconciliacaoIndisponivel}>
-                                <Search className="h-3.5 w-3.5" /> Localizar
-                              </Button>
-                              <Button size="sm" variant="outline" className="gap-1" onClick={acaoReconciliacaoIndisponivel}>
-                                <PlusCircle className="h-3.5 w-3.5" /> Cadastrar
-                              </Button>
-                              <Button size="sm" variant="ghost" className="gap-1" onClick={acaoReconciliacaoIndisponivel}>
-                                <EyeOff className="h-3.5 w-3.5" /> Ignorar
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {(relatorio?.reconciliacao ?? []).map((r) => {
+                        const cls = RECON_CLASS_META[r.classificacao] ?? RECON_CLASS_META.pendente
+                        const ocupado = classificandoId === r.id
+                        return (
+                          <TableRow key={r.id}>
+                            <TableCell className="font-mono text-xs">{r.codigoBipado}</TableCell>
+                            <TableCell className="text-right font-semibold tabular-nums">{r.quantidadeContada}</TableCell>
+                            <TableCell className="text-muted-foreground">{formatDateTime(r.ultimoBipeEm)}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className={cn("whitespace-nowrap", cls.className)}>{cls.label}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-wrap items-center justify-end gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1"
+                                  disabled={ocupado}
+                                  onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.LOCALIZADO)}
+                                >
+                                  <MapPin className="h-3.5 w-3.5" /> Localizado
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-1"
+                                  disabled={ocupado}
+                                  onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.CADASTRAR_DEPOIS)}
+                                >
+                                  <PlusCircle className="h-3.5 w-3.5" /> Cadastrar depois
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="gap-1"
+                                  disabled={ocupado}
+                                  onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.IGNORADO)}
+                                >
+                                  <EyeOff className="h-3.5 w-3.5" /> Ignorar
+                                </Button>
+                                {r.classificacao !== "pendente" && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="gap-1 text-muted-foreground"
+                                    disabled={ocupado}
+                                    onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.PENDENTE)}
+                                  >
+                                    Limpar
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -499,11 +802,18 @@ export function InventarioRelatorios() {
                 <PackageX className="h-4 w-4 text-destructive" /> Relatório D — Produtos não bipados
               </CardTitle>
               <p className="text-xs text-muted-foreground">
-                Produtos do sistema que não apareceram na contagem. <strong>Não é permitido zerar</strong> —
-                apenas conferência pendente.
+                Produtos do sistema que não apareceram na contagem. <strong>Nunca zere em lote.</strong> O
+                ajuste é individual, com confirmação forte — só depois de checar prateleira, depósito,
+                balcão e caixa.
               </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
+              {!sessaoFinalizada && (relatorio?.naoBipados ?? []).length > 0 && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>Encerre a sessão (aba “Contagem”) para liberar a zeragem por ausência.</span>
+                </div>
+              )}
               {(relatorio?.naoBipados ?? []).length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
                   Todos os produtos do sistema foram bipados nesta sessão.
@@ -517,21 +827,45 @@ export function InventarioRelatorios() {
                         <TableHead>Código</TableHead>
                         <TableHead className="text-right">Estoque atual</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Ação</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {(relatorio?.naoBipados ?? []).map((n) => (
                         <TableRow key={n.produtoId}>
-                          <TableCell className="max-w-[24rem]">
+                          <TableCell className="max-w-[22rem]">
                             <span className="block truncate font-medium text-foreground">{n.nome}</span>
                             {n.sku && <span className="block truncate text-xs text-muted-foreground">{n.sku}</span>}
                           </TableCell>
                           <TableCell className="font-mono text-xs">{n.codigo ?? "—"}</TableCell>
                           <TableCell className="text-right tabular-nums">{n.estoqueSistema}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="whitespace-nowrap border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                              Conferência pendente
-                            </Badge>
+                            {n.ajusteAplicado ? (
+                              <Badge variant="outline" className="whitespace-nowrap border-muted-foreground/30 bg-muted text-muted-foreground">
+                                Zerado por ausência
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="whitespace-nowrap border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                                Conferência pendente
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {n.ajusteAplicado ? (
+                              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                                <CheckCircle2 className="h-3.5 w-3.5" /> Concluído
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1 text-destructive"
+                                disabled={!sessaoFinalizada}
+                                onClick={() => abrirZeragem(n)}
+                              >
+                                <PackageX className="h-3.5 w-3.5" /> Confirmar ausência e zerar
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -543,6 +877,66 @@ export function InventarioRelatorios() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Confirmação de ajuste (divergência) / zeragem por ausência */}
+      <Dialog open={ajusteAlvo !== null} onOpenChange={(o) => { if (!o) setAjusteAlvo(null) }}>
+        <DialogContent className="max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              {ajusteAlvo?.tipo === "ausencia" ? (
+                <ShieldAlert className="h-5 w-5 text-destructive" />
+              ) : (
+                <Wrench className="h-5 w-5 text-primary" />
+              )}
+              {ajusteAlvo?.tipo === "ausencia" ? "Confirmar ausência e zerar" : "Aplicar ajuste de estoque"}
+            </DialogTitle>
+            <DialogDescription>
+              {ajusteAlvo ? (
+                <>
+                  Este ajuste vai alterar o estoque de <span className="font-medium text-foreground">{ajusteAlvo.nome}</span>{" "}
+                  de <span className="font-semibold text-foreground">{ajusteAlvo.sistema}</span> para{" "}
+                  <span className="font-semibold text-foreground">{ajusteAlvo.novo}</span>.
+                </>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          {ajusteAlvo?.tipo === "ausencia" && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              Este produto existe no sistema, mas não foi encontrado no inventário. Confirme que ele não
+              está em prateleira, depósito, balcão ou caixa antes de zerar.
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="inv-ajuste-motivo">Motivo</Label>
+            <Input
+              id="inv-ajuste-motivo"
+              value={motivoAjuste}
+              onChange={(e) => setMotivoAjuste(e.target.value)}
+              placeholder="Motivo do ajuste"
+            />
+            <p className="text-xs text-muted-foreground">
+              Registrado no histórico de movimentação de estoque (auditoria).
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button type="button" variant="outline" onClick={() => setAjusteAlvo(null)} disabled={aplicandoAjuste}>
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant={ajusteAlvo?.tipo === "ausencia" ? "destructive" : "default"}
+              onClick={() => void confirmarAjuste()}
+              disabled={aplicandoAjuste || !motivoAjuste.trim()}
+            >
+              {aplicandoAjuste ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+              {ajusteAlvo?.tipo === "ausencia" ? "Zerar estoque" : "Confirmar ajuste"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
