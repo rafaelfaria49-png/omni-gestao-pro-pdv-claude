@@ -58,6 +58,11 @@ import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
+import {
+  construirProdutosACadastrar,
+  enfileirarProdutosACadastrar,
+  acharProdutoPorCodigoExato,
+} from "@/lib/pdv-produtos-a-cadastrar"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { VendaEsperaModal } from "./venda-espera-modal"
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
@@ -129,6 +134,8 @@ type CartItem = {
   isAvulso?: boolean
   /** Custo unitário opcional informado no balcão. `null` = desconhecido. */
   custoUnitario?: number | null
+  /** Código de barras/SKU do item avulso → fila "Produtos a cadastrar". */
+  codigoAvulso?: string | null
 }
 
 export function PdvSupermercado({
@@ -398,7 +405,7 @@ export function PdvSupermercado({
           : null
       setCart((prev) => [
         ...prev,
-        { lineId, inventoryId, name: payload.description, price, quantity, isAvulso: true, custoUnitario },
+        { lineId, inventoryId, name: payload.description, price, quantity, isAvulso: true, custoUnitario, codigoAvulso: payload.codigo },
       ])
       setShowItemAvulsoModal(false)
       if (isModoRapido) {
@@ -688,6 +695,7 @@ export function PdvSupermercado({
         quantity: i.quantity,
         isAvulso: i.isAvulso,
         custoUnitario: i.custoUnitario,
+        codigoAvulso: i.codigoAvulso,
       })),
       customer: null,
       discountReais,
@@ -711,6 +719,7 @@ export function PdvSupermercado({
         quantity: i.quantity,
         isAvulso: i.isAvulso,
         custoUnitario: i.custoUnitario,
+        codigoAvulso: i.codigoAvulso,
       })),
     )
     setDiscountReais(sale.discountReais ?? 0)
@@ -1196,6 +1205,31 @@ export function PdvSupermercado({
             return
           }
           _printInput.numeroVenda = result.saleId
+          // Fila "Produtos a cadastrar": registra os itens avulsos vendidos para revisão posterior.
+          // Não toca estoque/venda/caixa e nunca lança (não pode afetar a venda já concluída).
+          try {
+            const avulsosVendidos = cart.filter((i) => i.isAvulso)
+            if (avulsosVendidos.length > 0) {
+              enfileirarProdutosACadastrar(
+                lojaKey,
+                construirProdutosACadastrar({
+                  storeId: lojaKey,
+                  vendaId: result.saleId,
+                  operador: operatorLabel,
+                  itens: avulsosVendidos.map((i) => ({
+                    lineId: i.lineId,
+                    nome: i.name,
+                    codigo: i.codigoAvulso,
+                    precoVenda: i.price,
+                    custo: i.custoUnitario,
+                    quantidade: i.quantity,
+                  })),
+                })
+              )
+            }
+          } catch {
+            /* fila é auxiliar — não interrompe o pós-venda */
+          }
 
           setCart([])
           setDiscountReais(0)
@@ -1232,6 +1266,7 @@ export function PdvSupermercado({
         open={showItemAvulsoModal}
         onOpenChange={setShowItemAvulsoModal}
         onConfirm={addItemAvulso}
+        checkCodigoExistente={(c) => acharProdutoPorCodigoExato(inventory, c)}
       />
 
       <PdvRecebimentoModal

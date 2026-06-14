@@ -88,6 +88,11 @@ import { TrocasDevolucao } from "./trocas-devolucao"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
+import {
+  construirProdutosACadastrar,
+  enfileirarProdutosACadastrar,
+  acharProdutoPorCodigoExato,
+} from "@/lib/pdv-produtos-a-cadastrar"
 import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
 import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
@@ -193,6 +198,8 @@ type CartLine = {
   isAvulso?: boolean
   /** Custo unitário opcional informado no balcão. `null` = desconhecido. */
   custoUnitario?: number | null
+  /** Código de barras/SKU do item avulso → fila "Produtos a cadastrar". */
+  codigoAvulso?: string | null
 }
 
 type PayMethod = "dinheiro" | "pix" | "credito" | "debito" | "a_prazo" | "multiplo"
@@ -2163,6 +2170,31 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       return
     }
     _printInput.numeroVenda = result.saleId
+    // Fila "Produtos a cadastrar": registra os itens avulsos vendidos para revisão posterior.
+    // Não toca estoque/venda/caixa e nunca lança (não pode afetar a venda já concluída).
+    try {
+      const avulsosVendidos = cart.filter((l) => l.isAvulso)
+      if (avulsosVendidos.length > 0) {
+        enfileirarProdutosACadastrar(
+          storeIdKey,
+          construirProdutosACadastrar({
+            storeId: storeIdKey,
+            vendaId: result.saleId,
+            operador: operatorLabel,
+            itens: avulsosVendidos.map((l) => ({
+              lineId: l.lineId,
+              nome: l.title,
+              codigo: l.codigoAvulso,
+              precoVenda: l.price,
+              custo: l.custoUnitario,
+              quantidade: l.qty,
+            })),
+          })
+        )
+      }
+    } catch {
+      /* fila é auxiliar — não interrompe o pós-venda */
+    }
 
     // Venda real concluída — limpa carrinho e persistência.
     paymentDiscountSnapshotRef.current = null
@@ -3043,6 +3075,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       <ItemAvulsoModal
         open={showItemAvulsoModal}
         onOpenChange={setShowItemAvulsoModal}
+        checkCodigoExistente={(c) => acharProdutoPorCodigoExato(inventory, c)}
         onConfirm={(payload: ItemAvulsoPayload) => {
           const nid = newLineId()
           const inventoryId = avulsoInventoryId(nid)
@@ -3062,6 +3095,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               qty,
               isAvulso: true,
               custoUnitario,
+              codigoAvulso: payload.codigo,
             },
           ])
           setShowItemAvulsoModal(false)

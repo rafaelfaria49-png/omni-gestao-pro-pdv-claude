@@ -108,6 +108,11 @@ import {
   osServicoInventoryId,
 } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
+import {
+  construirProdutosACadastrar,
+  enfileirarProdutosACadastrar,
+  acharProdutoPorCodigoExato,
+} from "@/lib/pdv-produtos-a-cadastrar"
 import { PdvPostSaleDialog } from "./pdv-post-sale-dialog"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
@@ -145,6 +150,8 @@ type CartItem = {
   isAvulso?: boolean
   /** Custo unitário opcional informado no balcão. `null` = desconhecido. */
   custoUnitario?: number | null
+  /** Código de barras/SKU do item avulso → fila "Produtos a cadastrar". */
+  codigoAvulso?: string | null
 }
 
 type Product = PdvCatalogProduct
@@ -667,6 +674,7 @@ export function PdvClassic({
         complementos: [],
         isAvulso: true,
         custoUnitario,
+        codigoAvulso: payload.codigo,
       },
     ])
     setSelectedCartLineId(lineId)
@@ -1320,6 +1328,7 @@ export function PdvClassic({
         atributosLabel: i.atributosLabel,
         vendaPorPeso: i.vendaPorPeso,
         custoUnitario: i.custoUnitario,
+        codigoAvulso: i.codigoAvulso,
       })),
       customer: selectedCustomer
         ? { id: selectedCustomer.id, name: selectedCustomer.name, cpf: selectedCustomer.cpf, phone: selectedCustomer.phone }
@@ -1348,6 +1357,7 @@ export function PdvClassic({
         atributosLabel: i.atributosLabel,
         vendaPorPeso: i.vendaPorPeso,
         custoUnitario: i.custoUnitario,
+        codigoAvulso: i.codigoAvulso,
       })),
     )
     if (sale.customer) {
@@ -1590,6 +1600,7 @@ export function PdvClassic({
         open={showItemAvulsoModal}
         onOpenChange={setShowItemAvulsoModal}
         onConfirm={addItemAvulso}
+        checkCodigoExistente={(c) => acharProdutoPorCodigoExato(inventory, c)}
       />
 
       <VendaEsperaModal
@@ -1722,6 +1733,31 @@ export function PdvClassic({
             return
           }
           _printInput.numeroVenda = result.saleId
+          // Fila "Produtos a cadastrar": registra os itens avulsos vendidos para revisão posterior.
+          // Não toca estoque/venda/caixa e nunca lança (não pode afetar a venda já concluída).
+          try {
+            const avulsosVendidos = cart.filter((i) => i.isAvulso)
+            if (avulsosVendidos.length > 0) {
+              enfileirarProdutosACadastrar(
+                lojaKey,
+                construirProdutosACadastrar({
+                  storeId: lojaKey,
+                  vendaId: result.saleId,
+                  operador: operatorLabel,
+                  itens: avulsosVendidos.map((i) => ({
+                    lineId: i.lineId,
+                    nome: i.name,
+                    codigo: i.codigoAvulso,
+                    precoVenda: i.price,
+                    custo: i.custoUnitario,
+                    quantidade: i.quantity,
+                  })),
+                })
+              )
+            }
+          } catch {
+            /* fila é auxiliar — não interrompe o pós-venda */
+          }
           const _hadItems = cart.length > 0
           if (impressaoConfig.imprimirAutomatico && _hadItems) {
             void printPdvSaleReceipt({

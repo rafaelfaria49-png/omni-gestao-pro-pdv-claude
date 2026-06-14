@@ -17,6 +17,8 @@ export type HeldCartItem = {
   atributosLabel?: string
   vendaPorPeso?: boolean
   custoUnitario?: number | null
+  /** Código de barras/SKU informado no Item Avulso (fila "Produtos a cadastrar"). */
+  codigoAvulso?: string | null
 }
 
 export type HeldSaleCustomer = {

@@ -17,8 +17,8 @@
  * - Enter no último campo confirma; Esc fecha (padrão do Dialog do shadcn).
  */
 
-import { useEffect, useRef, useState } from "react"
-import { PlusCircle } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { PlusCircle, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -40,12 +40,19 @@ export interface ItemAvulsoPayload {
   quantity: number
   /** Custo unitário opcional (R$). `null` quando o operador não informou. */
   custoUnitario: number | null
+  /** Código de barras / SKU opcional informado no balcão. `null` quando vazio. */
+  codigo: string | null
 }
 
 interface ItemAvulsoModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: (payload: ItemAvulsoPayload) => void
+  /**
+   * Checagem opcional: se o código informado já existe no catálogo, devolve o produto.
+   * Quando fornecida, o modal só ALERTA (não bloqueia) — a decisão é do operador.
+   */
+  checkCodigoExistente?: (codigo: string) => { nome: string } | null
 }
 
 function parseDecimal(raw: string): number {
@@ -58,11 +65,12 @@ function parseQuantity(raw: string): number {
   return Number.isFinite(v) && v >= 1 ? v : 0
 }
 
-export function ItemAvulsoModal({ open, onOpenChange, onConfirm }: ItemAvulsoModalProps) {
+export function ItemAvulsoModal({ open, onOpenChange, onConfirm, checkCodigoExistente }: ItemAvulsoModalProps) {
   const [description, setDescription] = useState("")
   const [unitPriceInput, setUnitPriceInput] = useState("")
   const [quantityInput, setQuantityInput] = useState("1")
   const [custoInput, setCustoInput] = useState("")
+  const [codigoInput, setCodigoInput] = useState("")
   const descriptionRef = useRef<HTMLInputElement | null>(null)
 
   // Reset + foco no campo de descrição a cada abertura.
@@ -72,6 +80,7 @@ export function ItemAvulsoModal({ open, onOpenChange, onConfirm }: ItemAvulsoMod
     setUnitPriceInput("")
     setQuantityInput("1")
     setCustoInput("")
+    setCodigoInput("")
     // requestAnimationFrame garante que o Dialog terminou o mount antes do focus.
     const t = window.requestAnimationFrame(() => descriptionRef.current?.focus())
     return () => window.cancelAnimationFrame(t)
@@ -82,6 +91,17 @@ export function ItemAvulsoModal({ open, onOpenChange, onConfirm }: ItemAvulsoMod
   const quantity = parseQuantity(quantityInput)
   const custoTouched = custoInput.trim().length > 0
   const custoUnitario = custoTouched ? parseDecimal(custoInput) : null
+  const codigo = codigoInput.trim().replace(/\s+/g, " ") || null
+
+  // Alerta (não bloqueia): código informado já existe em produto cadastrado?
+  const produtoExistente = useMemo(() => {
+    if (!codigo || !checkCodigoExistente) return null
+    try {
+      return checkCodigoExistente(codigo)
+    } catch {
+      return null
+    }
+  }, [codigo, checkCodigoExistente])
 
   const canConfirm =
     trimmedDescription.length > 0 &&
@@ -100,6 +120,7 @@ export function ItemAvulsoModal({ open, onOpenChange, onConfirm }: ItemAvulsoMod
       unitPrice,
       quantity,
       custoUnitario,
+      codigo,
     })
   }
 
@@ -150,6 +171,32 @@ export function ItemAvulsoModal({ open, onOpenChange, onConfirm }: ItemAvulsoMod
                 placeholder="1"
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="item-avulso-codigo" className="text-muted-foreground">
+              Código de barras / SKU — opcional
+            </Label>
+            <Input
+              id="item-avulso-codigo"
+              value={codigoInput}
+              onChange={(e) => setCodigoInput(e.target.value)}
+              placeholder="Bipe ou digite o código (EAN, SKU ou código interno)"
+              autoComplete="off"
+            />
+            {produtoExistente ? (
+              <p className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Este código já existe em <span className="font-medium">{produtoExistente.nome}</span>. Você
+                  pode usar o produto existente — ou seguir como avulso e revisar depois.
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Fica salvo na fila “Produtos a cadastrar” para cadastro posterior. Não cria produto agora.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
