@@ -6,9 +6,11 @@ import { canAccessStore } from "@/lib/auth/enterprise-permissions";
 import {
   aplicarBipe,
   diferencaContagem,
+  montarRelatorioInventario,
   normalizarCodigo,
   STATUS_CONTAGEM,
   STATUS_SESSAO,
+  type ContagemLinha,
   type ProdutoEstoque,
 } from "@/lib/estoque/inventario-core";
 
@@ -330,5 +332,211 @@ export async function encerrarInventario(
     return { ok: true };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao encerrar inventário" };
+  }
+}
+
+// ─── F3 · Relatórios e análise (SOMENTE LEITURA) ───────────────────────────────
+// Reusa o núcleo PURO `montarRelatorioInventario` (testado na F1). Esta camada apenas
+// hidrata os dados (contagens da sessão + catálogo da loja) e enriquece para a UI
+// (código bipado por linha, data/hora e sessão na reconciliação). NÃO altera nada:
+// nada de ajuste de saldo, cadastro, exclusão ou reconciliação automática.
+
+/** Linha A/B — produto encontrado/divergente (estoque sistema atual × contado). */
+export type RelatorioEncontradoDTO = {
+  produtoId: string;
+  nome: string;
+  sku: string | null;
+  /** Código efetivamente bipado que resolveu para este produto. */
+  codigo: string | null;
+  estoqueSistema: number;
+  quantidadeContada: number;
+  diferenca: number;
+};
+
+/** Linha C — fila de reconciliação (código sem produto resolvido). */
+export type RelatorioReconciliacaoDTO = {
+  id: string;
+  codigoBipado: string;
+  quantidadeContada: number;
+  ultimoBipeEm: string;
+  sessaoId: string;
+  sessaoNome: string | null;
+};
+
+/** Linha D — produto do sistema que NÃO apareceu na contagem (conferência pendente). */
+export type RelatorioNaoBipadoDTO = {
+  produtoId: string;
+  nome: string;
+  sku: string | null;
+  codigo: string | null;
+  estoqueSistema: number;
+};
+
+export type RelatorioInventarioDTO = {
+  sessao: InventarioSessaoDTO;
+  encontrados: RelatorioEncontradoDTO[];
+  divergencias: RelatorioEncontradoDTO[];
+  reconciliacao: RelatorioReconciliacaoDTO[];
+  naoBipados: RelatorioNaoBipadoDTO[];
+  resumo: {
+    encontrados: number;
+    divergencias: number;
+    reconciliacao: number;
+    naoBipados: number;
+    unidadesContadas: number;
+  };
+};
+
+export type RelatorioInventarioResult =
+  | { ok: true; relatorio: RelatorioInventarioDTO }
+  | ActionFail;
+
+/**
+ * Relatório completo de uma sessão (A encontrados, B divergências, C reconciliação, D não bipados
+ * + resumo). Funciona para sessão aberta (em andamento) ou finalizada. SOMENTE LEITURA.
+ */
+export async function getRelatorioInventario(
+  storeId: string,
+  sessaoId: string
+): Promise<RelatorioInventarioResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  const sid = (sessaoId ?? "").trim();
+  if (!sid) return { ok: false, reason: "Sessão inválida" };
+
+  try {
+    const sessao = await prisma.inventarioSessao.findFirst({
+      where: { id: sid, storeId: g.sid },
+      select: SESSAO_SELECT,
+    });
+    if (!sessao) return { ok: false, reason: "Sessão não encontrada" };
+
+    const [contagensRows, catalogo] = await Promise.all([
+      prisma.inventarioContagem.findMany({
+        where: { storeId: g.sid, sessaoId: sid },
+        orderBy: { ultimoBipeEm: "desc" },
+        select: {
+          id: true,
+          produtoId: true,
+          codigoBipado: true,
+          produtoNomeSnapshot: true,
+          produtoSkuSnapshot: true,
+          estoqueSistemaSnapshot: true,
+          quantidadeContada: true,
+          status: true,
+          ultimoBipeEm: true,
+        },
+      }),
+      // Catálogo da loja (ativo) — base do "não bipados" e do estoque atual da divergência.
+      prisma.produto.findMany({
+        where: { storeId: g.sid, active: true },
+        select: { id: true, name: true, sku: true, barcode: true, stock: true },
+      }),
+    ]);
+
+    const produtosLoja: ProdutoEstoque[] = catalogo.map((p) => ({
+      id: p.id,
+      nome: p.name,
+      sku: p.sku,
+      barcode: p.barcode,
+      stock: p.stock,
+    }));
+    const contagensCore: ContagemLinha[] = contagensRows.map((c) => ({
+      produtoId: c.produtoId,
+      codigoBipado: c.codigoBipado,
+      quantidadeContada: c.quantidadeContada,
+      estoqueSistemaSnapshot: c.estoqueSistemaSnapshot,
+      status: c.status as ContagemLinha["status"],
+      produtoNomeSnapshot: c.produtoNomeSnapshot,
+      produtoSkuSnapshot: c.produtoSkuSnapshot,
+    }));
+
+    const rel = montarRelatorioInventario({ contagens: contagensCore, produtosLoja });
+
+    // Mapas de enriquecimento (sem reprocessar regra — apenas anexar campos de exibição).
+    const codigoPorProduto = new Map<string, string>();
+    for (const c of contagensRows) {
+      if (c.produtoId && !codigoPorProduto.has(c.produtoId)) codigoPorProduto.set(c.produtoId, c.codigoBipado);
+    }
+    const codigoCatalogo = new Map<string, string | null>(
+      catalogo.map((p) => [p.id, (p.barcode ?? "").trim() || (p.sku ?? "").trim() || null])
+    );
+
+    const encontrados: RelatorioEncontradoDTO[] = rel.encontrados.map((e) => ({
+      produtoId: e.produtoId,
+      nome: e.nome,
+      sku: e.sku,
+      codigo: codigoPorProduto.get(e.produtoId) ?? null,
+      estoqueSistema: e.estoqueSistema,
+      quantidadeContada: e.quantidadeContada,
+      diferenca: e.diferenca,
+    }));
+
+    // B) divergências = contado ≠ sistema, ordenadas pela MAIOR diferença (abs desc).
+    const divergencias = encontrados
+      .filter((e) => e.diferenca !== 0)
+      .sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca));
+
+    // C) reconciliação a partir das linhas cruas (data/hora + sessão para auditoria).
+    const reconciliacao: RelatorioReconciliacaoDTO[] = contagensRows
+      .filter((c) => c.status === STATUS_CONTAGEM.RECONCILIACAO || !c.produtoId)
+      .map((c) => ({
+        id: c.id,
+        codigoBipado: c.codigoBipado,
+        quantidadeContada: c.quantidadeContada,
+        ultimoBipeEm: c.ultimoBipeEm.toISOString(),
+        sessaoId: sid,
+        sessaoNome: sessao.nome,
+      }));
+
+    // D) não bipados = produto do sistema nunca contado (NUNCA zerar — só conferência pendente).
+    const naoBipados: RelatorioNaoBipadoDTO[] = rel.naoContados.map((n) => ({
+      produtoId: n.produtoId,
+      nome: n.nome,
+      sku: n.sku,
+      codigo: codigoCatalogo.get(n.produtoId) ?? null,
+      estoqueSistema: n.estoqueSistema,
+    }));
+
+    return {
+      ok: true,
+      relatorio: {
+        sessao: sessaoToDTO(sessao),
+        encontrados,
+        divergencias,
+        reconciliacao,
+        naoBipados,
+        resumo: {
+          encontrados: encontrados.length,
+          divergencias: divergencias.length,
+          reconciliacao: reconciliacao.length,
+          naoBipados: naoBipados.length,
+          unidadesContadas: rel.totais.unidadesContadas,
+        },
+      },
+    };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao gerar relatório" };
+  }
+}
+
+export type ListInventarioSessoesResult =
+  | { ok: true; sessoes: InventarioSessaoDTO[] }
+  | ActionFail;
+
+/** Sessões da loja (mais recentes primeiro) — para escolher qual analisar nos relatórios. */
+export async function listInventarioSessoes(storeId: string): Promise<ListInventarioSessoesResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  try {
+    const rows = await prisma.inventarioSessao.findMany({
+      where: { storeId: g.sid },
+      orderBy: { iniciadoEm: "desc" },
+      take: 50,
+      select: SESSAO_SELECT,
+    });
+    return { ok: true, sessoes: rows.map(sessaoToDTO) };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao listar sessões" };
   }
 }
