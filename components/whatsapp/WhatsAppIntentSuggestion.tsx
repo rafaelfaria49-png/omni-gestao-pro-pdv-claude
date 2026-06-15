@@ -1,11 +1,14 @@
 "use client"
 
 /**
- * WhatsApp IA — F2 · Cartão de classificação assistida do inbound.
+ * WhatsApp IA — F2/F3 · Cartão de classificação + consulta de catálogo assistida.
  *
- * Componente ISOLADO: roda o classificador puro (`classifyWhatsAppIntent`) em tempo de
- * leitura sobre a última mensagem recebida e exibe intenção, confiança, entidades e uma
- * sugestão de resposta SEGURA para o operador revisar.
+ * F2: roda o classificador puro (`classifyWhatsAppIntent`) em tempo de leitura sobre a
+ * última mensagem recebida e exibe intenção, confiança, entidades e uma sugestão segura.
+ *
+ * F3: quando a intenção é CONSULTA_PRODUTO_ESTOQUE, busca produtos REAIS da loja ativa
+ * (via API read-only escopada por loja) e mostra cards (foto/nome/preço/estoque) + uma
+ * resposta sugerida orientada pelos dados. SOMENTE LEITURA — não altera estoque.
  *
  * Nada é enviado automaticamente. "Usar resposta" apenas preenche o campo de mensagem
  * (via `onUseReply`); o operador confirma o envio manualmente.
@@ -16,11 +19,14 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Activity,
   DollarSign,
+  ImageOff,
   MessageCircle,
+  Package,
   Pencil,
   ShieldCheck,
   ShoppingBag,
@@ -37,6 +43,11 @@ import {
   type WhatsAppIntentEntities,
   type WhatsAppIntentKind,
 } from "@/lib/whatsapp/whatsapp-intent-classifier"
+import type {
+  WhatsAppResolvedProduct,
+  WhatsAppStockStatus,
+} from "@/lib/whatsapp/whatsapp-product-resolver"
+import { useWhatsAppProductSuggestion } from "./use-whatsapp-product-suggestion"
 
 const INTENT_META: Record<WhatsAppIntentKind, { icon: LucideIcon; className: string }> = {
   CONSULTA_PRODUTO_ESTOQUE: {
@@ -84,6 +95,26 @@ const ENTITY_LABELS: { key: keyof WhatsAppIntentEntities; label: string }[] = [
   { key: "nome", label: "Nome" },
 ]
 
+const STOCK_META: Record<WhatsAppStockStatus, { label: string; className: string }> = {
+  EM_ESTOQUE: {
+    label: "Disponível",
+    className: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  },
+  BAIXO_ESTOQUE: {
+    label: "Baixo estoque",
+    className: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  },
+  SEM_ESTOQUE: {
+    label: "Sem estoque",
+    className: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  },
+}
+
+function formatBRL(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "—"
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+}
+
 function entityChips(entities: WhatsAppIntentEntities): { label: string; value: string }[] {
   const seen = new Set<string>()
   const chips: { label: string; value: string }[] = []
@@ -98,10 +129,46 @@ function entityChips(entities: WhatsAppIntentEntities): { label: string; value: 
   return chips
 }
 
+function ProductRow({ p }: { p: WhatsAppResolvedProduct }) {
+  const stock = STOCK_META[p.estoqueStatus]
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/50 p-2">
+      {p.imagemPrincipalUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={p.imagemPrincipalUrl}
+          alt={p.nome}
+          className="h-10 w-10 shrink-0 rounded-md object-cover"
+        />
+      ) : (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/40">
+          <ImageOff className="h-4 w-4 text-muted-foreground/60" />
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[11px] font-medium text-foreground">{p.nome}</p>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <span className="text-[11px] font-semibold text-foreground">{formatBRL(p.preco)}</span>
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-medium",
+              stock.className
+            )}
+          >
+            {stock.label}
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function WhatsAppIntentSuggestion({
   lastInboundText,
   storeId,
   phone,
+  conversationId,
+  apiHeaders,
   isSupplierConversation,
   onUseReply,
   className,
@@ -109,6 +176,8 @@ export function WhatsAppIntentSuggestion({
   lastInboundText: string
   storeId?: string
   phone?: string
+  conversationId?: string | null
+  apiHeaders?: Record<string, string> | null
   isSupplierConversation?: boolean
   onUseReply?: (text: string) => void
   className?: string
@@ -128,16 +197,29 @@ export function WhatsAppIntentSuggestion({
     [text, storeId, phone, isSupplierConversation]
   )
 
+  const isProduct = classification?.intent === "CONSULTA_PRODUTO_ESTOQUE"
+  const productState = useWhatsAppProductSuggestion({
+    conversationId: conversationId ?? null,
+    apiHeaders: apiHeaders ?? null,
+    enabled: !!isProduct,
+    text,
+    entities: classification?.entities ?? {},
+  })
+
   const [dismissed, setDismissed] = useState(false)
   const [editing, setEditing] = useState(false)
   const [replyText, setReplyText] = useState("")
 
-  // Reset ao trocar a mensagem/conversa.
+  // Prefere a resposta orientada pelos dados (F3) quando disponível.
+  const effectiveReply =
+    productState.resolution?.suggestedReply?.trim() || classification?.suggestedReply || ""
+
+  // Reset ao trocar a mensagem/conversa ou quando a resposta efetiva muda.
   useEffect(() => {
     setDismissed(false)
     setEditing(false)
-    setReplyText(classification?.suggestedReply ?? "")
-  }, [classification?.suggestedReply, text])
+    setReplyText(effectiveReply)
+  }, [effectiveReply, text])
 
   if (!classification) return null
 
@@ -162,13 +244,10 @@ export function WhatsAppIntentSuggestion({
   const chips = entityChips(classification.entities)
   const canUse = !!onUseReply && replyText.trim().length > 0
 
+  const resolution = productState.resolution
+
   return (
-    <div
-      className={cn(
-        "rounded-xl border border-primary/25 bg-card/50 p-3",
-        className
-      )}
-    >
+    <div className={cn("rounded-xl border border-primary/25 bg-card/50 p-3", className)}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
           <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -189,9 +268,7 @@ export function WhatsAppIntentSuggestion({
           <Icon className="h-3 w-3" />
           {INTENT_LABEL_PT[classification.intent]}
         </span>
-        <span className="text-[10px] text-muted-foreground">
-          Confiança {confidencePct}%
-        </span>
+        <span className="text-[10px] text-muted-foreground">Confiança {confidencePct}%</span>
       </div>
 
       {chips.length > 0 && (
@@ -205,6 +282,50 @@ export function WhatsAppIntentSuggestion({
               {c.value}
             </span>
           ))}
+        </div>
+      )}
+
+      {/* ── F3 · Produtos encontrados (só CONSULTA_PRODUTO_ESTOQUE) ── */}
+      {isProduct && (
+        <div className="mt-3 rounded-lg border border-border/60 bg-muted/15 p-2">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <Package className="h-3 w-3 text-primary" />
+              Produtos no catálogo
+            </span>
+            {resolution && resolution.total > 0 && (
+              <span className="text-[9px] text-muted-foreground">
+                Busca {Math.round(resolution.confidence * 100)}%
+              </span>
+            )}
+          </div>
+
+          {productState.loading ? (
+            <div className="space-y-1.5">
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+            </div>
+          ) : productState.error ? (
+            <p className="text-[10px] text-muted-foreground">
+              Não foi possível consultar o catálogo agora ({productState.error}).
+            </p>
+          ) : resolution && resolution.produtos.length > 0 ? (
+            <div className="space-y-1.5">
+              {resolution.produtos.map((p) => (
+                <ProductRow key={p.id} p={p} />
+              ))}
+              {resolution.overflow > 0 && (
+                <p className="pt-0.5 text-center text-[10px] font-medium text-muted-foreground">
+                  + {resolution.overflow} produto{resolution.overflow > 1 ? "s" : ""} encontrado
+                  {resolution.overflow > 1 ? "s" : ""}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground">
+              Nenhum produto compatível no catálogo desta loja. Verifique manualmente antes de responder.
+            </p>
+          )}
         </div>
       )}
 

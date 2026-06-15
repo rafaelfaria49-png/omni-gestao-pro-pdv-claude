@@ -302,6 +302,8 @@ export function WhatsAppContextPanel({
           lastInboundText={lastInboundText}
           storeId={apiHeaders?.[ASSISTEC_LOJA_HEADER]}
           phone={conv.contact.phoneDigits}
+          conversationId={conv.id}
+          apiHeaders={apiHeaders}
           onUseReply={onApplySuggestion}
         />
 
