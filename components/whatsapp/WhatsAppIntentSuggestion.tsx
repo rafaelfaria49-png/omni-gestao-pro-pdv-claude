@@ -28,8 +28,10 @@ import {
   MessageCircle,
   Package,
   Pencil,
+  Receipt,
   ShieldCheck,
   ShoppingBag,
+  Smartphone,
   Sparkles,
   Truck,
   Wrench,
@@ -47,7 +49,12 @@ import type {
   WhatsAppResolvedProduct,
   WhatsAppStockStatus,
 } from "@/lib/whatsapp/whatsapp-product-resolver"
+import type {
+  WhatsAppAssistanceQuote,
+  WhatsAppQuoteBadge,
+} from "@/lib/whatsapp/whatsapp-assistance-quote"
 import { useWhatsAppProductSuggestion } from "./use-whatsapp-product-suggestion"
+import { useWhatsAppAssistanceQuote } from "./use-whatsapp-assistance-quote"
 
 const INTENT_META: Record<WhatsAppIntentKind, { icon: LucideIcon; className: string }> = {
   CONSULTA_PRODUTO_ESTOQUE: {
@@ -110,9 +117,75 @@ const STOCK_META: Record<WhatsAppStockStatus, { label: string; className: string
   },
 }
 
+const QUOTE_BADGE_META: Record<WhatsAppQuoteBadge, string> = {
+  Real: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  Estimado: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  Revisar: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300",
+}
+
+const QUOTE_ORIGIN_LABEL: Record<WhatsAppAssistanceQuote["origem"], string> = {
+  SERVICO_CADASTRADO: "Serviço cadastrado",
+  PRODUTO_COMPATIVEL: "Peça compatível",
+  ESTIMATIVA: "Estimativa",
+  SEM_DADOS: "Sem dados",
+}
+
 function formatBRL(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return "—"
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+}
+
+function priceDisplay(q: WhatsAppAssistanceQuote): string {
+  if (q.valorSugerido != null && q.valorSugerido > 0) return formatBRL(q.valorSugerido)
+  const { min, max } = q.faixaPreco
+  if (min != null && max != null && min !== max) return `${formatBRL(min)} – ${formatBRL(max)}`
+  if (min != null) return `a partir de ${formatBRL(min)}`
+  if (max != null) return `até ${formatBRL(max)}`
+  return "a confirmar"
+}
+
+function QuoteBlock({ quote }: { quote: WhatsAppAssistanceQuote }) {
+  const aparelho = quote.device.modelo || quote.device.marca || "Aparelho a confirmar"
+  const servico = quote.service.label || "Serviço a identificar"
+  return (
+    <div className="space-y-1.5">
+      <div className="grid grid-cols-2 gap-1.5">
+        <div className="rounded-md border border-border/60 bg-card/50 p-1.5">
+          <p className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+            <Smartphone className="h-2.5 w-2.5" /> Aparelho
+          </p>
+          <p className="mt-0.5 truncate text-[11px] font-medium text-foreground">{aparelho}</p>
+        </div>
+        <div className="rounded-md border border-border/60 bg-card/50 p-1.5">
+          <p className="flex items-center gap-1 text-[9px] uppercase tracking-wide text-muted-foreground">
+            <Wrench className="h-2.5 w-2.5" /> Serviço
+          </p>
+          <p className="mt-0.5 truncate text-[11px] font-medium text-foreground">{servico}</p>
+        </div>
+      </div>
+      <div className="flex items-center justify-between rounded-md border border-border/60 bg-muted/20 px-2 py-1.5">
+        <span className="text-[10px] text-muted-foreground">Valor sugerido</span>
+        <span className="text-sm font-semibold text-foreground">{priceDisplay(quote)}</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full border px-1.5 py-0.5 text-[9px] font-semibold",
+            QUOTE_BADGE_META[quote.badge]
+          )}
+        >
+          {quote.badge}
+        </span>
+        <span className="rounded-md border border-border/60 bg-muted/30 px-1.5 py-0.5 text-[9px] text-muted-foreground">
+          {QUOTE_ORIGIN_LABEL[quote.origem]}
+        </span>
+        <span className="text-[9px] text-muted-foreground">
+          Confiança {Math.round(quote.confidence * 100)}%
+        </span>
+      </div>
+      <p className="text-[10px] leading-snug text-muted-foreground">{quote.resumo}</p>
+    </div>
+  )
 }
 
 function entityChips(entities: WhatsAppIntentEntities): { label: string; value: string }[] {
@@ -206,13 +279,24 @@ export function WhatsAppIntentSuggestion({
     entities: classification?.entities ?? {},
   })
 
+  const isQuote = classification?.intent === "ORCAMENTO_ASSISTENCIA"
+  const quoteState = useWhatsAppAssistanceQuote({
+    conversationId: conversationId ?? null,
+    apiHeaders: apiHeaders ?? null,
+    enabled: !!isQuote,
+    text,
+  })
+
   const [dismissed, setDismissed] = useState(false)
   const [editing, setEditing] = useState(false)
   const [replyText, setReplyText] = useState("")
 
-  // Prefere a resposta orientada pelos dados (F3) quando disponível.
+  // Prefere a resposta orientada pelos dados (F3 produto / F4 orçamento) quando disponível.
   const effectiveReply =
-    productState.resolution?.suggestedReply?.trim() || classification?.suggestedReply || ""
+    productState.resolution?.suggestedReply?.trim() ||
+    quoteState.quote?.suggestedReply?.trim() ||
+    classification?.suggestedReply ||
+    ""
 
   // Reset ao trocar a mensagem/conversa ou quando a resposta efetiva muda.
   useEffect(() => {
@@ -324,6 +408,32 @@ export function WhatsAppIntentSuggestion({
           ) : (
             <p className="text-[10px] text-muted-foreground">
               Nenhum produto compatível no catálogo desta loja. Verifique manualmente antes de responder.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── F4 · Orçamento sugerido (só ORCAMENTO_ASSISTENCIA) ── */}
+      {isQuote && (
+        <div className="mt-3 rounded-lg border border-border/60 bg-muted/15 p-2">
+          <div className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <Receipt className="h-3 w-3 text-primary" />
+            Orçamento sugerido
+          </div>
+          {quoteState.loading ? (
+            <div className="space-y-1.5">
+              <Skeleton className="h-10 w-full rounded-lg" />
+              <Skeleton className="h-6 w-2/3 rounded-lg" />
+            </div>
+          ) : quoteState.error ? (
+            <p className="text-[10px] text-muted-foreground">
+              Não foi possível montar o orçamento agora ({quoteState.error}).
+            </p>
+          ) : quoteState.quote ? (
+            <QuoteBlock quote={quoteState.quote} />
+          ) : (
+            <p className="text-[10px] text-muted-foreground">
+              Confirme o aparelho e o serviço para montar o orçamento manualmente.
             </p>
           )}
         </div>
