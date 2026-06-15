@@ -43,7 +43,9 @@ import {
   useWhatsAppClienteContext,
 } from "./use-whatsapp-cliente-context"
 import { useWhatsAppAiAnalysis } from "./use-whatsapp-ai-analysis"
+import { WhatsAppIntentSuggestion } from "./WhatsAppIntentSuggestion"
 import { clientesDashboardHref } from "@/lib/whatsapp/clientes-dashboard-link"
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { cn } from "@/lib/utils"
 
 export type ContextContact = {
@@ -190,6 +192,14 @@ export function WhatsAppContextPanel({
     () => (conv ? suggestReply(intent, conv.humanMode) : ""),
     [conv, intent]
   )
+  // F2 — última mensagem RECEBIDA (inbound) para a classificação assistida.
+  const lastInboundText = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m && m.direction !== "outbound") return m.body
+    }
+    return conv?.lastMessagePreview ?? ""
+  }, [messages, conv?.lastMessagePreview])
   const llmSuggestion = aiAnalysis?.sugestaoResposta?.trim() ?? ""
   const suggestionSource: "llm" | "local" | null = aiLoading
     ? null
@@ -287,6 +297,13 @@ export function WhatsAppContextPanel({
             ))}
           </div>
         )}
+
+        <WhatsAppIntentSuggestion
+          lastInboundText={lastInboundText}
+          storeId={apiHeaders?.[ASSISTEC_LOJA_HEADER]}
+          phone={conv.contact.phoneDigits}
+          onUseReply={onApplySuggestion}
+        />
 
         <div className="rounded-xl border border-violet-500/25 bg-card/50 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
