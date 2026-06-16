@@ -19,6 +19,15 @@ export type HeldCartItem = {
   custoUnitario?: number | null
   /** Código de barras/SKU informado no Item Avulso (fila "Produtos a cadastrar"). */
   codigoAvulso?: string | null
+  /** Desconto percentual por linha (Venda Completa Enterprise). Opcional/aditivo. */
+  discountPct?: number
+  /** Metadados por item da Venda Completa: IMEI, nº de série, garantia, observação. */
+  detail?: {
+    imei?: string
+    serial?: string
+    garantiaDias?: number
+    observacao?: string
+  }
 }
 
 export type HeldSaleCustomer = {
@@ -36,7 +45,7 @@ export type HeldSale = {
   customer?: HeldSaleCustomer | null
   discountReais?: number
   discountPercent?: number
-  pdvType: "classic" | "supermercado" | "assistencia" | "black"
+  pdvType: "classic" | "supermercado" | "assistencia" | "black" | "venda-completa"
 }
 
 function holdsKey(storeId: string, terminalId: string): string {

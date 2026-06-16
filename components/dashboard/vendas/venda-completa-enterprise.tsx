@@ -12,6 +12,8 @@ import {
   Loader2,
   MapPin,
   PackageSearch,
+  PauseCircle,
+  PlusCircle,
   Receipt,
   Search,
   ShieldCheck,
@@ -35,15 +37,33 @@ import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
-import { PdvPendingSyncBadge } from "@/components/dashboard/vendas/pdv-pending-sync-badge"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
+import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { enrichVendaEnterprise } from "@/app/actions/vendas-enterprise"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
+import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
+import { VendaEsperaModal } from "./venda-espera-modal"
+import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { readSelectedTerminal } from "@/lib/pdv-terminal"
+import { CaixaStatusBar } from "../caixa/caixa-status-bar"
+import {
+  getHeldSales,
+  saveHeldSale,
+  removeHeldSale,
+  newHoldId,
+  nextHoldLabel,
+  type HeldSale,
+} from "@/lib/pdv-hold"
+import {
+  construirProdutosACadastrar,
+  enfileirarProdutosACadastrar,
+  acharProdutoPorCodigoExato,
+} from "@/lib/pdv-produtos-a-cadastrar"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -94,6 +114,10 @@ type CartLine = {
   qty: number
   discountPct: number
   detail?: LineDetail
+  /** Item avulso (INSERT): não baixa estoque; alimenta a fila "Produtos a cadastrar". */
+  isAvulso?: boolean
+  custoUnitario?: number | null
+  codigoAvulso?: string | null
 }
 
 type DraftData = {
@@ -133,7 +157,7 @@ function formaLabel(f: FormaPagamento, parcelas: number): string {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
-  const { inventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
+  const { inventory, setInventory, caixa, finalizeSaleTransaction, getSaldoCreditoCliente } = useOperationsStore()
   const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
   const { pdvParams } = useStoreSettings()
   const { toast } = useToast()
@@ -182,6 +206,21 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const [tipoVenda, setTipoVenda] = useState<TipoVenda>("comum")
   const [observacaoGeral, setObservacaoGeral] = useState("")
   const [helpOpen, setHelpOpen] = useState(false)
+
+  // ── Item avulso + venda em espera (paridade com Clássico/Assistência) ──────
+  const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
+  const [showVendaEsperaModal, setShowVendaEsperaModal] = useState(false)
+  const [heldRefresh, setHeldRefresh] = useState(0)
+  const terminalIdForHold = useMemo(
+    () => readSelectedTerminal(storeId)?.id ?? "default",
+    [storeId],
+  )
+  const heldSales = useMemo(
+    () => getHeldSales(storeId, terminalIdForHold),
+    // heldRefresh força releitura do localStorage após guardar/retomar/descartar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [storeId, terminalIdForHold, heldRefresh],
+  )
 
   // ── Catálogo ──────────────────────────────────────────────────────────────
   const products = useMemo((): PdvCatalogProduct[] => {
@@ -235,7 +274,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       if (!raw) return
       const draft = JSON.parse(raw) as DraftData
       const validCart = (draft.cart ?? []).filter((l) =>
-        inventory.some((i) => i.id === l.inventoryId),
+        isAvulsoSaleLine(l.inventoryId) || inventory.some((i) => i.id === l.inventoryId),
       )
       if (validCart.length > 0) {
         setCart(validCart)
@@ -282,13 +321,20 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      // Deixa qualquer combo Alt+_ passar (ex.: Alt+L → Alta Legibilidade global),
+      // mesmo padrão do Supermercado/Assistência — atalho global nunca é engolido.
+      if (e.altKey) return
+      // Toda flag de modal entra no guard — evita atalho disparar com diálogo aberto.
+      const anyModalOpen =
+        isPaymentOpen || cupomOpen || helpOpen || showItemAvulsoModal || showVendaEsperaModal
       switch (e.key) {
         case "F1":
           e.preventDefault()
-          if (!isPaymentOpen && !cupomOpen && !helpOpen) handleClickFinalize()
+          if (!anyModalOpen) handleClickFinalize()
           break
         case "F2":
           e.preventDefault()
+          if (anyModalOpen) break
           if (selectedCliente) {
             setSelectedCliente(null)
             setClienteQuery("")
@@ -301,7 +347,17 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           break
         case "F3":
           e.preventDefault()
-          productInputRef.current?.focus()
+          if (!anyModalOpen) productInputRef.current?.focus()
+          break
+        case "Insert":
+          // Item Avulso — venda de balcão sem cadastro (igual Clássico/Assistência).
+          e.preventDefault()
+          if (!anyModalOpen) setShowItemAvulsoModal(true)
+          break
+        case "F7":
+          // Venda em espera (suspender/retomar) — mesmo atalho dos PDVs ativos.
+          e.preventDefault()
+          if (!isPaymentOpen && !cupomOpen && !helpOpen) setShowVendaEsperaModal(true)
           break
         case "End":
           e.preventDefault()
@@ -313,7 +369,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen],
+    [selectedCliente, isPaymentOpen, cupomOpen, helpOpen, showItemAvulsoModal, showVendaEsperaModal],
   )
 
   useEffect(() => {
@@ -391,6 +447,126 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setCart((prev) => prev.map((l) => l.lineId === lineId ? { ...l, discountPct: clamped } : l))
   }
 
+  // ── Item avulso (INSERT) ──────────────────────────────────────────────────
+  // Cria uma linha com `inventoryId` virtual (`__avulso__…`) — `isVirtualSaleLine`
+  // faz o motor da venda pular a baixa de estoque. Descrição/valor/qtd/custo/código
+  // vêm do modal compartilhado (mesma implementação do Clássico/Assistência).
+  const addItemAvulso = useCallback((payload: ItemAvulsoPayload) => {
+    const lineId = newPdvLineId("avulso")
+    const quantity = Math.max(1, Math.round(payload.quantity))
+    const price = Math.max(0, Math.round(payload.unitPrice * 100) / 100)
+    const custoUnitario =
+      payload.custoUnitario !== null && payload.custoUnitario >= 0
+        ? Math.round(payload.custoUnitario * 100) / 100
+        : null
+    setCart((prev) => [
+      ...prev,
+      {
+        lineId,
+        inventoryId: avulsoInventoryId(lineId),
+        codigo: payload.codigo ?? "",
+        name: payload.description,
+        unid: "UN",
+        price,
+        qty: quantity,
+        discountPct: 0,
+        isAvulso: true,
+        custoUnitario,
+        codigoAvulso: payload.codigo,
+      },
+    ])
+    setShowItemAvulsoModal(false)
+    appendAuditLog({
+      action: "pdv_item_avulso_adicionado",
+      userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
+      detail: `${payload.description} · ${quantity}x ${brl(price)}${custoUnitario !== null ? ` · custo ${brl(custoUnitario)}` : " · custo n/i"}`,
+    })
+    setTimeout(() => productInputRef.current?.focus(), 50)
+  }, [empresaDocumentos.nomeFantasia])
+
+  // ── Venda em espera (F7) ──────────────────────────────────────────────────
+  function handleHoldSale() {
+    if (cart.length === 0) return
+    const held: HeldSale = {
+      id: newHoldId(),
+      label: nextHoldLabel(heldSales),
+      savedAt: new Date().toISOString(),
+      items: cart.map((l) => ({
+        lineId: l.lineId,
+        inventoryId: l.inventoryId,
+        name: l.name,
+        price: l.price,
+        quantity: l.qty,
+        isAvulso: l.isAvulso,
+        custoUnitario: l.custoUnitario,
+        codigoAvulso: l.codigoAvulso,
+        discountPct: l.discountPct,
+        detail: l.detail,
+      })),
+      customer: selectedCliente
+        ? {
+            id: selectedCliente.id,
+            name: selectedCliente.name,
+            cpf: selectedCliente.document ?? undefined,
+            phone: selectedCliente.phone ?? undefined,
+          }
+        : null,
+      discountReais,
+      pdvType: "venda-completa",
+    }
+    saveHeldSale(storeId, terminalIdForHold, held)
+    setCart([])
+    setSelectedCliente(null)
+    setClienteQuery("")
+    setDiscountReais(0)
+    setEnderecoEntrega(EMPTY_ENDERECO)
+    setShowEnderecoForm(false)
+    setTipoVenda("comum")
+    setObservacaoGeral("")
+    setExpandedLineId(null)
+    setHeldRefresh((n) => n + 1)
+    toast({ title: "Venda em espera", description: `${held.label} guardada.` })
+  }
+
+  function handleResumeSale(sale: HeldSale) {
+    setCart(
+      sale.items.map((i) => {
+        const inv = inventory.find((x) => x.id === i.inventoryId)
+        return {
+          lineId: i.lineId,
+          inventoryId: i.inventoryId,
+          codigo: i.codigoAvulso ?? inv?.codigo ?? inv?.sku ?? "",
+          name: i.name,
+          unid: i.vendaPorPeso ? "KG" : "UN",
+          price: i.price,
+          qty: i.quantity,
+          discountPct: i.discountPct ?? 0,
+          detail: i.detail,
+          isAvulso: i.isAvulso,
+          custoUnitario: i.custoUnitario,
+          codigoAvulso: i.codigoAvulso,
+        }
+      }),
+    )
+    if (sale.customer) {
+      setSelectedCliente({
+        id: sale.customer.id,
+        name: sale.customer.name,
+        phone: sale.customer.phone ?? null,
+        document: sale.customer.cpf ?? null,
+      })
+    }
+    setDiscountReais(sale.discountReais ?? 0)
+    removeHeldSale(storeId, terminalIdForHold, sale.id)
+    setHeldRefresh((n) => n + 1)
+    toast({ title: "Venda retomada", description: `${sale.label} carregada no carrinho.` })
+  }
+
+  function handleDiscardHold(id: string) {
+    removeHeldSale(storeId, terminalIdForHold, id)
+    setHeldRefresh((n) => n + 1)
+  }
+
   // ── Validações e abertura do modal ────────────────────────────────────────
   function handleClickFinalize() {
     if (!selectedCliente) {
@@ -427,12 +603,14 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
     setIsProcessing(true)
     try {
       const saleLines = cart
-        .filter((l) => inventory.some((i) => i.id === l.inventoryId))
+        .filter((l) => isAvulsoSaleLine(l.inventoryId) || inventory.some((i) => i.id === l.inventoryId))
         .map((l) => ({
           inventoryId: l.inventoryId,
           quantity: l.qty,
           unitPrice: l.price * (1 - l.discountPct / 100),
           name: l.name,
+          ...(l.isAvulso ? { isAvulso: true as const } : {}),
+          ...(l.custoUnitario !== undefined ? { custoUnitario: l.custoUnitario } : {}),
         }))
 
       const paymentBreakdown = {
@@ -461,6 +639,32 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       if (!result.ok) {
         toast({ title: "Falha ao registrar venda", description: result.reason, variant: "destructive" })
         return
+      }
+
+      // Fila "Produtos a cadastrar": itens avulsos vendidos → revisão posterior.
+      // Não toca estoque/venda/caixa e nunca lança (venda já concluída).
+      try {
+        const avulsosVendidos = cart.filter((l) => l.isAvulso)
+        if (avulsosVendidos.length > 0) {
+          enfileirarProdutosACadastrar(
+            storeId,
+            construirProdutosACadastrar({
+              storeId,
+              vendaId: result.saleId,
+              operador: operatorLabel,
+              itens: avulsosVendidos.map((l) => ({
+                lineId: l.lineId,
+                nome: l.name,
+                codigo: l.codigoAvulso,
+                precoVenda: l.price,
+                custo: l.custoUnitario,
+                quantidade: l.qty,
+              })),
+            }),
+          )
+        }
+      } catch {
+        /* fila é auxiliar — não interrompe o pós-venda */
       }
 
       if (formaPagamento === "a_prazo") {
@@ -619,7 +823,9 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      <PdvPendingSyncBadge className="mx-3 mt-2" />
+      {/* Barra de caixa compartilhada: abertura/fechamento/sangria/suprimento +
+          status visual + badge de pendências (paridade com Clássico/Assistência). */}
+      <CaixaStatusBar variant="pdv" />
 
       {/* ── Body: esquerda scrollável + sidebar direita fixa ── */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -791,15 +997,45 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     </Badge>
                   )}
                 </div>
-                {cart.length > 0 && (
-                  <button
+                <div className="flex items-center gap-1.5">
+                  <Button
                     type="button"
-                    className="text-xs text-muted-foreground transition-colors hover:text-destructive"
-                    onClick={() => { setCart([]); setExpandedLineId(null) }}
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs"
+                    onClick={() => setShowItemAvulsoModal(true)}
+                    title="Item avulso — venda de balcão sem cadastro [INS]"
                   >
-                    Limpar tudo
-                  </button>
-                )}
+                    <PlusCircle className="h-3.5 w-3.5" />
+                    Item avulso
+                    <kbd className="ml-0.5 rounded border border-border bg-muted px-1 py-0.5 font-mono text-[9px] text-muted-foreground">INS</kbd>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 px-2 text-xs"
+                    onClick={() => setShowVendaEsperaModal(true)}
+                    title="Vendas em espera — suspender/retomar [F7]"
+                  >
+                    <PauseCircle className="h-3.5 w-3.5" />
+                    Em espera
+                    {heldSales.length > 0 && (
+                      <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[9px] tabular-nums">
+                        {heldSales.length}
+                      </Badge>
+                    )}
+                  </Button>
+                  {cart.length > 0 && (
+                    <button
+                      type="button"
+                      className="ml-1 text-xs text-muted-foreground transition-colors hover:text-destructive"
+                      onClick={() => { setCart([]); setExpandedLineId(null) }}
+                    >
+                      Limpar tudo
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Busca de produto */}
@@ -812,15 +1048,27 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                   onChange={(e) => { setProductQuery(e.target.value); setShowProductDropdown(true) }}
                   onFocus={() => { if (productQuery.trim()) setShowProductDropdown(true) }}
                   onBlur={() => setTimeout(() => setShowProductDropdown(false), 200)}
-                  onKeyDown={(e) => {
+                  onKeyDown={async (e) => {
                     if (e.key === "Enter") {
                       e.preventDefault()
-                      const exact = findPdvProductByScan(productQuery.trim(), products)
-                      if (exact) {
-                        addToCart(exact)
-                      } else if (filteredProducts.length > 0) {
-                        addToCart(filteredProducts[0]!)
+                      const raw = productQuery.trim()
+                      if (!raw) return
+                      const exact = findPdvProductByScan(raw, products)
+                      if (exact) { addToCart(exact); return }
+                      if (filteredProducts.length > 0) { addToCart(filteredProducts[0]!); return }
+                      // Miss local → catálogo INTEIRO da loja (snapshot pode estar defasado),
+                      // igual ao PDV Assistência/Clássico. Isolamento multi-loja no servidor.
+                      const remote = await lookupPdvScanRemote({ code: raw, storeId, setInventory })
+                      if (remote.kind === "single") { addToCart(remote.product); return }
+                      if (remote.kind === "multiple") {
+                        toast({ title: "Vários produtos", description: `Mais de um item para "${raw}". Refine a busca.` })
+                        return
                       }
+                      toast({
+                        title: "Produto não encontrado",
+                        description: `Nada encontrado nesta loja para o código: ${raw}`,
+                        variant: "destructive",
+                      })
                     }
                     if (e.key === "Escape") { setShowProductDropdown(false); setProductQuery("") }
                   }}
@@ -1355,6 +1603,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     { key: "F1", label: "Finalizar venda" },
                     { key: "F2", label: "Buscar / limpar cliente" },
                     { key: "F3", label: "Foco no produto" },
+                    { key: "INS", label: "Item avulso" },
+                    { key: "F7", label: "Vendas em espera" },
                     { key: "↵",  label: "Bipe / 1º resultado" },
                   ] as const
                 ).map(({ key, label }) => (
@@ -1393,6 +1643,25 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Item avulso (INSERT) ── */}
+      <ItemAvulsoModal
+        open={showItemAvulsoModal}
+        onOpenChange={setShowItemAvulsoModal}
+        onConfirm={addItemAvulso}
+        checkCodigoExistente={(codigo) => acharProdutoPorCodigoExato(products, codigo)}
+      />
+
+      {/* ── Vendas em espera (F7) ── */}
+      <VendaEsperaModal
+        open={showVendaEsperaModal}
+        onOpenChange={setShowVendaEsperaModal}
+        heldSales={heldSales}
+        cartEmpty={cart.length === 0}
+        onHold={handleHoldSale}
+        onResume={handleResumeSale}
+        onDiscard={handleDiscardHold}
+      />
 
       {/* ── Cupom não fiscal ── */}
       {cupomData && (
