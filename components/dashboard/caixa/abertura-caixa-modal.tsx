@@ -24,6 +24,7 @@ import {
 import { useCaixa } from "./caixa-provider"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useTerminalAtivo } from "@/lib/pdv-terminal"
+import { setPdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useToast } from "@/hooks/use-toast"
 import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
@@ -89,6 +90,10 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
       const agora = new Date()
       const obsTrim = observacao.trim()
 
+      // Fonte oficial de EXIBIÇÃO do operador (PDV/caixa/comprovantes). Espelha o
+      // que será gravado em `SessaoCaixa.operador`. Vazio → cai para a sessão.
+      setPdvOperadorNome(lojaAtivaId, nomeOp)
+
       appendAuditLog({
         action: "caixa_aberto",
         userLabel: `${nomeLoja} (sessão local)`,
@@ -118,7 +123,7 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
             const data = (await res.json()) as {
               sessaoId?: string
               alreadyOpen?: boolean
-              sessao?: { saldoInicial?: number }
+              sessao?: { saldoInicial?: number; operador?: string }
             }
             if (data.sessaoId) {
               sid = data.sessaoId
@@ -130,6 +135,10 @@ export function AberturaCaixaModal({ isOpen, onClose }: AberturaCaixaModalProps)
                 const saldoExistente =
                   typeof data.sessao?.saldoInicial === "number" ? data.sessao.saldoInicial : valor
                 abrirCaixa(saldoExistente)
+                // Exibe o operador que realmente abriu a sessão (não o digitado agora).
+                if (data.sessao?.operador?.trim()) {
+                  setPdvOperadorNome(lojaAtivaId, data.sessao.operador)
+                }
                 toast({
                   title: "Caixa já estava aberto",
                   description: "Recuperamos a sessão atual do servidor — use este caixa.",

@@ -64,7 +64,8 @@ import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { useSession } from "next-auth/react"
-import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
+import { operatorDisplayName } from "@/lib/pdv-operator-label"
+import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
@@ -1410,7 +1411,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   )
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
-  const operatorLabel = pdvOperatorReceiptLabel(session)
+  const operadorNomeAbertura = usePdvOperadorNome((lojaAtivaId ?? "").trim())
+  const operatorLabel = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
   const { caixa } = useCaixa()
   const storeIdKey = useMemo(
     () => (lojaAtivaId ?? "").trim(),
@@ -2396,7 +2398,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
             <div className="hidden items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 sm:flex">
               <User className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">
-                Op: <span className="font-semibold tabular-nums text-foreground">{cashierId.slice(0, 8)}</span>
+                Op: <span className="font-semibold text-foreground">{operatorLabel}</span>
               </span>
             </div>
           ) : null}

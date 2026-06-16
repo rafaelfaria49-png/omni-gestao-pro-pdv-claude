@@ -25,10 +25,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import { useSession } from "next-auth/react"
 import { useCaixa } from "./caixa-provider"
 import { ensureLedger, useOperationsStore } from "@/lib/operations-store"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { operatorDisplayName } from "@/lib/pdv-operator-label"
+import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { useTerminalAtivo } from "@/lib/pdv-terminal"
 import { useToast } from "@/hooks/use-toast"
 import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
@@ -53,6 +56,8 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const { caixa, fecharCaixa, getSaldoAtual, sessaoId } = useCaixa()
   const { dailyLedger, sales } = useOperationsStore()
   const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
+  const { data: session } = useSession()
+  const operadorNomeAbertura = usePdvOperadorNome(lojaAtivaId)
   const { terminal } = useTerminalAtivo(lojaAtivaId)
   // Terminal ativo do device (mesmo em que o caixa foi aberto) — Fase 3: mostrar
   // o PDV no comprovante/relatório de fechamento. "Sem terminal" para sessões legadas.
@@ -136,14 +141,18 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     opsCarregando,
   ])
 
-  // Operadores (terminal) que registraram vendas na sessão — identidade local de auditoria.
+  // Operador da sessão para o comprovante — nome LEGÍVEL (fonte única: abertura do
+  // caixa → sessão → e-mail; nunca o `cashierId` técnico). O `cashierId` permanece
+  // em cada venda para auditoria. Mostra o operador quando houve venda na sessão;
+  // mantém vazio (→ "—") em sessão sem vendas para não inventar dado.
+  const operadorDisplay = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
   const operadoresSessao = useMemo(() => {
-    const set = new Set<string>()
-    for (const s of filterSalesDaSessao(sales, { sessaoId, dataAbertura: caixa.dataAbertura })) {
-      if (s.cashierId) set.add(s.cashierId.slice(0, 8))
-    }
-    return Array.from(set)
-  }, [sales, sessaoId, caixa.dataAbertura])
+    const houveVenda = filterSalesDaSessao(sales, {
+      sessaoId,
+      dataAbertura: caixa.dataAbertura,
+    }).some((s) => !!s.cashierId)
+    return houveVenda && operadorDisplay ? [operadorDisplay] : []
+  }, [sales, sessaoId, caixa.dataAbertura, operadorDisplay])
 
   // Receita total do dia (faturamento) — vendas líquidas + serviços recebidos.
   // Fonte única (helper) para casar com a reimpressão do histórico.

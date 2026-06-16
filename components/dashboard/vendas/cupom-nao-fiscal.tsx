@@ -12,6 +12,7 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
+import { sanitizeOperatorLabel } from "@/lib/pdv-operator-label"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,8 @@ function fmtDate(iso: string) {
 }
 
 function buildTexto(d: CupomData): string {
+  // Guarda central de comprovante: nunca imprime id técnico como operador.
+  const operador = sanitizeOperatorLabel(d.operador)
   const lines: string[] = []
   lines.push("================================")
   lines.push(d.lojaNome.toUpperCase())
@@ -85,7 +88,7 @@ function buildTexto(d: CupomData): string {
   lines.push("================================")
   lines.push(`Venda:    ${d.numeroPedido}`)
   lines.push(`Data:     ${fmtDate(d.at)}`)
-  if (d.operador) lines.push(`Operador: ${d.operador}`)
+  if (operador) lines.push(`Operador: ${operador}`)
   if (d.clienteNome) lines.push(`Cliente:  ${d.clienteNome}`)
   if (d.clienteCpf) lines.push(`CPF:      ${d.clienteCpf}`)
   if (d.tipoVenda) lines.push(`Tipo:     ${d.tipoVenda}`)
@@ -116,6 +119,7 @@ function buildTexto(d: CupomData): string {
 
 function buildHtml(d: CupomData): string {
   const esc = escapeHtml
+  const operador = sanitizeOperatorLabel(d.operador)
   const isCancelada = d.status === "cancelada"
 
   const itensHtml = d.itens
@@ -149,7 +153,7 @@ function buildHtml(d: CupomData): string {
     <div style="font-size:10px">
       <div style="display:flex;justify-content:space-between"><span>Venda:</span><span><b>${esc(d.numeroPedido)}</b></span></div>
       <div style="display:flex;justify-content:space-between"><span>Data:</span><span>${esc(fmtDate(d.at))}</span></div>
-      ${d.operador ? `<div style="display:flex;justify-content:space-between"><span>Operador:</span><span>${esc(d.operador)}</span></div>` : ""}
+      ${operador ? `<div style="display:flex;justify-content:space-between"><span>Operador:</span><span>${esc(operador)}</span></div>` : ""}
       ${d.clienteNome ? `<div style="display:flex;justify-content:space-between"><span>Cliente:</span><span>${esc(d.clienteNome)}</span></div>` : ""}
       ${d.clienteCpf ? `<div style="display:flex;justify-content:space-between"><span>CPF:</span><span>${esc(d.clienteCpf)}</span></div>` : ""}
       ${d.tipoVenda ? `<div style="display:flex;justify-content:space-between"><span>Tipo:</span><span>${esc(d.tipoVenda)}</span></div>` : ""}
@@ -186,6 +190,7 @@ function buildHtml(d: CupomData): string {
 export function CupomNaoFiscal({ isOpen, onClose, data }: CupomNaoFiscalProps) {
   const { toast } = useToast()
   const isCancelada = data.status === "cancelada"
+  const operador = sanitizeOperatorLabel(data.operador)
 
   const handleImprimir = useCallback(() => {
     openThermalHtmlPrint(buildHtml(data), `Cupom ${data.numeroPedido}`)
@@ -244,10 +249,10 @@ export function CupomNaoFiscal({ isOpen, onClose, data }: CupomNaoFiscalProps) {
                   <span className="text-muted-foreground">Data:</span>
                   <span>{fmtDate(data.at)}</span>
                 </div>
-                {data.operador && (
+                {operador && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Operador:</span>
-                    <span>{data.operador}</span>
+                    <span>{operador}</span>
                   </div>
                 )}
                 {data.clienteNome && (

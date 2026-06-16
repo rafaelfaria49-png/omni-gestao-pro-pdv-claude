@@ -54,7 +54,8 @@ import { PdvPainelLateralTerminal, PdvVisorTotal } from "./painel-total"
 import { PdvTabelaItemLinha, PdvTabelaItens } from "./tabela-itens"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { useSession } from "next-auth/react"
-import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
+import { operatorDisplayName } from "@/lib/pdv-operator-label"
+import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { avulsoInventoryId, isAvulsoSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
@@ -158,7 +159,8 @@ export function PdvSupermercado({
   const lojaKey = lojaAtivaId ?? opsLojaIdFromStorageKey(opsStorageKey)
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
-  const operatorLabel = pdvOperatorReceiptLabel(session)
+  const operadorNomeAbertura = usePdvOperadorNome(lojaKey)
+  const operatorLabel = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
 
   const productInputRef = useRef<HTMLInputElement | null>(null)
   const listEndRef = useRef<HTMLDivElement | null>(null)

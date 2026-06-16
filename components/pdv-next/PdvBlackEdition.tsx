@@ -9,7 +9,10 @@ import {
   type KeyboardEvent,
 } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { operatorDisplayName } from "@/lib/pdv-operator-label"
+import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { useConfigEmpresa } from "@/lib/config-empresa"
 import { useOperationsStore } from "@/lib/operations-store"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
@@ -94,10 +97,11 @@ export function PdvBlackEdition() {
     return config?.empresa.nomeFantasia || config?.empresa.razaoSocial || "OmniGestão PDV"
   }, [lojaAtivaRaw, config])
 
-  const operadorNome = useMemo(() => {
-    const razao = (lojaAtivaRaw?.razaoSocial || config?.empresa.razaoSocial || "").trim()
-    return razao ? razao.split(" ")[0] : "Operador"
-  }, [lojaAtivaRaw, config])
+  // Operador para exibição e auditoria (cashierId): fonte única — abertura do
+  // caixa → sessão autenticada → e-mail → "Operador não identificado". Nunca id.
+  const { data: session } = useSession()
+  const operadorNomeAbertura = usePdvOperadorNome((lojaAtivaId ?? "").trim())
+  const operadorNome = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
 
   // ── Carrinho ───────────────────────────────────────────────────────────────
   const [cartRows, setCartRows] = useState<PdvBlackCartRow[]>([])

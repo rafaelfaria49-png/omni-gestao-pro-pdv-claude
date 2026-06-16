@@ -33,7 +33,8 @@ import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { useSession } from "next-auth/react"
-import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
+import { operatorDisplayName } from "@/lib/pdv-operator-label"
+import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { PdvPendingSyncBadge } from "@/components/dashboard/vendas/pdv-pending-sync-badge"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -138,7 +139,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   const { toast } = useToast()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
-  const operatorLabel = pdvOperatorReceiptLabel(session)
+  const operadorNomeAbertura = usePdvOperadorNome((lojaAtivaId ?? "").trim())
+  const operatorLabel = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
 
   const storeId = useMemo(
     () => (lojaAtivaId ?? "").trim(),
@@ -585,8 +587,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
               </p>
               <p className="truncate text-[11px] text-muted-foreground">
                 {selectedCliente
-                  ? `${selectedCliente.name} · Op: ${cashierId.slice(-6)}`
-                  : `Op: ${cashierId.slice(-6)} — Identifique o cliente`}
+                  ? `${selectedCliente.name} · Op: ${operatorLabel}`
+                  : `Op: ${operatorLabel} — Identifique o cliente`}
               </p>
             </div>
           </div>
@@ -1099,7 +1101,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                   </div>
                   <div className="flex items-center justify-between rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground">
                     <span>Operador</span>
-                    <span className="font-mono font-medium text-foreground">{cashierId.slice(-8)}</span>
+                    <span className="font-medium text-foreground">{operatorLabel}</span>
                   </div>
                 </div>
               </div>
@@ -1179,7 +1181,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Operador</span>
-                  <span className="font-mono font-medium text-foreground">{cashierId.slice(-8)}</span>
+                  <span className="font-medium text-foreground">{operatorLabel}</span>
                 </div>
                 {cart.length > 0 && (
                   <div className="flex items-center justify-between">
@@ -1386,7 +1388,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           </div>
           <div className="border-t border-border px-5 py-2.5">
             <p className="text-[11px] text-muted-foreground">
-              Operador: <span className="font-mono font-medium text-foreground">{cashierId}</span>
+              Operador: <span className="font-medium text-foreground">{operatorLabel}</span>
             </p>
           </div>
         </DialogContent>

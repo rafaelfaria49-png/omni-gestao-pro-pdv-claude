@@ -71,6 +71,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useLojaAtiva } from "@/lib/loja-ativa"
+import { sanitizeOperatorLabel } from "@/lib/pdv-operator-label"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { useToast } from "@/hooks/use-toast"
@@ -256,7 +257,11 @@ function saleRecordToVendaItem(s: SaleRecord): VendaItem {
     cliente: s.customerName?.trim() || "—",
     total: s.total,
     status: "concluida",
-    operador: s.cashierId ?? null,
+    // Operador legível: o `cashierId` salvo na venda é exibido SOMENTE quando é um
+    // nome (ex.: pdv-next). Se for id técnico (UUID/timestamp-hash) → oculta ("—").
+    // Filtro puro: o id permanece no SaleRecord para auditoria; nunca inventamos
+    // nem substituímos pelo operador atual.
+    operador: sanitizeOperatorLabel(s.cashierId) || null,
     terminalId: s.terminalId ?? null,
     formaPagamento: formas.length > 0 ? formas.join(" + ") : "—",
     quantidadeItens: s.lines.reduce((sum, l) => sum + l.quantity, 0),
@@ -400,7 +405,12 @@ export function VendasArquivoGeral() {
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = (await res.json()) as ApiResponse
-      setVendas(data.vendas ?? [])
+      // Filtra id técnico que possa ter sido persistido em `Venda.operador`
+      // (fallback de `cashierId` quando a venda foi gravada sem sessão). Nome
+      // legível é mantido; UUID/timestamp-hash → null ("—"). Nunca substitui.
+      setVendas(
+        (data.vendas ?? []).map((v) => ({ ...v, operador: sanitizeOperatorLabel(v.operador) || null })),
+      )
       setTotal(data.total ?? 0)
       setKpis(data.kpis ?? { totalVendas: 0, faturamento: 0, cancelamentos: 0, devolvidas: 0, concluidas: 0, ticketMedio: 0 })
       if (Array.isArray(data.terminais)) setTerminais(data.terminais)
@@ -632,7 +642,10 @@ export function VendasArquivoGeral() {
       })
       const data = await res.json()
       if (data.ok) {
-        setDetalhe(data.venda)
+        // Sanitiza o operador vindo do banco (reimpressão de cupom + detalhe usam
+        // este valor). Id técnico → oculto; nome legível preservado. Sem substituição.
+        const vendaDetalhe = data.venda as VendaDetalhe
+        setDetalhe({ ...vendaDetalhe, operador: sanitizeOperatorLabel(vendaDetalhe.operador) || null })
         // Busca saldo atual em haver se a venda tem devoluções com crédito e CPF do cliente
         const venda = data.venda as VendaDetalhe
         if (venda.clienteCpf) {
@@ -1527,7 +1540,7 @@ export function VendasArquivoGeral() {
                     )}
                     <div>
                       <p className="text-xs text-muted-foreground">Operador</p>
-                      <p className="font-medium text-foreground">{detalhePendenteLocal.cashierId ?? "—"}</p>
+                      <p className="font-medium text-foreground">{sanitizeOperatorLabel(detalhePendenteLocal.cashierId) || "—"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Terminal</p>

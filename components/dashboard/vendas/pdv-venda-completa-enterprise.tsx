@@ -37,6 +37,9 @@ import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import { useStoreSettings } from "@/lib/store-settings-provider"
 import { useOperationsStore } from "@/lib/operations-store"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
+import { useSession } from "next-auth/react"
+import { operatorDisplayName } from "@/lib/pdv-operator-label"
+import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import {
   newPdvLineId,
   type PdvCatalogProduct,
@@ -150,10 +153,13 @@ export function PdvVendaCompletaEnterprise({
   const { pdvParams } = useStoreSettings()
   const { toast } = useToast()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
+  const { data: session } = useSession()
   const storeId = useMemo(
     () => (lojaAtivaId ?? "").trim(),
     [lojaAtivaId]
   )
+  const operadorNomeAbertura = usePdvOperadorNome(storeId)
+  const operatorLabel = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
 
   // ── Customer ──────────────────────────────────────────────────────────────
   const [clienteQuery, setClienteQuery] = useState("")
@@ -554,7 +560,7 @@ export function PdvVendaCompletaEnterprise({
       lojaNome: storeDisplayName,
       clienteNome: selectedCliente?.name ?? null,
       clienteCpf: selectedCliente?.document ?? null,
-      operador: cashierId,
+      operador: operatorLabel,
       tipoVenda: tipoVenda !== "comum" ? tipoVendaLabel : undefined,
       observacaoGeral: observacaoGeral || undefined,
       itens: cart.map((l) => ({
@@ -631,8 +637,8 @@ export function PdvVendaCompletaEnterprise({
               </p>
               <p className="truncate text-[11px] text-muted-foreground">
                 {selectedCliente
-                  ? `${selectedCliente.name} · Op: ${cashierId.slice(-6)}`
-                  : `Op: ${cashierId.slice(-6)} — Identifique o cliente`}
+                  ? `${selectedCliente.name} · Op: ${operatorLabel}`
+                  : `Op: ${operatorLabel} — Identifique o cliente`}
               </p>
             </div>
           </div>
@@ -1246,7 +1252,7 @@ export function PdvVendaCompletaEnterprise({
 
             <div className="flex items-center justify-between rounded-lg border border-border bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground">
               <span>Operador</span>
-              <span className="font-mono font-medium text-foreground">{cashierId.slice(-8)}</span>
+              <span className="font-medium text-foreground">{operatorLabel}</span>
             </div>
           </div>
         </div>
@@ -1449,7 +1455,7 @@ export function PdvVendaCompletaEnterprise({
           <div className="border-t border-border px-5 py-2.5">
             <p className="text-[11px] text-muted-foreground">
               Operador:{" "}
-              <span className="font-mono font-medium text-foreground">{cashierId}</span>
+              <span className="font-medium text-foreground">{operatorLabel}</span>
               {" · "}
               Pressione{" "}
               <kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">END</kbd>{" "}

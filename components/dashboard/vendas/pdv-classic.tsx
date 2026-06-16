@@ -41,7 +41,8 @@ import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
 import { useSession } from "next-auth/react"
-import { pdvOperatorReceiptLabel } from "@/lib/pdv-operator-label"
+import { operatorDisplayName } from "@/lib/pdv-operator-label"
+import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { CaixaStatusBar } from "../caixa/caixa-status-bar"
 // useCaixa removido no Lote 4 — sangria/suprimento vivem no CaixaStatusBar.
 import { configPadrao, useConfigEmpresa } from "@/lib/config-empresa"
@@ -206,7 +207,8 @@ export function PdvClassic({
   const { inventory, setInventory, finalizeSaleTransaction, getSaldoCreditoCliente, ordens } = useOperationsStore()
   const cashierId = useMemo(() => getOrCreatePdvOperatorId(), [])
   const { data: session } = useSession()
-  const operatorLabel = pdvOperatorReceiptLabel(session)
+  const operadorNomeAbertura = usePdvOperadorNome(lojaKey)
+  const operatorLabel = operatorDisplayName({ aberturaNome: operadorNomeAbertura, session })
   const { toast } = useToast()
   const [searchTerm, setSearchTerm] = useState("")
   const [customerSearch, setCustomerSearch] = useState("")
