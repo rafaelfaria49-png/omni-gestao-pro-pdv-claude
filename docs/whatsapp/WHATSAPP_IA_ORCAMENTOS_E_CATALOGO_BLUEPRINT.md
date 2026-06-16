@@ -5,8 +5,15 @@
 > **Data:** 14/06/2026 · **Modelo:** Opus 4.8 (Claude Code)
 > **Escopo:** desenho da automação de **orçamentos, catálogo, estoque, fornecedores e
 > atendimento assistido** via WhatsApp IA.
-> **Status de execução:** ⛔ **Sem código.** Sem schema. Sem migration. Sem envio real.
-> Documento sujeito a **Gate humano** antes de qualquer fase de implementação.
+> **Status de execução (desta entrega F1):** ⛔ **Sem código.** Sem schema. Sem migration. Sem
+> envio real. Documento sujeito a **Gate humano** antes de qualquer fase de implementação.
+
+> **Progresso de execução (atualizado 15/06/2026):** F1 ✅ blueprint (`8a35ef1`) · **F2 ✅**
+> classificação de intenção (`0fd7abf`) · **F3 ✅** catálogo/estoque/fotos (`545c0e0`) · **F4 ✅**
+> orçamento de assistência assistido (`d82d83b`). **Tudo assistido/somente leitura — nada enviado
+> automaticamente, sem criar OS/cobrança/cotação.** Próximo: **F5 Fornecedores/Cotação** — primeiro
+> schema novo, **exige Gate (ADR + schema review + multi-loja review)**. Estado oficial:
+> [`docs/ai/CURRENT_STATUS.md`](../ai/CURRENT_STATUS.md) → seção "WhatsApp IA".
 
 ---
 
