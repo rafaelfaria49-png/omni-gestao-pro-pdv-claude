@@ -258,6 +258,7 @@ export async function GET(
         pagamentos: extractPayments(venda.payload),
         itens: venda.itens.map((it) => ({
           id: it.id,
+          inventoryId: it.inventoryId,
           nome: it.nome,
           quantidade: it.quantidade,
           precoUnitario: it.precoUnitario,

@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Receipt, User, CreditCard, Landmark, Package, ShieldCheck, FileText, Wallet,
   History, Loader2, AlertTriangle, CheckCircle2, XCircle, Clock, ArrowRight,
-  RotateCcw, Banknote, Info,
+  RotateCcw, Banknote, Info, Pencil, Plus, Trash2, Save, Search, Calculator,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -21,12 +21,19 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
+import { useToast } from "@/hooks/use-toast"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
+import { computeCorrecaoItensPlan, type CorrecaoLineInput } from "@/lib/vendas/correcao-itens-plan"
+import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
 
 // ── Tipos (espelham o GET enriquecido) ─────────────────────────────────────────
 
@@ -75,7 +82,7 @@ type VendaFull = {
   estoqueReposto?: boolean; estornoFinanceiro?: boolean
   paymentBreakdown: Partial<PaymentBreakdownFull> | null
   pagamentos: Array<{ label: string; valor: number }>
-  itens: Array<{ id: string; nome: string; quantidade: number; precoUnitario: number; lineTotal: number }>
+  itens: Array<{ id: string; inventoryId: string | null; nome: string; quantidade: number; precoUnitario: number; lineTotal: number }>
   correcoes: Correcao[]
   devolucoes: Devolucao[]
   clienteCompleto: ClienteCompleto | null
@@ -250,10 +257,36 @@ export function WorkspaceCorrecaoVenda({
   open: boolean
   onOpenChange: (o: boolean) => void
 }) {
+  const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [venda, setVenda] = useState<VendaFull | null>(null)
   const [tab, setTab] = useState<string>("resumo")
+
+  // ── Edição de produtos (F2) ────────────────────────────────────────────────
+  type DraftLine = { uid: string; inventoryId: string; nome: string; quantidade: number; precoUnitario: number; desconto: number; isAvulso: boolean }
+  const [editProdutos, setEditProdutos] = useState(false)
+  const [draft, setDraft] = useState<DraftLine[]>([])
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [motivo, setMotivo] = useState("")
+  const [pin, setPin] = useState("")
+  const [applying, setApplying] = useState(false)
+  // Busca de produto para adicionar/trocar
+  const [buscaProduto, setBuscaProduto] = useState("")
+  const [resultados, setResultados] = useState<Array<{ id: string; name: string; price: number; stock: number; sku: string | null }>>([])
+  const [buscando, setBuscando] = useState(false)
+  const [swapTarget, setSwapTarget] = useState<string | null>(null) // uid da linha a trocar; null = adicionar
+
+  const resetEdicao = useCallback(() => {
+    setEditProdutos(false)
+    setDraft([])
+    setShowConfirm(false)
+    setMotivo("")
+    setPin("")
+    setBuscaProduto("")
+    setResultados([])
+    setSwapTarget(null)
+  }, [])
 
   const load = useCallback(async () => {
     if (!vendaId) return
@@ -282,9 +315,10 @@ export function WorkspaceCorrecaoVenda({
   useEffect(() => {
     if (open && vendaId) {
       setTab("resumo")
+      resetEdicao()
       void load()
     }
-  }, [open, vendaId, load])
+  }, [open, vendaId, load, resetEdicao])
 
   const sf = venda?.statusFinanceiro ?? null
   const timeline = useMemo(() => (venda ? buildTimeline(venda) : []), [venda])
@@ -297,6 +331,111 @@ export function WorkspaceCorrecaoVenda({
       .map((k) => ({ key: k, label: PAYMENT_LABELS[k], valor: Number(pb[k]) || 0 }))
       .filter((r) => r.valor > 0)
   }, [venda])
+
+  // ── Edição de produtos: handlers ─────────────────────────────────────────────
+  const startEdit = useCallback(() => {
+    if (!venda) return
+    setDraft(
+      venda.itens.map((it, i) => {
+        const invId = it.inventoryId ?? it.id
+        return {
+          uid: `${it.id}-${i}`,
+          inventoryId: invId,
+          nome: it.nome,
+          quantidade: it.quantidade,
+          precoUnitario: it.precoUnitario,
+          desconto: 0,
+          isAvulso: invId.startsWith("__avulso__"),
+        }
+      }),
+    )
+    setEditProdutos(true)
+    setShowConfirm(false)
+    setMotivo("")
+    setPin("")
+  }, [venda])
+
+  const updateLine = useCallback((uid: string, patch: Partial<DraftLine>) => {
+    setDraft((cur) => cur.map((l) => (l.uid === uid ? { ...l, ...patch } : l)))
+  }, [])
+  const removeLine = useCallback((uid: string) => {
+    setDraft((cur) => cur.filter((l) => l.uid !== uid))
+  }, [])
+
+  const buscarProdutos = useCallback(async (q: string) => {
+    if (!q.trim()) { setResultados([]); return }
+    setBuscando(true)
+    try {
+      const res = await fetch(`/api/produtos?q=${encodeURIComponent(q.trim())}&activeOnly=1`, {
+        credentials: "include",
+        headers: { "x-assistec-loja-id": storeId },
+      })
+      const data = await res.json()
+      const list = Array.isArray(data.produtos) ? data.produtos : []
+      setResultados(list.slice(0, 25).map((p: Record<string, unknown>) => ({
+        id: String(p.id), name: String(p.name), price: Number(p.price) || 0, stock: Number(p.stock) || 0, sku: (p.sku as string) ?? null,
+      })))
+    } catch { setResultados([]) } finally { setBuscando(false) }
+  }, [storeId])
+
+  const pickProduto = useCallback((p: { id: string; name: string; price: number }) => {
+    if (swapTarget) {
+      updateLine(swapTarget, { inventoryId: p.id, nome: p.name, precoUnitario: p.price })
+      setSwapTarget(null)
+    } else {
+      setDraft((cur) => [...cur, { uid: `new-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, inventoryId: p.id, nome: p.name, quantidade: 1, precoUnitario: p.price, desconto: 0, isAvulso: false }])
+    }
+    setBuscaProduto("")
+    setResultados([])
+  }, [swapTarget, updateLine])
+
+  const addAvulso = useCallback(() => {
+    setDraft((cur) => [...cur, { uid: `av-${Date.now()}`, inventoryId: avulsoInventoryId(), nome: "Item avulso", quantidade: 1, precoUnitario: 0, desconto: 0, isAvulso: true }])
+  }, [])
+
+  // Plano de pré-visualização (reusa o MESMO planner puro do servidor).
+  const draftPlan = useMemo(() => {
+    if (!venda || !editProdutos) return null
+    const oldLines: CorrecaoLineInput[] = venda.itens.map((it) => ({
+      inventoryId: it.inventoryId ?? it.id, nome: it.nome, quantidade: it.quantidade, precoUnitario: it.precoUnitario,
+    }))
+    const newLines: CorrecaoLineInput[] = draft.map((l) => ({
+      inventoryId: l.inventoryId, nome: l.nome, quantidade: l.quantidade, precoUnitario: l.precoUnitario, desconto: l.desconto, isAvulso: l.isAvulso,
+    }))
+    return computeCorrecaoItensPlan({ oldLines, newLines, oldTotal: venda.total, oldBreakdown: venda.paymentBreakdown })
+  }, [venda, editProdutos, draft])
+
+  const aplicarCorrecaoItens = useCallback(async () => {
+    if (!venda || !draftPlan?.ok || !motivo.trim() || !pin.trim()) return
+    setApplying(true)
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(venda.id)}/corrigir-itens`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify({
+          motivo: motivo.trim(),
+          supervisorPin: pin.trim(),
+          expectedTotal: venda.total,
+          itens: draft.map((l) => ({ inventoryId: l.inventoryId, nome: l.nome, quantidade: l.quantidade, precoUnitario: l.precoUnitario, desconto: l.desconto, isAvulso: l.isAvulso })),
+        }),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        toast({ title: "Correção não aplicada", description: data.error ?? "Falha ao corrigir itens.", variant: "destructive" })
+        return
+      }
+      toast({ title: "Itens corrigidos", description: `Total ${fmtBrl(data.totalAnterior)} → ${fmtBrl(data.totalNovo)}.` })
+      resetEdicao()
+      await load()
+    } catch {
+      toast({ title: "Erro", description: "Falha de conexão ao aplicar correção.", variant: "destructive" })
+    } finally {
+      setApplying(false)
+    }
+  }, [venda, draftPlan, motivo, pin, draft, storeId, toast, resetEdicao, load])
+
+  const draftTotal = useMemo(() => draft.reduce((s, l) => s + Math.max(0, l.precoUnitario * l.quantidade - l.desconto), 0), [draft])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -515,39 +654,225 @@ export function WorkspaceCorrecaoVenda({
                 )}
               </TabsContent>
 
-              {/* 5 · PRODUTOS */}
-              <TabsContent value="produtos" className="mt-0">
-                {venda.itens.length > 0 ? (
-                  <Card className="border-border bg-card min-w-0">
-                    <CardContent className="p-0 overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/40 hover:bg-muted/40">
-                            <TableHead className="text-foreground">Produto</TableHead>
-                            <TableHead className="text-foreground text-center">Qtd</TableHead>
-                            <TableHead className="text-foreground text-right">Unitário</TableHead>
-                            <TableHead className="text-foreground text-right">Total</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {venda.itens.map((it) => (
-                            <TableRow key={it.id} className="border-border">
-                              <TableCell className="text-foreground break-words max-w-[420px]">{it.nome}</TableCell>
-                              <TableCell className="text-center tabular-nums text-foreground">{it.quantidade}</TableCell>
-                              <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(it.precoUnitario)}</TableCell>
-                              <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(it.lineTotal)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
+              {/* 5 · PRODUTOS (editável — F2) */}
+              <TabsContent value="produtos" className="mt-0 space-y-4">
+                {!editProdutos ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <Info className="h-3.5 w-3.5" /> Correções alteram caixa e estoque. Revise antes de aplicar.
+                      </p>
+                      {venda.status !== "cancelada" && (
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={startEdit}>
+                          <Pencil className="h-3.5 w-3.5" /> Editar produtos
+                        </Button>
+                      )}
+                    </div>
+                    {venda.itens.length > 0 ? (
+                      <Card className="border-border bg-card min-w-0">
+                        <CardContent className="p-0 overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                                <TableHead className="text-foreground">Produto</TableHead>
+                                <TableHead className="text-foreground text-center">Qtd</TableHead>
+                                <TableHead className="text-foreground text-right">Unitário</TableHead>
+                                <TableHead className="text-foreground text-right">Total</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {venda.itens.map((it) => (
+                                <TableRow key={it.id} className="border-border">
+                                  <TableCell className="text-foreground break-words max-w-[420px]">{it.nome}</TableCell>
+                                  <TableCell className="text-center tabular-nums text-foreground">{it.quantidade}</TableCell>
+                                  <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(it.precoUnitario)}</TableCell>
+                                  <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(it.lineTotal)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <EmptyState icon={Package} title="Sem itens" hint="Esta venda não tem itens registrados." />
+                    )}
+                  </>
                 ) : (
-                  <EmptyState icon={Package} title="Sem itens" hint="Esta venda não tem itens registrados." />
+                  <div className="space-y-4">
+                    {/* Aviso */}
+                    <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>Correções alteram caixa, estoque e financeiro. Revise no preview antes de aplicar.</span>
+                    </div>
+
+                    {/* Linhas editáveis */}
+                    <Card className="border-border bg-card min-w-0">
+                      <CardContent className="p-0 overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/40 hover:bg-muted/40">
+                              <TableHead className="text-foreground">Produto</TableHead>
+                              <TableHead className="text-foreground text-center w-20">Qtd</TableHead>
+                              <TableHead className="text-foreground text-right w-28">Unitário</TableHead>
+                              <TableHead className="text-foreground text-right w-28">Desc. (R$)</TableHead>
+                              <TableHead className="text-foreground text-right w-28">Total</TableHead>
+                              <TableHead className="text-foreground text-center w-24">Ações</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {draft.length === 0 ? (
+                              <TableRow><TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">Sem itens. Adicione abaixo.</TableCell></TableRow>
+                            ) : draft.map((l) => (
+                              <TableRow key={l.uid} className="border-border">
+                                <TableCell className="min-w-[200px]">
+                                  <div className="flex items-center gap-2">
+                                    {l.isAvulso ? (
+                                      <Input value={l.nome} onChange={(e) => updateLine(l.uid, { nome: e.target.value })} className="h-8 text-sm" />
+                                    ) : (
+                                      <span className="text-foreground break-words">{l.nome}</span>
+                                    )}
+                                    {l.isAvulso && <Badge variant="outline" className="text-[9px] border-info/30 bg-info/10 text-info shrink-0">avulso</Badge>}
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Input type="number" min={1} value={l.quantidade} onChange={(e) => updateLine(l.uid, { quantidade: Math.max(1, Math.round(Number(e.target.value) || 1)) })} className="h-8 w-16 text-center text-sm mx-auto" />
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Input type="number" min={0} step="0.01" value={l.precoUnitario} onChange={(e) => updateLine(l.uid, { precoUnitario: Math.max(0, Number(e.target.value) || 0) })} className="h-8 w-24 text-right text-sm ml-auto" />
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Input type="number" min={0} step="0.01" value={l.desconto} onChange={(e) => updateLine(l.uid, { desconto: Math.max(0, Number(e.target.value) || 0) })} className="h-8 w-24 text-right text-sm ml-auto" />
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(Math.max(0, l.precoUnitario * l.quantidade - l.desconto))}</TableCell>
+                                <TableCell>
+                                  <div className="flex items-center justify-center gap-1">
+                                    {!l.isAvulso && (
+                                      <Button size="icon" variant="ghost" className="h-7 w-7" title="Trocar produto" onClick={() => { setSwapTarget(l.uid); setBuscaProduto(""); setResultados([]) }}>
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" title="Remover" onClick={() => removeLine(l.uid)}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+
+                    {/* Adicionar produto / item avulso */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="relative flex-1 min-w-[220px]">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            className="pl-8 h-9 text-sm"
+                            placeholder={swapTarget ? "Buscar produto para TROCAR…" : "Buscar produto para adicionar…"}
+                            value={buscaProduto}
+                            onChange={(e) => { setBuscaProduto(e.target.value); void buscarProdutos(e.target.value) }}
+                          />
+                        </div>
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={addAvulso}>
+                          <Plus className="h-3.5 w-3.5" /> Item avulso
+                        </Button>
+                        {swapTarget && (
+                          <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => { setSwapTarget(null); setBuscaProduto(""); setResultados([]) }}>Cancelar troca</Button>
+                        )}
+                      </div>
+                      {(buscando || resultados.length > 0) && (
+                        <Card className="border-border bg-popover min-w-0">
+                          <CardContent className="p-1 max-h-52 overflow-y-auto">
+                            {buscando ? (
+                              <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando…</div>
+                            ) : resultados.map((p) => (
+                              <button key={p.id} type="button" onClick={() => pickProduto(p)} className="w-full text-left px-3 py-2 rounded-md hover:bg-accent hover:text-accent-foreground flex items-center justify-between gap-3 text-sm">
+                                <span className="min-w-0 break-words">{p.name}{p.sku ? <span className="text-[10px] text-muted-foreground ml-1.5">{p.sku}</span> : null}</span>
+                                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{fmtBrl(p.price)} · estq {p.stock}</span>
+                              </button>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      )}
+                    </div>
+
+                    {/* Resumo / Preview */}
+                    <Card className="border-border bg-card min-w-0">
+                      <CardContent className="pt-4 space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Total anterior</span>
+                          <span className="tabular-nums text-foreground">{fmtBrl(venda.total)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Total novo</span>
+                          <span className="tabular-nums font-semibold text-foreground">{fmtBrl(draftTotal)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Diferença</span>
+                          <span className={cn("tabular-nums font-semibold", draftTotal - venda.total > 0 ? "text-success" : draftTotal - venda.total < 0 ? "text-destructive" : "text-foreground")}>
+                            {draftTotal - venda.total >= 0 ? "+" : ""}{fmtBrl(draftTotal - venda.total)}
+                          </span>
+                        </div>
+                        {draftPlan && !draftPlan.ok && draftPlan.errorCode !== "no_change" && (
+                          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2">
+                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" /> {draftPlan.error}
+                          </div>
+                        )}
+                        {draftPlan?.ok && draftPlan.stockDeltas.length > 0 && (
+                          <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs space-y-1">
+                            <p className="font-semibold text-muted-foreground flex items-center gap-1.5"><Package className="h-3.5 w-3.5" /> Impacto no estoque</p>
+                            {draftPlan.stockDeltas.map((d) => (
+                              <p key={d.inventoryId} className="text-foreground flex items-center justify-between">
+                                <span className="break-words">{d.nome}</span>
+                                <span className={cn("tabular-nums", d.deltaQty > 0 ? "text-destructive" : "text-success")}>
+                                  {d.deltaQty > 0 ? `baixar ${d.deltaQty}` : `devolver ${-d.deltaQty}`}
+                                </span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
+                        {draftPlan?.ok && (
+                          <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                            <Banknote className="h-3.5 w-3.5" /> Caixa (dinheiro): {fmtBrl(draftPlan.oldBreakdown.dinheiro)} → {fmtBrl(draftPlan.newBreakdown.dinheiro)}
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Confirmação: motivo + PIN */}
+                    {showConfirm && draftPlan?.ok && (
+                      <Card className="border-primary/30 bg-primary/5 min-w-0">
+                        <CardContent className="pt-4 space-y-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs text-foreground">Motivo da correção <span className="text-destructive">*</span></Label>
+                            <Textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} className="min-h-[60px] resize-none bg-background text-sm" placeholder="Descreva o motivo (obrigatório)…" disabled={applying} />
+                          </div>
+                          <div className="space-y-1.5 max-w-[220px]">
+                            <Label className="text-xs text-foreground flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> PIN do supervisor <span className="text-destructive">*</span></Label>
+                            <Input type="password" inputMode="numeric" maxLength={12} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} className="h-9 bg-background font-mono tracking-widest" placeholder="PIN numérico" disabled={applying} />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Ações */}
+                    <div className="flex items-center justify-end gap-2 flex-wrap">
+                      <Button variant="outline" size="sm" onClick={resetEdicao} disabled={applying}>Cancelar edição</Button>
+                      {!showConfirm ? (
+                        <Button size="sm" className="gap-1.5" disabled={!draftPlan?.ok} onClick={() => setShowConfirm(true)}>
+                          <Calculator className="h-4 w-4" /> Pré-visualizar correção
+                        </Button>
+                      ) : (
+                        <Button size="sm" className="gap-1.5" disabled={applying || !draftPlan?.ok || !motivo.trim() || !pin.trim()} onClick={() => void aplicarCorrecaoItens()}>
+                          {applying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          {applying ? "Aplicando…" : "Aplicar correção"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5">
-                  <Info className="h-3.5 w-3.5" /> Edição de produtos (qtd/preço/add/remover) chega em F2 — com delta de estoque auditado.
-                </p>
               </TabsContent>
 
               {/* 6 · AUDITORIA */}
