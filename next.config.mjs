@@ -29,8 +29,15 @@ const BUILD_ID =
   String(Date.now())
 const BUILD_TIME = new Date().toISOString()
 
+/**
+ * SEGURANÇA: o `env` do next.config é inlined via DefinePlugin no bundle do CLIENTE.
+ * SÓ pode conter valores públicos (não-segredos). Segredos de servidor — incluindo
+ * GOOGLE_GENERATIVE_AI_API_KEY — NUNCA entram aqui: o código de servidor (Node runtime)
+ * lê `process.env.*` em runtime sem precisar de inline (ver lib/resolve-llm-env.ts).
+ * Colocar uma chave aqui a "arma" para vazar ao bundle no instante em que qualquer
+ * módulo alcançável pelo cliente referenciar `process.env.<chave>`.
+ */
 const env = {
-  GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
   NEXT_PUBLIC_BUILD_ID: BUILD_ID,
   NEXT_PUBLIC_BUILD_TIME: BUILD_TIME,
 }
