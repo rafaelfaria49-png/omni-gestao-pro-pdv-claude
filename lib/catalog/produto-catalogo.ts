@@ -206,6 +206,23 @@ export function normalizeProduto(raw: RawProdutoInput): ProdutoNormalizado {
   }
 }
 
+/**
+ * Deriva o bloco de metadata "IA" (contrato {@link ProdutoIAMetadata}) a partir de um produto
+ * cru, para o IMPORTADOR pré-preencher `Produto.metadata` na criação (F2). Só inclui campos
+ * com sinal real (categoria/compatibilidade/palavras derivadas) — nunca polui o JSONB com
+ * arrays vazios. Determinístico, idempotente e sem IO. `tags` NÃO é derivado (exige entrada
+ * explícita do cadastro/IA — F2 UI), então não é fabricado aqui.
+ */
+export function buildProdutoIAMetadata(raw: RawProdutoInput): ProdutoIAMetadata {
+  const n = normalizeProduto(raw)
+  const out: ProdutoIAMetadata = {}
+  if (n.sinonimos.length > 0) out.sinonimos = n.sinonimos
+  if (n.compatibilidade.modelos.length > 0) out.compatibilidade = n.compatibilidade.modelos
+  if (n.palavrasChave.length > 0) out.palavrasChave = n.palavrasChave
+  if (n.modelo) out.modelo = n.modelo
+  return out
+}
+
 // ─── Adaptadores de fonte → RawProdutoInput (evita duplicar mapeamento nos consumidores) ──
 
 /** ProdutoDTO (app/actions/cadastros) → entrada canônica. */

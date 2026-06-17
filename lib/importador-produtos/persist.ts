@@ -15,9 +15,11 @@
 //    pulados (e por quê), matches fracos descartados.
 // ============================================================
 
+import { Prisma } from "@/generated/prisma"
 import { prisma } from "@/lib/prisma"
 import { normalizeSkuForSave } from "@/lib/produto-sku"
 import { nomePareceDocumento } from "@/lib/produto-sku-normalize"
+import { buildProdutoIAMetadata } from "@/lib/catalog/produto-catalogo"
 import type { ItemResultado, ModoConflito, ProdutoNormalizado } from "./types"
 import {
   classificarBarcode,
@@ -243,9 +245,27 @@ async function criarProdutoNovo(
   // NCM/CEST vão em Produto.metadata (schema não tem coluna dedicada —
   // decisão arquitetural em docs/auditoria/COMPRAS_FORNECEDORES_PLANO_TECNICO.md:347).
   // Omite o objeto inteiro quando ambos vazios para não poluir o JSONB.
-  const metadataExtras: Record<string, string> = {}
+  const metadataExtras: Record<string, unknown> = {}
   if (p.ncm) metadataExtras.ncm = p.ncm
   if (p.cest) metadataExtras.cest = p.cest
+
+  // Catálogo inteligente F2: pré-preenche o metadata IA (sinônimos / compatibilidade /
+  // palavras-chave) DERIVADO do nome+categoria, reutilizando lib/catalog. SOMENTE na criação
+  // (nunca no update — preserva a filosofia "import não sobrescreve") e só quando há sinal
+  // real (o helper omite vazios). Aditivo: não muda colunas core, estoque nem formato da planilha.
+  const iaMeta = buildProdutoIAMetadata({
+    id: "",
+    nome: p.nome,
+    sku: skuToSave,
+    barcode: barcodeToSave,
+    categoria: p.categoria,
+    preco: p.preco,
+    estoque: p.estoque,
+  })
+  if (Object.keys(iaMeta).length > 0) {
+    Object.assign(metadataExtras, iaMeta)
+    metadataExtras.iaGeradoPor = "importador"
+  }
 
   await prisma.produto.create({
     data: {
@@ -257,7 +277,8 @@ async function criarProdutoNovo(
       price: p.preco,
       stock: p.estoque,
       barcode: barcodeToSave,
-      metadata: Object.keys(metadataExtras).length > 0 ? metadataExtras : undefined,
+      metadata:
+        Object.keys(metadataExtras).length > 0 ? (metadataExtras as Prisma.InputJsonValue) : undefined,
       // brand: deixar vazio — schema default já é "". Planilhas suportadas
       // não trazem coluna de marca real. Não duplicar categoria em brand.
     },

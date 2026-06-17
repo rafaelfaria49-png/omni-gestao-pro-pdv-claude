@@ -19,6 +19,7 @@
  */
 
 import { normalizePdvSearchText, scorePdvSearch } from "@/lib/pdv-product-search"
+import { resolveProdutoImagens } from "@/lib/catalog/produto-media"
 import type { WhatsAppIntentEntities } from "@/lib/whatsapp/whatsapp-intent-classifier"
 
 export type WhatsAppStockStatus = "EM_ESTOQUE" | "BAIXO_ESTOQUE" | "SEM_ESTOQUE"
@@ -204,9 +205,13 @@ function toResolved(
   item: RankedItem,
   media: Map<string, { url: string; isPrimary: boolean }[]>
 ): WhatsAppResolvedProduct {
+  // Seleção de imagem unificada (lib/catalog) — fonte única de "principal ?? 1ª".
+  // Em produção a lista chega `isPrimary desc` (loadMedia), então o resultado é idêntico
+  // ao anterior; sem placeholder aqui (o WhatsApp decide se anexa foto).
   const list = media.get(item.product.id) ?? []
-  const primary = list.find((m) => m.isPrimary)?.url ?? list[0]?.url ?? null
-  const imagens = list.map((m) => m.url).filter(Boolean)
+  const imgs = resolveProdutoImagens(list, { usarPlaceholder: false })
+  const primary = imgs.principal
+  const imagens = imgs.todas
   return {
     id: item.product.id,
     nome: item.product.name,

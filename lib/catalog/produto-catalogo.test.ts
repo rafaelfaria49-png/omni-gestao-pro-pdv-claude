@@ -4,6 +4,7 @@ import {
   readProdutoMetadata,
   fromProdutoDTO,
   fromInventoryItem,
+  buildProdutoIAMetadata,
 } from "@/lib/catalog/produto-catalogo"
 
 describe("readProdutoMetadata", () => {
@@ -73,6 +74,26 @@ describe("normalizeProduto", () => {
     expect(a.categoria).toBe("")
     expect(a.marca).toBe("")
     expect(a).toEqual(b)
+  })
+})
+
+describe("buildProdutoIAMetadata (pré-preenchimento do importador)", () => {
+  it("deriva sinônimos/compatibilidade/palavras-chave de produto com sinal", () => {
+    const meta = buildProdutoIAMetadata({
+      id: "",
+      nome: "Capa Galaxy A06",
+      categoria: "Capinhas",
+      preco: 25,
+      estoque: 4,
+    })
+    expect(meta.sinonimos).toContain("capinha")
+    expect(meta.compatibilidade).toContain("a06")
+    expect(Array.isArray(meta.palavrasChave)).toBe(true)
+  })
+
+  it("produto sem sinal → objeto vazio (não polui o JSONB)", () => {
+    const meta = buildProdutoIAMetadata({ id: "", nome: "Item genérico XYZ", categoria: "", preco: 1, estoque: 1 })
+    expect(Object.keys(meta)).toHaveLength(0)
   })
 })
 
