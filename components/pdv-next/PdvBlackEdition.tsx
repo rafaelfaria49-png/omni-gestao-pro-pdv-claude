@@ -346,15 +346,30 @@ export function PdvBlackEdition() {
       toast({ variant: "destructive", title: "Caixa fechado", description: "Abra o caixa antes de finalizar a venda." })
       return
     }
-    // Só linhas resolvíveis no inventory real (itens do catálogo-base mock não persistem).
-    const saleLines = cartRows
-      .filter((r) => r.inventoryId && inventory.some((i) => i.id === r.inventoryId))
-      .map((r) => ({
-        inventoryId: r.inventoryId as string,
-        quantity: r.qty,
-        unitPrice: r.unitPrice,
-        name: r.description,
-      }))
+    // Guard anti-descarte-silencioso: detecta linhas cujo produto não resolve no
+    // inventory real desta loja. Antes elas eram filtradas EM SILÊNCIO — o cliente
+    // seria cobrado pelo `total` cheio (calculado sobre TODO o carrinho), mas o item
+    // sumiria da venda persistida e do estoque. Agora bloqueamos com aviso claro,
+    // sem perder a venda nem o item (carrinho intacto para o operador corrigir).
+    const isLinhaResolvivel = (r: PdvBlackCartRow) =>
+      !!r.inventoryId && inventory.some((i) => i.id === r.inventoryId)
+    const linhasNaoResolvidas = cartRows.filter((r) => !isLinhaResolvivel(r))
+    if (linhasNaoResolvidas.length > 0) {
+      const nomes = linhasNaoResolvidas.map((r) => r.description).join(", ")
+      toast({
+        variant: "destructive",
+        title: "Item não pode ser vendido",
+        description: `Sem cadastro no estoque desta loja: ${nomes}. Remova o item da lista e tente novamente.`,
+      })
+      return
+    }
+    // Todas as linhas resolvem (garantido pelo guard acima) — nada é descartado.
+    const saleLines = cartRows.map((r) => ({
+      inventoryId: r.inventoryId as string,
+      quantity: r.qty,
+      unitPrice: r.unitPrice,
+      name: r.description,
+    }))
     const aPrazoPayment = payments.find((p) => p.type === "a_prazo")
     const result = finalizeSaleTransaction({
       lines: saleLines,
