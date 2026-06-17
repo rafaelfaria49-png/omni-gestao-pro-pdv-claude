@@ -7,7 +7,7 @@ import {
   Printer, Eye, XCircle, ChevronLeft, ChevronRight,
   CheckCircle, Filter, X, Tag, Clock, DollarSign, UserCheck, RotateCcw,
   Receipt, Download, MoreHorizontal, Loader2, Calendar, Wrench, ShieldCheck, Monitor,
-  Send, Trash2, ListChecks,
+  Send, Trash2, ListChecks, PanelsTopLeft,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { RoadmapPreviewDialog } from "@/components/ui/roadmap-preview-dialog"
@@ -74,6 +74,7 @@ import { useLojaAtiva } from "@/lib/loja-ativa"
 import { sanitizeOperatorLabel } from "@/lib/pdv-operator-label"
 import { CupomNaoFiscal, type CupomData } from "./cupom-nao-fiscal"
 import { TrocasDevolucao } from "./trocas-devolucao"
+import { WorkspaceCorrecaoVenda } from "./workspace-correcao-venda"
 import { useToast } from "@/hooks/use-toast"
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import { useOperationsStore } from "@/lib/operations-store"
@@ -347,6 +348,9 @@ export function VendasArquivoGeral() {
   const [descartandoLocalLoading, setDescartandoLocalLoading] = useState(false)
   const [bulkLimparOpen, setBulkLimparOpen] = useState(false)
   const [bulkLimparLoading, setBulkLimparLoading] = useState(false)
+
+  // Workspace Enterprise (F1) — ficha completa READ ONLY
+  const [workspaceVendaId, setWorkspaceVendaId] = useState<string | null>(null)
 
   // Correção dialog
   const [corrigindoVenda, setCorrigindoVenda] = useState<VendaDetalhe | null>(null)
@@ -1321,6 +1325,16 @@ export function VendasArquivoGeral() {
                             {!isPendenteSync && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
+                                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => setWorkspaceVendaId(v.id)}>
+                                    <PanelsTopLeft className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Workspace (ficha completa)</TooltipContent>
+                              </Tooltip>
+                            )}
+                            {!isPendenteSync && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
                                   <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openCupomFromRow(v.id)}>
                                     <Printer className="h-4 w-4" />
                                   </Button>
@@ -1409,6 +1423,11 @@ export function VendasArquivoGeral() {
                                 <DropdownMenuItem onClick={() => void openDetalhe(v.id)}>
                                   <Eye className="h-4 w-4 mr-2" /> Detalhes
                                 </DropdownMenuItem>
+                                {!isPendenteSync && (
+                                  <DropdownMenuItem onClick={() => setWorkspaceVendaId(v.id)}>
+                                    <PanelsTopLeft className="h-4 w-4 mr-2" /> Workspace
+                                  </DropdownMenuItem>
+                                )}
                                 {!isPendenteSync && (
                                   <DropdownMenuItem onClick={() => void openCupomFromRow(v.id)}>
                                     <Printer className="h-4 w-4 mr-2" /> Imprimir
@@ -2545,6 +2564,14 @@ export function VendasArquivoGeral() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ── Workspace Enterprise da Venda (F1 · somente leitura) ─────────────────── */}
+      <WorkspaceCorrecaoVenda
+        vendaId={workspaceVendaId}
+        storeId={storeId}
+        open={!!workspaceVendaId}
+        onOpenChange={(o) => { if (!o) setWorkspaceVendaId(null) }}
+      />
 
       <RoadmapPreviewDialog
         open={exportRoadmapOpen}

@@ -11,6 +11,7 @@ import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
+import { computeVendaStatusFinanceiro, sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -66,6 +67,9 @@ export async function GET(
   if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
   const { id: rawId } = await params
   const pedidoId = rawId?.trim()
+  // Workspace Enterprise (F1): enriquecimento read-only opt-in. Os consumidores
+  // legados (drawer, cupom, correção) NÃO enviam `full` → resposta inalterada.
+  const full = new URL(req.url).searchParams.get("full") === "1"
 
   if (!pedidoId) {
     return NextResponse.json({ ok: false, error: "ID da venda obrigatório" }, { status: 400 })
@@ -134,12 +138,104 @@ export async function GET(
         )
       : null
 
+    // Forma de pagamento bruta (espelho do payload) — usada pelo Workspace.
+    const pbRaw =
+      venda.payload && typeof venda.payload === "object"
+        ? ((venda.payload as Record<string, unknown>).paymentBreakdown as Partial<PaymentBreakdownFull> | undefined) ?? null
+        : null
+
+    // ── Enriquecimento Enterprise (Workspace F1) — SOMENTE LEITURA, opt-in `?full=1`.
+    // Nenhuma mutação. Carrega cliente completo, sessão de caixa, movimentações
+    // financeiras, títulos a receber e o status financeiro derivado da venda.
+    let enterprise: Record<string, unknown> = {}
+    if (full) {
+      const [clienteCompleto, sessao, movimentacoesFinanceiras, titulosRaw] = await Promise.all([
+        venda.clienteId
+          ? prisma.cliente.findFirst({
+              where: { id: venda.clienteId, storeId },
+              select: {
+                id: true, name: true, kind: true, document: true, phone: true,
+                email: true, city: true, totalSpent: true, lastPurchaseAt: true,
+              },
+            })
+          : Promise.resolve(null),
+        sessaoIdPayload
+          ? prisma.sessaoCaixa.findFirst({
+              where: { id: sessaoIdPayload, storeId },
+              select: {
+                id: true, operador: true, status: true, abertaEm: true,
+                fechadaEm: true, saldoInicial: true, terminalId: true,
+              },
+            })
+          : Promise.resolve(null),
+        prisma.movimentacaoFinanceira.findMany({
+          where: { storeId, referenciaId: pedidoId },
+          orderBy: { createdAt: "asc" },
+          select: { id: true, tipo: true, origem: true, valor: true, descricao: true, createdAt: true },
+        }),
+        prisma.contaReceberTitulo.findMany({
+          where: {
+            storeId,
+            OR: [
+              { localKey: { startsWith: `pdv-aprazo-${pedidoId}` } },
+              ...(venda.contaReceberTituloId ? [{ id: venda.contaReceberTituloId }] : []),
+            ],
+          },
+          orderBy: { createdAt: "asc" },
+        }),
+      ])
+
+      const titulos = titulosRaw.map((t) => ({
+        id: t.id,
+        localKey: t.localKey,
+        descricao: t.descricao,
+        cliente: t.cliente,
+        valor: t.valor,
+        vencimento: t.vencimento,
+        status: t.status,
+        pago: sumPagamentosHistorico(t.payload),
+        createdAt: t.createdAt.toISOString(),
+      }))
+
+      const statusFinanceiro = computeVendaStatusFinanceiro({
+        total: venda.total,
+        paymentBreakdown: pbRaw,
+        movimentacoes: movimentacoesFinanceiras.map((m) => ({ tipo: m.tipo, origem: m.origem, valor: m.valor })),
+        titulos: titulosRaw.map((t) => ({ status: t.status, valor: t.valor, payload: t.payload })),
+      })
+
+      enterprise = {
+        clienteCompleto: clienteCompleto
+          ? { ...clienteCompleto, lastPurchaseAt: clienteCompleto.lastPurchaseAt?.toISOString() ?? null }
+          : null,
+        sessao: sessao
+          ? {
+              ...sessao,
+              abertaEm: sessao.abertaEm.toISOString(),
+              fechadaEm: sessao.fechadaEm?.toISOString() ?? null,
+            }
+          : null,
+        movimentacoesFinanceiras: movimentacoesFinanceiras.map((m) => ({
+          id: m.id,
+          tipo: m.tipo,
+          origem: m.origem,
+          valor: m.valor,
+          descricao: m.descricao,
+          createdAt: m.createdAt.toISOString(),
+        })),
+        titulos,
+        statusFinanceiro,
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       venda: {
         id: venda.pedidoId,
         dbId: venda.id,
         at: venda.at.toISOString(),
+        paymentBreakdown: pbRaw,
+        ...enterprise,
         clienteNome: venda.clienteNome || null,
         clienteId: venda.clienteId || null,
         clienteCpf: extractCustomerCpf(venda.payload),
