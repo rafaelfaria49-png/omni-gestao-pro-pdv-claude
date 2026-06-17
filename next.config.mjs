@@ -13,8 +13,26 @@ const withPWA = withPWAInit({
 
 const isVercel = process.env.VERCEL === "1"
 
+/**
+ * Carimbo de versão do build (PWA stale guard).
+ *
+ * Avaliado UMA vez por build e inlined via `env` no bundle do cliente E no código
+ * do servidor (rota `/api/version`). Como cada deploy gera um `BUILD_ID` próprio, um
+ * cliente rodando bundle ANTIGO (cache/PWA) carrega o id antigo, enquanto a rota do
+ * deploy ATUAL devolve o id novo → divergência = versão desatualizada detectável
+ * sem depender do ciclo de Service Worker do navegador. Em dev (sem commit SHA) usa
+ * timestamp: cliente e servidor compartilham o mesmo valor na sessão (sem falso stale).
+ */
+const BUILD_ID =
+  (process.env.VERCEL_GIT_COMMIT_SHA && process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 12)) ||
+  process.env.NEXT_PUBLIC_BUILD_ID ||
+  String(Date.now())
+const BUILD_TIME = new Date().toISOString()
+
 const env = {
   GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+  NEXT_PUBLIC_BUILD_ID: BUILD_ID,
+  NEXT_PUBLIC_BUILD_TIME: BUILD_TIME,
 }
 
 /** Cabeçalhos de segurança (produção Vercel). COOP permissivo para não quebrar popups de pagamento/login. */
