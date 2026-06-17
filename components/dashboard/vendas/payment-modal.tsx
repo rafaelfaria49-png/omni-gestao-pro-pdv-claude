@@ -171,6 +171,13 @@ interface PaymentModalProps {
    * shells (Supermercado / Venda Completa / Black Edition) mantêm o layout padrão.
    */
   twoColumn?: boolean
+  /**
+   * Disparado quando uma forma exige cliente (à prazo / carnê) e nenhum está
+   * selecionado. O shell deve abrir o seletor de cliente (`PdvClientePicker`) POR CIMA
+   * do modal — sem fechá-lo, para preservar os pagamentos em andamento. Ao selecionar
+   * o cliente, o shell atualiza `selectedCustomer` e o fluxo à prazo é liberado.
+   */
+  onRequireCustomer?: () => void
 }
 
 export function PaymentModal({ 
@@ -193,6 +200,7 @@ export function PaymentModal({
   onCustomerCpfUpdate,
   multipayHint = false,
   twoColumn = false,
+  onRequireCustomer,
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
   const [isConfirming, setIsConfirming] = useState(false)
@@ -207,6 +215,7 @@ export function PaymentModal({
   const [aPrazoEntradaType, setAPrazoEntradaType] = useState<PaymentMethodType>("dinheiro")
   const [aPrazoParcelas, setAPrazoParcelas] = useState("1")
   const [aPrazoPrimeiroVencDate, setAPrazoPrimeiroVencDate] = useState("") // YYYY-MM-DD
+  const [aPrazoObs, setAPrazoObs] = useState("")
   const [showMerchantPanel, setShowMerchantPanel] = useState(false)
   const [cpfDraft, setCpfDraft] = useState("")
   const [cartaoLiberado, setCartaoLiberado] = useState(true)
@@ -235,7 +244,9 @@ export function PaymentModal({
   const formasPagamento = pdvParams.formasPagamento ?? []
   const formasModal = useMemo(() => {
     const list = getFormasForPaymentModal(formasPagamento)
-    return multipayHint ? list.filter((f) => f.permitirNoMultiplo) : list
+    // Pagamento Múltiplo permite combinar qualquer forma "permitirNoMultiplo" + À Prazo:
+    // o saldo à prazo vira Conta a Receber (não entra no caixa) via o card de configuração.
+    return multipayHint ? list.filter((f) => f.permitirNoMultiplo || f.id === "a_prazo") : list
   }, [formasPagamento, multipayHint])
 
   const resolveFormaForType = useCallback(
@@ -250,13 +261,15 @@ export function PaymentModal({
         forma?.exigirCliente ??
         (type === "a_prazo" || type === "carne")
       if (exigirCliente && !selectedCustomer) {
+        // Em vez de só barrar, pede ao shell para abrir o seletor de cliente
+        // (com cadastro rápido). O modal permanece aberto e o carrinho intacto.
+        onRequireCustomer?.()
         toast({
-          variant: "destructive",
-          title: "Cliente obrigatório",
+          title: "Selecione o cliente",
           description:
             type === "a_prazo"
-              ? "⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo."
-              : "Selecione o cliente para esta forma de pagamento.",
+              ? "Abrindo a busca de cliente para liberar a venda a prazo."
+              : "Abrindo a busca de cliente para esta forma de pagamento.",
         })
         return false
       }
@@ -279,7 +292,7 @@ export function PaymentModal({
       }
       return true
     },
-    [adminSessionOk, cpfEfetivo, selectedCustomer, toast],
+    [adminSessionOk, cpfEfetivo, selectedCustomer, toast, onRequireCustomer],
   )
   const fluxoPrazoOuCarne =
     !!selectedCustomer &&
@@ -351,6 +364,7 @@ export function PaymentModal({
       setAPrazoEntradaType("dinheiro")
       setAPrazoParcelas("1")
       setAPrazoPrimeiroVencDate("")
+      setAPrazoObs("")
     }
   }, [isOpen])
 
@@ -380,7 +394,8 @@ export function PaymentModal({
       const forma = resolveFormaForType(type, preferFormaId)
       if (!guardFormaRules(forma, type)) return
       if (type === "a_prazo" && !selectedCustomer) {
-        toast.error("⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo.")
+        onRequireCustomer?.()
+        toast({ title: "Selecione o cliente", description: "Abrindo a busca de cliente para a venda a prazo." })
         return
       }
       if ((type === "a_prazo" || type === "carne") && selectedCustomer && !documentoClienteValido(cpfEfetivo)) {
@@ -447,6 +462,7 @@ export function PaymentModal({
       cpfEfetivo,
       toast,
       total,
+      onRequireCustomer,
     ]
   )
 
@@ -464,6 +480,9 @@ export function PaymentModal({
         if (t === "carne" || t === "a_prazo") {
           /** Carnê / à prazo: abre o fluxo de configuração. */
           setSelectedType(t)
+          // Sem cliente, pede o seletor (com cadastro rápido) já na abertura —
+          // o card de configuração fica pronto para quando o cliente for escolhido.
+          if (!selectedCustomer) onRequireCustomer?.()
         } else {
           handleAddPayment(t)
         }
@@ -472,7 +491,7 @@ export function PaymentModal({
       }
     }, 0)
     return () => window.clearTimeout(tid)
-  }, [handleAddPayment, instantPayIntent, isOpen, multipayHint, onInstantPayIntentConsumed])
+  }, [handleAddPayment, instantPayIntent, isOpen, multipayHint, onInstantPayIntentConsumed, selectedCustomer, onRequireCustomer])
 
   // Modo múltiplo: ao abrir, foca o campo "Valor a Adicionar" para sinalizar o fluxo
   // (digite o valor parcial → escolha a forma → repita). Banner explica visualmente.
@@ -574,7 +593,12 @@ export function PaymentModal({
       id: `${Date.now()}-aprazo`,
       type: "a_prazo",
       value: aPrazoSaldoVal,
-      aPrazoConfig: { parcelas: aPrazoParcelasN, primeiroVencimento: primeiroVenc, intervalDias: 30 },
+      aPrazoConfig: {
+        parcelas: aPrazoParcelasN,
+        primeiroVencimento: primeiroVenc,
+        intervalDias: 30,
+        ...(aPrazoObs.trim() ? { observacao: aPrazoObs.trim() } : {}),
+      },
     })
 
     setPayments((prev) => [...prev, ...toAdd])
@@ -589,8 +613,38 @@ export function PaymentModal({
     aPrazoEntradaType,
     aPrazoParcelasN,
     aPrazoPrimeiroVencDate,
+    aPrazoObs,
     toast,
   ])
+
+  /** Forma "à prazo" está configurada/ativa? (controla a sugestão de saldo restante). */
+  const aPrazoFormaAtiva = useMemo(
+    () => formasModal.some((f) => f.id === "a_prazo"),
+    [formasModal],
+  )
+
+  /**
+   * Exigência RafaCell: ao pagar um valor parcial (ex.: R$ 22 de R$ 39,90), sugerir
+   * lançar o saldo restante (R$ 17,90) como Conta a Receber em 1 toque — sem o
+   * operador calcular. Abre o card "Configurar À Prazo" já com o saldo = falta a pagar.
+   * Sem cliente, pede o seletor (preserva carrinho e pagamentos já lançados).
+   */
+  const sugerirSaldoAPrazo = useCallback(() => {
+    if (faltaPagar <= 0.02) return
+    if (!selectedCustomer) {
+      onRequireCustomer?.()
+      toast({ title: "Selecione o cliente", description: "Abrindo a busca de cliente para lançar o saldo a prazo." })
+      return
+    }
+    setCurrentValue("")
+    setAPrazoEntradaStr("")
+    setSelectedType("a_prazo")
+    if (!aPrazoPrimeiroVencDate) {
+      const d = new Date()
+      d.setDate(d.getDate() + 30)
+      setAPrazoPrimeiroVencDate(d.toISOString().split("T")[0])
+    }
+  }, [faltaPagar, selectedCustomer, onRequireCustomer, aPrazoPrimeiroVencDate, toast])
 
   /** Lista enriquecida (runtime + ícone + disabled + tooltip): fonte única do grid clássico e da lista enterprise. */
   const formaRuntimeList = useMemo(() => {
@@ -599,19 +653,19 @@ export function PaymentModal({
       if (!runtime) return []
       const Icon = getFormaPagamentoIcon(forma.icon)
       const isCartao = runtime === "cartao_debito" || runtime === "cartao_credito"
-      const exigirCliente = forma.exigirCliente ?? (runtime === "a_prazo" || runtime === "carne")
+      // Formas que exigem cliente NÃO ficam desabilitadas sem cliente: o clique abre
+      // o seletor de cliente (com cadastro rápido) via onRequireCustomer.
       const disabled =
         (isCartao && !cartaoLiberado) ||
         (runtime === "credito_vale" && customerStoreCredit <= 0) ||
-        (exigirCliente && !selectedCustomer) ||
         (forma.exigirAutorizacao && !adminSessionOk)
       const title =
         isCartao && !cartaoLiberado
           ? "Ative pelo menos uma maquininha em Configurações → Financeiro (cartões)"
           : runtime === "a_prazo" && !selectedCustomer
-            ? "Selecione o cliente no PDV para liberar venda à prazo"
+            ? "Selecione/cadastre o cliente para liberar venda à prazo"
             : runtime === "carne" && !selectedCustomer
-              ? "Selecione o cliente no PDV para carnê ou boleto"
+              ? "Selecione/cadastre o cliente para carnê ou boleto"
               : forma.exigirAutorizacao && !adminSessionOk
                 ? "Exige autorização do supervisor"
                 : runtime === "a_prazo"
@@ -1163,6 +1217,27 @@ export function PaymentModal({
                 </div>
               )}
 
+              {aPrazoFormaAtiva && faltaPagar > 0.02 && selectedType !== "a_prazo" && selectedType !== "carne" && (
+                <button
+                  type="button"
+                  onClick={sugerirSaldoAPrazo}
+                  className="flex w-full items-center justify-between gap-2 rounded-xl border-2 border-violet-500/45 bg-violet-500/10 px-4 py-3 text-left transition-colors hover:bg-violet-500/15"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <CalendarClock className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-violet-800 dark:text-violet-100">
+                        Lançar {formatCurrency(faltaPagar)} restante À Prazo
+                      </span>
+                      <span className="block text-[11px] text-violet-900/70 dark:text-violet-100/70">
+                        Gera Conta a Receber do saldo — não entra no caixa
+                      </span>
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+                </button>
+              )}
+
               {selectedType === "a_prazo" && faltaPagar > 0 && (
                 <Card className="border-violet-500/50 bg-violet-500/5">
                   <CardHeader className="pb-3">
@@ -1240,6 +1315,17 @@ export function PaymentModal({
                           <span className="font-bold text-violet-700 dark:text-violet-300">{formatCurrency(aPrazoSaldoVal)}</span>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm">Observação (opcional)</Label>
+                      <Input
+                        type="text"
+                        placeholder="Ex.: combinado pagar dia 10"
+                        value={aPrazoObs}
+                        onChange={(e) => setAPrazoObs(e.target.value)}
+                        className="h-10 bg-secondary border-border"
+                      />
                     </div>
 
                     {aPrazoSaldoVal > 0.009 && aPrazoPrimeiroVencDate && (
@@ -1742,19 +1828,19 @@ export function PaymentModal({
                   const Icon = getFormaPagamentoIcon(forma.icon)
                   const isSelected = selectedType === runtime
                   const isCartao = runtime === "cartao_debito" || runtime === "cartao_credito"
-                  const exigirCliente = forma.exigirCliente ?? (runtime === "a_prazo" || runtime === "carne")
+                  // Sem cliente, à prazo/carnê continuam clicáveis: o clique abre o
+                  // seletor de cliente (com cadastro rápido) via onRequireCustomer.
                   const disabled =
                     (isCartao && !cartaoLiberado) ||
                     (runtime === "credito_vale" && customerStoreCredit <= 0) ||
-                    (exigirCliente && !selectedCustomer) ||
                     (forma.exigirAutorizacao && !adminSessionOk)
                   const title =
                     isCartao && !cartaoLiberado
                       ? "Ative pelo menos uma maquininha em Configurações → Financeiro (cartões)"
                       : runtime === "a_prazo" && !selectedCustomer
-                        ? "Selecione o cliente no PDV para liberar venda à prazo"
+                        ? "Selecione/cadastre o cliente para liberar venda à prazo"
                         : runtime === "carne" && !selectedCustomer
-                          ? "Selecione o cliente no PDV para carnê ou boleto"
+                          ? "Selecione/cadastre o cliente para carnê ou boleto"
                           : forma.exigirAutorizacao && !adminSessionOk
                             ? "Exige autorização do supervisor"
                             : runtime === "a_prazo"
@@ -1801,6 +1887,28 @@ export function PaymentModal({
                 })}
               </div>
             </div>
+          )}
+
+          {/* Sugestão de saldo restante → À Prazo (1 toque) */}
+          {aPrazoFormaAtiva && faltaPagar > 0.02 && selectedType !== "a_prazo" && selectedType !== "carne" && (
+            <button
+              type="button"
+              onClick={sugerirSaldoAPrazo}
+              className="flex w-full items-center justify-between gap-2 rounded-xl border-2 border-violet-500/45 bg-violet-500/10 px-4 py-3 text-left transition-colors hover:bg-violet-500/15"
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <CalendarClock className="h-5 w-5 shrink-0 text-violet-600 dark:text-violet-400" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-violet-800 dark:text-violet-100">
+                    Lançar {formatCurrency(faltaPagar)} restante À Prazo
+                  </span>
+                  <span className="block text-[11px] text-violet-900/70 dark:text-violet-100/70">
+                    Gera Conta a Receber do saldo — não entra no caixa
+                  </span>
+                </span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
+            </button>
           )}
 
           {/* Módulo À Prazo */}
@@ -1881,6 +1989,17 @@ export function PaymentModal({
                       <span className="font-bold text-violet-700 dark:text-violet-300">{formatCurrency(aPrazoSaldoVal)}</span>
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm">Observação (opcional)</Label>
+                  <Input
+                    type="text"
+                    placeholder="Ex.: combinado pagar dia 10"
+                    value={aPrazoObs}
+                    onChange={(e) => setAPrazoObs(e.target.value)}
+                    className="h-10 bg-secondary border-border"
+                  />
                 </div>
 
                 {aPrazoSaldoVal > 0.009 && aPrazoPrimeiroVencDate && (

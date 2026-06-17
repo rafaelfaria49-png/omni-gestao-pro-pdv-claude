@@ -42,6 +42,8 @@ import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
+import { PaymentModal, type PaymentMethod } from "./payment-modal"
+import type { APrazoConfig } from "@/lib/operations-sale-types"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { enrichVendaEnterprise } from "@/app/actions/vendas-enterprise"
@@ -129,29 +131,27 @@ type DraftData = {
   enderecoEntrega?: EnderecoEntrega
 }
 
-type FormaPagamento = "dinheiro" | "pix" | "cartao_debito" | "cartao_credito" | "a_prazo" | "carne"
-
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const DRAFT_KEY = (storeId: string) => `omnigestao:venda-completa-ent-v2:${storeId}`
-
-const FORMAS_PAGAMENTO: { value: FormaPagamento; label: string }[] = [
-  { value: "dinheiro",      label: "Dinheiro" },
-  { value: "pix",           label: "PIX" },
-  { value: "cartao_debito", label: "Débito" },
-  { value: "cartao_credito",label: "Crédito" },
-  { value: "a_prazo",       label: "A Prazo" },
-  { value: "carne",         label: "Carnê" },
-]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const brl = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
 
-function formaLabel(f: FormaPagamento, parcelas: number): string {
-  if (f === "cartao_credito" && parcelas > 1) return `Crédito ${parcelas}x`
-  return FORMAS_PAGAMENTO.find((fp) => fp.value === f)?.label ?? f
+/** Rótulo legível de uma forma de pagamento do modal compartilhado (cupom/auditoria). */
+function pagamentoLabelMethod(p: PaymentMethod): string {
+  switch (p.type) {
+    case "dinheiro": return "Dinheiro"
+    case "pix": return "PIX"
+    case "cartao_debito": return "Cartão débito"
+    case "cartao_credito": return p.installments && p.installments > 1 ? `Cartão crédito ${p.installments}x` : "Cartão crédito"
+    case "carne": return "Carnê"
+    case "a_prazo": return p.aPrazoConfig && p.aPrazoConfig.parcelas > 1 ? `À prazo ${p.aPrazoConfig.parcelas}x` : "À prazo"
+    case "credito_vale": return "Crédito/Vale"
+    default: return p.type
+  }
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -192,10 +192,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
   // ── Desconto global ───────────────────────────────────────────────────────
   const [discountReais, setDiscountReais] = useState(0)
 
-  // ── Pagamento simples ────────────────────────────────────────────────────
+  // ── Pagamento (modal compartilhado: à vista / múltiplo / à prazo + entrada) ──
   const [isPaymentOpen, setIsPaymentOpen] = useState(false)
-  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento | null>(null)
-  const [parcelas, setParcelas] = useState(1)
   const [isProcessing, setIsProcessing] = useState(false)
 
   // ── Cupom ─────────────────────────────────────────────────────────────────
@@ -587,18 +585,16 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       toast({ title: "Caixa fechado", description: "Abra o caixa antes de registrar uma venda.", variant: "destructive" })
       return
     }
-    setFormaPagamento(null)
-    setParcelas(1)
     setIsPaymentOpen(true)
   }
 
   // ── Confirmação e finalização ─────────────────────────────────────────────
-  async function handleConfirmPayment() {
-    if (!formaPagamento) {
+  async function handleConfirmPayment(payments: PaymentMethod[]) {
+    if (!selectedCliente || cart.length === 0 || total <= 0) return
+    if (payments.length === 0) {
       toast({ title: "Selecione a forma de pagamento", variant: "destructive" })
       return
     }
-    if (!selectedCliente || cart.length === 0 || total <= 0) return
 
     setIsProcessing(true)
     try {
@@ -613,14 +609,18 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           ...(l.custoUnitario !== undefined ? { custoUnitario: l.custoUnitario } : {}),
         }))
 
-      const paymentBreakdown = {
-        dinheiro:       formaPagamento === "dinheiro"      ? total : 0,
-        pix:            formaPagamento === "pix"           ? total : 0,
-        cartaoDebito:   formaPagamento === "cartao_debito" ? total : 0,
-        cartaoCredito:  formaPagamento === "cartao_credito"? total : 0,
-        aPrazo:         formaPagamento === "a_prazo"       ? total : 0,
-        carne:          formaPagamento === "carne"         ? total : 0,
+      let dinheiro = 0, pix = 0, cartaoDebito = 0, cartaoCredito = 0, carne = 0, aPrazo = 0, creditoVale = 0
+      let aPrazoConfig: APrazoConfig | undefined
+      for (const p of payments) {
+        if (p.type === "dinheiro") dinheiro += p.value
+        else if (p.type === "pix") pix += p.value
+        else if (p.type === "cartao_debito") cartaoDebito += p.value
+        else if (p.type === "cartao_credito") cartaoCredito += p.value
+        else if (p.type === "carne") carne += p.value
+        else if (p.type === "a_prazo") { aPrazo += p.value; if (p.aPrazoConfig) aPrazoConfig = p.aPrazoConfig }
+        else if (p.type === "credito_vale") creditoVale += p.value
       }
+      const paymentBreakdown = { dinheiro, pix, cartaoDebito, cartaoCredito, aPrazo, carne, creditoVale }
 
       const result = finalizeSaleTransaction({
         lines: saleLines,
@@ -634,6 +634,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         customerCpf: selectedCliente.document ?? undefined,
         customerName: selectedCliente.name,
         clienteId: selectedCliente.id || undefined,
+        aPrazoConfig,
       })
 
       if (!result.ok) {
@@ -667,19 +668,21 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         /* fila é auxiliar — não interrompe o pós-venda */
       }
 
-      if (formaPagamento === "a_prazo") {
+      if (aPrazo > 0.02) {
         appendContaReceberTituloPdvAprazo({
           lojaId: storeId,
           saleId: result.saleId,
           clienteNome: selectedCliente.name,
-          valor: total,
+          valor: aPrazo,
+          aPrazoConfig,
         })
       }
 
+      const pagamentosResumo = payments.map((p) => `${pagamentoLabelMethod(p)} ${brl(p.value)}`).join(" + ")
       appendAuditLog({
         action: "sale_finalized",
         userLabel: (empresaDocumentos.nomeFantasia || "Loja").trim(),
-        detail: `Venda Completa Enterprise ${result.saleId} | ${selectedCliente.name} | ${formaLabel(formaPagamento, parcelas)} | ${brl(total)}`,
+        detail: `Venda Completa Enterprise ${result.saleId} | ${selectedCliente.name} | ${pagamentosResumo} | ${brl(total)}`,
       })
 
       const linhasDetalhe = cart
@@ -737,7 +740,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
           precoUnitario: l.price,
           lineTotal: Math.round(l.price * l.qty * (1 - l.discountPct / 100) * 100) / 100,
         })),
-        pagamentos: [{ label: formaLabel(formaPagamento, parcelas), valor: total }],
+        pagamentos: payments.map((p) => ({ label: pagamentoLabelMethod(p), valor: p.value })),
         total,
         desconto: discountReais > 0 ? discountReais : undefined,
       }
@@ -757,8 +760,6 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       setObservacaoGeral("")
       setEnderecoEntrega(EMPTY_ENDERECO)
       setShowEnderecoForm(false)
-      setFormaPagamento(null)
-      setParcelas(1)
     } finally {
       setIsProcessing(false)
     }
@@ -1492,98 +1493,41 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {/* ── Modal de pagamento simples ── */}
-      <Dialog open={isPaymentOpen} onOpenChange={(o) => { if (!isProcessing) setIsPaymentOpen(o) }}>
-        <DialogContent className="max-w-sm rounded-2xl border-border bg-card p-0">
-          <DialogHeader className="border-b border-border px-5 py-3">
-            <DialogTitle className="flex items-center gap-2 text-sm font-semibold">
-              <CreditCard className="h-4 w-4 text-primary" />
-              Confirmar Pagamento
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-4 px-5 py-4">
-            {/* Total */}
-            <div className="rounded-xl border border-border bg-background px-4 py-3 text-center">
-              {selectedCliente && (
-                <p className="mb-0.5 text-xs text-muted-foreground">{selectedCliente.name}</p>
-              )}
-              <p className="text-3xl font-bold tabular-nums text-foreground">{brl(total)}</p>
-              {discountReais > 0 && (
-                <p className="mt-0.5 text-[11px] text-amber-500">Inclui desconto de {brl(discountReais)}</p>
-              )}
-            </div>
-
-            {/* Forma de pagamento */}
-            <div className="space-y-2">
-              <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Forma de pagamento
-              </Label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {FORMAS_PAGAMENTO.map((f) => (
-                  <button
-                    key={f.value}
-                    type="button"
-                    onClick={() => { setFormaPagamento(f.value); if (f.value !== "cartao_credito") setParcelas(1) }}
-                    className={cn(
-                      "rounded-lg border px-2 py-2.5 text-center text-xs font-medium transition-all",
-                      formaPagamento === f.value
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-background text-muted-foreground hover:bg-secondary",
-                    )}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Parcelamento (só crédito) */}
-            {formaPagamento === "cartao_credito" && (
-              <div className="space-y-2">
-                <Label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Parcelamento
-                </Label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setParcelas(n)}
-                      className={cn(
-                        "flex flex-col items-center rounded-lg border px-1 py-1.5 text-center transition-all",
-                        parcelas === n
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border bg-background text-muted-foreground hover:bg-secondary",
-                      )}
-                    >
-                      <span className="text-xs font-bold">{n}x</span>
-                      <span className="text-[9px] tabular-nums">{brl(total / n)}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Botão confirmar */}
-            <Button
-              type="button"
-              className="h-11 w-full rounded-xl bg-emerald-600 font-bold text-zinc-950 hover:bg-emerald-500 disabled:opacity-50"
-              disabled={!formaPagamento || isProcessing}
-              onClick={handleConfirmPayment}
-            >
-              {isProcessing ? (
-                <span className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Registrando venda…
-                </span>
-              ) : (
-                `Confirmar ${formaPagamento ? formaLabel(formaPagamento, parcelas) : ""}`
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* ── Modal de pagamento (compartilhado: à vista / múltiplo / à prazo + entrada) ── */}
+      <PaymentModal
+        isOpen={isPaymentOpen}
+        onClose={() => {
+          if (!isProcessing) setIsPaymentOpen(false)
+        }}
+        cartSubtotal={subtotal}
+        impostoEstimado={impostoEstimado}
+        total={total}
+        discountReais={discountReais}
+        discountPercent={0}
+        onDiscountReaisChange={setDiscountReais}
+        onDiscountPercentChange={(pct) =>
+          setDiscountReais(Math.max(0, Math.round(subtotal * (pct / 100) * 100) / 100))
+        }
+        selectedCustomer={
+          selectedCliente
+            ? {
+                id: selectedCliente.id,
+                name: selectedCliente.name,
+                cpf: (selectedCliente.document ?? "").trim(),
+                phone: (selectedCliente.phone ?? "").trim(),
+              }
+            : null
+        }
+        customerStoreCredit={customerStoreCredit}
+        cashierId={cashierId}
+        onCustomerCpfUpdate={(id, cpf) =>
+          setSelectedCliente((prev) => (prev && prev.id === id ? { ...prev, document: cpf } : prev))
+        }
+        onRequireCustomer={() => clienteInputRef.current?.focus()}
+        onConfirm={(payments) => {
+          void handleConfirmPayment(payments)
+        }}
+      />
 
       {/* ── Modal de ajuda ── */}
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>

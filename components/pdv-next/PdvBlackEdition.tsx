@@ -29,6 +29,7 @@ import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PaymentModal, type PaymentMethod } from "@/components/dashboard/vendas/payment-modal"
+import { PdvClientePicker, type PdvClienteResult } from "@/components/dashboard/vendas/pdv-cliente-picker"
 import { useToast } from "@/hooks/use-toast"
 import { reducePaymentsToBreakdown } from "@/lib/pdv-payments"
 import { PdvBlackShell, type PdvBlackCartRow } from "./PdvBlackShell"
@@ -117,6 +118,9 @@ export function PdvBlackEdition() {
   // ── Cliente ────────────────────────────────────────────────────────────────
   const [customerDisplay, setCustomerDisplay] = useState("Consumidor final")
   const [selectedClienteId, setSelectedClienteId] = useState<string | null>(null)
+  /** Cliente completo (com CPF) — necessário para venda à prazo (motor exige documento). */
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string; cpf: string; phone: string } | null>(null)
+  const [aPrazoClientePickerOpen, setAPrazoClientePickerOpen] = useState(false)
   const [clientSearchOpen, setClientSearchOpen] = useState(false)
   const { clientes: clientResults } = useClienteSearch(
     clientSearchOpen ? customerDisplay.replace("Consumidor final", "") : "",
@@ -375,8 +379,9 @@ export function PdvBlackEdition() {
       lines: saleLines,
       total,
       paymentBreakdown: reducePaymentsToBreakdown(payments),
-      customerName: customerDisplay !== "Consumidor final" ? customerDisplay : undefined,
-      clienteId: selectedClienteId || undefined,
+      customerCpf: selectedCustomer?.cpf,
+      customerName: selectedCustomer?.name ?? (customerDisplay !== "Consumidor final" ? customerDisplay : undefined),
+      clienteId: selectedCustomer?.id ?? selectedClienteId ?? undefined,
       auditMeta: { cashierId: operadorNome },
       aPrazoConfig: aPrazoPayment?.aPrazoConfig,
     })
@@ -392,6 +397,7 @@ export function PdvBlackEdition() {
     setHighlightLineId(null)
     setCustomerDisplay("Consumidor final")
     setSelectedClienteId(null)
+    setSelectedCustomer(null)
     setBipeCode("")
     setValorRecebido("")
     setLastAddedItem(null)
@@ -405,6 +411,7 @@ export function PdvBlackEdition() {
     total,
     customerDisplay,
     selectedClienteId,
+    selectedCustomer,
     finalizeSaleTransaction,
     operadorNome,
     cupomNum,
@@ -484,8 +491,14 @@ export function PdvBlackEdition() {
         clientOptions={clientOptions}
         onPickClient={(label) => {
           const opt = clientOptions.find((o) => o.label === label)
+          const full = opt ? clientResults.find((c) => c.id === opt.id) : undefined
           setSelectedClienteId(opt?.id ?? null)
           setCustomerDisplay(label.split(" — ")[0] || label)
+          setSelectedCustomer(
+            full
+              ? { id: full.id, name: full.name, cpf: (full.document ?? "").trim(), phone: (full.phone ?? "").trim() }
+              : null,
+          )
           setClientSearchOpen(false)
           focusBipe()
         }}
@@ -518,6 +531,24 @@ export function PdvBlackEdition() {
       <AberturaCaixaModal isOpen={showAbertura} onClose={() => setShowAbertura(false)} />
       <FechamentoCaixaModal isOpen={showFechamento} onClose={() => setShowFechamento(false)} />
 
+      {/* Seletor de cliente (com cadastro rápido) para venda à prazo — por cima do pagamento */}
+      <PdvClientePicker
+        open={aPrazoClientePickerOpen}
+        storeId={lojaAtivaId ?? ""}
+        onClose={() => setAPrazoClientePickerOpen(false)}
+        onSelect={(c: PdvClienteResult) => {
+          setSelectedCustomer({
+            id: c.id,
+            name: c.name,
+            cpf: (c.document ?? "").trim(),
+            phone: (c.phone ?? "").trim(),
+          })
+          setSelectedClienteId(c.id)
+          setCustomerDisplay(c.name)
+          setAPrazoClientePickerOpen(false)
+        }}
+      />
+
       {/* Modal de pagamento */}
       <PaymentModal
         isOpen={paymentOpen}
@@ -528,6 +559,11 @@ export function PdvBlackEdition() {
         discountPercent={0}
         onDiscountReaisChange={() => {}}
         onDiscountPercentChange={() => {}}
+        selectedCustomer={selectedCustomer}
+        onCustomerCpfUpdate={(id, cpf) =>
+          setSelectedCustomer((prev) => (prev && prev.id === id ? { ...prev, cpf } : prev))
+        }
+        onRequireCustomer={() => setAPrazoClientePickerOpen(true)}
         cashierId={operadorNome}
         onConfirm={handlePaymentConfirm}
       />

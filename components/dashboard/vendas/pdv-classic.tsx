@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
+import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { TrocasDevolucao } from "./trocas-devolucao"
@@ -49,7 +50,6 @@ import { configPadrao, useConfigEmpresa } from "@/lib/config-empresa"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { computePdvCartTotals } from "@/lib/pdv-cart-totals"
 import {
-  findFormaByPaymentType,
   getActiveFormasPagamento,
   getFormaMultiplo,
   getFormaPagamentoIcon,
@@ -224,6 +224,8 @@ export function PdvClassic({
   const [discountReais, setDiscountReais] = useState<number>(0)
   const [discountPercent, setDiscountPercent] = useState<number>(0)
   const [instantPayIntent, setInstantPayIntent] = useState<PaymentMethodType | null>(null)
+  /** Seletor de cliente (com cadastro rápido) aberto por cima do modal de pagamento (à prazo). */
+  const [aPrazoClientePickerOpen, setAPrazoClientePickerOpen] = useState(false)
   /** Convergência operacional: abre o modal compartilhado em modo Pagamento Múltiplo (F12 / botão "Múltiplo"). */
   const [multipayMode, setMultipayMode] = useState(false)
   const [showOperationsMenu, setShowOperationsMenu] = useState(false)
@@ -1264,38 +1266,8 @@ export function PdvClassic({
   }, [voiceCartSeed, onVoiceCartSeedConsumed, toast])
 
   const openPaymentModal = (intent: PaymentMethodType | null) => {
-    if (intent) {
-      const forma = findFormaByPaymentType(pdvParams.formasPagamento ?? [], intent)
-      const exigirCliente = forma?.exigirCliente ?? (intent === "a_prazo" || intent === "carne")
-      if (exigirCliente && !selectedCustomer) {
-        toast({
-          variant: "destructive",
-          title: "Cliente obrigatório",
-          description:
-            intent === "a_prazo"
-              ? "⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo."
-              : "Selecione o cliente para carnê parcelado ou boleto.",
-        })
-        return
-      }
-    }
-    if (intent === "a_prazo" && !selectedCustomer) {
-      toast({
-        variant: "destructive",
-        title: "Cliente obrigatório",
-        description:
-          "⚠️ Selecione um cliente na tela inicial para liberar a venda a prazo.",
-      })
-      return
-    }
-    if (intent === "carne" && !selectedCustomer) {
-      toast({
-        variant: "destructive",
-        title: "Cliente obrigatório",
-        description: "Selecione o cliente para carnê parcelado ou boleto.",
-      })
-      return
-    }
+    // À prazo / carnê sem cliente NÃO barram mais: o modal abre e pede o seletor de
+    // cliente (com cadastro rápido) via onRequireCustomer, preservando o carrinho.
     setInstantPayIntent(intent)
     setMultipayMode(false)
     setIsPaymentModalOpen(true)
@@ -1628,6 +1600,21 @@ export function PdvClassic({
         hotkeyLabel="F5"
       />
 
+      <PdvClientePicker
+        open={aPrazoClientePickerOpen}
+        storeId={lojaKey}
+        onClose={() => setAPrazoClientePickerOpen(false)}
+        onSelect={(c: PdvClienteResult) => {
+          setSelectedCustomer({
+            id: c.id,
+            name: c.name,
+            cpf: (c.document ?? "").trim(),
+            phone: (c.phone ?? "").trim(),
+          })
+          setAPrazoClientePickerOpen(false)
+        }}
+      />
+
       <PaymentModal
         isOpen={isPaymentModalOpen}
         twoColumn
@@ -1651,6 +1638,7 @@ export function PdvClassic({
         onInstantPayIntentConsumed={() => setInstantPayIntent(null)}
         onCustomerCpfUpdate={updateCustomerCpf}
         multipayHint={multipayMode}
+        onRequireCustomer={() => setAPrazoClientePickerOpen(true)}
         cashierId={cashierId}
         onConfirm={(payments, meta) => {
           const saleLines = cart

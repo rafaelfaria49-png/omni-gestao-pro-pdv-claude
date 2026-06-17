@@ -4,6 +4,8 @@ export interface APrazoConfig {
   parcelas: number           // 1-24, default 1
   primeiroVencimento: string // DD/MM/YYYY
   intervalDias: number       // default 30
+  /** Observação opcional do operador (persistida no payload do ContaReceberTitulo). */
+  observacao?: string
 }
 
 export interface PaymentBreakdownFull {

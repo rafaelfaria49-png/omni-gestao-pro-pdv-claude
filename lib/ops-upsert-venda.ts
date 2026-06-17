@@ -59,6 +59,8 @@ export type SalePayload = {
     parcelas?: number
     primeiroVencimento?: string // DD/MM/YYYY
     intervalDias?: number
+    /** Observação opcional do operador (espelhada no payload do título). */
+    observacao?: string
   }
   lines?: Array<{
     inventoryId?: string
@@ -415,6 +417,10 @@ export async function upsertVendaInTransaction(
     const parcelas = Math.max(1, Math.min(24, Number(cfg?.parcelas) || 1))
     const intervalDias = Math.max(1, Number(cfg?.intervalDias) || 30)
     const aprazoCliente = clienteNome || "Cliente"
+    const aprazoObs =
+      typeof cfg?.observacao === "string" && cfg.observacao.trim()
+        ? cfg.observacao.trim().slice(0, 500)
+        : null
 
     // Resolve primeiro vencimento (DD/MM/YYYY → Date)
     let primeiroVenc: Date
@@ -458,6 +464,7 @@ export async function upsertVendaInTransaction(
         total_value: aPrazoVal,
         numeroParcela: n,
         totalParcelas: parcelas,
+        ...(aprazoObs ? { observacao: aprazoObs } : {}),
         vendas: [{ saleId: pedidoId, total: aPrazoVal }],
       } as unknown as Prisma.InputJsonValue
 

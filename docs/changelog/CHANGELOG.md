@@ -1,5 +1,13 @@
 # Changelog — OmniGestão Pro
 
+## 2026-06-17 — Venda a prazo profissional + cliente rápido no PDV
+
+- **Modal de pagamento compartilhado** (`payment-modal.tsx`): À Prazo passa a ser combinável no **Pagamento Múltiplo** (F12); novo atalho **"Lançar R$ X restante À Prazo"** sugere o saldo como Conta a Receber em 1 toque (ex.: recebe R$ 22 em dinheiro numa venda de R$ 39,90 → sugere R$ 17,90 à prazo); campo **Observação** no card à prazo; quando falta cliente, o modal **abre o seletor de cliente** (em vez de só toast) via `onRequireCustomer`, preservando o carrinho.
+- **Cadastro rápido de cliente no PDV** (`pdv-cliente-picker.tsx` + `app/api/clientes/quick`): botão "Cadastrar novo cliente" na busca (Nome obrigatório, Telefone/CPF opcionais), cria cliente real e seleciona automaticamente sem sair do PDV. Rota dedicada aberta a operador autenticado, multi-loja por header.
+- **PDVs cobertos:** Clássico, Supermercado (passa a aceitar cliente/à prazo) e PDV Next (passa a enviar CPF) reutilizam o mesmo modal/motor; **Venda Completa** migrada do formulário de método único para o modal compartilhado (ganha entrada + parcelas + vencimento + múltiplo + à prazo).
+- **Motor inalterado:** `finalizeSaleTransaction` + `upsertVendaInTransaction` já faziam o split correto — entrada no caixa, saldo a prazo só em `ContaReceberTitulo` (idempotente por parcela), sem duplicar e sem criar título quando aPrazo = 0. Observação opcional espelhada no payload do título. Cobertura de testes nova em `lib/ops-upsert-venda-aprazo.test.ts`.
+- **Fora desta entrega:** PDV **Assistência** mantém seu modal próprio (à prazo cheio → Conta a Receber, sem entrada/parcelas) — migração para o modal compartilhado adiada por risco (modal bespoke acoplado a desconto/teclado na produção; requer teste manual de checkout).
+
 ## 2026-05-08 — Memória viva do projeto
 
 - **Documentação:** criado [`docs/memory/OMNIGESTAO_MASTER_MEMORY.md`](../memory/OMNIGESTAO_MASTER_MEMORY.md) — relatório longo de continuidade: histórico por fases, implementações por módulo (Financeiro, PDV, Operações, WhatsApp, Auth, Billing, etc.), separação *inferencial* Claude Code vs Cursor, status ✅/⚠️/❌, decisões arquiteturais, pendências P0/P1/P2/P3, temas (incl. Quantum Violet como acento, não tema studio), PDVs, produção/Vercel, riscos, sequência MVP e apêndices (migrations, índice de reports, commits).

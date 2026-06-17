@@ -45,6 +45,8 @@ import {
 } from "@/lib/pdv-formas-pagamento"
 import { useOperationsStore, type InventoryItem } from "@/lib/operations-store"
 import { PaymentModal, type PaymentMethodType } from "./payment-modal"
+import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
+import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { newPdvLineId, type PdvCatalogProduct } from "@/lib/pdv-catalog"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
@@ -179,6 +181,9 @@ export function PdvSupermercado({
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
   /** Convergência operacional: abre o modal compartilhado em modo Pagamento Múltiplo (F12 / botão "Múltiplo"). */
   const [multipayMode, setMultipayMode] = useState(false)
+  /** Cliente selecionado para venda à prazo (consumidor final por padrão no supermercado). */
+  const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string; cpf: string; phone: string } | null>(null)
+  const [aPrazoClientePickerOpen, setAPrazoClientePickerOpen] = useState(false)
   const [adminSessionOk, setAdminSessionOk] = useState(false)
   const [supervisorDialogOpen, setSupervisorDialogOpen] = useState(false)
   const [supervisorPin, setSupervisorPin] = useState("")
@@ -1102,6 +1107,21 @@ export function PdvSupermercado({
         </PdvPainelLateralTerminal>
       </div>
 
+      <PdvClientePicker
+        open={aPrazoClientePickerOpen}
+        storeId={lojaKey}
+        onClose={() => setAPrazoClientePickerOpen(false)}
+        onSelect={(c: PdvClienteResult) => {
+          setSelectedCustomer({
+            id: c.id,
+            name: c.name,
+            cpf: (c.document ?? "").trim(),
+            phone: (c.phone ?? "").trim(),
+          })
+          setAPrazoClientePickerOpen(false)
+        }}
+      />
+
       <PaymentModal
         isOpen={isPaymentModalOpen}
         onClose={() => {
@@ -1118,12 +1138,15 @@ export function PdvSupermercado({
         onDiscountReaisChange={setDiscountReais}
         onDiscountPercentChange={setDiscountPercent}
         custoPeca={total * 0.35}
-        selectedCustomer={null}
-        customerStoreCredit={getSaldoCreditoCliente("")}
+        selectedCustomer={selectedCustomer}
+        customerStoreCredit={getSaldoCreditoCliente(selectedCustomer?.cpf ?? "")}
         instantPayIntent={instantPayIntent}
         onInstantPayIntentConsumed={() => setInstantPayIntent(null)}
-        onCustomerCpfUpdate={() => {}}
+        onCustomerCpfUpdate={(id, cpf) =>
+          setSelectedCustomer((prev) => (prev && prev.id === id ? { ...prev, cpf } : prev))
+        }
         multipayHint={multipayMode}
+        onRequireCustomer={() => setAPrazoClientePickerOpen(true)}
         cashierId={cashierId}
         onConfirm={(payments, meta) => {
           // Capturar dados de impressão ANTES de limpar o cart
@@ -1193,6 +1216,9 @@ export function PdvSupermercado({
               aPrazo,
               creditoVale,
             },
+            customerCpf: selectedCustomer?.cpf,
+            customerName: selectedCustomer?.name,
+            clienteId: selectedCustomer?.id || undefined,
             auditMeta: {
               cashierId: meta?.cashierId ?? cashierId,
               discountAuthorizedByAdminId: meta?.discountAuthorizedByAdminId,
@@ -1207,6 +1233,16 @@ export function PdvSupermercado({
             return
           }
           _printInput.numeroVenda = result.saleId
+          // Saldo à prazo → Conta a Receber (cache local; o servidor é a fonte da verdade).
+          if (aPrazo > 0.02 && selectedCustomer) {
+            appendContaReceberTituloPdvAprazo({
+              lojaId: lojaKey,
+              saleId: result.saleId,
+              clienteNome: selectedCustomer.name,
+              valor: aPrazo,
+              aPrazoConfig,
+            })
+          }
           // Fila "Produtos a cadastrar": registra os itens avulsos vendidos para revisão posterior.
           // Não toca estoque/venda/caixa e nunca lança (não pode afetar a venda já concluída).
           try {
@@ -1234,6 +1270,7 @@ export function PdvSupermercado({
           }
 
           setCart([])
+          setSelectedCustomer(null)
           setDiscountReais(0)
           setDiscountPercent(0)
           setSelectedProduct(null)
