@@ -42,6 +42,7 @@ import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-se
 import { estornarMovimentacaoPorReferencia } from "@/lib/financeiro/services/movimentacoes-service"
 import { cancelContaReceber, upsertContaReceber } from "@/lib/financeiro/services/contas-receber-service"
 import { RECEBER_STATUS, normalizeReceberStatus } from "@/lib/financeiro/contracts/status"
+import { aPrazoExigeCliente, podeLimparCliente, tituloEditavel, parseVencimentoBr } from "@/lib/vendas/correcao-cliente-titulo-plan"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -81,6 +82,8 @@ type CorrigirBody = {
   motivo: string
   supervisorPin?: string
   novaFormaPagamento?: Partial<PaymentBreakdownFull>
+  /** Vencimento DD/MM/AAAA do título à prazo gerado pela correção (F3). Opcional. */
+  aPrazoVencimento?: string | null
   novoClienteId?: string | null
   novoClienteNome?: string | null
   novaObservacao?: string | null
@@ -106,7 +109,7 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "JSON inválido" }, { status: 400 })
   }
 
-  const { motivo, supervisorPin, novaFormaPagamento, novoClienteId, novoClienteNome, novaObservacao } = body
+  const { motivo, supervisorPin, novaFormaPagamento, aPrazoVencimento, novoClienteId, novoClienteNome, novaObservacao } = body
 
   if (!motivo?.trim()) {
     return NextResponse.json({ ok: false, error: "Motivo da correção é obrigatório" }, { status: 400 })
@@ -213,6 +216,25 @@ export async function POST(
       const newPbNorm = normalizeBreakdown(novaFormaPagamento)
       const oldPbNorm = normalizeBreakdown(oldPb)
 
+      // 2b) Venda à prazo exige cliente (F3). A correção de pagamento usa o cliente
+      //     JÁ vinculado à venda — para lançar saldo a prazo sem cliente, o operador
+      //     deve primeiro vincular um cliente (aba Cliente).
+      const clienteNomeEfetivo = venda.clienteNome ?? ""
+      const reqCliente = aPrazoExigeCliente(plan.newAPrazo, clienteNomeEfetivo)
+      if (!reqCliente.ok) {
+        return NextResponse.json({ ok: false, error: reqCliente.error, code: reqCliente.code }, { status: 422 })
+      }
+
+      // 2c) Vencimento do título à prazo (se informado, validar DD/MM/AAAA).
+      let aPrazoVencStr: string | null = null
+      if (plan.criarTituloValor !== null && typeof aPrazoVencimento === "string" && aPrazoVencimento.trim()) {
+        const venc = parseVencimentoBr(aPrazoVencimento)
+        if (!venc.ok) {
+          return NextResponse.json({ ok: false, error: venc.error, code: "vencimento_invalido" }, { status: 422 })
+        }
+        aPrazoVencStr = venc.vencimento ?? null
+      }
+
       // 3) Pré-checagens read-only (antes de QUALQUER mutação) ────────────────────
       // 3a) Título à prazo já recebido (pago/parcial) não pode ser convertido aqui.
       if (plan.reconcileTitulos) {
@@ -292,13 +314,12 @@ export async function POST(
         }
 
         if (plan.criarTituloValor !== null) {
-          const vencDate = new Date(venda.at.getTime() + 30 * 86_400_000)
-          const vencimento = vencDate.toLocaleDateString("pt-BR")
+          const vencimento = aPrazoVencStr ?? new Date(venda.at.getTime() + 30 * 86_400_000).toLocaleDateString("pt-BR")
           await upsertContaReceber({
             storeId,
             localKey: targetLocalKey,
             descricao: `Venda PDV ${pedidoId} — À prazo (correção de pagamento)`,
-            cliente: venda.clienteNome || "Cliente",
+            cliente: clienteNomeEfetivo || venda.clienteNome || "Cliente",
             valor: plan.criarTituloValor,
             vencimento,
             status: "pendente",
@@ -434,7 +455,7 @@ export async function POST(
         if (plan.newAPrazo > 0.005) {
           newPayload.aPrazoConfig = {
             parcelas: 1,
-            primeiroVencimento: new Date(venda.at.getTime() + 30 * 86_400_000).toLocaleDateString("pt-BR"),
+            primeiroVencimento: aPrazoVencStr ?? new Date(venda.at.getTime() + 30 * 86_400_000).toLocaleDateString("pt-BR"),
             intervalDias: 30,
           }
         } else {
@@ -487,8 +508,55 @@ export async function POST(
       })
     }
 
-    // ── Correção de cliente ─────────────────────────────────────────────────────
+    // ── Correção de cliente (F3) ────────────────────────────────────────────────
+    // PIN de supervisor obrigatório para troca de cliente (Parte 11). O bloco de
+    // pagamento retorna cedo, então aqui sempre validamos (cliente/observação).
+    let titulosClienteAtualizados = 0
     if (hasClienteChange) {
+      if (!supervisorPin?.trim()) {
+        return NextResponse.json(
+          { ok: false, error: "PIN de supervisor obrigatório para trocar o cliente", code: "pin_required" },
+          { status: 403 },
+        )
+      }
+      const adminCli = await prisma.user.findFirst({
+        where: { pin: supervisorPin.trim(), OR: [{ role: "ADMIN" }, { role: "admin" }] },
+        select: { id: true, name: true },
+      })
+      if (!adminCli) {
+        return NextResponse.json({ ok: false, error: "PIN de supervisor inválido", code: "pin_invalid" }, { status: 401 })
+      }
+      correcao.supervisorNome = adminCli.name || "Supervisor"
+      // Títulos à prazo desta venda (para regras de obrigatoriedade/propagação).
+      const titulosVenda = await prisma.contaReceberTitulo.findMany({
+        where: { storeId, localKey: { startsWith: `pdv-aprazo-${pedidoId}` } },
+        select: { id: true, status: true, payload: true },
+      })
+      const titulosAbertos = titulosVenda.filter((t) => {
+        const st = normalizeReceberStatus(t.status)
+        return st !== RECEBER_STATUS.CANCELADO && st !== RECEBER_STATUS.ESTORNADO
+      })
+      const temAPrazoAberto = titulosAbertos.length > 0
+
+      const limpandoCliente = !novoClienteId && !(novoClienteNome ?? "").trim()
+      if (limpandoCliente) {
+        const r = podeLimparCliente(temAPrazoAberto)
+        if (!r.ok) return NextResponse.json({ ok: false, error: r.error, code: r.code }, { status: 422 })
+      }
+
+      // Título já recebido (pago/parcial) bloqueia troca de cliente (exige fluxo futuro).
+      if (temAPrazoAberto) {
+        for (const t of titulosAbertos) {
+          const editavel = tituloEditavel(t.status)
+          if (!editavel.ok) {
+            return NextResponse.json(
+              { ok: false, error: "Há título à prazo recebido (total/parcial). Estorne no Contas a Receber antes de trocar o cliente.", code: editavel.code },
+              { status: 409 },
+            )
+          }
+        }
+      }
+
       correcao.clienteAnterior = venda.clienteNome ?? null
       correcao.clienteNovo = novoClienteNome ?? null
       correcao.clienteIdAnterior = venda.clienteId ?? null
@@ -498,6 +566,7 @@ export async function POST(
       updateData.clienteNome = novoClienteNome ?? null
       updateData.clienteId = novoClienteId ?? null
 
+      let nomeClienteFinal = novoClienteNome ?? null
       if (novoClienteId) {
         const cpfPayload = payload.customerCpf
         const cliente = await prisma.cliente.findUnique({
@@ -507,11 +576,22 @@ export async function POST(
         if (cliente) {
           newPayload.customerCpf = cliente.document ?? cpfPayload ?? null
           newPayload.customerName = cliente.name ?? novoClienteNome ?? null
+          nomeClienteFinal = cliente.name ?? novoClienteNome ?? null
         }
       } else {
         newPayload.customerCpf = null
         newPayload.customerName = novoClienteNome ?? null
       }
+
+      // Propaga o novo cliente para os títulos à prazo ABERTOS (campo `cliente`).
+      if (temAPrazoAberto && nomeClienteFinal) {
+        const upd = await prisma.contaReceberTitulo.updateMany({
+          where: { id: { in: titulosAbertos.map((t) => t.id) } },
+          data: { cliente: nomeClienteFinal },
+        })
+        titulosClienteAtualizados = upd.count
+      }
+      correcao.titulosClienteAtualizados = titulosClienteAtualizados
     }
 
     // ── Correção de observação ──────────────────────────────────────────────────

@@ -33,7 +33,10 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { computeCorrecaoItensPlan, type CorrecaoLineInput } from "@/lib/vendas/correcao-itens-plan"
+import { computeCorrecaoPagamentoPlan } from "@/lib/financeiro/correcao-pagamento-plan"
+import { parseVencimentoBr } from "@/lib/vendas/correcao-cliente-titulo-plan"
 import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
+import { listClientes } from "@/app/actions/cadastros"
 
 // ── Tipos (espelham o GET enriquecido) ─────────────────────────────────────────
 
@@ -437,6 +440,177 @@ export function WorkspaceCorrecaoVenda({
 
   const draftTotal = useMemo(() => draft.reduce((s, l) => s + Math.max(0, l.precoUnitario * l.quantidade - l.desconto), 0), [draft])
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // F3 — Pagamento / Cliente / Conta a Receber (editáveis)
+  // ════════════════════════════════════════════════════════════════════════════
+  const FORMS: Array<{ key: keyof PaymentBreakdownFull; label: string }> = [
+    { key: "dinheiro", label: "Dinheiro" }, { key: "pix", label: "Pix" },
+    { key: "cartaoDebito", label: "Débito" }, { key: "cartaoCredito", label: "Crédito" },
+    { key: "carne", label: "Carnê" }, { key: "aPrazo", label: "A Prazo" },
+    { key: "creditoVale", label: "Vale/Crédito" },
+  ]
+
+  // ── Pagamento ────────────────────────────────────────────────────────────────
+  const [editPag, setEditPag] = useState(false)
+  const [pagDraft, setPagDraft] = useState<Record<string, number>>({})
+  const [pagVenc, setPagVenc] = useState("")
+  const [pagMotivo, setPagMotivo] = useState("")
+  const [pagPin, setPagPin] = useState("")
+  const [pagConfirm, setPagConfirm] = useState(false)
+  const [pagApplying, setPagApplying] = useState(false)
+
+  const startEditPag = useCallback(() => {
+    if (!venda) return
+    const pb = venda.paymentBreakdown ?? {}
+    const seed: Record<string, number> = {}
+    for (const f of FORMS) seed[f.key] = Number(pb[f.key]) || 0
+    setPagDraft(seed)
+    setPagVenc("")
+    setPagMotivo(""); setPagPin(""); setPagConfirm(false); setEditPag(true)
+  }, [venda]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const pagSoma = useMemo(() => Math.round(Object.values(pagDraft).reduce((s, v) => s + (Number(v) || 0), 0) * 100) / 100, [pagDraft])
+  const pagPlan = useMemo(() => {
+    if (!venda || !editPag) return null
+    return computeCorrecaoPagamentoPlan({ total: venda.total, oldBreakdown: venda.paymentBreakdown, newBreakdown: pagDraft })
+  }, [venda, editPag, pagDraft])
+  const pagAPrazo = Number(pagDraft.aPrazo) || 0
+  const pagPrecisaCliente = pagAPrazo > 0.005 && !(venda?.clienteNome ?? "").trim()
+  const pagPrecisaVenc = pagAPrazo > 0.005
+
+  const aplicarPag = useCallback(async () => {
+    if (!venda || !pagPlan?.ok || !pagMotivo.trim() || !pagPin.trim()) return
+    if (pagPrecisaCliente) { toast({ title: "Cliente obrigatório", description: "Venda à prazo exige cliente. Vincule na aba Cliente.", variant: "destructive" }); return }
+    if (pagPrecisaVenc && !parseVencimentoBr(pagVenc).ok) { toast({ title: "Vencimento inválido", description: "Informe o vencimento DD/MM/AAAA do saldo a prazo.", variant: "destructive" }); return }
+    setPagApplying(true)
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(venda.id)}/corrigir`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify({
+          motivo: pagMotivo.trim(), supervisorPin: pagPin.trim(),
+          novaFormaPagamento: pagDraft,
+          ...(pagPrecisaVenc ? { aPrazoVencimento: pagVenc.trim() } : {}),
+        }),
+      })
+      const data = await res.json()
+      if (!data.ok) { toast({ title: "Pagamento não corrigido", description: data.error ?? "Falha.", variant: "destructive" }); return }
+      toast({ title: "Pagamento corrigido", description: "Reconciliação financeira aplicada." })
+      setEditPag(false); await load()
+    } catch { toast({ title: "Erro", description: "Falha de conexão.", variant: "destructive" }) }
+    finally { setPagApplying(false) }
+  }, [venda, pagPlan, pagMotivo, pagPin, pagDraft, pagVenc, pagPrecisaCliente, pagPrecisaVenc, storeId, toast, load])
+
+  // ── Cliente ──────────────────────────────────────────────────────────────────
+  const [editCli, setEditCli] = useState(false)
+  const [cliBusca, setCliBusca] = useState("")
+  const [cliLista, setCliLista] = useState<Array<{ id: string; nome: string; documento?: string }>>([])
+  const [cliLoading, setCliLoading] = useState(false)
+  const [cliSelId, setCliSelId] = useState<string | null>(null)
+  const [cliSelNome, setCliSelNome] = useState("")
+  const [cliMotivo, setCliMotivo] = useState("")
+  const [cliPin, setCliPin] = useState("")
+  const [cliApplying, setCliApplying] = useState(false)
+  const [qcOpen, setQcOpen] = useState(false)
+  const [qcNome, setQcNome] = useState("")
+  const [qcFone, setQcFone] = useState("")
+  const [qcDoc, setQcDoc] = useState("")
+  const [qcSaving, setQcSaving] = useState(false)
+
+  const vendaTemAPrazo = useMemo(() => {
+    if (!venda) return false
+    return (venda.titulos ?? []).some((t) => {
+      const s = (t.status ?? "").toLowerCase()
+      return s !== "cancelado" && s !== "estornado"
+    }) || (Number(venda.paymentBreakdown?.aPrazo) || 0) > 0.005
+  }, [venda])
+
+  const startEditCli = useCallback(() => {
+    if (!venda) return
+    setCliSelId(venda.clienteId ?? null)
+    setCliSelNome(venda.clienteNome ?? "")
+    setCliBusca(venda.clienteNome ?? "")
+    setCliMotivo(""); setCliPin(""); setEditCli(true); setQcOpen(false)
+    setCliLoading(true)
+    listClientes(storeId).then((d) => setCliLista((d || []).map((c: Record<string, unknown>) => ({ id: String(c.id), nome: String(c.nome ?? c.name ?? ""), documento: (c.documento as string) ?? (c.document as string) ?? undefined })))).catch(() => setCliLista([])).finally(() => setCliLoading(false))
+  }, [venda, storeId])
+
+  const criarClienteRapido = useCallback(async () => {
+    if (!qcNome.trim()) return
+    setQcSaving(true)
+    try {
+      const res = await fetch(`/api/clientes/quick`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify({ name: qcNome.trim(), phone: qcFone.trim() || undefined, document: qcDoc.trim() || undefined }),
+      })
+      const data = await res.json()
+      if (!data.ok) { toast({ title: "Cadastro não concluído", description: data.error ?? "Falha.", variant: "destructive" }); return }
+      const c = data.cliente
+      setCliSelId(c.id); setCliSelNome(c.name); setCliBusca(c.name)
+      setCliLista((cur) => [{ id: c.id, nome: c.name, documento: c.document }, ...cur])
+      setQcOpen(false); setQcNome(""); setQcFone(""); setQcDoc("")
+      toast({ title: "Cliente cadastrado", description: c.name })
+    } catch { toast({ title: "Erro", description: "Falha de conexão.", variant: "destructive" }) }
+    finally { setQcSaving(false) }
+  }, [qcNome, qcFone, qcDoc, storeId, toast])
+
+  const limpandoCliente = !cliSelId && !cliSelNome.trim()
+  const cliBloqueiaLimpar = limpandoCliente && vendaTemAPrazo
+
+  const aplicarCli = useCallback(async () => {
+    if (!venda || !cliMotivo.trim() || !cliPin.trim()) return
+    if (cliBloqueiaLimpar) { toast({ title: "Cliente obrigatório", description: "Venda com saldo a prazo não pode ficar sem cliente.", variant: "destructive" }); return }
+    setCliApplying(true)
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(venda.id)}/corrigir`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify({ motivo: cliMotivo.trim(), supervisorPin: cliPin.trim(), novoClienteId: cliSelId, novoClienteNome: cliSelNome.trim() || null }),
+      })
+      const data = await res.json()
+      if (!data.ok) { toast({ title: "Cliente não corrigido", description: data.error ?? "Falha.", variant: "destructive" }); return }
+      toast({ title: "Cliente atualizado", description: cliSelNome || "Consumidor final" })
+      setEditCli(false); await load()
+    } catch { toast({ title: "Erro", description: "Falha de conexão.", variant: "destructive" }) }
+    finally { setCliApplying(false) }
+  }, [venda, cliMotivo, cliPin, cliSelId, cliSelNome, cliBloqueiaLimpar, storeId, toast, load])
+
+  // ── Conta a Receber (vencimento/observação) ───────────────────────────────────
+  const [editTitId, setEditTitId] = useState<string | null>(null)
+  const [titVenc, setTitVenc] = useState("")
+  const [titObs, setTitObs] = useState("")
+  const [titMotivo, setTitMotivo] = useState("")
+  const [titPin, setTitPin] = useState("")
+  const [titApplying, setTitApplying] = useState(false)
+
+  const startEditTitulo = useCallback((t: Titulo) => {
+    setEditTitId(t.id); setTitVenc(t.vencimento || ""); setTitObs(""); setTitMotivo(""); setTitPin("")
+  }, [])
+
+  // Limpa edições F3 ao (re)abrir ou trocar de venda.
+  useEffect(() => {
+    setEditPag(false); setEditCli(false); setEditTitId(null); setPagConfirm(false); setQcOpen(false)
+  }, [open, vendaId])
+
+  const aplicarTitulo = useCallback(async () => {
+    if (!venda || !editTitId || !titMotivo.trim() || !titPin.trim()) return
+    if (titVenc.trim() && !parseVencimentoBr(titVenc).ok) { toast({ title: "Vencimento inválido", description: "Use DD/MM/AAAA.", variant: "destructive" }); return }
+    setTitApplying(true)
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(venda.id)}/corrigir-titulo`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify({ tituloId: editTitId, motivo: titMotivo.trim(), supervisorPin: titPin.trim(), ...(titVenc.trim() ? { novoVencimento: titVenc.trim() } : {}), novaObservacao: titObs.trim() || null }),
+      })
+      const data = await res.json()
+      if (!data.ok) { toast({ title: "Título não corrigido", description: data.error ?? "Falha.", variant: "destructive" }); return }
+      toast({ title: "Título atualizado", description: "Conta a receber corrigida." })
+      setEditTitId(null); await load()
+    } catch { toast({ title: "Erro", description: "Falha de conexão.", variant: "destructive" }) }
+    finally { setTitApplying(false) }
+  }, [venda, editTitId, titMotivo, titPin, titVenc, titObs, storeId, toast, load])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] p-0 gap-0 border-border bg-background flex flex-col overflow-hidden">
@@ -552,68 +726,206 @@ export function WorkspaceCorrecaoVenda({
                 </div>
               </TabsContent>
 
-              {/* 2 · CLIENTE */}
-              <TabsContent value="cliente" className="mt-0">
-                {venda.clienteCompleto ? (
-                  <Card className="border-border bg-card max-w-2xl min-w-0">
-                    <CardContent className="pt-4">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">Cliente vinculado</p>
-                      <FieldRow label="Nome" value={venda.clienteCompleto.name} />
-                      <FieldRow label="Tipo" value={venda.clienteCompleto.kind === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"} />
-                      <FieldRow label="Documento" value={venda.clienteCompleto.document || venda.clienteCpf || "—"} mono />
-                      <FieldRow label="Telefone" value={venda.clienteCompleto.phone || "—"} />
-                      <FieldRow label="E-mail" value={venda.clienteCompleto.email || "—"} />
-                      <FieldRow label="Cidade" value={venda.clienteCompleto.city || "—"} />
-                      <FieldRow label="Total gasto (histórico)" value={fmtBrl(venda.clienteCompleto.totalSpent)} />
-                      <FieldRow label="Última compra" value={fmtDateTime(venda.clienteCompleto.lastPurchaseAt)} />
-                    </CardContent>
-                  </Card>
-                ) : venda.clienteNome || venda.clienteCpf ? (
-                  <Card className="border-border bg-card max-w-2xl min-w-0">
-                    <CardContent className="pt-4">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">Cliente (sem cadastro formal)</p>
-                      <FieldRow label="Nome" value={venda.clienteNome || "—"} />
-                      <FieldRow label="CPF/CNPJ no cupom" value={venda.clienteCpf || "—"} mono />
-                    </CardContent>
-                  </Card>
+              {/* 2 · CLIENTE (editável — F3) */}
+              <TabsContent value="cliente" className="mt-0 space-y-4">
+                {!editCli ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Trocar o cliente exige motivo e PIN. Venda à prazo sempre exige cliente.</p>
+                      {venda.status !== "cancelada" && (
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditCli}><Pencil className="h-3.5 w-3.5" /> Editar cliente</Button>
+                      )}
+                    </div>
+                    {venda.clienteCompleto ? (
+                      <Card className="border-border bg-card max-w-2xl min-w-0">
+                        <CardContent className="pt-4">
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">Cliente vinculado</p>
+                          <FieldRow label="Nome" value={venda.clienteCompleto.name} />
+                          <FieldRow label="Tipo" value={venda.clienteCompleto.kind === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"} />
+                          <FieldRow label="Documento" value={venda.clienteCompleto.document || venda.clienteCpf || "—"} mono />
+                          <FieldRow label="Telefone" value={venda.clienteCompleto.phone || "—"} />
+                          <FieldRow label="E-mail" value={venda.clienteCompleto.email || "—"} />
+                          <FieldRow label="Cidade" value={venda.clienteCompleto.city || "—"} />
+                          <FieldRow label="Total gasto (histórico)" value={fmtBrl(venda.clienteCompleto.totalSpent)} />
+                          <FieldRow label="Última compra" value={fmtDateTime(venda.clienteCompleto.lastPurchaseAt)} />
+                        </CardContent>
+                      </Card>
+                    ) : venda.clienteNome || venda.clienteCpf ? (
+                      <Card className="border-border bg-card max-w-2xl min-w-0">
+                        <CardContent className="pt-4">
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">Cliente (sem cadastro formal)</p>
+                          <FieldRow label="Nome" value={venda.clienteNome || "—"} />
+                          <FieldRow label="CPF/CNPJ no cupom" value={venda.clienteCpf || "—"} mono />
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <EmptyState icon={User} title="Consumidor final" hint="Esta venda não tem cliente vinculado." />
+                    )}
+                  </>
                 ) : (
-                  <EmptyState icon={User} title="Consumidor final" hint="Esta venda não tem cliente vinculado. A troca/cadastro de cliente chega em F3." />
+                  <div className="space-y-4 max-w-2xl">
+                    <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" /><span>Correções alteram o cupom e o vínculo de Conta a Receber. Revise antes de aplicar.</span>
+                    </div>
+                    {/* Busca de cliente */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Buscar cliente cadastrado</Label>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input className="pl-8 h-9 text-sm" placeholder="Nome ou documento…" value={cliBusca} onChange={(e) => { setCliBusca(e.target.value) }} />
+                      </div>
+                      {cliLoading ? (
+                        <div className="flex items-center gap-2 p-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando…</div>
+                      ) : (
+                        <div className="max-h-40 overflow-y-auto rounded-md border border-border divide-y divide-border/50">
+                          {cliLista.filter((c) => { const s = cliBusca.trim().toLowerCase(); return !s || c.nome.toLowerCase().includes(s) || (c.documento ?? "").toLowerCase().includes(s) }).slice(0, 30).map((c) => (
+                            <button key={c.id} type="button" onClick={() => { setCliSelId(c.id); setCliSelNome(c.nome); setCliBusca(c.nome) }} className={cn("w-full text-left px-3 py-1.5 text-sm hover:bg-accent hover:text-accent-foreground flex justify-between gap-2", cliSelId === c.id && "bg-accent")}>
+                              <span className="break-words">{c.nome}</span>{c.documento && <span className="text-[10px] text-muted-foreground shrink-0">{c.documento}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Cadastro rápido */}
+                    {!qcOpen ? (
+                      <Button size="sm" variant="ghost" className="gap-1.5 text-primary" onClick={() => setQcOpen(true)}><Plus className="h-3.5 w-3.5" /> Cadastrar novo cliente</Button>
+                    ) : (
+                      <Card className="border-primary/30 bg-primary/5">
+                        <CardContent className="pt-4 space-y-2">
+                          <p className="text-xs font-semibold text-foreground">Cadastro rápido</p>
+                          <Input className="h-9 text-sm" placeholder="Nome *" value={qcNome} onChange={(e) => setQcNome(e.target.value)} />
+                          <div className="flex gap-2">
+                            <Input className="h-9 text-sm" placeholder="Telefone" value={qcFone} onChange={(e) => setQcFone(e.target.value)} />
+                            <Input className="h-9 text-sm" placeholder="CPF/CNPJ" value={qcDoc} onChange={(e) => setQcDoc(e.target.value)} />
+                          </div>
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setQcOpen(false)} disabled={qcSaving}>Cancelar</Button>
+                            <Button size="sm" className="gap-1.5" disabled={qcSaving || !qcNome.trim()} onClick={() => void criarClienteRapido()}>{qcSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar cliente</Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    {/* Seleção atual / limpar */}
+                    <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm flex items-center justify-between gap-2">
+                      <span className="text-foreground">Selecionado: <span className="font-medium">{cliSelNome || "Consumidor final (sem cliente)"}</span></span>
+                      {(cliSelId || cliSelNome) && <Button size="sm" variant="ghost" className="h-7 text-muted-foreground" onClick={() => { setCliSelId(null); setCliSelNome(""); setCliBusca("") }}>Limpar</Button>}
+                    </div>
+                    {cliBloqueiaLimpar && (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2"><AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" /> Esta venda tem saldo a prazo — não pode ficar sem cliente.</div>
+                    )}
+                    {/* Motivo + PIN */}
+                    <div className="space-y-1.5"><Label className="text-xs text-foreground">Motivo <span className="text-destructive">*</span></Label><Textarea className="min-h-[56px] resize-none bg-background text-sm" value={cliMotivo} onChange={(e) => setCliMotivo(e.target.value)} disabled={cliApplying} /></div>
+                    <div className="space-y-1.5 max-w-[220px]"><Label className="text-xs text-foreground flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> PIN supervisor <span className="text-destructive">*</span></Label><Input type="password" inputMode="numeric" maxLength={12} value={cliPin} onChange={(e) => setCliPin(e.target.value.replace(/\D/g, ""))} className="h-9 bg-background font-mono tracking-widest" disabled={cliApplying} /></div>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setEditCli(false)} disabled={cliApplying}>Cancelar edição</Button>
+                      <Button size="sm" className="gap-1.5" disabled={cliApplying || !cliMotivo.trim() || !cliPin.trim() || cliBloqueiaLimpar} onClick={() => void aplicarCli()}>{cliApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {cliApplying ? "Aplicando…" : "Aplicar correção"}</Button>
+                    </div>
+                  </div>
                 )}
               </TabsContent>
 
-              {/* 3 · PAGAMENTO */}
-              <TabsContent value="pagamento" className="mt-0">
-                {breakdownRows.length > 0 ? (
-                  <Card className="border-border bg-card max-w-xl min-w-0">
-                    <CardContent className="p-0">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/40 hover:bg-muted/40">
-                            <TableHead className="text-foreground">Forma</TableHead>
-                            <TableHead className="text-foreground text-right">Valor</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {breakdownRows.map((r) => (
-                            <TableRow key={r.key} className="border-border">
-                              <TableCell className="text-foreground">{r.label}</TableCell>
-                              <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(r.valor)}</TableCell>
-                            </TableRow>
-                          ))}
-                          <TableRow className="border-border bg-muted/20 font-semibold">
-                            <TableCell className="text-foreground">Total</TableCell>
-                            <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(venda.total)}</TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
+              {/* 3 · PAGAMENTO (editável — F3) */}
+              <TabsContent value="pagamento" className="mt-0 space-y-4">
+                {!editPag ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Corrigir pagamento reconcilia caixa, financeiro e Conta a Receber. Exige motivo e PIN.</p>
+                      {venda.status !== "cancelada" && (
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditPag}><Pencil className="h-3.5 w-3.5" /> Editar pagamento</Button>
+                      )}
+                    </div>
+                    {breakdownRows.length > 0 ? (
+                      <Card className="border-border bg-card max-w-xl min-w-0">
+                        <CardContent className="p-0">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                                <TableHead className="text-foreground">Forma</TableHead>
+                                <TableHead className="text-foreground text-right">Valor</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {breakdownRows.map((r) => (
+                                <TableRow key={r.key} className="border-border">
+                                  <TableCell className="text-foreground">{r.label}</TableCell>
+                                  <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(r.valor)}</TableCell>
+                                </TableRow>
+                              ))}
+                              <TableRow className="border-border bg-muted/20 font-semibold">
+                                <TableCell className="text-foreground">Total</TableCell>
+                                <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(venda.total)}</TableCell>
+                              </TableRow>
+                            </TableBody>
+                          </Table>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <EmptyState icon={CreditCard} title="Sem detalhamento de pagamento" hint="A venda não registrou breakdown de formas de pagamento." />
+                    )}
+                  </>
                 ) : (
-                  <EmptyState icon={CreditCard} title="Sem detalhamento de pagamento" hint="A venda não registrou breakdown de formas de pagamento." />
+                  <div className="space-y-4 max-w-xl">
+                    <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" /><span>A soma das formas deve fechar com o total ({fmtBrl(venda.total)}). À prazo/vale geram efeitos reconciliados automaticamente.</span>
+                    </div>
+                    <Card className="border-border bg-card min-w-0">
+                      <CardContent className="pt-4 space-y-2">
+                        {FORMS.map((f) => (
+                          <div key={f.key} className="flex items-center justify-between gap-3">
+                            <Label className="text-sm text-foreground">{f.label}</Label>
+                            <Input type="number" min={0} step="0.01" value={pagDraft[f.key] ?? 0}
+                              onChange={(e) => setPagDraft((cur) => ({ ...cur, [f.key]: Math.max(0, Number(e.target.value) || 0) }))}
+                              className="h-8 w-32 text-right text-sm" />
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between border-t border-border pt-2 text-sm font-semibold">
+                          <span className="text-foreground">Soma</span>
+                          <span className={cn("tabular-nums", Math.abs(pagSoma - venda.total) <= 0.01 ? "text-success" : "text-destructive")}>{fmtBrl(pagSoma)} / {fmtBrl(venda.total)}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    {pagPrecisaVenc && (
+                      <div className="space-y-1.5 max-w-[220px]">
+                        <Label className="text-xs text-foreground">Vencimento do saldo a prazo <span className="text-destructive">*</span></Label>
+                        <Input placeholder="DD/MM/AAAA" value={pagVenc} onChange={(e) => setPagVenc(e.target.value)} className="h-9 bg-background text-sm" disabled={pagApplying} />
+                      </div>
+                    )}
+                    {pagPrecisaCliente && (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2"><AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" /> Venda à prazo exige cliente. Vincule um cliente na aba Cliente antes de aplicar.</div>
+                    )}
+                    {pagPlan && !pagPlan.ok && pagPlan.errorCode !== "no_change" && (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2"><AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" /> {pagPlan.error}</div>
+                    )}
+                    {pagPlan?.ok && (
+                      <Card className="border-border bg-card min-w-0">
+                        <CardContent className="pt-4 text-xs space-y-1">
+                          <p className="font-semibold text-muted-foreground flex items-center gap-1.5"><Calculator className="h-3.5 w-3.5" /> Pré-visualização do impacto</p>
+                          <p className="text-foreground flex justify-between"><span>Caixa (à vista)</span><span className="tabular-nums">{fmtBrl(pagPlan.oldCashReal)} → {fmtBrl(pagPlan.cashTarget)}</span></p>
+                          <p className="text-foreground flex justify-between"><span>À prazo</span><span className="tabular-nums">{fmtBrl(pagPlan.oldAPrazo)} → {fmtBrl(pagPlan.newAPrazo)}</span></p>
+                          <p className="text-foreground flex justify-between"><span>Vale/crédito</span><span className="tabular-nums">{fmtBrl(pagPlan.oldCreditoVale)} → {fmtBrl(pagPlan.creditoTarget)}</span></p>
+                          {pagPlan.cancelAllAPrazo && <p className="text-muted-foreground">• Títulos à prazo desta venda serão estornados/cancelados.</p>}
+                          {pagPlan.criarTituloValor !== null && <p className="text-muted-foreground">• Será criado título à prazo de {fmtBrl(pagPlan.criarTituloValor)}.</p>}
+                        </CardContent>
+                      </Card>
+                    )}
+                    {pagConfirm && pagPlan?.ok && (
+                      <Card className="border-primary/30 bg-primary/5 min-w-0">
+                        <CardContent className="pt-4 space-y-3">
+                          <div className="space-y-1.5"><Label className="text-xs text-foreground">Motivo <span className="text-destructive">*</span></Label><Textarea className="min-h-[56px] resize-none bg-background text-sm" value={pagMotivo} onChange={(e) => setPagMotivo(e.target.value)} disabled={pagApplying} /></div>
+                          <div className="space-y-1.5 max-w-[220px]"><Label className="text-xs text-foreground flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> PIN supervisor <span className="text-destructive">*</span></Label><Input type="password" inputMode="numeric" maxLength={12} value={pagPin} onChange={(e) => setPagPin(e.target.value.replace(/\D/g, ""))} className="h-9 bg-background font-mono tracking-widest" disabled={pagApplying} /></div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setEditPag(false)} disabled={pagApplying}>Cancelar edição</Button>
+                      {!pagConfirm ? (
+                        <Button size="sm" className="gap-1.5" disabled={!pagPlan?.ok || pagPrecisaCliente} onClick={() => setPagConfirm(true)}><Calculator className="h-4 w-4" /> Pré-visualizar correção</Button>
+                      ) : (
+                        <Button size="sm" className="gap-1.5" disabled={pagApplying || !pagPlan?.ok || !pagMotivo.trim() || !pagPin.trim() || pagPrecisaCliente || (pagPrecisaVenc && !pagVenc.trim())} onClick={() => void aplicarPag()}>{pagApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {pagApplying ? "Aplicando…" : "Aplicar correção"}</Button>
+                      )}
+                    </div>
+                  </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1.5">
-                  <Info className="h-3.5 w-3.5" /> A correção de pagamento continua no botão “Corrigir venda”. Edição inline chega em F4.
-                </p>
               </TabsContent>
 
               {/* 4 · FINANCEIRO */}
@@ -930,38 +1242,57 @@ export function WorkspaceCorrecaoVenda({
                 )}
               </TabsContent>
 
-              {/* 7 · CONTA A RECEBER */}
-              <TabsContent value="receber" className="mt-0">
+              {/* 7 · CONTA A RECEBER (editável — F3: vencimento/observação de título aberto) */}
+              <TabsContent value="receber" className="mt-0 space-y-3">
                 {venda.titulos.length > 0 ? (
-                  <Card className="border-border bg-card min-w-0">
-                    <CardContent className="p-0 overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/40 hover:bg-muted/40">
-                            <TableHead className="text-foreground">Título</TableHead>
-                            <TableHead className="text-foreground">Vencimento</TableHead>
-                            <TableHead className="text-foreground text-right">Valor</TableHead>
-                            <TableHead className="text-foreground text-right">Pago</TableHead>
-                            <TableHead className="text-foreground">Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {venda.titulos.map((t) => {
-                            const b = statusTituloBadge(t.status)
-                            return (
-                              <TableRow key={t.id} className="border-border">
-                                <TableCell className="text-foreground break-words max-w-[360px]">{t.descricao}</TableCell>
-                                <TableCell className="text-foreground whitespace-nowrap">{t.vencimento || "—"}</TableCell>
-                                <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(t.valor)}</TableCell>
-                                <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(t.pago)}</TableCell>
-                                <TableCell><Badge variant="outline" className={cn("text-[10px]", b.className)}>{b.label}</Badge></TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
+                  <>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Apenas títulos em aberto podem ter vencimento/observação editados. Recebimento/estorno seguem no Contas a Receber.</p>
+                    <div className="space-y-2">
+                      {venda.titulos.map((t) => {
+                        const b = statusTituloBadge(t.status)
+                        const st = (t.status ?? "").toLowerCase()
+                        const editavel = !["pago", "parcial", "cancelado", "estornado"].includes(st)
+                        const emEdicao = editTitId === t.id
+                        return (
+                          <Card key={t.id} className="border-border bg-card min-w-0">
+                            <CardContent className="pt-4 space-y-2">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="text-sm font-medium text-foreground break-words">{t.descricao}</span>
+                                <Badge variant="outline" className={cn("text-[10px]", b.className)}>{b.label}</Badge>
+                              </div>
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs sm:grid-cols-3">
+                                <span className="text-muted-foreground">Valor: <span className="text-foreground tabular-nums">{fmtBrl(t.valor)}</span></span>
+                                <span className="text-muted-foreground">Pago: <span className="text-foreground tabular-nums">{fmtBrl(t.pago)}</span></span>
+                                <span className="text-muted-foreground">Vencimento: <span className="text-foreground">{t.vencimento || "—"}</span></span>
+                              </div>
+                              {!emEdicao ? (
+                                <div className="flex justify-end">
+                                  {editavel ? (
+                                    <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => startEditTitulo(t)}><Pencil className="h-3.5 w-3.5" /> Editar vencimento / obs.</Button>
+                                  ) : (
+                                    <span className="text-[11px] text-muted-foreground">Título recebido/encerrado — edição bloqueada.</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="space-y-2 border-t border-border pt-2">
+                                  <div className="flex flex-wrap gap-3">
+                                    <div className="space-y-1 max-w-[180px]"><Label className="text-xs text-muted-foreground">Novo vencimento</Label><Input placeholder="DD/MM/AAAA" value={titVenc} onChange={(e) => setTitVenc(e.target.value)} className="h-8 bg-background text-sm" disabled={titApplying} /></div>
+                                    <div className="space-y-1 flex-1 min-w-[180px]"><Label className="text-xs text-muted-foreground">Observação</Label><Input value={titObs} onChange={(e) => setTitObs(e.target.value)} className="h-8 bg-background text-sm" disabled={titApplying} /></div>
+                                  </div>
+                                  <div className="space-y-1"><Label className="text-xs text-foreground">Motivo <span className="text-destructive">*</span></Label><Textarea className="min-h-[48px] resize-none bg-background text-sm" value={titMotivo} onChange={(e) => setTitMotivo(e.target.value)} disabled={titApplying} /></div>
+                                  <div className="space-y-1 max-w-[200px]"><Label className="text-xs text-foreground flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> PIN supervisor <span className="text-destructive">*</span></Label><Input type="password" inputMode="numeric" maxLength={12} value={titPin} onChange={(e) => setTitPin(e.target.value.replace(/\D/g, ""))} className="h-8 bg-background font-mono tracking-widest" disabled={titApplying} /></div>
+                                  <div className="flex justify-end gap-2">
+                                    <Button size="sm" variant="ghost" onClick={() => setEditTitId(null)} disabled={titApplying}>Cancelar</Button>
+                                    <Button size="sm" className="gap-1.5" disabled={titApplying || !titMotivo.trim() || !titPin.trim()} onClick={() => void aplicarTitulo()}>{titApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Aplicar</Button>
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        )
+                      })}
+                    </div>
+                  </>
                 ) : (
                   <EmptyState icon={FileText} title="Sem títulos a receber" hint="Venda à vista — não gerou contas a receber." />
                 )}
