@@ -522,6 +522,7 @@ export function PdvBlackEdition() {
           setCartRows([])
           setSelectedLineId(null)
           setLastAddedItem(null)
+          setBipeCode("") // limpar busca ao cancelar (GOAL limpeza pós-ação)
           setCancelSaleOpen(false)
           focusBipe()
         }}

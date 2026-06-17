@@ -752,6 +752,8 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
       try { localStorage.removeItem(DRAFT_KEY(storeId)) } catch {}
 
       setCart([])
+      setProductQuery("") // limpa termo + resultados de busca após finalizar (GOAL limpeza pós-ação)
+      setShowProductDropdown(false)
       setDiscountReais(0)
       setSelectedCliente(null)
       setClienteQuery("")
@@ -1031,7 +1033,7 @@ export function VendaCompletaEnterprise({ onBack }: { onBack: () => void }) {
                     <button
                       type="button"
                       className="ml-1 text-xs text-muted-foreground transition-colors hover:text-destructive"
-                      onClick={() => { setCart([]); setExpandedLineId(null) }}
+                      onClick={() => { setCart([]); setExpandedLineId(null); setProductQuery(""); setShowProductDropdown(false) }}
                     >
                       Limpar tudo
                     </button>

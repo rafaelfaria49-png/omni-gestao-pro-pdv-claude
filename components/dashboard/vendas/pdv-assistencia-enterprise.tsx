@@ -1604,6 +1604,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     paymentDiscountSnapshotRef.current = null
     try { localStorage.removeItem(CART_STORAGE_KEY(storeIdKey)) } catch { /* ignore */ }
     setCart([])
+    setSearch("") // limpa termo + resultados de busca após finalizar (GOAL limpeza pós-ação)
     resetDiscountState()
     setCustomerName("")
     setSelectedClienteId(null)
@@ -2471,6 +2472,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 })
                 try { localStorage.removeItem(CART_STORAGE_KEY(storeIdKey)) } catch { /* ignore */ }
                 setCart([])
+                setSearch("") // limpa termo + resultados de busca ao cancelar/limpar (GOAL limpeza pós-ação)
                 resetDiscountState()
                 setSelectedLineId(null)
                 setClearConfirmOpen(false)

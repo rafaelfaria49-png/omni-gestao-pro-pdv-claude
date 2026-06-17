@@ -911,6 +911,7 @@ export function PdvSupermercado({
                     setCart([])
                     setDiscountPercent(0)
                     setDiscountReais(0)
+                    setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
                     toast({ title: "Carrinho limpo" })
                     queueMicrotask(hardFocusSearch)
                     return
@@ -919,6 +920,7 @@ export function PdvSupermercado({
                     setCart([])
                     setDiscountPercent(0)
                     setDiscountReais(0)
+                    setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
                     toast({ title: "Carrinho limpo" })
                     productInputRef.current?.focus()
                     return
@@ -1459,6 +1461,7 @@ export function PdvSupermercado({
                       setCart([])
                       setDiscountPercent(0)
                       setDiscountReais(0)
+                      setSearchTerm("") // limpar busca ao limpar carrinho (GOAL limpeza pós-ação)
                       toast({ title: "Carrinho limpo", description: "Autorizado pelo supervisor." })
                     }
                     setSupervisorDialogOpen(false)

@@ -1536,6 +1536,7 @@ export function PdvClassic({
                 setSelectedCartLineId(null)
                 setShellHighlightLineId(null)
                 setBipeCode("")
+                setSearchTerm("") // limpar busca F3 ao cancelar (GOAL limpeza pós-ação)
                 setShellNextQty("1")
                 setSelectedCustomer(null)
                 setShellCustomerField("CONSUMIDOR")
