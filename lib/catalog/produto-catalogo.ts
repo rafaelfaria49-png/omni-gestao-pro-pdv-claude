@@ -35,6 +35,10 @@ export type ProdutoIAMetadata = {
   descricaoCurta?: string
   descricaoLonga?: string
   tags?: string[]
+  /** Categoria/marca SUGERIDAS (revisão do operador). Ficam no metadata — NUNCA tocam as
+   * colunas core `category`/`brand` (regra "salvar somente em metadata"). */
+  categoriaSugerida?: string
+  marcaSugerida?: string
   /** Fiscais — já em uso pelo importador (docs). Mantidos aqui para o contrato completo. */
   ncm?: string
   cest?: string
