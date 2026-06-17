@@ -1,13 +1,9 @@
 "use client"
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Barcode,
-  Banknote,
-  CreditCard,
-  CircleDot,
   Clock,
-  QrCode,
   User,
   Wrench,
   Plus,
@@ -15,8 +11,6 @@ import {
   Settings2,
   X,
   RefreshCw,
-  Layers,
-  CalendarClock,
   CheckCircle2,
   AlertTriangle,
   Lock,
@@ -58,7 +52,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { playPdvRapidoItemBeepIfEnabled } from "@/lib/pdv-rapido-feedback"
 import { useOperationsStore } from "@/lib/operations-store"
@@ -78,13 +71,13 @@ import { useStoreSettings } from "@/lib/store-settings-provider"
 import {
   buildAssistenciaPayMethods,
   defaultFormasPagamento,
-  findFormaById,
-  type AssistenciaPayMethodRuntime,
 } from "@/lib/pdv-formas-pagamento"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { appendAuditLog } from "@/lib/audit-log"
 import { useClienteSearch } from "@/lib/hooks/use-cliente-search"
 import { PdvClientePicker, type PdvClienteResult } from "./pdv-cliente-picker"
+import { PaymentModal, type PaymentMethod, type PaymentMethodType } from "./payment-modal"
+import { appendContaReceberTituloPdvAprazo } from "@/lib/pdv-append-conta-receber"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { ItemAvulsoModal, type ItemAvulsoPayload } from "./item-avulso-modal"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
@@ -205,63 +198,24 @@ type CartLine = {
 
 type PayMethod = "dinheiro" | "pix" | "credito" | "debito" | "a_prazo" | "multiplo"
 
+/** Mapeia a forma nativa da Assistência para o intent do modal compartilhado. */
+function assistMethodToRuntime(method: PayMethod): PaymentMethodType | null {
+  switch (method) {
+    case "dinheiro": return "dinheiro"
+    case "pix": return "pix"
+    case "credito": return "cartao_credito"
+    case "debito": return "cartao_debito"
+    case "a_prazo": return "a_prazo"
+    case "multiplo": return null
+  }
+}
+
 const DEFAULT_PAY_METHODS = buildAssistenciaPayMethods(defaultFormasPagamento())
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function brl(n: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n)
-}
-
-/** Monetário BRL — parse para cálculo/validação; não usar para controlar o input. */
-function parseBrlInput(value: string): number {
-  let t = value.trim()
-  if (!t) return 0
-
-  while (t.endsWith(",") || t.endsWith(".")) {
-    if (t.length <= 1) return 0
-    t = t.slice(0, -1).trim()
-  }
-  if (!t) return 0
-
-  if (t.includes(",")) {
-    const n = Number(t.replace(/\./g, "").replace(",", "."))
-    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0
-  }
-
-  if (t.includes(".")) {
-    const parts = t.split(".")
-    const last = parts[parts.length - 1] ?? ""
-    if (parts.length > 1 && last.length === 3 && parts.every((p) => /^\d+$/.test(p))) {
-      const n = Number(parts.join(""))
-      return Number.isFinite(n) && n >= 0 ? n : 0
-    }
-    const n = Number(t)
-    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0
-  }
-
-  const n = Number(t.replace(/\D/g, ""))
-  return Number.isFinite(n) && n >= 0 ? n : 0
-}
-
-/** Percentual — aceita 10,5 · 10.5 · estados parciais 10, */
-function parsePercentInput(value: string): number {
-  let t = value.trim()
-  if (!t) return 0
-
-  while (t.endsWith(",") || t.endsWith(".")) {
-    if (t.length <= 1) return 0
-    t = t.slice(0, -1).trim()
-  }
-  if (!t) return 0
-
-  const n = Number(t.replace(",", "."))
-  return Number.isFinite(n) && n >= 0 ? n : 0
-}
-
-/** Compara valores monetários em centavos (evita erro de float). */
-function moneyGte(a: number, b: number): boolean {
-  return Math.round(a * 100) >= Math.round(b * 100)
 }
 
 function computeMerchandiseDiscount(
@@ -419,579 +373,10 @@ function QuickRow({
 }
 
 // ─── PaymentModal ─────────────────────────────────────────────────────────────
-
-function PaymentModal({
-  open,
-  subtotal,
-  total,
-  impostoEstimado = 0,
-  discountType,
-  discountReais,
-  discountPercent,
-  discountAmount,
-  discountOverTotal,
-  onDiscountTypeChange,
-  onDiscountReaisChange,
-  onDiscountPercentChange,
-  discountInputRef,
-  customerName,
-  customerStoreCredit = 0,
-  defaultMethod = "dinheiro",
-  payMethods = DEFAULT_PAY_METHODS,
-  onConfirm,
-  onClose,
-}: {
-  open: boolean
-  subtotal: number
-  total: number
-  impostoEstimado?: number
-  discountType: DiscountType
-  discountReais: number
-  discountPercent: number
-  discountAmount: number
-  discountOverTotal: boolean
-  onDiscountTypeChange: (type: DiscountType) => void
-  onDiscountReaisChange: (value: number) => void
-  onDiscountPercentChange: (value: number) => void
-  discountInputRef?: RefObject<HTMLInputElement | null>
-  customerName: string
-  customerStoreCredit?: number
-  defaultMethod?: PayMethod
-  payMethods?: AssistenciaPayMethodRuntime[]
-  onConfirm: (
-    method: PayMethod,
-    notes: string,
-    payments: { dinheiro: number; pix: number; cartaoDebito: number; cartaoCredito: number; aPrazo: number; creditoVale: number },
-    meta?: { discountAuthorizedByAdminId?: string },
-  ) => void
-  onClose: () => void
-}) {
-  const [method, setMethod] = useState<PayMethod>(defaultMethod)
-  const [usarCredito, setUsarCredito] = useState(false)
-  const [adminSessionOk, setAdminSessionOk] = useState(false)
-  const [authorizedAdmin, setAuthorizedAdmin] = useState<{ id: string; name: string } | null>(null)
-  const [supervisorPin, setSupervisorPin] = useState("")
-  const [supervisorBusy, setSupervisorBusy] = useState(false)
-  const [supervisorErr, setSupervisorErr] = useState<string | null>(null)
-  const paymentFieldsInitialized = useRef(false)
-
-  const [amountPaid, setAmountPaid] = useState("")
-  const [multiplo1, setMultiplo1] = useState<PayMethod>("dinheiro")
-  const [multiplo1Value, setMultiplo1Value] = useState("")
-  const [multiplo2, setMultiplo2] = useState<PayMethod>("pix")
-  const [notes, setNotes] = useState("")
-  const [discountReaisDraft, setDiscountReaisDraft] = useState("")
-  const [discountPercentDraft, setDiscountPercentDraft] = useState("")
-
-  useEffect(() => {
-    if (open) {
-      if (!paymentFieldsInitialized.current) {
-        paymentFieldsInitialized.current = true
-        setDiscountReaisDraft(
-          discountReais > 0.009 ? String(discountReais).replace(".", ",") : "",
-        )
-        setDiscountPercentDraft(
-          discountPercent > 0.009 ? String(discountPercent).replace(".", ",") : "",
-        )
-        setAmountPaid("")
-        setMultiplo1Value("")
-        setNotes("")
-      }
-      setMethod(defaultMethod)
-      setUsarCredito(false)
-      setSupervisorPin("")
-      setSupervisorErr(null)
-      setSupervisorBusy(false)
-    } else {
-      paymentFieldsInitialized.current = false
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, defaultMethod])
-
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const r = await fetch("/api/auth/admin", { method: "GET", credentials: "include", cache: "no-store" })
-        const j = (await r.json().catch(() => null)) as { authenticated?: boolean; admin?: { id?: string; name?: string } }
-        if (!r.ok || !j || cancelled) return
-        const ok = j.authenticated === true
-        setAdminSessionOk(ok)
-        setAuthorizedAdmin(ok && j.admin?.id ? { id: String(j.admin.id), name: String(j.admin.name || "Admin") } : null)
-      } catch {
-        /* ignore */
-      }
-    })()
-    return () => { cancelled = true }
-  }, [open])
-
-  const descontoManualAtivo = discountAmount > 0.009
-  const creditoValeAplicado = usarCredito ? Math.min(customerStoreCredit, total) : 0
-  const totalComDesconto = Math.max(0, total - creditoValeAplicado)
-
-  const paid = parseBrlInput(amountPaid)
-  const troco = Math.max(0, paid - totalComDesconto)
-  const m1val = parseBrlInput(multiplo1Value)
-  const m2val = Math.max(0, totalComDesconto - m1val)
-
-  const missingCustomer = method === "a_prazo" && !customerName.trim()
-  const multiplo1Error = method === "multiplo" && m1val > totalComDesconto + 0.009
-  const supervisorOk = !descontoManualAtivo || adminSessionOk
-  const canConfirm =
-    !discountOverTotal &&
-    supervisorOk &&
-    !missingCustomer &&
-    !multiplo1Error &&
-    (totalComDesconto <= 0.001 ||
-      method === "pix" ||
-      method === "credito" ||
-      method === "debito" ||
-      method === "a_prazo" ||
-      (method === "dinheiro" && moneyGte(paid, totalComDesconto)) ||
-      (method === "multiplo" && m1val > 0.009 && !moneyGte(m1val, totalComDesconto)))
-
-  function handleConfirm() {
-    if (!canConfirm) return
-    const notesLines: string[] = []
-    if (notes) notesLines.push(notes)
-    if (discountAmount > 0.009) {
-      notesLines.push(
-        discountType === "percent"
-          ? `Desconto ${discountPercent}% (${brl(discountAmount)})`
-          : `Desconto ${brl(discountAmount)}`,
-      )
-    }
-    const payments = { dinheiro: 0, pix: 0, cartaoDebito: 0, cartaoCredito: 0, aPrazo: 0, creditoVale: creditoValeAplicado }
-    if (usarCredito && creditoValeAplicado > 0) {
-      notesLines.push(`Crédito/Vale: ${brl(creditoValeAplicado)}`)
-    }
-    if (totalComDesconto <= 0.001) {
-      // Pago 100% com crédito
-    } else if (method === "multiplo") {
-      const m1 = payMethods.find((p) => p.id === multiplo1)!
-      const m2 = payMethods.find((p) => p.id === multiplo2)!
-      notesLines.push(
-        `Múltiplo: ${m1.label} ${brl(m1val)} + ${m2.label} ${brl(m2val)}`,
-      )
-      const add = (m: PayMethod, v: number) => {
-        if (m === "dinheiro") payments.dinheiro += v
-        else if (m === "pix") payments.pix += v
-        else if (m === "debito") payments.cartaoDebito += v
-        else if (m === "credito") payments.cartaoCredito += v
-        else if (m === "a_prazo") payments.aPrazo += v
-      }
-      add(multiplo1, m1val)
-      add(multiplo2, m2val)
-    } else if (method === "dinheiro") {
-      notesLines.push(`Troco: ${brl(troco)}`)
-      payments.dinheiro = totalComDesconto
-    } else if (method === "pix") payments.pix = totalComDesconto
-    else if (method === "debito") payments.cartaoDebito = totalComDesconto
-    else if (method === "credito") payments.cartaoCredito = totalComDesconto
-    else if (method === "a_prazo") payments.aPrazo = totalComDesconto
-    onConfirm(method, notesLines.join(" | "), payments, {
-      discountAuthorizedByAdminId: descontoManualAtivo ? authorizedAdmin?.id : undefined,
-    })
-    setAmountPaid("")
-    setNotes("")
-    setUsarCredito(false)
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col rounded-2xl border-border bg-card p-0 shadow-lg">
-        <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
-          <DialogTitle className="text-lg font-bold text-foreground">Finalizar Venda</DialogTitle>
-        </DialogHeader>
-
-        <div className="flex-1 overflow-y-auto space-y-5 px-6 py-5">
-          {/* Subtotal · Desconto · Total */}
-          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium tabular-nums text-foreground">{brl(subtotal)}</span>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Desconto</Label>
-                <div className="flex rounded-lg border border-border bg-background p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDiscountPercentDraft("")
-                      onDiscountTypeChange("reais")
-                    }}
-                    className={cn(
-                      "rounded-md px-2.5 py-1 text-xs font-bold transition-colors",
-                      discountType === "reais"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    R$
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDiscountReaisDraft("")
-                      onDiscountTypeChange("percent")
-                    }}
-                    className={cn(
-                      "rounded-md px-2.5 py-1 text-xs font-bold transition-colors",
-                      discountType === "percent"
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    %
-                  </button>
-                </div>
-              </div>
-              {discountType === "reais" ? (
-                <Input
-                  ref={discountInputRef}
-                  type="text"
-                  value={discountReaisDraft}
-                  onChange={(e) => {
-                    const raw = e.target.value
-                    setDiscountReaisDraft(raw)
-                    onDiscountReaisChange(parseBrlInput(raw))
-                  }}
-                  placeholder="0,00"
-                  className="h-10 rounded-xl border-border bg-background text-right text-sm tabular-nums"
-                  inputMode="decimal"
-                  autoComplete="off"
-                />
-              ) : (
-                <Input
-                  ref={discountInputRef}
-                  type="text"
-                  value={discountPercentDraft}
-                  onChange={(e) => {
-                    const raw = e.target.value
-                    setDiscountPercentDraft(raw)
-                    onDiscountPercentChange(parsePercentInput(raw))
-                  }}
-                  placeholder="0"
-                  className="h-10 rounded-xl border-border bg-background text-right text-sm tabular-nums"
-                  inputMode="decimal"
-                  autoComplete="off"
-                />
-              )}
-              {discountOverTotal && discountAmount > 0.009 && (
-                <p className="flex items-center gap-1.5 text-xs text-destructive">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                  Desconto não pode ser maior que o subtotal
-                </p>
-              )}
-              {discountAmount > 0.009 && !discountOverTotal && (
-                <div className="flex justify-between text-sm text-destructive">
-                  <span>
-                    Desconto{discountType === "percent" ? ` (${discountPercent}%)` : ""}
-                  </span>
-                  <span className="font-semibold tabular-nums">−{brl(discountAmount)}</span>
-                </div>
-              )}
-              {impostoEstimado > 0.009 ? (
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Imposto estimado</span>
-                  <span className="font-semibold tabular-nums">{brl(impostoEstimado)}</span>
-                </div>
-              ) : null}
-            </div>
-
-            <Separator className="bg-border" />
-
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-semibold text-foreground">Total final</span>
-              <span className="text-2xl font-black tabular-nums text-primary">{brl(total)}</span>
-            </div>
-            {creditoValeAplicado > 0 && (
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Após crédito/vale</span>
-                <span className="font-bold tabular-nums text-foreground">{brl(totalComDesconto)}</span>
-              </div>
-            )}
-          </div>
-
-          {descontoManualAtivo && !adminSessionOk && (
-            <div className="rounded-xl border border-warning/35 bg-warning/10 px-4 py-3">
-              <p className="text-xs font-bold uppercase tracking-wide text-warning">
-                Desconto manual exige supervisor
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Informe a senha do supervisor para confirmar a venda com desconto.
-              </p>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <Label className="text-xs text-muted-foreground">Senha do supervisor</Label>
-                  <Input
-                    type="password"
-                    value={supervisorPin}
-                    onChange={(e) => setSupervisorPin(e.target.value)}
-                    className="h-10 rounded-xl bg-background border-border"
-                    placeholder="PIN"
-                    autoComplete="off"
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-10 rounded-xl shrink-0"
-                  disabled={supervisorBusy || supervisorPin.trim().length === 0}
-                  onClick={async () => {
-                    setSupervisorErr(null)
-                    setSupervisorBusy(true)
-                    try {
-                      const r = await fetch("/api/auth/admin", {
-                        method: "POST",
-                        credentials: "include",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ pin: supervisorPin.trim() }),
-                      })
-                      if (!r.ok) {
-                        setSupervisorErr("Senha inválida.")
-                        setAdminSessionOk(false)
-                        setAuthorizedAdmin(null)
-                        return
-                      }
-                      const j = (await r.json().catch(() => null)) as { admin?: { id?: string; name?: string } }
-                      setAdminSessionOk(true)
-                      setAuthorizedAdmin(
-                        j?.admin?.id
-                          ? { id: String(j.admin.id), name: String(j.admin.name || "Admin") }
-                          : { id: "admin", name: "Admin" },
-                      )
-                      setSupervisorPin("")
-                    } catch {
-                      setSupervisorErr("Falha ao validar senha.")
-                      setAdminSessionOk(false)
-                      setAuthorizedAdmin(null)
-                    } finally {
-                      setSupervisorBusy(false)
-                    }
-                  }}
-                >
-                  {supervisorBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Autorizar"}
-                </Button>
-              </div>
-              {supervisorErr ? <p className="mt-2 text-xs text-destructive">{supervisorErr}</p> : null}
-            </div>
-          )}
-
-          {/* Credit/Vale section */}
-          {customerStoreCredit > 0 && (
-            <div className={cn(
-              "flex items-center justify-between rounded-xl border px-4 py-3",
-              usarCredito ? "border-success/40 bg-success/10" : "border-border bg-muted/30",
-            )}>
-              <div className="flex items-center gap-2 min-w-0">
-                <input
-                  type="checkbox"
-                  id="usar-credito-modal"
-                  checked={usarCredito}
-                  onChange={(e) => setUsarCredito(e.target.checked)}
-                  className="h-4 w-4 cursor-pointer accent-primary"
-                />
-                <label htmlFor="usar-credito-modal" className="cursor-pointer text-sm font-semibold text-foreground">
-                  Usar crédito/vale
-                </label>
-                <span className="text-xs text-muted-foreground">({brl(customerStoreCredit)} disponível)</span>
-              </div>
-              {usarCredito && (
-                <span className="text-sm font-bold tabular-nums text-success">−{brl(creditoValeAplicado)}</span>
-              )}
-            </div>
-          )}
-
-          {/* Method grid + method inputs — hidden when fully paid by credit */}
-          {totalComDesconto > 0.001 && (
-            <>
-              <div>
-                <Label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Forma de Pagamento
-                </Label>
-                <div className="grid grid-cols-3 gap-2">
-                  {payMethods.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setMethod(m.id)}
-                      className={cn(
-                        "flex flex-col items-center gap-1 rounded-xl border-2 px-2 py-2.5 text-xs font-bold transition-all",
-                        method === m.id
-                          ? "border-primary bg-primary/10 text-primary"
-                          : "border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground",
-                      )}
-                    >
-                      <m.Icon className="h-4 w-4" />
-                      {m.shortLabel}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Method-specific inputs */}
-              {method === "dinheiro" && (
-                <div className="space-y-3">
-                  <div>
-                    <Label className="mb-1 block text-sm text-muted-foreground">Valor recebido</Label>
-                    <Input
-                      type="text"
-                      autoFocus={!descontoManualAtivo}
-                      value={amountPaid}
-                      onChange={(e) => setAmountPaid(e.target.value)}
-                      placeholder="R$ 0,00"
-                      className="h-12 rounded-xl text-right text-lg font-bold tabular-nums"
-                      inputMode="decimal"
-                      autoComplete="off"
-                    />
-                  </div>
-                  {paid > 0 && (
-                    <div
-                      className={cn(
-                        "flex items-center justify-between rounded-xl border px-4 py-3",
-                        troco > 0
-                          ? "border-success/30 bg-success/10"
-                          : !moneyGte(paid, totalComDesconto)
-                            ? "border-destructive/30 bg-destructive/10"
-                            : "border-border bg-muted/40",
-                      )}
-                    >
-                      <span className="text-sm font-semibold text-muted-foreground">
-                        {troco > 0 ? "Troco" : !moneyGte(paid, totalComDesconto) ? "Faltam" : "Valor exato"}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-xl font-black tabular-nums",
-                          troco > 0
-                            ? "text-success"
-                            : !moneyGte(paid, totalComDesconto)
-                              ? "text-destructive"
-                              : "text-foreground",
-                        )}
-                      >
-                        {troco > 0 ? brl(troco) : !moneyGte(paid, totalComDesconto) ? brl(Math.max(0, totalComDesconto - paid)) : "✓"}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {(method === "pix" || method === "credito" || method === "debito") && (
-                <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-4">
-                  <span className="text-sm text-muted-foreground">Total a cobrar</span>
-                  <span className="text-2xl font-black tabular-nums text-foreground">{brl(totalComDesconto)}</span>
-                </div>
-              )}
-
-              {method === "a_prazo" && (
-                <div className="space-y-3">
-                  {missingCustomer && (
-                    <div className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2.5 text-sm text-warning">
-                      <AlertTriangle className="h-4 w-4 shrink-0" />
-                      Informe o nome do cliente no painel antes de usar esta forma.
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between rounded-xl border border-border bg-muted/40 px-4 py-4">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Cliente</p>
-                      <p className="font-semibold text-foreground">
-                        {customerName.trim() || <span className="italic text-muted-foreground">Não informado</span>}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Total fiado</p>
-                      <p className="text-xl font-black tabular-nums text-warning">{brl(totalComDesconto)}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {method === "multiplo" && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">Método 1</Label>
-                      <select
-                        value={multiplo1}
-                        onChange={(e) => setMultiplo1(e.target.value as PayMethod)}
-                        className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
-                      >
-                        {payMethods.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
-                      <Input
-                        type="text"
-                        value={multiplo1Value}
-                        onChange={(e) => setMultiplo1Value(e.target.value)}
-                        placeholder="R$ 0,00"
-                        className="h-9 rounded-xl text-right text-sm tabular-nums"
-                        inputMode="decimal"
-                        autoComplete="off"
-                      />
-                      {multiplo1Error && (
-                        <p className="text-xs text-destructive">Valor maior que o total</p>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">Método 2</Label>
-                      <select
-                        value={multiplo2}
-                        onChange={(e) => setMultiplo2(e.target.value as PayMethod)}
-                        className="h-9 w-full rounded-xl border border-border bg-background px-2 text-sm text-foreground"
-                      >
-                        {payMethods.filter((m) => m.id !== "multiplo" && m.id !== "a_prazo").map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
-                      <div className="flex h-9 items-center justify-end rounded-xl border border-border bg-muted/50 px-3 text-sm font-bold tabular-nums text-foreground">
-                        {brl(m2val >= 0 ? m2val : 0)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Notes */}
-          <div>
-            <Label className="mb-1 block text-xs text-muted-foreground">Observações (opcional)</Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ex: cliente solicitou nota, desconto autorizado…"
-              className="h-16 resize-none rounded-xl text-sm"
-            />
-          </div>
-        </div>
-
-        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
-          <Button variant="outline" className="rounded-xl" onClick={onClose}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!canConfirm}
-            className="rounded-xl bg-emerald-600 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-            onClick={handleConfirm}
-          >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Confirmar Venda
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
+// O modal de pagamento da Assistência agora reutiliza o componente compartilhado
+// `./payment-modal` (mesmo motor de Clássico/Supermercado/Venda Completa/Black):
+// pagamento misto, à prazo + entrada/parcelas/vencimento/observação, Conta a Receber
+// e cadastro rápido de cliente. Antes havia um PaymentModal local duplicado aqui.
 
 // ─── HelpOverlay ─────────────────────────────────────────────────────────────
 
@@ -1450,7 +835,6 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   }, [inventory])
   const inputRef = useRef<HTMLInputElement | null>(null)
   const customerInputRef = useRef<HTMLInputElement | null>(null)
-  const discountInputRef = useRef<HTMLInputElement | null>(null)
   const { toast } = useToast()
 
   // ── Time ────────────────────────────────────────────────────────────────────
@@ -1515,7 +899,9 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Modals ───────────────────────────────────────────────────────────────────
   const [paymentOpen, setPaymentOpen] = useState(false)
-  const [paymentInitMethod, setPaymentInitMethod] = useState<PayMethod>("dinheiro")
+  /** Intent passado ao modal compartilhado (forma pré-selecionada) e flag de múltiplo. */
+  const [paymentInstantIntent, setPaymentInstantIntent] = useState<PaymentMethodType | null>(null)
+  const [paymentMultipay, setPaymentMultipay] = useState(false)
   const paymentDiscountSnapshotRef = useRef<{
     discountType: DiscountType
     discountReais: number
@@ -1760,20 +1146,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   }, [search, fullSearch.length])
 
   // ── Global keyboard shortcuts ─────────────────────────────────────────────────
-  const openPaymentModal = (method: PayMethod) => {
-    if (!payMethods.some((p) => p.id === method)) return
-    const runtimeBtn = payMethods.find((p) => p.id === method)
-    const configForma = runtimeBtn
-      ? findFormaById(pdvParams.formasPagamento ?? defaultFormasPagamento(), runtimeBtn.configId)
-      : undefined
-    if (configForma?.exigirCliente && !selectedClienteId) {
-      toast({
-        variant: "destructive",
-        title: "Cliente obrigatório",
-        description: "Selecione o cliente antes de usar esta forma de pagamento.",
-      })
-      return
-    }
+  // Sem cliente, à prazo/carnê NÃO barram mais: o modal compartilhado abre e pede o
+  // seletor de cliente (com cadastro rápido) via onRequireCustomer. `method = null`
+  // abre em estado neutro (ex.: F10 = Desconto), sem pré-selecionar forma.
+  const openPaymentModal = (method: PayMethod | null = null) => {
+    if (method && !payMethods.some((p) => p.id === method)) return
     if (cart.length === 0) return
     if (discountOverTotal) {
       toast({
@@ -1795,7 +1172,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     appendAuditLog({
       action: "pdv_pagamento_iniciado",
       userLabel: cashierId.slice(0, 8),
-      detail: `Método: ${method} — Total: ${brl(total)}${discountPct >= AUDIT_DISCOUNT_ALERT_PCT ? ` — DESCONTO ${discountPct.toFixed(1)}%` : ""}`,
+      detail: `Método: ${method ?? "balcão"} — Total: ${brl(total)}${discountPct >= AUDIT_DISCOUNT_ALERT_PCT ? ` — DESCONTO ${discountPct.toFixed(1)}%` : ""}`,
     })
     if (discountPct >= AUDIT_DISCOUNT_ALERT_PCT) {
       appendAuditLog({
@@ -1809,7 +1186,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       discountReais,
       discountPercent,
     }
-    setPaymentInitMethod(method)
+    setPaymentMultipay(method === "multiplo")
+    setPaymentInstantIntent(method && method !== "multiplo" ? assistMethodToRuntime(method) : null)
     setPaymentOpen(true)
   }
 
@@ -1991,12 +1369,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           setRecebimentoOpen(true)
           break
         case "F10":
+          // Desconto agora vive no modal de pagamento compartilhado (campos R$/%
+          // no topo). F10 abre o modal em estado neutro para aplicar o desconto.
           if (!isModoRapido) {
             if (cart.length > 0 && caixa.isOpen) {
-              openPaymentModal("dinheiro")
-              window.setTimeout(() => discountInputRef.current?.focus(), 100)
+              openPaymentModal()
             } else {
-              discountInputRef.current?.focus()
+              toast({ title: "F10 — Desconto", description: "Abra o caixa e adicione itens; o desconto fica no modal de pagamento." })
             }
           } else {
             toast({ title: "F10 — Desconto", description: "Disponível no modo padrão." })
@@ -2100,12 +1479,24 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Payment confirm ────────────────────────────────────────────────────────────
   const handlePaymentConfirm = (
-    method: PayMethod,
-    notes: string,
-    payments: { dinheiro: number; pix: number; cartaoDebito: number; cartaoCredito: number; aPrazo: number; creditoVale: number },
-    meta?: { discountAuthorizedByAdminId?: string },
+    payments: PaymentMethod[],
+    meta?: { cashierId?: string; discountAuthorizedByAdminId?: string; discountReais?: number; discountPercent?: number },
   ) => {
     if (cart.length === 0 || discountOverTotal) return
+
+    // Reduz as formas do modal compartilhado para o breakdown do motor (mesma regra
+    // de Clássico/Supermercado/Venda Completa/Black — sem duplicar lógica).
+    let dinheiro = 0, pix = 0, cartaoDebito = 0, cartaoCredito = 0, carne = 0, aPrazo = 0, creditoVale = 0
+    let aPrazoConfig: import("@/lib/operations-sale-types").APrazoConfig | undefined
+    for (const p of payments) {
+      if (p.type === "dinheiro") dinheiro += p.value
+      else if (p.type === "pix") pix += p.value
+      else if (p.type === "cartao_debito") cartaoDebito += p.value
+      else if (p.type === "cartao_credito") cartaoCredito += p.value
+      else if (p.type === "carne") carne += p.value
+      else if (p.type === "a_prazo") { aPrazo += p.value; if (p.aPrazoConfig) aPrazoConfig = p.aPrazoConfig }
+      else if (p.type === "credito_vale") creditoVale += p.value
+    }
 
     // Capturar dados de impressão ANTES de limpar o cart
     const _nomeFantasia = (empresaDocumentos?.nomeFantasia || "").trim() || lojaAtivaId || "Loja"
@@ -2120,12 +1511,12 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       clienteNome: customerName.trim() || undefined,
       clienteCpf: selectedClienteDoc ?? undefined,
       pagamentos: buildPagamentosResumo({
-        dinheiro: payments.dinheiro,
-        pix: payments.pix,
-        cartaoDebito: payments.cartaoDebito,
-        cartaoCredito: payments.cartaoCredito,
-        aPrazo: payments.aPrazo,
-        creditoVale: payments.creditoVale,
+        dinheiro,
+        pix,
+        cartaoDebito,
+        cartaoCredito,
+        aPrazo,
+        creditoVale,
       }),
       itens: cart.map((l) => ({ name: l.title, quantity: l.qty, unitPrice: l.price, lineTotal: l.price * l.qty })),
       subtotal,
@@ -2147,13 +1538,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       })),
       total,
       paymentBreakdown: {
-        dinheiro: payments.dinheiro,
-        pix: payments.pix,
-        cartaoDebito: payments.cartaoDebito,
-        cartaoCredito: payments.cartaoCredito,
-        carne: 0,
-        aPrazo: payments.aPrazo,
-        creditoVale: payments.creditoVale,
+        dinheiro,
+        pix,
+        cartaoDebito,
+        cartaoCredito,
+        carne,
+        aPrazo,
+        creditoVale,
       },
       customerName: customerName.trim() || undefined,
       customerCpf: selectedClienteDoc ?? undefined,
@@ -2165,6 +1556,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         discountPercent: discountType === "percent" ? discountPercent : (subtotal > 0 ? (desconto / subtotal) * 100 : 0),
         discountAuthorizedByAdminId: meta?.discountAuthorizedByAdminId,
       },
+      aPrazoConfig,
     })
 
     if (!result.ok) {
@@ -2172,6 +1564,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       return
     }
     _printInput.numeroVenda = result.saleId
+    // Saldo à prazo → Conta a Receber (cache local; o servidor é a fonte da verdade).
+    if (aPrazo > 0.02 && (customerName.trim() || selectedClienteId)) {
+      appendContaReceberTituloPdvAprazo({
+        lojaId: storeIdKey,
+        saleId: result.saleId,
+        clienteNome: customerName.trim() || "Cliente",
+        valor: aPrazo,
+        aPrazoConfig,
+      })
+    }
     // Fila "Produtos a cadastrar": registra os itens avulsos vendidos para revisão posterior.
     // Não toca estoque/venda/caixa e nunca lança (não pode afetar a venda já concluída).
     try {
@@ -2211,11 +1613,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     setRapidoFlashLineId(null)
     setRapidoPickIdx(0)
     closePaymentModal(false)
-    if (notes.trim()) {
-      toast({ title: "Venda finalizada", description: notes.trim(), duration: 4000 })
-    } else {
-      toast({ title: "Venda finalizada", description: result.saleId, duration: 4000 })
-    }
+    toast({ title: "Venda finalizada", description: result.saleId, duration: 4000 })
 
     // Pós-venda: impressão automática ou popup de oferta
     if (impressaoConfig.imprimirAutomatico && _hadItems) {
@@ -3014,28 +2412,40 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       </div>
 
       {/* ── Modals ── */}
+      {/* Modal de pagamento compartilhado (mesmo motor dos demais PDVs). O desconto
+          R$/% vive dentro do modal; mapeamos as mudanças para o discountType da
+          Assistência (snapshot/revert preservados via closePaymentModal). */}
       <PaymentModal
-        open={paymentOpen}
-        subtotal={subtotal}
-        total={total}
+        isOpen={paymentOpen}
+        cartSubtotal={subtotal}
         impostoEstimado={impostoEstimado}
-        discountType={discountType}
-        discountReais={discountReais}
-        discountPercent={discountPercent}
-        discountAmount={desconto}
-        discountOverTotal={discountOverTotal}
-        onDiscountTypeChange={(type) => {
-          setDiscountType(type)
-          if (type === "reais") setDiscountPercent(0)
-          else setDiscountReais(0)
+        total={total}
+        discountReais={discountType === "reais" ? discountReais : 0}
+        discountPercent={discountType === "percent" ? discountPercent : 0}
+        onDiscountReaisChange={(v) => {
+          setDiscountType("reais")
+          setDiscountReais(v)
+          setDiscountPercent(0)
         }}
-        onDiscountReaisChange={setDiscountReais}
-        onDiscountPercentChange={setDiscountPercent}
-        discountInputRef={discountInputRef}
-        customerName={customerName}
+        onDiscountPercentChange={(v) => {
+          setDiscountType("percent")
+          setDiscountPercent(v)
+          setDiscountReais(0)
+        }}
+        selectedCustomer={
+          selectedClienteId
+            ? { id: selectedClienteId, name: customerName, cpf: (selectedClienteDoc ?? "").trim(), phone: "" }
+            : null
+        }
         customerStoreCredit={customerCredit}
-        defaultMethod={paymentInitMethod}
-        payMethods={payMethods}
+        cashierId={cashierId}
+        instantPayIntent={paymentInstantIntent}
+        onInstantPayIntentConsumed={() => setPaymentInstantIntent(null)}
+        multipayHint={paymentMultipay}
+        onCustomerCpfUpdate={(id, cpf) => {
+          if (id === selectedClienteId) setSelectedClienteDoc(cpf)
+        }}
+        onRequireCustomer={() => setClientePickerOpen(true)}
         onConfirm={handlePaymentConfirm}
         onClose={() => closePaymentModal(true)}
       />

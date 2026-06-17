@@ -1,5 +1,11 @@
 # Changelog — OmniGestão Pro
 
+## 2026-06-17 — PDV Assistência: migração para o motor de pagamento compartilhado
+
+- **PDV Assistência** passou a reutilizar o **mesmo `PaymentModal` compartilhado** dos demais PDVs (Clássico/Supermercado/Venda Completa/Black) — eliminado o `PaymentModal` local duplicado (~570 linhas; saldo do arquivo: **−590 linhas**). Ganha automaticamente: pagamento misto, **à prazo com entrada + parcelas + vencimento + observação**, à prazo no Múltiplo, sugestão de saldo restante → Conta a Receber, **abertura automática do seletor de cliente** (com cadastro rápido) quando falta cliente, e idempotência por parcela em `ContaReceberTitulo`.
+- **Preservado (sem regressão):** aparência do PDV Assistência (carrinho/atalhos/header), desconto (mapeado para o `discountType` interno, com snapshot/revert no cancelar), impressão (cupom via `buildPagamentosResumo`), operador/auditoria, crédito-vale, persistência de carrinho, offline/sync e `finalizeSaleTransaction` (intacto).
+- **Mudanças de UX deliberadas:** o desconto agora é editado **dentro** do modal (campos R$/% no topo) em vez de um campo no PDV — F10 abre o modal nesse estado; o campo de "observação da venda" (que era só um toast, não persistido) saiu. Motor transacional, schema, auth, proxy e financeiro **não** foram tocados.
+
 ## 2026-06-17 — Venda a prazo profissional + cliente rápido no PDV
 
 - **Modal de pagamento compartilhado** (`payment-modal.tsx`): À Prazo passa a ser combinável no **Pagamento Múltiplo** (F12); novo atalho **"Lançar R$ X restante À Prazo"** sugere o saldo como Conta a Receber em 1 toque (ex.: recebe R$ 22 em dinheiro numa venda de R$ 39,90 → sugere R$ 17,90 à prazo); campo **Observação** no card à prazo; quando falta cliente, o modal **abre o seletor de cliente** (em vez de só toast) via `onRequireCustomer`, preservando o carrinho.
