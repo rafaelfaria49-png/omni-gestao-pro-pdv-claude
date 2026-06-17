@@ -256,14 +256,24 @@ export async function GET(
           : null,
         correcoes,
         pagamentos: extractPayments(venda.payload),
-        itens: venda.itens.map((it) => ({
-          id: it.id,
-          inventoryId: it.inventoryId,
-          nome: it.nome,
-          quantidade: it.quantidade,
-          precoUnitario: it.precoUnitario,
-          lineTotal: it.lineTotal,
-        })),
+        itens: venda.itens.map((it, i) => {
+          // Metadados do item (serial/IMEI/lote/garantia/observação) vivem em
+          // payload.lines[i].metadata (F4). Casamento por posição (ordem de criação).
+          const pl = venda.payload && typeof venda.payload === "object"
+            ? (venda.payload as Record<string, unknown>).lines
+            : undefined
+          const line = Array.isArray(pl) && pl[i] && typeof pl[i] === "object" ? (pl[i] as Record<string, unknown>) : null
+          const metadata = line && line.metadata && typeof line.metadata === "object" ? line.metadata : null
+          return {
+            id: it.id,
+            inventoryId: it.inventoryId,
+            nome: it.nome,
+            quantidade: it.quantidade,
+            precoUnitario: it.precoUnitario,
+            lineTotal: it.lineTotal,
+            metadata,
+          }
+        }),
         devolucoes: devolucoes.map((d) => {
           // Extrai metadata de troca imediata do payload (vendaOriginalId, novaVendaId, totais).
           const meta =

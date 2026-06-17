@@ -35,6 +35,7 @@ import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { computeCorrecaoItensPlan, type CorrecaoLineInput } from "@/lib/vendas/correcao-itens-plan"
 import { computeCorrecaoPagamentoPlan } from "@/lib/financeiro/correcao-pagamento-plan"
 import { parseVencimentoBr } from "@/lib/vendas/correcao-cliente-titulo-plan"
+import { computeParcelamentoPlan } from "@/lib/vendas/correcao-parcelamento-plan"
 import { avulsoInventoryId } from "@/lib/os-pdv-virtual-lines"
 import { listClientes } from "@/app/actions/cadastros"
 
@@ -85,7 +86,7 @@ type VendaFull = {
   estoqueReposto?: boolean; estornoFinanceiro?: boolean
   paymentBreakdown: Partial<PaymentBreakdownFull> | null
   pagamentos: Array<{ label: string; valor: number }>
-  itens: Array<{ id: string; inventoryId: string | null; nome: string; quantidade: number; precoUnitario: number; lineTotal: number }>
+  itens: Array<{ id: string; inventoryId: string | null; nome: string; quantidade: number; precoUnitario: number; lineTotal: number; metadata?: Record<string, string> | null }>
   correcoes: Correcao[]
   devolucoes: Devolucao[]
   clienteCompleto: ClienteCompleto | null
@@ -588,9 +589,111 @@ export function WorkspaceCorrecaoVenda({
     setEditTitId(t.id); setTitVenc(t.vencimento || ""); setTitObs(""); setTitMotivo(""); setTitPin("")
   }, [])
 
-  // Limpa edições F3 ao (re)abrir ou trocar de venda.
+  // ── F4: Reparcelamento ─────────────────────────────────────────────────────
+  const [reparcOpen, setReparcOpen] = useState(false)
+  const [reparcN, setReparcN] = useState(1)
+  const [reparcVenc, setReparcVenc] = useState("")
+  const [reparcInterv, setReparcInterv] = useState(30)
+  const [reparcMotivo, setReparcMotivo] = useState("")
+  const [reparcPin, setReparcPin] = useState("")
+  const [reparcApplying, setReparcApplying] = useState(false)
+
+  const aPrazoValor = useMemo(() => Number(venda?.paymentBreakdown?.aPrazo) || 0, [venda])
+  const reparcPlan = useMemo(() => {
+    if (!venda || !reparcOpen || aPrazoValor <= 0.005) return null
+    return computeParcelamentoPlan({ pedidoId: venda.id, totalAPrazo: aPrazoValor, parcelas: reparcN, primeiroVencimento: reparcVenc || undefined, intervaloDias: reparcInterv })
+  }, [venda, reparcOpen, aPrazoValor, reparcN, reparcVenc, reparcInterv])
+
+  const startReparc = useCallback(() => {
+    if (!venda) return
+    const t0 = venda.titulos.find((t) => { const s = (t.status ?? "").toLowerCase(); return s !== "cancelado" && s !== "estornado" })
+    setReparcN(venda.titulos.filter((t) => { const s = (t.status ?? "").toLowerCase(); return s !== "cancelado" && s !== "estornado" }).length || 1)
+    setReparcVenc(t0?.vencimento ?? "")
+    setReparcInterv(30); setReparcMotivo(""); setReparcPin(""); setReparcOpen(true)
+  }, [venda])
+
+  const aplicarReparc = useCallback(async () => {
+    if (!venda || !reparcPlan?.ok || !reparcMotivo.trim() || !reparcPin.trim()) return
+    setReparcApplying(true)
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(venda.id)}/corrigir-parcelas`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify({ motivo: reparcMotivo.trim(), supervisorPin: reparcPin.trim(), parcelas: reparcN, primeiroVencimento: reparcVenc.trim(), intervaloDias: reparcInterv }),
+      })
+      const data = await res.json()
+      if (!data.ok) { toast({ title: "Reparcelamento não aplicado", description: data.error ?? "Falha.", variant: "destructive" }); return }
+      toast({ title: "Reparcelado", description: `${data.parcelas} parcela(s) geradas.` })
+      setReparcOpen(false); await load()
+    } catch { toast({ title: "Erro", description: "Falha de conexão.", variant: "destructive" }) }
+    finally { setReparcApplying(false) }
+  }, [venda, reparcPlan, reparcMotivo, reparcPin, reparcN, reparcVenc, reparcInterv, storeId, toast, load])
+
+  // ── F4: Dados do cliente vinculado (CPF/telefone/e-mail) — reusa PATCH /api/clientes/[id]
+  const [editCliDados, setEditCliDados] = useState(false)
+  const [cdNome, setCdNome] = useState("")
+  const [cdDoc, setCdDoc] = useState("")
+  const [cdFone, setCdFone] = useState("")
+  const [cdEmail, setCdEmail] = useState("")
+  const [cdSaving, setCdSaving] = useState(false)
+
+  const startEditCliDados = useCallback(() => {
+    const c = venda?.clienteCompleto
+    if (!c) return
+    setCdNome(c.name); setCdDoc(c.document || ""); setCdFone(c.phone || ""); setCdEmail(c.email || ""); setEditCliDados(true)
+  }, [venda])
+
+  const salvarCliDados = useCallback(async () => {
+    if (!venda?.clienteCompleto) return
+    setCdSaving(true)
+    try {
+      const res = await fetch(`/api/clientes/${encodeURIComponent(venda.clienteCompleto.id)}`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify({ name: cdNome.trim(), phone: cdFone.trim(), email: cdEmail.trim() || null, document: cdDoc.trim() }),
+      })
+      const data = await res.json()
+      if (!data.ok) { toast({ title: "Dados não salvos", description: data.error ?? "Falha (telefone válido é obrigatório).", variant: "destructive" }); return }
+      toast({ title: "Dados do cliente atualizados", description: cdNome })
+      setEditCliDados(false); await load()
+    } catch { toast({ title: "Erro", description: "Falha de conexão.", variant: "destructive" }) }
+    finally { setCdSaving(false) }
+  }, [venda, cdNome, cdDoc, cdFone, cdEmail, storeId, toast, load])
+
+  // ── F4: Metadados do item (serial/IMEI/lote/garantia/observação)
+  const [metaIdx, setMetaIdx] = useState<number | null>(null)
+  const [metaVals, setMetaVals] = useState<Record<string, string>>({})
+  const [metaMotivo, setMetaMotivo] = useState("")
+  const [metaPin, setMetaPin] = useState("")
+  const [metaSaving, setMetaSaving] = useState(false)
+
+  const startMeta = useCallback((idx: number, atual?: Record<string, string> | null) => {
+    setMetaIdx(idx)
+    setMetaVals({ observacao: atual?.observacao ?? "", garantia: atual?.garantia ?? "", serial: atual?.serial ?? "", imei: atual?.imei ?? "", lote: atual?.lote ?? "" })
+    setMetaMotivo(""); setMetaPin("")
+  }, [])
+
+  const salvarMeta = useCallback(async () => {
+    if (!venda || metaIdx === null || !metaMotivo.trim() || !metaPin.trim()) return
+    setMetaSaving(true)
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(venda.id)}/corrigir-item-meta`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify({ itemIndex: metaIdx, motivo: metaMotivo.trim(), supervisorPin: metaPin.trim(), metadata: metaVals }),
+      })
+      const data = await res.json()
+      if (!data.ok) { toast({ title: "Metadados não salvos", description: data.error ?? "Falha.", variant: "destructive" }); return }
+      toast({ title: "Metadados salvos", description: "Sem impacto em estoque/financeiro." })
+      setMetaIdx(null); await load()
+    } catch { toast({ title: "Erro", description: "Falha de conexão.", variant: "destructive" }) }
+    finally { setMetaSaving(false) }
+  }, [venda, metaIdx, metaMotivo, metaPin, metaVals, storeId, toast, load])
+
+  // Limpa edições F3/F4 ao (re)abrir ou trocar de venda.
   useEffect(() => {
     setEditPag(false); setEditCli(false); setEditTitId(null); setPagConfirm(false); setQcOpen(false)
+    setReparcOpen(false); setEditCliDados(false); setMetaIdx(null)
   }, [open, vendaId])
 
   const aplicarTitulo = useCallback(async () => {
@@ -733,10 +836,33 @@ export function WorkspaceCorrecaoVenda({
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Trocar o cliente exige motivo e PIN. Venda à prazo sempre exige cliente.</p>
                       {venda.status !== "cancelada" && (
-                        <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditCli}><Pencil className="h-3.5 w-3.5" /> Editar cliente</Button>
+                        <div className="flex gap-2">
+                          {venda.clienteCompleto && !editCliDados && (
+                            <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditCliDados}><Pencil className="h-3.5 w-3.5" /> Editar dados</Button>
+                          )}
+                          <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditCli}><RotateCcw className="h-3.5 w-3.5" /> Trocar cliente</Button>
+                        </div>
                       )}
                     </div>
                     {venda.clienteCompleto ? (
+                      editCliDados ? (
+                        <Card className="border-primary/30 bg-primary/5 max-w-2xl min-w-0">
+                          <CardContent className="pt-4 space-y-2">
+                            <p className="text-xs font-semibold text-foreground">Editar dados do cliente (CPF/telefone/e-mail)</p>
+                            <Input className="h-9 text-sm" placeholder="Nome *" value={cdNome} onChange={(e) => setCdNome(e.target.value)} disabled={cdSaving} />
+                            <div className="flex gap-2 flex-wrap">
+                              <Input className="h-9 text-sm flex-1 min-w-[140px]" placeholder="CPF/CNPJ" value={cdDoc} onChange={(e) => setCdDoc(e.target.value)} disabled={cdSaving} />
+                              <Input className="h-9 text-sm flex-1 min-w-[140px]" placeholder="Telefone *" value={cdFone} onChange={(e) => setCdFone(e.target.value)} disabled={cdSaving} />
+                            </div>
+                            <Input className="h-9 text-sm" placeholder="E-mail" value={cdEmail} onChange={(e) => setCdEmail(e.target.value)} disabled={cdSaving} />
+                            <p className="text-[11px] text-muted-foreground">Altera o cadastro do cliente (reflete em cupom/reimpressão e demais vendas). Requer permissão de administrador.</p>
+                            <div className="flex justify-end gap-2">
+                              <Button size="sm" variant="ghost" onClick={() => setEditCliDados(false)} disabled={cdSaving}>Cancelar</Button>
+                              <Button size="sm" className="gap-1.5" disabled={cdSaving || !cdNome.trim() || !cdFone.trim()} onClick={() => void salvarCliDados()}>{cdSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar dados</Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ) : (
                       <Card className="border-border bg-card max-w-2xl min-w-0">
                         <CardContent className="pt-4">
                           <p className="text-xs font-semibold text-muted-foreground mb-2">Cliente vinculado</p>
@@ -750,6 +876,7 @@ export function WorkspaceCorrecaoVenda({
                           <FieldRow label="Última compra" value={fmtDateTime(venda.clienteCompleto.lastPurchaseAt)} />
                         </CardContent>
                       </Card>
+                      )
                     ) : venda.clienteNome || venda.clienteCpf ? (
                       <Card className="border-border bg-card max-w-2xl min-w-0">
                         <CardContent className="pt-4">
@@ -990,23 +1117,58 @@ export function WorkspaceCorrecaoVenda({
                                 <TableHead className="text-foreground text-center">Qtd</TableHead>
                                 <TableHead className="text-foreground text-right">Unitário</TableHead>
                                 <TableHead className="text-foreground text-right">Total</TableHead>
+                                <TableHead className="text-foreground text-center w-28">Metadados</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {venda.itens.map((it) => (
-                                <TableRow key={it.id} className="border-border">
-                                  <TableCell className="text-foreground break-words max-w-[420px]">{it.nome}</TableCell>
-                                  <TableCell className="text-center tabular-nums text-foreground">{it.quantidade}</TableCell>
-                                  <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(it.precoUnitario)}</TableCell>
-                                  <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(it.lineTotal)}</TableCell>
-                                </TableRow>
-                              ))}
+                              {venda.itens.map((it, idx) => {
+                                const md = it.metadata && typeof it.metadata === "object" ? it.metadata : null
+                                const mdResumo = md ? Object.entries(md).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(" · ") : ""
+                                return (
+                                  <TableRow key={it.id} className="border-border">
+                                    <TableCell className="text-foreground break-words max-w-[420px]">
+                                      {it.nome}
+                                      {mdResumo && <div className="text-[10px] text-muted-foreground mt-0.5 break-words">{mdResumo}</div>}
+                                    </TableCell>
+                                    <TableCell className="text-center tabular-nums text-foreground">{it.quantidade}</TableCell>
+                                    <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(it.precoUnitario)}</TableCell>
+                                    <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(it.lineTotal)}</TableCell>
+                                    <TableCell className="text-center">
+                                      {venda.status !== "cancelada" && (
+                                        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs" onClick={() => startMeta(idx, md)}><Pencil className="h-3 w-3" /> {md ? "Editar" : "Add"}</Button>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                )
+                              })}
                             </TableBody>
                           </Table>
                         </CardContent>
                       </Card>
                     ) : (
                       <EmptyState icon={Package} title="Sem itens" hint="Esta venda não tem itens registrados." />
+                    )}
+
+                    {/* Editor de metadados do item (serial/IMEI/lote/garantia/observação — sem estoque) */}
+                    {metaIdx !== null && venda.itens[metaIdx] && (
+                      <Card className="border-primary/30 bg-primary/5 min-w-0">
+                        <CardContent className="pt-4 space-y-2">
+                          <p className="text-xs font-semibold text-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Metadados de “{venda.itens[metaIdx].nome}” — não altera quantidade/estoque/total</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="space-y-1"><Label className="text-xs text-muted-foreground">Nº de série</Label><Input className="h-8 text-sm" value={metaVals.serial ?? ""} onChange={(e) => setMetaVals((c) => ({ ...c, serial: e.target.value }))} disabled={metaSaving} /></div>
+                            <div className="space-y-1"><Label className="text-xs text-muted-foreground">IMEI</Label><Input className="h-8 text-sm" value={metaVals.imei ?? ""} onChange={(e) => setMetaVals((c) => ({ ...c, imei: e.target.value }))} disabled={metaSaving} /></div>
+                            <div className="space-y-1"><Label className="text-xs text-muted-foreground">Lote</Label><Input className="h-8 text-sm" value={metaVals.lote ?? ""} onChange={(e) => setMetaVals((c) => ({ ...c, lote: e.target.value }))} disabled={metaSaving} /></div>
+                            <div className="space-y-1"><Label className="text-xs text-muted-foreground">Garantia</Label><Input className="h-8 text-sm" placeholder="ex.: 90 dias" value={metaVals.garantia ?? ""} onChange={(e) => setMetaVals((c) => ({ ...c, garantia: e.target.value }))} disabled={metaSaving} /></div>
+                          </div>
+                          <div className="space-y-1"><Label className="text-xs text-muted-foreground">Observação do item</Label><Input className="h-8 text-sm" value={metaVals.observacao ?? ""} onChange={(e) => setMetaVals((c) => ({ ...c, observacao: e.target.value }))} disabled={metaSaving} /></div>
+                          <div className="space-y-1"><Label className="text-xs text-foreground">Motivo <span className="text-destructive">*</span></Label><Textarea className="min-h-[44px] resize-none bg-background text-sm" value={metaMotivo} onChange={(e) => setMetaMotivo(e.target.value)} disabled={metaSaving} /></div>
+                          <div className="space-y-1 max-w-[200px]"><Label className="text-xs text-foreground flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> PIN supervisor <span className="text-destructive">*</span></Label><Input type="password" inputMode="numeric" maxLength={12} value={metaPin} onChange={(e) => setMetaPin(e.target.value.replace(/\D/g, ""))} className="h-8 bg-background font-mono tracking-widest" disabled={metaSaving} /></div>
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setMetaIdx(null)} disabled={metaSaving}>Cancelar</Button>
+                            <Button size="sm" className="gap-1.5" disabled={metaSaving || !metaMotivo.trim() || !metaPin.trim()} onClick={() => void salvarMeta()}>{metaSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar metadados</Button>
+                          </div>
+                        </CardContent>
+                      </Card>
                     )}
                   </>
                 ) : (
@@ -1247,6 +1409,50 @@ export function WorkspaceCorrecaoVenda({
                 {venda.titulos.length > 0 ? (
                   <>
                     <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Apenas títulos em aberto podem ter vencimento/observação editados. Recebimento/estorno seguem no Contas a Receber.</p>
+
+                    {/* Reparcelamento (F4) */}
+                    {aPrazoValor > 0.005 && venda.status !== "cancelada" && (
+                      !reparcOpen ? (
+                        <div className="flex justify-end">
+                          <Button size="sm" variant="outline" className="gap-1.5" onClick={startReparc}><Calculator className="h-3.5 w-3.5" /> Reparcelar saldo à prazo</Button>
+                        </div>
+                      ) : (
+                        <Card className="border-primary/30 bg-primary/5 min-w-0">
+                          <CardContent className="pt-4 space-y-3">
+                            <p className="text-xs font-semibold text-foreground">Reparcelar {fmtBrl(aPrazoValor)} à prazo</p>
+                            <div className="flex flex-wrap gap-3 items-end">
+                              <div className="space-y-1">
+                                <Label className="text-xs text-muted-foreground">Parcelas</Label>
+                                <div className="flex gap-1">
+                                  {[1, 2, 3, 6, 12].map((n) => (
+                                    <Button key={n} size="sm" variant={reparcN === n ? "default" : "outline"} className="h-8 w-9 p-0" onClick={() => setReparcN(n)}>{n}</Button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="space-y-1 max-w-[150px]"><Label className="text-xs text-muted-foreground">1º vencimento</Label><Input placeholder="DD/MM/AAAA" value={reparcVenc} onChange={(e) => setReparcVenc(e.target.value)} className="h-8 bg-background text-sm" disabled={reparcApplying} /></div>
+                              <div className="space-y-1 max-w-[110px]"><Label className="text-xs text-muted-foreground">Intervalo (dias)</Label><Input type="number" min={1} value={reparcInterv} onChange={(e) => setReparcInterv(Math.max(1, Math.round(Number(e.target.value) || 30)))} className="h-8 bg-background text-sm" disabled={reparcApplying} /></div>
+                            </div>
+                            {reparcPlan && !reparcPlan.ok && (
+                              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-start gap-2"><AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" /> {reparcPlan.error}</div>
+                            )}
+                            {reparcPlan?.ok && (
+                              <div className="rounded-lg border border-border bg-muted/20 p-2 text-xs space-y-0.5">
+                                <p className="font-semibold text-muted-foreground">Pré-visualização das parcelas</p>
+                                {reparcPlan.itens.map((p) => (
+                                  <p key={p.numero} className="text-foreground flex justify-between"><span>Parcela {p.numero}/{reparcPlan.parcelas}</span><span className="tabular-nums">{fmtBrl(p.valor)} · venc. {p.vencimento}</span></p>
+                                ))}
+                              </div>
+                            )}
+                            <div className="space-y-1"><Label className="text-xs text-foreground">Motivo <span className="text-destructive">*</span></Label><Textarea className="min-h-[48px] resize-none bg-background text-sm" value={reparcMotivo} onChange={(e) => setReparcMotivo(e.target.value)} disabled={reparcApplying} /></div>
+                            <div className="space-y-1 max-w-[200px]"><Label className="text-xs text-foreground flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> PIN supervisor <span className="text-destructive">*</span></Label><Input type="password" inputMode="numeric" maxLength={12} value={reparcPin} onChange={(e) => setReparcPin(e.target.value.replace(/\D/g, ""))} className="h-8 bg-background font-mono tracking-widest" disabled={reparcApplying} /></div>
+                            <div className="flex justify-end gap-2">
+                              <Button size="sm" variant="ghost" onClick={() => setReparcOpen(false)} disabled={reparcApplying}>Cancelar</Button>
+                              <Button size="sm" className="gap-1.5" disabled={reparcApplying || !reparcPlan?.ok || !reparcMotivo.trim() || !reparcPin.trim()} onClick={() => void aplicarReparc()}>{reparcApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {reparcApplying ? "Aplicando…" : "Aplicar reparcelamento"}</Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    )}
                     <div className="space-y-2">
                       {venda.titulos.map((t) => {
                         const b = statusTituloBadge(t.status)
