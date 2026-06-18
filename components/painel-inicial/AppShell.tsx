@@ -10,15 +10,24 @@ import { Topbar } from "./Topbar";
 export function AppShell({
   children,
   noPadding,
+  topNotice,
 }: {
   children: ReactNode;
   noPadding?: boolean;
+  /**
+   * Faixa horizontal opcional renderizada logo ABAIXO da Topbar global e ACIMA
+   * do conteúdo (`<main>`). Fica no fluxo (não é overlay): empurra o conteúdo
+   * para baixo, sem cobrir carrinho, pagamento, workspace nem a sidebar.
+   * Usada pelo aviso de atualização (PWA). Quando vazio/null não ocupa espaço.
+   */
+  topNotice?: ReactNode;
 }) {
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       <Sidebar />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Topbar />
+        {topNotice}
         <main
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",

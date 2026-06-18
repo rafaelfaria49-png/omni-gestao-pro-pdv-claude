@@ -39,7 +39,9 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
     pathname?.startsWith("/dashboard/vendas-hub/")
 
   const shell = (
-    <AppShell noPadding={isFixedScreen}>
+    // Aviso de atualização (PWA) vai na faixa superior (abaixo da Topbar global),
+    // no fluxo — nunca como overlay sobre carrinho/pagamento/workspace.
+    <AppShell noPadding={isFixedScreen} topNotice={<PwaUpdatePrompt />}>
       <FirstAccessWizard />
       <div
         className={
@@ -53,10 +55,5 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
     </AppShell>
   )
 
-  return (
-    <AppOpsProviders>
-      {shell}
-      <PwaUpdatePrompt />
-    </AppOpsProviders>
-  )
+  return <AppOpsProviders>{shell}</AppOpsProviders>
 }

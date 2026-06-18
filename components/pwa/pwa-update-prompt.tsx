@@ -128,68 +128,67 @@ export function PwaUpdatePrompt() {
 
   const strong = severity === "strong"
 
+  // Barra superior horizontal, no fluxo (renderizada pelo slot `topNotice` do
+  // AppShell, logo abaixo da Topbar). NÃO é overlay: não cobre carrinho, total,
+  // botões de pagamento, workspace nem a sidebar — apenas empurra o conteúdo.
   return (
     <div
-      className="fixed bottom-4 right-4 z-[120] max-w-[calc(100vw-2rem)]"
-      role="alertdialog"
+      role={strong ? "alert" : "status"}
       aria-live={strong ? "assertive" : "polite"}
+      aria-atomic="true"
       aria-label="Atualização do sistema disponível"
+      className={[
+        "shrink-0 border-b",
+        strong ? "border-warning/40 bg-warning/10" : "border-border bg-card",
+      ].join(" ")}
     >
-      <div
-        className={[
-          "flex items-start gap-3 rounded-lg border px-4 py-3 shadow-lg",
-          strong
-            ? "w-[22rem] border-warning/50 bg-warning/10"
-            : "border-border bg-card",
-        ].join(" ")}
-      >
-        {strong ? (
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
-        ) : (
-          <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-        )}
+      <div className="flex flex-col gap-2 px-4 py-2 sm:flex-row sm:items-center sm:gap-3 sm:px-6">
+        <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
+          {strong ? (
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning sm:mt-0" aria-hidden="true" />
+          ) : (
+            <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-primary sm:mt-0" aria-hidden="true" />
+          )}
+          <p className="line-clamp-2 min-w-0 text-xs leading-snug sm:line-clamp-1">
+            <span className="font-semibold text-foreground">
+              {strong ? "Atualização importante disponível" : "Nova versão disponível"}
+            </span>{" "}
+            <span className="text-muted-foreground">
+              Atualize quando concluir a venda. Suas vendas e pendências locais serão preservadas.
+            </span>
+          </p>
+        </div>
 
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground">
-            {strong ? "Versão muito desatualizada" : "Nova versão disponível"}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {strong
-              ? "Esta máquina está rodando uma versão antiga. Atualize assim que concluir a venda atual."
-              : "Atualize para carregar a versão mais recente quando puder."}
-          </p>
-          <p className="mt-1 text-[11px] text-muted-foreground/80">
-            Suas vendas, pendências e o caixa são preservados ao atualizar.
-          </p>
-
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={reloading}
+            onClick={() => void applyUpdateAndReload()}
+            aria-label="Atualizar agora para a versão mais recente"
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+          >
+            {reloading ? "Atualizando…" : "Atualizar agora"}
+          </button>
+          <button
+            type="button"
+            disabled={reloading}
+            onClick={reloadOnly}
+            aria-label="Recarregar o sistema"
+            className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+          >
+            Recarregar sistema
+          </button>
+          {!strong && (
             <button
               type="button"
               disabled={reloading}
-              onClick={() => void applyUpdateAndReload()}
-              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+              onClick={() => setDismissed(true)}
+              aria-label="Dispensar aviso de atualização por enquanto"
+              className="rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
-              {reloading ? "Atualizando…" : "Atualizar agora"}
+              Agora não
             </button>
-            <button
-              type="button"
-              disabled={reloading}
-              onClick={reloadOnly}
-              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
-            >
-              Recarregar sistema
-            </button>
-            {!strong && (
-              <button
-                type="button"
-                disabled={reloading}
-                onClick={() => setDismissed(true)}
-                className="px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Agora não
-              </button>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </div>
