@@ -5,6 +5,7 @@ import {
   breakdownEquals,
   cashReal,
   sumBreakdown,
+  valorAVistaVenda,
 } from "./correcao-pagamento-plan"
 
 const T = 100
@@ -39,6 +40,60 @@ describe("helpers", () => {
       breakdownEquals(normalizeBreakdown({ dinheiro: 100 }), normalizeBreakdown({ dinheiro: 100.004 })),
     ).toBe(true)
   })
+})
+
+describe("valorAVistaVenda — REGRA OFICIAL ÚNICA (total − aPrazo − creditoVale)", () => {
+  it("dinheiro puro: à vista = total", () => {
+    expect(valorAVistaVenda(100, { dinheiro: 100 })).toBe(100)
+  })
+  it("vale puro: à vista = 0 (vale não é dinheiro novo)", () => {
+    expect(valorAVistaVenda(100, { creditoVale: 100 })).toBe(0)
+  })
+  it("dinheiro + vale: à vista = só o dinheiro", () => {
+    expect(valorAVistaVenda(100, { dinheiro: 60, creditoVale: 40 })).toBe(60)
+  })
+  it("múltiplo (dinheiro+pix+débito+crédito+carnê): à vista = soma das formas à vista", () => {
+    expect(
+      valorAVistaVenda(100, { dinheiro: 20, pix: 20, cartaoDebito: 20, cartaoCredito: 20, carne: 20 }),
+    ).toBe(100)
+  })
+  it("entrada + à prazo: à vista exclui o saldo à prazo", () => {
+    expect(valorAVistaVenda(100, { dinheiro: 40, aPrazo: 60 })).toBe(40)
+  })
+  it("à prazo + vale: à vista exclui ambos", () => {
+    expect(valorAVistaVenda(100, { aPrazo: 50, creditoVale: 50 })).toBe(0)
+  })
+  it("breakdown ausente (replay legado): cai em total (sem regressão histórica)", () => {
+    expect(valorAVistaVenda(100, undefined)).toBe(100)
+    expect(valorAVistaVenda(100, null)).toBe(100)
+  })
+  it("equivale a cashReal quando o breakdown fecha o total", () => {
+    const pb = normalizeBreakdown({ dinheiro: 30, pix: 10, aPrazo: 40, creditoVale: 20 })
+    expect(valorAVistaVenda(100, pb)).toBe(cashReal(pb)) // ambos = 40
+  })
+})
+
+describe("consistência venda↔correção (uma única regra)", () => {
+  // O motor de venda grava `valorAVistaVenda(total, pb)`; a correção grava
+  // `plan.cashTarget`. Para o MESMO breakdown-alvo os dois DEVEM coincidir —
+  // é exatamente o que elimina a divergência da auditoria.
+  const casos: Array<{ nome: string; pb: Record<string, number> }> = [
+    { nome: "dinheiro", pb: { dinheiro: 100 } },
+    { nome: "vale", pb: { creditoVale: 100 } },
+    { nome: "dinheiro+vale", pb: { dinheiro: 60, creditoVale: 40 } },
+    { nome: "múltiplo", pb: { dinheiro: 50, pix: 50 } },
+    { nome: "à prazo", pb: { aPrazo: 100 } },
+    { nome: "entrada+prazo+vale", pb: { dinheiro: 30, aPrazo: 40, creditoVale: 30 } },
+  ]
+  for (const c of casos) {
+    it(`${c.nome}: entrada da venda == cashTarget da correção`, () => {
+      const vendaEntrada = valorAVistaVenda(T, c.pb)
+      // Correção para o mesmo alvo (partindo de dinheiro:100, à vista pura).
+      const plan = computeCorrecaoPagamentoPlan({ total: T, oldBreakdown: { dinheiro: 100 }, newBreakdown: c.pb })
+      const correcaoEntrada = plan.cashTarget
+      expect(correcaoEntrada).toBe(vendaEntrada)
+    })
+  }
 })
 
 describe("computeCorrecaoPagamentoPlan — transições do GOAL Parte 3", () => {

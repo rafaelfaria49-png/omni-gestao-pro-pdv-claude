@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
+import { valorAVistaVenda } from "@/lib/financeiro/correcao-pagamento-plan"
 
 /**
  * Lançada pela baixa de estoque do PDV quando `enforceStock` está ativo e o saldo
@@ -332,11 +333,13 @@ export async function upsertVendaInTransaction(
   }
 
   // ── 4. MovimentacaoFinanceira (receita à vista PDV) ─────────────────────────
-  // aPrazo já vira ContaReceberTitulo no cliente — não duplicar aqui.
-  // creditoVale é abatimento de saldo existente — não é receita nova.
+  // REGRA OFICIAL ÚNICA (GOAL_FATURAMENTO_VALE_ALINHAMENTO): receita à vista =
+  // total − aPrazo − creditoVale (ver `valorAVistaVenda`). aPrazo vira
+  // ContaReceberTitulo (passo 6); creditoVale abate ClienteCredito (passo 5) —
+  // nenhum dos dois é dinheiro novo no caixa. Mesma função usada pela correção.
   const pb = sale.paymentBreakdown
   const aPrazoVal = typeof pb?.aPrazo === "number" && pb.aPrazo > 0 ? pb.aPrazo : 0
-  const valorImediato = arredonda2(total - aPrazoVal)
+  const valorImediato = valorAVistaVenda(total, pb)
 
   if (valorImediato > 0) {
     const dupFinanceiro = await tx.movimentacaoFinanceira.findFirst({

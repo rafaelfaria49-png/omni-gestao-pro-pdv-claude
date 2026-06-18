@@ -72,9 +72,31 @@ export function sumBreakdown(pb: PaymentBreakdownFull): number {
   return round2(PAYMENT_FORM_KEYS.reduce((s, k) => s + (pb[k] || 0), 0))
 }
 
-/** Parcela à vista (dinheiro real) de um breakdown. */
+/** Parcela à vista (dinheiro real) de um breakdown — soma das formas à vista. */
 export function cashReal(pb: PaymentBreakdownFull): number {
   return round2(AVISTA_CASH_KEYS.reduce((s, k) => s + (pb[k] || 0), 0))
+}
+
+/**
+ * REGRA OFICIAL ÚNICA de "receita à vista" de uma venda — GOAL_FATURAMENTO_VALE_ALINHAMENTO.
+ *
+ *   valorAVistaVenda = total − aPrazo − creditoVale
+ *
+ * É o valor que entra no caixa/financeiro como `MovimentacaoFinanceira(origem:"venda")`.
+ * EXCLUI `aPrazo` (vira ContaReceberTitulo) e `creditoVale` (abatimento de saldo já
+ * existente do cliente, debitado em ClienteCredito/UsoCreditoCliente — não é dinheiro novo).
+ *
+ * Reutilizada IDENTICAMENTE pelos dois fluxos que gravam essa entrada:
+ *   - venda normal  → `upsertVendaInTransaction` (motor compartilhado dos PDVs);
+ *   - correção      → `computeCorrecaoPagamentoPlan` (campo `cashTarget`).
+ *
+ * Ancorada no TOTAL autoritativo da venda (não na soma das formas): para um breakdown
+ * que fecha o total é idêntica a `cashReal(pb)`; se o breakdown estiver ausente/incompleto
+ * (replay legado sem `paymentBreakdown`), cai em `total` — preservando o histórico.
+ */
+export function valorAVistaVenda(total: number, pb?: Partial<PaymentBreakdownFull> | null): number {
+  const n = normalizeBreakdown(pb)
+  return round2(round2(total) - n.aPrazo - n.creditoVale)
 }
 
 /** Igualdade de breakdown forma-a-forma (tolerância de centavos). */
@@ -140,7 +162,10 @@ export function computeCorrecaoPagamentoPlan(input: {
     oldBreakdown,
     newBreakdown,
     oldCashReal: cashReal(oldBreakdown),
-    cashTarget: cashReal(newBreakdown),
+    // Alvo da entrada à vista = REGRA OFICIAL ÚNICA (idêntica ao motor de venda).
+    // Consumido só quando ok:true (novo breakdown fecha o total), onde equivale a
+    // cashReal(newBreakdown); ancorar no total mantém a regra única entre os fluxos.
+    cashTarget: valorAVistaVenda(total, newBreakdown),
     oldAPrazo: oldBreakdown.aPrazo,
     newAPrazo: newBreakdown.aPrazo,
     reconcileTitulos: false,

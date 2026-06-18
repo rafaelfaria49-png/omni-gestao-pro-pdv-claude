@@ -100,6 +100,31 @@ describe("computeVendaStatusFinanceiro", () => {
     expect(r.conciliado).toBe(true)
   })
 
+  it("dinheiro + vale: entrada à vista = só dinheiro (regra alinhada) → concilia", () => {
+    // GOAL_FATURAMENTO_VALE_ALINHAMENTO: o motor grava MovFin = valorAVista = 60.
+    const r = computeVendaStatusFinanceiro({
+      total: 100,
+      paymentBreakdown: { dinheiro: 60, creditoVale: 40 },
+      movimentacoes: [{ tipo: "entrada", origem: "venda", valor: 60 }],
+      titulos: [],
+    })
+    expect(r.recebidoAVista).toBe(60)
+    expect(r.creditoValeUsado).toBe(40)
+    expect(r.conciliado).toBe(true) // 60 + 0 (aPrazo) + 40 (vale) = 100
+  })
+
+  it("regressão travada: entrada incluindo o vale (bug antigo) NÃO concilia", () => {
+    // Antes do GOAL o motor gravava MovFin = total − aPrazo = 100 (incluía o vale),
+    // o que fazia o Workspace exibir "não conciliado" para toda venda com vale.
+    const r = computeVendaStatusFinanceiro({
+      total: 100,
+      paymentBreakdown: { dinheiro: 60, creditoVale: 40 },
+      movimentacoes: [{ tipo: "entrada", origem: "venda", valor: 100 }],
+      titulos: [],
+    })
+    expect(r.conciliado).toBe(false) // 100 + 40 = 140 ≠ 100 — sintoma eliminado pelo fix
+  })
+
   it("conta títulos cancelados separadamente", () => {
     const r = computeVendaStatusFinanceiro({
       total: 100,

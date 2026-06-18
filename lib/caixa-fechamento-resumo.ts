@@ -12,11 +12,12 @@
  *                      (PDV F5 / `recebimento_cr`), saldo em dinheiro esperado,
  *                      qtd de vendas, ticket médio.
  *
- * Convenção alinhada ao financeiro já estabilizado:
+ * Convenção alinhada ao financeiro já estabilizado (REGRA OFICIAL ÚNICA —
+ * GOAL_FATURAMENTO_VALE_ALINHAMENTO, ver `valorAVistaVenda`):
  *  - `MovimentacaoFinanceira(origem:"venda")` lança apenas o valor à vista
- *    (`total − aPrazo`). Aqui, `totalRecebido = totalLiquido − aPrazo` segue a
- *    mesma definição (carnê é tratado como recebimento imediato, igual ao
- *    `upsertVendaInTransaction`).
+ *    (`total − aPrazo − creditoVale`). Aqui, `totalRecebido = totalLiquido − aPrazo
+ *    − creditoVale` segue a MESMA definição (carnê é recebimento imediato, igual ao
+ *    `upsertVendaInTransaction`; creditoVale abate saldo do cliente, não é dinheiro novo).
  *  - O saldo em dinheiro da gaveta considera **somente** dinheiro físico:
  *    `saldoInicial + dinheiro(vendas) + suprimentos + recebimentos CR em dinheiro − sangrias`.
  *  - `recebimento_cr` (CaixaOperacao) **não** entra em vendas nem em `porOrigem`/`porPagamento`
@@ -58,7 +59,7 @@ export interface FechamentoResumo {
   descontos: number
   /** Σ Venda.total (após desconto). */
   totalLiquido: number
-  /** totalLiquido − aPrazo (recebido à vista; alinhado ao MovimentacaoFinanceira). */
+  /** totalLiquido − aPrazo − creditoVale (recebido à vista; alinhado ao MovimentacaoFinanceira). */
   totalRecebido: number
   /** Σ paymentBreakdown.aPrazo (fiado — vira ContaReceberTitulo). */
   aPrazo: number
@@ -277,7 +278,11 @@ export function computeFechamentoResumo(input: {
   totalLiquido = round2(totalLiquido)
   const descontos = round2(Math.max(0, subtotalBruto - totalLiquido))
   const aPrazo = pg.aPrazo
-  const totalRecebido = round2(totalLiquido - aPrazo)
+  // Recebido à vista = REGRA OFICIAL ÚNICA (GOAL_FATURAMENTO_VALE_ALINHAMENTO):
+  // total − aPrazo − creditoVale. Igual à entrada `MovimentacaoFinanceira(origem:"venda")`
+  // gravada por `valorAVistaVenda`. creditoVale não é dinheiro novo (abate saldo do cliente).
+  // O faturamento (`totalLiquido`/`receitaTotalDia`) CONTINUA incluindo o vale — é receita.
+  const totalRecebido = round2(totalLiquido - aPrazo - pg.creditoVale)
   const qtdVendas = activeSales.length
   const ticketMedio = qtdVendas > 0 ? round2(totalLiquido / qtdVendas) : 0
   const recCr = round2(recebimentosContas)

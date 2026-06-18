@@ -90,3 +90,42 @@ describe("receita total do dia — fechamento de caixa", () => {
     expect(receitaTotalDoDia({ totalLiquido: 80, recebimentosContas: 0 })).toBe(80)
   })
 })
+
+describe("creditoVale no fechamento — REGRA OFICIAL ÚNICA (GOAL_FATURAMENTO_VALE_ALINHAMENTO)", () => {
+  /** Venda com vale: 60 em dinheiro + 40 em vale/crédito. */
+  function vendaComVale(): SaleRecord {
+    return {
+      id: "v-vale",
+      at: new Date().toISOString(),
+      total: 100,
+      status: "concluida",
+      lines: [{ inventoryId: "prod-1", lineTotal: 100 }],
+      paymentBreakdown: {
+        dinheiro: 60,
+        pix: 0,
+        cartaoDebito: 0,
+        cartaoCredito: 0,
+        carne: 0,
+        aPrazo: 0,
+        creditoVale: 40,
+      },
+    } as unknown as SaleRecord
+  }
+
+  it("recebido à vista EXCLUI o vale (alinhado ao MovimentacaoFinanceira)", () => {
+    const r = computeFechamentoResumo({ ...base, sales: [vendaComVale()] })
+    expect(r.totalRecebido).toBe(60) // 100 − 0 (aPrazo) − 40 (vale)
+    expect(r.porPagamento.creditoVale).toBe(40) // vale segue rastreado à parte
+  })
+
+  it("dinheiro físico da gaveta ignora o vale (só dinheiro)", () => {
+    const r = computeFechamentoResumo({ ...base, sales: [vendaComVale()], saldoInicial: 0 })
+    expect(r.saldoDinheiroEsperado).toBe(60) // só o dinheiro entra na gaveta
+  })
+
+  it("faturamento (receita do dia) CONTINUA incluindo o vale — é receita", () => {
+    const r = computeFechamentoResumo({ ...base, sales: [vendaComVale()] })
+    expect(r.totalLiquido).toBe(100)
+    expect(r.receitaTotalDia).toBe(100)
+  })
+})
