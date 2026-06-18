@@ -29,9 +29,18 @@ export interface IdentidadeVisual {
   coresTema: string[]
 }
 
+/**
+ * @deprecated GOAL_002 (Fiscal Identity Per Store): a identidade fiscal NÃO é mais
+ * fonte oficial no localStorage. A fonte da verdade é o banco — `ConfiguracaoFiscalLoja`
+ * + `CertificadoDigital` por loja (UI em Configurações → "Identidade Fiscal";
+ * API em `/api/fiscal/*`). NUNCA gravar `senhaCertificado` em texto/localStorage — a
+ * senha do certificado vive apenas como referência no cofre seguro. Este tipo permanece
+ * apenas por retrocompatibilidade de blobs antigos e será removido numa fase futura.
+ */
 export interface DadosFiscais {
   certificadoDigitalStatus: "Pendente de Upload" | "Ativo" | "Expirado"
   tipoCertificado: "A1" | "A3"
+  /** @deprecated Nunca persistir senha em texto/localStorage (ver cofre seguro). */
   senhaCertificado?: string
 }
 

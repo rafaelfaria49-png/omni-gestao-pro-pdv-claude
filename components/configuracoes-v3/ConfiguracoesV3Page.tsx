@@ -13,6 +13,7 @@ import { AparenciaSection } from "./features/settings/sections/AparenciaSection"
 import { PdvSection } from "./features/settings/sections/PdvSection";
 import { VendasSection } from "./features/settings/sections/VendasSection";
 import { FinanceiroSection } from "./features/settings/sections/FinanceiroSection";
+import { FiscalSection } from "./features/settings/sections/FiscalSection";
 import { IaSection } from "./features/settings/sections/IaSection";
 import { IntegracoesSection } from "./features/settings/sections/IntegracoesSection";
 import { ImportacaoSection } from "./features/settings/sections/ImportacaoSection";
@@ -35,6 +36,7 @@ const SECTION_COMPONENTS: Record<SectionId, () => JSX.Element> = {
   pdv: PdvSection,
   vendas: VendasSection,
   financeiro: FinanceiroSection,
+  fiscal: FiscalSection,
   ia: IaSection,
   integracoes: IntegracoesSection,
   importacao: ImportacaoSection,

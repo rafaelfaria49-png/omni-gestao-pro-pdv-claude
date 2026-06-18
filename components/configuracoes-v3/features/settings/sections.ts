@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   CreditCard,
   ClipboardList,
+  ReceiptText,
 } from "lucide-react";
 
 export type SectionId =
@@ -23,6 +24,7 @@ export type SectionId =
   | "pdv"
   | "vendas"
   | "financeiro"
+  | "fiscal"
   | "ia"
   | "integracoes"
   | "importacao"
@@ -53,6 +55,12 @@ export const SETTINGS_SECTIONS: SectionItem[] = [
   { id: "pdv", label: "PDV", description: "Layout do ponto de venda", icon: Monitor },
   { id: "vendas", label: "Vendas", description: "Regras de operação", icon: ShoppingCart },
   { id: "financeiro", label: "Financeiro", description: "Juros, parcelas e relatórios", icon: Wallet },
+  {
+    id: "fiscal",
+    label: "Identidade Fiscal",
+    description: "Dados fiscais, certificado e CSC por loja",
+    icon: ReceiptText,
+  },
   { id: "ia", label: "IA e Créditos", description: "Saldo e modelos de IA", icon: Sparkles },
   { id: "integracoes", label: "Integrações", description: "Conecte serviços externos", icon: Plug },
   { id: "importacao", label: "Importação", description: "Planilhas e dados externos", icon: Upload },
