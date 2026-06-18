@@ -110,9 +110,40 @@ function fmtDateTime(iso?: string | null) {
   } catch { return iso }
 }
 
+/**
+ * Rótulo profissional da sessão de caixa — NUNCA expõe o id técnico (cuid) ao
+ * operador. Deriva uma identificação legível da data/hora de abertura
+ * (ex.: "Sessão de 16/06/2026 · 18:28"). O id real permanece só para auditoria
+ * interna/backend. Puro/UX — não altera dado nem regra.
+ */
+function fmtSessaoLabel(abertaEm?: string | null) {
+  if (!abertaEm) return "Sessão de caixa"
+  try {
+    const d = new Date(abertaEm)
+    const data = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+    const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+    return `Sessão de ${data} · ${hora}`
+  } catch { return "Sessão de caixa" }
+}
+
 const PAYMENT_LABELS: Record<string, string> = {
   dinheiro: "Dinheiro", pix: "Pix", cartaoDebito: "Débito", cartaoCredito: "Crédito",
   carne: "Carnê", aPrazo: "A Prazo", creditoVale: "Vale/Crédito",
+}
+
+// Humaniza a "origem" técnica das movimentações financeiras (UX — não muda dado).
+const ORIGEM_LABELS: Record<string, string> = {
+  venda: "Venda", "os-faturamento": "Faturamento de OS", devolucao: "Devolução",
+  cancelamento_pdv: "Cancelamento", estorno: "Estorno", credito_cliente: "Crédito do cliente",
+  recebimento: "Recebimento", "pdv-aprazo": "À prazo",
+}
+function fmtOrigem(o: string) {
+  if (!o) return "—"
+  const known = ORIGEM_LABELS[o]
+  if (known) return known
+  // Fallback legível: troca separadores técnicos por espaço e capitaliza.
+  const s = o.replace(/[-_:]+/g, " ").trim()
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "—"
 }
 
 function statusVendaBadge(s: string): { label: string; className: string } {
@@ -143,11 +174,28 @@ function EmptyState({ icon: Icon, title, hint }: { icon: typeof Info; title: str
   )
 }
 
-function FieldRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+/**
+ * Campo rótulo→valor empilhado (label em cima, valor embaixo). Substitui o antigo
+ * FieldRow `justify-between` que "estranhava" rótulo e valor em cards largos.
+ * Empilhado + `tabular-nums` mantém os valores alinhados na coluna e os rótulos
+ * sem quebra estranha. Pensado para viver dentro de <StatGrid>.
+ */
+function StatField({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2 border-b border-border/50 last:border-0 min-w-0">
-      <span className="text-xs text-muted-foreground shrink-0">{label}</span>
-      <span className={cn("text-sm text-foreground text-right break-words min-w-0", mono && "font-mono text-xs")}>{value}</span>
+    <div className="min-w-0 space-y-0.5">
+      <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+      <div className={cn("text-sm font-medium text-foreground tabular-nums break-words", mono && "font-mono text-xs font-normal text-muted-foreground")}>
+        {value}
+      </div>
+    </div>
+  )
+}
+
+/** Grade responsiva de StatField: 2 colunas a partir de `sm` para aproveitar a largura. */
+function StatGrid({ children, cols = 2 }: { children: React.ReactNode; cols?: 2 | 3 }) {
+  return (
+    <div className={cn("grid gap-x-6 gap-y-3", cols === 3 ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2")}>
+      {children}
     </div>
   )
 }
@@ -155,13 +203,13 @@ function FieldRow({ label, value, mono }: { label: string; value: React.ReactNod
 function KpiCard({ label, value, tone = "text-foreground", icon: Icon }: { label: string; value: string; tone?: string; icon: typeof Info }) {
   return (
     <Card className="border-border bg-card min-w-0">
-      <CardContent className="flex items-center gap-3 pt-4 pb-3">
-        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-muted/40">
+      <CardContent className="flex items-center gap-3">
+        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-muted/40">
           <Icon className={cn("h-4 w-4", tone)} />
         </div>
         <div className="min-w-0">
           <p className="text-[11px] text-muted-foreground truncate">{label}</p>
-          <p className={cn("text-base font-bold leading-tight truncate", tone)}>{value}</p>
+          <p className={cn("text-lg font-bold leading-tight truncate tabular-nums", tone)}>{value}</p>
         </div>
       </CardContent>
     </Card>
@@ -716,30 +764,34 @@ export function WorkspaceCorrecaoVenda({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[96vw] w-[96vw] h-[92vh] p-0 gap-0 border-border bg-background flex flex-col overflow-hidden">
+      <DialogContent className="w-[96vw] max-w-[1680px] h-[94vh] p-0 gap-0 border-border bg-background flex flex-col overflow-hidden">
         {/* Cabeçalho */}
-        <DialogHeader className="shrink-0 border-b border-border px-5 py-4 space-y-0">
+        <DialogHeader className="shrink-0 border-b border-border px-6 py-4 space-y-0">
           <div className="flex flex-wrap items-center gap-3 min-w-0">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
               <Receipt className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2 flex-wrap">
+              <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2 flex-wrap leading-tight">
                 Workspace da Venda
-                {venda && <span className="font-mono text-xs font-normal text-muted-foreground">{venda.id}</span>}
                 {statusBadge && (
                   <Badge variant="outline" className={cn("text-[10px]", statusBadge.className)}>{statusBadge.label}</Badge>
                 )}
               </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                {venda ? <>{fmtDateTime(venda.at)} · {venda.operador || "Operador —"} · unidade <span className="font-mono">{storeId}</span></> : "Carregando…"}
+              <DialogDescription className="text-xs text-muted-foreground mt-1">
+                {venda ? <>{fmtDateTime(venda.at)} · {venda.operador || "Operador —"} · Cupom {venda.id}</> : "Carregando…"}
               </DialogDescription>
             </div>
-            <div className="ml-auto flex items-center gap-2 shrink-0">
+            <div className="ml-auto flex items-center gap-3 shrink-0">
               <Badge variant="outline" className="gap-1 border-info/30 bg-info/10 text-info text-[10px]">
-                <ShieldCheck className="h-3 w-3" /> Somente leitura (F1)
+                <ShieldCheck className="h-3 w-3" /> Alterações auditadas
               </Badge>
-              {venda && <span className="text-sm font-bold text-foreground tabular-nums">{fmtBrl(venda.total)}</span>}
+              {venda && (
+                <div className="text-right">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground leading-none">Total</p>
+                  <p className="text-lg font-bold text-foreground tabular-nums leading-tight mt-0.5">{fmtBrl(venda.total)}</p>
+                </div>
+              )}
             </div>
           </div>
         </DialogHeader>
@@ -765,53 +817,55 @@ export function WorkspaceCorrecaoVenda({
           </div>
         ) : (
           <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col min-h-0">
-            <div className="shrink-0 border-b border-border px-3 overflow-x-auto">
-              <TabsList className="h-auto bg-transparent p-0 gap-0 flex-nowrap justify-start">
+            <div className="shrink-0 border-b border-border px-4 sm:px-6 overflow-x-auto">
+              <TabsList className="h-auto bg-transparent p-0 gap-1 flex-nowrap justify-start">
                 {TABS.map((t) => (
                   <TabsTrigger
                     key={t.key}
                     value={t.key}
-                    className="gap-1.5 rounded-none border-b-2 border-transparent px-3 py-2.5 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none whitespace-nowrap"
+                    className="gap-1.5 rounded-none border-b-2 border-transparent px-4 py-3 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none whitespace-nowrap"
                   >
-                    <t.icon className="h-3.5 w-3.5" />
+                    <t.icon className="h-4 w-4" />
                     {t.label}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-5 min-h-0">
+            <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 min-h-0">
               {/* 1 · RESUMO */}
               <TabsContent value="resumo" className="mt-0 space-y-5">
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                   <KpiCard label="Total da venda" value={fmtBrl(venda.total)} tone="text-primary" icon={Receipt} />
                   <KpiCard label="Recebido à vista" value={fmtBrl(sf?.entradaLiquida ?? 0)} tone="text-success" icon={Banknote} />
                   <KpiCard label="À prazo em aberto" value={fmtBrl(sf?.aPrazoAberto ?? 0)} tone="text-warning" icon={FileText} />
                   <KpiCard label="Desconto" value={fmtBrl(venda.desconto)} tone="text-info" icon={Info} />
                 </div>
-                <div className="grid gap-5 lg:grid-cols-2">
+                <div className="grid gap-4 lg:grid-cols-2">
                   <Card className="border-border bg-card min-w-0">
-                    <CardContent className="pt-4">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">Dados da venda</p>
-                      <FieldRow label="Cupom" value={venda.id} mono />
-                      <FieldRow label="Data / hora" value={fmtDateTime(venda.at)} />
-                      <FieldRow label="Operador" value={venda.operador || "—"} />
-                      <FieldRow label="Terminal" value={venda.terminal?.name || venda.terminal?.code || "Sem terminal"} />
-                      <FieldRow label="Cliente" value={venda.clienteNome || "Consumidor final"} />
-                      <FieldRow label="Formas de pagamento" value={venda.pagamentos.map((p) => `${p.label} ${fmtBrl(p.valor)}`).join(" + ") || "—"} />
+                    <CardContent className="space-y-4">
+                      <p className="text-sm font-semibold text-foreground">Dados da venda</p>
+                      <StatGrid>
+                        <StatField label="Cupom" value={venda.id} mono />
+                        <StatField label="Data / hora" value={fmtDateTime(venda.at)} />
+                        <StatField label="Operador" value={venda.operador || "—"} />
+                        <StatField label="Terminal" value={venda.terminal?.name || venda.terminal?.code || "Sem terminal"} />
+                        <StatField label="Cliente" value={venda.clienteNome || "Consumidor final"} />
+                        <StatField label="Formas de pagamento" value={venda.pagamentos.map((p) => `${p.label} ${fmtBrl(p.valor)}`).join(" · ") || "—"} />
+                      </StatGrid>
                     </CardContent>
                   </Card>
                   <Card className="border-border bg-card min-w-0">
-                    <CardContent className="pt-4">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">Status financeiro</p>
+                    <CardContent className="space-y-4">
+                      <p className="text-sm font-semibold text-foreground">Status financeiro</p>
                       {sf ? (
-                        <>
-                          <FieldRow label="Recebido à vista (líquido)" value={fmtBrl(sf.entradaLiquida)} />
-                          <FieldRow label="À prazo (total)" value={fmtBrl(sf.aPrazoTotal)} />
-                          <FieldRow label="À prazo pago" value={fmtBrl(sf.aPrazoPago)} />
-                          <FieldRow label="Vale/crédito usado" value={fmtBrl(sf.creditoValeUsado)} />
-                          <FieldRow label="Estornado" value={fmtBrl(sf.estornado)} />
-                          <FieldRow
+                        <StatGrid>
+                          <StatField label="Recebido à vista (líquido)" value={fmtBrl(sf.entradaLiquida)} />
+                          <StatField label="À prazo (total)" value={fmtBrl(sf.aPrazoTotal)} />
+                          <StatField label="À prazo pago" value={fmtBrl(sf.aPrazoPago)} />
+                          <StatField label="Vale/crédito usado" value={fmtBrl(sf.creditoValeUsado)} />
+                          <StatField label="Estornado" value={fmtBrl(sf.estornado)} />
+                          <StatField
                             label="Conciliação"
                             value={
                               <span className={cn("inline-flex items-center gap-1", sf.conciliado ? "text-success" : "text-warning")}>
@@ -820,7 +874,7 @@ export function WorkspaceCorrecaoVenda({
                               </span>
                             }
                           />
-                        </>
+                        </StatGrid>
                       ) : (
                         <EmptyState icon={Landmark} title="Sem status financeiro" />
                       )}
@@ -863,26 +917,30 @@ export function WorkspaceCorrecaoVenda({
                           </CardContent>
                         </Card>
                       ) : (
-                      <Card className="border-border bg-card max-w-2xl min-w-0">
-                        <CardContent className="pt-4">
-                          <p className="text-xs font-semibold text-muted-foreground mb-2">Cliente vinculado</p>
-                          <FieldRow label="Nome" value={venda.clienteCompleto.name} />
-                          <FieldRow label="Tipo" value={venda.clienteCompleto.kind === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"} />
-                          <FieldRow label="Documento" value={venda.clienteCompleto.document || venda.clienteCpf || "—"} mono />
-                          <FieldRow label="Telefone" value={venda.clienteCompleto.phone || "—"} />
-                          <FieldRow label="E-mail" value={venda.clienteCompleto.email || "—"} />
-                          <FieldRow label="Cidade" value={venda.clienteCompleto.city || "—"} />
-                          <FieldRow label="Total gasto (histórico)" value={fmtBrl(venda.clienteCompleto.totalSpent)} />
-                          <FieldRow label="Última compra" value={fmtDateTime(venda.clienteCompleto.lastPurchaseAt)} />
+                      <Card className="border-border bg-card max-w-4xl min-w-0">
+                        <CardContent className="space-y-4">
+                          <p className="text-sm font-semibold text-foreground">Cliente vinculado</p>
+                          <StatGrid cols={3}>
+                            <StatField label="Nome" value={venda.clienteCompleto.name} />
+                            <StatField label="Tipo" value={venda.clienteCompleto.kind === "PJ" ? "Pessoa Jurídica" : "Pessoa Física"} />
+                            <StatField label="Documento" value={venda.clienteCompleto.document || venda.clienteCpf || "—"} mono />
+                            <StatField label="Telefone" value={venda.clienteCompleto.phone || "—"} />
+                            <StatField label="E-mail" value={venda.clienteCompleto.email || "—"} />
+                            <StatField label="Cidade" value={venda.clienteCompleto.city || "—"} />
+                            <StatField label="Total gasto (histórico)" value={fmtBrl(venda.clienteCompleto.totalSpent)} />
+                            <StatField label="Última compra" value={fmtDateTime(venda.clienteCompleto.lastPurchaseAt)} />
+                          </StatGrid>
                         </CardContent>
                       </Card>
                       )
                     ) : venda.clienteNome || venda.clienteCpf ? (
                       <Card className="border-border bg-card max-w-2xl min-w-0">
-                        <CardContent className="pt-4">
-                          <p className="text-xs font-semibold text-muted-foreground mb-2">Cliente (sem cadastro formal)</p>
-                          <FieldRow label="Nome" value={venda.clienteNome || "—"} />
-                          <FieldRow label="CPF/CNPJ no cupom" value={venda.clienteCpf || "—"} mono />
+                        <CardContent className="space-y-4">
+                          <p className="text-sm font-semibold text-foreground">Cliente (sem cadastro formal)</p>
+                          <StatGrid>
+                            <StatField label="Nome" value={venda.clienteNome || "—"} />
+                            <StatField label="CPF/CNPJ no cupom" value={venda.clienteCpf || "—"} mono />
+                          </StatGrid>
                         </CardContent>
                       </Card>
                     ) : (
@@ -1079,7 +1137,7 @@ export function WorkspaceCorrecaoVenda({
                                   {m.tipo === "entrada" ? "Entrada" : "Saída"}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-xs font-mono text-muted-foreground">{m.origem}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{fmtOrigem(m.origem)}</TableCell>
                               <TableCell className="text-sm text-foreground break-words max-w-[360px]">{m.descricao}</TableCell>
                               <TableCell className="text-right tabular-nums text-foreground">{fmtBrl(m.valor)}</TableCell>
                             </TableRow>
@@ -1507,22 +1565,26 @@ export function WorkspaceCorrecaoVenda({
               {/* 8 · CAIXA */}
               <TabsContent value="caixa" className="mt-0">
                 {venda.sessao ? (
-                  <Card className="border-border bg-card max-w-2xl min-w-0">
-                    <CardContent className="pt-4">
-                      <p className="text-xs font-semibold text-muted-foreground mb-2">Sessão de caixa</p>
-                      <FieldRow label="Sessão" value={venda.sessao.id} mono />
-                      <FieldRow label="Operador" value={venda.sessao.operador || "—"} />
-                      <FieldRow
-                        label="Status"
-                        value={
-                          <Badge variant="outline" className={cn("text-[10px]", venda.sessao.status === "ABERTA" ? "border-success/20 bg-success/10 text-success" : "border-muted bg-muted/30 text-muted-foreground")}>
-                            {venda.sessao.status}
-                          </Badge>
-                        }
-                      />
-                      <FieldRow label="Aberta em" value={fmtDateTime(venda.sessao.abertaEm)} />
-                      <FieldRow label="Fechada em" value={fmtDateTime(venda.sessao.fechadaEm)} />
-                      <FieldRow label="Saldo inicial" value={fmtBrl(venda.sessao.saldoInicial)} />
+                  <Card className="border-border bg-card max-w-3xl min-w-0">
+                    <CardContent className="space-y-4">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <p className="text-sm font-semibold text-foreground">Sessão do Caixa</p>
+                        <span className="text-xs text-muted-foreground">{fmtSessaoLabel(venda.sessao.abertaEm)}</span>
+                      </div>
+                      <StatGrid cols={3}>
+                        <StatField label="Operador" value={venda.sessao.operador || "—"} />
+                        <StatField
+                          label="Status"
+                          value={
+                            <Badge variant="outline" className={cn("text-[10px]", venda.sessao.status === "ABERTA" ? "border-success/20 bg-success/10 text-success" : "border-muted bg-muted/30 text-muted-foreground")}>
+                              {venda.sessao.status ? venda.sessao.status.charAt(0).toUpperCase() + venda.sessao.status.slice(1).toLowerCase() : "—"}
+                            </Badge>
+                          }
+                        />
+                        <StatField label="Saldo inicial" value={fmtBrl(venda.sessao.saldoInicial)} />
+                        <StatField label="Aberta em" value={fmtDateTime(venda.sessao.abertaEm)} />
+                        <StatField label="Fechada em" value={fmtDateTime(venda.sessao.fechadaEm)} />
+                      </StatGrid>
                     </CardContent>
                   </Card>
                 ) : (
@@ -1537,14 +1599,16 @@ export function WorkspaceCorrecaoVenda({
                   <Timeline items={timeline} />
                 </div>
                 {venda.canceladaEm && (
-                  <Card className="border-destructive/20 bg-destructive/5 min-w-0">
-                    <CardContent className="pt-4">
-                      <p className="text-xs font-semibold text-destructive mb-2">Cancelamento</p>
-                      <FieldRow label="Cancelada em" value={fmtDateTime(venda.canceladaEm)} />
-                      <FieldRow label="Por" value={venda.canceladaPor || "—"} />
-                      <FieldRow label="Motivo" value={venda.motivoCancelamento || "—"} />
-                      <FieldRow label="Estoque reposto" value={venda.estoqueReposto ? "Sim" : "Não"} />
-                      <FieldRow label="Estorno financeiro" value={venda.estornoFinanceiro ? "Sim" : "Não"} />
+                  <Card className="border-destructive/20 bg-destructive/5 max-w-3xl min-w-0">
+                    <CardContent className="space-y-4">
+                      <p className="text-sm font-semibold text-destructive">Cancelamento</p>
+                      <StatGrid>
+                        <StatField label="Cancelada em" value={fmtDateTime(venda.canceladaEm)} />
+                        <StatField label="Por" value={venda.canceladaPor || "—"} />
+                        <StatField label="Motivo" value={venda.motivoCancelamento || "—"} />
+                        <StatField label="Estoque reposto" value={venda.estoqueReposto ? "Sim" : "Não"} />
+                        <StatField label="Estorno financeiro" value={venda.estornoFinanceiro ? "Sim" : "Não"} />
+                      </StatGrid>
                     </CardContent>
                   </Card>
                 )}
@@ -1555,7 +1619,7 @@ export function WorkspaceCorrecaoVenda({
                       {venda.devolucoes.map((d) => (
                         <li key={d.id} className="rounded-lg border border-border bg-card p-3 text-sm min-w-0">
                           <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-medium text-foreground">{d.localId} · {d.tipo}</span>
+                            <span className="font-medium text-foreground capitalize">{d.tipo.replace(/[-_]+/g, " ")}</span>
                             <span className="text-[11px] text-muted-foreground tabular-nums">{fmtDateTime(d.at)}</span>
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">{fmtBrl(d.valorTotal)} · {d.operador}{d.motivo ? ` · ${d.motivo}` : ""}</p>
