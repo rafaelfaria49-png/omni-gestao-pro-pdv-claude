@@ -16,7 +16,7 @@
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { auth } from "@/auth"
+import { requireCorrecaoVendaAuth } from "@/lib/vendas/guard-correcao-venda"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
@@ -46,6 +46,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id: rawId } = await params
   const pedidoId = rawId?.trim()
   if (!pedidoId) return NextResponse.json({ ok: false, error: "ID da venda obrigatório" }, { status: 400 })
+
+  // Segurança (mesmo padrão de cancelar/venda-persist): sessão + acesso à loja +
+  // permissão; assinatura no PDV legado. Escopa a correção à loja do operador.
+  const acl = await requireCorrecaoVendaAuth(storeId)
+  if (!acl.ok) return NextResponse.json({ ok: false, error: acl.error }, { status: acl.status })
+  const session = acl.session
 
   let body: Body
   try {
@@ -127,7 +133,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
     }
 
-    const session = await auth()
     const operador = session?.user ? getOperatorLabelFromSession(session) : "Operador"
     const now = new Date()
     const novosLocalKeys = new Set(plan.itens.map((i) => i.localKey))
@@ -191,6 +196,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const correcao = {
       at: now.toISOString(),
       operador,
+      storeId,
+      rota: "vendas/corrigir-parcelas",
       motivo,
       campos: ["parcelas"],
       supervisorNome: supervisorName,

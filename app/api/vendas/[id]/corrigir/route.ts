@@ -30,7 +30,7 @@
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
-import { auth } from "@/auth"
+import { requireCorrecaoVendaAuth } from "@/lib/vendas/guard-correcao-venda"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import {
@@ -102,6 +102,12 @@ export async function POST(
     return NextResponse.json({ ok: false, error: "ID da venda obrigatório" }, { status: 400 })
   }
 
+  // Segurança (mesmo padrão de cancelar/venda-persist): sessão + acesso à loja +
+  // permissão; assinatura no PDV legado. Escopa a correção à loja do operador.
+  const acl = await requireCorrecaoVendaAuth(storeId)
+  if (!acl.ok) return NextResponse.json({ ok: false, error: acl.error }, { status: acl.status })
+  const session = acl.session
+
   let body: CorrigirBody
   try {
     body = (await req.json()) as CorrigirBody
@@ -126,7 +132,6 @@ export async function POST(
   try {
     await prismaEnsureConnected()
 
-    const session = await auth()
     const operador = session?.user ? getOperatorLabelFromSession(session) : "Operador"
 
     const venda = await prisma.venda.findFirst({
@@ -148,6 +153,8 @@ export async function POST(
     const correcao: Record<string, unknown> = {
       at: now.toISOString(),
       operador,
+      storeId,
+      rota: "vendas/corrigir",
       motivo: motivo.trim(),
       campos: [] as string[],
     }
