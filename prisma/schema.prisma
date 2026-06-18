@@ -104,6 +104,14 @@ model Store {
   usosCredito              UsoCreditoCliente[]
   pdvTerminais             PdvTerminal[]
   inventarioSessoes        InventarioSessao[]
+  // ─── Fiscal (GOAL_001B — aditivo/dormente; só relações inversas, sem coluna física) ──
+  configuracaoFiscal       ConfiguracaoFiscalLoja?
+  certificadosDigitais     CertificadoDigital[]
+  seriesFiscais            SerieFiscal[]
+  notasFiscais             NotaFiscal[]
+  eventosFiscais           EventoFiscal[]
+  fiscalEmissaoJobs        FiscalEmissaoJob[]
+  fiscalLogs               FiscalLog[]
 
   @@index([profile])
   @@map("stores")
@@ -1395,12 +1403,20 @@ model Venda {
    */
   terminalId           String?             @map("terminalId")
   itens                ItemVenda[]
+  /**
+   * Estado fiscal da venda (GOAL_001B — aditivo/dormente). Ortogonal ao `status`
+   * operacional. Default NAO_FISCAL → toda venda (nova e antiga) nasce sem efeito fiscal;
+   * só transita quando a loja tem ConfiguracaoFiscalLoja.fiscalEnabled = true (GOAL_003+).
+   */
+  fiscalStatus         FiscalStatusVenda   @default(NAO_FISCAL) @map("fiscalStatus")
+  notasFiscais         NotaFiscal[]
 
   @@index([storeId])
   @@index([storeId, status])
   @@index([clienteId])
   @@index([contaReceberTituloId])
   @@index([storeId, terminalId])
+  @@index([storeId, fiscalStatus])
   @@map("vendas")
 }
 
@@ -2051,4 +2067,425 @@ model AdminUser {
   currentPeriodEnd     DateTime?
 
   @@map("admin_users")
+}
+
+// =================================================================================
+// FUNDACAO FISCAL (NFC-e/SAT/TEF) — GOAL_001B
+// Aditivo + DORMENTE. Nada emite enquanto ConfiguracaoFiscalLoja.fiscalEnabled = false.
+// Multi-loja estrito (ADR-0003): NENHUMA tabela fiscal usa @default("loja-1").
+// Segredo (certificado/senha/CSC/token) NUNCA em coluna em claro — so referencias (*Ref).
+// Desenho: docs/architecture/FISCAL_SCHEMA_DESIGN_v01.md · Governa: MASTER_FISCAL_EXECUTION_PLAN.md
+// =================================================================================
+
+/** Estado fiscal da venda (visão "colapsada"; default NAO_FISCAL = comportamento atual). */
+enum FiscalStatusVenda {
+  NAO_FISCAL
+  PENDENTE
+  EMITINDO
+  EM_CONTINGENCIA
+  AUTORIZADA
+  REJEITADA
+  CANCELADA_FISCAL
+  BLOQUEADA_FISCAL
+}
+
+/** Estado do documento fiscal (mais granular que o da venda). */
+enum StatusNotaFiscal {
+  RASCUNHO
+  VALIDANDO
+  ASSINADA
+  TRANSMITINDO
+  AUTORIZADA
+  REJEITADA
+  DENEGADA
+  CONTINGENCIA
+  CANCELADA
+  INUTILIZADA
+  ERRO
+}
+
+enum ModeloFiscal {
+  NFCE
+  SAT
+  NFE
+}
+
+enum AmbienteFiscal {
+  HOMOLOGACAO
+  PRODUCAO
+}
+
+enum TipoEmissao {
+  NORMAL
+  CONTINGENCIA_OFFLINE
+}
+
+enum RegimeTributario {
+  SIMPLES_NACIONAL
+  SIMPLES_NACIONAL_EXCESSO
+  REGIME_NORMAL
+  MEI
+}
+
+enum FiscalProviderTipo {
+  STUB_HOMOLOGACAO
+  SEFAZ_DIRETO
+  GATEWAY_FOCUS
+  GATEWAY_PLUGNOTAS
+  GATEWAY_ENOTAS
+  GATEWAY_NFEIO
+  SAT_LOCAL
+}
+
+enum CertificadoStatus {
+  PENDENTE_VALIDACAO
+  ATIVO
+  EXPIRADO
+  REVOGADO
+  INVALIDO
+}
+
+enum TipoEventoFiscal {
+  CANCELAMENTO
+  CARTA_CORRECAO
+  INUTILIZACAO
+  CONTINGENCIA_ENVIO
+}
+
+enum StatusEventoFiscal {
+  PENDENTE
+  AUTORIZADO
+  REJEITADO
+}
+
+enum FiscalJobTipo {
+  EMISSAO
+  CANCELAMENTO
+  INUTILIZACAO
+  CONTINGENCIA_TRANSMISSAO
+  CONSULTA
+}
+
+enum FiscalJobStatus {
+  PENDENTE
+  PROCESSANDO
+  AGUARDANDO_RETRY
+  CONCLUIDO
+  FALHA
+  CANCELADO
+}
+
+/**
+ * Identidade fiscal por loja (1:1 com Store). Substitui o DadosFiscais em localStorage
+ * single-empresa (P0-B). CSC/token de gateway são SEGREDO → só referência (*Ref).
+ */
+model ConfiguracaoFiscalLoja {
+  id                  String   @id @default(cuid())
+  storeId             String   @unique @map("storeId")
+  store               Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  // Flags — tudo nasce desligado (default-off)
+  fiscalEnabled       Boolean        @default(false) @map("fiscalEnabled")
+  ambiente            AmbienteFiscal @default(HOMOLOGACAO) @map("ambiente")
+  modeloFiscal        ModeloFiscal   @default(NFCE) @map("modeloFiscal")
+
+  // Identidade fiscal
+  razaoSocial         String   @default("") @map("razaoSocial")
+  nomeFantasia        String   @default("") @map("nomeFantasia")
+  cnpj                String   @default("") @map("cnpj")
+  inscricaoEstadual   String   @default("") @map("inscricaoEstadual")
+  inscricaoMunicipal  String   @default("") @map("inscricaoMunicipal")
+  regimeTributario    RegimeTributario @default(SIMPLES_NACIONAL) @map("regimeTributario")
+  crt                 Int      @default(1) @map("crt")
+
+  // Endereço fiscal ESTRUTURADO (exigência do XML)
+  logradouro          String   @default("") @map("logradouro")
+  numero              String   @default("") @map("numero")
+  complemento         String   @default("") @map("complemento")
+  bairro              String   @default("") @map("bairro")
+  codigoMunicipioIbge String   @default("") @map("codigoMunicipioIbge")
+  municipio           String   @default("") @map("municipio")
+  uf                  String   @default("") @map("uf")
+  cep                 String   @default("") @map("cep")
+  codigoPais          String   @default("1058") @map("codigoPais")
+  fone                String   @default("") @map("fone")
+  email               String   @default("") @map("email")
+
+  // CSC (NFC-e) — SÓ referência ao segredo
+  cscId               String   @default("") @map("cscId")
+  cscTokenRef         String?  @map("cscTokenRef")
+
+  // Provider (provider-agnóstico) — token do gateway por referência
+  provider            FiscalProviderTipo @default(STUB_HOMOLOGACAO) @map("provider")
+  providerConfig      Json?    @map("providerConfig") @db.JsonB
+  providerTokenRef    String?  @map("providerTokenRef")
+
+  certificadoAtivoId  String?  @map("certificadoAtivoId")
+
+  createdAt           DateTime @default(now()) @map("createdAt")
+  updatedAt           DateTime @updatedAt @map("updatedAt")
+
+  @@index([fiscalEnabled])
+  @@map("configuracoes_fiscais_loja")
+}
+
+/**
+ * Certificado digital A1 por loja. SEGREDO: só metadados + referências (blobRef/senhaRef);
+ * NUNCA bytes do .pfx nem a senha em coluna em claro (blueprint §9). O cofre é decidido no GOAL_002.
+ */
+model CertificadoDigital {
+  id            String   @id @default(cuid())
+  storeId       String   @map("storeId")
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  apelido       String   @default("") @map("apelido")
+  tipo          String   @default("A1") @map("tipo")
+  titularCn     String   @default("") @map("titularCn")
+  cnpjTitular   String   @default("") @map("cnpjTitular")
+  serialNumber  String   @default("") @map("serialNumber")
+  fingerprint   String   @default("") @map("fingerprint")
+  validoDe      DateTime? @map("validoDe")
+  validoAte     DateTime? @map("validoAte")
+  status        CertificadoStatus @default(PENDENTE_VALIDACAO) @map("status")
+  ativo         Boolean  @default(false) @map("ativo")
+
+  // SEGREDO — só referência
+  blobRef       String?  @map("blobRef")
+  senhaRef      String?  @map("senhaRef")
+
+  uploadedBy    String?  @map("uploadedBy")
+  createdAt     DateTime @default(now()) @map("createdAt")
+  updatedAt     DateTime @updatedAt @map("updatedAt")
+
+  notasAssinadas NotaFiscal[]
+
+  @@index([storeId])
+  @@index([storeId, ativo])
+  @@index([validoAte])
+  @@map("certificados_digitais")
+}
+
+/** Série + contador atômico de numeração por (loja, modelo, série, ambiente). Resolve P1-E. */
+model SerieFiscal {
+  id            String       @id @default(cuid())
+  storeId       String       @map("storeId")
+  store         Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  modelo        ModeloFiscal   @default(NFCE) @map("modelo")
+  ambiente      AmbienteFiscal @default(HOMOLOGACAO) @map("ambiente")
+  serie         Int          @default(1) @map("serie")
+  proximoNumero Int          @default(1) @map("proximoNumero")
+  descricao     String       @default("") @map("descricao")
+  ativo         Boolean      @default(true) @map("ativo")
+
+  createdAt     DateTime     @default(now()) @map("createdAt")
+  updatedAt     DateTime     @updatedAt @map("updatedAt")
+
+  notas         NotaFiscal[]
+
+  @@unique([storeId, modelo, serie, ambiente])
+  @@index([storeId])
+  @@map("series_fiscais")
+}
+
+/**
+ * Documento fiscal (cabeçalho + snapshots congelados do emitente/destinatário/pagamento).
+ * 1 venda → N tentativas, 1 vigente (índice único PARCIAL na migration). XML é registro legal.
+ */
+model NotaFiscal {
+  id               String   @id @default(cuid())
+  storeId          String   @map("storeId")
+  store            Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  vendaId          String   @map("vendaId")
+  venda            Venda    @relation(fields: [vendaId], references: [id], onDelete: Restrict)
+
+  modelo           ModeloFiscal     @default(NFCE) @map("modelo")
+  ambiente         AmbienteFiscal   @map("ambiente")
+  tipoEmissao      TipoEmissao      @default(NORMAL) @map("tipoEmissao")
+  status           StatusNotaFiscal @default(RASCUNHO) @map("status")
+  vigente          Boolean          @default(true) @map("vigente")
+
+  serieFiscalId    String?  @map("serieFiscalId")
+  serieFiscal      SerieFiscal? @relation(fields: [serieFiscalId], references: [id], onDelete: SetNull)
+  serie            Int?     @map("serie")
+  numero           Int?     @map("numero")
+
+  // Resultado SEFAZ
+  chaveAcesso      String?  @unique @map("chaveAcesso")
+  protocolo        String?  @map("protocolo")
+  cStat            String?  @map("cStat")
+  xMotivo          String?  @map("xMotivo")
+  dataAutorizacao  DateTime? @map("dataAutorizacao")
+  digestValue      String?  @map("digestValue")
+  qrCodeData       String?  @map("qrCodeData") @db.Text
+  urlConsulta      String?  @map("urlConsulta")
+
+  // Totais
+  valorTotal         Float  @default(0) @map("valorTotal")
+  valorDesconto      Float  @default(0) @map("valorDesconto")
+  valorFrete         Float  @default(0) @map("valorFrete")
+  valorTotalTributos Float  @default(0) @map("valorTotalTributos")
+
+  // SNAPSHOTS congelados (foto do instante)
+  snapshotEmitente     Json? @map("snapshotEmitente") @db.JsonB
+  snapshotDestinatario Json? @map("snapshotDestinatario") @db.JsonB
+  snapshotPagamento    Json? @map("snapshotPagamento") @db.JsonB
+
+  // XML (documento legal)
+  xmlAssinado      String?  @map("xmlAssinado") @db.Text
+  xmlAutorizado    String?  @map("xmlAutorizado") @db.Text
+  xmlStorageRef    String?  @map("xmlStorageRef")
+
+  certificadoId    String?  @map("certificadoId")
+  certificado      CertificadoDigital? @relation(fields: [certificadoId], references: [id], onDelete: SetNull)
+
+  localKey         String?  @map("localKey")
+  tentativas       Int      @default(0) @map("tentativas")
+  ultimoErro       String?  @map("ultimoErro")
+  emitidaPor       String?  @map("emitidaPor")
+  dataContingencia DateTime? @map("dataContingencia")
+  justContingencia String?  @map("justContingencia")
+
+  createdAt        DateTime @default(now()) @map("createdAt")
+  updatedAt        DateTime @updatedAt @map("updatedAt")
+
+  itens            NotaFiscalItem[]
+  eventos          EventoFiscal[]
+
+  @@unique([storeId, modelo, serie, numero, ambiente])
+  @@unique([storeId, localKey])
+  @@index([storeId])
+  @@index([storeId, status])
+  @@index([vendaId])
+  @@map("notas_fiscais")
+}
+
+/** Snapshot fiscal CONGELADO por item (origem em GOAL_004/005). Foto do produto no ato. */
+model NotaFiscalItem {
+  id               String   @id @default(cuid())
+  notaFiscalId     String   @map("notaFiscalId")
+  notaFiscal       NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+
+  itemVendaId      String?  @map("itemVendaId")
+  produtoId        String?  @map("produtoId")
+  numeroItem       Int      @default(1) @map("numeroItem")
+
+  codigoProduto    String   @default("") @map("codigoProduto")
+  descricao        String   @default("") @map("descricao")
+  gtin             String?  @map("gtin")
+  ncm              String   @default("") @map("ncm")
+  cest             String?  @map("cest")
+  cfop             String   @default("") @map("cfop")
+  cst              String?  @map("cst")
+  csosn            String?  @map("csosn")
+  origemMercadoria Int      @default(0) @map("origemMercadoria")
+  unidadeComercial String   @default("UN") @map("unidadeComercial")
+
+  quantidade       Float    @default(1) @map("quantidade")
+  valorUnitario    Float    @default(0) @map("valorUnitario")
+  valorBruto       Float    @default(0) @map("valorBruto")
+  valorDesconto    Float    @default(0) @map("valorDesconto")
+  valorTotal       Float    @default(0) @map("valorTotal")
+
+  baseCalculoIcms  Float    @default(0) @map("baseCalculoIcms")
+  aliquotaIcms     Float    @default(0) @map("aliquotaIcms")
+  valorIcms        Float    @default(0) @map("valorIcms")
+  valorTributos    Float    @default(0) @map("valorTributos")
+
+  createdAt        DateTime @default(now()) @map("createdAt")
+
+  @@index([notaFiscalId])
+  @@map("notas_fiscais_itens")
+}
+
+/** Eventos da nota (cancelamento/CC-e/inutilização/contingência). Idempotente por (nota,tipo,seq). */
+model EventoFiscal {
+  id            String   @id @default(cuid())
+  storeId       String   @map("storeId")
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  notaFiscalId  String   @map("notaFiscalId")
+  notaFiscal    NotaFiscal @relation(fields: [notaFiscalId], references: [id], onDelete: Cascade)
+
+  tipo          TipoEventoFiscal @map("tipo")
+  sequencia     Int      @default(1) @map("sequencia")
+  status        StatusEventoFiscal @default(PENDENTE) @map("status")
+
+  protocolo     String?  @map("protocolo")
+  cStat         String?  @map("cStat")
+  xMotivo       String?  @map("xMotivo")
+  justificativa String?  @map("justificativa")
+  xmlEvento     String?  @map("xmlEvento") @db.Text
+  xmlRetorno    String?  @map("xmlRetorno") @db.Text
+
+  dataEvento    DateTime @default(now()) @map("dataEvento")
+  operador      String?  @map("operador")
+  createdAt     DateTime @default(now()) @map("createdAt")
+  updatedAt     DateTime @updatedAt @map("updatedAt")
+
+  @@unique([notaFiscalId, tipo, sequencia])
+  @@index([storeId])
+  @@map("eventos_fiscais")
+}
+
+/** Fila idempotente de emissão/cancelamento/contingência (pós-commit). Desacopla o balcão (P0-D). */
+model FiscalEmissaoJob {
+  id                 String   @id @default(cuid())
+  storeId            String   @map("storeId")
+  store              Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  vendaId            String   @map("vendaId")
+  notaFiscalId       String?  @map("notaFiscalId")
+
+  tipo               FiscalJobTipo   @default(EMISSAO) @map("tipo")
+  status             FiscalJobStatus @default(PENDENTE) @map("status")
+
+  tentativas         Int      @default(0) @map("tentativas")
+  maxTentativas      Int      @default(5) @map("maxTentativas")
+  proximaTentativaEm DateTime? @map("proximaTentativaEm")
+  prioridade         Int      @default(0) @map("prioridade")
+
+  lockOwner          String?  @map("lockOwner")
+  lockedAt           DateTime? @map("lockedAt")
+  lockExpiresAt      DateTime? @map("lockExpiresAt")
+
+  dedupeKey          String?  @map("dedupeKey")
+  payload            Json?    @map("payload") @db.JsonB
+  ultimoErro         String?  @map("ultimoErro")
+  concluidoEm        DateTime? @map("concluidoEm")
+
+  createdAt          DateTime @default(now()) @map("createdAt")
+  updatedAt          DateTime @updatedAt @map("updatedAt")
+
+  @@unique([storeId, dedupeKey])
+  @@index([status, proximaTentativaEm])
+  @@index([storeId])
+  @@map("fiscal_emissao_jobs")
+}
+
+/** Trilha append-only de toda interação fiscal (montar/assinar/transmitir/consultar + cStat). */
+model FiscalLog {
+  id             String   @id @default(cuid())
+  storeId        String   @map("storeId")
+  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  vendaId        String?  @map("vendaId")
+  notaFiscalId   String?  @map("notaFiscalId")
+  eventoFiscalId String?  @map("eventoFiscalId")
+  jobId          String?  @map("jobId")
+
+  nivel          String   @default("INFO") @map("nivel")
+  acao           String   @default("") @map("acao")
+  cStat          String?  @map("cStat")
+  xMotivo        String?  @map("xMotivo")
+  mensagem       String   @default("") @map("mensagem")
+  detalhe        Json?    @map("detalhe") @db.JsonB
+  operador       String?  @map("operador")
+
+  createdAt      DateTime @default(now()) @map("createdAt")
+
+  @@index([storeId, createdAt])
+  @@index([notaFiscalId])
+  @@map("fiscal_logs")
 }
