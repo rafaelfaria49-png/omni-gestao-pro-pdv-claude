@@ -1420,8 +1420,8 @@ export function PdvClassic({
       <div className="flex min-h-[360px] w-full flex-1 flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-muted/40 px-6 py-10 text-center backdrop-blur-xl">
         <h2 className="text-xl font-black text-foreground">Cadastre o nome da empresa desta unidade</h2>
         <p className="max-w-lg text-base text-muted-foreground">
-          O PDV fica bloqueado até a unidade <strong>{lojaAtivaId}</strong> ter um <strong>Nome fantasia</strong> salvo no
-          banco. Acesse <strong>Configurações → Dados da Empresa</strong>, preencha e salve.
+          O PDV fica bloqueado até <strong>esta unidade</strong> ter um <strong>Nome fantasia</strong> salvo.
+          Acesse <strong>Configurações → Dados da Empresa</strong>, preencha e salve.
         </p>
         <Button type="button" className="h-12 px-8 text-base font-bold" onClick={() => router.replace("/dashboard/configuracoes")}>
           Ir para Dados da Empresa

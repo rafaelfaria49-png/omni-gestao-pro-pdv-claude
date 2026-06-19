@@ -1152,7 +1152,7 @@ export function PdvSupermercado({
         cashierId={cashierId}
         onConfirm={(payments, meta) => {
           // Capturar dados de impressão ANTES de limpar o cart
-          const _nomeFantasia = (empresaDocumentos?.nomeFantasia || "").trim() || lojaAtivaId || "Loja"
+          const _nomeFantasia = (empresaDocumentos?.nomeFantasia || "").trim() || "Loja"
           const _cnpj = (empresaDocumentos?.cnpj || "").trim()
           const _footer = resolveCupomRodape(impressaoConfig, undefined)
           const _printInput: PdvReceiptInput = {
