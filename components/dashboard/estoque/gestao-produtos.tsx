@@ -319,6 +319,9 @@ export function GestaoProdutos({
                 ? String(row.codigoBarras).trim()
                 : ""
           const dbId = typeof row.dbId === "string" ? row.dbId.trim() : ""
+          // Identidade fiscal (GOAL_004): a API expõe `fiscal` (read-only) — usada na edição.
+          const fiscal = (row.fiscal && typeof row.fiscal === "object" ? row.fiscal : {}) as Record<string, unknown>
+          const fiscalStr = (k: string) => (typeof fiscal[k] === "string" ? (fiscal[k] as string) : "")
           return {
             id: String(it.id ?? ""),
             dbId: dbId || undefined,
@@ -332,6 +335,10 @@ export function GestaoProdutos({
             precoVenda: Number.isFinite(precoVenda) ? precoVenda : 0,
             estoqueAtual: typeof it.stock === "number" ? it.stock : 0,
             estoqueMinimo: 0,
+            ncm: fiscalStr("ncm"),
+            cest: fiscalStr("cest"),
+            cfop: fiscalStr("cfop"),
+            origemMercadoria: fiscalStr("origemMercadoria"),
           }
         })
       )
@@ -571,6 +578,11 @@ export function GestaoProdutos({
         codigo: normalizeUserCodigoInput(formData.codigo),
         barcode: formData.barcode?.trim() || undefined,
         codigoBarras: formData.codigoBarras?.trim() || undefined,
+        // Identidade fiscal (GOAL_004): a API persiste em metadata.fiscal — fim do descarte.
+        ncm: formData.ncm?.trim() || "",
+        cest: formData.cest?.trim() || "",
+        cfop: formData.cfop?.trim() || "",
+        origemMercadoria: formData.origemMercadoria?.trim() || "",
       }
       const res = editingProduct
         ? await fetch(

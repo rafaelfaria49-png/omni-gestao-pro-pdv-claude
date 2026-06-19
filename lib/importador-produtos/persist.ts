@@ -20,6 +20,7 @@ import { prisma } from "@/lib/prisma"
 import { normalizeSkuForSave } from "@/lib/produto-sku"
 import { nomePareceDocumento } from "@/lib/produto-sku-normalize"
 import { buildProdutoIAMetadata } from "@/lib/catalog/produto-catalogo"
+import { mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
 import type { ItemResultado, ModoConflito, ProdutoNormalizado } from "./types"
 import {
   classificarBarcode,
@@ -245,6 +246,8 @@ async function criarProdutoNovo(
   // NCM/CEST vão em Produto.metadata (schema não tem coluna dedicada —
   // decisão arquitetural em docs/auditoria/COMPRAS_FORNECEDORES_PLANO_TECNICO.md:347).
   // Omite o objeto inteiro quando ambos vazios para não poluir o JSONB.
+  // Legado (topo): preservado para leitores antigos. Canônico (GOAL_004): metadata.fiscal,
+  // gravado mais abaixo via mergeProdutoFiscalIntoMetadata (getProdutoFiscal lê ambos).
   const metadataExtras: Record<string, unknown> = {}
   if (p.ncm) metadataExtras.ncm = p.ncm
   if (p.cest) metadataExtras.cest = p.cest
@@ -267,6 +270,9 @@ async function criarProdutoNovo(
     metadataExtras.iaGeradoPor = "importador"
   }
 
+  // GOAL_004: grava a identidade fiscal canônica em metadata.fiscal (além do legado topo).
+  const metadataFinal = mergeProdutoFiscalIntoMetadata(metadataExtras, { ncm: p.ncm, cest: p.cest })
+
   await prisma.produto.create({
     data: {
       storeId,
@@ -278,7 +284,7 @@ async function criarProdutoNovo(
       stock: p.estoque,
       barcode: barcodeToSave,
       metadata:
-        Object.keys(metadataExtras).length > 0 ? (metadataExtras as Prisma.InputJsonValue) : undefined,
+        Object.keys(metadataFinal).length > 0 ? (metadataFinal as Prisma.InputJsonValue) : undefined,
       // brand: deixar vazio — schema default já é "". Planilhas suportadas
       // não trazem coluna de marca real. Não duplicar categoria em brand.
     },

@@ -9,6 +9,7 @@ import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite }
 import { requireAdmin } from "@/lib/require-admin"
 import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
+import { getProdutoFiscal, isProdutoFiscalVazio, type ProdutoFiscal } from "@/lib/produto-fiscal"
 // (sem normalizeNameForMatch — tabela `product` é minimalista)
 
 export const runtime = "nodejs"
@@ -67,6 +68,11 @@ type InvPayload = {
   vendaPorPeso?: boolean
   precoPorKg?: number
   atributos?: unknown[]
+  /**
+   * Identidade fiscal do produto (GOAL_004) — campo ADITIVO e somente-leitura.
+   * Presente apenas quando há algum dado fiscal. O PDV ignora; o Cadastro usa na edição.
+   */
+  fiscal?: ProdutoFiscal
 }
 
 function rowToItem(row: Produto): InvPayload {
@@ -78,6 +84,7 @@ function rowToItem(row: Produto): InvPayload {
   const skuTrim = sku.trim()
   const bcTrim = barcode.trim()
   const opId = skuTrim || row.id
+  const fiscal = getProdutoFiscal(row)
   return {
     id: opId,
     name: row.name,
@@ -90,6 +97,7 @@ function rowToItem(row: Produto): InvPayload {
     cost: row.precoCusto,
     price: row.price,
     category: typeof (row as unknown as { category?: unknown }).category === "string" ? (row as unknown as { category: string }).category : "",
+    ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
   }
 }
 

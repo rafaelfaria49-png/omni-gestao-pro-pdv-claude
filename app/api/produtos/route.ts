@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { Prisma } from "@/generated/prisma"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
+import { fiscalInputFromBody, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -139,6 +140,14 @@ export async function POST(req: Request) {
       } else {
         return badRequest("metadata deve ser objeto JSON ou null")
       }
+    }
+
+    // Identidade fiscal (GOAL_004): campos fiscais (top-level ou metadata.fiscal) passam a
+    // PERSISTIR canonicamente em `metadata.fiscal` — fim do descarte no cadastro. Dormente.
+    const fiscalInput = fiscalInputFromBody(raw)
+    if (fiscalInput) {
+      const baseMeta = metadata && metadata !== Prisma.DbNull ? metadata : {}
+      metadata = mergeProdutoFiscalIntoMetadata(baseMeta, fiscalInput) as Prisma.InputJsonValue
     }
 
     if (!name) return badRequest('Campo "name" é obrigatório')

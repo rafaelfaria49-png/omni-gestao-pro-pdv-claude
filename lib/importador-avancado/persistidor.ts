@@ -20,6 +20,7 @@ import { upsertContaReceber } from "@/lib/financeiro/services/contas-receber-ser
 import { upsertContaPagar } from "@/lib/financeiro/services/contas-pagar-service"
 import { normalizeSkuForSave } from "@/lib/produto-sku"
 import { normalizeProdutoSku, looksLikeEan, nomePareceDocumento } from "@/lib/produto-sku-normalize"
+import { mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
 
 // ── Utilitários ───────────────────────────────────────────────
 
@@ -260,7 +261,27 @@ async function persistirProdutos(
         })
       } else {
         // Produto novo: pode iniciar com o estoque da planilha.
-        await prisma.produto.create({ data: produtoData })
+        // GOAL_004: preserva a identidade fiscal PARSEADA da planilha (NCM/unidade), que
+        // antes era descartada — `extrairCamposProduto` capturava `campos.payload.ncm`,
+        // mas `produtoData` nunca levava metadata ao banco. Canônico: metadata.fiscal
+        // (lido por getProdutoFiscal). Só no create: o update conservador não sobrescreve
+        // dado fiscal já curado. Omite metadata quando não há nada fiscal (JSONB enxuto).
+        const pf = campos.payload
+        const metadataFiscal = mergeProdutoFiscalIntoMetadata(
+          {},
+          {
+            ncm: pf.ncm == null ? null : String(pf.ncm),
+            unidade: pf.unidade == null ? null : String(pf.unidade),
+          },
+        )
+        await prisma.produto.create({
+          data: {
+            ...produtoData,
+            ...(Object.keys(metadataFiscal).length > 0
+              ? { metadata: metadataFiscal as Prisma.InputJsonValue }
+              : {}),
+          },
+        })
       }
 
       log.push({ dominio: "produtos", chave: reg.chave, acao: existenteProduto ? "atualizado" : "criado" })

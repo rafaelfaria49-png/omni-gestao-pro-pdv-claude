@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { Prisma } from "@/generated/prisma"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
+import { fiscalInputFromBody, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -141,11 +142,25 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       }
     }
 
+    await prismaEnsureConnected()
+
+    // Identidade fiscal (GOAL_004): persiste canonicamente em `metadata.fiscal`, fazendo
+    // MERGE não-destrutivo no metadata atual do produto (nunca apaga outras chaves).
+    const fiscalInput = fiscalInputFromBody(raw)
+    if (fiscalInput) {
+      let baseMeta: unknown = {}
+      if (data.metadata !== undefined && data.metadata !== Prisma.DbNull) {
+        baseMeta = data.metadata
+      } else {
+        const current = await prisma.produto.findFirst({ where: { id, storeId }, select: { metadata: true } })
+        baseMeta = current?.metadata ?? {}
+      }
+      data.metadata = mergeProdutoFiscalIntoMetadata(baseMeta, fiscalInput) as Prisma.InputJsonValue
+    }
+
     if (Object.keys(data).length === 0) {
       return badRequest("Nada para atualizar")
     }
-
-    await prismaEnsureConnected()
     const upd = await prisma.produto.updateMany({
       where: { id, storeId },
       data,
