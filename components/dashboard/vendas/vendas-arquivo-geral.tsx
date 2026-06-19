@@ -277,6 +277,10 @@ function saleRecordToVendaItem(s: SaleRecord): VendaItem {
 export function VendasArquivoGeral() {
   const { lojaAtivaId, empresaDocumentos, getEnderecoDocumentos } = useLojaAtiva()
   const storeId = (lojaAtivaId ?? "").trim()
+  // Rótulo amigável da unidade (nome fantasia da loja ativa). Substitui o storeId
+  // técnico nos textos visíveis ao operador (subtítulo e ficha de detalhe). O storeId
+  // cru segue sendo usado apenas internamente (headers de API, filtros, deps).
+  const unidadeLabel = (empresaDocumentos.nomeFantasia || "").trim()
   const {
     sales: opsSales,
     retrySyncSale,
@@ -949,8 +953,8 @@ export function VendasArquivoGeral() {
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Vendas</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Consulte, corrija, reimprima, cancele ou registre trocas e devoluções · unidade{" "}
-              <span className="font-mono text-xs">{storeId}</span>
+              Consulte, corrija, reimprima, cancele ou registre trocas e devoluções
+              {unidadeLabel && <> · {unidadeLabel}</>}
               {remoteLoading && (
                 <span className="inline-flex items-center gap-1 ml-2 text-xs">
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -1575,7 +1579,7 @@ export function VendasArquivoGeral() {
                     </div>
                     <div className="col-span-2">
                       <p className="text-xs text-muted-foreground">Loja</p>
-                      <p className="font-mono text-xs text-foreground">{storeId}</p>
+                      <p className="text-xs text-foreground">{unidadeLabel || "—"}</p>
                     </div>
                     {detalhePendenteLocal.sessaoId && (
                       <div className="col-span-2">
