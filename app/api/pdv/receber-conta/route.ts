@@ -13,6 +13,8 @@ import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { apiGuardFinanceiroEditEnterpriseOrLegacy } from "@/lib/auth/api-enterprise-guard"
 import {
   buildContaReceberAuditTrail,
+  getContaReceberById,
+  getContaReceberByLocalKey,
   liquidarContaReceber,
   registrarPagamentoParcial,
 } from "@/lib/financeiro/services"
@@ -129,6 +131,14 @@ export async function POST(request: Request) {
     let parcial = false
 
     if (parsed.data.op === "liquidar") {
+      // Saldo REAL em aberto (valor − pagamentos já registrados no histórico) ANTES de quitar.
+      // `res.data.valor` é o valor BRUTO da coluna e não diminui em baixas parciais via backend —
+      // usá-lo lançaria mais que o devido no caixa/movimentação em títulos já parcialmente pagos.
+      const atual = ref.id
+        ? await getContaReceberById(storeId, ref.id)
+        : await getContaReceberByLocalKey(storeId, ref.localKey!)
+      const abertoAntes = atual ? buildContaReceberAuditTrail([atual])[0]?.saldoAberto ?? 0 : 0
+
       res = await liquidarContaReceber({
         storeId,
         id: ref.id,
@@ -140,7 +150,7 @@ export async function POST(request: Request) {
         const status = res.reason === "not_found" ? 404 : 422
         return NextResponse.json({ ok: false, error: res.reason, code: res.reason }, { status })
       }
-      valorMov = res.data.valor
+      valorMov = abertoAntes > 0 ? abertoAntes : res.data.valor
       parcial = false
     } else {
       res = await registrarPagamentoParcial({

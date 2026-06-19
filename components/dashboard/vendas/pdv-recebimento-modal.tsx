@@ -129,6 +129,8 @@ export function PdvRecebimentoModal({
   const [error, setError] = useState<string | null>(null)
   const [parcialValue, setParcialValue] = useState<Record<string, string>>({})
   const [formaPagto, setFormaPagto] = useState<string>("dinheiro")
+  /** Saldo REALMENTE em aberto por título (id/localKey → saldoAberto), vindo do audit do servidor. */
+  const [saldoAbertoMap, setSaldoAbertoMap] = useState<Record<string, number>>({})
 
   const formasAtivas = useMemo(
     () =>
@@ -148,9 +150,23 @@ export function PdvRecebimentoModal({
         headers: { [ASSISTEC_LOJA_HEADER]: storeId },
         cache: "no-store",
       })
-      const j = (await r.json().catch(() => null)) as { ok?: boolean; rows?: ContaReceberRow[]; error?: string } | null
+      const j = (await r.json().catch(() => null)) as {
+        ok?: boolean
+        rows?: ContaReceberRow[]
+        audit?: Array<{ id?: string; localKey?: string; saldoAberto?: number }>
+        error?: string
+      } | null
       if (!r.ok || !j) throw new Error(j?.error || `HTTP ${r.status}`)
       const list = Array.isArray(j.rows) ? j.rows : []
+      // Saldo aberto real (valor − pagamentos no histórico) calculado pelo servidor.
+      const map: Record<string, number> = {}
+      for (const a of Array.isArray(j.audit) ? j.audit : []) {
+        const sa = typeof a.saldoAberto === "number" && Number.isFinite(a.saldoAberto) ? a.saldoAberto : null
+        if (sa == null) continue
+        if (a.localKey) map[String(a.localKey)] = sa
+        if (a.id) map[String(a.id)] = sa
+      }
+      setSaldoAbertoMap(map)
       setRows(list.filter((row) => STATUS_RECEBIVEL.has((row.status || "").toLowerCase())))
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -198,6 +214,20 @@ export function PdvRecebimentoModal({
     if (!selectedCliente) return []
     return rows.filter((r) => clienteMatchesTitulo(selectedCliente, r.cliente || ""))
   }, [rows, selectedCliente])
+
+  /**
+   * Saldo realmente em aberto do título. Prioriza o `saldoAberto` do audit do servidor
+   * (valor − pagamentos já registrados); cai para `row.valor` apenas se ausente.
+   * Evita a divergência em que a coluna `valor` (bruta) não diminui após baixa parcial.
+   */
+  const saldoAbertoDe = useCallback(
+    (row: ContaReceberRow): number => {
+      const sa = saldoAbertoMap[String(row.id)]
+      if (typeof sa === "number" && Number.isFinite(sa)) return Math.max(0, Math.round(sa * 100) / 100)
+      return Math.max(0, Math.round((Number(row.valor) || 0) * 100) / 100)
+    },
+    [saldoAbertoMap],
+  )
 
   const formaLabel = formasAtivas.find((f) => f.id === formaPagto)?.label ?? formaPagto
 
@@ -257,6 +287,12 @@ export function PdvRecebimentoModal({
         if (code === "ja_pago" || code === "nada_em_aberto") {
           return { ok: false as const, error: "Este título já está quitado." }
         }
+        if (code === "valor_maior_que_aberto") {
+          return {
+            ok: false as const,
+            error: "O valor é maior que o saldo em aberto do título. Atualizei o saldo — confira e tente novamente.",
+          }
+        }
         return { ok: false as const, error: j?.error || `HTTP ${r.status}` }
       }
       return { ok: true as const, valorRecebido: j.valorRecebido ?? valor ?? Number(row.valor) }
@@ -314,11 +350,12 @@ export function PdvRecebimentoModal({
         toast({ variant: "destructive", title: "Valor inválido", description: "Informe um valor parcial maior que zero." })
         return
       }
-      if (valor > (Number(row.valor) || 0) + 0.009) {
+      const saldoAberto = saldoAbertoDe(row)
+      if (valor > saldoAberto + 0.009) {
         toast({
           variant: "destructive",
           title: "Valor excede o saldo",
-          description: `Saldo do título: ${brl(Number(row.valor) || 0)}.`,
+          description: `Saldo em aberto do título: ${brl(saldoAberto)}.`,
         })
         return
       }
@@ -335,7 +372,7 @@ export function PdvRecebimentoModal({
         })
         setParcialValue((p) => ({ ...p, [String(row.id)]: "" }))
         await fetchTitulos()
-        const saldoRem = Math.max(0, (Number(row.valor) || 0) - valor)
+        const saldoRem = Math.max(0, Math.round((saldoAberto - valor) * 100) / 100)
         const nextRows = rows.map((r) =>
           String(r.id) === String(row.id)
             ? { ...r, status: saldoRem <= 0.009 ? "pago" : "parcial", valor: saldoRem }
@@ -361,12 +398,13 @@ export function PdvRecebimentoModal({
       tryPrintRecibo,
       onReceived,
       adicionarEntrada,
+      saldoAbertoDe,
     ],
   )
 
   const totalRestante = useMemo(
-    () => filtered.reduce((s, r) => s + (Number(r.valor) || 0), 0),
-    [filtered],
+    () => filtered.reduce((s, r) => s + saldoAbertoDe(r), 0),
+    [filtered, saldoAbertoDe],
   )
 
   const selectCliente = (c: PdvClienteResult) => {
@@ -516,7 +554,7 @@ export function PdvRecebimentoModal({
               <ul className="space-y-2">
                 {filtered.map((row) => {
                   const id = String(row.id)
-                  const valor = Number(row.valor) || 0
+                  const valor = saldoAbertoDe(row)
                   const busy = busyId === id
                   const parcialStr = parcialValue[id] ?? ""
                   const jaPago = (row.status || "").toLowerCase() === "pago"
