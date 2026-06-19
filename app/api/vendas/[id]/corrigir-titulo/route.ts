@@ -19,6 +19,7 @@ import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { requireCorrecaoVendaAuth } from "@/lib/vendas/guard-correcao-venda"
+import { assertVendaFiscalEditavel } from "@/lib/fiscal/venda-fiscal-state-machine"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { mergeFinanceiroPayload, appendFinanceiroHistorico } from "@/lib/financeiro/contracts/payload"
 import { tituloEditavel, parseVencimentoBr } from "@/lib/vendas/correcao-cliente-titulo-plan"
@@ -72,6 +73,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const venda = await prisma.venda.findFirst({ where: { pedidoId, storeId } })
     if (!venda) return NextResponse.json({ ok: false, error: "Venda não encontrada" }, { status: 404 })
+
+    // Gate fiscal (GOAL_003): NAO_FISCAL → no-op; estados fiscais bloqueados impedem a correção.
+    const fiscalGate = assertVendaFiscalEditavel(venda)
+    if (!fiscalGate.ok) {
+      return NextResponse.json({ ok: false, error: fiscalGate.error, code: fiscalGate.code }, { status: fiscalGate.status })
+    }
 
     const titulo = await prisma.contaReceberTitulo.findFirst({ where: { id: tituloId, storeId } })
     if (!titulo) return NextResponse.json({ ok: false, error: "Título não encontrado" }, { status: 404 })

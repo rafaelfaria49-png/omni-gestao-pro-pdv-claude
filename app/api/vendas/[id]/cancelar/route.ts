@@ -18,6 +18,7 @@ import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-se
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { assertVendaFiscalCancelavel } from "@/lib/fiscal/venda-fiscal-state-machine"
 import { auth } from "@/auth"
 
 export const runtime = "nodejs"
@@ -92,6 +93,14 @@ export async function POST(
         { ok: false, error: "Esta venda já foi cancelada anteriormente" },
         { status: 409 }
       )
+    }
+
+    // Gate fiscal (GOAL_003): NAO_FISCAL (todas as vendas atuais) → no-op; estados
+    // fiscais bloqueados (EMITINDO/AUTORIZADA/EM_CONTINGENCIA/CANCELADA/BLOQUEADA)
+    // impedem o cancelamento operacional puro.
+    const fiscalGate = assertVendaFiscalCancelavel(venda)
+    if (!fiscalGate.ok) {
+      return NextResponse.json({ ok: false, error: fiscalGate.error, code: fiscalGate.code }, { status: fiscalGate.status })
     }
 
     // Verificar se há devoluções vinculadas (com itens para o netting de estoque)

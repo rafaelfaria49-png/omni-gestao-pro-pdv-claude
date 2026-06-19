@@ -31,6 +31,7 @@ import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import { requireCorrecaoVendaAuth } from "@/lib/vendas/guard-correcao-venda"
+import { assertVendaFiscalEditavel } from "@/lib/fiscal/venda-fiscal-state-machine"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import {
@@ -144,6 +145,13 @@ export async function POST(
 
     if (venda.status === "cancelada") {
       return NextResponse.json({ ok: false, error: "Não é possível corrigir uma venda cancelada" }, { status: 409 })
+    }
+
+    // Gate fiscal (GOAL_003): NAO_FISCAL → no-op (comportamento atual); estados fiscais
+    // bloqueados impedem a correção operacional.
+    const fiscalGate = assertVendaFiscalEditavel(venda)
+    if (!fiscalGate.ok) {
+      return NextResponse.json({ ok: false, error: fiscalGate.error, code: fiscalGate.code }, { status: fiscalGate.status })
     }
 
     const payload = (venda.payload && typeof venda.payload === "object" ? venda.payload : {}) as Record<string, unknown>
