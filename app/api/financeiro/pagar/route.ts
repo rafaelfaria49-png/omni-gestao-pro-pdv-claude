@@ -20,6 +20,7 @@ import {
   buildContaPagarAuditTrail,
   buildContaPagarSummary,
   cancelContaPagar,
+  getContaPagarByLocalKey,
   liquidarContaPagar,
   registrarPagamentoParcialContaPagar,
   estornarContaPagar,
@@ -335,18 +336,25 @@ export async function PATCH(req: Request) {
     }
 
     if (parsed.data.op === "liquidar") {
+      // Saldo REAL em aberto ANTES de quitar (valor − pagamentos já no histórico).
+      // `res.data.valor` é a coluna BRUTA e NÃO diminui em baixas parciais via backend —
+      // usá-lo lançaria mais que o devido na saída de caixa/auditoria de títulos já parciais.
+      const atual = await getContaPagarByLocalKey(storeId, parsed.data.localKey)
+      const abertoAntes = atual ? buildContaPagarAuditTrail([atual])[0]?.restante ?? 0 : 0
+
       const res = await liquidarContaPagar({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel })
       if (!res.ok) return err(res.reason, `liquidar_${res.reason}`, 422)
+      const valorMov = abertoAntes > 0 ? abertoAntes : res.data.valor
       const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
       // Gerar movimentação de saída (idempotente) — vincula à carteira do título se houver
       await createMovimentacaoSaidaFromPagar(
         { id: res.data.id, storeId: res.data.storeId, descricao: res.data.descricao },
-        res.data.valor,
+        valorMov,
         { carteiraId },
       ).catch((e) => console.error("[pagar/liquidar mov]", e))
       void logAuditoriaFinanceira({
         storeId, entidade: "pagar", entidadeId: res.data.id, acao: "liquidar", actor,
-        depois: { localKey: parsed.data.localKey, valor: res.data.valor, carteiraId },
+        depois: { localKey: parsed.data.localKey, valor: valorMov, carteiraId },
       })
       return NextResponse.json({ ok: true, op: "liquidar" })
     }
