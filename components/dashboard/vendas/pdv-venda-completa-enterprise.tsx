@@ -1,5 +1,29 @@
 "use client"
 
+/**
+ * ⚠️ COMPONENTE LEGADO / ÓRFÃO — NÃO USAR EM CÓDIGO NOVO.
+ *
+ * Esta é uma DUPLICATA não roteada de `venda-completa-enterprise.tsx`. Exporta
+ * `PdvVendaCompletaEnterprise` e o re-exporta como alias `VendaCompletaEnterprise`
+ * no fim do arquivo — porém NENHUMA rota/módulo importa este arquivo.
+ *
+ * Caminho oficial e ATIVO da "Venda Completa":
+ *   app/dashboard/vendas/venda-completa/page.tsx
+ *     → venda-completa-page-client.tsx
+ *       → `VendaCompletaEnterprise` de `./venda-completa-enterprise` (SEM o prefixo `pdv-`).
+ *
+ * Status: código morto. Verificado em 2026-06-20 — busca por imports deste módulo
+ * retorna zero ocorrências. É referenciado apenas por:
+ *   - documentação de auditoria (docs/audits/*), e
+ *   - o lint estático `lib/multi-loja-client-no-legacy-fallback.test.ts` (que lê o
+ *     arquivo via readFileSync como guarda anti-fallback de loja principal — DT-13;
+ *     por isso evite citar aqui o literal da constante de loja legada).
+ *
+ * Mantido por ora apenas para preservar esse teste e o histórico. A remoção definitiva
+ * exige também retirar a entrada deste arquivo de `DT13_FILES` no teste acima.
+ * Ref.: GOAL_PDV_ORPHAN_CLEANUP · docs/audits/AUDITORIA_OPERACIONAL_PDV_REAL_v01.md (P3-01).
+ */
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowLeft,
