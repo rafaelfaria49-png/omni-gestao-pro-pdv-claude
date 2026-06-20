@@ -748,8 +748,8 @@ export function WorkspaceCorrecaoVenda({
         body: JSON.stringify({ itemIndex: metaIdx, motivo: metaMotivo.trim(), supervisorPin: metaPin.trim(), metadata: metaVals }),
       })
       const data = await res.json()
-      if (!data.ok) { toast({ title: "Metadados não salvos", description: data.error ?? "Falha.", variant: "destructive" }); return }
-      toast({ title: "Metadados salvos", description: "Sem impacto em estoque/financeiro." })
+      if (!data.ok) { toast({ title: "Detalhes não salvos", description: data.error ?? "Falha.", variant: "destructive" }); return }
+      toast({ title: "Detalhes salvos", description: "Sem impacto em estoque/financeiro." })
       setMetaIdx(null); await load()
     } catch { toast({ title: "Erro", description: "Falha de conexão.", variant: "destructive" }) }
     finally { setMetaSaving(false) }
@@ -1263,7 +1263,7 @@ export function WorkspaceCorrecaoVenda({
                                 <TableHead className="text-foreground text-center">Qtd</TableHead>
                                 <TableHead className="text-foreground text-right">Unitário</TableHead>
                                 <TableHead className="text-foreground text-right">Total</TableHead>
-                                <TableHead className="text-foreground text-center w-28">Metadados</TableHead>
+                                <TableHead className="text-foreground text-center w-28">Detalhes</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1299,7 +1299,7 @@ export function WorkspaceCorrecaoVenda({
                     {metaIdx !== null && venda.itens[metaIdx] && (
                       <Card className="border-primary/30 bg-primary/5 min-w-0">
                         <CardContent className="pt-4 space-y-2">
-                          <p className="text-xs font-semibold text-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Metadados de “{venda.itens[metaIdx].nome}” — não altera quantidade/estoque/total</p>
+                          <p className="text-xs font-semibold text-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> Detalhes de “{venda.itens[metaIdx].nome}” — não altera quantidade/estoque/total</p>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <div className="space-y-1"><Label className="text-xs text-muted-foreground">Nº de série</Label><Input className="h-8 text-sm" value={metaVals.serial ?? ""} onChange={(e) => setMetaVals((c) => ({ ...c, serial: e.target.value }))} disabled={metaSaving} /></div>
                             <div className="space-y-1"><Label className="text-xs text-muted-foreground">IMEI</Label><Input className="h-8 text-sm" value={metaVals.imei ?? ""} onChange={(e) => setMetaVals((c) => ({ ...c, imei: e.target.value }))} disabled={metaSaving} /></div>
@@ -1311,7 +1311,7 @@ export function WorkspaceCorrecaoVenda({
                           <div className="space-y-1 max-w-[200px]"><Label className="text-xs text-foreground flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> PIN supervisor <span className="text-destructive">*</span></Label><Input type="password" inputMode="numeric" maxLength={12} value={metaPin} onChange={(e) => setMetaPin(e.target.value.replace(/\D/g, ""))} className="h-8 bg-background font-mono tracking-widest" disabled={metaSaving} /></div>
                           <div className="flex justify-end gap-2">
                             <Button size="sm" variant="ghost" onClick={() => setMetaIdx(null)} disabled={metaSaving}>Cancelar</Button>
-                            <Button size="sm" className="gap-1.5" disabled={metaSaving || !metaMotivo.trim() || !metaPin.trim()} onClick={() => void salvarMeta()}>{metaSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar metadados</Button>
+                            <Button size="sm" className="gap-1.5" disabled={metaSaving || !metaMotivo.trim() || !metaPin.trim()} onClick={() => void salvarMeta()}>{metaSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Salvar detalhes</Button>
                           </div>
                         </CardContent>
                       </Card>

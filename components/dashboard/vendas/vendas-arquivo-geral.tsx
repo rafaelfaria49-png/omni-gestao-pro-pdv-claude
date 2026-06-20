@@ -1446,12 +1446,6 @@ export function VendasArquivoGeral() {
                       <p className="text-xs text-muted-foreground">Loja</p>
                       <p className="text-xs text-foreground">{unidadeLabel || "—"}</p>
                     </div>
-                    {detalhePendenteLocal.sessaoId && (
-                      <div className="col-span-2">
-                        <p className="text-xs text-muted-foreground">Sessão caixa</p>
-                        <p className="font-mono text-[11px] text-foreground truncate">{detalhePendenteLocal.sessaoId}</p>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1611,12 +1605,6 @@ export function VendasArquivoGeral() {
                         <p className="font-medium text-muted-foreground">Sem terminal</p>
                       )}
                     </div>
-                    {detalhe.sessaoId && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Sessão caixa</p>
-                        <p className="font-mono text-[11px] text-foreground truncate">{detalhe.sessaoId}</p>
-                      </div>
-                    )}
                   </div>
                 </div>
 
