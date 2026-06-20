@@ -888,6 +888,14 @@ export function WorkspaceCorrecaoVenda({
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 min-h-0">
+              {/* Venda cancelada → ficha somente leitura. Sinaliza por que os botões de
+                  correção não aparecem (eles já estão ocultos por status === "cancelada"). */}
+              {venda.status === "cancelada" && (
+                <div className="mb-5 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>Venda cancelada — ficha em modo somente leitura. As correções estão desabilitadas; o histórico e os detalhes seguem disponíveis para consulta.</span>
+                </div>
+              )}
               {/* 1 · RESUMO */}
               <TabsContent value="resumo" className="mt-0 space-y-5">
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

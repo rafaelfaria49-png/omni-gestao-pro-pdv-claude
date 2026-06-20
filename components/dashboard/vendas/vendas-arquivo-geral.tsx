@@ -485,10 +485,11 @@ export function VendasArquivoGeral() {
         acao === "cancelar"
           ? "Venda pendente não pode ser cancelada até sincronizar com o servidor."
           : "Esta ação só está disponível após a venda ser confirmada no servidor."
+      // Situação neutra (ação ainda indisponível, não um erro) — toast informativo,
+      // nunca destructive, em todas as ações bloqueadas por sincronização pendente.
       toast({
         title: "Venda pendente de sincronização",
         description: desc,
-        variant: acao === "cancelar" ? "destructive" : "default",
       })
     },
     [toast],
@@ -1889,8 +1890,8 @@ export function VendasArquivoGeral() {
                   Atenção
                 </p>
                 <p>
-                  O cancelamento registra o motivo e altera o status da venda. Reposição de estoque e estorno financeiro
-                  serão tratados na próxima fase.
+                  O cancelamento registra o motivo e marca a venda como cancelada. A reposição de estoque e o estorno
+                  financeiro (caixa e títulos a prazo) são aplicados automaticamente quando houver.
                 </p>
               </div>
               <div className="space-y-2">
