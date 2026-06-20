@@ -465,7 +465,8 @@ function PdvSectionContent() {
 
   const controlsDisabled = busy || noLoja;
 
-  // PDV Next é experimental (não persiste vendas): ocultar o card da galeria em
+  // PDV Next é experimental (já persiste vendas reais pelo motor oficial, mas
+  // recursos de balcão ainda em desenvolvimento): ocultar o card da galeria em
   // operação real. Liberado em dev via env NEXT_PUBLIC_OG_EXPERIMENTAL=1.
   const visibleFlows = experimentalPdvEnabled ? FLOWS : FLOWS.filter((f) => f.id !== "next");
 

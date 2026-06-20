@@ -5,13 +5,15 @@ import { ModuleEmDesenvolvimento } from "@/components/painel-inicial/ModuleEmDes
 import { experimentalPdvEnabled } from "@/lib/feature-flags"
 
 export default function DashboardPdvNextPage() {
-  // Bloqueio operacional: o PDV Next ainda NÃO persiste vendas no banco.
-  // Liberado apenas em desenvolvimento (env NEXT_PUBLIC_OG_EXPERIMENTAL=1).
+  // O PDV Next já persiste vendas reais (motor oficial finalizeSaleTransaction);
+  // segue experimental por funcionalidades de balcão ainda em desenvolvimento
+  // (impressão de cupom, desconto, devolução). Liberado apenas em desenvolvimento
+  // (env NEXT_PUBLIC_OG_EXPERIMENTAL=1).
   if (!experimentalPdvEnabled) {
     return (
       <ModuleEmDesenvolvimento
         title="PDV Next (Black Edition) — experimental"
-        description="Este PDV ainda não registra as vendas no banco de dados e não deve ser usado em operação real. Use o PDV oficial para vender com segurança."
+        description="Este PDV é operacional e já registra as vendas no banco de dados pelo motor oficial. Segue experimental enquanto recursos de balcão (impressão de cupom, desconto e devolução) estão em desenvolvimento. Para a operação completa, use o PDV oficial."
         links={[{ href: "/dashboard/vendas", label: "Abrir PDV oficial" }]}
       />
     )

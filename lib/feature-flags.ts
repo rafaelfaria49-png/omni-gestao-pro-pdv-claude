@@ -16,9 +16,11 @@ export const financeiroV2Enabled = true;
 const experimentalModulesEnabled = process.env.NEXT_PUBLIC_OG_EXPERIMENTAL === "1";
 
 /**
- * PDVs experimentais: Black Edition (`/dashboard/pdv-next`, ainda NÃO persiste
- * vendas) e o espelho de referência (`/dashboard/pdv-github-original`).
- * Operação real deve usar o PDV oficial em `/dashboard/vendas`.
+ * PDVs experimentais: Black Edition (`/dashboard/pdv-next`) já persiste vendas
+ * reais pelo motor oficial; segue experimental por funcionalidades de balcão
+ * ainda em desenvolvimento (impressão de cupom, desconto, devolução). Inclui
+ * também o espelho de referência (`/dashboard/pdv-github-original`).
+ * Operação completa recomendada no PDV oficial em `/dashboard/vendas`.
  */
 export const experimentalPdvEnabled = experimentalModulesEnabled;
 
