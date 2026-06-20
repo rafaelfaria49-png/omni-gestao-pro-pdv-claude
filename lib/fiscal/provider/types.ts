@@ -160,6 +160,9 @@ export type FiscalProviderContexto = {
   notaFiscalId: string | null
   modelo: ModeloFiscal | string
   ambiente: AmbienteFiscal | string
+  /** Numeração fiscal alocada (GOAL_008): presente a partir de `emitir`; null/ausente antes. */
+  serie?: number | null
+  numero?: number | null
 }
 
 /** Requisição canônica das operações que dependem do snapshot congelado da venda. */

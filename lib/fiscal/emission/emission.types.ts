@@ -15,6 +15,7 @@ import type {
   FiscalProviderResultado,
 } from "../provider/types"
 import type { VendaFiscalSnapshot } from "../venda-fiscal-snapshot"
+import type { FiscalNumberAllocationOutcome } from "../numbering/numbering.types"
 
 export type EmissionInput = {
   storeId: string
@@ -41,6 +42,7 @@ export type EmissionErrorCode =
   | "config_ausente"
   | "provider_ausente" // resolver não encontrou provider (desconhecido/não implementado)
   | "estado_bloqueado"
+  | "numeracao_indisponivel" // sem série fiscal ativa / falha de numeração (GOAL_008)
   | "erro_interno"
 
 export type EmissionEtapaNome = "validarConfiguracao" | "validarSnapshot" | "prepararEmissao" | "emitir"
@@ -102,6 +104,17 @@ export type EmissionPorts = {
   setFiscalStatus: (status: FiscalStatusVenda) => Promise<void>
   /** Grava uma entrada de trilha fiscal (best-effort; nunca deve derrubar a emissão). */
   log: (entry: FiscalEmissionLogEntry) => Promise<void>
+  /**
+   * Aloca/garante o número fiscal da NotaFiscal vigente ANTES de emitir (GOAL_008).
+   * Opcional: ausente = numeração pulada (compatível com os testes do pipeline puro).
+   * Quando presente e falha (ex.: série inativa), a emissão é abortada SEM mutar fiscalStatus.
+   */
+  allocateNumero?: (ctx: {
+    storeId: string
+    notaFiscalId: string | null
+    modelo: string
+    ambiente: string
+  }) => Promise<FiscalNumberAllocationOutcome>
   /** Relógio injetável (testes determinísticos). */
   now?: () => number
 }

@@ -281,6 +281,52 @@ export async function runEmissionPipeline(
     })
   }
 
+  // ── 5b) Numeração fiscal (GOAL_008) — série+número ANTES de emitir ────────────────────
+  // Pré-condição de emissão: a NotaFiscal precisa de (modelo, série, número, ambiente).
+  // Falha aqui (ex.: nenhuma série ativa) NÃO muta fiscalStatus e NÃO emite.
+  if (ports.allocateNumero) {
+    const alloc = await ports.allocateNumero({
+      storeId: snapshot.storeId,
+      notaFiscalId: input.notaFiscalId,
+      modelo: snapshot.modelo,
+      ambiente: snapshot.ambiente,
+    })
+    if (!alloc.ok) {
+      await ports.log({
+        acao: "emissao.numeracao_indisponivel",
+        nivel: "ERROR",
+        mensagem: alloc.mensagem,
+        detalhe: { ...baseDetalhe(), errorCode: "numeracao_indisponivel", numeracao: { erro: alloc.errorCode } },
+      })
+      return finalize({
+        ok: false,
+        resultado: "erro",
+        fiscalStatusNovo: anterior,
+        mensagem: alloc.mensagem,
+        errorCode: "numeracao_indisponivel",
+      })
+    }
+    // Snapshot/contexto NUMERADO entregue ao provider em `emitir`.
+    contexto.serie = alloc.serie
+    contexto.numero = alloc.numero
+    await ports.log({
+      acao: "emissao.numeracao",
+      nivel: "INFO",
+      mensagem: `Número fiscal ${alloc.reused ? "reaproveitado (idempotente)" : "alocado"}: modelo ${alloc.modelo} série ${alloc.serie} nº ${alloc.numero}.`,
+      detalhe: {
+        ...baseDetalhe(),
+        numeracao: {
+          numeroAlocado: alloc.numero,
+          serie: alloc.serie,
+          modelo: alloc.modelo,
+          ambiente: alloc.ambiente,
+          serieFiscalId: alloc.serieFiscalId,
+          reused: alloc.reused,
+        },
+      },
+    })
+  }
+
   // ── 6) Transição para EMITINDO (antes de transmitir) ──────────────────────────────────
   await ports.setFiscalStatus(S.EMITINDO)
   await ports.log({

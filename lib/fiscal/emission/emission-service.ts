@@ -14,6 +14,8 @@ import { FiscalStatusVenda } from "@/generated/prisma"
 import { normalizeFiscalStatus } from "../venda-fiscal-state-machine"
 import { resolveFiscalProvider } from "../provider/resolver"
 import type { FiscalProvider, FiscalProviderConfigInput } from "../provider/types"
+import { allocateFiscalNumber } from "../numbering/allocate-fiscal-number"
+import { createPrismaFiscalNumberingPorts } from "../numbering/prisma-numbering-ports"
 import { runEmissionPipeline } from "./emission-pipeline"
 import { recordFiscalEmissionLog } from "./emission-log"
 import { reconstructSnapshotFromNota, type NotaFiscalRow } from "./snapshot-reader"
@@ -166,7 +168,10 @@ export async function emitirNotaFiscalVenda(input: EmissionInput): Promise<Emiss
   const provider: FiscalProvider | null = resolved.ok ? resolved.provider : null
 
   // 5) Portas: a ÚNICA escrita de negócio é Venda.fiscalStatus; o resto é trilha.
+  //    A numeração (GOAL_008) toca apenas SerieFiscal (contador) + NotaFiscal (serie/numero).
   const notaId = nota?.id ?? null
+  // Sem argumento: usa o singleton `prisma` (em teste, o módulo é mockado).
+  const numberingPorts = createPrismaFiscalNumberingPorts()
   const ports: EmissionPorts = {
     setFiscalStatus: async (status: FiscalStatusVenda) => {
       await prisma.venda.update({ where: { id: vendaId }, data: { fiscalStatus: status } })
@@ -174,6 +179,8 @@ export async function emitirNotaFiscalVenda(input: EmissionInput): Promise<Emiss
     log: async (entry) => {
       await recordFiscalEmissionLog({ ...entry, storeId, vendaId, notaFiscalId: notaId, operador })
     },
+    allocateNumero: async (ctx) =>
+      allocateFiscalNumber({ storeId: ctx.storeId, notaFiscalId: ctx.notaFiscalId ?? "" }, numberingPorts),
   }
 
   // 6) Pipeline puro.

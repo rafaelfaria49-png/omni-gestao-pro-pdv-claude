@@ -18,22 +18,32 @@ import {
   type VendaFiscalSnapshot,
 } from "../venda-fiscal-snapshot"
 import { stubHomologacaoProvider } from "../provider/stub-homologacao"
-import type { FiscalProvider, FiscalProviderConfigInput, FiscalProviderResponse } from "../provider/types"
+import type {
+  FiscalProvider,
+  FiscalProviderConfigInput,
+  FiscalProviderContexto,
+  FiscalProviderRequest,
+  FiscalProviderResponse,
+} from "../provider/types"
 
 // ── Mock do Prisma (só o serviço usa) ──────────────────────────────────────────────────
 const db = vi.hoisted(() => ({
   vendaFindFirst: vi.fn(),
   vendaUpdate: vi.fn(),
   notaFindFirst: vi.fn(),
+  notaUpdate: vi.fn(),
   configFindUnique: vi.fn(),
   fiscalLogCreate: vi.fn(),
+  serieFindFirst: vi.fn(),
+  serieUpdate: vi.fn(),
 }))
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     venda: { findFirst: db.vendaFindFirst, update: db.vendaUpdate },
-    notaFiscal: { findFirst: db.notaFindFirst },
+    notaFiscal: { findFirst: db.notaFindFirst, update: db.notaUpdate },
     configuracaoFiscalLoja: { findUnique: db.configFindUnique },
     fiscalLog: { create: db.fiscalLogCreate },
+    serieFiscal: { findFirst: db.serieFindFirst, update: db.serieUpdate },
   },
 }))
 
@@ -181,12 +191,19 @@ function pipelineInput(over: Partial<EmissionPipelineInput> = {}): EmissionPipel
   }
 }
 
+/** Série fiscal ativa padrão (numeração GOAL_008). */
+const SERIE_ATIVA = { id: "serie-1", serie: 1, modelo: "NFCE", ambiente: "HOMOLOGACAO", ativo: true }
+
 beforeEach(() => {
   db.vendaFindFirst.mockReset()
   db.vendaUpdate.mockReset().mockResolvedValue({})
   db.notaFindFirst.mockReset()
+  db.notaUpdate.mockReset().mockResolvedValue({})
   db.configFindUnique.mockReset()
   db.fiscalLogCreate.mockReset().mockResolvedValue({})
+  // Defaults de numeração: série ativa + reserva do número 1 (proximoNumero 1 → 2).
+  db.serieFindFirst.mockReset().mockResolvedValue(SERIE_ATIVA)
+  db.serieUpdate.mockReset().mockResolvedValue({ proximoNumero: 2, serie: 1 })
 })
 
 // ── 1. Pipeline puro ────────────────────────────────────────────────────────────────────
@@ -325,6 +342,57 @@ describe("runEmissionPipeline — FiscalLog", () => {
   })
 })
 
+describe("runEmissionPipeline — numeração fiscal (GOAL_008)", () => {
+  it("aloca número antes de emitir e o provider recebe o contexto numerado", async () => {
+    const { ports, statusWrites, logs } = fakePorts()
+    let capturado: FiscalProviderContexto | null = null
+    const provider = makeMockProvider(async () =>
+      resp("emitir", { statusNota: "AUTORIZADA", dados: { placeholder: true, chaveAcesso: "SIM-CHAVE-1", cStat: "100" } }),
+    )
+    const emitOriginal = provider.emitir
+    provider.emitir = vi.fn(async (req: FiscalProviderRequest) => {
+      capturado = req.contexto
+      return emitOriginal(req)
+    })
+    ports.allocateNumero = async () => ({
+      ok: true,
+      reused: false,
+      serieFiscalId: "serie-1",
+      serie: 1,
+      numero: 5,
+      modelo: "NFCE",
+      ambiente: "HOMOLOGACAO",
+    })
+
+    const out = await runEmissionPipeline(pipelineInput({ provider }), ports)
+
+    expect(out.ok).toBe(true)
+    expect(statusWrites).toEqual([FiscalStatusVenda.EMITINDO, FiscalStatusVenda.AUTORIZADA])
+    // provider recebeu o snapshot/contexto NUMERADO
+    expect((capturado as FiscalProviderContexto | null)?.serie).toBe(1)
+    expect((capturado as FiscalProviderContexto | null)?.numero).toBe(5)
+    // FiscalLog de numeração
+    const numLog = logs.find((l) => l.acao === "emissao.numeracao")
+    expect(numLog).toBeTruthy()
+    const det = numLog!.detalhe as { numeracao?: { numeroAlocado?: number; serie?: number } }
+    expect(det.numeracao?.numeroAlocado).toBe(5)
+    expect(det.numeracao?.serie).toBe(1)
+  })
+
+  it("série inativa → numeracao_indisponivel, sem mutar status e sem emitir", async () => {
+    const { ports, statusWrites } = fakePorts()
+    const provider = makeMockProvider(async () => resp("emitir", { statusNota: "AUTORIZADA" }))
+    ports.allocateNumero = async () => ({ ok: false, errorCode: "serie_inativa", mensagem: "sem série fiscal ativa" })
+
+    const out = await runEmissionPipeline(pipelineInput({ provider }), ports)
+
+    expect(out.ok).toBe(false)
+    expect(out.errorCode).toBe("numeracao_indisponivel")
+    expect(statusWrites).toEqual([])
+    expect(provider.emitir).not.toHaveBeenCalled()
+  })
+})
+
 // ── 2. snapshot-reader ────────────────────────────────────────────────────────────────────
 
 function notaRowFromSnapshot(s: VendaFiscalSnapshot, id = "nf-1"): NotaFiscalRow {
@@ -427,6 +495,47 @@ describe("emitirNotaFiscalVenda (serviço + Prisma mockado)", () => {
     expect(db.fiscalLogCreate).toHaveBeenCalled()
     const primeiraGravacao = db.fiscalLogCreate.mock.calls[0]?.[0]?.data
     expect(primeiraGravacao?.detalhe?.simulado).toBe(true)
+  })
+
+  it("numera a NotaFiscal (série+número) antes de emitir e registra FiscalLog de numeração", async () => {
+    db.vendaFindFirst.mockResolvedValue({ id: "venda-1", fiscalStatus: "PENDENTE" })
+    db.notaFindFirst.mockResolvedValue(notaRowFromSnapshot(SNAPSHOT_OK))
+    db.configFindUnique.mockResolvedValue(CONFIG_ROW)
+
+    const out = await emitirNotaFiscalVenda({ storeId: "loja-1", vendaId: "venda-1" })
+
+    expect(out.resultado).toBe("autorizada")
+    // bind gravou série+número na NotaFiscal
+    expect(db.notaUpdate).toHaveBeenCalledTimes(1)
+    const bindData = db.notaUpdate.mock.calls[0]?.[0]?.data
+    expect(bindData?.serie).toBe(1)
+    expect(bindData?.numero).toBe(1)
+    expect(bindData?.serieFiscalId).toBe("serie-1")
+    // reserva = incremento ATÔMICO de proximoNumero
+    expect(db.serieUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { proximoNumero: { increment: 1 } } }),
+    )
+    // FiscalLog de numeração (simulado=true)
+    const numLog = db.fiscalLogCreate.mock.calls
+      .map((c) => c[0]?.data)
+      .find((d) => d?.acao === "emissao.numeracao")
+    expect(numLog).toBeTruthy()
+    expect(numLog?.detalhe?.simulado).toBe(true)
+    expect(numLog?.detalhe?.numeracao?.numeroAlocado).toBe(1)
+  })
+
+  it("sem série fiscal ativa → numeracao_indisponivel; não vira AUTORIZADA nem grava EMITINDO", async () => {
+    db.vendaFindFirst.mockResolvedValue({ id: "venda-1", fiscalStatus: "PENDENTE" })
+    db.notaFindFirst.mockResolvedValue(notaRowFromSnapshot(SNAPSHOT_OK))
+    db.configFindUnique.mockResolvedValue(CONFIG_ROW)
+    db.serieFindFirst.mockResolvedValue(null) // nenhuma série ativa
+
+    const out = await emitirNotaFiscalVenda({ storeId: "loja-1", vendaId: "venda-1" })
+
+    expect(out.ok).toBe(false)
+    expect(out.errorCode).toBe("numeracao_indisponivel")
+    expect(db.vendaUpdate).not.toHaveBeenCalled() // nunca foi a EMITINDO/AUTORIZADA
+    expect(db.notaUpdate).not.toHaveBeenCalled() // nada numerado
   })
 
   it("idempotência: venda já AUTORIZADA → não retransmite nem grava status", async () => {
