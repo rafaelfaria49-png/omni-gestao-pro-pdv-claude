@@ -79,7 +79,6 @@ import { useToast } from "@/hooks/use-toast"
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import { useOperationsStore } from "@/lib/operations-store"
 import { subscribeEvent } from "@/lib/events/event-bus"
-import { listClientes } from "@/app/actions/cadastros"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -353,42 +352,8 @@ export function VendasArquivoGeral() {
   const [bulkLimparOpen, setBulkLimparOpen] = useState(false)
   const [bulkLimparLoading, setBulkLimparLoading] = useState(false)
 
-  // Workspace Enterprise (F1) — ficha completa READ ONLY
+  // Workspace Enterprise — ficha completa + correções (única via de correção de venda)
   const [workspaceVendaId, setWorkspaceVendaId] = useState<string | null>(null)
-
-  // Correção dialog
-  const [corrigindoVenda, setCorrigindoVenda] = useState<VendaDetalhe | null>(null)
-  const [correcaoMotivo, setCorrecaoMotivo] = useState("")
-  const [correcaoFormaPag, setCorrecaoFormaPag] = useState<string>("") // key da forma selecionada
-  const [correcaoClienteNome, setCorrecaoClienteNome] = useState("")
-  const [correcaoClienteId, setCorrecaoClienteId] = useState<string | null>(null)
-  const [correcaoObservacao, setCorrecaoObservacao] = useState("")
-  const [correcaoTab, setCorrecaoTab] = useState<"pagamento" | "cliente" | "observacao">("pagamento")
-  const [correcaoPin, setCorrecaoPin] = useState("")
-  const [correcaoLoading, setCorrecaoLoading] = useState(false)
-  const [correcaoError, setCorrecaoError] = useState<string | null>(null)
-
-  // Estados para autocomplete de clientes
-  const [todosClientes, setTodosClientes] = useState<any[]>([])
-  const [loadingTodosClientes, setLoadingTodosClientes] = useState(false)
-  const [buscaClienteInput, setBuscaClienteInput] = useState("")
-  const [dropdownClientesOpen, setDropdownClientesOpen] = useState(false)
-
-  useEffect(() => {
-    if (corrigindoVenda && correcaoTab === "cliente") {
-      setLoadingTodosClientes(true)
-      listClientes(storeId)
-        .then((data) => {
-          setTodosClientes(data || [])
-        })
-        .catch(() => {
-          setTodosClientes([])
-        })
-        .finally(() => {
-          setLoadingTodosClientes(false)
-        })
-    }
-  }, [corrigindoVenda, correcaoTab, storeId])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -792,75 +757,6 @@ export function VendasArquivoGeral() {
     setTrocaInitialSale(undefined)
   }, [])
 
-  const startCorrecao = useCallback((v: VendaDetalhe) => {
-    setCorrigindoVenda(v)
-    setCorrecaoMotivo("")
-    setCorrecaoPin("")
-    setCorrecaoError(null)
-    setCorrecaoTab("pagamento")
-    setCorrecaoObservacao(v.observacao ?? "")
-    setCorrecaoClienteNome(v.clienteNome ?? "")
-    setCorrecaoClienteId(v.clienteId ?? null)
-    setBuscaClienteInput(v.clienteNome ?? "")
-    // Detectar forma de pagamento atual (a principal/mais alta)
-    if (v.pagamentos.length > 0) {
-      const sorted = [...v.pagamentos].sort((a, b) => b.valor - a.valor)
-      const mainLabel = sorted[0].label
-      const labelToKey: Record<string, string> = {
-        "Dinheiro": "dinheiro", "Pix": "pix", "Débito": "cartaoDebito",
-        "Crédito": "cartaoCredito", "Carnê": "carne", "A Prazo": "aPrazo", "Vale/Crédito": "creditoVale",
-      }
-      setCorrecaoFormaPag(labelToKey[mainLabel] ?? "dinheiro")
-    } else {
-      setCorrecaoFormaPag("dinheiro")
-    }
-  }, [])
-
-  const handleCorrigir = useCallback(async () => {
-    if (!corrigindoVenda || !correcaoMotivo.trim()) return
-    setCorrecaoLoading(true)
-    setCorrecaoError(null)
-    try {
-      const body: Record<string, unknown> = { motivo: correcaoMotivo.trim() }
-
-      if (correcaoTab === "pagamento") {
-        // Redistribuir todo o total na forma selecionada
-        const newPb: Record<string, number> = {}
-        newPb[correcaoFormaPag] = corrigindoVenda.total
-        body.novaFormaPagamento = newPb
-        body.supervisorPin = correcaoPin
-      } else if (correcaoTab === "cliente") {
-        body.novoClienteId = correcaoClienteId
-        body.novoClienteNome = correcaoClienteNome.trim() || null
-      } else if (correcaoTab === "observacao") {
-        body.novaObservacao = correcaoObservacao.trim() || null
-      }
-
-      const res = await fetch(`/api/vendas/${encodeURIComponent(corrigindoVenda.id)}/corrigir`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (!data.ok) {
-        setCorrecaoError(data.error ?? "Falha ao corrigir venda.")
-        return
-      }
-      toast({ title: "Venda corrigida", description: `${corrigindoVenda.id} atualizada com sucesso.` })
-      setCorrigindoVenda(null)
-      // Refresh detalhe drawer se aberto na mesma venda
-      if (detalhe?.id === corrigindoVenda.id) {
-        await openDetalhe(corrigindoVenda.id)
-      }
-      load()
-    } catch {
-      setCorrecaoError("Falha na conexão.")
-    } finally {
-      setCorrecaoLoading(false)
-    }
-  }, [corrigindoVenda, correcaoMotivo, correcaoTab, correcaoFormaPag, correcaoPin, correcaoClienteId, correcaoClienteNome, correcaoObservacao, storeId, detalhe, openDetalhe, load, toast])
-
   const startCancel = useCallback((vendaId: string) => {
     if (isVendaPendenteSync(vendaId)) {
       toastVendaPendenteBloqueada("cancelar")
@@ -870,26 +766,6 @@ export function VendasArquivoGeral() {
     setCancelMotivo("")
     setCancelConfirmForcar(false)
   }, [isVendaPendenteSync, toastVendaPendenteBloqueada])
-
-  const startCorrecaoFromRow = useCallback(
-    async (vendaId: string) => {
-      if (isVendaPendenteSync(vendaId)) {
-        toastVendaPendenteBloqueada("corrigir")
-        return
-      }
-      try {
-        const res = await fetch(`/api/vendas/${encodeURIComponent(vendaId)}`, {
-          credentials: "include",
-          headers: { "x-assistec-loja-id": storeId },
-        })
-        const data = await res.json()
-        if (data.ok) startCorrecao(data.venda)
-      } catch {
-        toast({ title: "Erro", description: "Não foi possível carregar a venda para correção.", variant: "destructive" })
-      }
-    },
-    [storeId, isVendaPendenteSync, toastVendaPendenteBloqueada, toast],
-  )
 
   const clearAllFilters = useCallback(() => {
     setStatusFiltro("todos")
@@ -1333,7 +1209,7 @@ export function VendasArquivoGeral() {
                                     <PanelsTopLeft className="h-4 w-4" />
                                   </Button>
                                 </TooltipTrigger>
-                                <TooltipContent>Workspace (ficha completa)</TooltipContent>
+                                <TooltipContent>Workspace — ficha completa e correções</TooltipContent>
                               </Tooltip>
                             )}
                             {!isPendenteSync && (
@@ -1387,14 +1263,6 @@ export function VendasArquivoGeral() {
                               <>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void startCorrecaoFromRow(v.id)}>
-                                      <Wrench className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Corrigir venda</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
                                     <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openTroca(v.id)}>
                                       <RotateCcw className="h-4 w-4" />
                                     </Button>
@@ -1429,7 +1297,7 @@ export function VendasArquivoGeral() {
                                 </DropdownMenuItem>
                                 {!isPendenteSync && (
                                   <DropdownMenuItem onClick={() => setWorkspaceVendaId(v.id)}>
-                                    <PanelsTopLeft className="h-4 w-4 mr-2" /> Workspace
+                                    <PanelsTopLeft className="h-4 w-4 mr-2" /> Workspace · Corrigir
                                   </DropdownMenuItem>
                                 )}
                                 {!isPendenteSync && (
@@ -1452,9 +1320,6 @@ export function VendasArquivoGeral() {
                                 )}
                                 {!v.cancelada && !isPendenteSync && (
                                   <>
-                                    <DropdownMenuItem onClick={() => void startCorrecaoFromRow(v.id)}>
-                                      <Wrench className="h-4 w-4 mr-2" /> Corrigir venda
-                                    </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => openTroca(v.id)}>
                                       <RotateCcw className="h-4 w-4 mr-2" /> Troca / Devolução
                                     </DropdownMenuItem>
@@ -1956,7 +1821,7 @@ export function VendasArquivoGeral() {
                   <Button
                     variant="outline"
                     className="flex-1 h-10 gap-2 text-sm"
-                    onClick={() => startCorrecao(detalhe)}
+                    onClick={() => setWorkspaceVendaId(detalhe.id)}
                   >
                     <Wrench className="h-4 w-4" />
                     Corrigir venda
@@ -2245,331 +2110,7 @@ export function VendasArquivoGeral() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Correção de Venda ──────────────────────────────────────────────────── */}
-      <Dialog
-        open={!!corrigindoVenda}
-        onOpenChange={(o) => {
-          if (!o && !correcaoLoading) setCorrigindoVenda(null)
-        }}
-      >
-        <DialogContent className="max-w-lg border-border bg-card">
-          <DialogHeader>
-            <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
-              <Wrench className="h-4 w-4 text-primary" />
-              Corrigir venda
-              {corrigindoVenda && (
-                <span className="font-mono text-xs font-normal text-muted-foreground">{corrigindoVenda.id}</span>
-              )}
-            </DialogTitle>
-          </DialogHeader>
-
-          {corrigindoVenda && (
-            <div className="space-y-4">
-              {/* Info banner */}
-              <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                <p className="font-medium text-foreground flex items-center gap-1.5 mb-1">
-                  <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
-                  Correção segura — itens e total não serão alterados
-                </p>
-                <p>Total: <span className="font-bold text-foreground">{fmtBrl(corrigindoVenda.total)}</span> · {corrigindoVenda.itens.length} {corrigindoVenda.itens.length === 1 ? "item" : "itens"}</p>
-              </div>
-
-              {/* Tabs */}
-              <div className="flex gap-1 border-b border-border">
-                {(["pagamento", "cliente", "observacao"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    className={cn(
-                      "px-3 py-2 text-sm font-medium border-b-2 transition-colors",
-                      correcaoTab === tab
-                        ? "border-primary text-primary"
-                        : "border-transparent text-muted-foreground hover:text-foreground",
-                    )}
-                    onClick={() => { setCorrecaoTab(tab); setCorrecaoError(null) }}
-                  >
-                    {tab === "pagamento" ? "Pagamento" : tab === "cliente" ? "Cliente" : "Observação"}
-                  </button>
-                ))}
-              </div>
-
-              {/* Tab content */}
-              {correcaoTab === "pagamento" && (
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Pagamento atual</Label>
-                    <p className="text-sm font-medium text-foreground">
-                      {corrigindoVenda.pagamentos.map((p) => `${p.label} ${fmtBrl(p.valor)}`).join(" + ") || "—"}
-                    </p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Nova forma de pagamento</Label>
-                    <Select value={correcaoFormaPag} onValueChange={setCorrecaoFormaPag}>
-                      <SelectTrigger className="h-9 text-sm bg-background">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                        <SelectItem value="pix">Pix</SelectItem>
-                        <SelectItem value="cartaoDebito">Débito</SelectItem>
-                        <SelectItem value="cartaoCredito">Crédito</SelectItem>
-                        <SelectItem value="carne">Carnê</SelectItem>
-                        <SelectItem value="aPrazo">A Prazo</SelectItem>
-                        <SelectItem value="creditoVale">Vale/Crédito</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-[11px] text-muted-foreground">
-                      O valor total ({fmtBrl(corrigindoVenda.total)}) será redistribuído na forma selecionada.
-                    </p>
-                  </div>
-
-                  {/* Resumo comparativo pagamento */}
-                  <div className="rounded-lg border border-border p-3 bg-muted/20 text-xs space-y-1.5 mt-2">
-                    <span className="font-semibold text-muted-foreground block">Resumo do Ajuste Financeiro</span>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-destructive font-medium line-through">
-                        {corrigindoVenda.pagamentos.map((p) => `${p.label} ${fmtBrl(p.valor)}`).join(" + ") || "Sem pagamento"}
-                      </span>
-                      <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                        {{
-                          dinheiro: "Dinheiro",
-                          pix: "Pix",
-                          cartaoDebito: "Débito",
-                          cartaoCredito: "Crédito",
-                          carne: "Carnê",
-                          aPrazo: "A Prazo",
-                          creditoVale: "Vale/Crédito",
-                        }[correcaoFormaPag] || correcaoFormaPag} {fmtBrl(corrigindoVenda.total)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                      <ShieldCheck className="h-3 w-3" /> PIN do supervisor <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      type="password"
-                      inputMode="numeric"
-                      maxLength={12}
-                      className="h-9 text-sm bg-background font-mono tracking-widest"
-                      placeholder="PIN numérico"
-                      value={correcaoPin}
-                      onChange={(e) => setCorrecaoPin(e.target.value.replace(/\D/g, ""))}
-                      disabled={correcaoLoading}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {correcaoTab === "cliente" && (
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Cliente atual</Label>
-                    <p className="text-sm font-medium text-foreground">{corrigindoVenda.clienteNome ?? "Consumidor Final"}</p>
-                  </div>
-                  <div className="space-y-1.5 relative">
-                    <Label className="text-xs text-muted-foreground">Buscar Cliente Cadastrado</Label>
-                    <div className="relative">
-                      <Input
-                        className="h-9 text-sm bg-background pr-8"
-                        placeholder="Pesquisar por nome ou documento..."
-                        value={buscaClienteInput}
-                        onChange={(e) => {
-                          setBuscaClienteInput(e.target.value)
-                          setDropdownClientesOpen(true)
-                        }}
-                        onFocus={() => setDropdownClientesOpen(true)}
-                        disabled={correcaoLoading}
-                      />
-                      {buscaClienteInput && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setBuscaClienteInput("")
-                            setCorrecaoClienteNome("")
-                            setCorrecaoClienteId(null)
-                            setDropdownClientesOpen(false)
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                          title="Limpar seleção"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-
-                    {dropdownClientesOpen && (
-                      <>
-                        <div className="fixed inset-0 z-30" onClick={() => setDropdownClientesOpen(false)} />
-                        <div className="absolute left-0 right-0 top-full mt-1 max-h-56 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md z-40 py-1">
-                          {loadingTodosClientes ? (
-                            <div className="flex items-center justify-center p-3 text-xs text-muted-foreground gap-1.5">
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              Carregando clientes...
-                            </div>
-                          ) : (() => {
-                            const filtrados = todosClientes.filter((c) => {
-                              const search = buscaClienteInput.trim().toLowerCase()
-                              if (!search) return true
-                              return (
-                                c.nome?.toLowerCase().includes(search) ||
-                                c.documento?.toLowerCase().includes(search)
-                              )
-                            })
-                            if (filtrados.length === 0) {
-                              return (
-                                <div className="p-3 text-xs text-muted-foreground text-center">
-                                  Nenhum cliente correspondente
-                                </div>
-                              )
-                            }
-                            return filtrados.map((c) => (
-                              <button
-                                key={c.id}
-                                type="button"
-                                className="w-full text-left px-3 py-2 text-xs hover:bg-accent hover:text-accent-foreground flex flex-col gap-0.5"
-                                onClick={() => {
-                                  setCorrecaoClienteId(c.id)
-                                  setCorrecaoClienteNome(c.nome)
-                                  setBuscaClienteInput(c.nome)
-                                  setDropdownClientesOpen(false)
-                                }}
-                              >
-                                <span className="font-medium text-foreground">{c.nome}</span>
-                                {c.documento && c.documento !== "—" && (
-                                  <span className="text-[10px] text-muted-foreground">{c.documento} · {c.telefone || "Sem telefone"}</span>
-                                )}
-                              </button>
-                            ))
-                          })()}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  {correcaoClienteId && (
-                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-xs flex justify-between items-center">
-                      <div className="space-y-0.5">
-                        <span className="font-semibold text-emerald-700 dark:text-emerald-400">Cliente selecionado para alteração:</span>
-                        <p className="text-foreground font-medium">{correcaoClienteNome}</p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setCorrecaoClienteId(null)
-                          setCorrecaoClienteNome("")
-                          setBuscaClienteInput("")
-                        }}
-                      >
-                        Limpar Vínculo
-                      </Button>
-                    </div>
-                  )}
-                  {!correcaoClienteId && buscaClienteInput && (
-                    <div className="rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs space-y-0.5">
-                      <span className="font-semibold text-warning-700 dark:text-warning-400">Nota:</span>
-                      <p className="text-muted-foreground">O nome digitado será registrado textualmente se você confirmar a correção, sem vincular a um cadastro formal.</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {correcaoTab === "observacao" && (
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Observação original da venda</Label>
-                    <div className="text-sm font-medium text-foreground bg-muted/30 p-2.5 rounded border border-border/40">
-                      {corrigindoVenda.observacao ?? "Nenhuma observação registrada."}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">Nova observação</Label>
-                    <Textarea
-                      className="min-h-[80px] resize-none bg-background border-border text-sm"
-                      placeholder="Observação (ou vazio para remover)"
-                      value={correcaoObservacao}
-                      onChange={(e) => setCorrecaoObservacao(e.target.value)}
-                      disabled={correcaoLoading}
-                    />
-                  </div>
-
-                  {/* Histórico de alterações de observação anteriores */}
-                  {corrigindoVenda.correcoes && corrigindoVenda.correcoes.filter(c => c.campos.includes("observacao")).length > 0 && (
-                    <div className="space-y-1.5 pt-2">
-                      <Label className="text-xs text-muted-foreground">Histórico de observações</Label>
-                      <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1 text-xs">
-                        {corrigindoVenda.correcoes
-                          .filter(c => c.campos.includes("observacao"))
-                          .map((c, idx) => (
-                            <div key={idx} className="bg-muted/10 border border-border/40 p-2 rounded">
-                              <div className="flex justify-between text-[10px] text-muted-foreground mb-0.5">
-                                <span>{c.operador}</span>
-                                <span>{fmtDate(c.at)}</span>
-                              </div>
-                              <p className="text-foreground">
-                                <span className="line-through text-muted-foreground">{c.observacaoAnterior ?? "—"}</span>
-                                <span className="mx-1">➜</span>
-                                <span className="font-medium">{c.observacaoNova ?? "—"}</span>
-                              </p>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Motivo — sempre visível */}
-              <div className="space-y-1.5 pt-1 border-t border-border">
-                <Label className="text-xs text-foreground">
-                  Motivo da correção <span className="text-destructive">*</span>
-                </Label>
-                <Textarea
-                  className="min-h-[68px] resize-none bg-background border-border text-sm"
-                  placeholder="Descreva o motivo da correção (obrigatório)…"
-                  value={correcaoMotivo}
-                  onChange={(e) => setCorrecaoMotivo(e.target.value)}
-                  disabled={correcaoLoading}
-                />
-              </div>
-
-              {/* Error */}
-              {correcaoError && (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-                  {correcaoError}
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-2 justify-end pt-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9"
-                  disabled={correcaoLoading}
-                  onClick={() => setCorrigindoVenda(null)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  size="sm"
-                  className="h-9 gap-2"
-                  disabled={correcaoLoading || !correcaoMotivo.trim() || (correcaoTab === "pagamento" && !correcaoPin.trim())}
-                  onClick={() => void handleCorrigir()}
-                >
-                  {correcaoLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {correcaoLoading ? "Corrigindo…" : "Confirmar correção"}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Workspace Enterprise da Venda (F1 · somente leitura) ─────────────────── */}
+      {/* ── Workspace Enterprise da Venda — ficha completa + correções (única via) ── */}
       <WorkspaceCorrecaoVenda
         vendaId={workspaceVendaId}
         storeId={storeId}

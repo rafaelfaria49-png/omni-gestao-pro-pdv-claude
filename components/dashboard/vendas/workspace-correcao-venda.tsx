@@ -5,8 +5,9 @@
  *
  * Apresenta a venda em 9 abas estilo ERP (resumo, cliente, pagamento, financeiro,
  * produtos, auditoria, conta a receber, caixa e histórico) e concentra as correções
- * pós-venda — todas auditadas e protegidas por PIN de supervisor. Este arquivo é a
- * camada de apresentação; a lógica vive nos planners/serviços e nas rotas de correção.
+ * pós-venda — todas auditadas; as sensíveis (itens, pagamento, cliente, título) exigem
+ * PIN de supervisor, a observação da venda (não-sensível) não. Este arquivo é a camada
+ * de apresentação; a lógica vive nos planners/serviços e nas rotas de correção.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -754,10 +755,50 @@ export function WorkspaceCorrecaoVenda({
     finally { setMetaSaving(false) }
   }, [venda, metaIdx, metaMotivo, metaPin, metaVals, storeId, toast, load])
 
+  // ── Observação da venda (sem PIN — campo não-sensível) ───────────────────────
+  // Consolida no Workspace a única correção que vivia só no modal antigo. Não toca
+  // itens/total/estoque/financeiro: grava apenas payload.observacao via /corrigir.
+  const [editObs, setEditObs] = useState(false)
+  const [obsDraft, setObsDraft] = useState("")
+  const [obsMotivo, setObsMotivo] = useState("")
+  const [obsApplying, setObsApplying] = useState(false)
+
+  const startEditObs = useCallback(() => {
+    setObsDraft(venda?.observacao ?? "")
+    setObsMotivo("")
+    setEditObs(true)
+  }, [venda])
+
+  const aplicarObs = useCallback(async () => {
+    if (!venda || !obsMotivo.trim()) return
+    const atual = (venda.observacao ?? "").trim()
+    const novo = obsDraft.trim()
+    // no_change: nada a aplicar — feedback neutro (nunca toast de erro).
+    if (atual === novo) {
+      toast({ title: "Nenhuma alteração", description: "A observação não foi modificada." })
+      setEditObs(false)
+      return
+    }
+    setObsApplying(true)
+    try {
+      const res = await fetch(`/api/vendas/${encodeURIComponent(venda.id)}/corrigir`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json", "x-assistec-loja-id": storeId },
+        body: JSON.stringify({ motivo: obsMotivo.trim(), novaObservacao: novo || null }),
+      })
+      const data = await res.json()
+      if (!data.ok) { toast({ title: "Observação não corrigida", description: data.error ?? "Falha.", variant: "destructive" }); return }
+      if (data.naoAlterado) toast({ title: "Nenhuma alteração", description: "A observação não foi modificada." })
+      else toast({ title: "Observação atualizada", description: "Sem impacto em estoque/financeiro." })
+      setEditObs(false); await load()
+    } catch { toast({ title: "Erro", description: "Falha de conexão.", variant: "destructive" }) }
+    finally { setObsApplying(false) }
+  }, [venda, obsMotivo, obsDraft, storeId, toast, load])
+
   // Limpa edições F3/F4 ao (re)abrir ou trocar de venda.
   useEffect(() => {
     setEditPag(false); setEditCli(false); setEditTitId(null); setPagConfirm(false); setQcOpen(false)
-    setReparcOpen(false); setEditCliDados(false); setMetaIdx(null)
+    setReparcOpen(false); setEditCliDados(false); setMetaIdx(null); setEditObs(false)
   }, [open, vendaId])
 
   const aplicarTitulo = useCallback(async () => {
@@ -896,6 +937,38 @@ export function WorkspaceCorrecaoVenda({
                     </CardContent>
                   </Card>
                 </div>
+
+                {/* Observação da venda (editável — sem PIN, não-sensível) */}
+                <Card className="border-border bg-card min-w-0">
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <SectionTitle icon={FileText}>Observação da venda</SectionTitle>
+                      {venda.status !== "cancelada" && !editObs && (
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={startEditObs}><Pencil className="h-3.5 w-3.5" /> Editar observação</Button>
+                      )}
+                    </div>
+                    {!editObs ? (
+                      <p className="text-sm whitespace-pre-wrap break-words">
+                        {venda.observacao?.trim()
+                          ? <span className="text-foreground">{venda.observacao}</span>
+                          : <span className="text-muted-foreground">Nenhuma observação registrada.</span>}
+                      </p>
+                    ) : (
+                      <div className="space-y-3 max-w-2xl">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Info className="h-3.5 w-3.5" /> A observação não afeta itens, total, estoque ou financeiro — por isso não exige PIN.</p>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs text-muted-foreground">Nova observação</Label>
+                          <Textarea className="min-h-[80px] resize-none bg-background text-sm" placeholder="Observação (ou vazio para remover)" value={obsDraft} onChange={(e) => setObsDraft(e.target.value)} disabled={obsApplying} />
+                        </div>
+                        <div className="space-y-1.5"><Label className="text-xs text-foreground">Motivo <span className="text-destructive">*</span></Label><Textarea className="min-h-[56px] resize-none bg-background text-sm" value={obsMotivo} onChange={(e) => setObsMotivo(e.target.value)} disabled={obsApplying} /></div>
+                        <div className="flex justify-end gap-2">
+                          <Button variant="outline" size="sm" onClick={() => setEditObs(false)} disabled={obsApplying}>Cancelar</Button>
+                          <Button size="sm" className="gap-1.5" disabled={obsApplying || !obsMotivo.trim() || (venda.observacao ?? "").trim() === obsDraft.trim()} onClick={() => void aplicarObs()}>{obsApplying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {obsApplying ? "Aplicando…" : "Aplicar correção"}</Button>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               {/* 2 · CLIENTE (editável — F3) */}
