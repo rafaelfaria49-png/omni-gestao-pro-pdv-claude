@@ -38,7 +38,7 @@ import {
   type FormaPagamentoConfig,
 } from "@/lib/pdv-formas-pagamento"
 import {
-  calcSaldoDevedorClienteTodaLoja,
+  calcSaldoDevedorClienteDeSaldos,
   imprimirReciboPagamento,
   RECIBO_LOJA_NOME_PADRAO,
 } from "@/lib/contas-receber-recibo"
@@ -229,10 +229,29 @@ export function PdvRecebimentoModal({
     [saldoAbertoMap],
   )
 
+  /**
+   * Saldo devedor do cliente após este recebimento, para o rodapé do recibo.
+   * Fonte autoritativa: o saldo em aberto do servidor (`saldoAbertoDe`) — NUNCA o `valor` bruto
+   * da coluna nem inferência por status. Soma o saldo remanescente DESTE título (já calculado como
+   * saldo em aberto − valor pago) aos saldos dos demais títulos abertos do mesmo cliente.
+   */
+  const saldoDevedorClienteApos = useCallback(
+    (row: ContaReceberRow, saldoRemanescenteTitulo: number): number => {
+      const key = normClienteKey(row.cliente || "")
+      const outros = key
+        ? rows
+            .filter((r) => String(r.id) !== String(row.id) && normClienteKey(r.cliente || "") === key)
+            .map((r) => saldoAbertoDe(r))
+        : []
+      return calcSaldoDevedorClienteDeSaldos(saldoRemanescenteTitulo, outros)
+    },
+    [rows, saldoAbertoDe],
+  )
+
   const formaLabel = formasAtivas.find((f) => f.id === formaPagto)?.label ?? formaPagto
 
   const tryPrintRecibo = useCallback(
-    (row: ContaReceberRow, valorPago: number, rowsAtualizadas: ContaReceberRow[]) => {
+    (row: ContaReceberRow, valorPago: number, saldoRemanescenteTitulo: number) => {
       if (!impressaoConfig || !crediarioPrintAllowed(impressaoConfig)) return
       try {
         imprimirReciboPagamento(
@@ -243,7 +262,7 @@ export function PdvRecebimentoModal({
             valorPago,
             dataPagamento: new Date(),
             formaPagamento: formaLabel,
-            saldoDevedorAtual: calcSaldoDevedorClienteTodaLoja(rowsAtualizadas, row.cliente || ""),
+            saldoDevedorAtual: saldoDevedorClienteApos(row, saldoRemanescenteTitulo),
           },
           { bobina: impressaoConfig.bobinaTamanho === "58mm" ? "58mm" : "80mm" },
         )
@@ -255,7 +274,7 @@ export function PdvRecebimentoModal({
         })
       }
     },
-    [impressaoConfig, lojaNome, formaLabel, selectedCliente?.name, toast],
+    [impressaoConfig, lojaNome, formaLabel, selectedCliente?.name, toast, saldoDevedorClienteApos],
   )
 
   const postRecebimento = useCallback(
@@ -315,10 +334,8 @@ export function PdvRecebimentoModal({
           description: `${row.cliente || "—"} — ${brl(res.valorRecebido)} (${formaLabel}).`,
         })
         await fetchTitulos()
-        const nextRows = rows.map((r) =>
-          String(r.id) === String(row.id) ? { ...r, status: "pago", valor: 0 } : r,
-        )
-        tryPrintRecibo(row, res.valorRecebido, nextRows)
+        // Quitação total: nada remanesce DESTE título → saldo do recibo = demais títulos do cliente.
+        tryPrintRecibo(row, res.valorRecebido, 0)
         onReceived?.()
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
@@ -372,13 +389,9 @@ export function PdvRecebimentoModal({
         })
         setParcialValue((p) => ({ ...p, [String(row.id)]: "" }))
         await fetchTitulos()
+        // Saldo remanescente DESTE título a partir do saldo autoritativo (servidor) − valor pago agora.
         const saldoRem = Math.max(0, Math.round((saldoAberto - valor) * 100) / 100)
-        const nextRows = rows.map((r) =>
-          String(r.id) === String(row.id)
-            ? { ...r, status: saldoRem <= 0.009 ? "pago" : "parcial", valor: saldoRem }
-            : r,
-        )
-        tryPrintRecibo(row, valor, nextRows)
+        tryPrintRecibo(row, valor, saldoRem)
         onReceived?.()
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)

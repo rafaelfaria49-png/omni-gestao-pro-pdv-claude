@@ -105,6 +105,29 @@ export function calcSaldoDevedorClienteTodaLoja(todas: ContaLinhaSaldoRecibo[], 
   return Math.round(soma * 100) / 100
 }
 
+/**
+ * Saldo devedor do cliente para o rodapé do recibo a partir de saldos em aberto **autoritativos**
+ * (já calculados pelo servidor como `valor − pagamentos`), sem reinferir nada por status/`valor`/parcelas.
+ *
+ * - `saldoRemanescenteEsteTitulo`: o que ainda resta DESTE título após o pagamento do recibo
+ *   (= saldo em aberto antes − valor pago agora). Em quitação total é 0; em parcial é o restante.
+ * - `saldosOutrosTitulos`: saldo em aberto dos demais títulos do mesmo cliente.
+ *
+ * Nunca retorna negativo e **nunca assume zero enquanto houver saldo remanescente** — só dá 0
+ * quando, de fato, não sobra nada a receber.
+ */
+export function calcSaldoDevedorClienteDeSaldos(
+  saldoRemanescenteEsteTitulo: number,
+  saldosOutrosTitulos: number[],
+): number {
+  const este = Number.isFinite(saldoRemanescenteEsteTitulo) ? Math.max(0, saldoRemanescenteEsteTitulo) : 0
+  const outros = (saldosOutrosTitulos || []).reduce(
+    (acc, v) => acc + (Number.isFinite(v) ? Math.max(0, v) : 0),
+    0,
+  )
+  return Math.round((este + outros) * 100) / 100
+}
+
 export type ReciboPagamentoPayload = {
   lojaNome: string
   cliente: string
