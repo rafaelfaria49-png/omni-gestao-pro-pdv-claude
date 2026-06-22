@@ -1,16 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { Plus, RefreshCw, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, RefreshCw, Sparkles } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { cn } from "@/lib/utils";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
 import { statusMetaV3, type OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
 import { OperacoesV3Context, type OperacoesV3ContextValue } from "./context/OperacoesV3Context";
 import { NovaOSEnterpriseModalV3 } from "./components/NovaOSEnterpriseModalV3";
+import { OSContextRailV3 } from "./components/OSContextRailV3";
 import { OperacoesV3Nav } from "./OperacoesV3Nav";
+import { OSModeToggleV3, type ModoOperacoesV3 } from "./components/OSModeToggleV3";
+import { OSClienteColV3 } from "./components/OSClienteColV3";
 import { useOrdensV3 } from "./hooks/use-ordens-v3";
-import { navItem } from "./data/navigation";
 import type { ScreenId } from "./data/types";
 import { ButtonV3 } from "./components/UiV3";
 
@@ -56,7 +58,12 @@ const SCREENS: Record<ScreenId, ComponentType> = {
   configuracoes: ConfiguracoesV3,
 };
 
-const WIDE_SCREENS = new Set<ScreenId>(["workspace", "fila", "bancada", "historico", "orcamentos", "sla"]);
+/** Modo Bancada desativa ambas as laterais; Recepção abre ambas; Auditoria só a direita. */
+const MODO_COLS: Record<ModoOperacoesV3, { left: boolean; right: boolean }> = {
+  recepcao: { left: true, right: true },
+  bancada: { left: false, right: false },
+  auditoria: { left: false, right: true },
+};
 
 interface ToastItem {
   id: number;
@@ -64,7 +71,7 @@ interface ToastItem {
 }
 
 export function OperacoesV3Shell() {
-  const { lojaAtivaId } = useLojaAtiva();
+  const { lojaAtivaId, empresaDocumentos } = useLojaAtiva();
   const storeId = (lojaAtivaId ?? "").trim() || null;
   const { ordens, loading, primeiraCarga, error, reload } = useOrdensV3(storeId);
 
@@ -72,7 +79,19 @@ export function OperacoesV3Shell() {
   const [selectedOsId, setSelectedOsId] = useState<string | null>(null);
   const [novaOSOpen, setNovaOSOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  // Cockpit layout state — puro UI, sem I/O.
+  const [modo, setModo] = useState<ModoOperacoesV3>("recepcao");
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+
   const mainRef = useRef<HTMLElement>(null);
+
+  const handleModo = useCallback((m: ModoOperacoesV3) => {
+    setModo(m);
+    setLeftOpen(MODO_COLS[m].left);
+    setRightOpen(MODO_COLS[m].right);
+  }, []);
 
   const navigate = useCallback((screen: ScreenId, osId?: string | null) => {
     setActiveScreen(screen);
@@ -159,49 +178,114 @@ export function OperacoesV3Shell() {
   );
 
   const ActiveScreen = SCREENS[activeScreen];
-  const info = navItem(activeScreen);
-  const wide = WIDE_SCREENS.has(activeScreen);
+
+  // Colunas laterais do cockpit: só no workspace com uma OS aberta.
+  const selectedOs = activeScreen === "workspace" && selectedOsId
+    ? (ordens.find((o) => o.id === selectedOsId) ?? null)
+    : null;
+  const showCols = selectedOs !== null;
+
+  const unidade = empresaDocumentos?.nomeFantasia?.trim() || storeId || null;
 
   return (
     <OperacoesV3Context.Provider value={ctx}>
       <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-background">
-        {/* Top chrome */}
-        <header className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-card px-4 py-2.5">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Sparkles className="h-4 w-4" aria-hidden />
-            </span>
-            <p className="truncate text-sm font-semibold text-foreground">
-              Operações <span className="text-primary">V3</span>
-            </p>
-            <span className="hidden items-center rounded-full border border-dashed border-border px-2 py-0.5 text-[11px] text-muted-foreground sm:inline-flex">
-              casca isolada · status + orçamento reais
-            </span>
+
+        {/* ── Top bar (40 px) ────────────────────────────────────────────── */}
+        <header className="flex h-10 flex-none items-center gap-2 border-b border-border bg-card px-3">
+          {/* Identidade */}
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden />
+          </span>
+          <span className="hidden text-sm font-semibold text-foreground sm:inline">
+            Operações <span className="text-primary">V3</span>
+          </span>
+
+          {/* Modo de uso */}
+          <div className="ml-3">
+            <OSModeToggleV3 value={modo} onChange={handleModo} />
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            {info ? <span className="hidden text-xs text-muted-foreground md:inline">{info.label}</span> : null}
-            <ButtonV3 variant="ghost" onClick={reload} disabled={!storeId}>
-              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} aria-hidden />
-              Atualizar
-            </ButtonV3>
-            <ButtonV3 variant="primary" onClick={abrirNovaOS} disabled={!storeId}>
-              <Plus className="h-4 w-4" aria-hidden />
-              Nova OS
-            </ButtonV3>
-          </div>
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Unidade */}
+          {unidade ? (
+            <span className="hidden truncate text-xs text-muted-foreground lg:inline" title={unidade}>
+              {unidade}
+            </span>
+          ) : null}
+
+          {/* Ações */}
+          <ButtonV3 variant="ghost" onClick={reload} disabled={!storeId} className="h-7 px-2 text-xs">
+            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} aria-hidden />
+            <span className="hidden sm:inline">Atualizar</span>
+          </ButtonV3>
+          <ButtonV3 variant="primary" onClick={abrirNovaOS} disabled={!storeId} className="h-7 px-2.5 text-xs">
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden sm:inline">Nova OS</span>
+          </ButtonV3>
         </header>
 
-        {/* Layout: nav + conteúdo */}
-        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* ── Cockpit body ────────────────────────────────────────────────── */}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+
+          {/* Rail de ícones */}
           <OperacoesV3Nav active={activeScreen} onNavigate={(id) => navigate(id)} />
+
+          {/* Coluna de cliente (esquerda) — somente no workspace com OS */}
+          {showCols && (
+            <OSClienteColV3
+              os={selectedOs}
+              open={leftOpen}
+              onToggle={() => setLeftOpen((v) => !v)}
+            />
+          )}
+
+          {/* Centro: conteúdo principal */}
           <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto">
-            <div className={cn("mx-auto w-full px-4 py-6 sm:px-6", wide ? "max-w-7xl" : "max-w-6xl")}>
+            <div className="w-full px-4 py-4 sm:px-6">
               <ActiveScreen />
             </div>
           </main>
+
+          {/* Coluna de atividade (direita) — somente no workspace com OS */}
+          {showCols && (
+            <div
+              className={cn(
+                "relative flex-none border-l border-border bg-card/40 transition-[width] duration-200",
+                rightOpen ? "w-72" : "w-8",
+              )}
+            >
+              {/* Botão de colapso */}
+              <button
+                type="button"
+                onClick={() => setRightOpen((v) => !v)}
+                title={rightOpen ? "Recolher atividade" : "Expandir atividade"}
+                aria-label={rightOpen ? "Recolher coluna de atividade" : "Expandir coluna de atividade"}
+                className="absolute -left-3 top-4 z-20 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground"
+              >
+                {rightOpen ? (
+                  <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+                ) : (
+                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+                )}
+              </button>
+
+              {rightOpen && (
+                <div className="h-full overflow-y-auto p-3 pt-4">
+                  <OSContextRailV3
+                    os={selectedOs}
+                    onAbrirHistorico={() => navigate("historico")}
+                    onAcao={acaoEmConstrucao}
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Toasts honestos */}
+        {/* ── Toasts ──────────────────────────────────────────────────────── */}
         {toasts.length > 0 ? (
           <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4">
             {toasts.map((t) => (

@@ -6,7 +6,6 @@ import type { OrdemServico } from "@/types/os";
 import { SectionShellV3 } from "../components/SectionShellV3";
 import { OSHeaderV3 } from "../components/OSHeaderV3";
 import { OSCommandBarV3 } from "../components/OSCommandBarV3";
-import { OSContextRailV3 } from "../components/OSContextRailV3";
 import { OSSectionV3 } from "../components/OSSectionV3";
 import { OSCardV3 } from "../components/OSCardV3";
 import { OSTimelineV3 } from "../components/OSTimelineV3";
@@ -188,9 +187,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
       <OSCommandBarV3 os={os} onMudarStatus={onMudarStatus} onAcao={acaoEmConstrucao} />
       <OSTimelineV3 os={os} />
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-        {/* Coluna principal — prontuário do equipamento */}
-        <div className="min-w-0 space-y-3">
+      <div className="min-w-0 space-y-3">
           <OSSectionV3
             titulo="Identificação / Atendimento"
             tone="info"
@@ -359,10 +356,6 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
 
           {/* Histórico completo (item 10) — auditável */}
           <OSHistoricoV3 os={os} />
-        </div>
-
-        {/* Lateral de contexto */}
-        <OSContextRailV3 os={os} onAbrirHistorico={() => navigate("historico")} onAcao={acaoEmConstrucao} />
       </div>
 
       {/* Rodapé utilitário — documentos (Fase 1E) */}
