@@ -5,14 +5,14 @@ import { cn } from "@/lib/utils";
 
 export type ModoOperacoesV3 = "recepcao" | "bancada" | "auditoria";
 
-const MODOS: { id: ModoOperacoesV3; label: string; icon: typeof Bell }[] = [
-  { id: "recepcao", label: "Recepção", icon: Bell },
-  { id: "bancada", label: "Bancada", icon: Wrench },
-  { id: "auditoria", label: "Auditoria", icon: Search },
+const MODOS: { id: ModoOperacoesV3; label: string; hint: string; icon: typeof Bell }[] = [
+  { id: "recepcao", label: "Recepção", hint: "Cliente + Atividade abertos", icon: Bell },
+  { id: "bancada", label: "Bancada", hint: "Laterais recolhidas · workspace máximo", icon: Wrench },
+  { id: "auditoria", label: "Auditoria", hint: "Cliente recolhido · Atividade aberta", icon: Search },
 ];
 
-/** Seletor de modo de uso (Recepção / Bancada / Auditoria). Controla quais
- *  colunas laterais do cockpit ficam abertas. Estado de UI puro — sem I/O. */
+/** Seletor de modo de uso (Recepção / Bancada / Auditoria) — segmented control.
+ *  Controla quais colunas laterais do cockpit ficam abertas. Estado de UI puro. */
 export function OSModeToggleV3({
   value,
   onChange,
@@ -21,7 +21,7 @@ export function OSModeToggleV3({
   onChange: (m: ModoOperacoesV3) => void;
 }) {
   return (
-    <div className="flex items-center gap-0.5 rounded-lg border border-border bg-muted/50 p-0.5">
+    <div className="flex h-7 items-center gap-[3px] rounded-lg border border-border bg-muted p-0.5">
       {MODOS.map((m) => {
         const Icon = m.icon;
         const active = m.id === value;
@@ -30,16 +30,16 @@ export function OSModeToggleV3({
             key={m.id}
             type="button"
             onClick={() => onChange(m.id)}
-            title={m.label}
+            title={m.hint}
             aria-pressed={active}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              "inline-flex h-6 items-center gap-1.5 rounded-md px-2.5 text-[11.5px] font-semibold transition-colors",
               active
-                ? "bg-card text-primary shadow-sm"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
-            <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <Icon className="h-[13px] w-[13px] shrink-0" aria-hidden />
             <span className="hidden sm:inline">{m.label}</span>
           </button>
         );

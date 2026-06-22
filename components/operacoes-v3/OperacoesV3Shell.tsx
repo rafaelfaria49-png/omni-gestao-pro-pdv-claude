@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { ChevronLeft, ChevronRight, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { Activity, ChevronRight, MessageSquare, Paperclip, Plus, RefreshCw, Search } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { cn } from "@/lib/utils";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
@@ -179,7 +179,7 @@ export function OperacoesV3Shell() {
 
   const ActiveScreen = SCREENS[activeScreen];
 
-  // Colunas laterais do cockpit: só no workspace com uma OS aberta.
+  // Colunas laterais do cockpit: só no workspace com uma OS aberta (≥ xl, via CSS).
   const selectedOs = activeScreen === "workspace" && selectedOsId
     ? (ordens.find((o) => o.id === selectedOsId) ?? null)
     : null;
@@ -194,37 +194,47 @@ export function OperacoesV3Shell() {
         {/* ── Top bar (40 px) ────────────────────────────────────────────── */}
         <header className="flex h-10 flex-none items-center gap-2 border-b border-border bg-card px-3">
           {/* Identidade */}
-          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden />
-          </span>
-          <span className="hidden text-sm font-semibold text-foreground sm:inline">
-            Operações <span className="text-primary">V3</span>
-          </span>
-
-          {/* Modo de uso */}
-          <div className="ml-3">
-            <OSModeToggleV3 value={modo} onChange={handleModo} />
+          <div className="flex flex-none items-center gap-2">
+            <span className="inline-flex h-[23px] w-[23px] shrink-0 items-center justify-center rounded-md bg-foreground text-[12px] font-bold text-background">
+              O
+            </span>
+            <span className="hidden text-[13px] font-semibold text-foreground sm:inline">OmniGestão</span>
+            <span className="hidden whitespace-nowrap text-[11.5px] text-muted-foreground md:inline">
+              Operações <span className="font-semibold text-primary">V3</span>
+            </span>
           </div>
 
-          {/* Spacer */}
-          <div className="flex-1" />
+          {/* Busca rápida de OS — abre o seletor (Picker) do workspace */}
+          <button
+            type="button"
+            onClick={() => navigate("workspace", null)}
+            title="Buscar ordem de serviço"
+            className="ml-1 hidden h-7 items-center gap-2 rounded-lg border border-border bg-card pl-2.5 pr-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground md:inline-flex"
+          >
+            <Search className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden lg:inline">Buscar OS</span>
+            <kbd className="rounded border border-border bg-muted px-1 py-px text-[10px] font-medium text-muted-foreground/80">⌘K</kbd>
+          </button>
 
-          {/* Unidade */}
-          {unidade ? (
-            <span className="hidden truncate text-xs text-muted-foreground lg:inline" title={unidade}>
-              {unidade}
-            </span>
-          ) : null}
+          {/* Modo de uso */}
+          <OSModeToggleV3 value={modo} onChange={handleModo} />
 
-          {/* Ações */}
-          <ButtonV3 variant="ghost" onClick={reload} disabled={!storeId} className="h-7 px-2 text-xs">
-            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} aria-hidden />
-            <span className="hidden sm:inline">Atualizar</span>
-          </ButtonV3>
-          <ButtonV3 variant="primary" onClick={abrirNovaOS} disabled={!storeId} className="h-7 px-2.5 text-xs">
-            <Plus className="h-3.5 w-3.5" aria-hidden />
-            <span className="hidden sm:inline">Nova OS</span>
-          </ButtonV3>
+          {/* Grupo direito */}
+          <div className="ml-auto flex items-center gap-2">
+            {unidade ? (
+              <span className="hidden truncate text-[11.5px] text-muted-foreground lg:inline" title={unidade}>
+                {unidade}
+              </span>
+            ) : null}
+            <ButtonV3 variant="outline" onClick={reload} disabled={!storeId} className="h-7 px-2.5 text-xs">
+              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} aria-hidden />
+              <span className="hidden sm:inline">Atualizar</span>
+            </ButtonV3>
+            <ButtonV3 variant="primary" onClick={abrirNovaOS} disabled={!storeId} className="h-7 px-3 text-xs">
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              <span className="hidden sm:inline">Nova OS</span>
+            </ButtonV3>
+          </div>
         </header>
 
         {/* ── Cockpit body ────────────────────────────────────────────────── */}
@@ -233,13 +243,11 @@ export function OperacoesV3Shell() {
           {/* Rail de ícones */}
           <OperacoesV3Nav active={activeScreen} onNavigate={(id) => navigate(id)} />
 
-          {/* Coluna de cliente (esquerda) — somente no workspace com OS */}
+          {/* Coluna de cliente (esquerda) — workspace com OS, ≥ xl */}
           {showCols && (
-            <OSClienteColV3
-              os={selectedOs}
-              open={leftOpen}
-              onToggle={() => setLeftOpen((v) => !v)}
-            />
+            <div className="hidden shrink-0 xl:flex">
+              <OSClienteColV3 os={selectedOs} open={leftOpen} onToggle={() => setLeftOpen((v) => !v)} />
+            </div>
           )}
 
           {/* Centro: conteúdo principal */}
@@ -249,37 +257,47 @@ export function OperacoesV3Shell() {
             </div>
           </main>
 
-          {/* Coluna de atividade (direita) — somente no workspace com OS */}
+          {/* Coluna de atividade (direita) — workspace com OS, ≥ xl */}
           {showCols && (
-            <div
-              className={cn(
-                "relative flex-none border-l border-border bg-card/40 transition-[width] duration-200",
-                rightOpen ? "w-72" : "w-8",
-              )}
-            >
-              {/* Botão de colapso */}
-              <button
-                type="button"
-                onClick={() => setRightOpen((v) => !v)}
-                title={rightOpen ? "Recolher atividade" : "Expandir atividade"}
-                aria-label={rightOpen ? "Recolher coluna de atividade" : "Expandir coluna de atividade"}
-                className="absolute -left-3 top-4 z-20 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground"
-              >
-                {rightOpen ? (
-                  <ChevronRight className="h-3.5 w-3.5" aria-hidden />
-                ) : (
-                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-                )}
-              </button>
-
-              {rightOpen && (
-                <div className="h-full overflow-y-auto p-3 pt-4">
-                  <OSContextRailV3
-                    os={selectedOs}
-                    onAbrirHistorico={() => navigate("historico")}
-                    onAcao={acaoEmConstrucao}
-                  />
-                </div>
+            <div className="hidden shrink-0 xl:flex">
+              {rightOpen ? (
+                <aside className="flex w-72 flex-none flex-col border-l border-border bg-card">
+                  {/* Header strip 36 px */}
+                  <div className="flex h-9 flex-none items-center justify-between border-b border-border px-3">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
+                      Atividade
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setRightOpen(false)}
+                      title="Recolher atividade"
+                      aria-label="Recolher coluna de atividade"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <ChevronRight className="h-4 w-4" aria-hidden />
+                    </button>
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                    <OSContextRailV3
+                      os={selectedOs}
+                      onAbrirHistorico={() => navigate("historico")}
+                      onAcao={acaoEmConstrucao}
+                    />
+                  </div>
+                </aside>
+              ) : (
+                /* Trilho recolhido — o strip inteiro reabre a coluna (padrão V4) */
+                <button
+                  type="button"
+                  onClick={() => setRightOpen(true)}
+                  title="Expandir atividade"
+                  aria-label="Expandir coluna de atividade"
+                  className="flex w-8 flex-none flex-col items-center gap-[9px] border-l border-border bg-card pt-[9px] text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Activity className="h-4 w-4" aria-hidden />
+                  <MessageSquare className="h-4 w-4" aria-hidden />
+                  <Paperclip className="h-4 w-4" aria-hidden />
+                </button>
               )}
             </div>
           )}
