@@ -40,6 +40,17 @@ import {
   type TipoVinculoPendencia,
   type VinculoPendencia,
 } from "@/lib/estoque/inventario-pendencia";
+import {
+  montarConciliacao,
+  simularAplicacaoConciliacao,
+  saldoAplicavel,
+  GRUPO_CONCILIACAO,
+  type ItemConciliado,
+  type ItemNaoEncontrado,
+  type TotaisConciliacao,
+  type SimulacaoConciliacao,
+  type MovimentoEstoqueConc,
+} from "@/lib/estoque/inventario-conciliacao";
 
 /**
  * INVENTARIO_ASSISTIDO_V1 — Fase 2 (Sessão + Bipagem + Armazenamento).
@@ -1132,5 +1143,356 @@ export async function aplicarZeragemNaoBipado(
     return { ok: true, movimentacaoId, semMudanca, estoqueDepois: NOVO_SALDO_NAO_BIPADO };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao zerar produto" };
+  }
+}
+
+// ─── INVENTARIO INTELIGENTE · Conciliação dinâmica ─────────────────────────────
+// Resolve o inventário de VÁRIOS DIAS: entre a contagem física de um produto e o fechamento,
+// ele continua sendo vendido/usado em OS/devolvido/movimentado. Aqui projetamos a contagem até
+// o presente usando o livro-razão `MovimentacaoEstoque` (deltas assinados, já alimentado por
+// PDV/OS/devolução/entrada/ajuste) e medimos a divergência REAL contra o estoque atual.
+//   saldoEsperadoHoje = contado + Σ(movimentações com createdAt > ultimoBipeEm)
+//   divergenciaReal   = saldoEsperadoHoje − estoqueAtual
+// SOMENTE LEITURA na montagem/simulação. A aplicação reusa `registrarAjusteEstoque` (motor único
+// de ledger) e as MESMAS flags de idempotência da F4 (payload), garantindo que conciliação e
+// ajuste individual nunca apliquem em dobro. Não há schema novo.
+
+/** Item ENCONTRADO conciliado + estado de ajuste (flag F4 na contagem). */
+export type ConciliacaoItemDTO = ItemConciliado & { ajusteAplicado: boolean };
+
+/** Produto não encontrado (estoque positivo, não bipado) enriquecido para a tela. */
+export type ConciliacaoNaoEncontradoDTO = ItemNaoEncontrado & {
+  categoria: string | null;
+  ultimaVendaEm: string | null;
+  ultimaEntradaEm: string | null;
+  /** true quando já zerado por ausência nesta sessão (flag F4 no payload da sessão). */
+  ajusteAplicado: boolean;
+};
+
+export type ConciliacaoInventarioDTO = {
+  sessao: InventarioSessaoDTO;
+  itens: ConciliacaoItemDTO[];
+  naoEncontrados: ConciliacaoNaoEncontradoDTO[];
+  totais: TotaisConciliacao;
+};
+
+/**
+ * Monta a conciliação de UMA sessão já carregada (com payload). Reusado por
+ * `getConciliacaoInventario` (leitura), `simularConciliacaoInventario` e
+ * `aplicarConciliacaoInventario` (recálculo no servidor antes de aplicar). SOMENTE LEITURA.
+ */
+async function construirConciliacaoSessao(
+  sid: string,
+  sessao: SessaoComPayload
+): Promise<ConciliacaoInventarioDTO> {
+  const [contagensRows, catalogo] = await Promise.all([
+    prisma.inventarioContagem.findMany({
+      where: { storeId: sid, sessaoId: sessao.id, status: STATUS_CONTAGEM.ENCONTRADO, produtoId: { not: null } },
+      select: { produtoId: true, quantidadeContada: true, ultimoBipeEm: true, payload: true },
+    }),
+    prisma.produto.findMany({
+      where: { storeId: sid, active: true },
+      select: { id: true, name: true, sku: true, stock: true, precoCusto: true, price: true, category: true },
+    }),
+  ]);
+
+  // Contagens resolvidas (produtoId garantido pelo filtro) + flag de ajuste por produto.
+  const contagens = contagensRows
+    .filter((c): c is typeof c & { produtoId: string } => Boolean(c.produtoId))
+    .map((c) => ({ produtoId: c.produtoId, quantidadeContada: c.quantidadeContada, contadoEm: c.ultimoBipeEm }));
+  const ajustePorProduto = new Map<string, boolean>();
+  for (const c of contagensRows) {
+    if (c.produtoId && !ajustePorProduto.has(c.produtoId)) {
+      ajustePorProduto.set(c.produtoId, lerAjusteContagem(c.payload).aplicado);
+    }
+  }
+
+  const contadosIds = new Set(contagens.map((c) => c.produtoId));
+  const produtos = catalogo.map((p) => ({
+    id: p.id,
+    nome: p.name,
+    sku: p.sku,
+    estoqueAtual: p.stock,
+    precoCusto: p.precoCusto ?? 0,
+    precoVenda: p.price ?? 0,
+  }));
+
+  // Ledger relevante: movimentações dos produtos contados a partir do início da contagem
+  // (o núcleo PURO aplica o corte estrito por item, usando o `ultimoBipeEm` de cada produto).
+  let movimentacoes: MovimentoEstoqueConc[] = [];
+  if (contagens.length > 0) {
+    const minContadoEm = contagens.reduce(
+      (min, c) => (c.contadoEm < min ? c.contadoEm : min),
+      contagens[0].contadoEm
+    );
+    const rows = await prisma.movimentacaoEstoque.findMany({
+      where: { storeId: sid, produtoId: { in: [...contadosIds] }, createdAt: { gte: minContadoEm } },
+      select: { produtoId: true, quantidade: true, createdAt: true },
+    });
+    movimentacoes = rows
+      .filter((r): r is typeof r & { produtoId: string } => Boolean(r.produtoId))
+      .map((r) => ({ produtoId: r.produtoId, quantidade: r.quantidade, em: r.createdAt }));
+  }
+
+  // Candidatos a "não encontrado": estoque positivo e não contado. Enriquecemos última
+  // venda/entrada/movimentação a partir do ledger (display + classificação de suspeito antigo).
+  const candidatos = catalogo.filter((p) => !contadosIds.has(p.id) && p.stock > 0).map((p) => p.id);
+  const ultimaMovPorProduto: Record<string, string | null> = {};
+  const ultimaVendaPorProduto = new Map<string, string>();
+  const ultimaEntradaPorProduto = new Map<string, string>();
+  if (candidatos.length > 0) {
+    const [aggMov, aggVenda, aggEntrada] = await Promise.all([
+      prisma.movimentacaoEstoque.groupBy({
+        by: ["produtoId"],
+        where: { storeId: sid, produtoId: { in: candidatos } },
+        _max: { createdAt: true },
+      }),
+      prisma.movimentacaoEstoque.groupBy({
+        by: ["produtoId"],
+        where: { storeId: sid, produtoId: { in: candidatos }, tipo: "saida" },
+        _max: { createdAt: true },
+      }),
+      prisma.movimentacaoEstoque.groupBy({
+        by: ["produtoId"],
+        where: { storeId: sid, produtoId: { in: candidatos }, tipo: "entrada" },
+        _max: { createdAt: true },
+      }),
+    ]);
+    for (const r of aggMov) if (r.produtoId) ultimaMovPorProduto[r.produtoId] = r._max.createdAt?.toISOString() ?? null;
+    for (const r of aggVenda) if (r.produtoId && r._max.createdAt) ultimaVendaPorProduto.set(r.produtoId, r._max.createdAt.toISOString());
+    for (const r of aggEntrada) if (r.produtoId && r._max.createdAt) ultimaEntradaPorProduto.set(r.produtoId, r._max.createdAt.toISOString());
+  }
+
+  const rel = montarConciliacao({ contagens, produtos, movimentacoes, ultimaMovPorProduto });
+
+  const categoriaPorProduto = new Map(catalogo.map((p) => [p.id, p.category ?? null]));
+  const ajustesNaoBipados = lerAjustesNaoBipados(sessao.payload);
+
+  const itens: ConciliacaoItemDTO[] = rel.itens.map((i) => ({
+    ...i,
+    ajusteAplicado: ajustePorProduto.get(i.produtoId) ?? false,
+  }));
+  const naoEncontrados: ConciliacaoNaoEncontradoDTO[] = rel.naoEncontrados.map((n) => ({
+    ...n,
+    categoria: categoriaPorProduto.get(n.produtoId) ?? null,
+    ultimaVendaEm: ultimaVendaPorProduto.get(n.produtoId) ?? null,
+    ultimaEntradaEm: ultimaEntradaPorProduto.get(n.produtoId) ?? null,
+    ajusteAplicado: Object.prototype.hasOwnProperty.call(ajustesNaoBipados, n.produtoId),
+  }));
+
+  return { sessao: sessaoToDTO(sessao), itens, naoEncontrados, totais: rel.totais };
+}
+
+export type ConciliacaoInventarioResult =
+  | { ok: true; conciliacao: ConciliacaoInventarioDTO }
+  | ActionFail;
+
+/**
+ * Conciliação completa de uma sessão (itens conciliados + não encontrados + totais). Funciona
+ * para sessão aberta (prévia ao vivo) ou finalizada. SOMENTE LEITURA.
+ */
+export async function getConciliacaoInventario(
+  storeId: string,
+  sessaoId: string
+): Promise<ConciliacaoInventarioResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  const sid = (sessaoId ?? "").trim();
+  if (!sid) return { ok: false, reason: "Sessão inválida" };
+  try {
+    const sessao = await prisma.inventarioSessao.findFirst({
+      where: { id: sid, storeId: g.sid },
+      select: { ...SESSAO_SELECT, payload: true },
+    });
+    if (!sessao) return { ok: false, reason: "Sessão não encontrada" };
+    const conciliacao = await construirConciliacaoSessao(g.sid, sessao);
+    return { ok: true, conciliacao };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao montar conciliação" };
+  }
+}
+
+export type ConciliacaoSelecao = {
+  /** Produtos com divergência real a aplicar (vão para o saldo esperado hoje). */
+  divergenciaProdutoIds: string[];
+  /** Produtos não encontrados a zerar por ausência. */
+  naoEncontradoProdutoIds: string[];
+};
+
+/** Filtra a conciliação para apenas o que está selecionado E ainda não aplicado. */
+function filtrarSelecao(conc: ConciliacaoInventarioDTO, selecao: ConciliacaoSelecao) {
+  const divSel = new Set(selecao.divergenciaProdutoIds ?? []);
+  const naoSel = new Set(selecao.naoEncontradoProdutoIds ?? []);
+  const divergencias = conc.itens.filter(
+    (i) => i.grupo === GRUPO_CONCILIACAO.COM_DIVERGENCIA && !i.ajusteAplicado && divSel.has(i.produtoId)
+  );
+  const naoEncontrados = conc.naoEncontrados.filter((n) => !n.ajusteAplicado && naoSel.has(n.produtoId));
+  return { divergencias, naoEncontrados };
+}
+
+export type SimularConciliacaoResult =
+  | { ok: true; simulacao: SimulacaoConciliacao; operador: string | null; selecionados: { divergencias: number; naoEncontrados: number } }
+  | ActionFail;
+
+/**
+ * Simula a aplicação da conciliação a uma SELEÇÃO de divergências + não encontrados, recalculando
+ * tudo no servidor. SOMENTE LEITURA — nada é gravado. Exibido ao operador antes de confirmar.
+ */
+export async function simularConciliacaoInventario(
+  storeId: string,
+  sessaoId: string,
+  selecao: ConciliacaoSelecao
+): Promise<SimularConciliacaoResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  const sid = (sessaoId ?? "").trim();
+  if (!sid) return { ok: false, reason: "Sessão inválida" };
+  try {
+    const sessao = await prisma.inventarioSessao.findFirst({
+      where: { id: sid, storeId: g.sid },
+      select: { ...SESSAO_SELECT, payload: true },
+    });
+    if (!sessao) return { ok: false, reason: "Sessão não encontrada" };
+    const conc = await construirConciliacaoSessao(g.sid, sessao);
+    const { divergencias, naoEncontrados } = filtrarSelecao(conc, selecao);
+    const simulacao = simularAplicacaoConciliacao({ divergencias, naoEncontrados });
+    return {
+      ok: true,
+      simulacao,
+      operador: g.usuario,
+      selecionados: { divergencias: divergencias.length, naoEncontrados: naoEncontrados.length },
+    };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao simular conciliação" };
+  }
+}
+
+export type AplicarConciliacaoResult =
+  | {
+      ok: true;
+      resumo: {
+        divergenciasAplicadas: number;
+        naoEncontradosZerados: number;
+        semMudanca: number;
+        pulados: number;
+        falhas: { produtoId: string; nome: string; reason: string }[];
+      };
+    }
+  | ActionFail;
+
+/**
+ * Aplica a conciliação selecionada. Pré-condições: sessão da loja, FINALIZADA (a contagem precisa
+ * estar congelada antes de mexer no estoque — mesmo gate da F4). Recalcula tudo no servidor,
+ * grava cada divergência com `novoSaldo = saldoEsperadoHoje` (projeção da contagem até hoje) e
+ * zera cada não encontrado, SEMPRE via `registrarAjusteEstoque` (ledger + auditoria + idempotência
+ * por payload). Itens já aplicados são pulados → reaplicar não duplica.
+ */
+export async function aplicarConciliacaoInventario(
+  storeId: string,
+  sessaoId: string,
+  selecao: ConciliacaoSelecao
+): Promise<AplicarConciliacaoResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  const sid = (sessaoId ?? "").trim();
+  if (!sid) return { ok: false, reason: "Sessão inválida" };
+
+  try {
+    const sessao = await prisma.inventarioSessao.findFirst({
+      where: { id: sid, storeId: g.sid },
+      select: { ...SESSAO_SELECT, payload: true },
+    });
+    if (!sessao) return { ok: false, reason: "Sessão não encontrada" };
+    if (sessao.status !== STATUS_SESSAO.FINALIZADA) {
+      return { ok: false, reason: "Encerre a sessão antes de aplicar a conciliação" };
+    }
+
+    // Recálculo no servidor (fonte da verdade no momento da aplicação).
+    const conc = await construirConciliacaoSessao(g.sid, sessao);
+    const { divergencias, naoEncontrados } = filtrarSelecao(conc, selecao);
+
+    const resumo = {
+      divergenciasAplicadas: 0,
+      naoEncontradosZerados: 0,
+      semMudanca: 0,
+      pulados: 0,
+      falhas: [] as { produtoId: string; nome: string; reason: string }[],
+    };
+    const motivoSessao = montarMotivoInventario(sessao, "divergencia");
+    const motivoAusencia = montarMotivoInventario(sessao, "ausencia");
+
+    // 1) Divergências reais → grava o saldo esperado hoje.
+    for (const d of divergencias) {
+      const contagem = await prisma.inventarioContagem.findFirst({
+        where: { storeId: g.sid, sessaoId: sid, produtoId: d.produtoId, status: STATUS_CONTAGEM.ENCONTRADO },
+        select: { id: true, payload: true },
+      });
+      if (!contagem) {
+        resumo.falhas.push({ produtoId: d.produtoId, nome: d.nome, reason: "Contagem não encontrada" });
+        continue;
+      }
+      if (lerAjusteContagem(contagem.payload).aplicado) {
+        resumo.pulados += 1;
+        continue;
+      }
+      const res = await registrarAjusteEstoque(g.sid, {
+        produtoId: d.produtoId,
+        novoSaldo: saldoAplicavel(d.saldoEsperadoHoje),
+        motivo: motivoSessao,
+        observacao: `Inventário ${sid} — conciliação`,
+      });
+      const semMudanca = !res.ok && /nada a ajustar/i.test(res.reason);
+      if (!res.ok && !semMudanca) {
+        resumo.falhas.push({ produtoId: d.produtoId, nome: d.nome, reason: res.reason });
+        continue;
+      }
+      await prisma.inventarioContagem.update({
+        where: { id: contagem.id },
+        data: {
+          payload: marcarAjusteContagemPayload(contagem.payload, {
+            aplicadoEm: new Date().toISOString(),
+            movimentacaoId: res.ok ? res.movimentacaoId : null,
+            operador: g.usuario,
+          }) as Prisma.InputJsonValue,
+        },
+      });
+      if (semMudanca) resumo.semMudanca += 1;
+      resumo.divergenciasAplicadas += 1;
+    }
+
+    // 2) Não encontrados → zera por ausência. Acumula as marcas no payload da sessão.
+    let sessionPayload: unknown = sessao.payload;
+    for (const n of naoEncontrados) {
+      if (naoBipadoAjustado(sessionPayload, n.produtoId)) {
+        resumo.pulados += 1;
+        continue;
+      }
+      const res = await registrarAjusteEstoque(g.sid, {
+        produtoId: n.produtoId,
+        novoSaldo: NOVO_SALDO_NAO_BIPADO,
+        motivo: motivoAusencia,
+        observacao: `Inventário ${sid} — ausência confirmada (conciliação)`,
+      });
+      const semMudanca = !res.ok && /nada a ajustar/i.test(res.reason);
+      if (!res.ok && !semMudanca) {
+        resumo.falhas.push({ produtoId: n.produtoId, nome: n.nome, reason: res.reason });
+        continue;
+      }
+      sessionPayload = marcarAjusteNaoBipadoPayload(sessionPayload, n.produtoId, {
+        aplicadoEm: new Date().toISOString(),
+        movimentacaoId: res.ok ? res.movimentacaoId : null,
+        operador: g.usuario,
+      });
+      await prisma.inventarioSessao.update({
+        where: { id: sessao.id },
+        data: { payload: sessionPayload as Prisma.InputJsonValue },
+      });
+      if (semMudanca) resumo.semMudanca += 1;
+      resumo.naoEncontradosZerados += 1;
+    }
+
+    return { ok: true, resumo };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao aplicar conciliação" };
   }
 }

@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { LayoutDashboard, ScanBarcode, BarChart3 } from "lucide-react"
+import { LayoutDashboard, ScanBarcode, BarChart3, Scale } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { InventarioPainel } from "@/components/dashboard/estoque/inventario-painel"
 import { InventarioAssistido } from "@/components/dashboard/estoque/inventario-assistido"
 import { InventarioRelatorios } from "@/components/dashboard/estoque/inventario-relatorios"
+import { InventarioConciliacao } from "@/components/dashboard/estoque/inventario-conciliacao"
 
 export default function InventarioPage() {
   const [tab, setTab] = useState("painel")
@@ -24,6 +25,9 @@ export default function InventarioPage() {
         <TabsTrigger value="relatorios" className="gap-2">
           <BarChart3 className="h-4 w-4" /> Relatórios
         </TabsTrigger>
+        <TabsTrigger value="conciliacao" className="gap-2">
+          <Scale className="h-4 w-4" /> Conciliação
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="painel">
         <InventarioPainel
@@ -39,6 +43,9 @@ export default function InventarioPage() {
       </TabsContent>
       <TabsContent value="relatorios">
         <InventarioRelatorios sessaoIdInicial={sessaoSelecionada} />
+      </TabsContent>
+      <TabsContent value="conciliacao">
+        <InventarioConciliacao sessaoIdInicial={sessaoSelecionada} />
       </TabsContent>
     </Tabs>
   )
