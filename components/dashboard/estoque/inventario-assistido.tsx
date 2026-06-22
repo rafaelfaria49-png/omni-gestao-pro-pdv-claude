@@ -33,11 +33,13 @@ import {
   iniciarInventario,
   getInventarioAtivo,
   registrarBipe,
+  registrarPendenciaInventario,
   listInventarioContagens,
   encerrarInventario,
   type InventarioSessaoDTO,
   type InventarioContagemDTO,
 } from "@/app/actions/inventario"
+import { InventarioPendenciaModal } from "@/components/dashboard/estoque/inventario-pendencia-modal"
 
 // ─── Resolução de código via endpoint existente ────────────────────────────────
 // Reusa `GET /api/ops/inventory/lookup` (match exato barcode/sku/id no catálogo inteiro da
@@ -118,6 +120,10 @@ export function InventarioAssistido() {
   const [recarregando, setRecarregando] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Modal de pendência (código sem produto resolvido)
+  const [pendenciaCodigo, setPendenciaCodigo] = useState<string | null>(null)
+  const [registrandoPendencia, setRegistrandoPendencia] = useState(false)
+
   const carregar = useCallback(async () => {
     if (!storeId) {
       setLoading(false)
@@ -185,8 +191,14 @@ export function InventarioAssistido() {
           })
           return
         }
-        const produtoId = lookup.kind === "found" ? lookup.produtoId : null
-        const res = await registrarBipe(storeId, { sessaoId: sessao.id, codigo: code, produtoId })
+        if (lookup.kind === "none") {
+          // Código sem produto: abre o modal de captura em vez de registrar direto. Quantidade
+          // observada + nome rápido (opcional) só vão para a fila depois da confirmação humana.
+          setPendenciaCodigo(code)
+          setCodigo("")
+          return
+        }
+        const res = await registrarBipe(storeId, { sessaoId: sessao.id, codigo: code, produtoId: lookup.produtoId })
         if (!res.ok) {
           toast({ title: "Falha ao registrar bipe", description: res.reason, variant: "destructive" })
           return
@@ -200,6 +212,47 @@ export function InventarioAssistido() {
       }
     },
     [codigo, sessao, storeId, toast]
+  )
+
+  const jaPendenteDoModal = useMemo(() => {
+    if (!pendenciaCodigo) return null
+    const row = contagens.find((c) => c.codigoBipado === pendenciaCodigo && c.status === "reconciliacao")
+    return row ? { quantidadeContada: row.quantidadeContada } : null
+  }, [pendenciaCodigo, contagens])
+
+  const handleCancelarPendencia = useCallback(() => {
+    setPendenciaCodigo(null)
+    inputRef.current?.focus()
+  }, [])
+
+  const handleConfirmarPendencia = useCallback(
+    async (dados: { quantidade: number; nomeRapido: string }) => {
+      if (!pendenciaCodigo || !sessao || !storeId) return
+      setRegistrandoPendencia(true)
+      try {
+        const res = await registrarPendenciaInventario(storeId, {
+          sessaoId: sessao.id,
+          codigo: pendenciaCodigo,
+          quantidade: dados.quantidade,
+          nomeRapido: dados.nomeRapido || null,
+        })
+        if (!res.ok) {
+          toast({ title: "Falha ao registrar pendência", description: res.reason, variant: "destructive" })
+          return
+        }
+        setContagens(res.contagens)
+        setUltimoBipe(res.contagem)
+        toast({
+          title: "Produto não cadastrado",
+          description: "Separe uma unidade física. O item ficou na fila de reconciliação para identificar depois.",
+        })
+        setPendenciaCodigo(null)
+      } finally {
+        setRegistrandoPendencia(false)
+        inputRef.current?.focus()
+      }
+    },
+    [pendenciaCodigo, sessao, storeId, toast]
   )
 
   const handleRecarregar = useCallback(async () => {
@@ -525,6 +578,15 @@ export function InventarioAssistido() {
           )}
         </CardContent>
       </Card>
+
+      <InventarioPendenciaModal
+        open={pendenciaCodigo !== null}
+        codigo={pendenciaCodigo ?? ""}
+        jaPendente={jaPendenteDoModal}
+        registrando={registrandoPendencia}
+        onConfirmar={(dados) => void handleConfirmarPendencia(dados)}
+        onCancelar={handleCancelarPendencia}
+      />
     </div>
   )
 }

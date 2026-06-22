@@ -31,6 +31,15 @@ import {
   normalizarClassificacao,
   type ClassificacaoReconciliacao,
 } from "@/lib/estoque/inventario-reconciliacao";
+import {
+  lerPendencia,
+  marcarPendenciaPayload,
+  lerVinculoPendencia,
+  marcarVinculoPendencia,
+  pendenciaResolvida,
+  type TipoVinculoPendencia,
+  type VinculoPendencia,
+} from "@/lib/estoque/inventario-pendencia";
 
 /**
  * INVENTARIO_ASSISTIDO_V1 — Fase 2 (Sessão + Bipagem + Armazenamento).
@@ -317,6 +326,87 @@ export async function registrarBipe(
   }
 }
 
+export type RegistrarPendenciaResult =
+  | { ok: true; contagem: InventarioContagemDTO; contagens: InventarioContagemDTO[] }
+  | ActionFail;
+
+/**
+ * Registra (ou soma) uma leitura de PENDÊNCIA — código bipado sem produto resolvido — vinda do
+ * modal de captura: quantidade observada explícita pelo operador (em vez do +1 fixo) e nome
+ * rápido opcional. Sibling de `registrarBipe`, mesma validação de sessão/unicidade; a soma de
+ * quantidade reusa `aplicarBipe` (núcleo PURO) e o nome/contador de leituras usa
+ * `inventario-pendencia.ts` (payload, sem schema novo). NUNCA cria produto, NUNCA toca estoque.
+ */
+export async function registrarPendenciaInventario(
+  storeId: string,
+  input: { sessaoId: string; codigo: string; quantidade: number; nomeRapido?: string | null }
+): Promise<RegistrarPendenciaResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+
+  const sessaoId = (input.sessaoId ?? "").trim();
+  if (!sessaoId) return { ok: false, reason: "Sessão inválida" };
+  const codigo = normalizarCodigo(input.codigo);
+  if (!codigo) return { ok: false, reason: "Código bipado vazio" };
+
+  try {
+    const sessao = await prisma.inventarioSessao.findFirst({
+      where: { id: sessaoId, storeId: g.sid, status: STATUS_SESSAO.ABERTA },
+      select: { id: true },
+    });
+    if (!sessao) return { ok: false, reason: "Sessão não encontrada ou já encerrada" };
+
+    const existente = await prisma.inventarioContagem.findFirst({
+      where: { sessaoId, codigoBipado: codigo, storeId: g.sid },
+      select: { id: true, quantidadeContada: true, status: true, payload: true },
+    });
+    // Código já resolvido para um produto nesta sessão: a quantidade é controlada pela
+    // bipagem normal (registrarBipe), não pelo modal de pendência.
+    if (existente && existente.status === STATUS_CONTAGEM.ENCONTRADO) {
+      return { ok: false, reason: "Este código já está associado a um produto nesta sessão" };
+    }
+
+    const { linha } = aplicarBipe(
+      existente
+        ? {
+            produtoId: null,
+            codigoBipado: codigo,
+            quantidadeContada: existente.quantidadeContada,
+            estoqueSistemaSnapshot: null,
+            status: STATUS_CONTAGEM.RECONCILIACAO,
+          }
+        : null,
+      { codigoBipado: codigo, produto: null, incremento: input.quantidade }
+    );
+    const novoPayload = marcarPendenciaPayload(existente?.payload ?? null, { nomeRapido: input.nomeRapido });
+
+    const saved = await prisma.inventarioContagem.upsert({
+      where: { sessaoId_codigoBipado: { sessaoId, codigoBipado: codigo } },
+      create: {
+        storeId: g.sid,
+        sessaoId,
+        produtoId: null,
+        codigoBipado: codigo,
+        estoqueSistemaSnapshot: null,
+        quantidadeContada: linha.quantidadeContada,
+        status: STATUS_CONTAGEM.RECONCILIACAO,
+        payload: novoPayload as Prisma.InputJsonValue,
+      },
+      update: {
+        quantidadeContada: linha.quantidadeContada,
+        ultimoBipeEm: new Date(),
+        payload: novoPayload as Prisma.InputJsonValue,
+      },
+      select: CONTAGEM_SELECT,
+    });
+
+    const contagens = await loadContagens(g.sid, sessaoId);
+    return { ok: true, contagem: contagemToDTO(saved), contagens };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar pendência" };
+  }
+}
+
 export type ListContagensResult =
   | { ok: true; contagens: InventarioContagemDTO[] }
   | ActionFail;
@@ -414,11 +504,18 @@ export type RelatorioReconciliacaoDTO = {
   id: string;
   codigoBipado: string;
   quantidadeContada: number;
+  primeiroBipeEm: string;
   ultimoBipeEm: string;
   sessaoId: string;
   sessaoNome: string | null;
   /** F5 — classificação operacional (pendente/localizado/ignorado/cadastrar_depois). */
   classificacao: ClassificacaoReconciliacao;
+  /** F6 — apelido informado no modal de captura (quando o operador nomeou o item). */
+  nomeRapido: string | null;
+  /** F6 — quantas vezes o operador confirmou o modal (distinto de `quantidadeContada`). */
+  numeroLeituras: number;
+  /** F6 — vínculo de fechamento (cadastrado/associado a um produto). null = ainda pendente. */
+  vinculo: VinculoPendencia | null;
 };
 
 /** Linha D — produto do sistema que NÃO apareceu na contagem (conferência pendente). */
@@ -450,6 +547,10 @@ export type RelatorioInventarioDTO = {
     ajustesAplicados: number;
     /** F4 — produtos não bipados zerados por ausência confirmada. */
     zeradosPorAusencia: number;
+    /** F6 — itens da fila de reconciliação ainda sem vínculo de fechamento. */
+    reconciliacaoPendente: number;
+    /** F6 — itens já cadastrados/associados (saíram da fila ativa). */
+    reconciliacaoConcluida: number;
   };
 };
 
@@ -517,6 +618,7 @@ async function construirRelatorioSessao(
           estoqueSistemaSnapshot: true,
           quantidadeContada: true,
           status: true,
+          primeiroBipeEm: true,
           ultimoBipeEm: true,
           payload: true,
         },
@@ -585,18 +687,25 @@ async function construirRelatorioSessao(
       .filter((e) => e.diferenca !== 0)
       .sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca));
 
-    // C) reconciliação a partir das linhas cruas (data/hora + sessão + classificação F5).
+    // C) reconciliação a partir das linhas cruas (data/hora + sessão + classificação F5 + F6).
     const reconciliacao: RelatorioReconciliacaoDTO[] = contagensRows
       .filter((c) => c.status === STATUS_CONTAGEM.RECONCILIACAO || !c.produtoId)
-      .map((c) => ({
-        id: c.id,
-        codigoBipado: c.codigoBipado,
-        quantidadeContada: c.quantidadeContada,
-        ultimoBipeEm: c.ultimoBipeEm.toISOString(),
-        sessaoId: sessao.id,
-        sessaoNome: sessao.nome,
-        classificacao: lerClassificacaoReconciliacao(c.payload),
-      }));
+      .map((c) => {
+        const p = lerPendencia(c.payload);
+        return {
+          id: c.id,
+          codigoBipado: c.codigoBipado,
+          quantidadeContada: c.quantidadeContada,
+          primeiroBipeEm: c.primeiroBipeEm.toISOString(),
+          ultimoBipeEm: c.ultimoBipeEm.toISOString(),
+          sessaoId: sessao.id,
+          sessaoNome: sessao.nome,
+          classificacao: lerClassificacaoReconciliacao(c.payload),
+          nomeRapido: p.nomeRapido,
+          numeroLeituras: p.numeroLeituras,
+          vinculo: lerVinculoPendencia(c.payload),
+        };
+      });
 
     // D) não bipados = produto do sistema nunca contado (NUNCA zerar automático — ação individual).
     const naoBipados: RelatorioNaoBipadoDTO[] = rel.naoContados.map((n) => ({
@@ -611,6 +720,7 @@ async function construirRelatorioSessao(
     const ajustesAplicados = divergencias.filter((d) => d.ajusteAplicado).length;
     const divergenciasPendentes = divergencias.length - ajustesAplicados;
     const zeradosPorAusencia = naoBipados.filter((n) => n.ajusteAplicado).length;
+    const reconciliacaoConcluida = reconciliacao.filter((r) => r.vinculo !== null).length;
 
     return {
       sessao: sessaoToDTO(sessao),
@@ -627,6 +737,8 @@ async function construirRelatorioSessao(
         divergenciasPendentes,
         ajustesAplicados,
         zeradosPorAusencia,
+        reconciliacaoPendente: reconciliacao.length - reconciliacaoConcluida,
+        reconciliacaoConcluida,
       },
     };
 }
@@ -670,6 +782,8 @@ function lerResumoSnapshot(payload: unknown): RelatorioInventarioDTO["resumo"] |
     divergenciasPendentes: num(o.divergenciasPendentes),
     ajustesAplicados: num(o.ajustesAplicados),
     zeradosPorAusencia: num(o.zeradosPorAusencia),
+    reconciliacaoPendente: num(o.reconciliacaoPendente),
+    reconciliacaoConcluida: num(o.reconciliacaoConcluida),
   };
 }
 
@@ -819,6 +933,62 @@ export async function classificarReconciliacao(
     return { ok: true };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao classificar" };
+  }
+}
+
+// ─── F6 · Vínculo de fechamento da pendência (Cadastrar produto / Associar existente) ──────────
+// Fecha um item da fila de reconciliação apontando para um `produtoId`. É BOOKKEEPING puro: não
+// cria produto, não altera `Produto`/estoque e não vira alias de código no resolvedor do PDV
+// (`/api/ops/inventory/lookup`) — fica documentado como melhoria futura. Idempotente.
+
+export type VincularPendenciaResult = { ok: true } | ActionFail;
+
+/**
+ * Vincula a pendência `contagemId` ao produto `produtoId` (recém-cadastrado ou já existente) e
+ * a remove da fila ativa de reconciliação. Pré-condições: sessão da loja, contagem em
+ * "reconciliacao", ainda sem vínculo, produto existente NA LOJA (re-busca no banco).
+ */
+export async function vincularPendenciaInventario(
+  storeId: string,
+  sessaoId: string,
+  contagemId: string,
+  produtoId: string,
+  tipo: TipoVinculoPendencia
+): Promise<VincularPendenciaResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  const sid = (sessaoId ?? "").trim();
+  const cid = (contagemId ?? "").trim();
+  const pid = (produtoId ?? "").trim();
+  if (!sid || !cid) return { ok: false, reason: "Sessão ou item inválido" };
+  if (!pid) return { ok: false, reason: "Produto inválido" };
+  if (tipo !== "cadastrado" && tipo !== "associado") return { ok: false, reason: "Tipo de vínculo inválido" };
+
+  try {
+    const linha = await prisma.inventarioContagem.findFirst({
+      where: { id: cid, storeId: g.sid, sessaoId: sid, status: STATUS_CONTAGEM.RECONCILIACAO },
+      select: { id: true, payload: true },
+    });
+    if (!linha) return { ok: false, reason: "Item de reconciliação não encontrado" };
+    if (pendenciaResolvida(linha.payload)) return { ok: false, reason: "Este item já foi resolvido" };
+
+    // Snapshot autoritativo: o produto precisa existir NESTA loja (ignora dados do cliente).
+    const produto = await prisma.produto.findFirst({ where: { id: pid, storeId: g.sid }, select: { id: true } });
+    if (!produto) return { ok: false, reason: "Produto não encontrado nesta loja" };
+
+    const novoPayload = marcarVinculoPendencia(linha.payload, {
+      produtoId: pid,
+      tipo,
+      vinculadoEm: new Date().toISOString(),
+      operador: g.usuario,
+    });
+    await prisma.inventarioContagem.update({
+      where: { id: linha.id },
+      data: { payload: novoPayload as Prisma.InputJsonValue },
+    });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao vincular pendência" };
   }
 }
 

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import {
   BarChart3,
   RefreshCw,
@@ -18,6 +19,8 @@ import {
   FileSpreadsheet,
   FileDown,
   MapPin,
+  Link2,
+  Package,
 } from "lucide-react"
 import * as XLSX from "xlsx"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -58,9 +61,11 @@ import {
   aplicarAjusteInventario,
   aplicarZeragemNaoBipado,
   classificarReconciliacao,
+  vincularPendenciaInventario,
   type RelatorioInventarioDTO,
   type RelatorioEncontradoDTO,
   type RelatorioNaoBipadoDTO,
+  type RelatorioReconciliacaoDTO,
   type InventarioSessaoDTO,
 } from "@/app/actions/inventario"
 import {
@@ -72,6 +77,7 @@ import {
   CLASSIFICACAO_RECONCILIACAO,
   type ClassificacaoReconciliacao,
 } from "@/lib/estoque/inventario-reconciliacao"
+import { InventarioAssociarProdutoModal } from "@/components/dashboard/estoque/inventario-associar-produto-modal"
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -177,6 +183,7 @@ type AjusteAlvo = {
 
 export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: string | null } = {}) {
   const { toast } = useToast()
+  const router = useRouter()
   const { lojaAtivaId } = useLojaAtiva()
   const storeId = useMemo(() => (lojaAtivaId ?? "").trim(), [lojaAtivaId])
 
@@ -329,6 +336,44 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
     }
     XLSX.writeFile(wb, nomeArquivoExport(relatorio.sessao, "xlsx"))
   }, [relatorio])
+
+  // ── Reconciliação F6: vínculo de fechamento (Cadastrar produto / Associar existente) ────────────
+  const [associarAlvo, setAssociarAlvo] = useState<RelatorioReconciliacaoDTO | null>(null)
+  const [vinculandoId, setVinculandoId] = useState<string | null>(null)
+
+  const abrirCadastrarProduto = useCallback(
+    (r: RelatorioReconciliacaoDTO) => {
+      const params = new URLSearchParams()
+      params.set("prefillBarcode", r.codigoBipado)
+      params.set("prefillQtd", String(r.quantidadeContada))
+      if (r.nomeRapido) params.set("prefillNome", r.nomeRapido)
+      params.set("inventarioContagemId", r.id)
+      params.set("inventarioSessaoId", r.sessaoId)
+      params.set("inventarioStoreId", storeId)
+      router.push(`/dashboard/estoque?${params.toString()}`)
+    },
+    [storeId, router]
+  )
+
+  const handleAssociarSelecionar = useCallback(
+    async (produto: { id: string; nome: string }) => {
+      if (!associarAlvo || !relatorio || !storeId) return
+      setVinculandoId(associarAlvo.id)
+      try {
+        const res = await vincularPendenciaInventario(storeId, relatorio.sessao.id, associarAlvo.id, produto.id, "associado")
+        if (!res.ok) {
+          toast({ title: "Não foi possível associar", description: res.reason, variant: "destructive" })
+          return
+        }
+        toast({ title: "Pendência associada", description: `"${associarAlvo.codigoBipado}" vinculado ao produto "${produto.nome}".` })
+        setAssociarAlvo(null)
+        await carregarRelatorio(relatorio.sessao.id)
+      } finally {
+        setVinculandoId(null)
+      }
+    },
+    [associarAlvo, relatorio, storeId, toast, carregarRelatorio]
+  )
 
   // ── Reconciliação: classificação operacional (não cadastra produto) ──────────
   const [classificandoId, setClassificandoId] = useState<string | null>(null)
@@ -704,94 +749,186 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
 
         {/* C — FILA DE RECONCILIAÇÃO */}
         <TabsContent value="reconciliacao">
-          <Card className="bg-card border-border">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ClipboardList className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Relatório C — Fila de reconciliação
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Códigos bipados sem produto no catálogo. Classifique para organizar o trabalho — isto{" "}
-                <strong>não cadastra produto</strong> nem altera estoque.
-              </p>
-            </CardHeader>
-            <CardContent>
-              {(relatorio?.reconciliacao ?? []).length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted-foreground">Nenhum item em reconciliação.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Código bipado</TableHead>
-                        <TableHead className="text-right">Qtd. observada</TableHead>
-                        <TableHead>Data/hora</TableHead>
-                        <TableHead>Classificação</TableHead>
-                        <TableHead className="text-right">Ações</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(relatorio?.reconciliacao ?? []).map((r) => {
-                        const cls = RECON_CLASS_META[r.classificacao] ?? RECON_CLASS_META.pendente
-                        const ocupado = classificandoId === r.id
-                        return (
-                          <TableRow key={r.id}>
-                            <TableCell className="font-mono text-xs">{r.codigoBipado}</TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">{r.quantidadeContada}</TableCell>
-                            <TableCell className="text-muted-foreground">{formatDateTime(r.ultimoBipeEm)}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className={cn("whitespace-nowrap", cls.className)}>{cls.label}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex flex-wrap items-center justify-end gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1"
-                                  disabled={ocupado}
-                                  onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.LOCALIZADO)}
-                                >
-                                  <MapPin className="h-3.5 w-3.5" /> Localizado
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="gap-1"
-                                  disabled={ocupado}
-                                  onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.CADASTRAR_DEPOIS)}
-                                >
-                                  <PlusCircle className="h-3.5 w-3.5" /> Cadastrar depois
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="gap-1"
-                                  disabled={ocupado}
-                                  onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.IGNORADO)}
-                                >
-                                  <EyeOff className="h-3.5 w-3.5" /> Ignorar
-                                </Button>
-                                {r.classificacao !== "pendente" && (
+          <div className="space-y-4">
+            {/* Fila ativa — pendências sem vínculo */}
+            <Card className="bg-card border-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <ClipboardList className="h-4 w-4 text-amber-600 dark:text-amber-400" /> Relatório C — Fila de reconciliação
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Códigos bipados sem produto no catálogo. Use <strong>Cadastrar produto</strong> ou{" "}
+                  <strong>Associar produto existente</strong> para fechar a pendência — ou classifique para
+                  organizar o trabalho. Nenhuma ação altera estoque.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {(relatorio?.reconciliacao ?? []).filter((r) => !r.vinculo).length === 0 ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">
+                    {(relatorio?.reconciliacao ?? []).length > 0
+                      ? "Todas as pendências já foram resolvidas."
+                      : "Nenhum item em reconciliação."}
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Código bipado</TableHead>
+                          <TableHead>Nome rápido</TableHead>
+                          <TableHead className="text-right">Qtd.</TableHead>
+                          <TableHead className="text-right">Leituras</TableHead>
+                          <TableHead>Primeiro bipe</TableHead>
+                          <TableHead>Últ. bipe</TableHead>
+                          <TableHead>Classificação</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(relatorio?.reconciliacao ?? []).filter((r) => !r.vinculo).map((r) => {
+                          const cls = RECON_CLASS_META[r.classificacao] ?? RECON_CLASS_META.pendente
+                          const ocupado = classificandoId === r.id || vinculandoId === r.id
+                          return (
+                            <TableRow key={r.id}>
+                              <TableCell className="font-mono text-xs">{r.codigoBipado}</TableCell>
+                              <TableCell className="max-w-[12rem]">
+                                {r.nomeRapido
+                                  ? <span className="block truncate text-sm">{r.nomeRapido}</span>
+                                  : <span className="text-xs text-muted-foreground">—</span>
+                                }
+                              </TableCell>
+                              <TableCell className="text-right font-semibold tabular-nums">{r.quantidadeContada}</TableCell>
+                              <TableCell className="text-right tabular-nums text-muted-foreground">
+                                {r.numeroLeituras > 0 ? r.numeroLeituras : "—"}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{formatDateTime(r.primeiroBipeEm)}</TableCell>
+                              <TableCell className="text-xs text-muted-foreground">{formatDateTime(r.ultimoBipeEm)}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={cn("whitespace-nowrap", cls.className)}>{cls.label}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-wrap items-center justify-end gap-1">
+                                  {/* Ações de fechamento (F6) */}
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="gap-1"
+                                    disabled={ocupado}
+                                    onClick={() => abrirCadastrarProduto(r)}
+                                  >
+                                    <Package className="h-3.5 w-3.5" /> Cadastrar produto
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1"
+                                    disabled={ocupado}
+                                    onClick={() => setAssociarAlvo(r)}
+                                  >
+                                    <Link2 className="h-3.5 w-3.5" /> Associar produto
+                                  </Button>
+                                  {/* Classificações operacionais (F5 — mantidas, soft labels) */}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1"
+                                    disabled={ocupado}
+                                    onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.LOCALIZADO)}
+                                  >
+                                    <MapPin className="h-3.5 w-3.5" /> Localizado
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1"
+                                    disabled={ocupado}
+                                    onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.CADASTRAR_DEPOIS)}
+                                  >
+                                    <PlusCircle className="h-3.5 w-3.5" /> Cadastrar depois
+                                  </Button>
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="gap-1 text-muted-foreground"
+                                    className="gap-1"
                                     disabled={ocupado}
-                                    onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.PENDENTE)}
+                                    onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.IGNORADO)}
                                   >
-                                    Limpar
+                                    <EyeOff className="h-3.5 w-3.5" /> Ignorar
                                   </Button>
-                                )}
-                              </div>
+                                  {r.classificacao !== "pendente" && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="gap-1 text-muted-foreground"
+                                      disabled={ocupado}
+                                      onClick={() => void classificar(r.id, CLASSIFICACAO_RECONCILIACAO.PENDENTE)}
+                                    >
+                                      Limpar
+                                    </Button>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Seção lateral "Cadastro concluído" — itens com vínculo de fechamento */}
+            {(relatorio?.reconciliacao ?? []).some((r) => r.vinculo) && (
+              <Card className="bg-card border-border">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Cadastro concluído
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Pendências resolvidas nesta sessão (produto cadastrado ou associado).
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Código bipado</TableHead>
+                          <TableHead>Nome rápido</TableHead>
+                          <TableHead className="text-right">Qtd.</TableHead>
+                          <TableHead>Resolução</TableHead>
+                          <TableHead>Resolvido em</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(relatorio?.reconciliacao ?? []).filter((r) => r.vinculo).map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell className="font-mono text-xs">{r.codigoBipado}</TableCell>
+                            <TableCell className="max-w-[12rem]">
+                              {r.nomeRapido
+                                ? <span className="block truncate text-sm">{r.nomeRapido}</span>
+                                : <span className="text-xs text-muted-foreground">—</span>
+                              }
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">{r.quantidadeContada}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="whitespace-nowrap border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                                {r.vinculo?.tipo === "cadastrado" ? "Produto cadastrado" : "Produto associado"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {r.vinculo ? formatDateTime(r.vinculo.vinculadoEm) : "—"}
                             </TableCell>
                           </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </TabsContent>
 
         {/* D — NÃO BIPADOS */}
@@ -877,6 +1014,15 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Modal de associação de produto existente (F6) */}
+      <InventarioAssociarProdutoModal
+        open={associarAlvo !== null}
+        storeId={storeId}
+        vinculando={vinculandoId === associarAlvo?.id}
+        onSelecionar={(produto) => void handleAssociarSelecionar(produto)}
+        onFechar={() => setAssociarAlvo(null)}
+      />
 
       {/* Confirmação de ajuste (divergência) / zeragem por ausência */}
       <Dialog open={ajusteAlvo !== null} onOpenChange={(o) => { if (!o) setAjusteAlvo(null) }}>

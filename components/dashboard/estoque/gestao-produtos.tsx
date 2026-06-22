@@ -81,6 +81,7 @@ import { pickCostPrice, pickSalePrice } from "@/lib/inventory-item-from-api"
 import { TypeToConfirmDialog } from "@/components/dashboard/safety/type-to-confirm-dialog"
 import { cn } from "@/lib/utils"
 import { EmptyState, LoadingState } from "@/components/ui/states"
+import { vincularPendenciaInventario } from "@/app/actions/inventario"
 
 /** Prefixos legados (ex.: importação / IDs sintéticos) — só para `codigo`/SKU exibidos e enviados; não altera `id` nem `dbId`. */
 function stripAutoCodigoPrefixes(raw: string): string {
@@ -258,6 +259,35 @@ export function GestaoProdutos({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<BlobPart[]>([])
   const importInputRef = useRef<HTMLInputElement>(null)
+
+  // Contexto de vínculo de inventário — preenchido via URL quando o operador veio da fila de
+  // reconciliação do Inventário Assistido. Só o create usa (não o edit); lido do window.location
+  // via useEffect (client-only) para não afetar SSR nem a assinatura de renderização do componente.
+  const inventarioCtxRef = useRef<{ contagemId: string; sessaoId: string; storeId: string } | null>(null)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const p = new URLSearchParams(window.location.search)
+    const contagemId = p.get("inventarioContagemId")
+    const sessaoId = p.get("inventarioSessaoId")
+    const invStoreId = p.get("inventarioStoreId")
+    if (!contagemId || !sessaoId || !invStoreId) return
+
+    inventarioCtxRef.current = { contagemId, sessaoId, storeId: invStoreId }
+
+    const barcode = p.get("prefillBarcode") ?? ""
+    const nome = p.get("prefillNome") ?? ""
+    const qtd = Math.max(0, Math.trunc(Number(p.get("prefillQtd")) || 0))
+    if (!barcode) return
+
+    setFormData((prev) => ({
+      ...prev,
+      barcode: barcode || prev.barcode,
+      nome: nome || prev.nome,
+      estoqueAtual: qtd > 0 ? qtd : prev.estoqueAtual,
+    }))
+    setIsModalOpen(true)
+  }, [])
 
   const reloadInventory = useCallback(async () => {
     setIsLoading(true)
@@ -604,6 +634,7 @@ export function GestaoProdutos({
       if (!res.ok) {
         throw new Error(data?.error || data?.detail || `Falha ao salvar (HTTP ${res.status})`)
       }
+      const criado = (data as { produto?: { id?: string } } | null)?.produto
       if (editingProduct) {
         appendAuditLog({
           action: "stock_manual",
@@ -616,6 +647,17 @@ export function GestaoProdutos({
           userLabel: auditUser(),
           detail: `Cadastro "${formData.nome}", estoque inicial ${formData.estoqueAtual}`,
         })
+        // Vínculo com pendência de inventário (Fase 6): se veio da fila de reconciliação,
+        // marca a pendência como resolvida (não altera produto/estoque; só fecha a fila).
+        const ctx = inventarioCtxRef.current
+        const produtoId = typeof criado?.id === "string" ? criado.id : null
+        if (ctx && produtoId) {
+          const vinculo = await vincularPendenciaInventario(ctx.storeId, ctx.sessaoId, ctx.contagemId, produtoId, "cadastrado")
+          inventarioCtxRef.current = null
+          if (vinculo.ok) {
+            toast({ title: "Pendência resolvida", description: "Item removido da fila de reconciliação do inventário." })
+          }
+        }
       }
       await reloadInventory()
       toast({
