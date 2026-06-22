@@ -204,19 +204,19 @@ export function OperacoesV3Shell() {
             </span>
           </div>
 
-          {/* Busca rápida de OS — abre o seletor (Picker) do workspace */}
+          {/* Busca global — barra que cresce (flex-1, até 380px) abre o Picker do workspace */}
           <button
             type="button"
             onClick={() => navigate("workspace", null)}
             title="Buscar ordem de serviço"
-            className="ml-1 hidden h-7 items-center gap-2 rounded-lg border border-border bg-card pl-2.5 pr-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground md:inline-flex"
+            className="flex h-7 min-w-0 max-w-[380px] flex-1 items-center gap-2 rounded-lg border border-border bg-muted px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
           >
-            <Search className="h-3.5 w-3.5" aria-hidden />
-            <span className="hidden lg:inline">Buscar OS</span>
-            <kbd className="rounded border border-border bg-muted px-1 py-px text-[10px] font-medium text-muted-foreground/80">⌘K</kbd>
+            <Search className="h-[13px] w-[13px] shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1 truncate text-left">Ir para OS, cliente, IMEI…</span>
+            <kbd className="shrink-0 rounded border border-border bg-card px-1 py-px text-[10px] font-medium text-muted-foreground/80">⌘K</kbd>
           </button>
 
-          {/* Modo de uso */}
+          {/* Modo de uso — segmented no command header, imediatamente após a busca global */}
           <OSModeToggleV3 value={modo} onChange={handleModo} />
 
           {/* Grupo direito */}
