@@ -176,6 +176,78 @@ export function aplicarModoContagem(
   return modo === MODO_CONTAGEM.SOMAR ? base + q : q
 }
 
+// ─── Resumo operacional da sessão (observabilidade em tempo real) ───────────────
+// Resume as linhas de contagem JÁ carregadas (DTO da sessão) em KPIs para o cabeçalho do
+// Inventário Assistido. PURO: não toca Prisma/estoque, só agrega. "Distintos contados" conta
+// produtos resolvidos únicos (por produtoId); reconciliação conta os códigos sem produto.
+
+/** Forma mínima de uma linha de contagem para o resumo (compatível com `InventarioContagemDTO`). */
+export type LinhaContagemResumo = {
+  produtoId: string | null
+  codigoBipado: string
+  produtoNome?: string | null
+  quantidadeContada: number
+  /** Contado − sistema (snapshot). null quando não há produto resolvido. */
+  diferenca: number | null
+  status: string
+  ultimoBipeEm: string
+}
+
+export type ResumoContagemSessao = {
+  /** Produtos cadastrados distintos já contados (por produtoId). */
+  produtosContados: number
+  /** Σ de todas as unidades contadas (encontrados + reconciliação). */
+  unidadesContadas: number
+  /** Códigos sem produto resolvido (fila de reconciliação). */
+  reconciliacao: number
+  /** Encontrados cujo contado ≠ sistema (snapshot) — divergência aparente na contagem. */
+  divergencias: number
+  /** Nome (ou código) do produto do bipe mais recente. null = nada contado. */
+  ultimoProduto: string | null
+  /** Horário (ISO) do bipe mais recente. null = nada contado. */
+  ultimoBipeEm: string | null
+}
+
+function tempoMs(iso: string | null | undefined): number {
+  if (!iso) return 0
+  const t = new Date(iso).getTime()
+  return Number.isFinite(t) ? t : 0
+}
+
+/**
+ * Agrega as linhas de contagem de uma sessão em KPIs de observabilidade. PURO — não depende da
+ * ordenação do chamador: o "último" é decidido pelo maior `ultimoBipeEm`.
+ */
+export function resumirContagens(
+  linhas: ReadonlyArray<LinhaContagemResumo>,
+): ResumoContagemSessao {
+  const produtosDistintos = new Set<string>()
+  let unidadesContadas = 0
+  let reconciliacao = 0
+  let divergencias = 0
+  let ultimo: LinhaContagemResumo | null = null
+
+  for (const c of linhas) {
+    unidadesContadas += Math.trunc(Number(c.quantidadeContada)) || 0
+    if (c.status === STATUS_CONTAGEM.RECONCILIACAO || !c.produtoId) {
+      reconciliacao += 1
+    } else {
+      produtosDistintos.add(c.produtoId)
+      if (c.diferenca != null && c.diferenca !== 0) divergencias += 1
+    }
+    if (!ultimo || tempoMs(c.ultimoBipeEm) > tempoMs(ultimo.ultimoBipeEm)) ultimo = c
+  }
+
+  return {
+    produtosContados: produtosDistintos.size,
+    unidadesContadas,
+    reconciliacao,
+    divergencias,
+    ultimoProduto: ultimo ? (ultimo.produtoNome || ultimo.codigoBipado) : null,
+    ultimoBipeEm: ultimo ? ultimo.ultimoBipeEm : null,
+  }
+}
+
 // ─── Relatório de fechamento ──────────────────────────────────────────────────
 
 export type LinhaEncontrada = {

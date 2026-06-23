@@ -229,7 +229,16 @@ export function InventarioConciliacao({ sessaoIdInicial }: { sessaoIdInicial?: s
   const totais = conc?.totais
   const sessaoFinalizada = conc?.sessao.status === "finalizada"
 
-  // Conciliados = OK + com movimentação. Divergências e não encontrados em listas próprias.
+  // 5 grupos visuais: conciliados (sem mov.), com movimentação, divergência real,
+  // não encontrados e suspeitos antigos.
+  const conciliadosOk = useMemo<ConciliacaoItemDTO[]>(
+    () => (conc?.itens ?? []).filter((i) => i.grupo === "ok"),
+    [conc?.itens]
+  )
+  const conciliadosMov = useMemo<ConciliacaoItemDTO[]>(
+    () => (conc?.itens ?? []).filter((i) => i.grupo === "com_movimentacao"),
+    [conc?.itens]
+  )
   const conciliados = useMemo<ConciliacaoItemDTO[]>(
     () => (conc?.itens ?? []).filter((i) => i.grupo !== "com_divergencia"),
     [conc?.itens]
@@ -239,6 +248,14 @@ export function InventarioConciliacao({ sessaoIdInicial }: { sessaoIdInicial?: s
     [conc?.itens]
   )
   const naoEncontrados = conc?.naoEncontrados ?? []
+  const naoEncSomente = useMemo<ConciliacaoNaoEncontradoDTO[]>(
+    () => (conc?.naoEncontrados ?? []).filter((n) => n.grupo === "nao_encontrado"),
+    [conc?.naoEncontrados]
+  )
+  const suspeitos = useMemo<ConciliacaoNaoEncontradoDTO[]>(
+    () => (conc?.naoEncontrados ?? []).filter((n) => n.grupo === "suspeito_antigo"),
+    [conc?.naoEncontrados]
+  )
 
   // Itens elegíveis para seleção (pendentes de ajuste).
   const divPendentes = useMemo(() => divergencias.filter((d) => !d.ajusteAplicado), [divergencias])
@@ -465,7 +482,7 @@ export function InventarioConciliacao({ sessaoIdInicial }: { sessaoIdInicial?: s
           </TabsTrigger>
         </TabsList>
 
-        {/* CONCILIADOS (OK + com movimentação) */}
+        {/* CONCILIADOS (OK + com movimentação) — separados em dois grupos visuais */}
         <TabsContent value="conciliados">
           <Card className="bg-card border-border">
             <CardHeader className="pb-3">
@@ -476,44 +493,30 @@ export function InventarioConciliacao({ sessaoIdInicial }: { sessaoIdInicial?: s
                 Contado + movimentação após a contagem = estoque atual. Nada a ajustar.
               </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               {conciliados.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">Nenhum item conciliado nesta visão.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Produto</TableHead>
-                        <TableHead className="text-right">Contado</TableHead>
-                        <TableHead className="text-right">Mov. pós-contagem</TableHead>
-                        <TableHead className="text-right">Saldo esperado hoje</TableHead>
-                        <TableHead className="text-right">Estoque atual</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {conciliados.map((i) => {
-                        const badge = GRUPO_BADGE[i.grupo]
-                        return (
-                          <TableRow key={i.produtoId}>
-                            <TableCell className="max-w-[22rem]">
-                              <span className="block truncate font-medium text-foreground">{i.nome}</span>
-                              {i.sku && <span className="block truncate text-xs text-muted-foreground">{i.sku}</span>}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">{i.quantidadeContada}</TableCell>
-                            <TableCell className="text-right"><Signed value={i.movimentacaoPosContagem} /></TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">{i.saldoEsperadoHoje}</TableCell>
-                            <TableCell className="text-right tabular-nums text-muted-foreground">{i.estoqueAtual}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className={cn("whitespace-nowrap", badge.className)}>{badge.label}</Badge>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                <>
+                  <GrupoSecao
+                    icon={CheckCircle2}
+                    iconClassName="text-emerald-600 dark:text-emerald-400"
+                    label="Conciliados (sem movimentação)"
+                    hint="Contado = estoque atual, sem venda/entrada após a contagem."
+                    count={conciliadosOk.length}
+                  >
+                    <ItensConciliadosTable items={conciliadosOk} />
+                  </GrupoSecao>
+                  <GrupoSecao
+                    icon={ArrowRightLeft}
+                    iconClassName="text-sky-600 dark:text-sky-400"
+                    label="Com movimentação após contagem"
+                    hint="Houve venda/OS/entrada depois da contagem; o sistema recalculou e bate."
+                    count={conciliadosMov.length}
+                  >
+                    <ItensConciliadosTable items={conciliadosMov} />
+                  </GrupoSecao>
+                </>
               )}
             </CardContent>
           </Card>
@@ -631,68 +634,32 @@ export function InventarioConciliacao({ sessaoIdInicial }: { sessaoIdInicial?: s
                 </Button>
               )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               {naoEncontrados.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
                   Todos os produtos com estoque foram conferidos nesta sessão.
                 </p>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10" />
-                        <TableHead>Produto</TableHead>
-                        <TableHead>Categoria</TableHead>
-                        <TableHead className="text-right">Estoque</TableHead>
-                        <TableHead className="text-right">Custo</TableHead>
-                        <TableHead className="text-right">Impacto custo</TableHead>
-                        <TableHead>Última venda</TableHead>
-                        <TableHead>Últ. movimentação</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {naoEncontrados.map((n) => {
-                        const badge = GRUPO_BADGE[n.grupo]
-                        return (
-                          <TableRow key={n.produtoId} data-state={selNao.has(n.produtoId) ? "selected" : undefined}>
-                            <TableCell>
-                              <Checkbox
-                                checked={selNao.has(n.produtoId)}
-                                disabled={n.ajusteAplicado}
-                                onCheckedChange={() => toggle(setSelNao, n.produtoId)}
-                                aria-label={`Selecionar ${n.nome}`}
-                              />
-                            </TableCell>
-                            <TableCell className="max-w-[18rem]">
-                              <span className="block truncate font-medium text-foreground">{n.nome}</span>
-                              {n.sku && <span className="block truncate text-xs text-muted-foreground">{n.sku}</span>}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{n.categoria ?? "—"}</TableCell>
-                            <TableCell className="text-right font-semibold tabular-nums">{n.estoqueAtual}</TableCell>
-                            <TableCell className="text-right tabular-nums text-muted-foreground">{formatBRL(n.precoCusto)}</TableCell>
-                            <TableCell className="text-right tabular-nums">{formatBRL(n.impactoCusto)}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatDateTime(n.ultimaVendaEm)}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatDateTime(n.ultimaMovimentacaoEm)}</TableCell>
-                            <TableCell>
-                              {n.ajusteAplicado ? (
-                                <Badge variant="outline" className="whitespace-nowrap border-muted-foreground/30 bg-muted text-muted-foreground">
-                                  Zerado
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className={cn("whitespace-nowrap", badge.className)}>
-                                  {n.grupo === "suspeito_antigo" && <Clock className="mr-1 h-3 w-3" />}
-                                  {badge.label}
-                                </Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                <>
+                  <GrupoSecao
+                    icon={PackageX}
+                    iconClassName="text-destructive"
+                    label="Não encontrados / não bipados"
+                    hint="Com estoque no sistema, ausentes na contagem. Confira prateleira, depósito e caixa antes de zerar."
+                    count={naoEncSomente.length}
+                  >
+                    <NaoEncontradosTable items={naoEncSomente} sel={selNao} onToggle={(id) => toggle(setSelNao, id)} />
+                  </GrupoSecao>
+                  <GrupoSecao
+                    icon={Clock}
+                    iconClassName="text-muted-foreground"
+                    label="Suspeitos antigos"
+                    hint="Sem movimentação há muito tempo (ou nunca). Provável estoque fantasma — revise com atenção."
+                    count={suspeitos.length}
+                  >
+                    <NaoEncontradosTable items={suspeitos} sel={selNao} onToggle={(id) => toggle(setSelNao, id)} />
+                  </GrupoSecao>
+                </>
               )}
             </CardContent>
           </Card>
@@ -775,6 +742,151 @@ function Resumo({
     <div className="rounded-md border border-border bg-background px-3 py-2">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn("text-lg font-bold tabular-nums", color)}>{value}</p>
+    </div>
+  )
+}
+
+/** Seção de grupo da conciliação: cabeçalho (ícone + rótulo + contagem + dica) + conteúdo. */
+function GrupoSecao({
+  icon: Icon,
+  iconClassName,
+  label,
+  hint,
+  count,
+  children,
+}: {
+  icon: typeof CheckCircle2
+  iconClassName?: string
+  label: string
+  hint?: string
+  count: number
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Icon className={cn("h-4 w-4 shrink-0", iconClassName)} />
+        <span className="text-sm font-semibold text-foreground">{label}</span>
+        <Badge variant="secondary" className="tabular-nums">{count}</Badge>
+        {hint && <span className="w-full text-xs text-muted-foreground sm:w-auto sm:flex-1 sm:min-w-0">{hint}</span>}
+      </div>
+      {count === 0 ? (
+        <p className="rounded-md border border-dashed border-border py-4 text-center text-xs text-muted-foreground">
+          Nenhum item neste grupo.
+        </p>
+      ) : (
+        children
+      )}
+    </div>
+  )
+}
+
+/** Tabela de itens conciliados (sem seleção) — reusada nos grupos OK e com movimentação. */
+function ItensConciliadosTable({ items }: { items: ConciliacaoItemDTO[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Produto</TableHead>
+            <TableHead className="text-right">Contado</TableHead>
+            <TableHead className="text-right">Mov. pós-contagem</TableHead>
+            <TableHead className="text-right">Saldo esperado hoje</TableHead>
+            <TableHead className="text-right">Estoque atual</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((i) => {
+            const badge = GRUPO_BADGE[i.grupo]
+            return (
+              <TableRow key={i.produtoId}>
+                <TableCell className="max-w-[22rem]">
+                  <span className="block truncate font-medium text-foreground">{i.nome}</span>
+                  {i.sku && <span className="block truncate text-xs text-muted-foreground">{i.sku}</span>}
+                </TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{i.quantidadeContada}</TableCell>
+                <TableCell className="text-right"><Signed value={i.movimentacaoPosContagem} /></TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{i.saldoEsperadoHoje}</TableCell>
+                <TableCell className="text-right tabular-nums text-muted-foreground">{i.estoqueAtual}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={cn("whitespace-nowrap", badge.className)}>{badge.label}</Badge>
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+/** Tabela de não encontrados (com seleção) — reusada nos grupos não encontrado e suspeito antigo. */
+function NaoEncontradosTable({
+  items,
+  sel,
+  onToggle,
+}: {
+  items: ConciliacaoNaoEncontradoDTO[]
+  sel: Set<string>
+  onToggle: (produtoId: string) => void
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-10" />
+            <TableHead>Produto</TableHead>
+            <TableHead>Categoria</TableHead>
+            <TableHead className="text-right">Estoque</TableHead>
+            <TableHead className="text-right">Custo</TableHead>
+            <TableHead className="text-right">Impacto custo</TableHead>
+            <TableHead>Última venda</TableHead>
+            <TableHead>Últ. movimentação</TableHead>
+            <TableHead>Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {items.map((n) => {
+            const badge = GRUPO_BADGE[n.grupo]
+            return (
+              <TableRow key={n.produtoId} data-state={sel.has(n.produtoId) ? "selected" : undefined}>
+                <TableCell>
+                  <Checkbox
+                    checked={sel.has(n.produtoId)}
+                    disabled={n.ajusteAplicado}
+                    onCheckedChange={() => onToggle(n.produtoId)}
+                    aria-label={`Selecionar ${n.nome}`}
+                  />
+                </TableCell>
+                <TableCell className="max-w-[18rem]">
+                  <span className="block truncate font-medium text-foreground">{n.nome}</span>
+                  {n.sku && <span className="block truncate text-xs text-muted-foreground">{n.sku}</span>}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">{n.categoria ?? "—"}</TableCell>
+                <TableCell className="text-right font-semibold tabular-nums">{n.estoqueAtual}</TableCell>
+                <TableCell className="text-right tabular-nums text-muted-foreground">{formatBRL(n.precoCusto)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatBRL(n.impactoCusto)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{formatDateTime(n.ultimaVendaEm)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{formatDateTime(n.ultimaMovimentacaoEm)}</TableCell>
+                <TableCell>
+                  {n.ajusteAplicado ? (
+                    <Badge variant="outline" className="whitespace-nowrap border-muted-foreground/30 bg-muted text-muted-foreground">
+                      Zerado
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className={cn("whitespace-nowrap", badge.className)}>
+                      {n.grupo === "suspeito_antigo" && <Clock className="mr-1 h-3 w-3" />}
+                      {badge.label}
+                    </Badge>
+                  )}
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
     </div>
   )
 }

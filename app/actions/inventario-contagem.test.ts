@@ -145,7 +145,17 @@ const h = vi.hoisted(() => {
     },
     movimentacaoEstoque: {
       findMany: async ({ where }: { where: Row }) => store.movimentacoes.filter((m) => matchWhere(m, where)),
-      groupBy: async () => [],
+      // Agrega _max.createdAt por produtoId respeitando o where (storeId / produtoId in / tipo).
+      groupBy: async ({ where }: { where: Row }) => {
+        const byProd = new Map<string, Date>()
+        for (const m of store.movimentacoes.filter((r) => matchWhere(r, where))) {
+          const pid = m.produtoId as string
+          const d = m.createdAt as Date
+          const cur = byProd.get(pid)
+          if (!cur || d > cur) byProd.set(pid, d)
+        }
+        return [...byProd.entries()].map(([produtoId, createdAt]) => ({ produtoId, _max: { createdAt } }))
+      },
     },
   }
 
@@ -161,6 +171,7 @@ import {
   registrarContagemProduto,
   registrarPendenciaInventario,
   getConciliacaoInventario,
+  getContextoContagemProduto,
 } from "./inventario"
 
 function seedSessao(status: "aberta" | "finalizada" = "aberta") {
@@ -353,6 +364,66 @@ describe("conciliação a partir da contagem por quantidade", () => {
     expect(b.movimentacaoPosContagem).toBe(0) // venda foi antes da contagem dele
     expect(b.saldoEsperadoHoje).toBe(8)
     expect(b.divergenciaReal).toBe(0)
+  })
+
+  it("produto com estoque > 0 não bipado aparece em 'não encontrado'", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 10 }) // será contado
+    seedProduto("p2", { stock: 4, precoCusto: 10, price: 25 }) // NÃO bipado, estoque > 0
+    await registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "AAA", produtoId: "p1", quantidade: 10, modo: "substituir" })
+    // movimentação recente de p2 → classifica como "não encontrado" (não suspeito antigo).
+    h.store.movimentacoes.push({ storeId: STORE, produtoId: "p2", quantidade: -1, tipo: "saida", createdAt: new Date() })
+
+    const res = await getConciliacaoInventario(STORE, "s1")
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    const p2 = res.conciliacao.naoEncontrados.find((n) => n.produtoId === "p2")
+    expect(p2).toBeDefined()
+    expect(p2!.grupo).toBe("nao_encontrado")
+    expect(p2!.estoqueAtual).toBe(4)
+    // p1 (contado) não entra em não encontrados.
+    expect(res.conciliacao.naoEncontrados.some((n) => n.produtoId === "p1")).toBe(false)
+  })
+})
+
+describe("getContextoContagemProduto — observabilidade do modal", () => {
+  it("produto ainda não contado → contexto zerado", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 20 })
+    const res = await getContextoContagemProduto(STORE, "s1", "p1")
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.contexto).toEqual({ jaContado: 0, ultimaContagemEm: null, movimentacaoPosContagem: 0, temMovimentacaoPos: false })
+  })
+
+  it("contou e vendeu depois → detecta movimentação pós-contagem (com sinal)", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 10 })
+    await registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "789", produtoId: "p1", quantidade: 10, modo: "substituir" })
+    const contadoEm = h.store.contagens[0].ultimoBipeEm as Date
+    h.store.movimentacoes.push({ storeId: STORE, produtoId: "p1", quantidade: -2, tipo: "saida", createdAt: new Date(contadoEm.getTime() + 1000) })
+
+    const res = await getContextoContagemProduto(STORE, "s1", "p1")
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.contexto.jaContado).toBe(10)
+    expect(res.contexto.ultimaContagemEm).not.toBeNull()
+    expect(res.contexto.movimentacaoPosContagem).toBe(-2)
+    expect(res.contexto.temMovimentacaoPos).toBe(true)
+  })
+
+  it("movimentação ANTES da contagem não conta", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 10 })
+    await registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "789", produtoId: "p1", quantidade: 10, modo: "substituir" })
+    const contadoEm = h.store.contagens[0].ultimoBipeEm as Date
+    h.store.movimentacoes.push({ storeId: STORE, produtoId: "p1", quantidade: -2, tipo: "saida", createdAt: new Date(contadoEm.getTime() - 60000) })
+
+    const res = await getContextoContagemProduto(STORE, "s1", "p1")
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.contexto.movimentacaoPosContagem).toBe(0)
+    expect(res.contexto.temMovimentacaoPos).toBe(false)
   })
 })
 

@@ -47,6 +47,7 @@ import {
   montarConciliacao,
   simularAplicacaoConciliacao,
   saldoAplicavel,
+  somarMovimentacoesApos,
   GRUPO_CONCILIACAO,
   type ItemConciliado,
   type ItemNaoEncontrado,
@@ -430,6 +431,68 @@ export async function registrarContagemProduto(
     return { ok: true, contagem: contagemToDTO(saved), contagens };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar contagem" };
+  }
+}
+
+export type ContextoContagemProdutoDTO = {
+  /** Quantidade já contada deste produto nesta sessão (0 = ainda não contado). */
+  jaContado: number;
+  /** Horário (ISO) da última contagem deste produto na sessão. null = ainda não contado. */
+  ultimaContagemEm: string | null;
+  /** Σ de deltas de estoque (venda −, entrada +) APÓS a última contagem deste produto. */
+  movimentacaoPosContagem: number;
+  /** true quando há movimentação após a contagem → a conciliação final projetará o saldo. */
+  temMovimentacaoPos: boolean;
+};
+
+export type ContextoContagemProdutoResult =
+  | { ok: true; contexto: ContextoContagemProdutoDTO }
+  | ActionFail;
+
+/**
+ * Contexto de observabilidade para o modal de contagem de um produto JÁ CADASTRADO: quanto já foi
+ * contado nesta sessão, quando foi a última contagem e se houve movimentação depois (venda/OS/
+ * devolução/entrada). SOMENTE LEITURA — não toca estoque. Reusa o helper PURO
+ * `somarMovimentacoesApos` (mesmo corte temporal estrito da conciliação dinâmica).
+ */
+export async function getContextoContagemProduto(
+  storeId: string,
+  sessaoId: string,
+  produtoId: string
+): Promise<ContextoContagemProdutoResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  const sid = (sessaoId ?? "").trim();
+  const pid = (produtoId ?? "").trim();
+  if (!sid || !pid) return { ok: false, reason: "Sessão ou produto inválido" };
+
+  try {
+    const contagem = await prisma.inventarioContagem.findFirst({
+      where: { storeId: g.sid, sessaoId: sid, produtoId: pid, status: STATUS_CONTAGEM.ENCONTRADO },
+      select: { quantidadeContada: true, ultimoBipeEm: true },
+    });
+    if (!contagem) {
+      return { ok: true, contexto: { jaContado: 0, ultimaContagemEm: null, movimentacaoPosContagem: 0, temMovimentacaoPos: false } };
+    }
+
+    const rows = await prisma.movimentacaoEstoque.findMany({
+      where: { storeId: g.sid, produtoId: pid, createdAt: { gte: contagem.ultimoBipeEm } },
+      select: { quantidade: true, createdAt: true },
+    });
+    const movs: MovimentoEstoqueConc[] = rows.map((r) => ({ produtoId: pid, quantidade: r.quantidade, em: r.createdAt }));
+    const movimentacaoPosContagem = somarMovimentacoesApos(movs, contagem.ultimoBipeEm);
+
+    return {
+      ok: true,
+      contexto: {
+        jaContado: contagem.quantidadeContada,
+        ultimaContagemEm: contagem.ultimoBipeEm.toISOString(),
+        movimentacaoPosContagem,
+        temMovimentacaoPos: movimentacaoPosContagem !== 0,
+      },
+    };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao consultar contexto da contagem" };
   }
 }
 

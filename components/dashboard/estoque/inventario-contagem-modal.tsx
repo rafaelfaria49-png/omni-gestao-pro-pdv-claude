@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useRef, useState } from "react"
-import { Minus, Plus, PackageCheck, Loader2 } from "lucide-react"
+import { Minus, Plus, PackageCheck, Loader2, ArrowRightLeft } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -30,12 +30,29 @@ import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { MODO_CONTAGEM, type ModoContagem } from "@/lib/estoque/inventario-core"
 
+function formatDateTime(iso: string | null) {
+  if (!iso) return "—"
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return "—"
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 export type InventarioContagemModalProps = {
   open: boolean
   codigo: string
   produto: { nome: string; sku: string | null; estoqueSistema: number | null } | null
   /** Quantidade já contada deste produto nesta sessão (0 = primeira leitura). */
   jaContado: number
+  /** Horário da última contagem deste produto na sessão (null = primeira leitura). */
+  ultimaContagemEm: string | null
+  /** Σ de movimentações de estoque após a última contagem (venda −, entrada +). 0 = nenhuma. */
+  movimentacaoPosContagem: number
   registrando: boolean
   onConfirmar: (dados: { quantidade: number; modo: ModoContagem }) => void
   onCancelar: () => void
@@ -46,6 +63,8 @@ export function InventarioContagemModal({
   codigo,
   produto,
   jaContado,
+  ultimaContagemEm,
+  movimentacaoPosContagem,
   registrando,
   onConfirmar,
   onCancelar,
@@ -107,9 +126,24 @@ export function InventarioContagemModal({
               <p className="mt-1 text-xs text-muted-foreground">
                 Já contado nesta sessão:{" "}
                 <span className="font-semibold tabular-nums text-foreground">{jaContado}</span> un.
+                {ultimaContagemEm && <> · última contagem {formatDateTime(ultimaContagemEm)}</>}
               </p>
             )}
           </div>
+
+          {/* Aviso: houve movimentação depois da contagem → a conciliação projeta o saldo. */}
+          {movimentacaoPosContagem !== 0 && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              <ArrowRightLeft className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Este item teve movimentações depois da contagem (
+                <span className="font-semibold tabular-nums">
+                  {movimentacaoPosContagem > 0 ? `+${movimentacaoPosContagem}` : movimentacaoPosContagem}
+                </span>{" "}
+                un.). A conciliação final vai projetar o saldo automaticamente.
+              </span>
+            </div>
+          )}
 
           {/* Modo: substituir × somar */}
           <div className="space-y-1.5">

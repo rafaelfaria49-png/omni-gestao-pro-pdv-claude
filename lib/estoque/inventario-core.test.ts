@@ -16,8 +16,10 @@ import {
   aplicarModoContagem,
   aplicarBipe,
   diferencaContagem,
+  resumirContagens,
   montarRelatorioInventario,
   type ContagemLinha,
+  type LinhaContagemResumo,
   type ProdutoEstoque,
 } from "./inventario-core"
 
@@ -125,6 +127,69 @@ describe("contagem por quantidade (substituir × somar)", () => {
   it("nunca negativo; quantidades inválidas não baixam o já contado em somar", () => {
     expect(aplicarModoContagem(MODO_CONTAGEM.SOMAR, 10, -3)).toBe(10) // -3 sanitiza p/ 0
     expect(aplicarModoContagem(MODO_CONTAGEM.SUBSTITUIR, 10, -3)).toBe(0)
+  })
+})
+
+describe("resumirContagens (observabilidade da sessão)", () => {
+  const linha = (over: Partial<LinhaContagemResumo>): LinhaContagemResumo => ({
+    produtoId: "p1",
+    codigoBipado: "789",
+    produtoNome: "Produto",
+    quantidadeContada: 1,
+    diferenca: 0,
+    status: STATUS_CONTAGEM.ENCONTRADO,
+    ultimoBipeEm: "2026-06-20T10:00:00.000Z",
+    ...over,
+  })
+
+  it("lista vazia → zeros e nulls", () => {
+    const r = resumirContagens([])
+    expect(r).toEqual({
+      produtosContados: 0,
+      unidadesContadas: 0,
+      reconciliacao: 0,
+      divergencias: 0,
+      ultimoProduto: null,
+      ultimoBipeEm: null,
+    })
+  })
+
+  it("conta distintos, unidades, reconciliação e divergências", () => {
+    const r = resumirContagens([
+      linha({ produtoId: "p1", quantidadeContada: 10, diferenca: 0 }),
+      linha({ produtoId: "p2", quantidadeContada: 5, diferenca: -3 }), // divergência
+      linha({ produtoId: null, codigoBipado: "9999", produtoNome: null, quantidadeContada: 2, diferenca: null, status: STATUS_CONTAGEM.RECONCILIACAO }),
+    ])
+    expect(r.produtosContados).toBe(2)
+    expect(r.unidadesContadas).toBe(17)
+    expect(r.reconciliacao).toBe(1)
+    expect(r.divergencias).toBe(1)
+  })
+
+  it("não conta o mesmo produtoId duas vezes em 'distintos'", () => {
+    const r = resumirContagens([
+      linha({ produtoId: "p1", codigoBipado: "barras", quantidadeContada: 3 }),
+      linha({ produtoId: "p1", codigoBipado: "sku", quantidadeContada: 2 }),
+    ])
+    expect(r.produtosContados).toBe(1)
+    expect(r.unidadesContadas).toBe(5)
+  })
+
+  it("último = maior ultimoBipeEm (independe da ordem da lista)", () => {
+    const r = resumirContagens([
+      linha({ produtoId: "p1", produtoNome: "Antigo", ultimoBipeEm: "2026-06-20T10:00:00.000Z" }),
+      linha({ produtoId: "p2", produtoNome: "Recente", ultimoBipeEm: "2026-06-22T18:30:00.000Z" }),
+      linha({ produtoId: "p3", produtoNome: "Meio", ultimoBipeEm: "2026-06-21T09:00:00.000Z" }),
+    ])
+    expect(r.ultimoProduto).toBe("Recente")
+    expect(r.ultimoBipeEm).toBe("2026-06-22T18:30:00.000Z")
+  })
+
+  it("reconciliação sem nome usa o código como 'último produto'", () => {
+    const r = resumirContagens([
+      linha({ produtoId: null, codigoBipado: "SEM-NOME", produtoNome: null, status: STATUS_CONTAGEM.RECONCILIACAO, ultimoBipeEm: "2026-06-23T08:00:00.000Z" }),
+    ])
+    expect(r.ultimoProduto).toBe("SEM-NOME")
   })
 })
 

@@ -11,6 +11,8 @@ import {
   PackageSearch,
   AlertTriangle,
   CheckCircle2,
+  Clock,
+  Boxes,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -34,12 +36,13 @@ import {
   getInventarioAtivo,
   registrarContagemProduto,
   registrarPendenciaInventario,
+  getContextoContagemProduto,
   listInventarioContagens,
   encerrarInventario,
   type InventarioSessaoDTO,
   type InventarioContagemDTO,
 } from "@/app/actions/inventario"
-import type { ModoContagem } from "@/lib/estoque/inventario-core"
+import { resumirContagens, type ModoContagem } from "@/lib/estoque/inventario-core"
 import { InventarioPendenciaModal } from "@/components/dashboard/estoque/inventario-pendencia-modal"
 import { InventarioContagemModal } from "@/components/dashboard/estoque/inventario-contagem-modal"
 
@@ -137,6 +140,9 @@ export function InventarioAssistido() {
     nome: string
     sku: string | null
     estoqueSistema: number | null
+    jaContado: number
+    ultimaContagemEm: string | null
+    movimentacaoPosContagem: number
   } | null>(null)
   const [registrandoContagem, setRegistrandoContagem] = useState(false)
 
@@ -215,13 +221,25 @@ export function InventarioAssistido() {
           return
         }
         // Produto cadastrado: abre o modal de contagem para informar a quantidade física real
-        // e o modo (substituir / somar). A persistência só acontece na confirmação.
+        // e o modo (substituir / somar). A persistência só acontece na confirmação. O contexto
+        // (já contado, última contagem, movimentação posterior) alimenta a observabilidade.
+        const existente = contagens.find(
+          (c) => c.produtoId === lookup.produtoId && c.status === "encontrado"
+        )
+        let movimentacaoPosContagem = 0
+        if (existente) {
+          const ctx = await getContextoContagemProduto(storeId, sessao.id, lookup.produtoId)
+          if (ctx.ok) movimentacaoPosContagem = ctx.contexto.movimentacaoPosContagem
+        }
         setContagemProduto({
           codigo: code,
           produtoId: lookup.produtoId,
           nome: lookup.nome,
           sku: lookup.sku,
           estoqueSistema: lookup.estoqueSistema,
+          jaContado: existente?.quantidadeContada ?? 0,
+          ultimaContagemEm: existente?.ultimoBipeEm ?? null,
+          movimentacaoPosContagem,
         })
         setCodigo("")
       } finally {
@@ -229,16 +247,8 @@ export function InventarioAssistido() {
         inputRef.current?.focus()
       }
     },
-    [codigo, sessao, storeId, toast]
+    [codigo, sessao, storeId, contagens, toast]
   )
-
-  const jaContadoDoModal = useMemo(() => {
-    if (!contagemProduto) return 0
-    const row = contagens.find(
-      (c) => c.produtoId === contagemProduto.produtoId && c.status === "encontrado"
-    )
-    return row ? row.quantidadeContada : 0
-  }, [contagemProduto, contagens])
 
   const handleCancelarContagem = useCallback(() => {
     setContagemProduto(null)
@@ -347,17 +357,7 @@ export function InventarioAssistido() {
     }
   }, [sessao, storeId, toast])
 
-  const resumo = useMemo(() => {
-    let unidades = 0
-    let reconciliacao = 0
-    let divergencias = 0
-    for (const c of contagens) {
-      unidades += c.quantidadeContada
-      if (c.status === "reconciliacao") reconciliacao += 1
-      else if (c.diferenca != null && c.diferenca !== 0) divergencias += 1
-    }
-    return { linhas: contagens.length, unidades, reconciliacao, divergencias }
-  }, [contagens])
+  const resumo = useMemo(() => resumirContagens(contagens), [contagens])
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -461,22 +461,49 @@ export function InventarioAssistido() {
       </div>
 
       <Card className="bg-card border-border">
-        <CardContent className="flex flex-wrap items-center gap-x-6 gap-y-2 py-4 text-sm">
-          <div className="min-w-0">
-            <span className="text-muted-foreground">Sessão: </span>
-            <span className="font-medium text-foreground">{sessao.nome || "Sem nome"}</span>
+        <CardContent className="space-y-3 py-4">
+          {/* Metadados da sessão */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+            <div className="min-w-0">
+              <span className="text-muted-foreground">Sessão: </span>
+              <span className="font-medium text-foreground">{sessao.nome || "Sem nome"}</span>
+            </div>
+            <div className="min-w-0">
+              <span className="text-muted-foreground">Operador: </span>
+              <span className="font-medium text-foreground">{sessao.operador || "—"}</span>
+            </div>
+            <div className="min-w-0">
+              <span className="text-muted-foreground">Início: </span>
+              <span className="font-medium text-foreground">{formatDateTime(sessao.iniciadoEm)}</span>
+            </div>
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              Aberta
+            </Badge>
           </div>
-          <div className="min-w-0">
-            <span className="text-muted-foreground">Operador: </span>
-            <span className="font-medium text-foreground">{sessao.operador || "—"}</span>
+
+          {/* Resumo operacional ao vivo */}
+          <div className="grid grid-cols-2 gap-3 border-t border-border pt-3 sm:grid-cols-3 lg:grid-cols-5">
+            <StatInline label="Produtos contados" value={resumo.produtosContados} icon={PackageSearch} />
+            <StatInline label="Unidades contadas" value={resumo.unidadesContadas} icon={Boxes} />
+            <StatInline
+              label="Divergências"
+              value={resumo.divergencias}
+              icon={AlertTriangle}
+              accent={resumo.divergencias > 0 ? "amber" : "default"}
+            />
+            <StatInline
+              label="Reconciliação"
+              value={resumo.reconciliacao}
+              icon={ScanBarcode}
+              accent={resumo.reconciliacao > 0 ? "amber" : "default"}
+            />
+            <StatInline
+              label="Último bipe"
+              value={resumo.ultimoProduto ?? "—"}
+              sub={resumo.ultimoBipeEm ? formatDateTime(resumo.ultimoBipeEm) : "Nenhum ainda"}
+              icon={Clock}
+            />
           </div>
-          <div className="min-w-0">
-            <span className="text-muted-foreground">Início: </span>
-            <span className="font-medium text-foreground">{formatDateTime(sessao.iniciadoEm)}</span>
-          </div>
-          <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-            Aberta
-          </Badge>
         </CardContent>
       </Card>
 
@@ -554,8 +581,8 @@ export function InventarioAssistido() {
           </CardTitle>
           <div className="flex items-center gap-3">
             <div className="flex flex-wrap items-center gap-1.5 text-xs">
-              <Badge variant="secondary" className="tabular-nums">{resumo.linhas} itens</Badge>
-              <Badge variant="secondary" className="tabular-nums">{resumo.unidades} un.</Badge>
+              <Badge variant="secondary" className="tabular-nums">{contagens.length} itens</Badge>
+              <Badge variant="secondary" className="tabular-nums">{resumo.unidadesContadas} un.</Badge>
               {resumo.divergencias > 0 && (
                 <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 tabular-nums dark:text-amber-400">
                   {resumo.divergencias} divergência(s)
@@ -655,11 +682,47 @@ export function InventarioAssistido() {
             ? { nome: contagemProduto.nome, sku: contagemProduto.sku, estoqueSistema: contagemProduto.estoqueSistema }
             : null
         }
-        jaContado={jaContadoDoModal}
+        jaContado={contagemProduto?.jaContado ?? 0}
+        ultimaContagemEm={contagemProduto?.ultimaContagemEm ?? null}
+        movimentacaoPosContagem={contagemProduto?.movimentacaoPosContagem ?? 0}
         registrando={registrandoContagem}
         onConfirmar={(dados) => void handleConfirmarContagem(dados)}
         onCancelar={handleCancelarContagem}
       />
+    </div>
+  )
+}
+
+/** Stat compacto do resumo operacional da sessão (rótulo + valor + sub opcional). */
+function StatInline({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  accent = "default",
+}: {
+  label: string
+  value: string | number
+  sub?: string
+  icon: React.ComponentType<{ className?: string }>
+  accent?: "default" | "amber"
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{label}</span>
+      </div>
+      <p
+        className={cn(
+          "truncate text-base font-semibold tabular-nums text-foreground",
+          accent === "amber" && "text-amber-600 dark:text-amber-400"
+        )}
+        title={typeof value === "string" ? value : undefined}
+      >
+        {value}
+      </p>
+      {sub && <p className="truncate text-xs text-muted-foreground">{sub}</p>}
     </div>
   )
 }
