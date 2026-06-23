@@ -1433,9 +1433,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     if (isModoRapido && flashId) {
       setRapidoFlashLineId(flashId)
       window.setTimeout(() => setRapidoFlashLineId((h) => (h === flashId ? null : h)), 150)
-      setSearch("")
       playPdvRapidoItemBeepIfEnabled()
     }
+    // Limpa a busca após adicionar em QUALQUER modo (clique no resultado, Enter ou scan):
+    // mantém o scan contínuo sem o operador apagar o termo. (GOAL limpeza pós-ação)
+    setSearch("")
     queueMicrotask(() => {
       inputRef.current?.focus()
       if (isModoRapido) {
@@ -1851,10 +1853,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       e.preventDefault()
                       const pick = modoRapido ? (fullSearch[rapidoPickIdx] ?? fullSearch[0]) : fullSearch[0]
                       if (pick) {
+                        // addItem já limpa a busca após adicionar (scan contínuo em qualquer modo).
                         addItem(pick)
-                        // Limpa para o próximo bipe — scan contínuo em qualquer modo.
-                        // (addItem só limpa em modoRapido; aqui cobre o modo padrão.)
-                        setSearch("")
                       }
                     }
                     return
@@ -1867,7 +1867,6 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                     const remote = await lookupPdvScanRemote({ code, storeId: (lojaAtivaId ?? "").trim(), setInventory })
                     if (remote.kind === "single") {
                       addItem(remote.product)
-                      setSearch("")
                       return
                     }
                     if (remote.kind === "multiple") {

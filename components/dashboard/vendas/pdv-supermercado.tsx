@@ -350,9 +350,11 @@ export function PdvSupermercado({
       if (isModoRapido) {
         setRapidoFlashLineId(lineId)
         window.setTimeout(() => setRapidoFlashLineId((h) => (h === lineId ? null : h)), 150)
-        setSearchTerm("")
         playPdvRapidoItemBeepIfEnabled()
       }
+      // Limpa a busca após adicionar em QUALQUER modo (clique no card, Enter ou scan):
+      // o operador fica pronto para o próximo item sem apagar o termo. (GOAL limpeza pós-ação)
+      setSearchTerm("")
       queueMicrotask(() => {
         hardFocusSearch()
         if (isModoRapido) {
