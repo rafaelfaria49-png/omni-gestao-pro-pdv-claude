@@ -170,6 +170,7 @@ vi.mock("@/app/actions/estoque", () => ({ registrarAjusteEstoque: h.registrarAju
 import {
   registrarContagemProduto,
   registrarPendenciaInventario,
+  vincularPendenciaInventario,
   getConciliacaoInventario,
   getContextoContagemProduto,
 } from "./inventario"
@@ -239,6 +240,20 @@ describe("registrarContagemProduto — substituir × somar", () => {
     expect(res.contagem.quantidadeContada).toBe(15)
     // continua a MESMA linha (unicidade por sessão+código), não duplicou.
     expect(h.store.contagens.filter((c) => c.codigoBipado === "789")).toHaveLength(1)
+  })
+
+  it("editar quantidade já contada: substituir corrige o total para baixo (10 → 7) sem duplicar nem tocar stock", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 20 })
+    await registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "789", produtoId: "p1", quantidade: 10, modo: "substituir" })
+    // "Editar" reusa a mesma action em modo substituir com o novo total.
+    const res = await registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "789", produtoId: "p1", quantidade: 7, modo: "substituir" })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.contagem.quantidadeContada).toBe(7)
+    expect(h.store.contagens.filter((c) => c.codigoBipado === "789")).toHaveLength(1)
+    expect(h.registrarAjusteEstoque).not.toHaveBeenCalled()
+    expect((h.store.produtos[0].stock as number)).toBe(20)
   })
 
   it("NÃO altera Produto.stock na bipagem (registrarAjusteEstoque nunca é chamado)", async () => {
@@ -442,5 +457,49 @@ describe("fluxo de produto NÃO cadastrado (pendência) continua intacto", () =>
     expect(res.contagem.produtoId).toBeNull()
     expect(res.contagem.quantidadeContada).toBe(4)
     expect(h.registrarAjusteEstoque).not.toHaveBeenCalled()
+  })
+})
+
+describe("reconciliação — vincular pendência (cadastrar / associar)", () => {
+  it("vincula a um produto recém-cadastrado → sai da fila; reaplicar é rejeitado (idempotência)", async () => {
+    seedSessao()
+    seedProduto("pNovo", { stock: 0 }) // produto criado a partir da pendência
+    const pend = await registrarPendenciaInventario(STORE, { sessaoId: "s1", codigo: "SEM-CAD", quantidade: 3, nomeRapido: "Capinha X" })
+    expect(pend.ok).toBe(true)
+    if (!pend.ok) return
+
+    const res = await vincularPendenciaInventario(STORE, "s1", pend.contagem.id, "pNovo", "cadastrado")
+    expect(res.ok).toBe(true)
+    // não mexeu no estoque do produto vinculado.
+    expect(h.registrarAjusteEstoque).not.toHaveBeenCalled()
+    expect((h.store.produtos.find((p) => p.id === "pNovo")!.stock as number)).toBe(0)
+
+    // segunda chamada: já resolvido → rejeita (não duplica vínculo).
+    const res2 = await vincularPendenciaInventario(STORE, "s1", pend.contagem.id, "pNovo", "cadastrado")
+    expect(res2.ok).toBe(false)
+    if (res2.ok) return
+    expect(res2.reason).toMatch(/resolvid/i)
+  })
+
+  it("vincula a um produto existente (associado)", async () => {
+    seedSessao()
+    seedProduto("pExist", { stock: 5 })
+    const pend = await registrarPendenciaInventario(STORE, { sessaoId: "s1", codigo: "SEM-CAD2", quantidade: 1 })
+    expect(pend.ok).toBe(true)
+    if (!pend.ok) return
+    const res = await vincularPendenciaInventario(STORE, "s1", pend.contagem.id, "pExist", "associado")
+    expect(res.ok).toBe(true)
+    expect((h.store.produtos.find((p) => p.id === "pExist")!.stock as number)).toBe(5) // estoque intacto
+  })
+
+  it("rejeita vínculo a produto de outra loja / inexistente", async () => {
+    seedSessao()
+    const pend = await registrarPendenciaInventario(STORE, { sessaoId: "s1", codigo: "SEM-CAD3", quantidade: 2 })
+    expect(pend.ok).toBe(true)
+    if (!pend.ok) return
+    const res = await vincularPendenciaInventario(STORE, "s1", pend.contagem.id, "fantasma", "associado")
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.reason).toMatch(/não encontrado/i)
   })
 })

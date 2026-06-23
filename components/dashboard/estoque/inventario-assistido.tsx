@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Clock,
   Boxes,
+  Pencil,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -133,7 +134,8 @@ export function InventarioAssistido() {
   const [pendenciaCodigo, setPendenciaCodigo] = useState<string | null>(null)
   const [registrandoPendencia, setRegistrandoPendencia] = useState(false)
 
-  // Modal de contagem (produto cadastrado → informar quantidade + modo substituir/somar)
+  // Modal de contagem (produto cadastrado → informar quantidade + modo substituir/somar).
+  // Aberto tanto pela bipagem quanto pelo botão "Editar" da tabela ao vivo (modo/qtd iniciais).
   const [contagemProduto, setContagemProduto] = useState<{
     codigo: string
     produtoId: string
@@ -143,6 +145,8 @@ export function InventarioAssistido() {
     jaContado: number
     ultimaContagemEm: string | null
     movimentacaoPosContagem: number
+    modoInicial?: ModoContagem
+    quantidadeInicial?: number
   } | null>(null)
   const [registrandoContagem, setRegistrandoContagem] = useState(false)
 
@@ -280,6 +284,30 @@ export function InventarioAssistido() {
       }
     },
     [contagemProduto, sessao, storeId, toast]
+  )
+
+  // Editar a quantidade de uma linha já contada (produto cadastrado). Reusa o MESMO modal e a
+  // MESMA action — abre em "substituir" com o total atual, mas o operador pode trocar p/ "somar".
+  const handleEditarContagem = useCallback(
+    async (c: InventarioContagemDTO) => {
+      if (!sessao || !storeId || !c.produtoId) return
+      let movimentacaoPosContagem = 0
+      const ctx = await getContextoContagemProduto(storeId, sessao.id, c.produtoId)
+      if (ctx.ok) movimentacaoPosContagem = ctx.contexto.movimentacaoPosContagem
+      setContagemProduto({
+        codigo: c.codigoBipado,
+        produtoId: c.produtoId,
+        nome: c.produtoNome || c.codigoBipado,
+        sku: c.produtoSku,
+        estoqueSistema: c.estoqueSistema,
+        jaContado: c.quantidadeContada,
+        ultimaContagemEm: c.ultimoBipeEm,
+        movimentacaoPosContagem,
+        modoInicial: "substituir",
+        quantidadeInicial: c.quantidadeContada,
+      })
+    },
+    [sessao, storeId]
   )
 
   const jaPendenteDoModal = useMemo(() => {
@@ -616,6 +644,7 @@ export function InventarioAssistido() {
                     <TableHead className="text-right">Contado</TableHead>
                     <TableHead className="text-right">Diferença</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Ação</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -655,6 +684,20 @@ export function InventarioAssistido() {
                             {meta.label}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-right">
+                          {c.produtoId && c.status === "encontrado" ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1"
+                              onClick={() => void handleEditarContagem(c)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" /> Editar
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                       </TableRow>
                     )
                   })}
@@ -685,6 +728,8 @@ export function InventarioAssistido() {
         jaContado={contagemProduto?.jaContado ?? 0}
         ultimaContagemEm={contagemProduto?.ultimaContagemEm ?? null}
         movimentacaoPosContagem={contagemProduto?.movimentacaoPosContagem ?? 0}
+        modoInicial={contagemProduto?.modoInicial}
+        quantidadeInicial={contagemProduto?.quantidadeInicial}
         registrando={registrandoContagem}
         onConfirmar={(dados) => void handleConfirmarContagem(dados)}
         onCancelar={handleCancelarContagem}

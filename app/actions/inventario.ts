@@ -269,78 +269,6 @@ export async function getInventarioAtivo(storeId: string): Promise<InventarioAti
   }
 }
 
-export type RegistrarBipeResult =
-  | { ok: true; contagem: InventarioContagemDTO; contagens: InventarioContagemDTO[] }
-  | ActionFail;
-
-/**
- * Registra um bipe na sessão.
- *  - `produtoId` (id Prisma resolvido pelo `/api/ops/inventory/lookup` no cliente) é RE-VALIDADO
- *    aqui contra a loja — o snapshot autoritativo vem do banco, nunca do cliente.
- *  - 1º bipe de um código → cria a linha (encontrado/reconciliação). 2º bipe → incrementa (a
- *    unicidade `@@unique([sessaoId, codigoBipado])` garante uma linha por código).
- */
-export async function registrarBipe(
-  storeId: string,
-  input: { sessaoId: string; codigo: string; produtoId?: string | null }
-): Promise<RegistrarBipeResult> {
-  const g = await guard(storeId);
-  if (!g.ok) return g;
-
-  const sessaoId = (input.sessaoId ?? "").trim();
-  if (!sessaoId) return { ok: false, reason: "Sessão inválida" };
-  const codigo = normalizarCodigo(input.codigo);
-  if (!codigo) return { ok: false, reason: "Código bipado vazio" };
-
-  try {
-    // Sessão precisa existir, ser desta loja e estar aberta.
-    const sessao = await prisma.inventarioSessao.findFirst({
-      where: { id: sessaoId, storeId: g.sid, status: STATUS_SESSAO.ABERTA },
-      select: { id: true },
-    });
-    if (!sessao) return { ok: false, reason: "Sessão não encontrada ou já encerrada" };
-
-    // Snapshot autoritativo: re-busca o produto por id NA LOJA (ignora dados do cliente).
-    let produto: ProdutoEstoque | null = null;
-    const pid = (input.produtoId ?? "").trim();
-    if (pid) {
-      const row = await prisma.produto.findFirst({
-        where: { id: pid, storeId: g.sid },
-        select: { id: true, name: true, sku: true, barcode: true, stock: true },
-      });
-      if (row) {
-        produto = { id: row.id, nome: row.name, sku: row.sku, barcode: row.barcode, stock: row.stock };
-      }
-    }
-
-    // Classificação pela função PURA testada (encontrado × reconciliação + snapshot).
-    const { linha } = aplicarBipe(null, { codigoBipado: codigo, produto });
-
-    const saved = await prisma.inventarioContagem.upsert({
-      where: { sessaoId_codigoBipado: { sessaoId, codigoBipado: codigo } },
-      create: {
-        storeId: g.sid,
-        sessaoId,
-        produtoId: linha.produtoId,
-        codigoBipado: codigo,
-        produtoNomeSnapshot: linha.produtoNomeSnapshot ?? null,
-        produtoSkuSnapshot: linha.produtoSkuSnapshot ?? null,
-        estoqueSistemaSnapshot: linha.estoqueSistemaSnapshot,
-        quantidadeContada: linha.quantidadeContada,
-        status: linha.status,
-      },
-      // 2º+ bipe: só incrementa a quantidade (preserva produto/status/snapshot da 1ª leitura).
-      update: { quantidadeContada: { increment: 1 }, ultimoBipeEm: new Date() },
-      select: CONTAGEM_SELECT,
-    });
-
-    const contagens = await loadContagens(g.sid, sessaoId);
-    return { ok: true, contagem: contagemToDTO(saved), contagens };
-  } catch (e) {
-    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar bipe" };
-  }
-}
-
 export type RegistrarContagemProdutoResult =
   | { ok: true; contagem: InventarioContagemDTO; contagens: InventarioContagemDTO[] }
   | ActionFail;
@@ -503,8 +431,8 @@ export type RegistrarPendenciaResult =
 /**
  * Registra (ou soma) uma leitura de PENDÊNCIA — código bipado sem produto resolvido — vinda do
  * modal de captura: quantidade observada explícita pelo operador (em vez do +1 fixo) e nome
- * rápido opcional. Sibling de `registrarBipe`, mesma validação de sessão/unicidade; a soma de
- * quantidade reusa `aplicarBipe` (núcleo PURO) e o nome/contador de leituras usa
+ * rápido opcional. Sibling de `registrarContagemProduto`, mesma validação de sessão/unicidade; a
+ * soma de quantidade reusa `aplicarBipe` (núcleo PURO) e o nome/contador de leituras usa
  * `inventario-pendencia.ts` (payload, sem schema novo). NUNCA cria produto, NUNCA toca estoque.
  */
 export async function registrarPendenciaInventario(
@@ -530,8 +458,8 @@ export async function registrarPendenciaInventario(
       where: { sessaoId, codigoBipado: codigo, storeId: g.sid },
       select: { id: true, quantidadeContada: true, status: true, payload: true },
     });
-    // Código já resolvido para um produto nesta sessão: a quantidade é controlada pela
-    // bipagem normal (registrarBipe), não pelo modal de pendência.
+    // Código já resolvido para um produto nesta sessão: a quantidade é controlada pelo modal de
+    // contagem (registrarContagemProduto), não pelo modal de pendência.
     if (existente && existente.status === STATUS_CONTAGEM.ENCONTRADO) {
       return { ok: false, reason: "Este código já está associado a um produto nesta sessão" };
     }

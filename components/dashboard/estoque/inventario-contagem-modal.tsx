@@ -53,6 +53,10 @@ export type InventarioContagemModalProps = {
   ultimaContagemEm: string | null
   /** Σ de movimentações de estoque após a última contagem (venda −, entrada +). 0 = nenhuma. */
   movimentacaoPosContagem: number
+  /** Modo inicial do seletor (ex.: edição abre em "substituir"). Default: heurística por jaContado. */
+  modoInicial?: ModoContagem
+  /** Quantidade inicial do campo (ex.: edição pré-preenche com o total atual). Default: 1. */
+  quantidadeInicial?: number
   registrando: boolean
   onConfirmar: (dados: { quantidade: number; modo: ModoContagem }) => void
   onCancelar: () => void
@@ -65,6 +69,8 @@ export function InventarioContagemModal({
   jaContado,
   ultimaContagemEm,
   movimentacaoPosContagem,
+  modoInicial,
+  quantidadeInicial,
   registrando,
   onConfirmar,
   onCancelar,
@@ -75,12 +81,13 @@ export function InventarioContagemModal({
 
   useEffect(() => {
     if (open) {
-      // Já contado → SOMAR 1 (additivo e previsível, igual ao antigo +1). 1ª leitura → SUBSTITUIR.
-      setModo(jaContado > 0 ? MODO_CONTAGEM.SOMAR : MODO_CONTAGEM.SUBSTITUIR)
-      setQuantidade(1)
+      // Edição: respeita modo/quantidade iniciais (substituir + total atual). Bipagem: heurística —
+      // já contado → SOMAR 1 (additivo e previsível, igual ao antigo +1); 1ª leitura → SUBSTITUIR.
+      setModo(modoInicial ?? (jaContado > 0 ? MODO_CONTAGEM.SOMAR : MODO_CONTAGEM.SUBSTITUIR))
+      setQuantidade(Math.max(1, Math.trunc(Number(quantidadeInicial)) || 1))
       requestAnimationFrame(() => qtdInputRef.current?.select())
     }
-  }, [open, jaContado])
+  }, [open, jaContado, modoInicial, quantidadeInicial])
 
   const ajustar = (delta: number) => setQuantidade((q) => Math.max(1, q + delta))
 
