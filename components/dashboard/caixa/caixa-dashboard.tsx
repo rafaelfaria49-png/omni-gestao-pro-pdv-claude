@@ -4,7 +4,8 @@ import { useMemo, useState } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCaixa } from "./caixa-provider"
-import { ensureLedger, useOperationsStore } from "@/lib/operations-store"
+import { useOperationsStore } from "@/lib/operations-store"
+import { useCaixaResumo } from "./use-caixa-resumo"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { cn } from "@/lib/utils"
 
@@ -38,9 +39,11 @@ function horaCurta(at: string): string {
 
 export function CaixaDashboard({ className }: { className?: string }) {
   const [open, setOpen] = useState(false)
-  const { caixa, getSaldoAtual, sessaoId } = useCaixa()
-  const { dailyLedger, devolucoes, sales } = useOperationsStore()
-  const ledger = ensureLedger(dailyLedger)
+  const { sessaoId } = useCaixa()
+  const { devolucoes, sales } = useOperationsStore()
+  // Fonte ÚNICA e autoritativa (mesma do fechamento): vendas canceladas NUNCA contam.
+  const { resumo, entradas, saidas, saldoEsperado, qtdCanceladas, totalCanceladas } =
+    useCaixaResumo(open)
   const today = new Date().toISOString().split("T")[0]
 
   const devolucoesHoje = useMemo(
@@ -49,25 +52,26 @@ export function CaixaDashboard({ className }: { className?: string }) {
   )
   const totalCreditoDevolucao = devolucoesHoje.reduce((s, d) => s + (d.creditIssued ?? 0), 0)
 
-  // Últimas vendas do dia. Fonte real já existente: `store.sales`
-  // (localStorage + /api/ops/vendas-list). Sem mock: lista vazia => empty state honesto.
-  // Não recalcula nem altera nenhum total do caixa — é apenas uma visão de leitura.
+  // Últimas vendas do dia — inclui canceladas (riscadas, com selo) para auditoria visual.
+  // Os totais acima NUNCA somam venda cancelada (vêm do resumo autoritativo).
   const recentSales = useMemo(
     () =>
       sales
-        .filter((s) => String(s.at).startsWith(today) && s.status !== "cancelada")
+        .filter((s) => String(s.at).startsWith(today))
         .sort((a, b) => String(b.at).localeCompare(String(a.at)))
         .slice(0, 6),
     [sales, today]
   )
 
+  const pg = resumo.porPagamento
   const formasPagamento: Array<[string, number]> = [
-    ["Dinheiro", ledger.vendasDinheiro],
-    ["Pix", ledger.vendasPix],
-    ["Cartão débito", ledger.vendasCartaoDebito],
-    ["Cartão crédito", ledger.vendasCartaoCredito],
-    ["Carnê / a prazo", ledger.vendasCarne],
-    ["Crédito / vale", ledger.vendasCreditoVale],
+    ["Dinheiro", pg.dinheiro],
+    ["Pix", pg.pix],
+    ["Cartão débito", pg.cartaoDebito],
+    ["Cartão crédito", pg.cartaoCredito],
+    ["Carnê", pg.carne],
+    ["A prazo (fiado)", pg.aPrazo],
+    ["Crédito / vale", pg.creditoVale],
   ]
 
   return (
@@ -90,29 +94,29 @@ export function CaixaDashboard({ className }: { className?: string }) {
             </p>
           )}
 
-          {/* Métricas do caixa — linha única no desktop (compacto) */}
+          {/* Métricas do caixa — linha única no desktop (compacto). Autoritativo. */}
           <div className="mb-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
             <div className="rounded-md border border-border bg-background/80 p-2">
               <p className="text-muted-foreground">Abertura</p>
-              <p className="text-sm font-semibold">{fmt(caixa.saldoInicial)}</p>
+              <p className="text-sm font-semibold">{fmt(resumo.saldoInicial)}</p>
             </div>
             <div className="rounded-md border border-border bg-background/80 p-2">
               <p className="text-muted-foreground">Saldo esperado (caixa)</p>
-              <p className="text-sm font-semibold text-primary">{fmt(getSaldoAtual())}</p>
+              <p className="text-sm font-semibold text-primary">{fmt(saldoEsperado)}</p>
             </div>
             <div className="rounded-md border border-border bg-background/80 p-2">
               <p className="text-muted-foreground">Entradas (vendas + supr.)</p>
-              <p className="text-sm font-semibold text-primary">{fmt(caixa.totalEntradas)}</p>
+              <p className="text-sm font-semibold text-primary">{fmt(entradas)}</p>
             </div>
             <div className="rounded-md border border-border bg-background/80 p-2">
               <p className="text-muted-foreground">Saídas (sangrias)</p>
-              <p className="text-sm font-semibold text-destructive">{fmt(caixa.totalSaidas)}</p>
+              <p className="text-sm font-semibold text-destructive">{fmt(saidas)}</p>
             </div>
           </div>
 
           {/* Duas colunas no desktop: formas de pagamento (esq.) × últimas vendas (dir.) */}
           <div className="grid gap-3 lg:grid-cols-2">
-            {/* Esquerda: formas de pagamento + total (totais inalterados) */}
+            {/* Esquerda: formas de pagamento + total (sem vendas canceladas) */}
             <div className="space-y-1.5 rounded-md border border-border bg-background/80 p-2">
               <p className="font-semibold text-foreground">Formas de pagamento (hoje)</p>
               {formasPagamento.map(([label, value]) => (
@@ -123,7 +127,7 @@ export function CaixaDashboard({ className }: { className?: string }) {
               ))}
               <div className="flex justify-between gap-2 border-t border-border pt-1.5 font-semibold">
                 <span>Total vendas (dia)</span>
-                <span className="tabular-nums">{fmt(ledger.totalVendas)}</span>
+                <span className="tabular-nums">{fmt(pg.total)}</span>
               </div>
             </div>
 
@@ -145,6 +149,7 @@ export function CaixaDashboard({ className }: { className?: string }) {
               ) : (
                 <ul className="divide-y divide-border/40">
                   {recentSales.map((s) => {
+                    const cancelada = s.status === "cancelada"
                     const nItens = s.lines.reduce((acc, l) => acc + (l.quantity || 0), 0)
                     const nItensLabel =
                       nItens % 1 === 0 ? String(nItens) : nItens.toLocaleString("pt-BR", { maximumFractionDigits: 3 })
@@ -152,15 +157,27 @@ export function CaixaDashboard({ className }: { className?: string }) {
                       <li key={s.id} className="flex items-center justify-between gap-2 py-1">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-semibold tabular-nums">{fmt(s.total)}</span>
+                            <span
+                              className={cn(
+                                "font-semibold tabular-nums",
+                                cancelada && "text-muted-foreground line-through"
+                              )}
+                            >
+                              {fmt(s.total)}
+                            </span>
                             <span className="text-muted-foreground">· {metodoLabel(s.paymentBreakdown)}</span>
+                            {cancelada && (
+                              <span className="shrink-0 rounded bg-destructive/15 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-destructive">
+                                Cancelada
+                              </span>
+                            )}
                           </div>
                           <div className="truncate text-[10px] text-muted-foreground">
                             {horaCurta(s.at)} · {nItensLabel} {nItens === 1 ? "item" : "itens"}
                             {s.customerName ? ` · ${s.customerName}` : ""}
                           </div>
                         </div>
-                        {s.syncPending && (
+                        {s.syncPending && !cancelada && (
                           <span className="shrink-0 rounded bg-amber-500/15 px-1 py-px text-[9px] font-medium text-amber-600 dark:text-amber-300">
                             sincronizando
                           </span>
@@ -172,6 +189,17 @@ export function CaixaDashboard({ className }: { className?: string }) {
               )}
             </div>
           </div>
+
+          {/* Cancelamentos — informativo, fora dos totais (fonte real: vendas canceladas) */}
+          {qtdCanceladas > 0 && (
+            <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-2">
+              <p className="font-semibold text-destructive">Cancelamentos (sessão)</p>
+              <p className="text-muted-foreground">
+                {qtdCanceladas} venda(s) · {fmt(totalCanceladas)} estornado(s) — não entram nas entradas,
+                saldo nem formas de pagamento.
+              </p>
+            </div>
+          )}
 
           {/* Devoluções — rodapé compacto */}
           <div className="mt-3 rounded-md border border-border bg-background/80 p-2">

@@ -18,6 +18,7 @@ import { useCaixa } from "./caixa-provider"
 import { AberturaCaixaModal } from "./abertura-caixa-modal"
 import { FechamentoCaixaModal } from "./fechamento-caixa-modal"
 import { CaixaDashboard } from "./caixa-dashboard"
+import { useCaixaResumo } from "./use-caixa-resumo"
 import { cn } from "@/lib/utils"
 import { useLojaAtiva } from "@/lib/loja-ativa"
 import { useTerminalAtivo } from "@/lib/pdv-terminal"
@@ -47,13 +48,18 @@ export function CaixaStatusBar({
   onOpenFechamentoSignalConsumed,
   variant = "default",
 }: CaixaStatusBarProps) {
-  const { caixa, getSaldoAtual, sessaoId } = useCaixa()
+  const { caixa, sessaoId } = useCaixa()
   const { registrarOperacaoCaixa } = useOperationsStore()
   const { lojaAtivaId } = useLojaAtiva()
   const { terminal, clear: clearTerminal } = useTerminalAtivo(lojaAtivaId)
   const { toast } = useToast()
   const [showAbertura, setShowAbertura] = useState(false)
   const [showFechamento, setShowFechamento] = useState(false)
+  // Números autoritativos do caixa (mesma fonte do Resumo do caixa e do Fechamento):
+  // vendas canceladas/estornadas NUNCA entram em Entradas/Saídas/Saldo. `resumoRefreshKey`
+  // força nova reconciliação após sangria/suprimento.
+  const [resumoRefreshKey, setResumoRefreshKey] = useState(0)
+  const { entradas, saidas, saldoEsperado } = useCaixaResumo(caixa.isOpen, resumoRefreshKey)
 
   // Sangria/Suprimento acessível em TODOS os PDVs — a barra é compartilhada
   // (Clássico, Rápido/Supermercado, Assistência, Venda Completa). Reusa o mesmo
@@ -127,6 +133,8 @@ export function CaixaStatusBar({
     } finally {
       setOpSaving(false)
       closeOp()
+      // Recarrega operações do servidor para refletir a sangria/suprimento nos totais.
+      setResumoRefreshKey((k) => k + 1)
     }
   }
 
@@ -258,7 +266,7 @@ export function CaixaStatusBar({
               <TrendingUp className="w-4 h-4 text-success shrink-0" />
               <div className="text-right min-w-0">
                 <p className="text-xs text-success/80 dark:text-success/70">Entradas</p>
-                <p className="font-semibold text-sm text-success truncate">{formatCurrency(caixa.totalEntradas)}</p>
+                <p className="font-semibold text-sm text-success truncate">{formatCurrency(entradas)}</p>
               </div>
             </div>
 
@@ -266,14 +274,14 @@ export function CaixaStatusBar({
               <TrendingDown className="w-4 h-4 text-destructive shrink-0" />
               <div className="text-right min-w-0">
                 <p className="text-xs text-destructive/80 dark:text-destructive/70">Saídas</p>
-                <p className="font-semibold text-sm text-destructive truncate">{formatCurrency(caixa.totalSaidas)}</p>
+                <p className="font-semibold text-sm text-destructive truncate">{formatCurrency(saidas)}</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2 px-4 py-2 bg-success/15 border border-success/30 rounded-lg min-w-0">
               <div className="text-right min-w-0">
                 <p className="text-xs text-success/90 dark:text-success">Saldo Atual</p>
-                <p className="font-bold text-lg text-success truncate">{formatCurrency(getSaldoAtual())}</p>
+                <p className="font-bold text-lg text-success truncate">{formatCurrency(saldoEsperado)}</p>
               </div>
             </div>
           </div>

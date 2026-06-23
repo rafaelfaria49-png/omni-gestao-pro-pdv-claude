@@ -9,6 +9,7 @@ import { opsLojaIdFromStorageKey } from "@/lib/ops-loja-id"
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers"
 import { LEGACY_PRIMARY_STORE_ID } from "@/lib/store-defaults"
 import type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
+import { mergeSalesById } from "@/lib/operations-sales-merge"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import { readSelectedTerminal } from "@/lib/pdv-terminal"
 import { emitEvent } from "@/lib/events/event-bus"
@@ -135,22 +136,9 @@ function nextSaleId(sales: SaleRecord[]): string {
   return `VDA-${year}-${String(max + 1).padStart(4, "0")}`
 }
 
-/** Mescla vendas do Postgres sem sobrescrever o que já veio do localStorage (mesmo `id`). */
-function mergeSalesById(local: SaleRecord[], remote: SaleRecord[]): SaleRecord[] {
-  const remoteIds = new Set(remote.map((s) => s.id).filter(Boolean))
-  let reconciledPending = false
-  const mergedLocal = local.map((s) => {
-    if (s.syncPending && s.id && remoteIds.has(s.id)) {
-      reconciledPending = true
-      return { ...s, syncPending: false }
-    }
-    return s
-  })
-  const ids = new Set(mergedLocal.map((s) => s.id))
-  const extra = remote.filter((s) => s.id && !ids.has(s.id))
-  if (extra.length === 0 && !reconciledPending) return local
-  return [...mergedLocal, ...extra].sort((a, b) => a.at.localeCompare(b.at))
-}
+// `mergeSalesById` (pura) vive em `@/lib/operations-sales-merge` — importada acima e
+// reutilizada por `loadDb` e `refreshSalesFromServer`. Mantida fora deste módulo client
+// para permitir teste isolado em ambiente node.
 
 function formatVendaPersistErrorBody(body: string, status: number): string {
   try {
@@ -319,6 +307,12 @@ interface OperationsContextType {
     localId: string
     operador?: string
   }) => Promise<{ ok: true; deduped?: boolean } | { ok: false; reason: string }>
+  /**
+   * Re-busca as vendas do servidor (`/api/ops/vendas-list`) e reconcilia o estado local,
+   * propagando o `status` autoritativo (ex.: cancelamento feito na tela Vendas) para o
+   * caixa/fechamento. Best-effort: erro de rede não altera o estado.
+   */
+  refreshSalesFromServer: () => Promise<void>
   /**
    * Reenvia ao servidor uma venda local marcada como `syncPending`. Em sucesso,
    * limpa `syncPending`. Em erro, mantém o estado pendente e devolve o motivo.
@@ -828,6 +822,32 @@ export function OperationsProvider({
     }
   }, [storageKey])
 
+  const refreshSalesFromServer = useCallback<OperationsContextType["refreshSalesFromServer"]>(
+    async () => {
+      const lj = opsLojaIdFromStorageKey(storageKey)
+      try {
+        const rV = await fetch(`/api/ops/vendas-list?lojaId=${encodeURIComponent(lj)}`, {
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            "Content-Type": "application/json",
+            [ASSISTEC_LOJA_HEADER]: lj,
+          },
+        })
+        if (!rV.ok) return
+        const jV = (await rV.json()) as { sales?: SaleRecord[] }
+        const remoteSales = jV.sales ?? []
+        setState((prev) => {
+          const merged = mergeSalesById(prev.sales, remoteSales)
+          return merged === prev.sales ? prev : { ...prev, sales: merged }
+        })
+      } catch {
+        /* best-effort — reconciliação não bloqueia o caixa */
+      }
+    },
+    [storageKey],
+  )
+
   const retrySyncSale = useCallback<OperationsContextType["retrySyncSale"]>(
     async (saleId) => {
       const sale = stateRef.current.sales.find((s) => s.id === saleId && s.syncPending === true)
@@ -1068,6 +1088,9 @@ export function OperationsProvider({
       flushPendingSales()
       flushPendingDevolucoes()
       flushPendingCaixaOperations()
+      // Reconcilia status autoritativo das vendas (ex.: cancelamento feito na tela
+      // Vendas) ao voltar o foco/rede — caixa/fechamento atualizam sem reload manual.
+      void refreshSalesFromServer()
     }
     const onVisible = () => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") onWake()
@@ -1080,7 +1103,7 @@ export function OperationsProvider({
       document.removeEventListener("visibilitychange", onVisible)
       window.clearInterval(interval)
     }
-  }, [opsDbReady, flushPendingSales, flushPendingDevolucoes, flushPendingCaixaOperations])
+  }, [opsDbReady, flushPendingSales, flushPendingDevolucoes, flushPendingCaixaOperations, refreshSalesFromServer])
 
   const setOrdens: OperationsContextType["setOrdens"] = useCallback((updater) => {
     setState((prev) => ({
@@ -1633,6 +1656,7 @@ export function OperationsProvider({
       finalizeSaleTransaction,
       registrarDevolucao,
       registrarOperacaoCaixa,
+      refreshSalesFromServer,
       retrySyncSale,
       discardLocalPendingSale,
       bulkDiscardLocalPendingSales,
@@ -1653,6 +1677,7 @@ export function OperationsProvider({
       finalizeSaleTransaction,
       registrarDevolucao,
       registrarOperacaoCaixa,
+      refreshSalesFromServer,
       retrySyncSale,
       discardLocalPendingSale,
       bulkDiscardLocalPendingSales,

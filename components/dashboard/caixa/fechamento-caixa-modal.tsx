@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import {
   Lock,
   DollarSign,
@@ -36,13 +36,10 @@ import { useTerminalAtivo } from "@/lib/pdv-terminal"
 import { useToast } from "@/hooks/use-toast"
 import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
 import {
-  aggregateCaixaOperacoes,
-  computeFechamentoResumo,
   filterSalesDaSessao,
   receitaTotalDoDia,
-  type CaixaOperacaoLinha,
-  type FechamentoResumo,
 } from "@/lib/caixa-fechamento-resumo"
+import { useCaixaResumo } from "./use-caixa-resumo"
 
 interface FechamentoCaixaModalProps {
   isOpen: boolean
@@ -53,7 +50,7 @@ const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)
 
 export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalProps) {
-  const { caixa, fecharCaixa, getSaldoAtual, sessaoId } = useCaixa()
+  const { caixa, fecharCaixa, sessaoId } = useCaixa()
   const { dailyLedger, sales } = useOperationsStore()
   const { empresaDocumentos, lojaAtivaId } = useLojaAtiva()
   const { data: session } = useSession()
@@ -69,77 +66,14 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const [valorContado, setValorContado] = useState("")
   const [observacao, setObservacao] = useState("")
   const [salvando, setSalvando] = useState(false)
-  const [sessaoOperacoes, setSessaoOperacoes] = useState<CaixaOperacaoLinha[]>([])
-  const [opsCarregando, setOpsCarregando] = useState(false)
 
   const ledger = ensureLedger(dailyLedger)
   const userAudit = (empresaDocumentos.nomeFantasia || "").trim() || "Loja"
 
-  // Operações da sessão no servidor (sangria / suprimento / recebimento_cr).
-  useEffect(() => {
-    if (!isOpen || !sessaoId?.trim() || !lojaAtivaId) {
-      setSessaoOperacoes([])
-      return
-    }
-    let cancelled = false
-    setOpsCarregando(true)
-    void fetch(`/api/ops/caixa/sessao-detalhe?sessaoId=${encodeURIComponent(sessaoId)}`, {
-      credentials: "include",
-      headers: { "x-assistec-loja-id": lojaAtivaId },
-      cache: "no-store",
-    })
-      .then((r) => r.json())
-      .then((j: { sessao?: { operacoes?: CaixaOperacaoLinha[] } }) => {
-        if (cancelled) return
-        const ops = j.sessao?.operacoes
-        setSessaoOperacoes(
-          Array.isArray(ops)
-            ? ops.map((o) => ({ tipo: o.tipo, valor: o.valor, payload: o.payload }))
-            : [],
-        )
-      })
-      .catch(() => {
-        if (!cancelled) setSessaoOperacoes([])
-      })
-      .finally(() => {
-        if (!cancelled) setOpsCarregando(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen, sessaoId, lojaAtivaId])
-
-  const resumo: FechamentoResumo = useMemo(() => {
-    const sessionSales = filterSalesDaSessao(sales, {
-      sessaoId,
-      dataAbertura: caixa.dataAbertura,
-    })
-    const opsAgg = aggregateCaixaOperacoes(sessaoOperacoes)
-    const usarOpsServidor = !!sessaoId?.trim() && !opsCarregando
-    const totalLiquidoSessao = sessionSales.reduce((s, v) => s + (v.total ?? 0), 0)
-    const sangrias = usarOpsServidor ? opsAgg.sangrias : caixa.totalSaidas
-    const suprimentos = usarOpsServidor
-      ? opsAgg.suprimentos
-      : Math.max(0, caixa.totalEntradas - totalLiquidoSessao)
-    return computeFechamentoResumo({
-      sales: sessionSales,
-      sangrias,
-      suprimentos,
-      saldoInicial: caixa.saldoInicial,
-      recebimentosContas: opsAgg.recebimentosContas,
-      recebimentosContasDinheiro: opsAgg.recebimentosContasDinheiro,
-      qtdRecebimentosContas: opsAgg.qtdRecebimentosContas,
-    })
-  }, [
-    sales,
-    sessaoId,
-    caixa.dataAbertura,
-    caixa.totalSaidas,
-    caixa.totalEntradas,
-    caixa.saldoInicial,
-    sessaoOperacoes,
-    opsCarregando,
-  ])
+  // Fonte ÚNICA e autoritativa — idêntica à do Resumo do caixa e da barra de status.
+  // Reconcilia o status das vendas (cancelamentos da tela Vendas) e exclui canceladas
+  // de TODOS os totais. Garante que o fechamento grave os mesmos números exibidos.
+  const { resumo, opsCarregando, saldoEsperado, entradas, saidas } = useCaixaResumo(isOpen)
 
   // Operador da sessão para o comprovante — nome LEGÍVEL (fonte única: abertura do
   // caixa → sessão → e-mail; nunca o `cashierId` técnico). O `cashierId` permanece
@@ -158,8 +92,9 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   // Fonte única (helper) para casar com a reimpressão do histórico.
   const receitaTotalDia = receitaTotalDoDia(resumo)
 
-  // Saldo total movimentado (inclui pix/cartão) — mantém compatibilidade com getSaldoAtual.
-  const saldoEsperado = getSaldoAtual()
+  // Saldo total movimentado (inclui pix/cartão) — AUTORITATIVO (resumo das vendas ativas,
+  // sem canceladas). Substitui o antigo acumulador local `getSaldoAtual()` que ficava
+  // inflado por vendas canceladas. É o número gravado como `saldoFinal` no fechamento.
   // Conferência de gaveta usa o DINHEIRO físico esperado (não inclui pix/cartão).
   const saldoDinheiroEsperado = resumo.saldoDinheiroEsperado
   const valorContadoNum = parseFloat(valorContado) || 0
@@ -282,8 +217,9 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
             payload: {
               ledger,
               saldoInicial: caixa.saldoInicial,
-              totalEntradas: caixa.totalEntradas,
-              totalSaidas: caixa.totalSaidas,
+              // Autoritativos (vendas ativas + operações do servidor) — sem canceladas.
+              totalEntradas: entradas,
+              totalSaidas: saidas,
               dataAberturaReal: caixa.dataAbertura?.toISOString() ?? null,
               // Consolidação ERP (por origem + por pagamento + totais) para o
               // comprovante de fechamento e futura impressão térmica. JSONB — sem schema novo.
@@ -405,10 +341,11 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
 
     // ── Sucesso confirmado pelo servidor: agora sim, encerra localmente ─────
     if (valorContado !== "" && temDiferenca) {
+      const pgAudit = resumo.porPagamento
       appendAuditLog({
         action: "quebra_caixa",
         userLabel: `${userAudit} (fechamento)`,
-        detail: `Esperado ${fmt(saldoEsperado)} | Contado ${fmt(valorContadoNum)} | Diferença ${fmt(diferenca)} | Dia: Din ${fmt(ledger.vendasDinheiro)} Pix ${fmt(ledger.vendasPix)} Déb ${fmt(ledger.vendasCartaoDebito)} Créd ${fmt(ledger.vendasCartaoCredito)} Carnê ${fmt(ledger.vendasCarne)} Vale ${fmt(ledger.vendasCreditoVale)}`,
+        detail: `Esperado ${fmt(saldoEsperado)} | Contado ${fmt(valorContadoNum)} | Diferença ${fmt(diferenca)} | Dia: Din ${fmt(pgAudit.dinheiro)} Pix ${fmt(pgAudit.pix)} Déb ${fmt(pgAudit.cartaoDebito)} Créd ${fmt(pgAudit.cartaoCredito)} Carnê ${fmt(pgAudit.carne)} Vale ${fmt(pgAudit.creditoVale)}`,
       })
     }
     if (observacao.trim()) {
