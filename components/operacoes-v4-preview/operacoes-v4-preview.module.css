@@ -1,0 +1,35 @@
+/*
+ * Operações V4 Preview — utilitários de :hover.
+ *
+ * O protótipo Cloud Design usava um atributo `style-hover` (não-padrão). Como
+ * estilos inline do React não suportam pseudo-classes, os poucos estados de
+ * hover ficam aqui, escopados via CSS Module (não vazam para o app).
+ */
+
+.hoverSurface {
+  transition: background-color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
+}
+.hoverSurface:hover {
+  background: #f4f5f7;
+}
+
+.hoverBorder {
+  transition: border-color 0.12s ease;
+}
+.hoverBorder:hover {
+  border-color: #c7ccfa;
+}
+
+.hoverSoft {
+  transition: background-color 0.12s ease;
+}
+.hoverSoft:hover {
+  background: #f6f7ff;
+}
+
+.hoverFade {
+  transition: opacity 0.12s ease;
+}
+.hoverFade:hover {
+  opacity: 0.85;
+}
