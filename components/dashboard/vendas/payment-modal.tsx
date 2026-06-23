@@ -25,6 +25,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -204,6 +214,7 @@ export function PaymentModal({
 }: PaymentModalProps) {
   const { config } = useConfigEmpresa()
   const [isConfirming, setIsConfirming] = useState(false)
+  const [showFinalConfirm, setShowFinalConfirm] = useState(false)
   const { pdvParams, storeId: storeIdForPdv } = useStoreSettings()
   const { toast } = useToast()
   const [payments, setPayments] = useState<PaymentMethod[]>([])
@@ -327,6 +338,31 @@ export function PaymentModal({
     !docInvalidoParaConfirmar &&
     !(descontoManualAtivo && !adminSessionOk)
 
+  const handleFinalConfirm = useCallback(() => {
+    setShowFinalConfirm(false)
+    setIsConfirming(true)
+    setTimeout(() => {
+      try {
+        const normalized = normalizePaymentsToMatchTotal(payments, total)
+        const adminIdForAudit = descontoManualAtivo ? (authorizedAdmin?.id || undefined) : undefined
+        onConfirm?.(normalized, {
+          cashierId,
+          discountAuthorizedByAdminId: descontoManualAtivo ? adminIdForAudit : undefined,
+          discountReais: Number(discountReais) || 0,
+          discountPercent: Number(discountPercent) || 0,
+        })
+        onClose()
+      } catch (err) {
+        setIsConfirming(false)
+        toast({
+          variant: "destructive",
+          title: "Erro ao confirmar",
+          description: err instanceof Error ? err.message : "Erro desconhecido",
+        })
+      }
+    }, 50)
+  }, [payments, total, descontoManualAtivo, authorizedAdmin, onConfirm, cashierId, discountReais, discountPercent, onClose, toast])
+
   // ── Computações à prazo ──────────────────────────────────────────────────────
   const aPrazoBundleTotal = Math.min(
     parseMoneyString(currentValue) > 0 ? parseMoneyString(currentValue) : faltaPagar,
@@ -353,6 +389,7 @@ export function PaymentModal({
 
   useEffect(() => {
     if (!isOpen) {
+      setShowFinalConfirm(false)
       setPayments([])
       setCurrentValue("")
       setSelectedType(null)
@@ -789,6 +826,7 @@ export function PaymentModal({
   // ════════════════════════════════════════════════════════════════════════
   if (twoColumn) {
     return (
+      <>
       <Dialog
         open={isOpen}
         onOpenChange={(open) => {
@@ -887,7 +925,7 @@ export function PaymentModal({
               {faltaPagar > 0 && (
                 <div className="space-y-3">
                   <Label className="text-sm text-muted-foreground">
-                    {selectedType === "dinheiro" && !multipayHint ? "Valor recebido" : "Valor a adicionar"}
+                    {selectedType === "dinheiro" && !multipayHint ? "Cliente entregou" : "Valor a adicionar"}
                   </Label>
                   <div className="relative">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground select-none">R$</span>
@@ -916,7 +954,7 @@ export function PaymentModal({
                     <Button variant="outline" size="sm" onClick={() => handleQuickValue(50)} className="border-border hover:bg-primary hover:text-primary-foreground">R$ 50</Button>
                     <Button variant="outline" size="sm" onClick={() => handleQuickValue(100)} className="border-border hover:bg-primary hover:text-primary-foreground">R$ 100</Button>
                     <Button variant="outline" size="sm" onClick={() => handleQuickValue(200)} className="border-border hover:bg-primary hover:text-primary-foreground">R$ 200</Button>
-                    <Button variant="outline" size="sm" onClick={() => handleQuickValue(faltaPagar)} className="border-border hover:bg-primary hover:text-primary-foreground">Restante</Button>
+                    <Button variant="outline" size="sm" onClick={() => handleQuickValue(faltaPagar)} className="border-border hover:bg-primary hover:text-primary-foreground">{selectedType === "dinheiro" && !multipayHint ? "Exato" : "Restante"}</Button>
                   </div>
 
                   {selectedType === "dinheiro" && !multipayHint && (
@@ -1464,27 +1502,7 @@ export function PaymentModal({
                     })
                     return
                   }
-                  setIsConfirming(true)
-                  setTimeout(() => {
-                    try {
-                      const normalized = normalizePaymentsToMatchTotal(payments, total)
-                      const adminIdForAudit = descontoManualAtivo ? (authorizedAdmin?.id || undefined) : undefined
-                      onConfirm?.(normalized, {
-                        cashierId,
-                        discountAuthorizedByAdminId: descontoManualAtivo ? adminIdForAudit : undefined,
-                        discountReais: Number(discountReais) || 0,
-                        discountPercent: Number(discountPercent) || 0,
-                      })
-                      onClose()
-                    } catch (err) {
-                      setIsConfirming(false)
-                      toast({
-                        variant: "destructive",
-                        title: "Erro ao confirmar",
-                        description: err instanceof Error ? err.message : "Erro desconhecido",
-                      })
-                    }
-                  }, 50)
+                  setShowFinalConfirm(true)
                 }}
                 disabled={!podeConfirmar}
                 className={cn(
@@ -1507,10 +1525,31 @@ export function PaymentModal({
           </div>
         </DialogContent>
       </Dialog>
+      <AlertDialog open={showFinalConfirm} onOpenChange={setShowFinalConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Finalizar venda?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Confirme para registrar esta venda. A operação não poderá ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Não, voltar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-emerald-600 text-zinc-950 hover:bg-emerald-500"
+              onClick={handleFinalConfirm}
+            >
+              Sim, finalizar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      </>
     )
   }
 
   return (
+    <>
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
@@ -1705,7 +1744,7 @@ export function PaymentModal({
           {/* Input de Valor */}
           {faltaPagar > 0 && (
             <div className="space-y-3">
-              <Label className="text-sm text-muted-foreground">Valor a Adicionar</Label>
+              <Label className="text-sm text-muted-foreground">{selectedType === "dinheiro" && !multipayHint ? "Cliente entregou" : "Valor a Adicionar"}</Label>
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground select-none">R$</span>
@@ -1747,13 +1786,13 @@ export function PaymentModal({
                 >
                   R$ 200
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => handleQuickValue(faltaPagar)}
                   className="border-border hover:bg-primary hover:text-primary-foreground"
                 >
-                  Total Restante
+                  {selectedType === "dinheiro" && !multipayHint ? "Exato" : "Restante"}
                 </Button>
               </div>
 
@@ -2237,27 +2276,7 @@ export function PaymentModal({
                   })
                   return
                 }
-                setIsConfirming(true)
-                setTimeout(() => {
-                  try {
-                    const normalized = normalizePaymentsToMatchTotal(payments, total)
-                    const adminIdForAudit = descontoManualAtivo ? (authorizedAdmin?.id || undefined) : undefined
-                    onConfirm?.(normalized, {
-                      cashierId,
-                      discountAuthorizedByAdminId: descontoManualAtivo ? adminIdForAudit : undefined,
-                      discountReais: Number(discountReais) || 0,
-                      discountPercent: Number(discountPercent) || 0,
-                    })
-                    onClose()
-                  } catch (err) {
-                    setIsConfirming(false)
-                    toast({
-                      variant: "destructive",
-                      title: "Erro ao confirmar",
-                      description: err instanceof Error ? err.message : "Erro desconhecido",
-                    })
-                  }
-                }, 50)
+                setShowFinalConfirm(true)
               }}
               disabled={isConfirming || faltaPagar > 0.02 || docInvalidoParaConfirmar || (descontoManualAtivo && !adminSessionOk)}
               className="flex-1 h-12 bg-emerald-600 font-bold text-zinc-950 hover:bg-emerald-500 disabled:opacity-50"
@@ -2275,5 +2294,25 @@ export function PaymentModal({
         </div>
       </DialogContent>
     </Dialog>
+    <AlertDialog open={showFinalConfirm} onOpenChange={setShowFinalConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Finalizar venda?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Confirme para registrar esta venda. A operação não poderá ser desfeita.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Não, voltar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-emerald-600 text-zinc-950 hover:bg-emerald-500"
+            onClick={handleFinalConfirm}
+          >
+            Sim, finalizar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

@@ -2418,6 +2418,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           Assistência (snapshot/revert preservados via closePaymentModal). */}
       <PaymentModal
         isOpen={paymentOpen}
+        twoColumn
         cartSubtotal={subtotal}
         impostoEstimado={impostoEstimado}
         total={total}
