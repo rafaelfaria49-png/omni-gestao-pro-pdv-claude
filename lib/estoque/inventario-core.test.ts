@@ -8,8 +8,12 @@
 import { describe, expect, it } from "vitest"
 import {
   STATUS_CONTAGEM,
+  MODO_CONTAGEM,
   assertStoreId,
   normalizarCodigo,
+  normalizarModoContagem,
+  sanitizarQuantidadeContagem,
+  aplicarModoContagem,
   aplicarBipe,
   diferencaContagem,
   montarRelatorioInventario,
@@ -88,6 +92,39 @@ describe("diferencaContagem", () => {
     expect(diferencaContagem(12, 15)).toBe(-3)
     expect(diferencaContagem(20, 15)).toBe(5)
     expect(diferencaContagem(15, 15)).toBe(0)
+  })
+})
+
+describe("contagem por quantidade (substituir × somar)", () => {
+  it("normalizarModoContagem: só 'somar' vira somar; o resto cai em substituir (default seguro)", () => {
+    expect(normalizarModoContagem("somar")).toBe(MODO_CONTAGEM.SOMAR)
+    expect(normalizarModoContagem("substituir")).toBe(MODO_CONTAGEM.SUBSTITUIR)
+    expect(normalizarModoContagem("qualquer")).toBe(MODO_CONTAGEM.SUBSTITUIR)
+    expect(normalizarModoContagem(null)).toBe(MODO_CONTAGEM.SUBSTITUIR)
+  })
+
+  it("sanitizarQuantidadeContagem: inteiro >= 0; inválidos/negativos viram 0", () => {
+    expect(sanitizarQuantidadeContagem(13)).toBe(13)
+    expect(sanitizarQuantidadeContagem(13.9)).toBe(13)
+    expect(sanitizarQuantidadeContagem(0)).toBe(0)
+    expect(sanitizarQuantidadeContagem(-4)).toBe(0)
+    expect(sanitizarQuantidadeContagem(Number.NaN)).toBe(0)
+    expect(sanitizarQuantidadeContagem(null)).toBe(0)
+  })
+
+  it("substituir: a quantidade vira o total contado (ignora o já contado)", () => {
+    expect(aplicarModoContagem(MODO_CONTAGEM.SUBSTITUIR, 0, 13)).toBe(13)
+    expect(aplicarModoContagem(MODO_CONTAGEM.SUBSTITUIR, 99, 13)).toBe(13)
+  })
+
+  it("somar: a quantidade soma ao já contado (10 + 5 = 15)", () => {
+    expect(aplicarModoContagem(MODO_CONTAGEM.SOMAR, 10, 5)).toBe(15)
+    expect(aplicarModoContagem(MODO_CONTAGEM.SOMAR, 0, 5)).toBe(5)
+  })
+
+  it("nunca negativo; quantidades inválidas não baixam o já contado em somar", () => {
+    expect(aplicarModoContagem(MODO_CONTAGEM.SOMAR, 10, -3)).toBe(10) // -3 sanitiza p/ 0
+    expect(aplicarModoContagem(MODO_CONTAGEM.SUBSTITUIR, 10, -3)).toBe(0)
   })
 })
 

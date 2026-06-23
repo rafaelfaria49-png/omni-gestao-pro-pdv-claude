@@ -133,6 +133,49 @@ export function diferencaContagem(quantidadeContada: number, estoqueSistema: num
   return (Math.trunc(Number(quantidadeContada)) || 0) - (Math.trunc(Number(estoqueSistema)) || 0)
 }
 
+// ─── Contagem por quantidade de produto cadastrado (substituir × somar) ─────────
+// Produto JÁ cadastrado pode ter a quantidade física informada de uma vez (em vez de só +1 por
+// bipe). Dois modos espelham a fala do operador:
+//   - SUBSTITUIR: "contei X unidades no total agora" → a quantidade informada VIRA o total.
+//   - SOMAR:      "já contei antes e achei mais X"   → a quantidade é ADICIONADA ao já contado.
+// PURO: nunca toca estoque. A nova quantidade é só o número gravado em `quantidadeContada`.
+
+export const MODO_CONTAGEM = {
+  SUBSTITUIR: "substituir",
+  SOMAR: "somar",
+} as const
+export type ModoContagem = (typeof MODO_CONTAGEM)[keyof typeof MODO_CONTAGEM]
+
+/** Normaliza o modo recebido do cliente; default seguro = SUBSTITUIR ("contei X no total"). */
+export function normalizarModoContagem(modo: string | null | undefined): ModoContagem {
+  return modo === MODO_CONTAGEM.SOMAR ? MODO_CONTAGEM.SOMAR : MODO_CONTAGEM.SUBSTITUIR
+}
+
+/**
+ * Quantidade contada informada manualmente: inteiro >= 0. Recontagem pode legitimamente
+ * baixar até zero (SUBSTITUIR 0 = "não tem nenhum"); valores inválidos/negativos viram 0.
+ */
+export function sanitizarQuantidadeContagem(n: number | null | undefined): number {
+  const v = Math.trunc(Number(n ?? 0))
+  return Number.isFinite(v) && v > 0 ? v : 0
+}
+
+/**
+ * Resolve a nova `quantidadeContada` a partir do modo, do já contado e da quantidade informada.
+ * PURO. Resultado nunca negativo.
+ *   - SUBSTITUIR → quantidade (o total passa a ser o número informado).
+ *   - SOMAR      → jaContado + quantidade.
+ */
+export function aplicarModoContagem(
+  modo: ModoContagem,
+  jaContado: number,
+  quantidade: number,
+): number {
+  const base = Math.max(0, Math.trunc(Number(jaContado)) || 0)
+  const q = sanitizarQuantidadeContagem(quantidade)
+  return modo === MODO_CONTAGEM.SOMAR ? base + q : q
+}
+
 // ─── Relatório de fechamento ──────────────────────────────────────────────────
 
 export type LinhaEncontrada = {

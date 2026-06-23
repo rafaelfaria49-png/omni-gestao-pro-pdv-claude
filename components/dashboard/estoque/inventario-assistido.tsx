@@ -32,21 +32,23 @@ import { cn } from "@/lib/utils"
 import {
   iniciarInventario,
   getInventarioAtivo,
-  registrarBipe,
+  registrarContagemProduto,
   registrarPendenciaInventario,
   listInventarioContagens,
   encerrarInventario,
   type InventarioSessaoDTO,
   type InventarioContagemDTO,
 } from "@/app/actions/inventario"
+import type { ModoContagem } from "@/lib/estoque/inventario-core"
 import { InventarioPendenciaModal } from "@/components/dashboard/estoque/inventario-pendencia-modal"
+import { InventarioContagemModal } from "@/components/dashboard/estoque/inventario-contagem-modal"
 
 // ─── Resolução de código via endpoint existente ────────────────────────────────
 // Reusa `GET /api/ops/inventory/lookup` (match exato barcode/sku/id no catálogo inteiro da
 // loja). Retorna o id Prisma (`dbId`) do produto, que a Server Action re-valida no banco.
 
 type LookupResult =
-  | { kind: "found"; produtoId: string; nome: string }
+  | { kind: "found"; produtoId: string; nome: string; sku: string | null; estoqueSistema: number | null }
   | { kind: "none" }
   | { kind: "error" }
 
@@ -57,7 +59,9 @@ async function resolverProdutoPorCodigo(code: string, storeId: string): Promise<
       { credentials: "include", headers: { [ASSISTEC_LOJA_HEADER]: storeId } }
     )
     if (!res.ok) return { kind: "error" }
-    const json = (await res.json()) as { items?: Array<{ dbId?: unknown; name?: unknown }> }
+    const json = (await res.json()) as {
+      items?: Array<{ dbId?: unknown; name?: unknown; sku?: unknown; stock?: unknown }>
+    }
     const items = Array.isArray(json.items) ? json.items : []
     const first = items.find((i) => typeof i.dbId === "string" && i.dbId)
     if (!first) return { kind: "none" }
@@ -65,6 +69,8 @@ async function resolverProdutoPorCodigo(code: string, storeId: string): Promise<
       kind: "found",
       produtoId: String(first.dbId),
       nome: typeof first.name === "string" ? first.name : code,
+      sku: typeof first.sku === "string" && first.sku ? first.sku : null,
+      estoqueSistema: typeof first.stock === "number" ? first.stock : null,
     }
   } catch {
     return { kind: "error" }
@@ -123,6 +129,16 @@ export function InventarioAssistido() {
   // Modal de pendência (código sem produto resolvido)
   const [pendenciaCodigo, setPendenciaCodigo] = useState<string | null>(null)
   const [registrandoPendencia, setRegistrandoPendencia] = useState(false)
+
+  // Modal de contagem (produto cadastrado → informar quantidade + modo substituir/somar)
+  const [contagemProduto, setContagemProduto] = useState<{
+    codigo: string
+    produtoId: string
+    nome: string
+    sku: string | null
+    estoqueSistema: number | null
+  } | null>(null)
+  const [registrandoContagem, setRegistrandoContagem] = useState(false)
 
   const carregar = useCallback(async () => {
     if (!storeId) {
@@ -198,13 +214,15 @@ export function InventarioAssistido() {
           setCodigo("")
           return
         }
-        const res = await registrarBipe(storeId, { sessaoId: sessao.id, codigo: code, produtoId: lookup.produtoId })
-        if (!res.ok) {
-          toast({ title: "Falha ao registrar bipe", description: res.reason, variant: "destructive" })
-          return
-        }
-        setContagens(res.contagens)
-        setUltimoBipe(res.contagem)
+        // Produto cadastrado: abre o modal de contagem para informar a quantidade física real
+        // e o modo (substituir / somar). A persistência só acontece na confirmação.
+        setContagemProduto({
+          codigo: code,
+          produtoId: lookup.produtoId,
+          nome: lookup.nome,
+          sku: lookup.sku,
+          estoqueSistema: lookup.estoqueSistema,
+        })
         setCodigo("")
       } finally {
         setBipando(false)
@@ -212,6 +230,46 @@ export function InventarioAssistido() {
       }
     },
     [codigo, sessao, storeId, toast]
+  )
+
+  const jaContadoDoModal = useMemo(() => {
+    if (!contagemProduto) return 0
+    const row = contagens.find(
+      (c) => c.produtoId === contagemProduto.produtoId && c.status === "encontrado"
+    )
+    return row ? row.quantidadeContada : 0
+  }, [contagemProduto, contagens])
+
+  const handleCancelarContagem = useCallback(() => {
+    setContagemProduto(null)
+    inputRef.current?.focus()
+  }, [])
+
+  const handleConfirmarContagem = useCallback(
+    async (dados: { quantidade: number; modo: ModoContagem }) => {
+      if (!contagemProduto || !sessao || !storeId) return
+      setRegistrandoContagem(true)
+      try {
+        const res = await registrarContagemProduto(storeId, {
+          sessaoId: sessao.id,
+          codigo: contagemProduto.codigo,
+          produtoId: contagemProduto.produtoId,
+          quantidade: dados.quantidade,
+          modo: dados.modo,
+        })
+        if (!res.ok) {
+          toast({ title: "Falha ao registrar contagem", description: res.reason, variant: "destructive" })
+          return
+        }
+        setContagens(res.contagens)
+        setUltimoBipe(res.contagem)
+        setContagemProduto(null)
+      } finally {
+        setRegistrandoContagem(false)
+        inputRef.current?.focus()
+      }
+    },
+    [contagemProduto, sessao, storeId, toast]
   )
 
   const jaPendenteDoModal = useMemo(() => {
@@ -479,8 +537,9 @@ export function InventarioAssistido() {
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Cada leitura incrementa a quantidade contada. Códigos não cadastrados vão para a fila de
-              reconciliação (nunca cadastram nem zeram nada automaticamente).
+              Ao identificar um produto cadastrado você informa a quantidade contada (substituir ou
+              somar). Códigos não cadastrados vão para a fila de reconciliação (nunca cadastram nem
+              zeram nada automaticamente).
             </p>
           )}
         </CardContent>
@@ -586,6 +645,20 @@ export function InventarioAssistido() {
         registrando={registrandoPendencia}
         onConfirmar={(dados) => void handleConfirmarPendencia(dados)}
         onCancelar={handleCancelarPendencia}
+      />
+
+      <InventarioContagemModal
+        open={contagemProduto !== null}
+        codigo={contagemProduto?.codigo ?? ""}
+        produto={
+          contagemProduto
+            ? { nome: contagemProduto.nome, sku: contagemProduto.sku, estoqueSistema: contagemProduto.estoqueSistema }
+            : null
+        }
+        jaContado={jaContadoDoModal}
+        registrando={registrandoContagem}
+        onConfirmar={(dados) => void handleConfirmarContagem(dados)}
+        onCancelar={handleCancelarContagem}
       />
     </div>
   )

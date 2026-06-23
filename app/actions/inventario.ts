@@ -7,12 +7,15 @@ import { canAccessStore } from "@/lib/auth/enterprise-permissions";
 import { registrarAjusteEstoque } from "@/app/actions/estoque";
 import {
   aplicarBipe,
+  aplicarModoContagem,
   diferencaContagem,
   montarRelatorioInventario,
   normalizarCodigo,
+  normalizarModoContagem,
   STATUS_CONTAGEM,
   STATUS_SESSAO,
   type ContagemLinha,
+  type ModoContagem,
   type ProdutoEstoque,
 } from "@/lib/estoque/inventario-core";
 import {
@@ -334,6 +337,99 @@ export async function registrarBipe(
     return { ok: true, contagem: contagemToDTO(saved), contagens };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar bipe" };
+  }
+}
+
+export type RegistrarContagemProdutoResult =
+  | { ok: true; contagem: InventarioContagemDTO; contagens: InventarioContagemDTO[] }
+  | ActionFail;
+
+/**
+ * Registra a quantidade física contada de um produto JÁ CADASTRADO, informada explicitamente pelo
+ * operador (em vez do +1 fixo da bipagem). Dois modos (`inventario-core`):
+ *   - "substituir": a quantidade vira o total contado ("contei X no total agora");
+ *   - "somar":      a quantidade é adicionada ao já contado ("achei mais X").
+ *
+ * Igual à bipagem normal: NUNCA altera `Produto.stock` — só grava a contagem física + o instante
+ * da observação (`ultimoBipeEm = agora`), que a conciliação usa como `contadoEm` por produto para
+ * projetar vendas/movimentações posteriores. O snapshot autoritativo do produto vem do banco
+ * (re-busca por id NA LOJA), nunca do cliente. O ajuste real de estoque continua só no
+ * fechamento/conciliação (F4/conciliação).
+ */
+export async function registrarContagemProduto(
+  storeId: string,
+  input: { sessaoId: string; codigo: string; produtoId: string; quantidade: number; modo: ModoContagem }
+): Promise<RegistrarContagemProdutoResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+
+  const sessaoId = (input.sessaoId ?? "").trim();
+  if (!sessaoId) return { ok: false, reason: "Sessão inválida" };
+  const codigo = normalizarCodigo(input.codigo);
+  if (!codigo) return { ok: false, reason: "Código bipado vazio" };
+  const pid = (input.produtoId ?? "").trim();
+  if (!pid) return { ok: false, reason: "Produto inválido" };
+  const modo = normalizarModoContagem(input.modo);
+
+  try {
+    const sessao = await prisma.inventarioSessao.findFirst({
+      where: { id: sessaoId, storeId: g.sid, status: STATUS_SESSAO.ABERTA },
+      select: { id: true },
+    });
+    if (!sessao) return { ok: false, reason: "Sessão não encontrada ou já encerrada" };
+
+    // Snapshot autoritativo: re-busca o produto por id NA LOJA (ignora dados do cliente).
+    const row = await prisma.produto.findFirst({
+      where: { id: pid, storeId: g.sid },
+      select: { id: true, name: true, sku: true, stock: true },
+    });
+    if (!row) return { ok: false, reason: "Produto não encontrado nesta loja" };
+
+    const existente = await prisma.inventarioContagem.findFirst({
+      where: { sessaoId, codigoBipado: codigo, storeId: g.sid },
+      select: { id: true, quantidadeContada: true, estoqueSistemaSnapshot: true },
+    });
+
+    const novaQuantidade = aplicarModoContagem(modo, existente?.quantidadeContada ?? 0, input.quantidade);
+    const estoqueSnapshot = Math.trunc(Number(row.stock)) || 0;
+
+    let saved: ContagemRow;
+    if (!existente) {
+      saved = await prisma.inventarioContagem.create({
+        data: {
+          storeId: g.sid,
+          sessaoId,
+          produtoId: row.id,
+          codigoBipado: codigo,
+          produtoNomeSnapshot: row.name,
+          produtoSkuSnapshot: row.sku,
+          estoqueSistemaSnapshot: estoqueSnapshot,
+          quantidadeContada: novaQuantidade,
+          status: STATUS_CONTAGEM.ENCONTRADO,
+        },
+        select: CONTAGEM_SELECT,
+      });
+    } else {
+      saved = await prisma.inventarioContagem.update({
+        where: { id: existente.id },
+        data: {
+          produtoId: row.id,
+          produtoNomeSnapshot: row.name,
+          produtoSkuSnapshot: row.sku,
+          // Preserva o snapshot do 1º bipe; só preenche se ainda nulo (promove linha de reconciliação).
+          ...(existente.estoqueSistemaSnapshot == null ? { estoqueSistemaSnapshot: estoqueSnapshot } : {}),
+          quantidadeContada: novaQuantidade,
+          status: STATUS_CONTAGEM.ENCONTRADO,
+          ultimoBipeEm: new Date(),
+        },
+        select: CONTAGEM_SELECT,
+      });
+    }
+
+    const contagens = await loadContagens(g.sid, sessaoId);
+    return { ok: true, contagem: contagemToDTO(saved), contagens };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar contagem" };
   }
 }
 
