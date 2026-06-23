@@ -92,11 +92,18 @@ export async function GET(req: Request) {
     }
 
     // Match exato pelas chaves canônicas do produto, escopado à loja:
-    // - barcode (EAN/GTIN) · sku (código interno / id operacional) · id (cuid Prisma / dbId).
+    // - barcode (EAN/GTIN) · sku (código interno / id operacional) · id (cuid Prisma / dbId)
+    // - codigosAlias: códigos extras vinculados na reconciliação do Inventário
+    //   (GOAL_INVENTARIO_BARCODE_ALIAS_V01 — persistidos em `metadata.codigosAlias`).
     const rows = await prisma.produto.findMany({
       where: {
         storeId: lojaId,
-        OR: [{ barcode: code }, { sku: code }, { id: code }],
+        OR: [
+          { barcode: code },
+          { sku: code },
+          { id: code },
+          { metadata: { path: ["codigosAlias"], array_contains: code } },
+        ],
       },
       orderBy: { name: "asc" },
       take: 10,

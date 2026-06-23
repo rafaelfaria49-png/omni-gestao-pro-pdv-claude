@@ -44,6 +44,11 @@ import {
   type VinculoPendencia,
 } from "@/lib/estoque/inventario-pendencia";
 import {
+  normalizarCodigoAlias,
+  produtoResolveCodigo,
+  adicionarCodigoAliasMetadata,
+} from "@/lib/estoque/produto-codigo-alias";
+import {
   montarConciliacao,
   simularAplicacaoConciliacao,
   saldoAplicavel,
@@ -1035,16 +1040,23 @@ export async function classificarReconciliacao(
 }
 
 // ─── F6 · Vínculo de fechamento da pendência (Cadastrar produto / Associar existente) ──────────
-// Fecha um item da fila de reconciliação apontando para um `produtoId`. É BOOKKEEPING puro: não
-// cria produto, não altera `Produto`/estoque e não vira alias de código no resolvedor do PDV
-// (`/api/ops/inventory/lookup`) — fica documentado como melhoria futura. Idempotente.
+// Fecha um item da fila de reconciliação apontando para um `produtoId` E grava o código bipado
+// como ALIAS persistente do produto (`Produto.metadata.codigosAlias`), para que a próxima bipagem
+// do mesmo código resolva o produto automaticamente (GOAL_INVENTARIO_BARCODE_ALIAS_V01). Não cria
+// produto nem altera `Produto.stock`. Idempotente. A unicidade do alias na loja é checada aqui.
 
-export type VincularPendenciaResult = { ok: true } | ActionFail;
+export type VincularPendenciaResult =
+  | { ok: true; codigoVinculado: string | null }
+  | ActionFail;
 
 /**
  * Vincula a pendência `contagemId` ao produto `produtoId` (recém-cadastrado ou já existente) e
  * a remove da fila ativa de reconciliação. Pré-condições: sessão da loja, contagem em
  * "reconciliacao", ainda sem vínculo, produto existente NA LOJA (re-busca no banco).
+ *
+ * Alias: se o código bipado ainda não resolve o produto (barcode/sku/alias) e não pertence a
+ * NENHUM outro produto da loja, é gravado em `metadata.codigosAlias`. Se pertencer a outro
+ * produto, o vínculo é BLOQUEADO com erro claro (não marca como resolvido).
  */
 export async function vincularPendenciaInventario(
   storeId: string,
@@ -1065,14 +1077,48 @@ export async function vincularPendenciaInventario(
   try {
     const linha = await prisma.inventarioContagem.findFirst({
       where: { id: cid, storeId: g.sid, sessaoId: sid, status: STATUS_CONTAGEM.RECONCILIACAO },
-      select: { id: true, payload: true },
+      select: { id: true, codigoBipado: true, payload: true },
     });
     if (!linha) return { ok: false, reason: "Item de reconciliação não encontrado" };
     if (pendenciaResolvida(linha.payload)) return { ok: false, reason: "Este item já foi resolvido" };
 
     // Snapshot autoritativo: o produto precisa existir NESTA loja (ignora dados do cliente).
-    const produto = await prisma.produto.findFirst({ where: { id: pid, storeId: g.sid }, select: { id: true } });
+    const produto = await prisma.produto.findFirst({
+      where: { id: pid, storeId: g.sid },
+      select: { id: true, barcode: true, sku: true, metadata: true },
+    });
     if (!produto) return { ok: false, reason: "Produto não encontrado nesta loja" };
+
+    // Alias: grava o código bipado no produto se ainda não o resolve (e não conflita com outro).
+    const codigo = normalizarCodigoAlias(linha.codigoBipado);
+    let codigoVinculado: string | null = null;
+    if (codigo && !produtoResolveCodigo(produto, codigo)) {
+      // Unicidade na loja: nenhum OUTRO produto pode já usar este código (barcode/sku/alias).
+      const conflito = await prisma.produto.findFirst({
+        where: {
+          storeId: g.sid,
+          id: { not: pid },
+          OR: [
+            { barcode: codigo },
+            { sku: codigo },
+            { metadata: { path: ["codigosAlias"], array_contains: codigo } },
+          ],
+        },
+        select: { id: true, name: true },
+      });
+      if (conflito) {
+        return {
+          ok: false,
+          reason: `O código "${codigo}" já pertence ao produto "${conflito.name}". Desvincule-o antes de usar aqui.`,
+        };
+      }
+      const novoMetadata = adicionarCodigoAliasMetadata(produto.metadata, codigo);
+      await prisma.produto.update({
+        where: { id: pid },
+        data: { metadata: novoMetadata as Prisma.InputJsonValue },
+      });
+      codigoVinculado = codigo;
+    }
 
     const novoPayload = marcarVinculoPendencia(linha.payload, {
       produtoId: pid,
@@ -1084,7 +1130,7 @@ export async function vincularPendenciaInventario(
       where: { id: linha.id },
       data: { payload: novoPayload as Prisma.InputJsonValue },
     });
-    return { ok: true };
+    return { ok: true, codigoVinculado };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao vincular pendência" };
   }

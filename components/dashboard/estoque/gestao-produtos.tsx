@@ -655,7 +655,12 @@ export function GestaoProdutos({
           const vinculo = await vincularPendenciaInventario(ctx.storeId, ctx.sessaoId, ctx.contagemId, produtoId, "cadastrado")
           inventarioCtxRef.current = null
           if (vinculo.ok) {
-            toast({ title: "Pendência resolvida", description: "Item removido da fila de reconciliação do inventário." })
+            toast({
+              title: "Pendência resolvida",
+              description: vinculo.codigoVinculado
+                ? "Código vinculado ao produto. Nas próximas contagens ele será reconhecido automaticamente."
+                : "Item removido da fila de reconciliação do inventário.",
+            })
           }
         }
       }

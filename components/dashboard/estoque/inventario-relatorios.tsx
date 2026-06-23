@@ -365,7 +365,12 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
           toast({ title: "Não foi possível associar", description: res.reason, variant: "destructive" })
           return
         }
-        toast({ title: "Pendência associada", description: `"${associarAlvo.codigoBipado}" vinculado ao produto "${produto.nome}".` })
+        toast({
+          title: "Pendência associada",
+          description: res.codigoVinculado
+            ? `Código "${res.codigoVinculado}" vinculado a "${produto.nome}". Nas próximas contagens ele será reconhecido automaticamente.`
+            : `"${associarAlvo.codigoBipado}" vinculado ao produto "${produto.nome}".`,
+        })
         setAssociarAlvo(null)
         await carregarRelatorio(relatorio.sessao.id)
       } finally {
@@ -886,7 +891,8 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Cadastro concluído
                   </CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    Pendências resolvidas nesta sessão (produto cadastrado ou associado).
+                    Pendências resolvidas nesta sessão (produto cadastrado ou associado). O código bipado
+                    foi vinculado ao produto e será reconhecido automaticamente nas próximas contagens.
                   </p>
                 </CardHeader>
                 <CardContent>
@@ -904,7 +910,15 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
                       <TableBody>
                         {(relatorio?.reconciliacao ?? []).filter((r) => r.vinculo).map((r) => (
                           <TableRow key={r.id}>
-                            <TableCell className="font-mono text-xs">{r.codigoBipado}</TableCell>
+                            <TableCell className="font-mono text-xs">
+                              <span
+                                className="inline-flex items-center gap-1"
+                                title="Código vinculado ao produto — reconhecido nas próximas contagens"
+                              >
+                                <Link2 className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                {r.codigoBipado}
+                              </span>
+                            </TableCell>
                             <TableCell className="max-w-[12rem]">
                               {r.nomeRapido
                                 ? <span className="block truncate text-sm">{r.nomeRapido}</span>

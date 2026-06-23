@@ -48,9 +48,23 @@ const h = vi.hoisted(() => {
     }
     return value === cond
   }
+  // Filtro JSON do Prisma: { metadata: { path: [...], array_contains: code } } sobre JsonB.
+  const matchJsonPath = (row: Row, cond: Record<string, unknown>): boolean => {
+    let v: unknown = row.metadata
+    for (const seg of (cond.path as string[]) ?? []) v = (v as Record<string, unknown> | null)?.[seg]
+    return Array.isArray(v) && v.includes(cond.array_contains)
+  }
   const matchWhere = (row: Row, where: Row): boolean => {
     for (const [k, cond] of Object.entries(where)) {
       if (cond === undefined) continue
+      if (k === "OR") {
+        if (!Array.isArray(cond) || !cond.some((sub) => matchWhere(row, sub as Row))) return false
+        continue
+      }
+      if (k === "metadata" && cond && typeof cond === "object" && "array_contains" in (cond as object)) {
+        if (!matchJsonPath(row, cond as Record<string, unknown>)) return false
+        continue
+      }
       if (!matchOp(row[k], cond)) return false
     }
     return true
@@ -142,6 +156,12 @@ const h = vi.hoisted(() => {
     produto: {
       findFirst: async ({ where }: { where: Row }) => store.produtos.find((p) => matchWhere(p, where)) ?? null,
       findMany: async ({ where }: { where: Row }) => store.produtos.filter((p) => matchWhere(p, where)),
+      update: async ({ where, data }: { where: { id: string }; data: Row }) => {
+        const p = store.produtos.find((r) => r.id === where.id)
+        if (!p) throw new Error("Produto não encontrado")
+        Object.assign(p, data)
+        return p
+      },
     },
     movimentacaoEstoque: {
       findMany: async ({ where }: { where: Row }) => store.movimentacoes.filter((m) => matchWhere(m, where)),
@@ -501,5 +521,100 @@ describe("reconciliação — vincular pendência (cadastrar / associar)", () =>
     expect(res.ok).toBe(false)
     if (res.ok) return
     expect(res.reason).toMatch(/não encontrado/i)
+  })
+})
+
+// ─── GOAL_INVENTARIO_BARCODE_ALIAS_V01 ──────────────────────────────────────────
+// Simula a resolução do lookup (mesma forma do OR de /api/ops/inventory/lookup).
+function lookup(storeId: string, code: string) {
+  return h.prisma.produto.findFirst({
+    where: {
+      storeId,
+      OR: [
+        { barcode: code },
+        { sku: code },
+        { id: code },
+        { metadata: { path: ["codigosAlias"], array_contains: code } },
+      ],
+    },
+  })
+}
+
+describe("alias de código reconciliado", () => {
+  it("associar existente grava o código como alias → próxima bipagem resolve o produto", async () => {
+    seedSessao()
+    seedProduto("pExist", { stock: 5, barcode: "BAR-EXIST" })
+    const CODE = "EAN-NOVO-1"
+    // antes: o código não resolve ninguém (cai em pendência).
+    expect(await lookup(STORE, CODE)).toBeNull()
+
+    const pend = await registrarPendenciaInventario(STORE, { sessaoId: "s1", codigo: CODE, quantidade: 2 })
+    if (!pend.ok) return
+    const res = await vincularPendenciaInventario(STORE, "s1", pend.contagem.id, "pExist", "associado")
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.codigoVinculado).toBe(CODE)
+
+    // alias persistido no metadata (sem tocar barcode/sku/estoque).
+    const p = h.store.produtos.find((x) => x.id === "pExist")!
+    expect((p.metadata as { codigosAlias: string[] }).codigosAlias).toContain(CODE)
+    expect(p.barcode).toBe("BAR-EXIST")
+    expect(p.stock).toBe(5)
+    expect(h.registrarAjusteEstoque).not.toHaveBeenCalled()
+
+    // depois: a mesma bipagem agora encontra o produto.
+    expect((await lookup(STORE, CODE))?.id).toBe("pExist")
+  })
+
+  it("cadastrar produto que já tem o código como barcode → NÃO duplica alias", async () => {
+    seedSessao()
+    const CODE = "EAN-CAD-1"
+    seedProduto("pNovo", { stock: 0, barcode: CODE }) // criado já com o código bipado como barcode
+    const pend = await registrarPendenciaInventario(STORE, { sessaoId: "s1", codigo: CODE, quantidade: 1 })
+    if (!pend.ok) return
+    const res = await vincularPendenciaInventario(STORE, "s1", pend.contagem.id, "pNovo", "cadastrado")
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.codigoVinculado).toBeNull() // já resolvia por barcode → nada a adicionar
+    const p = h.store.produtos.find((x) => x.id === "pNovo")!
+    expect(p.metadata).toBeUndefined() // não criou codigosAlias à toa
+    expect((await lookup(STORE, CODE))?.id).toBe("pNovo")
+  })
+
+  it("código que já pertence a OUTRO produto da loja bloqueia o vínculo (não resolve a pendência)", async () => {
+    seedSessao()
+    const CODE = "EAN-DUP"
+    seedProduto("pDono", { stock: 1, barcode: CODE }) // já dono do código
+    seedProduto("pOutro", { stock: 1 })
+    const pend = await registrarPendenciaInventario(STORE, { sessaoId: "s1", codigo: CODE, quantidade: 1 })
+    if (!pend.ok) return
+    const res = await vincularPendenciaInventario(STORE, "s1", pend.contagem.id, "pOutro", "associado")
+    expect(res.ok).toBe(false)
+    if (res.ok) return
+    expect(res.reason).toMatch(/já pertence/i)
+    // pOutro NÃO recebeu alias e a pendência continua aberta.
+    expect(h.store.produtos.find((x) => x.id === "pOutro")!.metadata).toBeUndefined()
+    const contagem = h.store.contagens.find((c) => c.codigoBipado === CODE)!
+    expect((contagem.payload as Record<string, unknown>).pendenciaVinculo).toBeUndefined()
+  })
+
+  it("código igual em OUTRA loja não bloqueia nem vaza (escopo por storeId)", async () => {
+    const STORE2 = "loja-y"
+    seedSessao()
+    const CODE = "EAN-SHARED"
+    seedProduto("pLojaY", { storeId: STORE2, stock: 9, barcode: CODE }) // dono do código na loja Y
+    seedProduto("pLojaX", { stock: 3 }) // produto da loja X (STORE) sem o código
+
+    const pend = await registrarPendenciaInventario(STORE, { sessaoId: "s1", codigo: CODE, quantidade: 1 })
+    if (!pend.ok) return
+    // associa na loja X: o dono na loja Y não conta (escopo por storeId) → permitido.
+    const res = await vincularPendenciaInventario(STORE, "s1", pend.contagem.id, "pLojaX", "associado")
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.codigoVinculado).toBe(CODE)
+
+    // cada loja resolve para o SEU produto; nada vaza entre lojas.
+    expect((await lookup(STORE, CODE))?.id).toBe("pLojaX")
+    expect((await lookup(STORE2, CODE))?.id).toBe("pLojaY")
   })
 })
