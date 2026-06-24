@@ -37,13 +37,18 @@ const h = vi.hoisted(() => {
   let seq = 0
   const nextId = (p: string) => `${p}-${++seq}`
 
-  // matchWhere genérico: igualdade escalar + operadores { in } / { gte } / { not: null }.
+  // matchWhere genérico: igualdade escalar + operadores in/notIn/gte/gt/lt/not/contains.
   const matchOp = (value: unknown, cond: unknown): boolean => {
     if (cond && typeof cond === "object" && !(cond instanceof Date)) {
       const c = cond as Record<string, unknown>
       if ("in" in c) return Array.isArray(c.in) && (c.in as unknown[]).includes(value)
+      if ("notIn" in c) return !(Array.isArray(c.notIn) && (c.notIn as unknown[]).includes(value))
       if ("gte" in c) return (value as number) >= (c.gte as number)
+      if ("gt" in c) return (value as number) > (c.gt as number)
+      if ("lt" in c) return (value as number) < (c.lt as number)
       if ("not" in c) return c.not === null ? value != null : value !== c.not
+      if ("contains" in c)
+        return typeof value === "string" && value.toLowerCase().includes(String(c.contains).toLowerCase())
       return value === cond
     }
     return value === cond
@@ -155,7 +160,13 @@ const h = vi.hoisted(() => {
     },
     produto: {
       findFirst: async ({ where }: { where: Row }) => store.produtos.find((p) => matchWhere(p, where)) ?? null,
-      findMany: async ({ where }: { where: Row }) => store.produtos.filter((p) => matchWhere(p, where)),
+      findMany: async ({ where, orderBy, take, skip }: { where: Row; orderBy?: Row; take?: number; skip?: number }) => {
+        let rows = sortBy(store.produtos.filter((p) => matchWhere(p, where)), orderBy)
+        if (typeof skip === "number") rows = rows.slice(skip)
+        if (typeof take === "number") rows = rows.slice(0, take)
+        return rows
+      },
+      count: async ({ where }: { where: Row }) => store.produtos.filter((p) => matchWhere(p, where)).length,
       update: async ({ where, data }: { where: { id: string }; data: Row }) => {
         const p = store.produtos.find((r) => r.id === where.id)
         if (!p) throw new Error("Produto não encontrado")
@@ -193,6 +204,9 @@ import {
   vincularPendenciaInventario,
   getConciliacaoInventario,
   getContextoContagemProduto,
+  getInventarioProgresso,
+  listProdutosNaoConferidos,
+  getInventarioSaneamentoTimeline,
 } from "./inventario"
 
 function seedSessao(status: "aberta" | "finalizada" = "aberta") {
@@ -616,5 +630,141 @@ describe("alias de código reconciliado", () => {
     // cada loja resolve para o SEU produto; nada vaza entre lojas.
     expect((await lookup(STORE, CODE))?.id).toBe("pLojaX")
     expect((await lookup(STORE2, CODE))?.id).toBe("pLojaY")
+  })
+})
+
+// ─── GOAL_INVENTARIO_CONTINUO_V01 — progresso / a conferir / saneamento ─────────
+function seedContagem(over: Record<string, unknown>) {
+  const now = new Date()
+  h.store.contagens.push({
+    id: h.nextId("c"),
+    storeId: STORE,
+    sessaoId: "s1",
+    produtoId: null,
+    codigoBipado: `auto-${h.store.contagens.length}`,
+    produtoNomeSnapshot: null,
+    produtoSkuSnapshot: null,
+    estoqueSistemaSnapshot: null,
+    quantidadeContada: 1,
+    status: "encontrado",
+    primeiroBipeEm: now,
+    ultimoBipeEm: now,
+    payload: null,
+    ...over,
+  })
+}
+
+describe("INVENTARIO CONTÍNUO — progresso", () => {
+  it("total, conferidos, restantes e % do catálogo + novos/reconciliados", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 10, category: "Capas" })
+    seedProduto("p2", { stock: 5, category: "Capas" })
+    seedProduto("p3", { stock: 0, category: "Cabos" })
+    seedProduto("p4", { stock: 3, category: "Cabos" })
+    // conferidos: p1 e p2 (contado = estoque → sem divergência)
+    seedContagem({ produtoId: "p1", codigoBipado: "c1", quantidadeContada: 10, estoqueSistemaSnapshot: 10, produtoNomeSnapshot: "Produto p1" })
+    seedContagem({ produtoId: "p2", codigoBipado: "c2", quantidadeContada: 5, estoqueSistemaSnapshot: 5, produtoNomeSnapshot: "Produto p2" })
+    // 1 pendência (novo encontrado) sem vínculo
+    seedContagem({ status: "reconciliacao", codigoBipado: "ECX", quantidadeContada: 2 })
+
+    const res = await getInventarioProgresso(STORE)
+    expect(res.ok).toBe(true)
+    if (!res.ok || !res.progresso) throw new Error("sem progresso")
+    expect(res.progresso.totalCatalogo).toBe(4)
+    expect(res.progresso.conferidos).toBe(2)
+    expect(res.progresso.naoConferidos).toBe(2)
+    expect(res.progresso.percentual).toBe(50)
+    expect(res.progresso.divergencias).toBe(0)
+    expect(res.progresso.novosEncontrados).toBe(1)
+    expect(res.progresso.reconciliados).toBe(0)
+    expect(res.progresso.ativa).toBe(true)
+    expect(res.progresso.ultimoProduto).toBeTruthy()
+  })
+
+  it("progresso = null quando a loja nunca inventariou", async () => {
+    const res = await getInventarioProgresso(STORE)
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.progresso).toBeNull()
+  })
+})
+
+describe("INVENTARIO CONTÍNUO — listProdutosNaoConferidos", () => {
+  function seedCatalogo() {
+    seedSessao()
+    seedProduto("p1", { name: "Capa A", stock: 10, category: "Capas", brand: "ACME", supplierName: "Forn1" })
+    seedProduto("p2", { name: "Capa B", stock: 0, category: "Capas", brand: "ACME", supplierName: "Forn1" })
+    seedProduto("p3", { name: "Cabo C", stock: 3, category: "Cabos", brand: "Xpto", supplierName: "Forn2" })
+    seedProduto("p4", { name: "Cabo D", stock: 7, category: "Cabos", brand: "Xpto", supplierName: "Forn2" })
+    // p1 já conferido → sai da lista
+    seedContagem({ produtoId: "p1", codigoBipado: "c1", status: "encontrado" })
+  }
+
+  it("exclui conferidos e expõe facetas do catálogo", async () => {
+    seedCatalogo()
+    const all = await listProdutosNaoConferidos(STORE, "s1")
+    expect(all.ok).toBe(true)
+    if (!all.ok) return
+    expect(all.total).toBe(3)
+    expect(all.itens.map((i) => i.produtoId).sort()).toEqual(["p2", "p3", "p4"])
+    expect(all.facets.categorias).toEqual(["Cabos", "Capas"])
+    expect(all.facets.marcas).toEqual(["ACME", "Xpto"])
+    expect(all.facets.fornecedores).toEqual(["Forn1", "Forn2"])
+  })
+
+  it("filtra por categoria, estoque e busca; pagina", async () => {
+    seedCatalogo()
+    const cabos = await listProdutosNaoConferidos(STORE, "s1", { categoria: "Cabos" })
+    if (!cabos.ok) return
+    expect(cabos.total).toBe(2)
+
+    const zero = await listProdutosNaoConferidos(STORE, "s1", { estoque: "zero" })
+    if (!zero.ok) return
+    expect(zero.itens.map((i) => i.produtoId)).toEqual(["p2"])
+
+    const positivo = await listProdutosNaoConferidos(STORE, "s1", { estoque: "positivo" })
+    if (!positivo.ok) return
+    expect(positivo.itens.map((i) => i.produtoId).sort()).toEqual(["p3", "p4"])
+
+    const busca = await listProdutosNaoConferidos(STORE, "s1", { busca: "cabo" })
+    if (!busca.ok) return
+    expect(busca.total).toBe(2)
+
+    const pg = await listProdutosNaoConferidos(STORE, "s1", {}, { take: 2, skip: 0 })
+    if (!pg.ok) return
+    expect(pg.itens.length).toBe(2)
+    expect(pg.total).toBe(3)
+  })
+
+  it("não vaza catálogo de outra loja (escopo por storeId)", async () => {
+    seedCatalogo()
+    seedProduto("zZ", { storeId: "loja-y", name: "Outra loja", stock: 1, category: "Capas" })
+    const res = await listProdutosNaoConferidos(STORE, "s1")
+    if (!res.ok) return
+    expect(res.itens.some((i) => i.produtoId === "zZ")).toBe(false)
+  })
+})
+
+describe("INVENTARIO CONTÍNUO — saneamento", () => {
+  it("conferidos de hoje + reconciliados a partir do vínculo", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 5 })
+    const hoje = new Date()
+    seedContagem({ produtoId: "p1", codigoBipado: "c1", status: "encontrado", primeiroBipeEm: hoje })
+    seedContagem({ produtoId: "p1", codigoBipado: "c2", status: "encontrado", primeiroBipeEm: hoje })
+    seedContagem({
+      status: "reconciliacao",
+      codigoBipado: "ECX",
+      payload: { pendenciaVinculo: { produtoId: "p1", tipo: "associado", vinculadoEm: hoje.toISOString(), operador: "Tester" } },
+    })
+
+    const res = await getInventarioSaneamentoTimeline(STORE)
+    expect(res.ok).toBe(true)
+    if (!res.ok || !res.saneamento) throw new Error("sem saneamento")
+    expect(res.saneamento.hoje.conferidos).toBe(2)
+    expect(res.saneamento.hoje.reconciliados).toBe(1)
+    expect(res.saneamento.hoje.novos).toBe(0)
+    expect(res.saneamento.semana.conferidos).toBe(2)
+    expect(res.saneamento.ativa).toBe(true)
   })
 })

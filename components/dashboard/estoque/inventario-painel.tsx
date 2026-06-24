@@ -15,10 +15,17 @@ import {
   ScanLine,
   Wrench,
   ArrowRight,
+  ListChecks,
+  Gauge,
+  PlusCircle,
+  Link2,
+  Clock,
+  CalendarDays,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import {
   Table,
   TableBody,
@@ -33,9 +40,13 @@ import { cn } from "@/lib/utils"
 import {
   getInventarioDashboard,
   getInventarioHistorico,
+  getInventarioProgresso,
+  getInventarioSaneamentoTimeline,
   type InventarioSessaoDTO,
   type InventarioSessaoHistoricoDTO,
   type RelatorioInventarioDTO,
+  type InventarioProgressoDTO,
+  type InventarioSaneamentoDTO,
 } from "@/app/actions/inventario"
 
 function formatDateTime(iso: string | null) {
@@ -107,14 +118,16 @@ type DashboardData = {
 }
 
 /**
- * Painel do Inventário Assistido (F5): dashboard + retomar sessão + histórico.
- * `onIrParaContagem`/`onAbrirRelatorio` navegam entre as abas da página (sem rota nova).
+ * Painel do Inventário Assistido: dashboard de PROGRESSO + saneamento + retomar sessão + histórico.
+ * `onIrParaContagem`/`onIrParaAConferir`/`onAbrirRelatorio` navegam entre as abas (sem rota nova).
  */
 export function InventarioPainel({
   onIrParaContagem,
+  onIrParaAConferir,
   onAbrirRelatorio,
 }: {
   onIrParaContagem?: () => void
+  onIrParaAConferir?: () => void
   onAbrirRelatorio?: (sessaoId: string) => void
 }) {
   const { toast } = useToast()
@@ -123,6 +136,8 @@ export function InventarioPainel({
 
   const [dash, setDash] = useState<DashboardData | null>(null)
   const [historico, setHistorico] = useState<InventarioSessaoHistoricoDTO[]>([])
+  const [progresso, setProgresso] = useState<InventarioProgressoDTO | null>(null)
+  const [saneamento, setSaneamento] = useState<InventarioSaneamentoDTO | null>(null)
   const [loading, setLoading] = useState(true)
 
   const carregar = useCallback(async () => {
@@ -132,11 +147,18 @@ export function InventarioPainel({
     }
     setLoading(true)
     try {
-      const [d, h] = await Promise.all([getInventarioDashboard(storeId), getInventarioHistorico(storeId)])
+      const [d, h, p, s] = await Promise.all([
+        getInventarioDashboard(storeId),
+        getInventarioHistorico(storeId),
+        getInventarioProgresso(storeId),
+        getInventarioSaneamentoTimeline(storeId),
+      ])
       if (d.ok) setDash({ sessaoAtiva: d.sessaoAtiva, ultimaSessao: d.ultimaSessao, kpis: d.kpis })
       else toast({ title: "Falha ao carregar painel", description: d.reason, variant: "destructive" })
       if (h.ok) setHistorico(h.sessoes)
       else toast({ title: "Falha ao carregar histórico", description: h.reason, variant: "destructive" })
+      if (p.ok) setProgresso(p.progresso)
+      if (s.ok) setSaneamento(s.saneamento)
     } finally {
       setLoading(false)
     }
@@ -184,25 +206,38 @@ export function InventarioPainel({
     <div className="space-y-6">
       {header}
 
-      {/* Retomar sessão em andamento */}
+      {/* Retomar sessão em andamento — continua de onde parou (mesmo após dias/desligar o PC) */}
       {sessaoAtiva && (
         <Card className="border-l-4 border-l-emerald-500 bg-card border-border">
           <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3 min-w-0">
               <PlayCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">Existe uma sessão de inventário em andamento.</p>
+                <p className="text-sm font-medium text-foreground">O inventário está em andamento.</p>
                 <p className="text-xs text-muted-foreground">
                   {(sessaoAtiva.nome || "Sem nome")} · {sessaoAtiva.operador || "—"} · início {formatDateTime(sessaoAtiva.iniciadoEm)}
+                  {progresso && <> · <span className="font-medium text-foreground">{progresso.percentual}%</span> conferido</>}
                 </p>
+                {progresso?.ultimoProduto && (
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3 shrink-0" />
+                    Último: <span className="font-medium text-foreground">{progresso.ultimoProduto}</span> · {formatDateTime(progresso.ultimoBipeEm)}
+                  </p>
+                )}
               </div>
             </div>
             <Button size="sm" className="gap-2 shrink-0" onClick={() => onIrParaContagem?.()}>
-              Continuar contagem <ArrowRight className="h-4 w-4" />
+              Continuar inventário <ArrowRight className="h-4 w-4" />
             </Button>
           </CardContent>
         </Card>
       )}
+
+      {/* Dashboard "Progresso do inventário" / "Ainda falta conferir" */}
+      {progresso && <ProgressoCard progresso={progresso} onIrParaAConferir={onIrParaAConferir} />}
+
+      {/* Histórico do saneamento — hoje / ontem / semana */}
+      {saneamento && <SaneamentoCard saneamento={saneamento} />}
 
       {/* Indicadores operacionais (sessão ativa, senão última finalizada) */}
       <div>
@@ -324,5 +359,135 @@ export function InventarioPainel({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+/** Item compacto rótulo + valor (com ícone e acento opcional). */
+function MiniStat({
+  label,
+  value,
+  icon: Icon,
+  accent = "default",
+}: {
+  label: string
+  value: number | string
+  icon: typeof CheckCircle2
+  accent?: "default" | "emerald" | "amber" | "destructive"
+}) {
+  const color = {
+    default: "text-foreground",
+    emerald: "text-emerald-600 dark:text-emerald-400",
+    amber: "text-amber-600 dark:text-amber-400",
+    destructive: "text-destructive",
+  } as const
+  return (
+    <div className="rounded-md border border-border bg-background px-3 py-2 min-w-0">
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span className="truncate">{label}</span>
+      </div>
+      <p className={cn("mt-0.5 text-lg font-bold tabular-nums", color[accent])}>{value}</p>
+    </div>
+  )
+}
+
+/**
+ * Dashboard "Progresso do inventário" / "Ainda falta conferir": barra de progresso + total do
+ * catálogo, conferidos e restantes, mais o detalhamento (novos, reconciliados, divergências,
+ * suspeitos). Atualiza a cada recarga do painel.
+ */
+function ProgressoCard({
+  progresso,
+  onIrParaAConferir,
+}: {
+  progresso: InventarioProgressoDTO
+  onIrParaAConferir?: () => void
+}) {
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Gauge className="h-4 w-4 text-primary" /> Progresso do inventário
+        </CardTitle>
+        <Button size="sm" variant="outline" className="gap-2" onClick={() => onIrParaAConferir?.()}>
+          <ListChecks className="h-4 w-4" /> Produtos a conferir
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Headline: catálogo / conferidos / restantes / % */}
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+            <span className="text-muted-foreground">
+              Catálogo: <span className="font-semibold tabular-nums text-foreground">{progresso.totalCatalogo.toLocaleString("pt-BR")}</span>
+            </span>
+            <span className="text-muted-foreground">
+              Conferidos: <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{progresso.conferidos.toLocaleString("pt-BR")}</span>
+            </span>
+            <span className="text-muted-foreground">
+              Restantes: <span className="font-semibold tabular-nums text-foreground">{progresso.naoConferidos.toLocaleString("pt-BR")}</span>
+            </span>
+          </div>
+          <span className="text-2xl font-bold tabular-nums text-primary">{progresso.percentual}%</span>
+        </div>
+        <Progress value={progresso.percentual} aria-label={`${progresso.percentual}% conferido`} />
+
+        {/* Detalhamento */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <MiniStat label="Unidades contadas" value={progresso.unidadesContadas.toLocaleString("pt-BR")} icon={Boxes} />
+          <MiniStat label="Novos encontrados" value={progresso.novosEncontrados} icon={PlusCircle} accent={progresso.novosEncontrados > 0 ? "amber" : "default"} />
+          <MiniStat label="Reconciliados" value={progresso.reconciliados} icon={Link2} accent={progresso.reconciliados > 0 ? "emerald" : "default"} />
+          <MiniStat label="Divergências" value={progresso.divergencias} icon={AlertTriangle} accent={progresso.divergencias > 0 ? "amber" : "default"} />
+          <MiniStat label="Suspeitos antigos" value={progresso.suspeitosAntigos} icon={Clock} accent={progresso.suspeitosAntigos > 0 ? "destructive" : "default"} />
+        </div>
+        {progresso.naoConferidos === 0 && progresso.totalCatalogo > 0 && (
+          <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Catálogo inteiro conferido nesta campanha. Revise os não encontrados na aba “Conciliação” antes de fechar.
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Histórico do saneamento: o que foi feito hoje, ontem e na semana (conferidos/novos/reconciliados). */
+function SaneamentoCard({ saneamento }: { saneamento: InventarioSaneamentoDTO }) {
+  const blocos = [
+    { titulo: "Hoje", dados: saneamento.hoje },
+    { titulo: "Ontem", dados: saneamento.ontem },
+    { titulo: "Semana", dados: saneamento.semana },
+  ] as const
+  return (
+    <Card className="bg-card border-border">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <CalendarDays className="h-4 w-4 text-primary" /> Histórico do saneamento
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          {saneamento.sessao.operador || "—"} · {saneamento.ativa ? "campanha em andamento" : "última campanha"}
+        </p>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {blocos.map((b) => (
+          <div key={b.titulo} className="rounded-md border border-border bg-background p-3">
+            <p className="mb-2 text-sm font-semibold text-foreground">{b.titulo}</p>
+            <div className="space-y-1.5 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-muted-foreground"><ScanLine className="h-3.5 w-3.5" /> Conferidos</span>
+                <span className="font-semibold tabular-nums text-foreground">{b.dados.conferidos}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-muted-foreground"><PlusCircle className="h-3.5 w-3.5" /> Novos cadastrados</span>
+                <span className="font-semibold tabular-nums text-foreground">{b.dados.novos}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 text-muted-foreground"><Link2 className="h-3.5 w-3.5" /> Reconciliados</span>
+                <span className="font-semibold tabular-nums text-foreground">{b.dados.reconciliados}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   )
 }

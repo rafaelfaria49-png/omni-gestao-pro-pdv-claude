@@ -837,12 +837,14 @@ function NaoEncontradosTable({
         <TableHeader>
           <TableRow>
             <TableHead className="w-10" />
+            <TableHead>Código</TableHead>
             <TableHead>Produto</TableHead>
             <TableHead>Categoria</TableHead>
+            <TableHead>Fornecedor</TableHead>
             <TableHead className="text-right">Estoque</TableHead>
-            <TableHead className="text-right">Custo</TableHead>
-            <TableHead className="text-right">Impacto custo</TableHead>
+            <TableHead className="text-right">Valor em estoque</TableHead>
             <TableHead>Última venda</TableHead>
+            <TableHead>Última entrada</TableHead>
             <TableHead>Últ. movimentação</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
@@ -860,15 +862,19 @@ function NaoEncontradosTable({
                     aria-label={`Selecionar ${n.nome}`}
                   />
                 </TableCell>
+                <TableCell className="font-mono text-xs text-muted-foreground">{n.codigo ?? "—"}</TableCell>
                 <TableCell className="max-w-[18rem]">
                   <span className="block truncate font-medium text-foreground">{n.nome}</span>
                   {n.sku && <span className="block truncate text-xs text-muted-foreground">{n.sku}</span>}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">{n.categoria ?? "—"}</TableCell>
+                <TableCell className="max-w-[10rem] text-xs text-muted-foreground">
+                  <span className="block truncate">{n.fornecedor ?? "—"}</span>
+                </TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">{n.estoqueAtual}</TableCell>
-                <TableCell className="text-right tabular-nums text-muted-foreground">{formatBRL(n.precoCusto)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatBRL(n.impactoCusto)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{formatDateTime(n.ultimaVendaEm)}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{formatDateTime(n.ultimaEntradaEm)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{formatDateTime(n.ultimaMovimentacaoEm)}</TableCell>
                 <TableCell>
                   {n.ajusteAplicado ? (

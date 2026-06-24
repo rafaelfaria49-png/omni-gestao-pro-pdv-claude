@@ -60,6 +60,12 @@ import {
   type SimulacaoConciliacao,
   type MovimentoEstoqueConc,
 } from "@/lib/estoque/inventario-conciliacao";
+import {
+  percentualConcluido,
+  agruparSaneamentoPorDia,
+  type EventoSaneamento,
+  type ContadoresSaneamento,
+} from "@/lib/estoque/inventario-progresso";
 
 /**
  * INVENTARIO_ASSISTIDO_V1 — Fase 2 (Sessão + Bipagem + Armazenamento).
@@ -1295,7 +1301,10 @@ export type ConciliacaoItemDTO = ItemConciliado & { ajusteAplicado: boolean };
 
 /** Produto não encontrado (estoque positivo, não bipado) enriquecido para a tela. */
 export type ConciliacaoNaoEncontradoDTO = ItemNaoEncontrado & {
+  /** Código preferencial (barcode, senão SKU) — coluna do painel "nunca encontrados". */
+  codigo: string | null;
   categoria: string | null;
+  fornecedor: string | null;
   ultimaVendaEm: string | null;
   ultimaEntradaEm: string | null;
   /** true quando já zerado por ausência nesta sessão (flag F4 no payload da sessão). */
@@ -1325,7 +1334,17 @@ async function construirConciliacaoSessao(
     }),
     prisma.produto.findMany({
       where: { storeId: sid, active: true },
-      select: { id: true, name: true, sku: true, stock: true, precoCusto: true, price: true, category: true },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        barcode: true,
+        stock: true,
+        precoCusto: true,
+        price: true,
+        category: true,
+        supplierName: true,
+      },
     }),
   ]);
 
@@ -1398,7 +1417,11 @@ async function construirConciliacaoSessao(
 
   const rel = montarConciliacao({ contagens, produtos, movimentacoes, ultimaMovPorProduto });
 
-  const categoriaPorProduto = new Map(catalogo.map((p) => [p.id, p.category ?? null]));
+  const categoriaPorProduto = new Map(catalogo.map((p) => [p.id, (p.category ?? "").trim() || null]));
+  const fornecedorPorProduto = new Map(catalogo.map((p) => [p.id, (p.supplierName ?? "").trim() || null]));
+  const codigoNaoEncontrado = new Map<string, string | null>(
+    catalogo.map((p) => [p.id, (p.barcode ?? "").trim() || (p.sku ?? "").trim() || null]),
+  );
   const ajustesNaoBipados = lerAjustesNaoBipados(sessao.payload);
 
   const itens: ConciliacaoItemDTO[] = rel.itens.map((i) => ({
@@ -1407,7 +1430,9 @@ async function construirConciliacaoSessao(
   }));
   const naoEncontrados: ConciliacaoNaoEncontradoDTO[] = rel.naoEncontrados.map((n) => ({
     ...n,
+    codigo: codigoNaoEncontrado.get(n.produtoId) ?? null,
     categoria: categoriaPorProduto.get(n.produtoId) ?? null,
+    fornecedor: fornecedorPorProduto.get(n.produtoId) ?? null,
     ultimaVendaEm: ultimaVendaPorProduto.get(n.produtoId) ?? null,
     ultimaEntradaEm: ultimaEntradaPorProduto.get(n.produtoId) ?? null,
     ajusteAplicado: Object.prototype.hasOwnProperty.call(ajustesNaoBipados, n.produtoId),
@@ -1627,5 +1652,362 @@ export async function aplicarConciliacaoInventario(
     return { ok: true, resumo };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao aplicar conciliação" };
+  }
+}
+
+// ─── INVENTARIO CONTÍNUO · Progresso, "a conferir" e saneamento ────────────────
+// Camada OPERACIONAL de acompanhamento de uma campanha de vários dias até a loja inteira ser
+// conferida. SOMENTE LEITURA: agrega contagens + conciliação + catálogo. NÃO altera o motor de
+// contagem/ajuste, NÃO escreve nada. Reusa `construirConciliacaoSessao` (divergência real +
+// não encontrados + suspeitos) e o núcleo PURO `inventario-progresso`.
+
+/**
+ * Resolve a sessão-campanha de referência: a sessão aberta (em andamento) ou, na ausência dela,
+ * a última finalizada. `null` quando a loja nunca inventariou. SOMENTE LEITURA.
+ */
+async function resolverSessaoCampanha(sid: string): Promise<SessaoComPayload | null> {
+  const [ativaRow, ultimaRow] = await Promise.all([
+    prisma.inventarioSessao.findFirst({
+      where: { storeId: sid, status: STATUS_SESSAO.ABERTA },
+      orderBy: { iniciadoEm: "desc" },
+      select: { ...SESSAO_SELECT, payload: true },
+    }),
+    prisma.inventarioSessao.findFirst({
+      where: { storeId: sid, status: STATUS_SESSAO.FINALIZADA },
+      orderBy: { finalizadoEm: "desc" },
+      select: { ...SESSAO_SELECT, payload: true },
+    }),
+  ]);
+  return (ativaRow ?? ultimaRow) as SessaoComPayload | null;
+}
+
+export type InventarioProgressoDTO = {
+  sessao: InventarioSessaoDTO;
+  /** true quando a sessão de referência está ABERTA (campanha em andamento). */
+  ativa: boolean;
+  /** Produtos ativos cadastrados na loja. */
+  totalCatalogo: number;
+  /** Produtos do catálogo já conferidos nesta campanha (distintos). */
+  conferidos: number;
+  /** totalCatalogo − conferidos (nunca negativo). */
+  naoConferidos: number;
+  /** conferidos / totalCatalogo em % (0–100). */
+  percentual: number;
+  unidadesContadas: number;
+  /** Códigos bipados sem cadastro (fila de reconciliação) — "novos encontrados". */
+  novosEncontrados: number;
+  /** Pendências já fechadas (cadastradas/associadas a um produto). */
+  reconciliados: number;
+  /** Divergência REAL da conciliação dinâmica (já considera movimentação pós-contagem). */
+  divergencias: number;
+  /** Produtos com estoque positivo ainda não bipados. */
+  naoEncontrados: number;
+  /** Não encontrados sem movimentação há muito tempo (provável estoque fantasma). */
+  suspeitosAntigos: number;
+  /** Último produto conferido (nome/código) e quando — para o card "continuar inventário". */
+  ultimoProduto: string | null;
+  ultimoBipeEm: string | null;
+  ultimoOperador: string | null;
+};
+
+export type InventarioProgressoResult =
+  | { ok: true; progresso: InventarioProgressoDTO | null }
+  | ActionFail;
+
+/**
+ * Progresso consolidado da campanha de inventário (Dashboard "Progresso" / "Ainda falta conferir").
+ * Atualiza em tempo real (recalcula a cada chamada). `progresso = null` quando a loja nunca
+ * inventariou. SOMENTE LEITURA.
+ */
+export async function getInventarioProgresso(storeId: string): Promise<InventarioProgressoResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  try {
+    const alvo = await resolverSessaoCampanha(g.sid);
+    if (!alvo) return { ok: true, progresso: null };
+
+    // Divergência real + não encontrados + suspeitos + total catálogo (mesma fonte da Conciliação).
+    const conc = await construirConciliacaoSessao(g.sid, alvo);
+    const t = conc.totais;
+
+    // Pendências (reconciliação): novos = todas; reconciliados = as que já têm vínculo.
+    const reconRows = await prisma.inventarioContagem.findMany({
+      where: { storeId: g.sid, sessaoId: alvo.id, status: STATUS_CONTAGEM.RECONCILIACAO },
+      select: { payload: true },
+    });
+    const novosEncontrados = reconRows.length;
+    const reconciliados = reconRows.filter((r) => lerVinculoPendencia(r.payload) !== null).length;
+
+    // Último produto conferido (observabilidade do "continuar inventário").
+    const ultimas = await prisma.inventarioContagem.findMany({
+      where: {
+        storeId: g.sid,
+        sessaoId: alvo.id,
+        status: STATUS_CONTAGEM.ENCONTRADO,
+        produtoId: { not: null },
+      },
+      orderBy: { ultimoBipeEm: "desc" },
+      take: 1,
+      select: { produtoNomeSnapshot: true, codigoBipado: true, ultimoBipeEm: true },
+    });
+    const ultimo = ultimas[0] ?? null;
+
+    const totalCatalogo = t.cadastrados;
+    const conferidos = t.contados;
+    return {
+      ok: true,
+      progresso: {
+        sessao: sessaoToDTO(alvo),
+        ativa: alvo.status === STATUS_SESSAO.ABERTA,
+        totalCatalogo,
+        conferidos,
+        naoConferidos: Math.max(0, totalCatalogo - conferidos),
+        percentual: percentualConcluido(conferidos, totalCatalogo),
+        unidadesContadas: t.unidadesContadas,
+        novosEncontrados,
+        reconciliados,
+        divergencias: t.comDivergencia,
+        naoEncontrados: t.naoEncontrados,
+        suspeitosAntigos: t.suspeitosAntigos,
+        ultimoProduto: ultimo ? ultimo.produtoNomeSnapshot || ultimo.codigoBipado : null,
+        ultimoBipeEm: ultimo ? ultimo.ultimoBipeEm.toISOString() : null,
+        ultimoOperador: alvo.operador,
+      },
+    };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao carregar progresso" };
+  }
+}
+
+export type ProdutoNaoConferidoDTO = {
+  produtoId: string;
+  nome: string;
+  sku: string | null;
+  /** Código preferencial para exibição (barcode, senão SKU). */
+  codigo: string | null;
+  categoria: string | null;
+  marca: string | null;
+  fornecedor: string | null;
+  estoque: number;
+  /** estoque × custo unitário (valor parado a custo). */
+  valorEmEstoque: number;
+};
+
+export type FiltroEstoqueNaoConferido = "todos" | "positivo" | "negativo" | "zero";
+
+export type ProdutosNaoConferidosFacets = {
+  categorias: string[];
+  marcas: string[];
+  fornecedores: string[];
+};
+
+export type ListProdutosNaoConferidosResult =
+  | { ok: true; itens: ProdutoNaoConferidoDTO[]; total: number; facets: ProdutosNaoConferidosFacets }
+  | ActionFail;
+
+/** Janela de paginação saneada (1–200, padrão 50). */
+function clampTake(take: number | null | undefined): number {
+  const v = Math.trunc(Number(take ?? 50)) || 50;
+  return Math.max(1, Math.min(200, v));
+}
+
+/** Facetas de filtro (categoria/marca/fornecedor) a partir do catálogo. Ordenadas, sem vazios. */
+function montarFacetsNaoConferido(
+  rows: ReadonlyArray<{ category: string | null; brand: string | null; supplierName: string | null }>,
+): ProdutosNaoConferidosFacets {
+  const cat = new Set<string>();
+  const mar = new Set<string>();
+  const forn = new Set<string>();
+  for (const r of rows) {
+    const c = (r.category ?? "").trim();
+    const b = (r.brand ?? "").trim();
+    const s = (r.supplierName ?? "").trim();
+    if (c) cat.add(c);
+    if (b) mar.add(b);
+    if (s) forn.add(s);
+  }
+  const ord = (s: Set<string>) => [...s].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return { categorias: ord(cat), marcas: ord(mar), fornecedores: ord(forn) };
+}
+
+/**
+ * Lista PERMANENTE dos produtos do catálogo ainda NÃO conferidos nesta campanha. Conforme um
+ * produto é contado, ele sai automaticamente desta lista (filtro `id notIn` dos conferidos).
+ * Filtros: categoria, marca, fornecedor, faixa de estoque e busca textual. SOMENTE LEITURA.
+ */
+export async function listProdutosNaoConferidos(
+  storeId: string,
+  sessaoId: string,
+  filtros?: {
+    categoria?: string | null;
+    marca?: string | null;
+    fornecedor?: string | null;
+    estoque?: FiltroEstoqueNaoConferido;
+    busca?: string | null;
+  },
+  paginacao?: { take?: number; skip?: number },
+): Promise<ListProdutosNaoConferidosResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  const sid = (sessaoId ?? "").trim();
+  if (!sid) return { ok: false, reason: "Sessão inválida" };
+  try {
+    const sessao = await prisma.inventarioSessao.findFirst({
+      where: { id: sid, storeId: g.sid },
+      select: { id: true },
+    });
+    if (!sessao) return { ok: false, reason: "Sessão não encontrada" };
+
+    // Produtos já conferidos nesta campanha (distintos) → saem da lista.
+    const contadas = await prisma.inventarioContagem.findMany({
+      where: { storeId: g.sid, sessaoId: sid, status: STATUS_CONTAGEM.ENCONTRADO, produtoId: { not: null } },
+      select: { produtoId: true },
+    });
+    const conferidosIds = [
+      ...new Set(contadas.map((c) => c.produtoId).filter((x): x is string => Boolean(x))),
+    ];
+
+    // Facetas a partir do catálogo ativo (uma passada leve, escopada por loja).
+    const catalogo = await prisma.produto.findMany({
+      where: { storeId: g.sid, active: true },
+      select: { category: true, brand: true, supplierName: true },
+    });
+    const facets = montarFacetsNaoConferido(catalogo);
+
+    const categoria = (filtros?.categoria ?? "").trim();
+    const marca = (filtros?.marca ?? "").trim();
+    const fornecedor = (filtros?.fornecedor ?? "").trim();
+    const busca = (filtros?.busca ?? "").trim();
+    const estoque = filtros?.estoque ?? "todos";
+
+    const estoqueWhere: Prisma.ProdutoWhereInput =
+      estoque === "positivo"
+        ? { stock: { gt: 0 } }
+        : estoque === "negativo"
+          ? { stock: { lt: 0 } }
+          : estoque === "zero"
+            ? { stock: 0 }
+            : {};
+
+    const where: Prisma.ProdutoWhereInput = {
+      storeId: g.sid,
+      active: true,
+      ...(conferidosIds.length ? { id: { notIn: conferidosIds } } : {}),
+      ...(categoria ? { category: categoria } : {}),
+      ...(marca ? { brand: marca } : {}),
+      ...(fornecedor ? { supplierName: fornecedor } : {}),
+      ...estoqueWhere,
+      ...(busca
+        ? {
+            OR: [
+              { name: { contains: busca, mode: "insensitive" } },
+              { sku: { contains: busca, mode: "insensitive" } },
+              { barcode: { contains: busca, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
+
+    const take = clampTake(paginacao?.take);
+    const skip = Math.max(0, Math.trunc(Number(paginacao?.skip ?? 0)) || 0);
+
+    const [total, rows] = await Promise.all([
+      prisma.produto.count({ where }),
+      prisma.produto.findMany({
+        where,
+        orderBy: { name: "asc" },
+        take,
+        skip,
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          barcode: true,
+          category: true,
+          brand: true,
+          supplierName: true,
+          stock: true,
+          precoCusto: true,
+        },
+      }),
+    ]);
+
+    const itens: ProdutoNaoConferidoDTO[] = rows.map((p) => {
+      const estoqueQt = Math.trunc(Number(p.stock)) || 0;
+      const custo = Number(p.precoCusto) || 0;
+      return {
+        produtoId: p.id,
+        nome: p.name,
+        sku: p.sku,
+        codigo: (p.barcode ?? "").trim() || (p.sku ?? "").trim() || null,
+        categoria: (p.category ?? "").trim() || null,
+        marca: (p.brand ?? "").trim() || null,
+        fornecedor: (p.supplierName ?? "").trim() || null,
+        estoque: estoqueQt,
+        valorEmEstoque: Math.round(estoqueQt * custo * 100) / 100,
+      };
+    });
+
+    return { ok: true, itens, total, facets };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao listar produtos a conferir" };
+  }
+}
+
+export type InventarioSaneamentoDTO = {
+  sessao: InventarioSessaoDTO;
+  ativa: boolean;
+  hoje: ContadoresSaneamento;
+  ontem: ContadoresSaneamento;
+  semana: ContadoresSaneamento;
+};
+
+export type InventarioSaneamentoResult =
+  | { ok: true; saneamento: InventarioSaneamentoDTO | null }
+  | ActionFail;
+
+/**
+ * Histórico do saneamento (timeline hoje / ontem / semana) da campanha de referência: produtos
+ * conferidos, novos cadastrados e pendências reconciliadas, agrupados por dia-calendário.
+ * SOMENTE LEITURA. Reusa o núcleo PURO `agruparSaneamentoPorDia`.
+ */
+export async function getInventarioSaneamentoTimeline(
+  storeId: string,
+): Promise<InventarioSaneamentoResult> {
+  const g = await guard(storeId);
+  if (!g.ok) return g;
+  try {
+    const alvo = await resolverSessaoCampanha(g.sid);
+    if (!alvo) return { ok: true, saneamento: null };
+
+    const rows = await prisma.inventarioContagem.findMany({
+      where: { storeId: g.sid, sessaoId: alvo.id },
+      select: { status: true, produtoId: true, primeiroBipeEm: true, payload: true },
+    });
+
+    const eventos: EventoSaneamento[] = [];
+    for (const r of rows) {
+      if (r.status === STATUS_CONTAGEM.ENCONTRADO && r.produtoId) {
+        eventos.push({ em: r.primeiroBipeEm, tipo: "conferido" });
+      }
+      const v = lerVinculoPendencia(r.payload);
+      if (v && v.vinculadoEm) {
+        eventos.push({ em: v.vinculadoEm, tipo: v.tipo === "cadastrado" ? "novo" : "reconciliado" });
+      }
+    }
+
+    const grupos = agruparSaneamentoPorDia(eventos);
+    return {
+      ok: true,
+      saneamento: {
+        sessao: sessaoToDTO(alvo),
+        ativa: alvo.status === STATUS_SESSAO.ABERTA,
+        hoje: grupos.hoje,
+        ontem: grupos.ontem,
+        semana: grupos.semana,
+      },
+    };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : "Falha ao carregar saneamento" };
   }
 }
