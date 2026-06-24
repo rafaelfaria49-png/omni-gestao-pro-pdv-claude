@@ -19,6 +19,7 @@ import { useCaixa } from "@/components/dashboard/caixa/caixa-provider"
 import { AberturaCaixaModal } from "@/components/dashboard/caixa/abertura-caixa-modal"
 import { FechamentoCaixaModal } from "@/components/dashboard/caixa/fechamento-caixa-modal"
 import { CaixaStatusBar } from "@/components/dashboard/caixa/caixa-status-bar"
+import { SupervisorGateDialog } from "@/components/dashboard/caixa/supervisor-gate-dialog"
 import {
   mergePdvCatalogWithInventory,
   newPdvLineId,
@@ -66,6 +67,9 @@ export function PdvBlackEdition() {
   const [cupomNum, setCupomNum] = useState<number>(1000)
   const [showAbertura, setShowAbertura] = useState(false)
   const [showFechamento, setShowFechamento] = useState(false)
+  // Fechar caixa pelo shell preto é ação sensível: exige PIN de supervisor
+  // (mesmo gate compartilhado da CaixaStatusBar). Abrir caixa segue livre.
+  const [fecharGateOpen, setFecharGateOpen] = useState(false)
 
   useEffect(() => {
     setTurno(readTurno())
@@ -77,7 +81,7 @@ export function PdvBlackEdition() {
   }, [])
 
   const handleFecharCaixa = useCallback(() => {
-    setShowFechamento(true)
+    setFecharGateOpen(true)
   }, [])
 
   // Incrementa turno quando o caixa é aberto
@@ -530,6 +534,13 @@ export function PdvBlackEdition() {
 
       {/* Modais do caixa */}
       <AberturaCaixaModal isOpen={showAbertura} onClose={() => setShowAbertura(false)} />
+      <SupervisorGateDialog
+        open={fecharGateOpen}
+        onOpenChange={setFecharGateOpen}
+        onAuthorized={() => setShowFechamento(true)}
+        title="Fechar caixa"
+        description="Fechar o caixa exige a senha de um supervisor/gerente."
+      />
       <FechamentoCaixaModal isOpen={showFechamento} onClose={() => setShowFechamento(false)} />
 
       {/* Seletor de cliente (com cadastro rápido) para venda à prazo — por cima do pagamento */}
