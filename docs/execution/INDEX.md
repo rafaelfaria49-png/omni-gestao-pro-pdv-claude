@@ -46,6 +46,10 @@ escreve é a pista escolhida (SAFE-lite inline ou Engine de 17 fases). Ver §2.
 | 39 | `ROLLBACK_PROTOCOL.md` (a criar) | Como desfazer |
 | v2-b1 | [`EXECUTION_RULES.md`](./EXECUTION_RULES.md) | Regras de execução contínua de múltiplos GOALs — auto approval, gates, overnight, commit/push |
 | v2-b2 | [`GOAL_TEMPLATE.md`](./GOAL_TEMPLATE.md) | Template oficial para qualquer GOAL individual — 20 campos + 3 exemplos (docs/impl/overnight) |
+| v2-b3 | [`EXECUTION_PROFILE.md`](./EXECUTION_PROFILE.md) | Perfil oficial de cada ferramenta/IA — papéis, handoff, paralelismo seguro, quem mexe em quê |
+| v2-b4 | [`OVERNIGHT_QUEUE.md`](./OVERNIGHT_QUEUE.md) | Fila oficial de GOALs pré-aprovados — 9 estados, campos obrigatórios, política de execução e retomada |
+| v2-b5 | [`SESSION_HANDOFF.md`](./SESSION_HANDOFF.md) | Protocolo de continuidade entre sessões — 6 tipos de handoff, checklists, Mermaid, exemplos fiscais |
+| v2-b6 | [`EXECUTION_LOG.md`](./EXECUTION_LOG.md) | Log append-only de todas as execuções — 7 status, 11 tipos, exemplos fiscais + Execution Engine V2 |
 
 ---
 
