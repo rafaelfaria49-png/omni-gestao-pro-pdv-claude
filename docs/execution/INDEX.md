@@ -45,6 +45,7 @@ escreve é a pista escolhida (SAFE-lite inline ou Engine de 17 fases). Ver §2.
 | 38 | `COWORK_PROTOCOL.md` (a criar) | Modo multi-IA simultâneo |
 | 39 | `ROLLBACK_PROTOCOL.md` (a criar) | Como desfazer |
 | v2-b1 | [`EXECUTION_RULES.md`](./EXECUTION_RULES.md) | Regras de execução contínua de múltiplos GOALs — auto approval, gates, overnight, commit/push |
+| v2-b2 | [`GOAL_TEMPLATE.md`](./GOAL_TEMPLATE.md) | Template oficial para qualquer GOAL individual — 20 campos + 3 exemplos (docs/impl/overnight) |
 
 ---
 
