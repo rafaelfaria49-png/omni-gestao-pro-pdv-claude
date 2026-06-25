@@ -80,6 +80,8 @@ export interface V4State {
   pattern: number[];
   recibo: boolean;
   orcItens: V4OrcItem[];
+  /** false = tela limpa (empty state); true = OS demo selecionada */
+  osSelected: boolean;
 }
 
 /** Tom de cor de um status/badge. */

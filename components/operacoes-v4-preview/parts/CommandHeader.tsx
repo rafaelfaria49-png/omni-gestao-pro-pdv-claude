@@ -1,4 +1,4 @@
-/** Operações V4 Preview — header de comando (46px): status, total, ação primária, menus. */
+/** Operações V4 Preview — header de comando: status, total, ação primária, menus. */
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import styles from "../operacoes-v4-preview.module.css";
@@ -11,37 +11,43 @@ export function CommandHeader({ v }: { v: V4Vals }) {
         position: "relative",
         display: "flex",
         alignItems: "center",
-        gap: 11,
-        height: 46,
-        padding: "0 14px",
+        flexWrap: "wrap",
+        gap: 8,
+        minHeight: 46,
+        padding: "7px 14px",
         background: C.surface,
         borderBottom: `1px solid ${C.line}`,
       }}
     >
-      <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: "-.01em", color: C.ink }}>{v.os.codigo}</h1>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 22, padding: "0 9px", background: v.tone.bg, color: v.tone.fg, borderRadius: 999, fontSize: 11.5, fontWeight: 600 }}>
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: v.tone.dot }} />{v.statusLabel}
-      </span>
-      <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 9px", background: C.warnBg, color: C.warnFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600 }}>{v.pag.statusPagamento}</span>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 22, padding: "0 9px", background: C.successBg, color: C.successFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600 }}>⏱ SLA {v.os.sla}</span>
+      {/* Grupo esquerdo: identidade da OS */}
+      <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, flex: "1 1 auto", minWidth: 0 }}>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: "-.01em", color: C.ink, whiteSpace: "nowrap", flex: "none" }}>{v.os.codigo}</h1>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 22, padding: "0 9px", background: v.tone.bg, color: v.tone.fg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: v.tone.dot, flex: "none" }} />{v.statusLabel}
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 9px", background: C.warnBg, color: C.warnFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>{v.pag.statusPagamento}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 22, padding: "0 9px", background: C.successBg, color: C.successFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>⏱ SLA {v.os.sla}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", height: 18, padding: "0 7px", background: C.muted50, color: C.subtle, borderRadius: 5, fontSize: 10.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap", border: `1px solid ${C.line2}` }}>Demo local</span>
+      </div>
 
-      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 11 }}>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.ink, lineHeight: 1.05 }}>{v.pag.total}</div>
-          <div style={{ fontSize: 10.5, color: C.warnFg }}>saldo {v.pag.saldo}</div>
+      {/* Grupo direito: financeiro + ações */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{v.pag.total}</span>
+          <span style={{ fontSize: 10.5, color: C.warnFg }}>saldo {v.pag.saldo}</span>
         </div>
-        <span style={{ width: 1, height: 26, background: C.line2 }} />
-        <button type="button" onClick={v.togglePrint} style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, padding: "0 11px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>🖨 Documentos ▾</button>
+        <span style={{ width: 1, height: 26, background: C.line2, flex: "none" }} />
+        <button type="button" onClick={v.togglePrint} style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, padding: "0 10px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>🖨 Docs ▾</button>
         {v.hasPrimary && (
-          <button type="button" onClick={v.onPrimary} style={{ display: "inline-flex", alignItems: "center", gap: 8, height: 33, padding: "0 15px", border: "none", background: C.primary, color: C.white, borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 1px 2px rgba(79,70,229,.3)" }}>
+          <button type="button" onClick={v.onPrimary} style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 33, padding: "0 14px", border: "none", background: C.primary, color: C.white, borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 1px 2px rgba(79,70,229,.3)", whiteSpace: "nowrap", flex: "none" }}>
             ✦ {v.primaryLabel}
             {v.showKbd && <kbd style={{ fontSize: 10, background: "rgba(255,255,255,.22)", borderRadius: 4, padding: "1px 5px" }}>↵</kbd>}
           </button>
         )}
         {v.noPrimary && (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 33, padding: "0 13px", background: C.successBg2, color: C.successFg, borderRadius: 9, fontSize: 12.5, fontWeight: 600 }}>✓ Fluxo concluído</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 33, padding: "0 12px", background: C.successBg2, color: C.successFg, borderRadius: 9, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", flex: "none" }}>✓ Fluxo concluído</span>
         )}
-        <button type="button" onClick={v.toggleMore} title="Mais ações" style={{ width: 33, height: 33, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.muted, borderRadius: 9, fontSize: 16, cursor: "pointer" }}>⋯</button>
+        <button type="button" onClick={v.toggleMore} title="Mais ações" style={{ width: 33, height: 33, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.muted, borderRadius: 9, fontSize: 16, cursor: "pointer", flex: "none" }}>⋯</button>
       </div>
 
       {v.menuPrint && (

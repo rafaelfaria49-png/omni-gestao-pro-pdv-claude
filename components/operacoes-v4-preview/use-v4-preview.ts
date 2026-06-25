@@ -85,6 +85,7 @@ const INITIAL: V4State = {
   pattern: [],
   recibo: false,
   orcItens: ORC_ITENS_INICIAIS,
+  osSelected: false,
 };
 
 /** Cor de um botão segmentado tri-estado (ok / avaria / não-testado). */
@@ -545,6 +546,10 @@ function buildVals(
     os: OS, pag: PAG,
 
     toast: st.toast, showToast: !!st.toast,
+
+    osSelected: st.osSelected,
+    selectDemo: () => { update({ osSelected: true }); notify("Exemplo de demonstração carregado"); },
+    clearSelection: () => update({ osSelected: false }),
   };
 }
 
