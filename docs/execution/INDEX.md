@@ -50,6 +50,7 @@ escreve é a pista escolhida (SAFE-lite inline ou Engine de 17 fases). Ver §2.
 | v2-b4 | [`OVERNIGHT_QUEUE.md`](./OVERNIGHT_QUEUE.md) | Fila oficial de GOALs pré-aprovados — 9 estados, campos obrigatórios, política de execução e retomada |
 | v2-b5 | [`SESSION_HANDOFF.md`](./SESSION_HANDOFF.md) | Protocolo de continuidade entre sessões — 6 tipos de handoff, checklists, Mermaid, exemplos fiscais |
 | v2-b6 | [`EXECUTION_LOG.md`](./EXECUTION_LOG.md) | Log append-only de todas as execuções — 7 status, 11 tipos, exemplos fiscais + Execution Engine V2 |
+| v2-b7 | [`GOAL_LIBRARY.md`](./GOAL_LIBRARY.md) | Biblioteca de 17 templates reutilizáveis — docs, impl, audit, design e 6 HUBs (fiscal/PDV/Operações/Estoque/Financeiro/WhatsApp) |
 
 ---
 
