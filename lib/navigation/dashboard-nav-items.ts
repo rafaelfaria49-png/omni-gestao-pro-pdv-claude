@@ -62,6 +62,13 @@ export const hubsNavItems: DashboardNavItem[] = [
     visible: (p) => p.hubs.operacoes,
   },
   {
+    to: "/dashboard/operacoes-v4-preview",
+    label: "Operações V4 Preview",
+    icon: Activity,
+    badge: "V4",
+    visible: (p) => p.hubs.operacoes,
+  },
+  {
     to: "/dashboard/operacoes-v2",
     label: "Operações V2",
     icon: Activity,
