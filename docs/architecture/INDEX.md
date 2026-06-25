@@ -34,6 +34,11 @@ last_update: 2026-05-27
 | [`BACKEND.md`](./BACKEND.md) | Server Actions, services, adapters, contracts | ✅ vivo (6 KB) |
 | [`MODULARIZACAO.md`](./MODULARIZACAO.md) | Estratégia de modularização (placeholder) | 🟠 a expandir |
 | [`SIDEBAR_PAGE_ROUTES.md`](./SIDEBAR_PAGE_ROUTES.md) | Mapa de rotas e sidebar | ✅ vivo |
+| [`FISCAL_SCHEMA_DESIGN.md`](./FISCAL_SCHEMA_DESIGN.md) | Entidades fiscais (NFC-e/SAT/NF-e) + ER + campos | ✅ vivo |
+| [`NFCE_ARCHITECTURE.md`](./NFCE_ARCHITECTURE.md) | Pipeline de emissão NFC-e ponta a ponta | ✅ vivo |
+| [`FISCAL_EVENTS.md`](./FISCAL_EVENTS.md) | Eventos fiscais, fila, retry, dead-letter | ✅ vivo |
+| [`FISCAL_SECURITY.md`](./FISCAL_SECURITY.md) | Segredos fiscais (A1/CSC), cofre, rotação, auditoria | ✅ vivo |
+| [`FISCAL_DRY_RUN.md`](./FISCAL_DRY_RUN.md) | Emissão a seco (validação sem transmissão) | ✅ vivo |
 
 ---
 

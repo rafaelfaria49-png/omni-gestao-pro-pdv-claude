@@ -21,6 +21,7 @@ import {
   type BuildSnapshotInput,
   type SnapshotErrorCode,
   type SnapshotItemInput,
+  type SnapshotItemTributos,
   type SnapshotLojaInput,
   type VendaFiscalSnapshot,
 } from "./venda-fiscal-snapshot"
@@ -226,13 +227,23 @@ export async function createVendaFiscalSnapshot(params: {
 
   // 7) Persiste UMA NotaFiscal RASCUNHO (dormente) + itens congelados, atômico.
   //    ambiente/modelo vêm das ENUMS da config (não da string do snapshot).
+  // Tributação congelada (motor tax-engine, GOAL F2). Persistimos nos campos JÁ existentes:
+  // ICMS por item + valor de tributos (Lei da Transparência) + total na nota; o detalhamento
+  // completo (PIS/COFINS/situação/versão do motor) fica no JSONB `snapshotPagamento.tributacao`.
   const snapshotPagamento = {
     versao: snapshot.versao,
     geradoEm: snapshot.geradoEm,
     venda: snapshot.venda,
     totais: snapshot.totais,
     diagnostico: snapshot.diagnostico,
+    tributacao: snapshot.tributacao ?? null,
   }
+
+  const tribByItem = new Map<number, SnapshotItemTributos>()
+  for (const t of snapshot.tributacao?.itens ?? []) tribByItem.set(t.numeroItem, t)
+
+  // Lei da Transparência (vTotTrib): soma dos aproximados. Baseline Simples (CSOSN 102) = 0.
+  const valorTotalTributos = snapshot.tributacao?.totais.valorAproximadoTributos ?? 0
 
   try {
     const nota = await prisma.notaFiscal.create({
@@ -247,30 +258,39 @@ export async function createVendaFiscalSnapshot(params: {
         localKey,
         valorTotal: snapshot.totais.valorTotal,
         valorDesconto: snapshot.totais.valorDesconto,
+        valorTotalTributos,
         snapshotEmitente: snapshot.emitente as unknown as Prisma.InputJsonValue,
         snapshotDestinatario: snapshot.destinatario as unknown as Prisma.InputJsonValue,
         snapshotPagamento: snapshotPagamento as unknown as Prisma.InputJsonValue,
         itens: {
-          create: snapshot.itens.map((item) => ({
-            itemVendaId: item.itemVendaId,
-            produtoId: item.produtoId,
-            numeroItem: item.numeroItem,
-            codigoProduto: item.codigoProduto,
-            descricao: item.descricao,
-            gtin: item.gtin || null,
-            ncm: item.ncm,
-            cest: item.cest || null,
-            cfop: item.cfop,
-            cst: item.cst || null,
-            csosn: item.csosn || null,
-            origemMercadoria: Number(item.origemMercadoria) || 0,
-            unidadeComercial: item.unidadeComercial,
-            quantidade: item.quantidade,
-            valorUnitario: item.valorUnitario,
-            valorBruto: round2(item.quantidade * item.valorUnitario),
-            valorDesconto: item.valorDesconto,
-            valorTotal: item.valorTotal,
-          })),
+          create: snapshot.itens.map((item) => {
+            const trib = tribByItem.get(item.numeroItem)
+            return {
+              itemVendaId: item.itemVendaId,
+              produtoId: item.produtoId,
+              numeroItem: item.numeroItem,
+              codigoProduto: item.codigoProduto,
+              descricao: item.descricao,
+              gtin: item.gtin || null,
+              ncm: item.ncm,
+              cest: item.cest || null,
+              cfop: item.cfop,
+              cst: item.cst || null,
+              csosn: item.csosn || null,
+              origemMercadoria: Number(item.origemMercadoria) || 0,
+              unidadeComercial: item.unidadeComercial,
+              quantidade: item.quantidade,
+              valorUnitario: item.valorUnitario,
+              valorBruto: round2(item.quantidade * item.valorUnitario),
+              valorDesconto: item.valorDesconto,
+              valorTotal: item.valorTotal,
+              // Tributos congelados (Simples baseline = 0; preenchidos pelo motor).
+              baseCalculoIcms: trib?.icms.baseCalculo ?? 0,
+              aliquotaIcms: trib?.icms.aliquota ?? 0,
+              valorIcms: trib?.icms.valor ?? 0,
+              valorTributos: trib?.valorAproximadoTributos ?? 0,
+            }
+          }),
         },
       },
       select: { id: true },

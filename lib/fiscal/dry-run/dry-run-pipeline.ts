@@ -1,0 +1,227 @@
+/**
+ * Esteira do Dry-Run fiscal (BL-FISCAL-006 · TAREFA 2) — A SECO, dormente, em memória.
+ *
+ * `runFiscalDryRun(snapshot, opts)` executa: validação do snapshot → (tributação já congelada) →
+ * geração de XML → assinatura com certificado de TESTE → verificação da assinatura → validação
+ * estrutural → XSD placeholder → relatório. DESCARTA o XML (não persiste, não transmite, não
+ * toca banco/SEFAZ). PURO exceto hashing (node:crypto). Determinístico (sem timestamps).
+ */
+
+import { createHash } from "node:crypto"
+import {
+  buildNfceXmlResult,
+  NfceXmlError,
+  type NfceXmlContext,
+} from "../xml"
+import {
+  signNfceXmlDetailed,
+  verifyNfceSignature,
+  NfceSignError,
+  type FiscalCertificateMaterial,
+} from "../signing"
+import type { VendaFiscalSnapshot } from "../venda-fiscal-snapshot"
+import { DRY_RUN_TEST_CERT } from "./dry-run-fixtures"
+import { buildDryRunReport } from "./dry-run-report"
+import { validarEstruturaNfce, validarXsd } from "./dry-run-validation"
+import {
+  type DryRunEtapa,
+  type DryRunEtapaNome,
+  type DryRunEtapaStatus,
+  type DryRunReport,
+  type DryRunValidacaoEstrutural,
+  type DryRunXsd,
+} from "./dry-run.types"
+
+export type RunFiscalDryRunOptions = {
+  /** Contexto de numeração/emissão (série/número). Ausente ⇒ placeholder (não emite de verdade). */
+  contexto?: NfceXmlContext
+  /** Certificado de TESTE (default: cert descartável do dry-run). Nunca um A1 real. */
+  certificado?: FiscalCertificateMaterial
+  /** Senha do certificado de teste (default vazio — chave em claro). */
+  senha?: string
+  /** Conteúdo XSD oficial (injeção). Ausente ⇒ `xsd_nao_configurado` (sem rede/disco). */
+  xsd?: string | null
+  /** Valida a janela temporal do certificado (default false — cert de teste). */
+  validarCertificado?: boolean
+  /** Instante de referência se `validarCertificado` (default: agora). */
+  agora?: Date
+}
+
+/** Resultado detalhado: relatório + artefatos EM MEMÓRIA (não persistidos — descartados ao retornar). */
+export type RunFiscalDryRunDetailed = {
+  report: DryRunReport
+  /** XML não assinado (efêmero). */
+  xml: string | null
+  /** XML assinado (efêmero). */
+  xmlAssinado: string | null
+}
+
+function sha256Hex(s: string): string {
+  return createHash("sha256").update(Buffer.from(s, "utf8")).digest("hex")
+}
+
+function etapa(nome: DryRunEtapaNome, status: DryRunEtapaStatus, mensagem: string): DryRunEtapa {
+  return { nome, status, mensagem }
+}
+
+function xsdEtapaStatus(xsd: DryRunXsd): DryRunEtapaStatus {
+  switch (xsd.status) {
+    case "xsd_ok":
+      return "ok"
+    case "xsd_invalido":
+      return "erro"
+    default:
+      return "pendente"
+  }
+}
+
+/** Executa o Dry-Run e devolve relatório + artefatos em memória (para inspeção/golden). */
+export function runFiscalDryRunDetailed(
+  snapshot: VendaFiscalSnapshot,
+  options: RunFiscalDryRunOptions = {},
+): RunFiscalDryRunDetailed {
+  const etapas: DryRunEtapa[] = []
+  const erros: string[] = []
+  const warnings: string[] = []
+
+  let xml: string | null = null
+  let xmlAssinado: string | null = null
+  let chaveAcesso: string | null = null
+  let referenciaId: string | null = null
+  let numeracaoPlaceholder = true
+  let assinaturaValida = false
+
+  // 1) Tributação congelada (lida do snapshot — o dry-run NÃO recalcula imposto).
+  const trib = snapshot?.tributacao
+  if (!trib) {
+    etapas.push(etapa("tributacao", "erro", "Tributação não congelada no snapshot."))
+    erros.push("Tributação ausente no snapshot.")
+  } else if (!trib.ok) {
+    etapas.push(etapa("tributacao", "erro", "Tributação fora do baseline (pendente)."))
+    erros.push(...trib.pendencias)
+  } else {
+    etapas.push(etapa("tributacao", trib.semDestaque ? "ok" : "ok", `Regime ${trib.regime} (congelado).`))
+  }
+
+  // 2) Snapshot + XML (buildNfceXmlResult valida o snapshot e lança em erro bloqueante).
+  try {
+    const built = buildNfceXmlResult(snapshot, options.contexto)
+    xml = built.xml
+    chaveAcesso = built.chaveAcesso
+    numeracaoPlaceholder = built.numeracaoPlaceholder
+    warnings.push(...built.validacao.pendencias)
+    etapas.push(etapa("snapshot", "ok", "Snapshot válido para emissão."))
+    etapas.push(etapa("xml", "ok", `XML NFC-e 4.00 gerado (chave ${built.chaveAcesso}).`))
+  } catch (e) {
+    const msg = e instanceof NfceXmlError ? `${e.code}: ${e.message}` : "Falha ao gerar XML."
+    etapas.push(etapa("snapshot", "erro", "Snapshot inválido para emissão."))
+    etapas.push(etapa("xml", "erro", msg))
+    etapas.push(etapa("assinatura", "pulada", "Pulada (sem XML)."))
+    etapas.push(etapa("verificacao_assinatura", "pulada", "Pulada (sem assinatura)."))
+    etapas.push(etapa("validacao_estrutural", "pulada", "Pulada (sem XML assinado)."))
+    etapas.push(etapa("xsd", "pulada", "Pulada (sem XML)."))
+    erros.push(msg)
+    const validacaoEstrutural: DryRunValidacaoEstrutural = {
+      ok: false,
+      erros: ["XML não gerado — validação estrutural não executada."],
+      pendencias: [],
+    }
+    const xsd: DryRunXsd = {
+      status: "xsd_nao_configurado",
+      mensagem: "Não executado (sem XML).",
+      violacoes: [],
+    }
+    const report = buildDryRunReport({
+      etapas,
+      erros,
+      warnings,
+      chaveAcesso,
+      referenciaId,
+      assinaturaPresente: false,
+      assinaturaValida: false,
+      validacaoEstrutural,
+      xsd,
+      hashXml: null,
+      hashXmlAssinado: null,
+      numeracaoPlaceholder,
+    })
+    return { report, xml, xmlAssinado }
+  }
+
+  // 3) Assinatura com certificado de TESTE (simulada — nunca A1 real, nunca transmite).
+  const cert = options.certificado ?? DRY_RUN_TEST_CERT
+  try {
+    const signed = signNfceXmlDetailed(xml, cert, options.senha ?? "", {
+      ignorarValidade: options.validarCertificado !== true,
+      agora: options.agora,
+    })
+    xmlAssinado = signed.xml
+    referenciaId = signed.referenciaId
+    etapas.push(etapa("assinatura", "ok", "XML assinado com certificado de teste (descartável)."))
+  } catch (e) {
+    const msg = e instanceof NfceSignError ? `${e.code}: ${e.message}` : "Falha ao assinar."
+    etapas.push(etapa("assinatura", "erro", msg))
+    etapas.push(etapa("verificacao_assinatura", "pulada", "Pulada (assinatura falhou)."))
+    erros.push(msg)
+  }
+
+  // 4) Verificação da assinatura.
+  if (xmlAssinado) {
+    const v = verifyNfceSignature(xmlAssinado)
+    assinaturaValida = v.valido
+    if (v.valido) {
+      etapas.push(etapa("verificacao_assinatura", "ok", "Assinatura íntegra (digest + SignatureValue)."))
+    } else {
+      etapas.push(etapa("verificacao_assinatura", "erro", `Assinatura inválida: ${v.problemas.join(", ")}.`))
+      erros.push(`Assinatura inválida: ${v.problemas.join(", ")}.`)
+    }
+  }
+
+  // 5) Validação estrutural do XML assinado.
+  const validacaoEstrutural = validarEstruturaNfce(xmlAssinado)
+  if (validacaoEstrutural.ok) {
+    etapas.push(etapa("validacao_estrutural", "ok", "Estrutura mínima do infNFe 4.00 presente."))
+  } else {
+    etapas.push(etapa("validacao_estrutural", "erro", validacaoEstrutural.erros.join(" ")))
+    erros.push(...validacaoEstrutural.erros)
+  }
+  warnings.push(...validacaoEstrutural.pendencias)
+
+  // 6) XSD (placeholder seguro — sem rede/disco).
+  const xsd = validarXsd(xmlAssinado, { xsd: options.xsd })
+  etapas.push(etapa("xsd", xsdEtapaStatus(xsd), xsd.mensagem))
+  if (xsd.status === "xsd_nao_configurado" || xsd.status === "xsd_presente_sem_validador") {
+    warnings.push(xsd.mensagem)
+  } else if (xsd.status === "xsd_invalido") {
+    erros.push(...xsd.violacoes)
+  }
+
+  // 7) Relatório (descarta XML — só hashes/status). Nada persistido.
+  const report = buildDryRunReport({
+    etapas,
+    erros,
+    warnings,
+    chaveAcesso,
+    referenciaId,
+    assinaturaPresente: Boolean(xmlAssinado),
+    assinaturaValida,
+    validacaoEstrutural,
+    xsd,
+    hashXml: xml ? sha256Hex(xml) : null,
+    hashXmlAssinado: xmlAssinado ? sha256Hex(xmlAssinado) : null,
+    numeracaoPlaceholder,
+  })
+
+  return { report, xml, xmlAssinado }
+}
+
+/**
+ * Executa o Dry-Run e devolve SOMENTE o relatório (XML é descartado — não retornado, não
+ * persistido, não transmitido). Determinístico e sem informação sensível.
+ */
+export function runFiscalDryRun(
+  snapshot: VendaFiscalSnapshot,
+  options: RunFiscalDryRunOptions = {},
+): DryRunReport {
+  return runFiscalDryRunDetailed(snapshot, options).report
+}

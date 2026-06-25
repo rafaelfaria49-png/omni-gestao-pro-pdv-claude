@@ -18,3 +18,18 @@ export {
   FiscalProviderConfigError,
   type ResolveFiscalProviderResult,
 } from "./resolver"
+// BL-FISCAL-007 — MockProvider (test double) + fábrica por intenção + alias SefazStubProvider.
+export {
+  MockProvider,
+  createMockProvider,
+  type MockProviderConfig,
+  type MockProviderCall,
+  type MockOutcome,
+} from "./mock-provider"
+export {
+  createFiscalProvider,
+  SefazStubProvider,
+  sefazStubProvider,
+  type FiscalProviderKind,
+  type CreateFiscalProviderOptions,
+} from "./provider-factory"

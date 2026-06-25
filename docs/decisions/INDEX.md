@@ -2,7 +2,7 @@
 title: Decisões Arquiteturais (ADRs) — OmniGestão Pro
 status: vivo
 owner: produto/arquitetura
-last_update: 2026-06-01
+last_update: 2026-06-24
 ---
 
 # 🧭 Decisões Arquiteturais — Índice oficial
@@ -86,6 +86,8 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 | 0004 | SAFE-lite como modo padrão; Engine de 17 fases como modo pesado reservado | governança | ✅ Aceita | 2026-05-30 | [`ADR-0004-safe-lite-modo-padrao.md`](./ADR-0004-safe-lite-modo-padrao.md) |
 | 0006 | Roteamento WhatsApp multi-loja por `phone_number_id` (fim do webhook single-store) | whatsapp / multi_loja | ✅ Aceita | 2026-06-01 | [`ADR-0006-whatsapp-router-multi-loja.md`](./ADR-0006-whatsapp-router-multi-loja.md) |
 | 0007 | Modelo de Depósitos (multi-depósito por loja) — fundação de saldo segmentado | estoque / multi_loja | ✅ Aceita | 2026-06-01 | [`ADR-0007-modelo-depositos.md`](./ADR-0007-modelo-depositos.md) |
+| 0008 | Arquitetura oficial do módulo Fiscal (satélite pós-commit · snapshot imutável · provider-agnóstico) | cross / fiscal | ✅ Aceita | 2026-06-24 | [`ADR-0008-fiscal-architecture.md`](./ADR-0008-fiscal-architecture.md) |
+| 0009 | Cofre de segredos fiscais (A1/senha/CSC por referência · EnvVault piloto → KmsStorageVault produção) | cross / fiscal | ✅ Aceita | 2026-06-24 | [`ADR-0009-fiscal-secret-vault.md`](./ADR-0009-fiscal-secret-vault.md) |
 
 > **Nota sobre o ADR legado:** `OS_ROUTE_OFICIAL.md` foi escrito antes desta convenção e não segue o template/naming atual. Mantido como histórico. Quando precisar ser referenciado, citar como **ADR-0001 (legado)**. Migração para o naming `ADR-0001-os-route-oficial.md` é uma tarefa **opcional** e exige autorização (renomear histórico pode quebrar links externos).
 
@@ -124,6 +126,7 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 - **Omni Agent:** —
 - **BI:** —
 - **Multi-loja:** ADR-0003 (eliminar fallback `loja-1`) · ADR-0006 (router WhatsApp — aceita) · ADR-0007 (modelo de depósitos — aceita)
+- **Fiscal:** ADR-0008 (arquitetura oficial do módulo Fiscal — aceita) · ADR-0009 (cofre de segredos fiscais — aceita)
 - **Governança:** ADR-0002 (congelamento Skill Front Matter v1) · ADR-0004 (SAFE-lite modo padrão)
 
 ---

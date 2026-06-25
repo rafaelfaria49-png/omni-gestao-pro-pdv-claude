@@ -22,8 +22,17 @@ import {
   PRODUTO_FISCAL_VAZIO,
   type ProdutoFiscal,
 } from "@/lib/produto-fiscal"
+import { calculateTax } from "./tax-engine"
+import type { TaxEngineInput, TaxRegime } from "./tax-engine"
 
 export const VENDA_FISCAL_SNAPSHOT_VERSAO = 1
+
+/**
+ * Versão das REGRAS tributárias congeladas no snapshot. O cálculo usa o motor puro
+ * `lib/fiscal/tax-engine` (Fase F2). Incrementar quando a matriz tributária mudar de forma
+ * que altere valores já congelados (auditoria/reprocessamento).
+ */
+export const VENDA_FISCAL_TAX_RULES_VERSION = 1
 
 // ── Tipos de ENTRADA (o serviço carrega do banco e entrega isto ao builder) ────────
 
@@ -170,6 +179,60 @@ export type SnapshotVenda = {
   paymentBreakdown: Record<string, unknown> | null
 }
 
+/** Componente de um imposto (ICMS/PIS/COFINS) congelado no snapshot. */
+export type SnapshotTributoComponente = {
+  /** "tributado" | "nao_destacado" | "isento" | "com_credito_simples" (ver tax-engine). */
+  situacao: string
+  /** Código aplicado (CSOSN para ICMS no Simples; CST para PIS/COFINS). */
+  codigo: string
+  baseCalculo: number
+  aliquota: number
+  valor: number
+}
+
+/** Tributação CONGELADA por item (resultado do motor tax-engine no ato da venda). */
+export type SnapshotItemTributos = {
+  numeroItem: number
+  cfop: string
+  csosn: string
+  /** Base potencial do item: bruto − desconto + frete + seguro + outras. */
+  valorTributavel: number
+  /** Lei da Transparência (IBPT) aproximado — 0 quando não informado. */
+  valorAproximadoTributos: number
+  /** Soma dos impostos DESTACADOS do item (icms+pis+cofins). Simples 102 = 0. */
+  tributosDestacados: number
+  icms: SnapshotTributoComponente & { pCredSN: number; valorCreditoSimples: number }
+  pis: SnapshotTributoComponente
+  cofins: SnapshotTributoComponente
+}
+
+/**
+ * Bloco fiscal-tributário CONGELADO da nota. No Simples Nacional baseline (CSOSN 102) NENHUM
+ * imposto é destacado (valores 0) — isto é correto (imposto no DAS), não ausência de cálculo.
+ * `ok=false` quando o caso está fora do baseline do motor (regime normal/ST/interestadual): o
+ * snapshot ainda é criado, mas a tributação fica pendente com o(s) motivo(s).
+ */
+export type SnapshotTributacao = {
+  ok: boolean
+  engineVersion: string
+  regrasVersion: number
+  regime: string
+  /** True quando nenhum imposto foi destacado (caso típico do Simples Nacional). */
+  semDestaque: boolean
+  totais: {
+    baseCalculoIcms: number
+    valorIcms: number
+    valorPis: number
+    valorCofins: number
+    valorTotalTributos: number
+    valorAproximadoTributos: number
+    valorTotalNota: number
+  }
+  /** Motivos quando ok=false (caso fora do baseline). */
+  pendencias: string[]
+  itens: SnapshotItemTributos[]
+}
+
 export type VendaFiscalSnapshot = {
   versao: number
   geradoEm: string
@@ -193,6 +256,11 @@ export type VendaFiscalSnapshot = {
     /** Índices (numeroItem) dos itens sem fiscal mínimo. */
     itensSemFiscal: number[]
   }
+  /**
+   * Tributação CONGELADA (motor lib/fiscal/tax-engine — Fase F2). Opcional para
+   * compatibilidade com snapshots antigos; o builder atual sempre a preenche.
+   */
+  tributacao?: SnapshotTributacao
 }
 
 export type SnapshotErrorCode =
@@ -296,6 +364,96 @@ function classificarDestinatario(cliente: SnapshotClienteInput): SnapshotDestina
     telefone: s(cliente.telefone) || null,
     email: s(cliente.email) || null,
     municipio: s(cliente.municipio) || null,
+  }
+}
+
+// ── Tributação congelada (integra o motor tax-engine — Fase F2) ───────────────────────
+
+/**
+ * Calcula e CONGELA a tributação do snapshot via `calculateTax` (motor puro).
+ * Mapeia emitente (regime) + itens (csosn/cfop/origem/valores) para a entrada do motor.
+ * Graceful: se o caso estiver fora do baseline (regime normal/ST/interestadual), devolve
+ * `ok=false` + pendências — o snapshot NÃO falha por isso (a tributação fica pendente).
+ *
+ * NFC-e B2C: âmbito `interna`, destino `consumidor_final`. O desconto é o do cabeçalho da
+ * venda (rateado pelo motor); itens não têm desconto próprio nesta fase.
+ */
+export function computeSnapshotTributacao(
+  emitente: SnapshotEmitente,
+  itens: SnapshotItem[],
+  venda: SnapshotVenda,
+): SnapshotTributacao {
+  const regime = s(emitente.regimeTributario)
+  const descontoTotal = round2(num(venda.desconto))
+  const taxInput: TaxEngineInput = {
+    regime: regime as TaxRegime,
+    ambito: "interna",
+    destino: "consumidor_final",
+    descontoTotal: descontoTotal > 0 ? descontoTotal : undefined,
+    itens: itens.map((it) => ({
+      id: String(it.numeroItem),
+      quantidade: num(it.quantidade),
+      valorUnitario: num(it.valorUnitario),
+      descontoValor: num(it.valorDesconto) > 0 ? round2(num(it.valorDesconto)) : undefined,
+      cfop: it.cfop || undefined,
+      csosn: it.csosn || undefined,
+      origemMercadoria: it.origemMercadoria || undefined,
+    })),
+  }
+
+  const tax = calculateTax(taxInput)
+
+  const itensTrib: SnapshotItemTributos[] = tax.ok
+    ? tax.itens.map((ti) => ({
+        numeroItem: ti.index,
+        cfop: s(itens[ti.index - 1]?.cfop),
+        csosn: ti.icms.codigo,
+        valorTributavel: ti.valorTributavel,
+        valorAproximadoTributos: ti.valorAproximadoTributos,
+        tributosDestacados: ti.tributosDestacados,
+        icms: {
+          situacao: ti.icms.situacao,
+          codigo: ti.icms.codigo,
+          baseCalculo: ti.icms.baseCalculo,
+          aliquota: ti.icms.aliquota,
+          valor: ti.icms.valor,
+          pCredSN: ti.icms.pCredSN,
+          valorCreditoSimples: ti.icms.valorCreditoSimples,
+        },
+        pis: {
+          situacao: ti.pis.situacao,
+          codigo: ti.pis.codigo,
+          baseCalculo: ti.pis.baseCalculo,
+          aliquota: ti.pis.aliquota,
+          valor: ti.pis.valor,
+        },
+        cofins: {
+          situacao: ti.cofins.situacao,
+          codigo: ti.cofins.codigo,
+          baseCalculo: ti.cofins.baseCalculo,
+          aliquota: ti.cofins.aliquota,
+          valor: ti.cofins.valor,
+        },
+      }))
+    : []
+
+  return {
+    ok: tax.ok,
+    engineVersion: tax.meta.engineVersion,
+    regrasVersion: VENDA_FISCAL_TAX_RULES_VERSION,
+    regime,
+    semDestaque: tax.meta.semDestaque,
+    totais: {
+      baseCalculoIcms: tax.totais.baseCalculoIcms,
+      valorIcms: tax.totais.valorIcms,
+      valorPis: tax.totais.valorPis,
+      valorCofins: tax.totais.valorCofins,
+      valorTotalTributos: tax.totais.valorTotalTributos,
+      valorAproximadoTributos: tax.totais.valorAproximadoTributos,
+      valorTotalNota: tax.totais.valorTotalNota,
+    },
+    pendencias: tax.ok ? [] : tax.errors.map((e) => e.mensagem),
+    itens: itensTrib,
   }
 }
 
@@ -407,6 +565,9 @@ export function buildVendaFiscalSnapshot(input: BuildSnapshotInput): BuildSnapsh
       : []),
   ]
 
+  // Tributação congelada via motor puro (tax-engine). Não falha o snapshot fora do baseline.
+  const tributacao = computeSnapshotTributacao(emitente, itens, venda)
+
   const snapshot: VendaFiscalSnapshot = {
     versao: VENDA_FISCAL_SNAPSHOT_VERSAO,
     geradoEm: new Date().toISOString(),
@@ -428,6 +589,7 @@ export function buildVendaFiscalSnapshot(input: BuildSnapshotInput): BuildSnapsh
       pendencias,
       itensSemFiscal,
     },
+    tributacao,
   }
 
   return { ok: true, snapshot: deepFreeze(snapshot), localKey: resolveSnapshotLocalKey(storeId, vendaId) }
