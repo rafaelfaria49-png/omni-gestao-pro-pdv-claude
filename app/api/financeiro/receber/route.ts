@@ -31,6 +31,7 @@ import {
   estornarMovimentacaoPorReferencia,
 } from "@/lib/financeiro/services/movimentacoes-service"
 import { verificarPeriodoFechado } from "@/lib/financeiro/services/fechamento-service"
+import { registrarRecebimentoCrSeCaixaAberto } from "@/lib/caixa/recebimento-cr-caixa"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -118,6 +119,23 @@ const patchSchema = z.discriminatedUnion("op", [
     lojaId: z.string().max(120).optional(),
     localKey: z.string().min(1).max(260),
     motivo: z.string().max(2000).optional(),
+  }),
+  // Espelho da baixa no caixa operacional: cria CaixaOperacao(recebimento_cr) na
+  // sessão aberta para que o recebimento entre no fechamento. Usado pela tela
+  // Financeiro → Contas a Receber, que baixa o título no cliente (localStorage)
+  // e depois sincroniza a gaveta via esta op. Idempotente por `movimentoId`.
+  z.object({
+    op: z.literal("vincular-caixa"),
+    lojaId: z.string().max(120).optional(),
+    valor: z.number().finite().positive().max(1e12),
+    formaPagamento: z.string().max(80).optional(),
+    movimentoId: z.string().min(1).max(200),
+    tituloId: z.string().max(200).optional(),
+    localKey: z.string().max(260).optional(),
+    cliente: z.string().max(240).optional(),
+    descricao: z.string().max(240).optional(),
+    sessaoId: z.string().max(120).optional(),
+    terminalId: z.string().max(120).optional(),
   }),
 ])
 
@@ -301,6 +319,41 @@ export async function PATCH(req: Request) {
           409,
         )
       }
+    }
+
+    if (parsed.data.op === "vincular-caixa") {
+      // Espelho da baixa no caixa operacional. NÃO finge sucesso: se não houver
+      // sessão aberta, retorna vinculadoCaixa=false para a UI avisar que a baixa
+      // ficou só no financeiro (não entrou na gaveta/fechamento).
+      const r = await registrarRecebimentoCrSeCaixaAberto({
+        storeId,
+        valor: parsed.data.valor,
+        formaPagamento: parsed.data.formaPagamento,
+        origem: "financeiro",
+        tituloId: parsed.data.tituloId,
+        localKey: parsed.data.localKey,
+        cliente: parsed.data.cliente,
+        descricao: parsed.data.descricao,
+        operador: userLabel,
+        idempotencyKey: parsed.data.movimentoId,
+        sessaoId: parsed.data.sessaoId,
+        terminalId: parsed.data.terminalId,
+      })
+      if (r.vinculado) {
+        return NextResponse.json({
+          ok: true,
+          op: "vincular-caixa",
+          vinculadoCaixa: true,
+          sessaoId: r.sessaoId,
+          jaRegistrado: r.jaRegistrado,
+        })
+      }
+      return NextResponse.json({
+        ok: true,
+        op: "vincular-caixa",
+        vinculadoCaixa: false,
+        motivo: r.motivo,
+      })
     }
 
     if (parsed.data.op === "liquidar") {

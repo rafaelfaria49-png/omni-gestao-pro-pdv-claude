@@ -1019,8 +1019,8 @@ export function ContasReceber() {
           saldo <= 0.009
             ? imprimir
               ? "Baixa registrada. Você pode imprimir o recibo na janela que abrir em seguida."
-              : "Título quitado e entrada lançada no fluxo de caixa."
-            : "Baixa parcial registrada e entrada lançada no fluxo de caixa.",
+              : "Título quitado. Baixa lançada no financeiro."
+            : "Baixa parcial registrada no financeiro.",
       })
       return {
         contaAtualizada,
@@ -1032,6 +1032,54 @@ export function ContasReceber() {
       }
     },
     [carteiraPadrao, persist, setBaixaOpen, setMovimentos, toast]
+  )
+
+  /**
+   * Espelha a baixa no CAIXA OPERACIONAL: se houver sessão de caixa aberta na
+   * loja, cria a `CaixaOperacao(recebimento_cr)` para o recebimento entrar no
+   * fechamento (GOAL CAIXA-FIX-001). A baixa financeira já foi gravada antes;
+   * esta chamada é o passo aditivo + o aviso honesto quando NÃO há caixa aberto.
+   * Idempotente por `movimentoId` (não duplica em retry/clique duplo).
+   */
+  const sincronizarRecebimentoNoCaixa = useCallback(
+    async (args: { valor: number; forma: string; movId: string; conta: ContaReceberRow }) => {
+      if (!lojaKey) return
+      try {
+        const r = await fetch("/api/financeiro/receber", {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", [ASSISTEC_LOJA_HEADER]: lojaKey },
+          body: JSON.stringify({
+            op: "vincular-caixa",
+            valor: Math.round(args.valor * 100) / 100,
+            formaPagamento: args.forma,
+            movimentoId: args.movId,
+            localKey: String(args.conta.id),
+            cliente: args.conta.cliente,
+            descricao: args.conta.descricao,
+          }),
+        })
+        if (!r.ok) return
+        const j = (await r.json()) as { vinculadoCaixa?: boolean; jaRegistrado?: boolean }
+        if (j.vinculadoCaixa) {
+          if (!j.jaRegistrado) {
+            toast({
+              title: "Lançado no caixa aberto",
+              description: "O recebimento entra no fechamento do caixa (gaveta conforme a forma de pagamento).",
+            })
+          }
+        } else {
+          toast({
+            title: "Sem caixa aberto",
+            description:
+              "A baixa ficou só no financeiro e NÃO entra na gaveta/fechamento. Para entrar na gaveta, receba pelo PDV (F5) com o caixa aberto.",
+          })
+        }
+      } catch {
+        /* silencioso: a baixa financeira já foi registrada com sucesso */
+      }
+    },
+    [lojaKey, toast],
   )
 
   const abrirModalBaixa = (conta: ContaReceberRow, modo: BaixaModalModo) => {
@@ -1194,6 +1242,13 @@ export function ContasReceber() {
       try {
         resultadoImpressao = aplicarRecebimentoInterno(p)
         clearWatchdog()
+        // Espelha no caixa operacional (aditivo, idempotente, não bloqueia a baixa).
+        void sincronizarRecebimentoNoCaixa({
+          valor: p.valorRecebido,
+          forma: p.forma,
+          movId: p.movId,
+          conta: p.conta,
+        })
       } catch (e) {
         clearWatchdog()
         console.error("[contas-receber] executarRecebimento:", e)
