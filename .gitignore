@@ -43,3 +43,6 @@ public/worker-*.js
 public/worker-*.js.map
 public/swe-worker-*.js
 public/fallback-*.js
+# Dados reais de cliente - NUNCA versionar (LGPD)
+*.csv
+components/pdv-github-original/
