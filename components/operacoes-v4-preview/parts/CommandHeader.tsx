@@ -8,7 +8,6 @@ export function CommandHeader({ v }: { v: V4Vals }) {
     <div
       style={{
         flex: "none",
-        position: "relative",
         display: "flex",
         alignItems: "center",
         flexWrap: "wrap",
@@ -37,7 +36,25 @@ export function CommandHeader({ v }: { v: V4Vals }) {
           <span style={{ fontSize: 10.5, color: C.warnFg }}>saldo {v.pag.saldo}</span>
         </div>
         <span style={{ width: 1, height: 26, background: C.line2, flex: "none" }} />
-        <button type="button" onClick={v.togglePrint} style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, padding: "0 10px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap", flex: "none" }}>🖨 Docs ▾</button>
+
+        {/* Dropdown Docs — ancorado ao botão via position:relative */}
+        <div style={{ position: "relative", flex: "none" }}>
+          <button type="button" onClick={v.togglePrint} style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 30, padding: "0 10px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}>🖨 Docs ▾</button>
+          {v.menuPrint && (
+            <>
+              <button type="button" onClick={v.closeMenus} style={{ position: "fixed", inset: 0, zIndex: 40, border: "none", background: "transparent", cursor: "default" }} />
+              <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 50, width: 248, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 11, boxShadow: "0 12px 32px rgba(17,19,26,.16)", padding: 6 }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: C.subtle, fontWeight: 700, padding: "6px 9px 4px" }}>Imprimir / documentos</div>
+                {v.printItems.map((d) => (
+                  <button key={d.label} type="button" onClick={d.onClick} className={styles.hoverSurface} style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: "transparent", borderRadius: 7, padding: "8px 9px", fontSize: 12.5, color: C.body, cursor: "pointer" }}>
+                    <span style={{ width: 16, textAlign: "center" }}>{d.icon}</span>{d.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
         {v.hasPrimary && (
           <button type="button" onClick={v.onPrimary} style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 33, padding: "0 14px", border: "none", background: C.primary, color: C.white, borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: "pointer", boxShadow: "0 1px 2px rgba(79,70,229,.3)", whiteSpace: "nowrap", flex: "none" }}>
             ✦ {v.primaryLabel}
@@ -47,37 +64,26 @@ export function CommandHeader({ v }: { v: V4Vals }) {
         {v.noPrimary && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 33, padding: "0 12px", background: C.successBg2, color: C.successFg, borderRadius: 9, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", flex: "none" }}>✓ Fluxo concluído</span>
         )}
-        <button type="button" onClick={v.toggleMore} title="Mais ações" style={{ width: 33, height: 33, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.muted, borderRadius: 9, fontSize: 16, cursor: "pointer", flex: "none" }}>⋯</button>
+
+        {/* Dropdown Mais ações — ancorado ao botão via position:relative */}
+        <div style={{ position: "relative", flex: "none" }}>
+          <button type="button" onClick={v.toggleMore} title="Mais ações" style={{ width: 33, height: 33, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.muted, borderRadius: 9, fontSize: 16, cursor: "pointer" }}>⋯</button>
+          {v.menuMore && (
+            <>
+              <button type="button" onClick={v.closeMenus} style={{ position: "fixed", inset: 0, zIndex: 40, border: "none", background: "transparent", cursor: "default" }} />
+              <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 50, width: 236, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 11, boxShadow: "0 12px 32px rgba(17,19,26,.16)", padding: 6 }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: C.subtle, fontWeight: 700, padding: "6px 9px 4px" }}>Ações da OS</div>
+                {v.moreItems.map((m) => (
+                  <button key={m.label} type="button" onClick={m.onClick} className={styles.hoverSurface} style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: "transparent", borderRadius: 7, padding: "8px 9px", fontSize: 12.5, color: m.color, cursor: "pointer" }}>
+                    <span style={{ width: 16, textAlign: "center" }}>{m.icon}</span>{m.label}
+                  </button>
+                ))}
+                <div style={{ fontSize: 10.5, color: C.faint2, padding: "6px 9px 3px", borderTop: `1px solid ${C.line3}`, marginTop: 4 }}>Transições validadas pela máquina única do fluxo.</div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
-
-      {v.menuPrint && (
-        <>
-          <button type="button" onClick={v.closeMenus} style={{ position: "fixed", inset: 0, zIndex: 40, border: "none", background: "transparent", cursor: "default" }} />
-          <div style={{ position: "absolute", top: 42, right: 118, zIndex: 50, width: 248, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 11, boxShadow: "0 12px 32px rgba(17,19,26,.16)", padding: 6 }}>
-            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: C.subtle, fontWeight: 700, padding: "6px 9px 4px" }}>Imprimir / documentos</div>
-            {v.printItems.map((d) => (
-              <button key={d.label} type="button" onClick={d.onClick} className={styles.hoverSurface} style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: "transparent", borderRadius: 7, padding: "8px 9px", fontSize: 12.5, color: C.body, cursor: "pointer" }}>
-                <span style={{ width: 16, textAlign: "center" }}>{d.icon}</span>{d.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      {v.menuMore && (
-        <>
-          <button type="button" onClick={v.closeMenus} style={{ position: "fixed", inset: 0, zIndex: 40, border: "none", background: "transparent", cursor: "default" }} />
-          <div style={{ position: "absolute", top: 42, right: 14, zIndex: 50, width: 236, background: C.surface, border: `1px solid ${C.line}`, borderRadius: 11, boxShadow: "0 12px 32px rgba(17,19,26,.16)", padding: 6 }}>
-            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".05em", color: C.subtle, fontWeight: 700, padding: "6px 9px 4px" }}>Ações da OS</div>
-            {v.moreItems.map((m) => (
-              <button key={m.label} type="button" onClick={m.onClick} className={styles.hoverSurface} style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: "transparent", borderRadius: 7, padding: "8px 9px", fontSize: 12.5, color: m.color, cursor: "pointer" }}>
-                <span style={{ width: 16, textAlign: "center" }}>{m.icon}</span>{m.label}
-              </button>
-            ))}
-            <div style={{ fontSize: 10.5, color: C.faint2, padding: "6px 9px 3px", borderTop: `1px solid ${C.line3}`, marginTop: 4 }}>Transições validadas pela máquina única do fluxo.</div>
-          </div>
-        </>
-      )}
     </div>
   );
 }
