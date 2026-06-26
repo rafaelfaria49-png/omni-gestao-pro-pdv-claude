@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ACC_DEF,
-  ANEXOS,
   APONTAMENTOS,
   BANCADA_TEC,
   CAT_LABEL,
@@ -26,7 +25,6 @@ import {
   FIN_HIST,
   FIS_DEF,
   GARANTIA,
-  HIST_ALL,
   HIST_FILTER_DEF,
   KIND,
   MODE_DEF,
@@ -47,8 +45,6 @@ import {
   SLA_ROWS,
   STAGE_DEF,
   STATUS_LABEL,
-  STEP_RESP,
-  STEP_TIME,
   STEPS_DEF,
   TECH_DEF,
   TONE,
@@ -59,8 +55,11 @@ import { useLojaAtiva } from "@/lib/loja-ativa";
 import type { OrdemServico } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
 import {
+  adaptAnexos,
+  adaptObservacoes,
   adaptOsHeader,
   adaptPag,
+  adaptTimeline,
   EMPTY_OS_VIEW,
   EMPTY_PAG_VIEW,
   realPrioridadeToV4,
@@ -132,6 +131,9 @@ function buildVals(
   const realOS = ctx.realOS;
   const osView = realOS ? adaptOsHeader(realOS) : EMPTY_OS_VIEW;
   const pagView = realOS ? adaptPag(realOS) : EMPTY_PAG_VIEW;
+  const timelineReal = realOS ? adaptTimeline(realOS) : [];
+  const anexosReais = realOS ? adaptAnexos(realOS) : [];
+  const observacoesReais = realOS ? adaptObservacoes(realOS) : [];
   const curIdx = (() => {
     let i = ORDER.indexOf(st.status);
     if (i < 0) i = ORDER.indexOf("em_execucao");
@@ -331,15 +333,16 @@ function buildVals(
   });
 
   // ---- atividade (steps) ----
+  // Progressão do pipeline é derivada do status REAL; não inventamos data/responsável
+  // por etapa (sem timeline fake). O histórico real fica na etapa "Histórico".
   const steps = STEPS_DEF.map(([label, s]) => {
     const si = ORDER.indexOf(s);
     const reached = si < curIdx, current = si === curIdx, pending = si > curIdx;
-    const time = reached || current ? STEP_TIME[s] : "";
-    return { label, reached, current, pending, time, resp: STEP_RESP[s] || "", empty: pending && !time };
+    return { label, reached, current, pending, time: "", resp: "", empty: pending };
   });
 
-  // ---- histórico (filtrável) ----
-  const hist = st.histFilter === "todos" ? HIST_ALL : HIST_ALL.filter((h) => h.type === st.histFilter);
+  // ---- histórico real (filtrável) ----
+  const hist = st.histFilter === "todos" ? timelineReal : timelineReal.filter((h) => h.type === st.histFilter);
   const histFilters = HIST_FILTER_DEF.map(([k, label]) => {
     const sel = st.histFilter === k;
     return {
@@ -551,7 +554,8 @@ function buildVals(
     steps, checklist, check: { ok: okCount, ruim: ruimCount, nt: ntCount }, tech, estadoFis, acessorios, cred,
     acessoriosDev, entregaCheck, entregaCheckResumo,
     apontamentos: APONTAMENTOS, finHist: FIN_HIST, retHist: RET_HIST, npsScale,
-    hist, histCount: hist.length, histFilters, anexos: ANEXOS, resolved, pending: PENDING, act,
+    hist, histCount: hist.length, histFilters, anexos: anexosReais, observacoes: observacoesReais,
+    resolved, pending: PENDING, act,
 
     openNovaOS: () => update({ novaOS: true }), closeNovaOS: () => update({ novaOS: false }), novaOSOpen: st.novaOS,
     novaBuscar: st.novaTab === "buscar", novaNovo: st.novaTab === "novo",

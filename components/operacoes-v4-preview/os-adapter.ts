@@ -8,9 +8,16 @@
  * Princípio (GOAL OPS-V4-P0-002..005): **vazio honesto**. Onde não há dado real,
  * mostramos `NI` ("Não informado") em vez de inventar valor. Nada de mock novo.
  */
-import type { OrdemServico, OSStatus, EventoTimeline, ChecklistItem } from "@/types/os";
+import type {
+  OrdemServico,
+  OSStatus,
+  EventoTimeline,
+  ChecklistItem,
+  Anexo,
+  ObservacaoTecnica,
+} from "@/types/os";
 import type { V4Status, V4Stage } from "./types";
-import { fmt } from "./tokens";
+import { C, fmt } from "./tokens";
 
 export const NI = "Não informado";
 
@@ -286,6 +293,8 @@ export interface V4HistEvento {
   type: "status" | "financeiro" | "comunicacao" | "tecnico";
   text: string;
   meta: string;
+  /** Cor do marcador na timeline (derivada da categoria). */
+  dot: string;
 }
 
 /** Mapeia o tipo do evento real para a categoria de filtro da V4. */
@@ -297,17 +306,73 @@ function eventoCategoria(tipo: string): V4HistEvento["type"] {
   return "tecnico";
 }
 
+const CATEGORIA_DOT: Record<V4HistEvento["type"], string> = {
+  status: C.primary,
+  financeiro: C.success,
+  comunicacao: C.warn,
+  tecnico: C.info,
+};
+
 export function adaptTimeline(os: OrdemServico): V4HistEvento[] {
   const tl = Array.isArray(os.timeline) ? os.timeline : [];
   return tl
     .slice()
     .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
-    .map((ev: EventoTimeline) => ({
-      id: ev.id,
-      type: eventoCategoria(ev.tipo),
-      text: txt(ev.titulo) || txt(ev.conteudo) || ev.tipo,
-      meta: `${txt(ev.autor) || "Sistema"} · ${fmtDataHora(ev.criadoEm)}`,
-    }));
+    .map((ev: EventoTimeline) => {
+      const type = eventoCategoria(ev.tipo);
+      return {
+        id: ev.id,
+        type,
+        text: txt(ev.titulo) || txt(ev.conteudo) || ev.tipo,
+        meta: `${txt(ev.autor) || "Sistema"} · ${fmtDataHora(ev.criadoEm)}`,
+        dot: CATEGORIA_DOT[type],
+      };
+    });
+}
+
+const ANEXO_KIND_LABEL: Record<string, string> = {
+  foto_antes: "ANTES",
+  foto_depois: "DEPOIS",
+  foto_defeito: "DEFEITO",
+  video: "VÍDEO",
+  audio: "ÁUDIO",
+  laudo: "LAUDO",
+  nota: "NOTA",
+  comprovante: "COMPROV.",
+  documento_tecnico: "DOC",
+  outro: "ANEXO",
+};
+
+export interface V4Anexo {
+  id: string;
+  kind: string;
+  name: string;
+}
+
+export function adaptAnexos(os: OrdemServico): V4Anexo[] {
+  const lista = Array.isArray(os.anexos) ? os.anexos : [];
+  return lista.map((a: Anexo) => ({
+    id: a.id,
+    kind: ANEXO_KIND_LABEL[a.tipo] ?? "ANEXO",
+    name: txt(a.nome) || "Anexo",
+  }));
+}
+
+export interface V4Observacao {
+  id: string;
+  autor: string;
+  conteudo: string;
+  interna: boolean;
+}
+
+export function adaptObservacoes(os: OrdemServico): V4Observacao[] {
+  const lista = Array.isArray(os.observacoes) ? os.observacoes : [];
+  return lista.map((o: ObservacaoTecnica) => ({
+    id: o.id,
+    autor: txt(o.autor) || "—",
+    conteudo: txt(o.conteudo),
+    interna: !!o.interna,
+  }));
 }
 
 // ---- Checklist de entrada (GOAL OPS-V4-P0-005) -----------------------------

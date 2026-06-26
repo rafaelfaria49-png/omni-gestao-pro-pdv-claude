@@ -66,12 +66,12 @@ export function ActivityColumn({ v }: { v: V4Vals }) {
         <div style={{ border: `1px solid ${C.line2}`, borderRadius: 10, padding: 11, marginBottom: 11 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: C.body }}>Anexos</span>
-            <span style={{ fontSize: 11, color: C.subtle }}>4</span>
+            <span style={{ fontSize: 11, color: C.subtle }}>{v.anexos.length}</span>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <div style={{ width: 46, height: 46, borderRadius: 8, background: HATCH }} />
-            <div style={{ width: 46, height: 46, borderRadius: 8, background: HATCH }} />
-            <div style={{ width: 46, height: 46, borderRadius: 8, background: HATCH }} />
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {v.anexos.slice(0, 3).map((ax) => (
+              <div key={ax.id} title={ax.name} style={{ width: 46, height: 46, borderRadius: 8, background: HATCH }} />
+            ))}
             <div onClick={v.act.addFoto} style={{ width: 46, height: 46, borderRadius: 8, border: `1px dashed ${C.hatch}`, display: "flex", alignItems: "center", justifyContent: "center", color: C.subtle, cursor: "pointer" }}>+</div>
           </div>
         </div>
