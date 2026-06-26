@@ -14,6 +14,7 @@ import type {
   EventoTimeline,
   ChecklistItem,
   Anexo,
+  AnexoTipo,
   ObservacaoTecnica,
 } from "@/types/os";
 import type { V4Status, V4Stage } from "./types";
@@ -393,6 +394,62 @@ export function adaptChecklist(os: OrdemServico): V4ChecklistItem[] {
     estado: it.estado,
     observacao: txt(it.observacao),
   }));
+}
+
+// ---- Entrada: acessórios / fotos / segurança (GOAL OPS-V4-P0-006) ----------
+
+/** Acessórios recebidos (limpos) do equipamento da OS; lista vazia = honesto. */
+export function adaptAcessoriosEntrada(os: OrdemServico): string[] {
+  const lista = Array.isArray(os.equipamento?.acessorios) ? os.equipamento!.acessorios! : [];
+  return lista.map((a) => txt(a)).filter(Boolean);
+}
+
+/** Anexos considerados "fotos de entrada" (registrados na recepção do aparelho). */
+const FOTO_ENTRADA_TIPOS: AnexoTipo[] = ["foto_antes", "foto_defeito"];
+
+export interface V4FotoEntrada {
+  id: string;
+  /** Etiqueta curta derivada do tipo do anexo (ANTES / DEFEITO). */
+  tag: string;
+  name: string;
+}
+
+/** Fotos de entrada reais (anexos antes/defeito da OS); lista vazia = honesto. */
+export function adaptFotosEntrada(os: OrdemServico): V4FotoEntrada[] {
+  const lista = Array.isArray(os.anexos) ? os.anexos : [];
+  return lista
+    .filter((a: Anexo) => FOTO_ENTRADA_TIPOS.includes(a.tipo))
+    .map((a: Anexo) => ({
+      id: a.id,
+      tag: ANEXO_KIND_LABEL[a.tipo] ?? "FOTO",
+      name: txt(a.nome) || "Foto",
+    }));
+}
+
+export interface V4SegurancaEntrada {
+  /** true quando há credencial real registrada na OS. */
+  temCredencial: boolean;
+  /** PIN / senha / padrão (ou "Não informado"). */
+  tipoLabel: string;
+  /** Valor real da credencial (vazio quando ausente). */
+  valor: string;
+}
+
+export const EMPTY_SEGURANCA_ENTRADA: V4SegurancaEntrada = {
+  temCredencial: false,
+  tipoLabel: NI,
+  valor: "",
+};
+
+/** Segurança / acesso real: senha do equipamento + tipo; vazio honesto. */
+export function adaptSegurancaEntrada(os: OrdemServico): V4SegurancaEntrada {
+  const valor = txt(os.senhaEquipamento);
+  const tipo = txt(os.senhaEquipamentoTipo);
+  return {
+    temCredencial: !!valor,
+    tipoLabel: tipo ? (SENHA_TIPO_LABEL[tipo] ?? tipo) : NI,
+    valor,
+  };
 }
 
 // ---- Busca da lista de OS (GOAL OPS-V4-P0-002) -----------------------------

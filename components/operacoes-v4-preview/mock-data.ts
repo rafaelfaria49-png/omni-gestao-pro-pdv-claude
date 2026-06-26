@@ -107,7 +107,6 @@ export const CHECKLIST_DEF = [
   "Alto-falante",
 ];
 
-export const FIS_DEF = ["Tela", "Traseira", "Carcaça", "Câmeras", "Botões"];
 export const ACC_DEF = ["Capa", "Cabo", "Carregador", "Chip"];
 export const ENTREGA_CHECK_DEF = [
   "Aparelho ligando e testado",
@@ -385,15 +384,6 @@ export const CLIENTES_BUSCA = [
   { nome: "Carlos Eduardo Souza", doc: "455.902.118-30", tel: "(11) 99731-4420", os: 1, ini: "CE" },
   { nome: "Beatriz Almeida", doc: "201.556.770-12", tel: "(11) 98120-7755", os: 5, ini: "BA" },
 ];
-
-export const SEC_DEF: Array<[string, string]> = [
-  ["pin", "PIN"],
-  ["senha", "Senha"],
-  ["padrao", "Padrão"],
-];
-
-/** Coordenadas dos pontos do padrão 3×3 (px no quadro 140). */
-export const PATTERN_COORDS = [22, 70, 118];
 
 /* ---- detalhes estáticos da OS aberta ---- */
 

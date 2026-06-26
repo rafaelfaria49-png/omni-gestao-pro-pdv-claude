@@ -22,7 +22,6 @@ import {
   EQUIP_DEF,
   FILA_COLS,
   FIN_HIST,
-  FIS_DEF,
   GARANTIA,
   HIST_FILTER_DEF,
   KIND,
@@ -40,7 +39,6 @@ import {
   RAIL_DEF,
   RESOLVED_RAW,
   RET_HIST,
-  SEC_DEF,
   SLA_ROWS,
   STAGE_DEF,
   STATUS_LABEL,
@@ -49,19 +47,23 @@ import {
   TONE,
 } from "./mock-data";
 import { C, fmt } from "./tokens";
-import type { V4FisEstado, V4State, V4Status, V4Stage } from "./types";
+import type { V4State, V4Status, V4Stage } from "./types";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import type { OrdemServico } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
 import {
+  adaptAcessoriosEntrada,
   adaptAnexos,
   adaptChecklist,
+  adaptFotosEntrada,
   adaptObservacoes,
   adaptOsHeader,
   adaptPag,
+  adaptSegurancaEntrada,
   adaptTimeline,
   EMPTY_OS_VIEW,
   EMPTY_PAG_VIEW,
+  EMPTY_SEGURANCA_ENTRADA,
   realPrioridadeToV4,
   realStatusToV4,
   stageForStatus,
@@ -91,10 +93,6 @@ const INITIAL: V4State = {
   prioridade: "alta",
   estados: ["ok", "ruim", "ok", "ok", "ok", "ok", "nt", "ok"],
   tech: [true, true, true, false],
-  estadoFis: ["avariado", "avariado", "ok", "ok", "ok"],
-  faceId: false,
-  bio: true,
-  acessorios: [true, true, false, false],
   acessoriosDev: [true, true, false, false],
   entregaCheck: [true, true, false, false],
   histFilter: "todos",
@@ -102,22 +100,10 @@ const INITIAL: V4State = {
   novaTab: "buscar",
   novaEquip: "celular",
   novaOrigem: "balcao",
-  secTipo: "padrao",
-  pattern: [],
   recibo: false,
   orcItens: ORC_ITENS_INICIAIS,
   selectedOsId: null,
 };
-
-/** Cor de um botão segmentado tri-estado (ok / avaria / não-testado). */
-function seg(active: boolean, kind: "ok" | "av" | "nt") {
-  const map = {
-    ok: { bg: C.successBg, fg: C.successFg, bd: C.successBd },
-    av: { bg: C.dangerBg, fg: C.dangerFg, bd: C.dangerBd },
-    nt: { bg: C.infoBg, fg: C.infoFg, bd: C.infoBd },
-  } as const;
-  return active ? map[kind] : { bg: C.surface, fg: C.subtle, bd: C.inputBd };
-}
 
 type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
 
@@ -229,33 +215,13 @@ function buildVals(
   };
   const checklistVazio = checklistReal.length === 0;
 
-  const setFis = (i: number, v: V4FisEstado) =>
-    update((s) => {
-      const a = s.estadoFis.slice();
-      a[i] = v;
-      return { estadoFis: a };
-    });
-  const estadoFis = FIS_DEF.map((comp, i) => {
-    const v = st.estadoFis[i];
-    const ok = seg(v === "ok", "ok"), av = seg(v === "avariado", "av"), au = seg(v === "ausente", "nt");
-    return {
-      comp,
-      okBg: ok.bg, okFg: ok.fg, okBd: ok.bd,
-      avBg: av.bg, avFg: av.fg, avBd: av.bd,
-      auBg: au.bg, auFg: au.fg, auBd: au.bd,
-      onOk: () => setFis(i, "ok"), onAv: () => setFis(i, "avariado"), onAu: () => setFis(i, "ausente"),
-    };
-  });
+  // ---- Entrada: acessórios / fotos / segurança REAIS (vazio honesto) ----
+  // Leitura direta da OS real selecionada; quando ausente, listas vazias /
+  // segurança sem credencial — nada de valor inventado.
+  const entradaAcessorios = realOS ? adaptAcessoriosEntrada(realOS) : [];
+  const entradaFotos = realOS ? adaptFotosEntrada(realOS) : [];
+  const entradaSeguranca = realOS ? adaptSegurancaEntrada(realOS) : EMPTY_SEGURANCA_ENTRADA;
 
-  const toggleAcc = (i: number) =>
-    update((s) => {
-      const a = s.acessorios.slice();
-      a[i] = !a[i];
-      return { acessorios: a };
-    });
-  const acessorios = ACC_DEF.map((label, i) => ({
-    label, on: st.acessorios[i], off: !st.acessorios[i], onToggle: () => toggleAcc(i),
-  }));
   const toggleAccDev = (i: number) =>
     update((s) => {
       const a = s.acessoriosDev.slice();
@@ -305,12 +271,6 @@ function buildVals(
   const tech = TECH_DEF.map((label, i) => ({
     label, ok: st.tech[i], no: !st.tech[i], onToggle: () => toggleTech(i), color: st.tech[i] ? C.body : C.subtle,
   }));
-
-  const cred = {
-    faceMark: st.faceId ? "✓" : "＋", bioMark: st.bio ? "✓" : "＋",
-    faceBg: st.faceId ? C.successBg : C.surface, faceFg: st.faceId ? C.successFg : C.muted, faceBd: st.faceId ? C.successBd : C.inputBd,
-    bioBg: st.bio ? C.successBg : C.surface, bioFg: st.bio ? C.successFg : C.muted, bioBd: st.bio ? C.successBd : C.inputBd,
-  };
 
   // ---- pipeline ----
   const pipeline = STAGE_DEF.map(([id, label, rep, sub]) => {
@@ -412,28 +372,6 @@ function buildVals(
     },
   }));
 
-  // ---- segurança / acesso ----
-  const setSecTipo = (k: V4State["secTipo"]) => update({ secTipo: k });
-  const secTipoBtns = SEC_DEF.map(([k, label]) => {
-    const sel = st.secTipo === k;
-    return {
-      label, onClick: () => setSecTipo(k as V4State["secTipo"]),
-      bg: sel ? C.black : "transparent", fg: sel ? C.white : C.muted,
-    };
-  });
-  const patternAdd = (i: number) =>
-    update((s) => (s.pattern.includes(i) ? {} : { pattern: [...s.pattern, i] }));
-  const patternDots = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => {
-    const ord = st.pattern.indexOf(i);
-    const sel = ord >= 0;
-    return {
-      order: sel ? String(ord + 1) : "",
-      onClick: () => patternAdd(i),
-      bg: sel ? C.primary : C.surface, fg: C.white, bd: sel ? C.primary : C.dashed,
-    };
-  });
-  const patternSeq = st.pattern.length ? st.pattern.map((i) => i + 1).join(" → ") : "toque os pontos na ordem";
-
   // ---- orçamento (interativo) ----
   const cycleKind = (id: number) => {
     const o = ["cobrado", "brinde", "desconto"] as const;
@@ -479,11 +417,7 @@ function buildVals(
 
   // ---- handlers "visuais" (só notificam) ----
   const act = {
-    addAvaria: () => notify("Nova avaria"),
     addFoto: () => notify("Adicionar foto"),
-    toggleFace: () => update((s) => ({ faceId: !s.faceId })),
-    toggleBio: () => update((s) => ({ bio: !s.bio })),
-    assinarEntrada: () => notify("Capturar assinatura (entrada)"),
     salvarDiag: () => notify("Diagnóstico salvo"),
     gerarOrc: () => { go("orcamento"); notify("Orçamento gerado do laudo"); },
     abrirOSant: () => notify("Abrindo OS-2025-2207"),
@@ -556,7 +490,8 @@ function buildVals(
     onPrimary: () => advance(), showKbd: true,
 
     prio: { label: prioM.label, fg: prioM.fg, dot: prioM.dot }, prioridades,
-    steps, checklist, check, checklistVazio, tech, estadoFis, acessorios, cred,
+    steps, checklist, check, checklistVazio, tech,
+    entradaAcessorios, entradaFotos, entradaSeguranca,
     acessoriosDev, entregaCheck, entregaCheckResumo,
     apontamentos: APONTAMENTOS, finHist: FIN_HIST, retHist: RET_HIST, npsScale,
     hist, histCount: hist.length, histFilters, anexos: anexosReais, observacoes: observacoesReais,
@@ -571,9 +506,6 @@ function buildVals(
     novoFg: st.novaTab === "novo" ? C.primaryHover : C.muted,
     novaEquipBtns, novaOrigemBtns, clientesBusca,
     abrirOS: () => { update({ novaOS: false }); notify("Nova OS aberta"); },
-
-    secTipoBtns, secPin: st.secTipo === "pin", secSenha: st.secTipo === "senha", secPadrao: st.secTipo === "padrao",
-    patternDots, pattern: st.pattern, patternSeq, patternClear: () => update({ pattern: [] }),
 
     orcItens, orcTotais, addManual: () => notify("Adicionar item manual"),
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo, reciboData,

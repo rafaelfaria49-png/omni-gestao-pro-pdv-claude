@@ -35,9 +35,8 @@ export type V4Module = "workspace" | "dashboard" | "fila" | "bancada" | "sla" | 
 
 export type V4Menu = "print" | "more" | null;
 
-/** Estado tri-estado do checklist e do estado físico. */
+/** Estado tri-estado do checklist. */
 export type V4TriEstado = "ok" | "ruim" | "nt";
-export type V4FisEstado = "ok" | "avariado" | "ausente";
 
 export type V4OrcKind = "cobrado" | "brinde" | "desconto";
 
@@ -51,8 +50,6 @@ export interface V4OrcItem {
   qtd: number;
 }
 
-export type V4SecTipo = "pin" | "senha" | "padrao";
-
 export interface V4State {
   view: V4View;
   module: V4Module;
@@ -65,10 +62,6 @@ export interface V4State {
   prioridade: "baixa" | "normal" | "alta" | "urgente";
   estados: V4TriEstado[];
   tech: boolean[];
-  estadoFis: V4FisEstado[];
-  faceId: boolean;
-  bio: boolean;
-  acessorios: boolean[];
   acessoriosDev: boolean[];
   entregaCheck: boolean[];
   histFilter: string;
@@ -76,8 +69,6 @@ export interface V4State {
   novaTab: "buscar" | "novo";
   novaEquip: string;
   novaOrigem: string;
-  secTipo: V4SecTipo;
-  pattern: number[];
   recibo: boolean;
   orcItens: V4OrcItem[];
   /** null = tela limpa (empty state); id = OS real selecionada. */
