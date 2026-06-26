@@ -1,5 +1,11 @@
-/** Operações V4 Preview — etapa Diagnóstico técnico + histórico do aparelho. */
-import { C, card, cardTitle, upLabel } from "../../tokens";
+/** Operações V4 Preview — etapa Diagnóstico (somente leitura da OS real).
+ *
+ * GOAL OPS-V4-P0-009: o laudo/técnico/causa/solução fabricados e o "Histórico do
+ * aparelho" inventado (OS-2025-2207, garantia 08/2025) foram removidos. O stage
+ * lê só o que a OS persiste — defeito relatado, observações técnicas (parecer),
+ * anexos/laudos de diagnóstico e eventos de diagnóstico da timeline — ou exibe
+ * empty state honesto. Nada de valor inventado. */
+import { C, card, cardTitle, upLabel, HATCH } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 
 const fieldBox = {
@@ -12,45 +18,72 @@ const fieldBox = {
   color: C.body,
 } as const;
 
+const emptyText = { fontSize: 12, color: C.subtle, padding: "8px 2px", lineHeight: 1.5 } as const;
+
 export function DiagnosticoStage({ v }: { v: V4Vals }) {
+  const d = v.diag;
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)", gap: 12, alignItems: "start" }}>
-      <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
-          <span style={cardTitle}>🩺 Diagnóstico técnico</span>
-          <span style={{ fontSize: 10.5, color: C.subtle }}>Atualizado 20/06 11:10 · Bruno</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={card}>
+          <div style={{ ...cardTitle, marginBottom: 11 }}>🩺 Diagnóstico técnico</div>
+          <div style={{ ...upLabel, marginBottom: 4 }}>Defeito relatado</div>
+          <div style={{ ...fieldBox, minHeight: 44, color: d.temDefeito ? C.body : C.subtle }}>{d.defeito}</div>
+
+          <div style={{ ...upLabel, margin: "13px 0 6px" }}>Parecer técnico (observações)</div>
+          {d.observacoes.length === 0 ? (
+            <div style={emptyText}>Nenhuma observação técnica registrada.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {d.observacoes.map((o) => (
+                <div key={o.id} style={{ border: `1px solid ${C.line2}`, borderRadius: 8, background: C.surface2, padding: 9 }}>
+                  <div style={{ fontSize: 12, color: C.body, lineHeight: 1.5 }}>{o.conteudo}</div>
+                  <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 3 }}>{o.autor}{o.interna ? " · interna" : ""}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10 }}>
-          <div><div style={{ ...upLabel, marginBottom: 4 }}>Diagnóstico inicial</div><div style={{ ...fieldBox, minHeight: 64 }}>{v.diag.inicial}</div></div>
-          <div><div style={{ ...upLabel, marginBottom: 4 }}>Diagnóstico final</div><div style={{ ...fieldBox, minHeight: 64 }}>{v.diag.final}</div></div>
-          <div><div style={{ ...upLabel, marginBottom: 4 }}>Causa encontrada</div><div style={{ ...fieldBox, minHeight: 44 }}>{v.diag.causa}</div></div>
-          <div><div style={{ ...upLabel, marginBottom: 4 }}>Solução aplicada</div><div style={{ ...fieldBox, minHeight: 44 }}>{v.diag.solucao}</div></div>
-        </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button type="button" onClick={v.act.salvarDiag} style={{ height: 32, padding: "0 13px", border: "none", background: C.primary, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Salvar diagnóstico</button>
-          <button type="button" onClick={v.act.gerarOrc} style={{ height: 32, padding: "0 13px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12.5, fontWeight: 500, cursor: "pointer" }}>Gerar orçamento do laudo →</button>
+
+        <div style={card}>
+          <div style={{ ...cardTitle, marginBottom: 9 }}>
+            Anexos de diagnóstico{d.anexos.length > 0 ? ` · ${d.anexos.length}` : ""}
+          </div>
+          {d.anexos.length === 0 ? (
+            <div style={emptyText}>Nenhum anexo de diagnóstico disponível.</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8 }}>
+              {d.anexos.map((ax) => (
+                <div key={ax.id} style={{ border: `1px solid ${C.line2}`, borderRadius: 9, overflow: "hidden" }}>
+                  <div style={{ height: 62, background: HATCH, position: "relative" }}>
+                    <span style={{ position: "absolute", left: 5, top: 5, fontSize: 8, background: "rgba(0,0,0,.55)", color: C.white, padding: "1px 5px", borderRadius: 3 }}>{ax.kind}</span>
+                  </div>
+                  <div style={{ padding: "6px 8px", fontSize: 11, color: C.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{ax.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
       <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <span style={cardTitle}>Histórico do aparelho</span>
-          <span style={{ fontSize: 10.5, color: C.subtle }}>IMEI …045398 9 · 2 OS</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 6, border: `1px solid ${C.successBd}`, background: "#f6fbf7", borderRadius: 8, padding: "8px 10px", marginBottom: 9 }}>
-          <span style={{ color: C.successFg }}>🛡</span>
-          <span style={{ fontSize: 11.5, color: C.successFg, fontWeight: 500, lineHeight: 1.4 }}>Aparelho ainda em garantia de troca de bateria (08/2025).</span>
-        </div>
-        <button type="button" onClick={v.act.abrirOSant} style={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", border: `1px solid ${C.line2}`, borderRadius: 9, padding: 10, marginBottom: 8, background: C.surface, cursor: "pointer", textAlign: "left" }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: C.body }}>OS-2025-2207</span>
-              <span style={{ fontSize: 10, color: C.successFg, background: C.successBg, padding: "1px 7px", borderRadius: 999, fontWeight: 600 }}>Entregue</span>
+        <div style={{ ...cardTitle, marginBottom: 11 }}>Registros de diagnóstico</div>
+        {d.eventos.length === 0 ? (
+          <div style={emptyText}>Ainda não existe diagnóstico registrado para esta Ordem de Serviço.</div>
+        ) : (
+          d.eventos.map((ev) => (
+            <div key={ev.id} style={{ display: "flex", gap: 10, paddingBottom: 11 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: ev.dot, flex: "none", marginTop: 3 }} />
+                <span style={{ flex: 1, width: 2, background: C.line2, marginTop: 3 }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: C.body }}>{ev.text}</div>
+                <div style={{ fontSize: 10.5, color: C.subtle }}>{ev.meta}</div>
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Troca de bateria · 08/2025</div>
-          </div>
-          <span style={{ color: C.subtle }}>›</span>
-        </button>
-        <button type="button" onClick={v.act.verTimelineAp} style={{ width: "100%", height: 30, border: "none", background: "transparent", color: C.muted, borderRadius: 7, fontSize: 12, cursor: "pointer", textAlign: "left", padding: "0 4px" }}>🕑 Ver linha do tempo do aparelho (4)</button>
+          ))
+        )}
       </div>
     </div>
   );

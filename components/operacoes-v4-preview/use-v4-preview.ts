@@ -17,7 +17,6 @@ import {
   CLIENTES_BUSCA,
   DASH_DIST,
   DASH_FILA,
-  DIAG,
   ENTREGA_CHECK_DEF,
   EQUIP_DEF,
   FILA_COLS,
@@ -54,6 +53,7 @@ import {
   adaptAcessoriosEntrada,
   adaptAnexos,
   adaptChecklist,
+  adaptDiagnostico,
   adaptFinanceiro,
   adaptFotosEntrada,
   adaptObservacoes,
@@ -61,6 +61,7 @@ import {
   adaptPag,
   adaptSegurancaEntrada,
   adaptTimeline,
+  EMPTY_DIAGNOSTICO_VIEW,
   EMPTY_FINANCEIRO_VIEW,
   EMPTY_OS_VIEW,
   EMPTY_PAG_VIEW,
@@ -124,6 +125,8 @@ function buildVals(
   // derivado da própria timeline. Sem baixa fabricada, sem recibo inventado.
   const financeiroReal = realOS ? adaptFinanceiro(realOS) : EMPTY_FINANCEIRO_VIEW;
   const finHistReal = timelineReal.filter((e) => e.type === "financeiro");
+  // Diagnóstico REAL (defeito/observações/anexos/eventos); vazio honesto sem dado.
+  const diagnosticoReal = realOS ? adaptDiagnostico(realOS) : EMPTY_DIAGNOSTICO_VIEW;
   const curIdx = (() => {
     let i = ORDER.indexOf(st.status);
     if (i < 0) i = ORDER.indexOf("em_execucao");
@@ -423,10 +426,6 @@ function buildVals(
   // ---- handlers "visuais" (só notificam) ----
   const act = {
     addFoto: () => notify("Adicionar foto"),
-    salvarDiag: () => notify("Diagnóstico salvo"),
-    gerarOrc: () => { go("orcamento"); notify("Orçamento gerado do laudo"); },
-    abrirOSant: () => notify("Abrindo OS-2025-2207"),
-    verTimelineAp: () => notify("Linha do tempo do aparelho"),
     verVersoes: () => notify("Versões do orçamento"),
     addServico: () => notify("Novo serviço"),
     addPeca: () => notify("Nova peça"),
@@ -515,7 +514,7 @@ function buildVals(
     orcItens, orcTotais, addManual: () => notify("Adicionar item manual"),
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 
-    diag: DIAG, orc: ORC_META, garantia: GARANTIA,
+    diag: diagnosticoReal, orc: ORC_META, garantia: GARANTIA,
     os: osView, pag: pagView,
 
     toast: st.toast, showToast: !!st.toast,

@@ -330,14 +330,7 @@ export const CLIENTES_BUSCA = [
   { nome: "Beatriz Almeida", doc: "201.556.770-12", tel: "(11) 98120-7755", os: 5, ini: "BA" },
 ];
 
-/* ---- detalhes estáticos dos stages ainda em protótipo (Diagnóstico/Orçamento/Garantia) ---- */
-
-export const DIAG = {
-  inicial: "Tela sem resposta ao toque após queda. Trincado no canto superior direito.",
-  final: "Display e digitalizador danificados por impacto; placa lógica íntegra (sem oxidação).",
-  causa: "Impacto / queda — conjunto de tela.",
-  solucao: "Troca do conjunto de tela OLED original + vedação.",
-};
+/* ---- detalhes estáticos dos stages ainda em protótipo (Orçamento/Garantia) ---- */
 
 export const ORC_META = { status: "Aprovado", versoes: "2" };
 

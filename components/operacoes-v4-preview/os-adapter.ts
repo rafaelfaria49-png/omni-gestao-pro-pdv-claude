@@ -532,6 +532,71 @@ export function adaptSegurancaEntrada(os: OrdemServico): V4SegurancaEntrada {
   };
 }
 
+// ---- Diagnóstico (GOAL OPS-V4-P0-009) --------------------------------------
+// Read-only: o stage Diagnóstico passa a ler só o que a OS persiste — defeito
+// relatado, observações técnicas (parecer), anexos/laudos de diagnóstico e
+// eventos de diagnóstico na timeline. Sem laudo/técnico/data fabricados.
+
+/** Eventos da timeline considerados "registro de diagnóstico". */
+const DIAG_EVENTO_TIPOS = new Set<string>(["diagnostico_registrado"]);
+/** Tipos de anexo considerados de diagnóstico (laudo / foto do defeito). */
+const DIAG_ANEXO_TIPOS = new Set<AnexoTipo>(["laudo", "foto_defeito"]);
+
+export interface V4DiagnosticoView {
+  defeito: string;
+  temDefeito: boolean;
+  observacoes: V4Observacao[];
+  anexos: V4Anexo[];
+  eventos: V4HistEvento[];
+  /** true quando há QUALQUER trabalho de diagnóstico real (parecer/anexo/evento). */
+  temDiagnostico: boolean;
+}
+
+export const EMPTY_DIAGNOSTICO_VIEW: V4DiagnosticoView = {
+  defeito: NI,
+  temDefeito: false,
+  observacoes: [],
+  anexos: [],
+  eventos: [],
+  temDiagnostico: false,
+};
+
+export function adaptDiagnostico(os: OrdemServico): V4DiagnosticoView {
+  const defeito = txt(os.equipamento?.defeitoRelatado) || txt(os.observacaoCliente);
+  const observacoes = adaptObservacoes(os);
+
+  const anexosLista = Array.isArray(os.anexos) ? os.anexos : [];
+  const anexos = anexosLista
+    .filter((a: Anexo) => a.categoria === "diagnostico" || DIAG_ANEXO_TIPOS.has(a.tipo))
+    .map((a: Anexo) => ({
+      id: a.id,
+      kind: ANEXO_KIND_LABEL[a.tipo] ?? "ANEXO",
+      name: txt(a.nome) || "Anexo",
+    }));
+
+  const tl = Array.isArray(os.timeline) ? os.timeline : [];
+  const eventos = tl
+    .filter((ev: EventoTimeline) => DIAG_EVENTO_TIPOS.has(ev.tipo))
+    .slice()
+    .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
+    .map((ev: EventoTimeline): V4HistEvento => ({
+      id: ev.id,
+      type: "tecnico",
+      text: txt(ev.titulo) || txt(ev.conteudo) || ev.tipo,
+      meta: `${txt(ev.autor) || "Sistema"} · ${fmtDataHora(ev.criadoEm)}`,
+      dot: C.info,
+    }));
+
+  return {
+    defeito: defeito || NI,
+    temDefeito: !!defeito,
+    observacoes,
+    anexos,
+    eventos,
+    temDiagnostico: observacoes.length > 0 || anexos.length > 0 || eventos.length > 0,
+  };
+}
+
 // ---- Busca da lista de OS (GOAL OPS-V4-P0-002) -----------------------------
 
 function norm(s: string): string {
