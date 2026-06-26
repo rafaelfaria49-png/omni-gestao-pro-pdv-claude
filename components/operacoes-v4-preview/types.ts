@@ -35,18 +35,6 @@ export type V4Module = "workspace" | "dashboard" | "fila" | "bancada" | "sla" | 
 
 export type V4Menu = "print" | "more" | null;
 
-export type V4OrcKind = "cobrado" | "brinde" | "desconto";
-
-export interface V4OrcItem {
-  id: number;
-  cat: "servico" | "peca" | "acessorio" | "produto";
-  nome: string;
-  kind: V4OrcKind;
-  valor: number;
-  custo: number;
-  qtd: number;
-}
-
 export interface V4State {
   view: V4View;
   module: V4Module;
@@ -66,7 +54,6 @@ export interface V4State {
   novaEquip: string;
   novaOrigem: string;
   recibo: boolean;
-  orcItens: V4OrcItem[];
   /** null = tela limpa (empty state); id = OS real selecionada. */
   selectedOsId: string | null;
 }

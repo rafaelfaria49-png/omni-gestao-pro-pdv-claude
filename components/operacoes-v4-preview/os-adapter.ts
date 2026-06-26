@@ -16,6 +16,10 @@ import type {
   Anexo,
   AnexoTipo,
   ObservacaoTecnica,
+  Orcamento,
+  PecaUsada,
+  Servico,
+  OrcamentoStatus,
 } from "@/types/os";
 import type { V4Status, V4Stage } from "./types";
 import { C, fmt } from "./tokens";
@@ -594,6 +598,160 @@ export function adaptDiagnostico(os: OrdemServico): V4DiagnosticoView {
     anexos,
     eventos,
     temDiagnostico: observacoes.length > 0 || anexos.length > 0 || eventos.length > 0,
+  };
+}
+
+// ---- Orçamento (GOAL OPS-V4-P0-010) ----------------------------------------
+// Read-only sobre a OS já carregada. O orçamento NÃO tem model Prisma próprio:
+// chega em `os.orcamento` (payload), `itensPersistidos` (OrdemServicoItem) e
+// `prismaValorTotal`. Três estados (Decisão 1): persistido (status enum real),
+// previa (`sintetizado: true`, badge fixo "Prévia — não aprovado"), ausente.
+// Custo/lucro só quando `custoUnitario` real existir (Decisão 2) — `Servico`
+// não tem custo, logo só orçamentos 100% de peças com custo exibem o agregado.
+
+export type V4OrcamentoEstado = "persistido" | "previa" | "ausente";
+
+const ORC_STATUS_LABEL: Record<OrcamentoStatus, string> = {
+  rascunho: "Rascunho",
+  enviado: "Enviado",
+  aprovado: "Aprovado",
+  recusado: "Recusado",
+  expirado: "Expirado",
+};
+
+const ORC_STATUS_TONE: Record<OrcamentoStatus, V4OrcamentoView["statusTone"]> = {
+  rascunho: "neutro",
+  enviado: "info",
+  aprovado: "success",
+  recusado: "danger",
+  expirado: "warn",
+};
+
+export interface V4OrcItemView {
+  id: string;
+  descricao: string;
+  /** Detalhe real curto (qtd × · garantia Nd); vazio quando não houver. */
+  detalhe: string;
+  /** Total da linha (qtd × unitário − desconto), formatado. */
+  valor: string;
+  /** Custo da linha — somente quando `custoUnitario` real existir; senão null. */
+  custo: string | null;
+}
+
+export interface V4OrcamentoView {
+  estado: V4OrcamentoEstado;
+  isPrevia: boolean;
+  statusLabel: string;
+  statusTone: "success" | "info" | "warn" | "danger" | "neutro";
+  servicos: V4OrcItemView[];
+  pecas: V4OrcItemView[];
+  /** Total ao cliente (fonte autoritativa: orcamento.total). */
+  total: string;
+  /** Soma de descontos de linha (R$); null quando 0. */
+  desconto: string | null;
+  /** Agregado de custo — só quando TODAS as linhas têm custo real; senão null. */
+  custoTotal: string | null;
+  /** Lucro = total − custoTotal; só quando custoTotal existir; senão null. */
+  lucroTotal: string | null;
+  /** Versões reais (revisões registradas na OS). */
+  versoesCount: number;
+  temVersoes: boolean;
+}
+
+export const EMPTY_ORCAMENTO_VIEW: V4OrcamentoView = {
+  estado: "ausente",
+  isPrevia: false,
+  statusLabel: "",
+  statusTone: "neutro",
+  servicos: [],
+  pecas: [],
+  total: NI,
+  desconto: null,
+  custoTotal: null,
+  lucroTotal: null,
+  versoesCount: 0,
+  temVersoes: false,
+};
+
+function servicoLineTotal(s: Servico): number {
+  return Math.max(0, (s.valor || 0) - (s.desconto ?? 0));
+}
+
+function pecaLineTotal(p: PecaUsada): number {
+  return Math.max(0, (p.quantidade || 0) * (p.valorUnitario || 0) - (p.desconto ?? 0));
+}
+
+export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
+  const orc: Orcamento | undefined = os.orcamento;
+  const servicosRaw = Array.isArray(orc?.servicos) ? orc!.servicos : [];
+  const pecasRaw = Array.isArray(orc?.pecas) ? orc!.pecas : [];
+  const declaredTotal = typeof orc?.total === "number" ? orc!.total : 0;
+  const hasLines = servicosRaw.length > 0 || pecasRaw.length > 0;
+
+  // Ausente: nenhum orçamento real nem prévia derivada com conteúdo.
+  if (!orc || (!hasLines && declaredTotal <= 0)) {
+    return EMPTY_ORCAMENTO_VIEW;
+  }
+
+  const isPrevia = orc.sintetizado === true;
+  const estado: V4OrcamentoEstado = isPrevia ? "previa" : "persistido";
+
+  const servicos: V4OrcItemView[] = servicosRaw.map((s, i) => ({
+    id: txt(s.id) || `svc_${i}`,
+    descricao: txt(s.descricao) || "Serviço",
+    detalhe: typeof s.prazoGarantiaDias === "number" && s.prazoGarantiaDias > 0 ? `garantia ${s.prazoGarantiaDias}d` : "",
+    valor: fmt(servicoLineTotal(s)),
+    // Servico não tem custo no modelo → nunca exibe margem por linha.
+    custo: null,
+  }));
+
+  const pecas: V4OrcItemView[] = pecasRaw.map((p, i) => {
+    const det: string[] = [`${p.quantidade || 0}×`];
+    if (typeof p.prazoGarantiaDias === "number" && p.prazoGarantiaDias > 0) det.push(`garantia ${p.prazoGarantiaDias}d`);
+    const temCusto = typeof p.custoUnitario === "number";
+    return {
+      id: txt(p.id) || `peca_${i}`,
+      descricao: txt(p.nome) || "Peça",
+      detalhe: det.join(" · "),
+      valor: fmt(pecaLineTotal(p)),
+      custo: temCusto ? fmt((p.custoUnitario as number) * (p.quantidade || 0)) : null,
+    };
+  });
+
+  // Desconto agregado (somente linhas com desconto real).
+  const descNum =
+    servicosRaw.reduce((a, s) => a + (s.desconto ?? 0), 0) +
+    pecasRaw.reduce((a, p) => a + (p.desconto ?? 0), 0);
+
+  // Total autoritativo: orcamento.total; cai para soma das linhas se ausente.
+  const lineSum =
+    servicosRaw.reduce((a, s) => a + servicoLineTotal(s), 0) +
+    pecasRaw.reduce((a, p) => a + pecaLineTotal(p), 0);
+  const totalNum = declaredTotal > 0 ? declaredTotal : lineSum;
+
+  // Custo/lucro agregado: SÓ quando todas as linhas têm custo real (Decisão 2).
+  // Como Servico não tem custo, basta haver 1 serviço para suprimir o agregado.
+  const todasComCusto =
+    hasLines && servicosRaw.length === 0 && pecasRaw.every((p) => typeof p.custoUnitario === "number");
+  const custoNum = todasComCusto
+    ? pecasRaw.reduce((a, p) => a + (p.custoUnitario as number) * (p.quantidade || 0), 0)
+    : null;
+
+  const versoesCount = Array.isArray(os.orcamentoHistorico) ? os.orcamentoHistorico.length : 0;
+
+  return {
+    estado,
+    isPrevia,
+    statusLabel: isPrevia ? "Prévia — não aprovado" : (ORC_STATUS_LABEL[orc.status] ?? orc.status ?? ""),
+    statusTone: isPrevia ? "info" : (ORC_STATUS_TONE[orc.status] ?? "neutro"),
+    servicos,
+    pecas,
+    total: totalNum > 0 ? fmt(totalNum) : NI,
+    desconto: descNum > 0 ? fmt(descNum) : null,
+    custoTotal: custoNum != null ? fmt(custoNum) : null,
+    lucroTotal: custoNum != null ? fmt(totalNum - custoNum) : null,
+    versoesCount,
+    temVersoes: versoesCount > 0,
   };
 }
 

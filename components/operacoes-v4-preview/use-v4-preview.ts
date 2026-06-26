@@ -13,7 +13,6 @@ import {
   ACC_DEF,
   APONTAMENTOS,
   BANCADA_TEC,
-  CAT_LABEL,
   CLIENTES_BUSCA,
   DASH_DIST,
   DASH_FILA,
@@ -22,12 +21,9 @@ import {
   FILA_COLS,
   GARANTIA,
   HIST_FILTER_DEF,
-  KIND,
   MODE_DEF,
   MODULE_KPIS,
   MODULE_META,
-  ORC_ITENS_INICIAIS,
-  ORC_META,
   ORDER,
   ORIGEM_DEF,
   PDV_RECEBER,
@@ -57,12 +53,14 @@ import {
   adaptFinanceiro,
   adaptFotosEntrada,
   adaptObservacoes,
+  adaptOrcamento,
   adaptOsHeader,
   adaptPag,
   adaptSegurancaEntrada,
   adaptTimeline,
   EMPTY_DIAGNOSTICO_VIEW,
   EMPTY_FINANCEIRO_VIEW,
+  EMPTY_ORCAMENTO_VIEW,
   EMPTY_OS_VIEW,
   EMPTY_PAG_VIEW,
   EMPTY_SEGURANCA_ENTRADA,
@@ -102,7 +100,6 @@ const INITIAL: V4State = {
   novaEquip: "celular",
   novaOrigem: "balcao",
   recibo: false,
-  orcItens: ORC_ITENS_INICIAIS,
   selectedOsId: null,
 };
 
@@ -385,39 +382,10 @@ function buildVals(
     },
   }));
 
-  // ---- orçamento (interativo) ----
-  const cycleKind = (id: number) => {
-    const o = ["cobrado", "brinde", "desconto"] as const;
-    update((s) => ({
-      orcItens: s.orcItens.map((it) =>
-        it.id === id ? { ...it, kind: o[(o.indexOf(it.kind) + 1) % 3] } : it,
-      ),
-    }));
-  };
-  const delItem = (id: number) =>
-    update((s) => ({ orcItens: s.orcItens.filter((it) => it.id !== id) }));
-  const orcItens = st.orcItens.map((it) => {
-    const k = KIND[it.kind];
-    return {
-      nome: it.nome, cat: CAT_LABEL[it.cat] || it.cat, qtd: it.qtd, valor: fmt(it.valor * it.qtd),
-      kindLabel: k.label, kindBg: k.bg, kindFg: k.fg,
-      onCycle: () => cycleKind(it.id), onDel: () => delItem(it.id),
-    };
-  });
-  let sub = 0, desc = 0, brinde = 0, custo = 0;
-  st.orcItens.forEach((it) => {
-    const t = it.valor * it.qtd;
-    custo += it.custo * it.qtd;
-    if (it.kind === "cobrado") sub += t;
-    else if (it.kind === "desconto") desc += t;
-    else if (it.kind === "brinde") brinde += t;
-  });
-  const total = sub - desc;
-  const lucro = total - custo;
-  const orcTotais = {
-    subtotal: fmt(sub), desconto: "– " + fmt(desc), brinde: fmt(brinde),
-    total: fmt(total), custo: fmt(custo), lucro: fmt(lucro),
-  };
+  // ---- orçamento REAL da OS (somente leitura; vazio honesto quando ausente) ----
+  // Persistido (status enum real) / prévia sintetizada / ausente. Sem edição,
+  // sem toggle cobrado/brinde/desconto, sem custo/lucro inventado.
+  const orcamentoReal = realOS ? adaptOrcamento(realOS) : EMPTY_ORCAMENTO_VIEW;
 
   const prim = PRIMARY[st.status];
   const tone = TONE[st.status] || TONE.em_execucao;
@@ -426,14 +394,6 @@ function buildVals(
   // ---- handlers "visuais" (só notificam) ----
   const act = {
     addFoto: () => notify("Adicionar foto"),
-    verVersoes: () => notify("Versões do orçamento"),
-    addServico: () => notify("Novo serviço"),
-    addPeca: () => notify("Nova peça"),
-    catalogo: () => notify("Catálogo de produtos"),
-    enviarOrc: () => notify("Orçamento reenviado"),
-    recusarOrc: () => notify("Recusar orçamento"),
-    aprovarOrc: () => notify("Orçamento aprovado"),
-    pedirPeca: () => notify("Pedir / reservar peça"),
     alterarTec: () => notify("Alterar técnico"),
     pausarTimer: () => notify("Cronômetro pausado"),
     pararTimer: () => notify("Cronômetro encerrado"),
@@ -511,10 +471,9 @@ function buildVals(
     novaEquipBtns, novaOrigemBtns, clientesBusca,
     abrirOS: () => { update({ novaOS: false }); notify("Nova OS aberta"); },
 
-    orcItens, orcTotais, addManual: () => notify("Adicionar item manual"),
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 
-    diag: diagnosticoReal, orc: ORC_META, garantia: GARANTIA,
+    diag: diagnosticoReal, orcamento: orcamentoReal, garantia: GARANTIA,
     os: osView, pag: pagView,
 
     toast: st.toast, showToast: !!st.toast,

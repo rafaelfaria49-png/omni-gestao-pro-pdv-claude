@@ -6,7 +6,7 @@
  * nenhuma leitura de Prisma/Server Action/V3.
  */
 import { C } from "./tokens";
-import type { V4OrcItem, V4Status, V4Stage, V4Tone } from "./types";
+import type { V4Status, V4Stage, V4Tone } from "./types";
 
 /** Ordem linear do fluxo (governa concluído/atual/pendente). */
 export const ORDER: V4Status[] = [
@@ -64,19 +64,6 @@ export const PRIMARY: Record<
   pronta: { label: "Receber pagamento", to: "entregue", stage: "entrega" },
   entregue: null,
   cancelada: null,
-};
-
-export const KIND: Record<string, { label: string; bg: string; fg: string }> = {
-  cobrado: { label: "Cobrado", bg: C.primaryBg, fg: C.primaryHover },
-  brinde: { label: "Brinde", bg: C.successBg, fg: C.successFg },
-  desconto: { label: "Desconto", bg: C.warnBg, fg: C.warnFg },
-};
-
-export const CAT_LABEL: Record<string, string> = {
-  servico: "Mão de obra",
-  peca: "Peça",
-  acessorio: "Acessório",
-  produto: "Produto",
 };
 
 /* ---- definições de etapas / módulos ---- */
@@ -330,9 +317,7 @@ export const CLIENTES_BUSCA = [
   { nome: "Beatriz Almeida", doc: "201.556.770-12", tel: "(11) 98120-7755", os: 5, ini: "BA" },
 ];
 
-/* ---- detalhes estáticos dos stages ainda em protótipo (Orçamento/Garantia) ---- */
-
-export const ORC_META = { status: "Aprovado", versoes: "2" };
+/* ---- detalhes estáticos dos stages ainda em protótipo (Garantia) ---- */
 
 export const GARANTIA = {
   situacao: "Prevista",
@@ -342,11 +327,3 @@ export const GARANTIA = {
   validade: "A partir da entrega",
   prevista: "90 dias",
 };
-
-/** Itens iniciais do orçamento (interativo). */
-export const ORC_ITENS_INICIAIS: V4OrcItem[] = [
-  { id: 1, cat: "servico", nome: "Mão de obra — troca de tela", kind: "cobrado", valor: 220, custo: 60, qtd: 1 },
-  { id: 2, cat: "peca", nome: "Tela OLED (conjunto)", kind: "cobrado", valor: 620, custo: 330, qtd: 1 },
-  { id: 3, cat: "acessorio", nome: "Película 3D", kind: "brinde", valor: 50, custo: 18, qtd: 1 },
-  { id: 4, cat: "produto", nome: "Capa protetora (catálogo)", kind: "cobrado", valor: 40, custo: 15, qtd: 1 },
-];
