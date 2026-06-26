@@ -151,8 +151,8 @@ export function ContextColumn({ v }: { v: V4Vals }) {
               <span style={{ width: 6, height: 6, borderRadius: "50%", background: v.prio.dot }} />{v.prio.label}
             </span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, marginBottom: 7 }}><span style={{ color: C.muted }}>Localização</span><span style={{ color: C.body, fontWeight: 600 }}>Bancada 02</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}><span style={{ color: C.muted }}>Garantia</span><span style={{ color: C.body, fontWeight: 600 }}>90 dias</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, marginBottom: 7 }}><span style={{ color: C.muted }}>Localização</span><span style={{ color: C.body, fontWeight: 600 }}>{os.localizacao}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}><span style={{ color: C.muted }}>Garantia</span><span style={{ color: C.body, fontWeight: 600 }}>{os.garantiaPrazo}</span></div>
         </div>
 
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: C.subtle, marginTop: 12 }}><span>Entrada</span><span style={{ color: C.muted, fontWeight: 500 }}>{os.entrada}</span></div>
