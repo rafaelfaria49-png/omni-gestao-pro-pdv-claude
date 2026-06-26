@@ -21,7 +21,6 @@ import {
   ENTREGA_CHECK_DEF,
   EQUIP_DEF,
   FILA_COLS,
-  FIN_HIST,
   GARANTIA,
   HIST_FILTER_DEF,
   KIND,
@@ -55,12 +54,14 @@ import {
   adaptAcessoriosEntrada,
   adaptAnexos,
   adaptChecklist,
+  adaptFinanceiro,
   adaptFotosEntrada,
   adaptObservacoes,
   adaptOsHeader,
   adaptPag,
   adaptSegurancaEntrada,
   adaptTimeline,
+  EMPTY_FINANCEIRO_VIEW,
   EMPTY_OS_VIEW,
   EMPTY_PAG_VIEW,
   EMPTY_SEGURANCA_ENTRADA,
@@ -91,7 +92,6 @@ const INITIAL: V4State = {
   menu: null,
   toast: "",
   prioridade: "alta",
-  estados: ["ok", "ruim", "ok", "ok", "ok", "ok", "nt", "ok"],
   tech: [true, true, true, false],
   acessoriosDev: [true, true, false, false],
   entregaCheck: [true, true, false, false],
@@ -120,6 +120,10 @@ function buildVals(
   const timelineReal = realOS ? adaptTimeline(realOS) : [];
   const anexosReais = realOS ? adaptAnexos(realOS) : [];
   const observacoesReais = realOS ? adaptObservacoes(realOS) : [];
+  // Financeiro REAL da OS (faturamento/parcelas) + histórico financeiro real
+  // derivado da própria timeline. Sem baixa fabricada, sem recibo inventado.
+  const financeiroReal = realOS ? adaptFinanceiro(realOS) : EMPTY_FINANCEIRO_VIEW;
+  const finHistReal = timelineReal.filter((e) => e.type === "financeiro");
   const curIdx = (() => {
     let i = ORDER.indexOf(st.status);
     if (i < 0) i = ORDER.indexOf("em_execucao");
@@ -273,7 +277,10 @@ function buildVals(
   }));
 
   // ---- pipeline ----
-  const pipeline = STAGE_DEF.map(([id, label, rep, sub]) => {
+  // Legendas (sub) das etapas do fluxo eram placeholders fabricados ("Bancada 02",
+  // "saldo R$ 590"…) → removidas. Só o nó Histórico exibe um sub REAL derivado da
+  // OS (contagem de eventos/anexos), ocultado quando vazio.
+  const pipeline = STAGE_DEF.map(([id, label, rep]) => {
     const ri = ORDER.indexOf(rep);
     const after = id === "posvenda";
     const done = after ? false : ri < curIdx;
@@ -281,15 +288,18 @@ function buildVals(
     const pending = after ? true : ri > curIdx;
     const selected = st.stage === id;
     return {
-      id, label, sub, done, current, pending, ref: false, selected, onClick: () => go(id),
+      id, label, sub: "", done, current, pending, ref: false, selected, onClick: () => go(id),
       bg: selected ? C.primarySoft : C.surface,
       underline: selected ? C.primary : "transparent",
       labelColor: selected ? C.primaryHover : pending ? C.muted : C.ink,
     };
   });
   const histSelected = st.stage === "historico";
+  const histSubParts: string[] = [];
+  if (timelineReal.length) histSubParts.push(`${timelineReal.length} ${timelineReal.length === 1 ? "evento" : "eventos"}`);
+  if (anexosReais.length) histSubParts.push(`${anexosReais.length} ${anexosReais.length === 1 ? "anexo" : "anexos"}`);
   pipeline.push({
-    id: "historico", label: "Histórico", sub: "6 eventos · 4 anexos",
+    id: "historico", label: "Histórico", sub: histSubParts.join(" · "),
     done: false, current: false, pending: false, ref: true, selected: histSelected,
     onClick: () => go("historico"),
     bg: histSelected ? C.primarySoft : C.surface,
@@ -406,11 +416,6 @@ function buildVals(
     total: fmt(total), custo: fmt(custo), lucro: fmt(lucro),
   };
 
-  const reciboData = {
-    codigo: "OS-2026-0481", cliente: "Mariana Costa Lima", data: "14/06/2026 16:50",
-    forma: "PIX", valor: "R$ 300,00", total: fmt(total), saldo: fmt(total - 300),
-  };
-
   const prim = PRIMARY[st.status];
   const tone = TONE[st.status] || TONE.em_execucao;
   const prioM = PRIO[st.prioridade];
@@ -493,7 +498,7 @@ function buildVals(
     steps, checklist, check, checklistVazio, tech,
     entradaAcessorios, entradaFotos, entradaSeguranca,
     acessoriosDev, entregaCheck, entregaCheckResumo,
-    apontamentos: APONTAMENTOS, finHist: FIN_HIST, retHist: RET_HIST, npsScale,
+    apontamentos: APONTAMENTOS, financeiro: financeiroReal, finHist: finHistReal, retHist: RET_HIST, npsScale,
     hist, histCount: hist.length, histFilters, anexos: anexosReais, observacoes: observacoesReais,
     resolved, pending: PENDING, act,
 
@@ -508,7 +513,7 @@ function buildVals(
     abrirOS: () => { update({ novaOS: false }); notify("Nova OS aberta"); },
 
     orcItens, orcTotais, addManual: () => notify("Adicionar item manual"),
-    openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo, reciboData,
+    openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 
     diag: DIAG, orc: ORC_META, garantia: GARANTIA,
     os: osView, pag: pagView,

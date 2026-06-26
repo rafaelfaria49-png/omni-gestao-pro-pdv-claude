@@ -49,7 +49,7 @@ export function PipelineSpine({ v }: { v: V4Vals }) {
           )}
           <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
             <span style={{ fontSize: 12, fontWeight: 600, color: n.labelColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.label}</span>
-            <span style={{ fontSize: 10, color: C.subtle, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.sub}</span>
+            {n.sub && <span style={{ fontSize: 10, color: C.subtle, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{n.sub}</span>}
           </div>
         </button>
       ))}

@@ -35,9 +35,6 @@ export type V4Module = "workspace" | "dashboard" | "fila" | "bancada" | "sla" | 
 
 export type V4Menu = "print" | "more" | null;
 
-/** Estado tri-estado do checklist. */
-export type V4TriEstado = "ok" | "ruim" | "nt";
-
 export type V4OrcKind = "cobrado" | "brinde" | "desconto";
 
 export interface V4OrcItem {
@@ -60,7 +57,6 @@ export interface V4State {
   menu: V4Menu;
   toast: string;
   prioridade: "baixa" | "normal" | "alta" | "urgente";
-  estados: V4TriEstado[];
   tech: boolean[];
   acessoriosDev: boolean[];
   entregaCheck: boolean[];

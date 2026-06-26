@@ -286,6 +286,86 @@ export const EMPTY_PAG_VIEW: V4PagView = {
   previsto: NI,
 };
 
+// ---- Financeiro da OS (GOAL OPS-V4-P0-008) ---------------------------------
+// A V4 Preview NÃO lê a baixa real (PDV / Caixa / Conta a Receber). Só expõe o
+// que a própria OS carrega: total, status do faturamento, forma/modo de cobrança
+// e o plano de parcelas. "Recebido"/"saldo pago" não têm fonte na OS → vazio
+// honesto. Nada de valor inventado.
+
+const MODO_COBRANCA_LABEL: Record<string, string> = {
+  avista: "À vista",
+  parcelado: "Parcelado",
+  carteira: "Carteira / crediário",
+  dinheiro_pix_cartao: "Dinheiro / PIX / cartão",
+};
+
+export interface V4ParcelaView {
+  numero: string;
+  valor: string;
+  vencimento: string;
+}
+
+export interface V4FinanceiroView {
+  /** true quando existe qualquer informação financeira real na OS. */
+  temDados: boolean;
+  temTotal: boolean;
+  total: string;
+  /** "Faturamento pendente" / "Faturamento cancelado" / "Não informado". */
+  statusFaturamento: string;
+  statusTone: "pendente" | "cancelado" | "neutro";
+  formaPagamento: string;
+  modoCobranca: string;
+  parcelas: V4ParcelaView[];
+}
+
+export const EMPTY_FINANCEIRO_VIEW: V4FinanceiroView = {
+  temDados: false,
+  temTotal: false,
+  total: NI,
+  statusFaturamento: NI,
+  statusTone: "neutro",
+  formaPagamento: NI,
+  modoCobranca: NI,
+  parcelas: [],
+};
+
+export function adaptFinanceiro(os: OrdemServico): V4FinanceiroView {
+  const totalNum = osTotalNumero(os);
+  const temTotal = totalNum > 0;
+  const forma = txt(os.faturamentoFormaPagamento);
+  const modo = txt(os.faturamentoModoCobranca);
+  const parcelasRaw = Array.isArray(os.faturamentoParcelas) ? os.faturamentoParcelas : [];
+  const parcelas = parcelasRaw
+    .filter((p) => p && typeof p.valor === "number")
+    .map((p) => ({
+      numero: `${p.numero}ª`,
+      valor: fmt(p.valor),
+      vencimento: fmtData(p.vencimentoIso),
+    }));
+  const statusTone: V4FinanceiroView["statusTone"] =
+    os.faturamentoStatus === "cancelado"
+      ? "cancelado"
+      : os.faturamentoPendente || os.faturamentoStatus === "pendente"
+        ? "pendente"
+        : "neutro";
+  const statusFaturamento =
+    statusTone === "cancelado"
+      ? "Faturamento cancelado"
+      : statusTone === "pendente"
+        ? "Faturamento pendente"
+        : NI;
+  return {
+    temDados: temTotal || !!forma || !!modo || parcelas.length > 0 || statusTone !== "neutro",
+    temTotal,
+    total: temTotal ? fmt(totalNum) : NI,
+    statusFaturamento,
+    statusTone,
+    formaPagamento: forma || NI,
+    modoCobranca: modo ? (MODO_COBRANCA_LABEL[modo] ?? modo) : NI,
+    parcelas,
+  };
+}
+
 // ---- Histórico / timeline (GOAL OPS-V4-P0-004) -----------------------------
 
 export interface V4HistEvento {

@@ -1,6 +1,7 @@
 /** Operações V4 Preview — header de comando: status, total, ação primária, menus. */
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
+import { NI } from "../os-adapter";
 import styles from "../operacoes-v4-preview.module.css";
 
 export function CommandHeader({ v }: { v: V4Vals }) {
@@ -24,17 +25,25 @@ export function CommandHeader({ v }: { v: V4Vals }) {
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 22, padding: "0 9px", background: v.tone.bg, color: v.tone.fg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: v.tone.dot, flex: "none" }} />{v.statusLabel}
         </span>
-        <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 9px", background: C.warnBg, color: C.warnFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>{v.pag.statusPagamento}</span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 22, padding: "0 9px", background: C.successBg, color: C.successFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>⏱ SLA {v.os.sla}</span>
+        {v.pag.statusPagamento !== NI && (
+          <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 9px", background: C.warnBg, color: C.warnFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>{v.pag.statusPagamento}</span>
+        )}
+        {v.os.sla !== NI && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 22, padding: "0 9px", background: C.successBg, color: C.successFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>⏱ SLA {v.os.sla}</span>
+        )}
       </div>
 
       {/* Grupo direito: financeiro + ações */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{v.pag.total}</span>
-          <span style={{ fontSize: 10.5, color: C.warnFg }}>saldo {v.pag.saldo}</span>
-        </div>
-        <span style={{ width: 1, height: 26, background: C.line2, flex: "none" }} />
+        {(v.pag.total !== NI || v.pag.saldo !== NI) && (
+          <>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" }}>
+              {v.pag.total !== NI && <span style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{v.pag.total}</span>}
+              {v.pag.saldo !== NI && <span style={{ fontSize: 10.5, color: C.warnFg }}>saldo {v.pag.saldo}</span>}
+            </div>
+            <span style={{ width: 1, height: 26, background: C.line2, flex: "none" }} />
+          </>
+        )}
 
         {/* Dropdown Docs — ancorado ao botão via position:relative */}
         <div style={{ position: "relative", flex: "none" }}>

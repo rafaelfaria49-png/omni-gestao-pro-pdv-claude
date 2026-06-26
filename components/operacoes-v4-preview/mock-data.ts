@@ -96,17 +96,6 @@ export const MODE_DEF: Array<["recepcao" | "bancada" | "auditoria", string, stri
   ["auditoria", "Auditoria", "🔍", "Cliente recolhido · Atividade aberta"],
 ];
 
-export const CHECKLIST_DEF = [
-  "Liga / carrega",
-  "Tela (imagem)",
-  "Touch responde",
-  "Wi-Fi / BT",
-  "Câmeras",
-  "Botões físicos",
-  "Face ID",
-  "Alto-falante",
-];
-
 export const ACC_DEF = ["Capa", "Cabo", "Carregador", "Chip"];
 export const ENTREGA_CHECK_DEF = [
   "Aparelho ligando e testado",
@@ -121,15 +110,15 @@ export const TECH_DEF = [
   "Teste de resistência à água",
 ];
 
-/** Definição das etapas da pipeline: [id, label, statusRepresentado, sub]. */
-export const STAGE_DEF: Array<[V4Stage, string, V4Status, string]> = [
-  ["entrada", "Entrada", "aberta", ""],
-  ["diagnostico", "Diagnóstico", "diagnostico", "Troca de tela"],
-  ["orcamento", "Orçamento", "aprovado", "R$ 890 · aprovado"],
-  ["execucao", "Execução", "em_execucao", "Bancada 02"],
-  ["financeiro", "Financeiro", "pronta", "saldo R$ 590"],
-  ["entrega", "Entrega", "entregue", "garantia 90d"],
-  ["posvenda", "Pós-venda", "entregue", "follow-up +7d"],
+/** Definição das etapas da pipeline: [id, label, statusRepresentado]. */
+export const STAGE_DEF: Array<[V4Stage, string, V4Status]> = [
+  ["entrada", "Entrada", "aberta"],
+  ["diagnostico", "Diagnóstico", "diagnostico"],
+  ["orcamento", "Orçamento", "aprovado"],
+  ["execucao", "Execução", "em_execucao"],
+  ["financeiro", "Financeiro", "pronta"],
+  ["entrega", "Entrega", "entregue"],
+  ["posvenda", "Pós-venda", "entregue"],
 ];
 
 export const STEPS_DEF: Array<[string, V4Status]> = [
@@ -142,37 +131,6 @@ export const STEPS_DEF: Array<[string, V4Status]> = [
   ["Entrega", "entregue"],
 ];
 
-export const STEP_TIME: Record<string, string> = {
-  aberta: "12/06 14:20",
-  diagnostico: "14/06 10:05",
-  aguardando_aprovacao: "14/06 16:40",
-  aprovado: "19/06 09:12",
-  em_execucao: "20/06 11:30",
-  pronta: "",
-  entregue: "",
-};
-
-export const STEP_RESP: Record<string, string> = {
-  aberta: "Rafael",
-  diagnostico: "Bruno",
-  aguardando_aprovacao: "Rafael",
-  aprovado: "Mariana",
-  em_execucao: "Bruno",
-  pronta: "",
-  entregue: "",
-};
-
-export const HIST_ALL = [
-  { type: "status", dot: C.primary, text: "Status alterado para Em execução", meta: "Bruno Alves · 20/06 11:30" },
-  { type: "financeiro", dot: C.success, text: "Orçamento aprovado pelo cliente", meta: "Mariana Lima · 19/06 09:12" },
-  { type: "comunicacao", dot: C.warn, text: "Orçamento enviado por WhatsApp", meta: "Rafael · 14/06 16:45" },
-  { type: "financeiro", dot: C.success, text: "Sinal recebido (PIX) — R$ 300,00", meta: "Rafael · 14/06 16:50" },
-  { type: "tecnico", dot: C.info, text: "Diagnóstico técnico registrado", meta: "Bruno · 14/06 10:05" },
-  { type: "tecnico", dot: C.info, text: "Checklist de entrada finalizado", meta: "Rafael · 12/06 14:35" },
-  { type: "comunicacao", dot: C.warn, text: "WhatsApp: confirmação de recebimento", meta: "Automático · 12/06 14:25" },
-  { type: "status", dot: C.info, text: "OS aberta no balcão", meta: "Rafael · 12/06 14:20" },
-];
-
 export const HIST_FILTER_DEF: Array<[string, string]> = [
   ["todos", "Tudo"],
   ["status", "Status"],
@@ -181,23 +139,10 @@ export const HIST_FILTER_DEF: Array<[string, string]> = [
   ["tecnico", "Técnico"],
 ];
 
-export const ANEXOS = [
-  { name: "foto-frontal.jpg", kind: "frontal" },
-  { name: "foto-traseira.jpg", kind: "traseira" },
-  { name: "imei-tela.jpg", kind: "IMEI" },
-  { name: "comprovante-sinal.pdf", kind: "PDF" },
-];
-
 export const APONTAMENTOS = [
   { dot: C.success, text: "Tela OLED substituída e testada", meta: "Bruno · 20/06 10:42" },
   { dot: C.primary, text: "Vedação aplicada · aguardando cura", meta: "Bruno · 20/06 11:05" },
   { dot: C.warn, text: "Pendente: teste de resistência à água", meta: "previsto 20/06 12:00" },
-];
-
-export const FIN_HIST = [
-  { dot: C.success, text: "Sinal recebido (PIX)", amt: "+R$ 300,00", amtColor: C.successFg, meta: "Rafael · 14/06 16:50" },
-  { dot: C.primary, text: "Orçamento aprovado", amt: "R$ 890,00", amtColor: C.ink, meta: "Mariana · 19/06 09:12" },
-  { dot: C.warn, text: "Saldo previsto na entrega", amt: "R$ 590,00", amtColor: C.warnFg, meta: "no PDV de Serviço" },
 ];
 
 export const RET_HIST = [
@@ -385,42 +330,7 @@ export const CLIENTES_BUSCA = [
   { nome: "Beatriz Almeida", doc: "201.556.770-12", tel: "(11) 98120-7755", os: 5, ini: "BA" },
 ];
 
-/* ---- detalhes estáticos da OS aberta ---- */
-
-export const OS = {
-  codigo: "OS-2026-0481",
-  cliente: "Mariana Costa Lima",
-  documento: "328.114.905-77",
-  telefone: "(11) 98842-1190",
-  email: "mariana.lima@email.com",
-  aparelho: "Apple iPhone 13 Pro",
-  tipo: "Smartphone",
-  cor: "Grafite",
-  serieCurta: "…045398 9",
-  imei: "35 671211 045398 9",
-  serial: "C7H4K9XQ",
-  operadora: "Vivo",
-  senha: "L (padrão)",
-  acessorios: "Capa, cabo",
-  origem: "Balcão",
-  recebidoPor: "Rafael",
-  contaGoogle: "mariana.l@gmail.com",
-  contaApple: "—",
-  defeito: "Tela não responde ao toque após queda; trincada no canto superior direito.",
-  entrada: "12/06 14:20",
-  previsao: "20/06 18:00",
-  tecnico: "Bruno Alves",
-  sla: "6h",
-};
-
-export const PAG = {
-  total: "R$ 890,00",
-  recebido: "R$ 300,00",
-  saldo: "R$ 590,00",
-  statusPagamento: "Pagamento parcial",
-  ultimaForma: "PIX",
-  previsto: "Cartão de crédito",
-};
+/* ---- detalhes estáticos dos stages ainda em protótipo (Diagnóstico/Orçamento/Garantia) ---- */
 
 export const DIAG = {
   inicial: "Tela sem resposta ao toque após queda. Trincado no canto superior direito.",
