@@ -26,7 +26,6 @@ export function CommandHeader({ v }: { v: V4Vals }) {
         </span>
         <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 9px", background: C.warnBg, color: C.warnFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>{v.pag.statusPagamento}</span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 22, padding: "0 9px", background: C.successBg, color: C.successFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>⏱ SLA {v.os.sla}</span>
-        <span style={{ display: "inline-flex", alignItems: "center", height: 18, padding: "0 7px", background: C.muted50, color: C.subtle, borderRadius: 5, fontSize: 10.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap", border: `1px solid ${C.line2}` }}>Demo local</span>
       </div>
 
       {/* Grupo direito: financeiro + ações */}

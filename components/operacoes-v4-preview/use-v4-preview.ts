@@ -36,8 +36,6 @@ import {
   ORC_META,
   ORDER,
   ORIGEM_DEF,
-  OS,
-  PAG,
   PDV_RECEBER,
   PENDING,
   PRIMARY,
@@ -57,6 +55,30 @@ import {
 } from "./mock-data";
 import { C, fmt } from "./tokens";
 import type { V4FisEstado, V4State, V4Status, V4Stage, V4TriEstado } from "./types";
+import { useLojaAtiva } from "@/lib/loja-ativa";
+import type { OrdemServico } from "@/types/os";
+import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
+import {
+  adaptOsHeader,
+  adaptPag,
+  EMPTY_OS_VIEW,
+  EMPTY_PAG_VIEW,
+  realPrioridadeToV4,
+  realStatusToV4,
+  stageForStatus,
+} from "./os-adapter";
+
+/** Dados reais injetados no `buildVals` (somente leitura, vindos das Server Actions). */
+export interface V4DataCtx {
+  ordens: OrdemServico[];
+  ordensLoading: boolean;
+  ordensPrimeiraCarga: boolean;
+  ordensError: string | null;
+  reloadOrdens: () => void;
+  /** OS selecionada já hidratada (detalhe) ou linha da lista enquanto carrega. */
+  realOS: OrdemServico | null;
+  detailLoading: boolean;
+}
 
 const INITIAL: V4State = {
   view: "cockpit",
@@ -85,7 +107,7 @@ const INITIAL: V4State = {
   pattern: [],
   recibo: false,
   orcItens: ORC_ITENS_INICIAIS,
-  osSelected: false,
+  selectedOsId: null,
 };
 
 /** Cor de um botão segmentado tri-estado (ok / avaria / não-testado). */
@@ -104,7 +126,12 @@ function buildVals(
   st: V4State,
   update: (p: Patch) => void,
   notify: (msg: string) => void,
+  ctx: V4DataCtx,
 ) {
+  // OS real selecionada → identidade/financeiro reais (vazio honesto quando ausente).
+  const realOS = ctx.realOS;
+  const osView = realOS ? adaptOsHeader(realOS) : EMPTY_OS_VIEW;
+  const pagView = realOS ? adaptPag(realOS) : EMPTY_PAG_VIEW;
   const curIdx = (() => {
     let i = ORDER.indexOf(st.status);
     if (i < 0) i = ORDER.indexOf("em_execucao");
@@ -543,13 +570,33 @@ function buildVals(
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo, reciboData,
 
     diag: DIAG, orc: ORC_META, garantia: GARANTIA,
-    os: OS, pag: PAG,
+    os: osView, pag: pagView,
 
     toast: st.toast, showToast: !!st.toast,
 
-    osSelected: st.osSelected,
-    selectDemo: () => { update({ osSelected: true }); notify("Exemplo de demonstração carregado"); },
-    clearSelection: () => update({ osSelected: false }),
+    // ---- seleção de OS real ----
+    osSelected: !!st.selectedOsId,
+    selectedOsId: st.selectedOsId,
+    selectOS: (o: OrdemServico) => {
+      update({
+        selectedOsId: o.id,
+        status: realStatusToV4(o.status),
+        prioridade: realPrioridadeToV4(o.prioridade),
+        stage: stageForStatus(o.status),
+        module: "workspace",
+        view: "cockpit",
+        menu: null,
+      });
+      notify("OS " + (o.codigo || "") + " carregada");
+    },
+    clearSelection: () => update({ selectedOsId: null }),
+    // lista real para o seletor
+    ordens: ctx.ordens,
+    ordensLoading: ctx.ordensLoading,
+    ordensPrimeiraCarga: ctx.ordensPrimeiraCarga,
+    ordensError: ctx.ordensError,
+    reloadOrdens: ctx.reloadOrdens,
+    detailLoading: ctx.detailLoading,
   };
 }
 
@@ -559,6 +606,16 @@ export type V4Vals = ReturnType<typeof buildVals>;
 export function useV4Preview(): V4Vals {
   const [st, setSt] = useState<V4State>(INITIAL);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { lojaAtivaId } = useLojaAtiva();
+  const {
+    ordens,
+    loading: ordensLoading,
+    primeiraCarga: ordensPrimeiraCarga,
+    error: ordensError,
+    reload: reloadOrdens,
+  } = useOrdensV4(lojaAtivaId);
+  const { ordem: ordemDetail, loading: detailLoading } = useOrdemV4(lojaAtivaId, st.selectedOsId);
 
   useEffect(() => {
     return () => {
@@ -576,5 +633,25 @@ export function useV4Preview(): V4Vals {
     timer.current = setTimeout(() => setSt((prev) => ({ ...prev, toast: "" })), 1900);
   }, []);
 
-  return useMemo(() => buildVals(st, update, notify), [st, update, notify]);
+  // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
+  const realOS = useMemo<OrdemServico | null>(() => {
+    if (!st.selectedOsId) return null;
+    if (ordemDetail && ordemDetail.id === st.selectedOsId) return ordemDetail;
+    return ordens.find((o) => o.id === st.selectedOsId) ?? null;
+  }, [st.selectedOsId, ordemDetail, ordens]);
+
+  const ctx = useMemo<V4DataCtx>(
+    () => ({
+      ordens,
+      ordensLoading,
+      ordensPrimeiraCarga,
+      ordensError,
+      reloadOrdens,
+      realOS,
+      detailLoading,
+    }),
+    [ordens, ordensLoading, ordensPrimeiraCarga, ordensError, reloadOrdens, realOS, detailLoading],
+  );
+
+  return useMemo(() => buildVals(st, update, notify, ctx), [st, update, notify, ctx]);
 }

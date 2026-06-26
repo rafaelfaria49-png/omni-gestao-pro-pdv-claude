@@ -106,7 +106,7 @@ export function ContextColumn({ v }: { v: V4Vals }) {
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
           <div style={{ width: 40, height: 40, borderRadius: "50%", background: C.primaryBg, color: C.primaryHover, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flex: "none" }}>
-            MC
+            {os.avatarInitials}
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: C.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{os.cliente}</div>
