@@ -59,24 +59,26 @@ export function EntradaStage({ v }: { v: V4Vals }) {
       {/* Coluna 2 */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8, flexWrap: "wrap" }}>
             <span style={cardTitle}>Checklist do aparelho</span>
-            <span style={{ fontSize: 11, color: C.muted }}>
-              <span style={{ color: C.successFg, fontWeight: 600 }}>{v.check.ok} OK</span> · <span style={{ color: C.dangerFg }}>{v.check.ruim} ruim</span> · {v.check.nt} N/T
-            </span>
+            {!v.checklistVazio && (
+              <span style={{ fontSize: 11, color: C.muted }}>
+                <span style={{ color: C.successFg, fontWeight: 600 }}>{v.check.ok} OK</span> · <span style={{ color: C.dangerFg }}>{v.check.ruim} ruim</span> · {v.check.nt} N/T
+              </span>
+            )}
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: col2, gap: 7 }}>
-            {v.checklist.map((c, i) => (
-              <div key={i} style={{ border: `1px solid ${C.line2}`, borderRadius: 8, padding: "7px 8px" }}>
-                <div style={{ fontSize: 11.5, color: C.body, fontWeight: 500, marginBottom: 5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.label}</div>
-                <div style={{ display: "grid", gridTemplateColumns: col3, gap: 3 }}>
-                  <button type="button" onClick={c.onOk} style={{ border: `1px solid ${c.okBd}`, background: c.okBg, color: c.okFg, borderRadius: 5, padding: "2px 0", fontSize: 9.5, fontWeight: 700, cursor: "pointer" }}>OK</button>
-                  <button type="button" onClick={c.onRuim} style={{ border: `1px solid ${c.ruimBd}`, background: c.ruimBg, color: c.ruimFg, borderRadius: 5, padding: "2px 0", fontSize: 9.5, fontWeight: 700, cursor: "pointer" }}>RUIM</button>
-                  <button type="button" onClick={c.onNt} style={{ border: `1px solid ${c.ntBd}`, background: c.ntBg, color: c.ntFg, borderRadius: 5, padding: "2px 0", fontSize: 9.5, fontWeight: 700, cursor: "pointer" }}>N/T</button>
+          {v.checklistVazio ? (
+            <div style={{ fontSize: 12, color: C.subtle, padding: "10px 2px" }}>Checklist ainda não registrado.</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 7 }}>
+              {v.checklist.map((c) => (
+                <div key={c.id} title={c.observacao || undefined} style={{ border: `1px solid ${C.line2}`, borderRadius: 8, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, minWidth: 0 }}>
+                  <span style={{ fontSize: 11.5, color: C.body, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{c.label}</span>
+                  <span style={{ flex: "none", border: `1px solid ${c.bd}`, background: c.bg, color: c.fg, borderRadius: 5, padding: "2px 7px", fontSize: 9.5, fontWeight: 700 }}>{c.estadoLabel}</span>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         <div style={card}>
           <div style={{ ...cardTitle, marginBottom: 9 }}>Fotos de entrada (5/12)</div>

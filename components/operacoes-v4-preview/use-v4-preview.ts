@@ -14,7 +14,6 @@ import {
   APONTAMENTOS,
   BANCADA_TEC,
   CAT_LABEL,
-  CHECKLIST_DEF,
   CLIENTES_BUSCA,
   DASH_DIST,
   DASH_FILA,
@@ -50,12 +49,13 @@ import {
   TONE,
 } from "./mock-data";
 import { C, fmt } from "./tokens";
-import type { V4FisEstado, V4State, V4Status, V4Stage, V4TriEstado } from "./types";
+import type { V4FisEstado, V4State, V4Status, V4Stage } from "./types";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import type { OrdemServico } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
 import {
   adaptAnexos,
+  adaptChecklist,
   adaptObservacoes,
   adaptOsHeader,
   adaptPag,
@@ -202,27 +202,32 @@ function buildVals(
     };
   });
 
-  // ---- checklist entrada (tri-estado) ----
-  const okCount = st.estados.filter((e) => e === "ok").length;
-  const ruimCount = st.estados.filter((e) => e === "ruim").length;
-  const ntCount = st.estados.filter((e) => e === "nt").length;
-  const setEstado = (i: number, v: V4TriEstado) =>
-    update((s) => {
-      const a = s.estados.slice();
-      a[i] = v;
-      return { estados: a };
-    });
-  const checklist = CHECKLIST_DEF.map((label, i) => {
-    const e = st.estados[i];
-    const ok = seg(e === "ok", "ok"), ru = seg(e === "ruim", "av"), nt = seg(e === "nt", "nt");
+  // ---- checklist de entrada (REAL da OS; vazio honesto quando não registrado) ----
+  // Exibição somente-leitura do estado real de cada item; nada de tri-estado mock.
+  const checklistReal = realOS ? adaptChecklist(realOS) : [];
+  const checklist = checklistReal.map((it) => {
+    const m =
+      it.estado === "ok"
+        ? { label: "OK", bg: C.successBg, fg: C.successFg, bd: C.successBd }
+        : it.estado === "ruim"
+          ? { label: "RUIM", bg: C.dangerBg, fg: C.dangerFg, bd: C.dangerBd }
+          : { label: "N/T", bg: C.infoBg, fg: C.infoFg, bd: C.infoBd };
     return {
-      label,
-      okBg: ok.bg, okFg: ok.fg, okBd: ok.bd,
-      ruimBg: ru.bg, ruimFg: ru.fg, ruimBd: ru.bd,
-      ntBg: nt.bg, ntFg: nt.fg, ntBd: nt.bd,
-      onOk: () => setEstado(i, "ok"), onRuim: () => setEstado(i, "ruim"), onNt: () => setEstado(i, "nt"),
+      id: it.id,
+      label: it.label,
+      observacao: it.observacao,
+      estadoLabel: m.label,
+      bg: m.bg,
+      fg: m.fg,
+      bd: m.bd,
     };
   });
+  const check = {
+    ok: checklistReal.filter((c) => c.estado === "ok").length,
+    ruim: checklistReal.filter((c) => c.estado === "ruim").length,
+    nt: checklistReal.filter((c) => c.estado === "nao_testado").length,
+  };
+  const checklistVazio = checklistReal.length === 0;
 
   const setFis = (i: number, v: V4FisEstado) =>
     update((s) => {
@@ -551,7 +556,7 @@ function buildVals(
     onPrimary: () => advance(), showKbd: true,
 
     prio: { label: prioM.label, fg: prioM.fg, dot: prioM.dot }, prioridades,
-    steps, checklist, check: { ok: okCount, ruim: ruimCount, nt: ntCount }, tech, estadoFis, acessorios, cred,
+    steps, checklist, check, checklistVazio, tech, estadoFis, acessorios, cred,
     acessoriosDev, entregaCheck, entregaCheckResumo,
     apontamentos: APONTAMENTOS, finHist: FIN_HIST, retHist: RET_HIST, npsScale,
     hist, histCount: hist.length, histFilters, anexos: anexosReais, observacoes: observacoesReais,
