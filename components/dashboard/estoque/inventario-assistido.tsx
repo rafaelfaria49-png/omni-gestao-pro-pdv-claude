@@ -106,6 +106,19 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
   },
 }
 
+/**
+ * Merge/upsert de UMA linha de contagem no estado local (caminho quente do bipe): remove a versão
+ * anterior da mesma linha (por id) e a recoloca no topo — espelha a ordenação do servidor
+ * (`ultimoBipeEm desc`, mais recente primeiro). Evita reler a sessão inteira por bipe; sem duplicar.
+ */
+function mergeContagem(
+  prev: InventarioContagemDTO[],
+  contagem: InventarioContagemDTO,
+): InventarioContagemDTO[] {
+  const semAnterior = prev.filter((item) => item.id !== contagem.id)
+  return [contagem, ...semAnterior]
+}
+
 // ─── Componente ────────────────────────────────────────────────────────────────
 
 export function InventarioAssistido() {
@@ -275,7 +288,7 @@ export function InventarioAssistido() {
           toast({ title: "Falha ao registrar contagem", description: res.reason, variant: "destructive" })
           return
         }
-        setContagens(res.contagens)
+        setContagens((prev) => mergeContagem(prev, res.contagem))
         setUltimoBipe(res.contagem)
         setContagemProduto(null)
       } finally {
@@ -336,7 +349,7 @@ export function InventarioAssistido() {
           toast({ title: "Falha ao registrar pendência", description: res.reason, variant: "destructive" })
           return
         }
-        setContagens(res.contagens)
+        setContagens((prev) => mergeContagem(prev, res.contagem))
         setUltimoBipe(res.contagem)
         toast({
           title: "Produto não cadastrado",

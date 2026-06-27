@@ -281,7 +281,7 @@ export async function getInventarioAtivo(storeId: string): Promise<InventarioAti
 }
 
 export type RegistrarContagemProdutoResult =
-  | { ok: true; contagem: InventarioContagemDTO; contagens: InventarioContagemDTO[] }
+  | { ok: true; contagem: InventarioContagemDTO }
   | ActionFail;
 
 /**
@@ -366,8 +366,10 @@ export async function registrarContagemProduto(
       });
     }
 
-    const contagens = await loadContagens(g.sid, sessaoId);
-    return { ok: true, contagem: contagemToDTO(saved), contagens };
+    // Caminho quente (bipe): devolve SÓ a linha alterada (delta). O cliente faz merge/upsert local
+    // — sem reler a sessão inteira por bipe. A lista completa só é buscada no carregamento inicial e
+    // no refresh manual (getInventarioAtivo / listInventarioContagens, que seguem usando loadContagens).
+    return { ok: true, contagem: contagemToDTO(saved) };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar contagem" };
   }
@@ -436,7 +438,7 @@ export async function getContextoContagemProduto(
 }
 
 export type RegistrarPendenciaResult =
-  | { ok: true; contagem: InventarioContagemDTO; contagens: InventarioContagemDTO[] }
+  | { ok: true; contagem: InventarioContagemDTO }
   | ActionFail;
 
 /**
@@ -509,8 +511,8 @@ export async function registrarPendenciaInventario(
       select: CONTAGEM_SELECT,
     });
 
-    const contagens = await loadContagens(g.sid, sessaoId);
-    return { ok: true, contagem: contagemToDTO(saved), contagens };
+    // Caminho quente (bipe sem cadastro): delta da pendência criada/atualizada — merge no cliente.
+    return { ok: true, contagem: contagemToDTO(saved) };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "Falha ao registrar pendência" };
   }
