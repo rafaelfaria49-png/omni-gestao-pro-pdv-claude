@@ -115,7 +115,7 @@ export const HIST_FILTER_DEF: Array<[string, string]> = [
 /* ---- dados dos módulos (rail) ---- */
 
 export const MODULE_META: Record<string, { icon: string; title: string; subtitle: string }> = {
-  dashboard: { icon: "📊", title: "Visão geral", subtitle: "Unidade Centro · hoje 20/06" },
+  dashboard: { icon: "📊", title: "Visão geral", subtitle: "Unidade Centro · dados demonstrativos" },
   fila: { icon: "📋", title: "Fila de OS", subtitle: "18 ordens ativas" },
   bancada: { icon: "🔧", title: "Bancada por técnico", subtitle: "3 técnicos · 7 em execução" },
   sla: { icon: "⏱", title: "SLA & atrasos", subtitle: "3 prazos em risco" },
@@ -251,14 +251,14 @@ export const RESOLVED_RAW: Array<[string, string]> = [
   ["3 modos de uso", "Recepção, Bancada e Auditoria no topo — ajustam as duas laterais de uma vez e refletem o estado atual."],
   ["Aba Financeiro", "Total/recebido/saldo, forma de pagamento, plano, recebimentos, histórico financeiro e CTA Receber no PDV + aviso de baixa no PDV."],
   ["Aba Entrega", "Retirado por, documento, data/hora, assinatura, checklist final, acessórios devolvidos, garantia e imprimir termo + estado “precisa estar Pronta”."],
-  ["Aba Pós-venda", "Situação da garantia, retornos, NPS/satisfação, follow-up WhatsApp, agendar contato e histórico de retornos."],
+  ["Aba Pós-venda", "Garantia real (op/payload), retornos por garantia_acionada e eventos de pós-venda da timeline real — NPS, satisfação e follow-up não fazem parte do modelo de dados."],
   ["Espaços vazios", "Execução, Histórico, Financeiro e Entrega agora usam colunas densas — sem cards enormes vazios."],
   ["Rail de ícones", "Visão geral, Fila, OS, Bancada, SLA e PDV viraram telas reais navegáveis com KPIs e listas."],
   ["Header e etapas", "Topo 44→40px, comando 54→46px, spine 66→52px — mais conteúdo útil por tela."],
   ["Nova OS completa (v4)", "Modal com buscar/cadastrar cliente, equipamento, marca/modelo/IMEI/cor, defeito, observações, origem e recebido por."],
   ["Segurança / acesso (v4)", "PIN, senha, padrão de 9 pontos interativo, Face/biometria, Google, iCloud, observação e aviso de máscara na impressão."],
-  ["Orçamento por tipo (v4)", "Cada item alterna Cobrado / Brinde / Desconto; subtotal, desconto, brindes, total, custo e lucro recalculam ao vivo."],
-  ["Recibo + saldo devedor (v4)", "Financeiro gera recibo de pagamento e mostra saldo devedor após pagamento parcial."],
+  ["Orçamento por tipo (v4)", "Editor mock substituído por leitura real: serviços, peças, total e desconto da OS (ou prévia sintetizada); custo/lucro quando há custo real disponível."],
+  ["Recibo + saldo devedor (v4)", "Recibo fabricado removido — a baixa é registrada no PDV de Serviço; o modal exibe empty state honesto quando não há recibo real na OS."],
   ["Auditoria filtrável (v4)", "Filtros de Status / Financeiro / Comunicação / Técnico agora filtram a linha do tempo de verdade."],
   ["Identidade visual", "Mesma paleta (índigo #4f46e5 + neutros) e tipografia; nenhum tema novo."],
 ];

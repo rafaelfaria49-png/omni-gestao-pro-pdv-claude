@@ -45,7 +45,8 @@ export function NovaOSModal({ v }: { v: V4Vals }) {
 
           {v.novaBuscar && (
             <div style={{ marginBottom: 16 }}>
-              <input placeholder="Buscar por nome, CPF, telefone ou IMEI…" style={{ ...input, height: 34, marginBottom: 9 }} />
+              <input placeholder="Buscar por nome, CPF, telefone ou IMEI…" style={{ ...input, height: 34, marginBottom: 6 }} />
+              <div style={{ fontSize: 10, color: C.subtle, marginBottom: 9 }}>Dados demonstrativos — busca real será ligada à base de clientes na integração final.</div>
               {v.clientesBusca.map((c, i) => (
                 <button key={i} type="button" onClick={c.onClick} className={styles.hoverBorder} style={{ display: "flex", width: "100%", alignItems: "center", gap: 11, textAlign: "left", border: `1px solid ${C.line2}`, background: C.surface, borderRadius: 9, padding: "9px 11px", marginBottom: 6, cursor: "pointer" }}>
                   <span style={{ width: 32, height: 32, borderRadius: "50%", background: C.primaryBg, color: C.primaryHover, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flex: "none" }}>{c.ini}</span>
@@ -88,7 +89,7 @@ export function NovaOSModal({ v }: { v: V4Vals }) {
                 ))}
               </div>
             </div>
-            <div><div style={{ ...upLabel, marginBottom: 3 }}>Recebido por</div><input defaultValue="Rafael" style={input} /></div>
+            <div><div style={{ ...upLabel, marginBottom: 3 }}>Recebido por</div><input placeholder="Nome do atendente" style={input} /></div>
           </div>
         </div>
 
