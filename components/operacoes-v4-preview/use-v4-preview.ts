@@ -3,8 +3,11 @@
  *
  * Porta o `class Component extends DCLogic` do protótipo Cloud Design para
  * React: o estado vira `useState`, e `buildVals()` espelha o `renderVals()`
- * original (produz o objeto consumido pela UI). Tudo client-side, mock,
- * sem efeitos colaterais reais (handlers só trocam estado e disparam toast).
+ * original (produz o objeto consumido pela UI). Os STAGES leem a OS REAL
+ * (somente leitura, via `useOrdensV4`/`useOrdemV4`); o restante (rail,
+ * dashboards, Nova OS) segue protótipo. Nenhum handler persiste nada — as
+ * ações de escrita apenas pré-visualizam e disparam um toast honesto
+ * (`PREVIEW_NOOP`): a Preview NÃO grava no banco.
  */
 "use client";
 
@@ -102,6 +105,14 @@ const INITIAL: V4State = {
 
 type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
 
+/**
+ * Mensagem honesta para qualquer ação que NÃO persiste nada nesta Preview (somente leitura).
+ * Os botões de escrita do protótipo (avançar status, recibo, WhatsApp, exportar, "Abrir OS"…)
+ * apenas pré-visualizam o fluxo — nunca confirmam uma operação real. Trocar OS / Histórico /
+ * Configurações também não navegam de verdade na Preview.
+ */
+const PREVIEW_NOOP = "Indisponível na Preview — nenhuma alteração foi salva.";
+
 function buildVals(
   st: V4State,
   update: (p: Patch) => void,
@@ -143,16 +154,17 @@ function buildVals(
   const setView = (v: V4State["view"]) => update({ view: v, menu: null });
   const toggleMenu = (m: "print" | "more") =>
     update((s) => ({ menu: s.menu === m ? null : m }));
+  // Transições só pré-visualizam o fluxo no estado local — nada é persistido. O toast é honesto.
   const advance = () => {
     const p = PRIMARY[st.status];
     if (p) {
       update({ status: p.to, stage: p.stage });
-      notify("Status → " + (STATUS_LABEL[p.to] || p.to));
+      notify(PREVIEW_NOOP);
     }
   };
   const setStatusTo = (s: V4Status) => {
     update({ status: s });
-    notify("Status → " + (STATUS_LABEL[s] || s));
+    notify(PREVIEW_NOOP);
   };
   const setMode = (mode: "recepcao" | "bancada" | "auditoria") => {
     const map = {
@@ -283,17 +295,18 @@ function buildVals(
   });
 
   // ---- menus ----
+  // Documentos são protótipo: não geram/abrem nada na Preview → toast honesto.
   const printItems = [
-    { icon: "📄", label: "Imprimir OS (cliente)", onClick: () => notify("Gerando: OS do cliente") },
-    { icon: "🛡", label: "Termo de Garantia", onClick: () => notify("Gerando: Termo de Garantia") },
-    { icon: "📦", label: "Termo de Entrega", onClick: () => notify("Gerando: Termo de Entrega") },
-    { icon: "🔒", label: "Via Interna", onClick: () => notify("Gerando: Via Interna") },
-    { icon: "🏷", label: "Etiqueta", onClick: () => notify("Gerando: Etiqueta") },
-    { icon: "🌐", label: "Portal do cliente", onClick: () => notify("Abrindo: Portal do cliente") },
+    { icon: "📄", label: "Imprimir OS (cliente)", onClick: () => notify(PREVIEW_NOOP) },
+    { icon: "🛡", label: "Termo de Garantia", onClick: () => notify(PREVIEW_NOOP) },
+    { icon: "📦", label: "Termo de Entrega", onClick: () => notify(PREVIEW_NOOP) },
+    { icon: "🔒", label: "Via Interna", onClick: () => notify(PREVIEW_NOOP) },
+    { icon: "🏷", label: "Etiqueta", onClick: () => notify(PREVIEW_NOOP) },
+    { icon: "🌐", label: "Portal do cliente", onClick: () => notify(PREVIEW_NOOP) },
   ];
   const moreItems: Array<{ icon: string; label: string; color: string; onClick: () => void }> = [
-    { icon: "✏", label: "Editar OS", color: C.body, onClick: () => notify("Editar OS") },
-    { icon: "⇄", label: "Trocar OS", color: C.body, onClick: () => notify("Trocar OS") },
+    { icon: "✏", label: "Editar OS", color: C.body, onClick: () => notify(PREVIEW_NOOP) },
+    { icon: "⇄", label: "Trocar OS", color: C.body, onClick: () => notify(PREVIEW_NOOP) },
   ];
   if (st.status === "em_execucao" || st.status === "aprovado")
     moreItems.push({ icon: "⏸", label: "Marcar “Aguardando peça”", color: C.body, onClick: () => setStatusTo("aguardando_peca") });
@@ -345,13 +358,13 @@ function buildVals(
   const tone = TONE[st.status] || TONE.em_execucao;
   const prioM = PRIO[st.prioridade];
 
-  // ---- handlers "visuais" (só notificam) ----
+  // ---- handlers "visuais" (não persistem nada → toast honesto de Preview) ----
   const act = {
-    addFoto: () => notify("Adicionar foto"),
-    pdv: () => notify("Abrindo PDV de Serviço"),
-    whatsapp: () => notify("Atualização enviada (WhatsApp)"),
-    novaObs: () => notify("Nova observação"),
-    exportHist: () => notify("Exportando auditoria"),
+    addFoto: () => notify(PREVIEW_NOOP),
+    pdv: () => notify(PREVIEW_NOOP),
+    whatsapp: () => notify(PREVIEW_NOOP),
+    novaObs: () => notify(PREVIEW_NOOP),
+    exportHist: () => notify(PREVIEW_NOOP),
   };
 
   return {
@@ -363,7 +376,7 @@ function buildVals(
     goAuditoria: () => setView("auditoria"),
     railWorkspace: () => setModule("workspace"),
     railFila: () => setModule("fila"),
-    railSettings: () => notify("Configurações"),
+    railSettings: () => notify(PREVIEW_NOOP),
 
     rail, modeBtns,
     mod,
@@ -380,8 +393,8 @@ function buildVals(
     leftOpen: st.left, leftClosed: !st.left, rightOpen: st.right, rightClosed: !st.right,
     toggleLeft: () => update((s) => ({ left: !s.left })),
     toggleRight: () => update((s) => ({ right: !s.right })),
-    onTrocar: () => notify("Trocar OS"),
-    toHistCliente: () => notify("Histórico do cliente"),
+    onTrocar: () => notify(PREVIEW_NOOP),
+    toHistCliente: () => notify(PREVIEW_NOOP),
 
     menu: st.menu, menuPrint: st.menu === "print", menuMore: st.menu === "more",
     togglePrint: () => toggleMenu("print"), toggleMore: () => toggleMenu("more"),
@@ -407,7 +420,7 @@ function buildVals(
     novoBg: st.novaTab === "novo" ? C.surface : "transparent",
     novoFg: st.novaTab === "novo" ? C.primaryHover : C.muted,
     novaEquipBtns, novaOrigemBtns, clientesBusca,
-    abrirOS: () => { update({ novaOS: false }); notify("Nova OS aberta"); },
+    abrirOS: () => { update({ novaOS: false }); notify(PREVIEW_NOOP); },
 
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 

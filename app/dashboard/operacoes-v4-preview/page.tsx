@@ -3,10 +3,11 @@ import { OperacoesV4Preview } from "@/components/operacoes-v4-preview/OperacoesV
 /**
  * Operações V4 — Preview (rota isolada, NÃO substitui a V3).
  *
- * Tela 100% visual gerada a partir do redesign Cloud Design em
- * `design/operacoes-v4/`. Dados mockados locais; nenhuma integração real
- * (sem Server Actions, APIs, Prisma ou componentes da V3). `h-full` mantém o
- * AppShell como único dono do scroll.
+ * Redesign Cloud Design em `design/operacoes-v4/`. Os STAGES da OS leem dados
+ * REAIS (somente leitura, via Server Actions `listOrdens`/`getOrdem` com
+ * `readOnly: true` — sem efeito colateral de escrita); rail/dashboards/Nova OS
+ * seguem protótipo. Nenhuma persistência: ações de escrita só pré-visualizam.
+ * Não importa componentes da V3. `h-full` mantém o AppShell como único dono do scroll.
  */
 export default function OperacoesV4PreviewPage() {
   return (

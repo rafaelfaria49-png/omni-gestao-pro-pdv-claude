@@ -86,7 +86,7 @@ export function CommandHeader({ v }: { v: V4Vals }) {
                     <span style={{ width: 16, textAlign: "center" }}>{m.icon}</span>{m.label}
                   </button>
                 ))}
-                <div style={{ fontSize: 10.5, color: C.faint2, padding: "6px 9px 3px", borderTop: `1px solid ${C.line3}`, marginTop: 4 }}>Transições validadas pela máquina única do fluxo.</div>
+                <div style={{ fontSize: 10.5, color: C.faint2, padding: "6px 9px 3px", borderTop: `1px solid ${C.line3}`, marginTop: 4 }}>Pré-visualização — nenhuma transição é salva nesta Preview.</div>
               </div>
             </>
           )}

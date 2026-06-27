@@ -124,15 +124,27 @@ export async function listOrdens(lojaId: string, filters?: ListOrdensFilters): P
 
 /**
  * Uma OS por id + loja (multi-tenant). Somente leitura.
+ *
+ * `opts.readOnly` (default `false`): quando `true`, NÃO executa a manutenção de garantias vencidas
+ * (`expirarGarantiasVencidas`, que é um `updateMany`). Caminho usado pela Operações V4 Preview, que
+ * precisa ser estritamente sem efeito colateral de escrita. O fluxo normal (V3 e demais leitores)
+ * mantém a expiração automática inalterada.
  */
-export async function getOrdem(lojaId: string, osId: string): Promise<OrdemServicoLeitura | null> {
+export async function getOrdem(
+  lojaId: string,
+  osId: string,
+  opts?: { readOnly?: boolean },
+): Promise<OrdemServicoLeitura | null> {
   const storeId = normalizeLojaId(lojaId)
   const id = (osId ?? "").trim()
   if (!storeId || !id) return null
 
   const row = await withPrismaSafe(
     async (db) => {
-      await expirarGarantiasVencidas(db, { storeId, ordemServicoId: id })
+      // Preview (readOnly) é estritamente leitura: pula a manutenção de garantias (write).
+      if (!opts?.readOnly) {
+        await expirarGarantiasVencidas(db, { storeId, ordemServicoId: id })
+      }
       return db.ordemServico.findFirst({
         where: { id, storeId },
         include: {

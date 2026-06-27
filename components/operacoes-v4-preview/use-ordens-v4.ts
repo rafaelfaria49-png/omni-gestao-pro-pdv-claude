@@ -6,7 +6,8 @@
 // Consome a MESMA fonte de dados da Operações V3 (Server Actions `listOrdens` /
 // `getOrdem` de @/app/actions/ordens), sem importar nenhum componente da V3.
 // As actions NÃO lançam (retornam []/null em falha) e são multi-loja por storeId.
-// Nenhuma ação de escrita é importada — o Preview permanece somente-leitura.
+// Nenhuma ação de escrita é importada e `getOrdem` é chamado com `{ readOnly: true }`,
+// que pula a manutenção de garantias vencidas (`updateMany`) — o Preview NÃO grava nada.
 // ============================================================================
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -70,7 +71,7 @@ export interface OrdemV4State {
   reload: () => void;
 }
 
-/** Detalhe completo (hidratado) de UMA OS real por id — somente leitura. */
+/** Detalhe completo (hidratado) de UMA OS real por id — estritamente somente leitura (sem write). */
 export function useOrdemV4(storeId: string | null, osId: string | null): OrdemV4State {
   const [ordem, setOrdem] = useState<OrdemServico | null>(null);
   const [loading, setLoading] = useState(false);
@@ -90,7 +91,8 @@ export function useOrdemV4(storeId: string | null, osId: string | null): OrdemV4
     const reqId = ++reqRef.current;
     setLoading(true);
     setError(null);
-    getOrdem(sid, id)
+    // `readOnly: true` → não dispara `expirarGarantiasVencidas` (updateMany). Preview sem escrita.
+    getOrdem(sid, id, { readOnly: true })
       .then((row) => {
         if (reqRef.current !== reqId) return;
         setOrdem((row ?? null) as OrdemServico | null);
