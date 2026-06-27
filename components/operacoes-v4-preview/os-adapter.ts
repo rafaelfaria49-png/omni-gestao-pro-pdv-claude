@@ -1053,6 +1053,77 @@ export function adaptEntrega(os: OrdemServico): V4EntregaView {
   };
 }
 
+// ---- Pós-venda (GOAL OPS-V4-P0-013) ----------------------------------------
+// Read-only sobre a OS já carregada. O stage Pós-venda passa a ler só o que a OS
+// persiste: garantia real (reusa `adaptGarantia`), retornos em garantia (eventos
+// `garantia_acionada` da timeline) e os eventos reais de pós-venda (garantia /
+// entrega / retirada). O modelo NÃO tem NPS, satisfação nem follow-up → esses
+// cards viram empty honesto. Nada fabricado.
+
+/** Tipos de evento da timeline considerados de pós-venda. */
+const POSVENDA_EVENTO_TIPOS = new Set<EventoTipo>([
+  "garantia_gerada",
+  "garantia_acionada",
+  "entrega_cliente",
+  "retirada_confirmada",
+]);
+
+export interface V4PosVendaView {
+  /** true quando há QUALQUER registro real de pós-venda (garantia ou evento). */
+  temRegistro: boolean;
+  /** Garantia real da OS (operacional ou de payload). */
+  garantia: V4GarantiaView;
+  /** Retornos em garantia reais (eventos `garantia_acionada`). */
+  retornos: V4HistEvento[];
+  /** Nº de retornos em garantia registrados. */
+  retornosCount: number;
+  /** Eventos reais de pós-venda (garantia / entrega / retirada). */
+  eventos: V4HistEvento[];
+}
+
+export const EMPTY_POSVENDA_VIEW: V4PosVendaView = {
+  temRegistro: false,
+  garantia: EMPTY_GARANTIA_VIEW,
+  retornos: [],
+  retornosCount: 0,
+  eventos: [],
+};
+
+export function adaptPosVenda(os: OrdemServico): V4PosVendaView {
+  const garantia = adaptGarantia(os);
+  const tl = Array.isArray(os.timeline) ? os.timeline : [];
+
+  const ordenarDesc = (a: EventoTimeline, b: EventoTimeline) =>
+    new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime();
+  const mapEvento = (ev: EventoTimeline, dot: string): V4HistEvento => ({
+    id: ev.id,
+    type: "status",
+    text: txt(ev.titulo) || txt(ev.conteudo) || ev.tipo,
+    meta: `${txt(ev.autor) || "Sistema"} · ${fmtDataHora(ev.criadoEm)}`,
+    dot,
+  });
+
+  const retornos = tl
+    .filter((ev: EventoTimeline) => ev.tipo === "garantia_acionada")
+    .slice()
+    .sort(ordenarDesc)
+    .map((ev) => mapEvento(ev, C.warn));
+
+  const eventos = tl
+    .filter((ev: EventoTimeline) => POSVENDA_EVENTO_TIPOS.has(ev.tipo))
+    .slice()
+    .sort(ordenarDesc)
+    .map((ev) => mapEvento(ev, C.primary));
+
+  return {
+    temRegistro: garantia.temGarantia || eventos.length > 0,
+    garantia,
+    retornos,
+    retornosCount: retornos.length,
+    eventos,
+  };
+}
+
 // ---- Busca da lista de OS (GOAL OPS-V4-P0-002) -----------------------------
 
 function norm(s: string): string {

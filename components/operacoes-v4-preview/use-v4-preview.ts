@@ -28,7 +28,6 @@ import {
   PRIO,
   RAIL_DEF,
   RESOLVED_RAW,
-  RET_HIST,
   SLA_ROWS,
   STAGE_DEF,
   STATUS_LABEL,
@@ -53,10 +52,12 @@ import {
   adaptOrcamento,
   adaptOsHeader,
   adaptPag,
+  adaptPosVenda,
   adaptSegurancaEntrada,
   adaptTimeline,
   EMPTY_DIAGNOSTICO_VIEW,
   EMPTY_ENTREGA_VIEW,
+  EMPTY_POSVENDA_VIEW,
   EMPTY_EXECUCAO_VIEW,
   EMPTY_FINANCEIRO_VIEW,
   EMPTY_ORCAMENTO_VIEW,
@@ -126,6 +127,9 @@ function buildVals(
   // Entrega REAL (retirada/assinatura/acessórios/eventos + garantia real); vazio
   // honesto quando a OS ainda não foi entregue. Sem retirada/garantia/checklist mock.
   const entregaReal = realOS ? adaptEntrega(realOS) : EMPTY_ENTREGA_VIEW;
+  // Pós-venda REAL (garantia/retornos em garantia/eventos de pós-venda); vazio
+  // honesto quando não houver registro. Sem NPS/satisfação/follow-up fabricados.
+  const posVendaReal = realOS ? adaptPosVenda(realOS) : EMPTY_POSVENDA_VIEW;
   const curIdx = (() => {
     let i = ORDER.indexOf(st.status);
     if (i < 0) i = ORDER.indexOf("em_execucao");
@@ -278,8 +282,6 @@ function buildVals(
     };
   });
 
-  const npsScale = [0, 1, 2, 3, 4].map(() => ({ bg: "#eceef1" }));
-
   // ---- menus ----
   const printItems = [
     { icon: "📄", label: "Imprimir OS (cliente)", onClick: () => notify("Gerando: OS do cliente") },
@@ -347,12 +349,6 @@ function buildVals(
   const act = {
     addFoto: () => notify("Adicionar foto"),
     pdv: () => notify("Abrindo PDV de Serviço"),
-    termoEntrega: () => notify("Gerando: Termo de Entrega"),
-    abrirRetorno: () => notify("Abrir retorno"),
-    retornosCliente: () => notify("Retornos do cliente"),
-    pesquisa: () => notify("Pesquisa de satisfação enviada"),
-    agendar: () => notify("Contato agendado"),
-    whatsappFollow: () => notify("Follow-up enviado (WhatsApp)"),
     whatsapp: () => notify("Atualização enviada (WhatsApp)"),
     novaObs: () => notify("Nova observação"),
     exportHist: () => notify("Exportando auditoria"),
@@ -399,7 +395,7 @@ function buildVals(
     prio: { label: prioM.label, fg: prioM.fg, dot: prioM.dot },
     steps, checklist, check, checklistVazio,
     entradaAcessorios, entradaFotos, entradaSeguranca,
-    financeiro: financeiroReal, finHist: finHistReal, retHist: RET_HIST, npsScale,
+    financeiro: financeiroReal, finHist: finHistReal, posVenda: posVendaReal,
     hist, histCount: hist.length, histFilters, anexos: anexosReais, observacoes: observacoesReais,
     resolved, pending: PENDING, act,
 

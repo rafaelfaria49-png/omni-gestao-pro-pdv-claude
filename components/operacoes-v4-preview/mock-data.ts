@@ -112,10 +112,6 @@ export const HIST_FILTER_DEF: Array<[string, string]> = [
   ["tecnico", "Técnico"],
 ];
 
-export const RET_HIST = [
-  { dot: C.success, text: "Garantia anterior — bateria", meta: "Encerrada · 08/2025 · sem retorno" },
-];
-
 /* ---- dados dos módulos (rail) ---- */
 
 export const MODULE_META: Record<string, { icon: string; title: string; subtitle: string }> = {

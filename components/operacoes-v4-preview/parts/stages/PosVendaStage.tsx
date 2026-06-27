@@ -1,80 +1,140 @@
-/** Operações V4 Preview — etapa Pós-venda (garantia, retornos, NPS, follow-up). */
-import { C, card, cardTitle } from "../../tokens";
+/**
+ * Operações V4 Preview — etapa Pós-venda (somente leitura).
+ *
+ * GOAL OPS-V4-P0-013: lê apenas o que a OS persiste — garantia real, retornos
+ * em garantia (eventos `garantia_acionada`) e eventos reais de pós-venda
+ * (garantia / entrega / retirada). O modelo de dados NÃO tem NPS, satisfação
+ * nem follow-up → empty state honesto. Sem formulários/escrita (a V4 Preview é
+ * read-only); nenhum dado fabricado.
+ */
+import type { ReactNode } from "react";
+import { C, card, cardTitle, upLabel, pill } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 
 const col3 = "minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)";
 
+type Tone = "success" | "info" | "warn" | "danger" | "neutro";
+
+const TONE_MAP: Record<Tone, { bg: string; fg: string; dot: string }> = {
+  success: { bg: C.successBg, fg: C.successFg, dot: C.success },
+  info: { bg: C.infoBg, fg: C.infoFg, dot: C.info },
+  warn: { bg: C.warnBg, fg: C.warnFg, dot: C.warn },
+  danger: { bg: C.dangerBg, fg: C.dangerFg, dot: C.danger },
+  neutro: { bg: C.muted100, fg: C.muted, dot: C.subtle },
+};
+
+function StatusBadge({ label, tone }: { label: string; tone: Tone }) {
+  const t = TONE_MAP[tone];
+  return (
+    <span style={pill(t.bg, t.fg)}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: t.dot }} />
+      {label}
+    </span>
+  );
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return (
+    <div style={{ border: `1px dashed ${C.inputBd}`, borderRadius: 9, padding: 16, textAlign: "center", color: C.subtle, fontSize: 11.5, lineHeight: 1.5 }}>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12 }}>
+      <span style={{ color: C.subtle }}>{label}</span>
+      <span style={{ color: C.body, fontWeight: 500, textAlign: "right", minWidth: 0 }}>{value}</span>
+    </div>
+  );
+}
+
+function Timeline({ eventos }: { eventos: V4Vals["posVenda"]["eventos"] }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+      {eventos.map((ev) => (
+        <div key={ev.id} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: ev.dot, flex: "none", marginTop: 4 }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12, color: C.body }}>{ev.text}</div>
+            <div style={{ fontSize: 10.5, color: C.subtle }}>{ev.meta}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function PosVendaStage({ v }: { v: V4Vals }) {
+  const p = v.posVenda;
+  const g = p.garantia;
+
+  if (!p.temRegistro) {
+    return (
+      <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "40px 18px", textAlign: "center" }}>
+        <span style={{ fontSize: 22 }}>🛡</span>
+        <div style={{ fontSize: 13, fontWeight: 600, color: C.body }}>Nenhum pós-venda registrado para esta OS.</div>
+        <div style={{ fontSize: 11.5, color: C.subtle, maxWidth: 360, lineHeight: 1.5 }}>
+          A garantia, os retornos e os eventos de pós-venda aparecem aqui assim que forem registrados na OS.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: col3, gap: 12, alignItems: "start" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={card}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <span style={cardTitle}>Situação da garantia</span>
-            <span style={{ height: 21, padding: "0 9px", display: "inline-flex", alignItems: "center", gap: 5, background: C.infoBg, color: C.infoFg, borderRadius: 999, fontSize: 11, fontWeight: 600 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: C.info }} />Prevista</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Tipo</span><span style={{ color: C.body, fontWeight: 500 }}>Tela — 90 dias</span></div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Início</span><span style={{ color: C.body, fontWeight: 500 }}>Na entrega</span></div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Vencimento</span><span style={{ color: C.body, fontWeight: 500 }}>—</span></div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Dias restantes</span><span style={{ color: C.body, fontWeight: 500 }}>90 (na entrega)</span></div>
-          </div>
-          <button type="button" onClick={v.act.termoEntrega} style={{ width: "100%", height: 30, marginTop: 11, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>🖨 Termo de Entrega</button>
-        </div>
-        <div style={card}>
-          <div style={{ ...cardTitle, marginBottom: 11 }}>Histórico de retornos</div>
-          {v.retHist.map((r, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, paddingBottom: 11 }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: r.dot, flex: "none", marginTop: 3 }} />
-                <span style={{ flex: 1, width: 2, background: C.line2, marginTop: 3 }} />
-              </div>
-              <div><div style={{ fontSize: 12, color: C.body }}>{r.text}</div><div style={{ fontSize: 10.5, color: C.subtle }}>{r.meta}</div></div>
-            </div>
-          ))}
-          <div style={{ fontSize: 11.5, color: C.successFg, fontWeight: 600, textAlign: "center", padding: "4px 0" }}>Nenhum retorno em aberto nesta OS.</div>
-        </div>
-      </div>
-
+      {/* Situação da garantia (real) */}
       <div style={card}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <span style={cardTitle}>Retornos em garantia</span>
-          <span style={{ fontSize: 11, color: C.successFg, fontWeight: 600 }}>0 abertos</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
+          <span style={cardTitle}>🛡 Situação da garantia</span>
+          {g.temGarantia && <StatusBadge label={g.situacao} tone={g.situacaoTone} />}
         </div>
-        <div style={{ border: `1px dashed ${C.inputBd}`, borderRadius: 9, padding: 16, textAlign: "center", color: C.subtle, fontSize: 11.5, marginBottom: 10 }}>Nenhum retorno registrado para esta OS.</div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-          <input placeholder="Motivo do retorno…" style={{ flex: 1, minWidth: 0, height: 30, padding: "0 10px", border: `1px solid ${C.inputBd}`, borderRadius: 8, fontSize: 12, color: C.body }} />
-          <button type="button" onClick={v.act.abrirRetorno} style={{ height: 30, padding: "0 11px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer", whiteSpace: "nowrap" }}>↩ Abrir</button>
-        </div>
-        <button type="button" onClick={v.act.retornosCliente} style={{ width: "100%", height: 30, border: `1px solid ${C.line2}`, background: C.surface2, color: C.primary, fontSize: 11.5, borderRadius: 8, cursor: "pointer" }}>Cliente: 0 retorno(s) em 1 OS →</button>
-        <div style={{ fontSize: 10.5, color: C.subtle, lineHeight: 1.5, marginTop: 10 }}>Retornos abertos aqui entram no fluxo de <b>retrabalho</b> sem gerar nova cobrança quando a garantia está ativa.</div>
+        {g.temGarantia ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <Row label="Prazo" value={g.prazo} />
+            <Row label="Cobertura" value={g.cobertura} />
+            <Row label="Início" value={g.inicio} />
+            <Row label="Vencimento" value={g.fim} />
+            {g.acionamentos && <Row label="Acionamentos" value={g.acionamentos} />}
+            {g.observacoes && (
+              <div style={{ marginTop: 4 }}>
+                <div style={{ ...upLabel, marginBottom: 3 }}>Condições</div>
+                <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{g.observacoes}</div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <Empty>Nenhuma garantia vinculada.</Empty>
+        )}
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={card}>
-          <div style={{ ...cardTitle, marginBottom: 10 }}>Satisfação / NPS</div>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 8, marginBottom: 9 }}>
-            <span style={{ fontSize: 30, fontWeight: 700, color: C.subtle, letterSpacing: "-.02em", lineHeight: 1 }}>—</span>
-            <span style={{ fontSize: 11.5, color: C.subtle, paddingBottom: 5 }}>aguardando resposta</span>
-          </div>
-          <div style={{ display: "flex", gap: 4, marginBottom: 11 }}>
-            {v.npsScale.map((ns, i) => (
-              <div key={i} style={{ flex: 1, height: 6, borderRadius: 3, background: ns.bg }} />
-            ))}
-          </div>
-          <button type="button" onClick={v.act.pesquisa} style={{ width: "100%", height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>Enviar pesquisa de satisfação</button>
+      {/* Retornos em garantia (real) */}
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 11 }}>
+          <span style={cardTitle}>Retornos em garantia</span>
+          <span style={{ fontSize: 11, color: p.retornosCount > 0 ? C.warnFg : C.subtle, fontWeight: 600 }}>
+            {p.retornosCount} retorno(s)
+          </span>
         </div>
-        <div style={card}>
-          <div style={{ ...cardTitle, marginBottom: 10 }}>Follow-up</div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: `1px solid ${C.line2}`, borderRadius: 9, padding: "9px 10px", marginBottom: 8 }}>
-            <div><div style={{ fontSize: 12, color: C.body, fontWeight: 500 }}>Contato em +7 dias</div><div style={{ fontSize: 10.5, color: C.subtle }}>sugerido após a entrega</div></div>
-            <span style={{ fontSize: 11, color: C.subtle }}>27/06</span>
-          </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button type="button" onClick={v.act.whatsappFollow} style={{ flex: 1, height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 11.5, fontWeight: 500, cursor: "pointer" }}>💬 WhatsApp</button>
-            <button type="button" onClick={v.act.agendar} style={{ flex: 1, height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 11.5, fontWeight: 500, cursor: "pointer" }}>📅 Agendar</button>
-          </div>
+        {p.retornos.length > 0 ? (
+          <Timeline eventos={p.retornos} />
+        ) : (
+          <Empty>Nenhum retorno registrado.</Empty>
+        )}
+        <div style={{ fontSize: 10.5, color: C.subtle, lineHeight: 1.5, marginTop: 11 }}>
+          Retornos em garantia são acionamentos registrados na OS. A V4 Preview é somente leitura.
         </div>
+      </div>
+
+      {/* Eventos de pós-venda (real) */}
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 11 }}>Eventos de pós-venda</div>
+        {p.eventos.length > 0 ? (
+          <Timeline eventos={p.eventos} />
+        ) : (
+          <Empty>Nenhum contato de pós-venda registrado.</Empty>
+        )}
       </div>
     </div>
   );
