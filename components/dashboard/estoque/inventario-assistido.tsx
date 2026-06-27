@@ -107,6 +107,13 @@ const STATUS_META: Record<string, { label: string; className: string }> = {
 }
 
 /**
+ * Limite de linhas RENDERIZADAS na tabela "Contagem ao vivo". O estado (`contagens`) continua
+ * completo — KPIs/resumo/último bipe usam a lista inteira; só a tabela corta as 100 mais recentes
+ * para não pintar milhares de linhas por bipe. Visão completa fica em Relatórios / Atualizar.
+ */
+const LIMITE_CONTAGEM_RENDER = 100
+
+/**
  * Merge/upsert de UMA linha de contagem no estado local (caminho quente do bipe): remove a versão
  * anterior da mesma linha (por id) e a recoloca no topo — espelha a ordenação do servidor
  * (`ultimoBipeEm desc`, mais recente primeiro). Evita reler a sessão inteira por bipe; sem duplicar.
@@ -400,6 +407,11 @@ export function InventarioAssistido() {
 
   const resumo = useMemo(() => resumirContagens(contagens), [contagens])
 
+  // Apenas as N linhas mais recentes são renderizadas na tabela ao vivo (a lista já vem ordenada
+  // do mais recente para o mais antigo). O estado completo é preservado para resumo/KPIs/export.
+  const contagensVisiveis = useMemo(() => contagens.slice(0, LIMITE_CONTAGEM_RENDER), [contagens])
+  const contagensOcultas = contagens.length - contagensVisiveis.length
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   const header = (
@@ -661,7 +673,7 @@ export function InventarioAssistido() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {contagens.map((c) => {
+                  {contagensVisiveis.map((c) => {
                     const meta = STATUS_META[c.status] ?? STATUS_META.encontrado
                     return (
                       <TableRow key={c.id}>
@@ -716,6 +728,12 @@ export function InventarioAssistido() {
                   })}
                 </TableBody>
               </Table>
+              {contagensOcultas > 0 && (
+                <p className="border-t border-border px-1 pt-3 text-center text-xs text-muted-foreground">
+                  Mostrando os {LIMITE_CONTAGEM_RENDER} itens mais recentes. Use Atualizar/Relatórios
+                  para visão completa.
+                </p>
+              )}
             </div>
           )}
         </CardContent>
