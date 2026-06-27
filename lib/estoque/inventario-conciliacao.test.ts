@@ -24,6 +24,7 @@ import {
   isSuspeitoAntigo,
   conciliarEncontrado,
   montarConciliacao,
+  consolidarContagensConc,
   simularAplicacaoConciliacao,
   saldoAplicavel,
   type ProdutoConc,
@@ -336,5 +337,54 @@ describe("simularAplicacaoConciliacao", () => {
     })
     const s = simularAplicacaoConciliacao({ divergencias: [d], naoEncontrados: [] })
     expect(s.produtosAlterados).toBe(0)
+  })
+})
+
+// ─── Dedup: mesmo produto contado por códigos diferentes (barcode/SKU/alias) ─────
+describe("consolidarContagensConc", () => {
+  it("soma quantidades do mesmo produto e usa a observação MAIS RECENTE", () => {
+    const out = consolidarContagensConc([cont("p1", 6, T0), cont("p1", 4, T2), cont("p2", 5, T1)])
+    expect(out).toHaveLength(2)
+    const p1 = out.find((c) => c.produtoId === "p1")!
+    expect(p1.quantidadeContada).toBe(10) // 6 + 4
+    expect(p1.contadoEm).toBe(T2) // marco temporal = mais recente
+    expect(out.find((c) => c.produtoId === "p2")!.quantidadeContada).toBe(5)
+  })
+
+  it("lista vazia → vazio; item único passa intacto", () => {
+    expect(consolidarContagensConc([])).toEqual([])
+    expect(consolidarContagensConc([cont("p1", 3, T0)])).toEqual([
+      { produtoId: "p1", quantidadeContada: 3, contadoEm: T0 },
+    ])
+  })
+})
+
+describe("montarConciliacao — consolidação por produto (códigos diferentes)", () => {
+  it("produto bipado por 2 códigos vira UM item conciliado (quantidade somada, sem divergência falsa)", () => {
+    const r = montarConciliacao({
+      contagens: [cont("p1", 6, T0), cont("p1", 4, T0)], // mesmo produto, 2 códigos
+      produtos: [prod({ id: "p1", estoqueAtual: 10 })],
+      movimentacoes: [],
+    })
+    expect(r.itens).toHaveLength(1) // NÃO duplica
+    expect(r.totais.contados).toBe(1)
+    const i = r.itens[0]
+    expect(i.quantidadeContada).toBe(10) // 6 + 4
+    expect(i.saldoEsperadoHoje).toBe(10)
+    expect(i.divergenciaReal).toBe(0)
+    expect(i.grupo).toBe(GRUPO_CONCILIACAO.OK)
+    expect(r.totais.unidadesContadas).toBe(10)
+  })
+
+  it("divergência real é medida sobre o TOTAL consolidado, não por linha", () => {
+    const r = montarConciliacao({
+      contagens: [cont("p1", 3, T0), cont("p1", 2, T0)], // total contado = 5
+      produtos: [prod({ id: "p1", estoqueAtual: 8 })], // sistema 8 → falta 3
+      movimentacoes: [],
+    })
+    expect(r.itens).toHaveLength(1)
+    expect(r.itens[0].saldoEsperadoHoje).toBe(5)
+    expect(r.itens[0].divergenciaReal).toBe(-3) // 5 − 8
+    expect(r.totais.comDivergencia).toBe(1)
   })
 })

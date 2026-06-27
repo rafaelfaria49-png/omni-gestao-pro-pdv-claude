@@ -303,11 +303,19 @@ export function montarRelatorioInventario(input: {
   produtosLoja: ReadonlyArray<ProdutoEstoque>
 }): RelatorioInventario {
   const produtoPorId = new Map(input.produtosLoja.map((p) => [p.id, p]))
-  const contadosProdutoIds = new Set<string>()
 
-  const encontrados: LinhaEncontrada[] = []
   const reconciliacao: LinhaReconciliacao[] = []
   let unidadesContadas = 0
+
+  // Consolida ENCONTRADOS por produtoId: o MESMO produto pode ser bipado por códigos diferentes
+  // (barcode, SKU ou alias), gerando linhas distintas no banco (chave `sessaoId + codigoBipado`).
+  // Para o relatório/divergência/ajuste eles são UM produto — somamos a quantidade e preservamos
+  // nome/sku/snapshot da primeira ocorrência. Sem isso, um produto contado por 2 códigos vira 2
+  // linhas e a divergência (e o ajuste final) saem errados.
+  const encontradoPorProduto = new Map<
+    string,
+    { contado: number; nome: string | null; sku: string | null; snapshot: number | null }
+  >()
 
   for (const c of input.contagens) {
     const contado = Math.trunc(Number(c.quantidadeContada)) || 0
@@ -318,16 +326,31 @@ export function montarRelatorioInventario(input: {
       continue
     }
 
-    contadosProdutoIds.add(c.produtoId)
-    const atual = produtoPorId.get(c.produtoId)
-    const estoqueSistema = atual ? atual.stock : c.estoqueSistemaSnapshot ?? 0
+    const agg = encontradoPorProduto.get(c.produtoId)
+    if (agg) {
+      agg.contado += contado
+    } else {
+      encontradoPorProduto.set(c.produtoId, {
+        contado,
+        nome: c.produtoNomeSnapshot ?? null,
+        sku: c.produtoSkuSnapshot ?? null,
+        snapshot: c.estoqueSistemaSnapshot ?? null,
+      })
+    }
+  }
+
+  const contadosProdutoIds = new Set(encontradoPorProduto.keys())
+  const encontrados: LinhaEncontrada[] = []
+  for (const [produtoId, agg] of encontradoPorProduto) {
+    const atual = produtoPorId.get(produtoId)
+    const estoqueSistema = atual ? atual.stock : agg.snapshot ?? 0
     encontrados.push({
-      produtoId: c.produtoId,
-      nome: atual?.nome ?? c.produtoNomeSnapshot ?? c.produtoId,
-      sku: atual?.sku ?? c.produtoSkuSnapshot ?? null,
+      produtoId,
+      nome: atual?.nome ?? agg.nome ?? produtoId,
+      sku: atual?.sku ?? agg.sku ?? null,
       estoqueSistema,
-      quantidadeContada: contado,
-      diferenca: diferencaContagem(contado, estoqueSistema),
+      quantidadeContada: agg.contado,
+      diferenca: diferencaContagem(agg.contado, estoqueSistema),
     })
   }
 

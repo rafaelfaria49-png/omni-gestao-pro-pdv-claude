@@ -256,3 +256,42 @@ describe("montarRelatorioInventario", () => {
     expect(rel.totais.unidadesContadas).toBe(15 + 9 + 3)
   })
 })
+
+// ─── Dedup: mesmo produto bipado por códigos diferentes (barcode/SKU/alias) ──────
+describe("montarRelatorioInventario — consolidação por produto (códigos diferentes)", () => {
+  it("barcode + SKU do MESMO produto viram UMA linha com a quantidade somada", () => {
+    const produtosLoja: ProdutoEstoque[] = [
+      prod({ id: "p1", nome: "Capinha", sku: "SKU-1", barcode: "789", stock: 10 }),
+    ]
+    // 6 unidades bipadas pelo barcode + 4 pelo SKU = 10 no total real do produto.
+    const contagens: ContagemLinha[] = [
+      { produtoId: "p1", codigoBipado: "789", quantidadeContada: 6, estoqueSistemaSnapshot: 10, status: STATUS_CONTAGEM.ENCONTRADO, produtoNomeSnapshot: "Capinha", produtoSkuSnapshot: "SKU-1" },
+      { produtoId: "p1", codigoBipado: "SKU-1", quantidadeContada: 4, estoqueSistemaSnapshot: 10, status: STATUS_CONTAGEM.ENCONTRADO, produtoNomeSnapshot: "Capinha", produtoSkuSnapshot: "SKU-1" },
+    ]
+    const rel = montarRelatorioInventario({ contagens, produtosLoja })
+    expect(rel.encontrados).toHaveLength(1) // NÃO duplica o produto
+    expect(rel.totais.encontrados).toBe(1)
+    const e = rel.encontrados[0]
+    expect(e.produtoId).toBe("p1")
+    expect(e.quantidadeContada).toBe(10) // 6 + 4 consolidado
+    expect(e.estoqueSistema).toBe(10)
+    expect(e.diferenca).toBe(0) // 10 contado == 10 sistema → SEM divergência falsa
+    expect(rel.totais.divergencias).toBe(0)
+    expect(rel.totais.unidadesContadas).toBe(10)
+  })
+
+  it("três códigos (barcode/SKU/alias) do mesmo produto consolidam; divergência real preservada", () => {
+    const produtosLoja: ProdutoEstoque[] = [prod({ id: "p1", nome: "Cabo", sku: "C1", stock: 5 })]
+    const contagens: ContagemLinha[] = [
+      { produtoId: "p1", codigoBipado: "BAR", quantidadeContada: 3, estoqueSistemaSnapshot: 5, status: STATUS_CONTAGEM.ENCONTRADO },
+      { produtoId: "p1", codigoBipado: "SKU", quantidadeContada: 2, estoqueSistemaSnapshot: 5, status: STATUS_CONTAGEM.ENCONTRADO },
+      { produtoId: "p1", codigoBipado: "ALIAS", quantidadeContada: 2, estoqueSistemaSnapshot: 5, status: STATUS_CONTAGEM.ENCONTRADO },
+    ]
+    const rel = montarRelatorioInventario({ contagens, produtosLoja })
+    expect(rel.encontrados).toHaveLength(1)
+    expect(rel.encontrados[0].quantidadeContada).toBe(7) // 3 + 2 + 2
+    expect(rel.encontrados[0].diferenca).toBe(2) // 7 contado − 5 sistema
+    expect(rel.divergencias).toHaveLength(1)
+    expect(rel.divergencias[0].produtoId).toBe("p1")
+  })
+})

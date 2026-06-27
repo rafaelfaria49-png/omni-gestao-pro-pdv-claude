@@ -325,10 +325,21 @@ export async function registrarContagemProduto(
     });
     if (!row) return { ok: false, reason: "Produto não encontrado nesta loja" };
 
-    const existente = await prisma.inventarioContagem.findFirst({
-      where: { sessaoId, codigoBipado: codigo, storeId: g.sid },
-      select: { id: true, quantidadeContada: true, estoqueSistemaSnapshot: true },
-    });
+    // Consolidação por PRODUTO: o MESMO produto bipado por barcode, SKU ou alias diferente deve
+    // cair na MESMA linha — nunca criar linha concorrente que depois fragmentaria o ajuste final.
+    // 1º procuramos uma contagem já resolvida deste produto na sessão (independe do código);
+    // só na ausência caímos no código exato — que promove uma pendência de reconciliação ao
+    // mesmo código (fluxo de alias/cadastro). Reconciliação sem produto continua por código.
+    const existente =
+      (await prisma.inventarioContagem.findFirst({
+        where: { sessaoId, storeId: g.sid, produtoId: row.id, status: STATUS_CONTAGEM.ENCONTRADO },
+        orderBy: { primeiroBipeEm: "asc" },
+        select: { id: true, quantidadeContada: true, estoqueSistemaSnapshot: true },
+      })) ??
+      (await prisma.inventarioContagem.findFirst({
+        where: { sessaoId, codigoBipado: codigo, storeId: g.sid },
+        select: { id: true, quantidadeContada: true, estoqueSistemaSnapshot: true },
+      }));
 
     const novaQuantidade = aplicarModoContagem(modo, existente?.quantidadeContada ?? 0, input.quantidade);
     const estoqueSnapshot = Math.trunc(Number(row.stock)) || 0;
@@ -1180,16 +1191,22 @@ export async function aplicarAjusteInventario(
       return { ok: false, reason: "Encerre a sessão antes de aplicar ajustes" };
     }
 
-    const contagem = await prisma.inventarioContagem.findFirst({
+    // Consolida TODAS as linhas deste produto na sessão. O mesmo produto pode ter sido bipado por
+    // códigos diferentes (barcode/SKU/alias) → várias linhas. O saldo do ajuste é a SOMA do contado,
+    // nunca o de uma única linha — um `findFirst` aplicaria saldo parcial e corromperia o estoque.
+    const contagens = await prisma.inventarioContagem.findMany({
       where: { storeId: g.sid, sessaoId: sid, produtoId: pid, status: STATUS_CONTAGEM.ENCONTRADO },
+      orderBy: { primeiroBipeEm: "asc" },
       select: { id: true, quantidadeContada: true, payload: true },
     });
-    if (!contagem) return { ok: false, reason: "Contagem do produto não encontrada nesta sessão" };
-    if (lerAjusteContagem(contagem.payload).aplicado) {
+    if (contagens.length === 0) return { ok: false, reason: "Contagem do produto não encontrada nesta sessão" };
+    // Idempotência: se QUALQUER linha do produto já foi ajustada, não reaplica.
+    if (contagens.some((c) => lerAjusteContagem(c.payload).aplicado)) {
       return { ok: false, reason: "Este item já foi ajustado" };
     }
 
-    const novoSaldo = novoSaldoParaContagem(contagem.quantidadeContada);
+    const totalContado = contagens.reduce((s, c) => s + (Math.trunc(Number(c.quantidadeContada)) || 0), 0);
+    const novoSaldo = novoSaldoParaContagem(totalContado);
     const motivo = (opts?.motivo ?? "").trim() || montarMotivoInventario(sessao, "divergencia");
 
     // Motor único de ledger (transacional + auditoria + Produto.stock na MESMA transação).
@@ -1205,15 +1222,19 @@ export async function aplicarAjusteInventario(
     if (!res.ok && !semMudanca) return { ok: false, reason: res.reason };
 
     const movimentacaoId = res.ok ? res.movimentacaoId : null;
-    const novoPayload = marcarAjusteContagemPayload(contagem.payload, {
-      aplicadoEm: new Date().toISOString(),
-      movimentacaoId,
-      operador: g.usuario,
-    });
-    await prisma.inventarioContagem.update({
-      where: { id: contagem.id },
-      data: { payload: novoPayload as Prisma.InputJsonValue },
-    });
+    // Marca TODAS as linhas do produto (idempotência consistente entre múltiplos códigos).
+    for (const c of contagens) {
+      await prisma.inventarioContagem.update({
+        where: { id: c.id },
+        data: {
+          payload: marcarAjusteContagemPayload(c.payload, {
+            aplicadoEm: new Date().toISOString(),
+            movimentacaoId,
+            operador: g.usuario,
+          }) as Prisma.InputJsonValue,
+        },
+      });
+    }
 
     return { ok: true, movimentacaoId, semMudanca, estoqueDepois: novoSaldo };
   } catch (e) {
@@ -1581,17 +1602,20 @@ export async function aplicarConciliacaoInventario(
     const motivoSessao = montarMotivoInventario(sessao, "divergencia");
     const motivoAusencia = montarMotivoInventario(sessao, "ausencia");
 
-    // 1) Divergências reais → grava o saldo esperado hoje.
+    // 1) Divergências reais → grava o saldo esperado hoje. `d.saldoEsperadoHoje` já vem da
+    // conciliação consolidada por produto (códigos diferentes somados); aqui só marcamos todas as
+    // linhas do produto como ajustadas, sem `findFirst` (que ignoraria as demais).
     for (const d of divergencias) {
-      const contagem = await prisma.inventarioContagem.findFirst({
+      const contagens = await prisma.inventarioContagem.findMany({
         where: { storeId: g.sid, sessaoId: sid, produtoId: d.produtoId, status: STATUS_CONTAGEM.ENCONTRADO },
+        orderBy: { primeiroBipeEm: "asc" },
         select: { id: true, payload: true },
       });
-      if (!contagem) {
+      if (contagens.length === 0) {
         resumo.falhas.push({ produtoId: d.produtoId, nome: d.nome, reason: "Contagem não encontrada" });
         continue;
       }
-      if (lerAjusteContagem(contagem.payload).aplicado) {
+      if (contagens.some((c) => lerAjusteContagem(c.payload).aplicado)) {
         resumo.pulados += 1;
         continue;
       }
@@ -1606,16 +1630,18 @@ export async function aplicarConciliacaoInventario(
         resumo.falhas.push({ produtoId: d.produtoId, nome: d.nome, reason: res.reason });
         continue;
       }
-      await prisma.inventarioContagem.update({
-        where: { id: contagem.id },
-        data: {
-          payload: marcarAjusteContagemPayload(contagem.payload, {
-            aplicadoEm: new Date().toISOString(),
-            movimentacaoId: res.ok ? res.movimentacaoId : null,
-            operador: g.usuario,
-          }) as Prisma.InputJsonValue,
-        },
-      });
+      for (const c of contagens) {
+        await prisma.inventarioContagem.update({
+          where: { id: c.id },
+          data: {
+            payload: marcarAjusteContagemPayload(c.payload, {
+              aplicadoEm: new Date().toISOString(),
+              movimentacaoId: res.ok ? res.movimentacaoId : null,
+              operador: g.usuario,
+            }) as Prisma.InputJsonValue,
+          },
+        });
+      }
       if (semMudanca) resumo.semMudanca += 1;
       resumo.divergenciasAplicadas += 1;
     }

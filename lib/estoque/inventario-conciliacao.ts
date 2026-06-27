@@ -219,13 +219,42 @@ export function conciliarEncontrado(input: {
 }
 
 /**
+ * Consolida contagens do MESMO produto numa única `ContagemConc`: bipar um produto por códigos
+ * diferentes (barcode, SKU ou alias) gera linhas distintas no banco (chave `sessaoId + codigoBipado`),
+ * mas representam UM produto. Soma as quantidades e usa a observação MAIS RECENTE (`contadoEm`) como
+ * marco temporal — coerente com o caminho de bipagem consolidado (uma linha, `ultimoBipeEm` do último
+ * registro). Sem isso, um produto contado por 2 códigos viraria 2 itens e a divergência sairia errada.
+ * PURO.
+ */
+export function consolidarContagensConc(
+  contagens: ReadonlyArray<ContagemConc>,
+): ContagemConc[] {
+  const acc = new Map<string, { produtoId: string; quantidadeContada: number; contadoEm: Date | string }>()
+  for (const c of contagens) {
+    const ex = acc.get(c.produtoId)
+    if (!ex) {
+      acc.set(c.produtoId, {
+        produtoId: c.produtoId,
+        quantidadeContada: int(c.quantidadeContada),
+        contadoEm: c.contadoEm,
+      })
+    } else {
+      ex.quantidadeContada += int(c.quantidadeContada)
+      if (ms(c.contadoEm) > ms(ex.contadoEm)) ex.contadoEm = c.contadoEm
+    }
+  }
+  return [...acc.values()]
+}
+
+/**
  * Monta a conciliação completa de uma sessão a partir de:
  *  - `contagens`: linhas contadas resolvidas para um produto (status "encontrado");
  *  - `produtos`: catálogo ATIVO da loja (estoque atual + custo/venda);
  *  - `movimentacoes`: ledger relevante (qualquer produto contado, posterior ao início da contagem);
  *  - `ultimaMovPorProduto`: última movimentação de cada produto (para classificar não encontrados).
  *
- * PURO — apenas classifica em 5 grupos. Não decide ajuste nenhum.
+ * PURO — apenas classifica em 5 grupos. Não decide ajuste nenhum. Contagens do mesmo produto por
+ * códigos diferentes são consolidadas (`consolidarContagensConc`) antes de classificar.
  */
 export function montarConciliacao(input: {
   contagens: ReadonlyArray<ContagemConc>
@@ -252,7 +281,8 @@ export function montarConciliacao(input: {
   const contadosIds = new Set<string>()
   let unidadesContadas = 0
 
-  for (const c of input.contagens) {
+  // Uma contagem por produto (códigos diferentes do mesmo produto já somados).
+  for (const c of consolidarContagensConc(input.contagens)) {
     const produto = produtoPorId.get(c.produtoId)
     if (!produto) continue // produto saiu do catálogo — não entra na conciliação de saldo
     contadosIds.add(c.produtoId)

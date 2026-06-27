@@ -207,6 +207,8 @@ import {
   getInventarioProgresso,
   listProdutosNaoConferidos,
   getInventarioSaneamentoTimeline,
+  aplicarAjusteInventario,
+  getRelatorioInventario,
 } from "./inventario"
 
 function seedSessao(status: "aberta" | "finalizada" = "aberta") {
@@ -766,5 +768,81 @@ describe("INVENTARIO CONTÍNUO — saneamento", () => {
     expect(res.saneamento.hoje.novos).toBe(0)
     expect(res.saneamento.semana.conferidos).toBe(2)
     expect(res.saneamento.ativa).toBe(true)
+  })
+})
+
+// ─── OPS-V4-INVENTARIO-P1 — dedup: mesmo produto por códigos diferentes ──────────
+describe("dedup — consolidação por produto (barcode / SKU / alias)", () => {
+  it("barcode e depois SKU do MESMO produto = UMA linha consolidada (não duplica)", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 10, barcode: "789", sku: "SKU-1" })
+    await registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "789", produtoId: "p1", quantidade: 6, modo: "substituir" })
+    // mesmo produto bipado por OUTRO código (SKU) → soma na mesma linha
+    const res = await registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "SKU-1", produtoId: "p1", quantidade: 4, modo: "somar" })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(res.contagem.quantidadeContada).toBe(10) // 6 + 4
+    expect(h.store.contagens.filter((c) => c.produtoId === "p1")).toHaveLength(1) // sem linha concorrente
+    expect(h.store.contagens.some((c) => c.codigoBipado === "SKU-1")).toBe(false) // ficou na linha do barcode
+  })
+
+  it("código alias do mesmo produto consolida na mesma linha", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 10, barcode: "789", metadata: { codigosAlias: ["ALIAS-1"] } })
+    await registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "789", produtoId: "p1", quantidade: 5, modo: "substituir" })
+    const res = await registrarContagemProduto(STORE, { sessaoId: "s1", codigo: "ALIAS-1", produtoId: "p1", quantidade: 2, modo: "somar" })
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    expect(h.store.contagens.filter((c) => c.produtoId === "p1")).toHaveLength(1)
+    expect(res.contagem.quantidadeContada).toBe(7)
+  })
+
+  it("produto sem cadastro continua em pendência; códigos diferentes ficam separados (por código)", async () => {
+    seedSessao()
+    const r1 = await registrarPendenciaInventario(STORE, { sessaoId: "s1", codigo: "SEM-1", quantidade: 2 })
+    const r2 = await registrarPendenciaInventario(STORE, { sessaoId: "s1", codigo: "SEM-2", quantidade: 1 })
+    expect(r1.ok && r2.ok).toBe(true)
+    const recs = h.store.contagens.filter((c) => c.status === "reconciliacao")
+    expect(recs).toHaveLength(2)
+    expect(recs.map((c) => c.codigoBipado).sort()).toEqual(["SEM-1", "SEM-2"])
+  })
+
+  it("relatório consolida múltiplas linhas LEGADAS do mesmo produto (não duplica)", async () => {
+    seedSessao()
+    seedProduto("p1", { stock: 10 })
+    // Legado (pré-correção): duas linhas para o mesmo produto, códigos diferentes.
+    seedContagem({ id: "cA", produtoId: "p1", codigoBipado: "BAR", quantidadeContada: 6, estoqueSistemaSnapshot: 10, produtoNomeSnapshot: "Produto p1" })
+    seedContagem({ id: "cB", produtoId: "p1", codigoBipado: "SKU", quantidadeContada: 4, estoqueSistemaSnapshot: 10, produtoNomeSnapshot: "Produto p1" })
+    const res = await getRelatorioInventario(STORE, "s1")
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    const enc = res.relatorio.encontrados.filter((e) => e.produtoId === "p1")
+    expect(enc).toHaveLength(1) // consolidado na leitura
+    expect(enc[0].quantidadeContada).toBe(10)
+    expect(enc[0].diferenca).toBe(0) // 10 == 10 → SEM divergência falsa
+    expect(res.relatorio.resumo.encontrados).toBe(1)
+  })
+
+  it("ajuste final SOMA múltiplas linhas legadas do mesmo produto (não aplica saldo parcial) e é idempotente", async () => {
+    seedSessao("finalizada")
+    seedProduto("p1", { stock: 4 }) // sistema 4; total contado = 7
+    seedContagem({ id: "cA", produtoId: "p1", codigoBipado: "BAR", quantidadeContada: 3, estoqueSistemaSnapshot: 4 })
+    seedContagem({ id: "cB", produtoId: "p1", codigoBipado: "SKU", quantidadeContada: 4, estoqueSistemaSnapshot: 4 })
+    const res = await aplicarAjusteInventario(STORE, "s1", "p1")
+    expect(res.ok).toBe(true)
+    if (!res.ok) return
+    // saldo aplicado = 3 + 4 = 7 (NÃO 3 nem 4, que seria o findFirst antigo)
+    expect(h.registrarAjusteEstoque).toHaveBeenCalledTimes(1)
+    expect(h.registrarAjusteEstoque).toHaveBeenCalledWith(STORE, expect.objectContaining({ produtoId: "p1", novoSaldo: 7 }))
+    expect(res.estoqueDepois).toBe(7)
+    // TODAS as linhas marcadas como ajustadas (idempotência consistente entre códigos)
+    const p1Rows = h.store.contagens.filter((c) => c.produtoId === "p1")
+    expect(p1Rows.every((c) => (c.payload as Record<string, unknown> | null)?.ajusteAplicado === true)).toBe(true)
+    // reaplicar é rejeitado (não duplica o ajuste)
+    const res2 = await aplicarAjusteInventario(STORE, "s1", "p1")
+    expect(res2.ok).toBe(false)
+    if (res2.ok) return
+    expect(res2.reason).toMatch(/já foi ajustado/i)
+    expect(h.registrarAjusteEstoque).toHaveBeenCalledTimes(1) // não chamou de novo
   })
 })
