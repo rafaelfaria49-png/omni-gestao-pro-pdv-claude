@@ -83,13 +83,6 @@ export const MODE_DEF: Array<["recepcao" | "bancada" | "auditoria", string, stri
   ["auditoria", "Auditoria", "🔍", "Cliente recolhido · Atividade aberta"],
 ];
 
-export const ACC_DEF = ["Capa", "Cabo", "Carregador", "Chip"];
-export const ENTREGA_CHECK_DEF = [
-  "Aparelho ligando e testado",
-  "Tela / touch conferidos",
-  "Sem senha de bloqueio pendente",
-  "Termo de garantia impresso",
-];
 /** Definição das etapas da pipeline: [id, label, statusRepresentado]. */
 export const STAGE_DEF: Array<[V4Stage, string, V4Status]> = [
   ["entrada", "Entrada", "aberta"],
@@ -303,14 +296,3 @@ export const CLIENTES_BUSCA = [
   { nome: "Carlos Eduardo Souza", doc: "455.902.118-30", tel: "(11) 99731-4420", os: 1, ini: "CE" },
   { nome: "Beatriz Almeida", doc: "201.556.770-12", tel: "(11) 98120-7755", os: 5, ini: "BA" },
 ];
-
-/* ---- detalhes estáticos dos stages ainda em protótipo (Garantia) ---- */
-
-export const GARANTIA = {
-  situacao: "Prevista",
-  sugestao: "Tela — 90 dias",
-  modelo: "Tela — 90 dias",
-  prazo: "90 dias",
-  validade: "A partir da entrega",
-  prevista: "90 dias",
-};

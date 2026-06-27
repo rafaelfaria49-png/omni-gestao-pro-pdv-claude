@@ -880,6 +880,179 @@ export function adaptExecucao(os: OrdemServico): V4ExecucaoView {
   };
 }
 
+// ---- Entrega (GOAL OPS-V4-P0-012) ------------------------------------------
+// Read-only sobre a OS já carregada. O stage Entrega passa a ler só o que a OS
+// persiste: retirada confirmada (`retirada`), data de entrega (`entregueEm`),
+// assinatura textual, acessórios do aparelho, eventos de entrega/garantia da
+// timeline e a garantia real (operacional `garantiasOperacionais` ou de payload
+// `garantia`). Sem retirada/garantia/checklist/assinatura fabricados. Não há
+// "checklist final de entrega" no modelo → empty honesto. Nada inventado.
+
+/** Eventos da timeline considerados de entrega / garantia. */
+const ENTREGA_EVENTO_TIPOS = new Set<EventoTipo>([
+  "entrega_cliente",
+  "retirada_confirmada",
+  "garantia_gerada",
+  "garantia_acionada",
+]);
+
+export interface V4GarantiaView {
+  /** true quando há garantia real (operacional ou de payload). */
+  temGarantia: boolean;
+  situacao: string;
+  situacaoTone: "success" | "warn" | "danger" | "neutro";
+  prazo: string;
+  inicio: string;
+  fim: string;
+  cobertura: string;
+  /** Condições/observações reais; vazio quando não houver. */
+  observacoes: string;
+  /** Nº de acionamentos quando > 0; vazio honesto caso contrário. */
+  acionamentos: string;
+}
+
+export const EMPTY_GARANTIA_VIEW: V4GarantiaView = {
+  temGarantia: false,
+  situacao: NI,
+  situacaoTone: "neutro",
+  prazo: NI,
+  inicio: NI,
+  fim: NI,
+  cobertura: NI,
+  observacoes: "",
+  acionamentos: "",
+};
+
+const GARANTIA_OP_LABEL: Record<string, { label: string; tone: V4GarantiaView["situacaoTone"] }> = {
+  ativa: { label: "Ativa", tone: "success" },
+  expirada: { label: "Expirada", tone: "warn" },
+  cancelada: { label: "Cancelada", tone: "danger" },
+};
+
+/** Garantia real da OS: prioriza a operacional (Prisma) sobre a de payload. */
+function adaptGarantia(os: OrdemServico): V4GarantiaView {
+  const op = Array.isArray(os.garantiasOperacionais) ? os.garantiasOperacionais[0] : undefined;
+  const g = os.garantia;
+  const acion =
+    typeof g?.acionamentos === "number" && g.acionamentos > 0 ? String(g.acionamentos) : "";
+
+  if (op) {
+    const m = GARANTIA_OP_LABEL[op.status] ?? { label: op.status || NI, tone: "neutro" as const };
+    return {
+      temGarantia: true,
+      situacao: m.label,
+      situacaoTone: m.tone,
+      prazo: typeof op.prazoDias === "number" && op.prazoDias > 0 ? `${op.prazoDias} dias` : NI,
+      inicio: fmtData(op.dataInicio),
+      fim: fmtData(op.dataFim),
+      cobertura: txt(op.cobertura) || NI,
+      observacoes: txt(op.observacoes),
+      acionamentos: acion,
+    };
+  }
+
+  const temPayload =
+    !!g && (g.ativa || typeof g.prazoDias === "number" || !!txt(g.inicioEm) || !!txt(g.fimEm) || !!txt(g.termo));
+  if (temPayload && g) {
+    return {
+      temGarantia: true,
+      situacao: g.ativa ? "Ativa" : "Inativa",
+      situacaoTone: g.ativa ? "success" : "neutro",
+      prazo: typeof g.prazoDias === "number" && g.prazoDias > 0 ? `${g.prazoDias} dias` : NI,
+      inicio: fmtData(g.inicioEm),
+      fim: fmtData(g.fimEm),
+      cobertura: NI,
+      observacoes: txt(g.termo),
+      acionamentos: acion,
+    };
+  }
+
+  return EMPTY_GARANTIA_VIEW;
+}
+
+export interface V4EntregaView {
+  /** true quando há QUALQUER registro real de entrega/retirada/garantia/evento. */
+  temRegistro: boolean;
+  /** Equipamento efetivamente entregue/retirado. */
+  entregue: boolean;
+  statusLabel: string;
+  statusTone: "success" | "info" | "neutro";
+  retiradoPor: string;
+  retiradoEm: string;
+  /** Observação real da retirada; vazio quando não houver. */
+  observacao: string;
+  temAssinatura: boolean;
+  /** Assinatura textual real (fase simples); vazio quando ausente. */
+  assinatura: string;
+  /** Acessórios reais do aparelho (devolvidos com o equipamento). */
+  acessorios: string[];
+  eventos: V4HistEvento[];
+  garantia: V4GarantiaView;
+}
+
+export const EMPTY_ENTREGA_VIEW: V4EntregaView = {
+  temRegistro: false,
+  entregue: false,
+  statusLabel: "Não entregue",
+  statusTone: "neutro",
+  retiradoPor: NI,
+  retiradoEm: NI,
+  observacao: "",
+  temAssinatura: false,
+  assinatura: "",
+  acessorios: [],
+  eventos: [],
+  garantia: EMPTY_GARANTIA_VIEW,
+};
+
+export function adaptEntrega(os: OrdemServico): V4EntregaView {
+  const retirada = os.retirada;
+  const entregue = os.status === "entregue" || !!retirada?.confirmado || !!txt(os.entregueEm);
+  const statusLabel = entregue ? "Entregue" : os.status === "pronta" ? "Pronta para retirada" : "Não entregue";
+  const statusTone: V4EntregaView["statusTone"] = entregue
+    ? "success"
+    : os.status === "pronta"
+      ? "info"
+      : "neutro";
+
+  const retiradoPor = txt(retirada?.retiradoPor);
+  const retiradoEmRaw = txt(retirada?.retiradoEm) || txt(os.entregueEm);
+  const assinatura = txt(retirada?.assinaturaTexto);
+  const observacao = txt(retirada?.observacao);
+  const acessorios = adaptAcessoriosEntrada(os);
+
+  const tl = Array.isArray(os.timeline) ? os.timeline : [];
+  const eventos = tl
+    .filter((ev: EventoTimeline) => ENTREGA_EVENTO_TIPOS.has(ev.tipo))
+    .slice()
+    .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
+    .map((ev: EventoTimeline): V4HistEvento => ({
+      id: ev.id,
+      type: "status",
+      text: txt(ev.titulo) || txt(ev.conteudo) || ev.tipo,
+      meta: `${txt(ev.autor) || "Sistema"} · ${fmtDataHora(ev.criadoEm)}`,
+      dot: C.primary,
+    }));
+
+  const garantia = adaptGarantia(os);
+
+  return {
+    temRegistro:
+      entregue || !!retiradoPor || !!assinatura || !!observacao || eventos.length > 0 || garantia.temGarantia,
+    entregue,
+    statusLabel,
+    statusTone,
+    retiradoPor: retiradoPor || NI,
+    retiradoEm: retiradoEmRaw ? fmtDataHora(retiradoEmRaw) : NI,
+    observacao,
+    temAssinatura: !!assinatura,
+    assinatura,
+    acessorios,
+    eventos,
+    garantia,
+  };
+}
+
 // ---- Busca da lista de OS (GOAL OPS-V4-P0-002) -----------------------------
 
 function norm(s: string): string {

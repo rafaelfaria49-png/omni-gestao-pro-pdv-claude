@@ -10,15 +10,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ACC_DEF,
   BANCADA_TEC,
   CLIENTES_BUSCA,
   DASH_DIST,
   DASH_FILA,
-  ENTREGA_CHECK_DEF,
   EQUIP_DEF,
   FILA_COLS,
-  GARANTIA,
   HIST_FILTER_DEF,
   MODE_DEF,
   MODULE_KPIS,
@@ -48,6 +45,7 @@ import {
   adaptAnexos,
   adaptChecklist,
   adaptDiagnostico,
+  adaptEntrega,
   adaptExecucao,
   adaptFinanceiro,
   adaptFotosEntrada,
@@ -58,6 +56,7 @@ import {
   adaptSegurancaEntrada,
   adaptTimeline,
   EMPTY_DIAGNOSTICO_VIEW,
+  EMPTY_ENTREGA_VIEW,
   EMPTY_EXECUCAO_VIEW,
   EMPTY_FINANCEIRO_VIEW,
   EMPTY_ORCAMENTO_VIEW,
@@ -91,8 +90,6 @@ const INITIAL: V4State = {
   menu: null,
   toast: "",
   prioridade: "alta",
-  acessoriosDev: [true, true, false, false],
-  entregaCheck: [true, true, false, false],
   histFilter: "todos",
   novaOS: false,
   novaTab: "buscar",
@@ -126,6 +123,9 @@ function buildVals(
   // Execução REAL (técnico/checklist técnico/apontamentos/estoque/anexos de bancada);
   // vazio honesto quando não houver execução registrada. Sem técnico/timer/mock.
   const execucaoReal = realOS ? adaptExecucao(realOS) : EMPTY_EXECUCAO_VIEW;
+  // Entrega REAL (retirada/assinatura/acessórios/eventos + garantia real); vazio
+  // honesto quando a OS ainda não foi entregue. Sem retirada/garantia/checklist mock.
+  const entregaReal = realOS ? adaptEntrega(realOS) : EMPTY_ENTREGA_VIEW;
   const curIdx = (() => {
     let i = ORDER.indexOf(st.status);
     if (i < 0) i = ORDER.indexOf("em_execucao");
@@ -227,31 +227,6 @@ function buildVals(
   const entradaAcessorios = realOS ? adaptAcessoriosEntrada(realOS) : [];
   const entradaFotos = realOS ? adaptFotosEntrada(realOS) : [];
   const entradaSeguranca = realOS ? adaptSegurancaEntrada(realOS) : EMPTY_SEGURANCA_ENTRADA;
-
-  const toggleAccDev = (i: number) =>
-    update((s) => {
-      const a = s.acessoriosDev.slice();
-      a[i] = !a[i];
-      return { acessoriosDev: a };
-    });
-  const acessoriosDev = ACC_DEF.map((label, i) => ({
-    label, on: st.acessoriosDev[i], off: !st.acessoriosDev[i], onToggle: () => toggleAccDev(i),
-  }));
-
-  const toggleEntregaCheck = (i: number) =>
-    update((s) => {
-      const a = s.entregaCheck.slice();
-      a[i] = !a[i];
-      return { entregaCheck: a };
-    });
-  const entregaCheck = ENTREGA_CHECK_DEF.map((label, i) => ({
-    label,
-    ok: st.entregaCheck[i],
-    no: !st.entregaCheck[i],
-    color: st.entregaCheck[i] ? C.body : C.subtle,
-    onToggle: () => toggleEntregaCheck(i),
-  }));
-  const entregaCheckResumo = st.entregaCheck.filter(Boolean).length + "/" + ENTREGA_CHECK_DEF.length;
 
   // ---- pipeline ----
   // Legendas (sub) das etapas do fluxo eram placeholders fabricados ("Bancada 02",
@@ -372,11 +347,6 @@ function buildVals(
   const act = {
     addFoto: () => notify("Adicionar foto"),
     pdv: () => notify("Abrindo PDV de Serviço"),
-    registrarEntrega: () => notify("Entrega registrada"),
-    assinarRetirada: () => notify("Assinatura de retirada"),
-    aplicarSugestao: () => notify("Sugestão de garantia aplicada"),
-    salvarGarantia: () => notify("Garantia salva"),
-    imprimirTermo: () => notify("Gerando: Termo de Garantia"),
     termoEntrega: () => notify("Gerando: Termo de Entrega"),
     abrirRetorno: () => notify("Abrir retorno"),
     retornosCliente: () => notify("Retornos do cliente"),
@@ -429,7 +399,6 @@ function buildVals(
     prio: { label: prioM.label, fg: prioM.fg, dot: prioM.dot },
     steps, checklist, check, checklistVazio,
     entradaAcessorios, entradaFotos, entradaSeguranca,
-    acessoriosDev, entregaCheck, entregaCheckResumo,
     financeiro: financeiroReal, finHist: finHistReal, retHist: RET_HIST, npsScale,
     hist, histCount: hist.length, histFilters, anexos: anexosReais, observacoes: observacoesReais,
     resolved, pending: PENDING, act,
@@ -446,7 +415,7 @@ function buildVals(
 
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 
-    diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, garantia: GARANTIA,
+    diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, entrega: entregaReal,
     os: osView, pag: pagView,
 
     toast: st.toast, showToast: !!st.toast,

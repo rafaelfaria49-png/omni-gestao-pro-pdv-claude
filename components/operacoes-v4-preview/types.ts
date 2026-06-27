@@ -45,8 +45,6 @@ export interface V4State {
   menu: V4Menu;
   toast: string;
   prioridade: "baixa" | "normal" | "alta" | "urgente";
-  acessoriosDev: boolean[];
-  entregaCheck: boolean[];
   histFilter: string;
   novaOS: boolean;
   novaTab: "buscar" | "novo";
