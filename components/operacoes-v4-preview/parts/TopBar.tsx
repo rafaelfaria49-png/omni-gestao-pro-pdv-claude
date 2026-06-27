@@ -122,7 +122,7 @@ export function TopBar({ v }: { v: V4Vals }) {
       </div>
 
       <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-        <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>Unidade Centro</span>
+        <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>Loja ativa</span>
         <button
           type="button"
           onClick={v.goAuditoria}

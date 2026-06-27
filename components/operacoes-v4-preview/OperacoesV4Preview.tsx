@@ -3,9 +3,10 @@
  *
  * Conversão React do protótipo Cloud Design `design/operacoes-v4`. Isolado da V3
  * (não importa nada dela). Os STAGES leem a OS REAL por Server Actions de leitura
- * (`listOrdens`/`getOrdem` com `readOnly: true`); rail/dashboards/Nova OS seguem
- * protótipo. O estado é local (`useV4Preview`) e nenhuma ação persiste — a Preview
- * é somente leitura (não grava no banco).
+ * (`listOrdens`/`getOrdem` com `readOnly: true`). As telas de rail e o modal Nova OS
+ * são protótipo e NÃO exibem dados fabricados (estado vazio honesto; Nova OS não cria
+ * OS). O estado é local (`useV4Preview`) e nenhuma ação persiste — a Preview é somente
+ * leitura (não grava no banco).
  *
  * `height:100%` (e não 100vh) mantém o AppShell como dono do scroll — o Preview
  * só rola internamente no painel de etapa / nas telas de módulo.

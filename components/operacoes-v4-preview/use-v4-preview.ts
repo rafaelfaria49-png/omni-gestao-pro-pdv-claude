@@ -13,25 +13,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  BANCADA_TEC,
-  CLIENTES_BUSCA,
-  DASH_DIST,
-  DASH_FILA,
   EQUIP_DEF,
-  FILA_COLS,
   HIST_FILTER_DEF,
   MODE_DEF,
-  MODULE_KPIS,
   MODULE_META,
   ORDER,
   ORIGEM_DEF,
-  PDV_RECEBER,
   PENDING,
   PRIMARY,
   PRIO,
   RAIL_DEF,
   RESOLVED_RAW,
-  SLA_ROWS,
   STAGE_DEF,
   STATUS_LABEL,
   STEPS_DEF,
@@ -113,7 +105,13 @@ type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
  */
 const PREVIEW_NOOP = "Indisponível na Preview — nenhuma alteração foi salva.";
 
-function buildVals(
+/**
+ * Mensagem específica da tentativa de criar OS pela Preview: a Preview é somente leitura
+ * e NÃO cria Ordem de Serviço. "Abrir OS" nunca abre/seleciona uma OS existente por fallback.
+ */
+const PREVIEW_NO_OS = "Indisponível na Preview — nenhuma OS foi criada.";
+
+export function buildVals(
   st: V4State,
   update: (p: Patch) => void,
   notify: (msg: string) => void,
@@ -315,11 +313,8 @@ function buildVals(
   if (st.status !== "entregue" && st.status !== "cancelada")
     moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => setStatusTo("cancelada") });
 
-  // ---- módulos ----
-  const mod = {
-    ...(MODULE_META[st.module] || MODULE_META.dashboard),
-    kpis: MODULE_KPIS[st.module] || MODULE_KPIS.dashboard,
-  };
+  // ---- módulos (rail) — só metadados; as telas de módulo são protótipo sem dados fake ----
+  const mod = MODULE_META[st.module] || MODULE_META.dashboard;
 
   // ---- auditoria ----
   const resolved = RESOLVED_RAW.map((r, i) => ({
@@ -341,14 +336,6 @@ function buildVals(
       bg: sel ? C.primaryBg : C.surface, fg: sel ? C.primaryHover : C.muted, bd: sel ? C.primaryBd : C.inputBd,
     };
   });
-  const clientesBusca = CLIENTES_BUSCA.map((c) => ({
-    ...c,
-    onClick: () => {
-      update({ novaTab: "novo" });
-      notify("Cliente: " + c.nome);
-    },
-  }));
-
   // ---- orçamento REAL da OS (somente leitura; vazio honesto quando ausente) ----
   // Persistido (status enum real) / prévia sintetizada / ausente. Sem edição,
   // sem toggle cobrado/brinde/desconto, sem custo/lucro inventado.
@@ -380,10 +367,6 @@ function buildVals(
 
     rail, modeBtns,
     mod,
-    modDash: st.module === "dashboard", modFila: st.module === "fila",
-    modBancada: st.module === "bancada", modSla: st.module === "sla", modPdv: st.module === "pdv",
-    filaCols: FILA_COLS, bancadaTec: BANCADA_TEC, slaRows: SLA_ROWS,
-    pdvReceber: PDV_RECEBER, dashDist: DASH_DIST, dashFila: DASH_FILA,
 
     stage: st.stage, pipeline,
     isEntrada: st.stage === "entrada", isDiag: st.stage === "diagnostico", isOrc: st.stage === "orcamento",
@@ -419,8 +402,11 @@ function buildVals(
     buscarFg: st.novaTab === "buscar" ? C.primaryHover : C.muted,
     novoBg: st.novaTab === "novo" ? C.surface : "transparent",
     novoFg: st.novaTab === "novo" ? C.primaryHover : C.muted,
-    novaEquipBtns, novaOrigemBtns, clientesBusca,
-    abrirOS: () => { update({ novaOS: false }); notify(PREVIEW_NOOP); },
+    novaEquipBtns, novaOrigemBtns,
+    // "Abrir OS" na Preview NÃO cria OS e NUNCA abre/seleciona uma OS existente por fallback:
+    // limpa a seleção (volta ao seletor de OS) e avisa de forma honesta. Sem isso, fechar o
+    // modal revelaria a OS que estava aberta atrás dele — parecendo que abriu a "OS errada".
+    abrirOS: () => { update({ novaOS: false, selectedOsId: null }); notify(PREVIEW_NO_OS); },
 
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 

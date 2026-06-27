@@ -1,7 +1,6 @@
 /** Operações V4 Preview — modal Nova OS (buscar/cadastrar cliente + equipamento). */
 import { C, MONO, upLabel } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
-import styles from "../operacoes-v4-preview.module.css";
 
 const input: React.CSSProperties = {
   width: "100%",
@@ -32,12 +31,19 @@ export function NovaOSModal({ v }: { v: V4Vals }) {
         <div style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "15px 18px", borderBottom: `1px solid ${C.line2}` }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>Nova Ordem de Serviço</div>
-            <div style={{ fontSize: 11.5, color: C.subtle }}>Unidade Centro · abertura no balcão</div>
+            <div style={{ fontSize: 11.5, color: C.subtle }}>Pré-visualização — não cria OS real</div>
           </div>
           <button type="button" onClick={v.closeNovaOS} style={{ width: 28, height: 28, border: "none", background: C.muted50, borderRadius: 8, color: C.muted, fontSize: 16, cursor: "pointer" }}>×</button>
         </div>
 
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 18 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 14 }}>
+            <span style={{ fontSize: 13, lineHeight: "16px", flex: "none" }}>ℹ️</span>
+            <span style={{ fontSize: 11.5, color: C.infoFg, lineHeight: 1.45 }}>
+              Pré-visualização — esta tela não cria Ordem de Serviço. Nada digitado aqui é salvo; a
+              abertura real de OS acontece no módulo Operações. “Abrir OS” não abre nenhuma OS existente.
+            </span>
+          </div>
           <div style={{ display: "flex", gap: 3, padding: 3, background: C.muted100, borderRadius: 9, marginBottom: 14, width: "fit-content" }}>
             <button type="button" onClick={v.setNovaBuscar} style={{ height: 28, padding: "0 16px", border: "none", background: v.buscarBg, color: v.buscarFg, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Buscar cliente</button>
             <button type="button" onClick={v.setNovaNovo} style={{ height: 28, padding: "0 16px", border: "none", background: v.novoBg, color: v.novoFg, borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cadastrar novo</button>
@@ -45,15 +51,12 @@ export function NovaOSModal({ v }: { v: V4Vals }) {
 
           {v.novaBuscar && (
             <div style={{ marginBottom: 16 }}>
-              <input placeholder="Buscar por nome, CPF, telefone ou IMEI…" style={{ ...input, height: 34, marginBottom: 6 }} />
-              <div style={{ fontSize: 10, color: C.subtle, marginBottom: 9 }}>Dados demonstrativos — busca real será ligada à base de clientes na integração final.</div>
-              {v.clientesBusca.map((c, i) => (
-                <button key={i} type="button" onClick={c.onClick} className={styles.hoverBorder} style={{ display: "flex", width: "100%", alignItems: "center", gap: 11, textAlign: "left", border: `1px solid ${C.line2}`, background: C.surface, borderRadius: 9, padding: "9px 11px", marginBottom: 6, cursor: "pointer" }}>
-                  <span style={{ width: 32, height: 32, borderRadius: "50%", background: C.primaryBg, color: C.primaryHover, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flex: "none" }}>{c.ini}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{c.nome}</div><div style={{ fontSize: 11, color: C.subtle }}>{c.doc} · {c.tel}</div></div>
-                  <span style={{ fontSize: 11, color: C.muted, flex: "none" }}>{c.os} OS</span>
-                </button>
-              ))}
+              <input placeholder="Buscar por nome, CPF, telefone ou IMEI…" style={{ ...input, height: 34, marginBottom: 8 }} />
+              <div style={{ border: `1px dashed ${C.inputBd2}`, borderRadius: 9, padding: "16px 12px", textAlign: "center", fontSize: 11.5, color: C.subtle, lineHeight: 1.5 }}>
+                Busca de clientes indisponível na Preview.
+                <br />
+                Nenhum cliente é exibido aqui — a base real será ligada na integração final.
+              </div>
             </div>
           )}
 
