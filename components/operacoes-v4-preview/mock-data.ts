@@ -90,13 +90,6 @@ export const ENTREGA_CHECK_DEF = [
   "Sem senha de bloqueio pendente",
   "Termo de garantia impresso",
 ];
-export const TECH_DEF = [
-  "Touch 100% após troca",
-  "True Tone calibrado",
-  "Vedação aplicada",
-  "Teste de resistência à água",
-];
-
 /** Definição das etapas da pipeline: [id, label, statusRepresentado]. */
 export const STAGE_DEF: Array<[V4Stage, string, V4Status]> = [
   ["entrada", "Entrada", "aberta"],
@@ -124,12 +117,6 @@ export const HIST_FILTER_DEF: Array<[string, string]> = [
   ["financeiro", "Financeiro"],
   ["comunicacao", "Comunicação"],
   ["tecnico", "Técnico"],
-];
-
-export const APONTAMENTOS = [
-  { dot: C.success, text: "Tela OLED substituída e testada", meta: "Bruno · 20/06 10:42" },
-  { dot: C.primary, text: "Vedação aplicada · aguardando cura", meta: "Bruno · 20/06 11:05" },
-  { dot: C.warn, text: "Pendente: teste de resistência à água", meta: "previsto 20/06 12:00" },
 ];
 
 export const RET_HIST = [

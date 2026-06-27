@@ -11,7 +11,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ACC_DEF,
-  APONTAMENTOS,
   BANCADA_TEC,
   CLIENTES_BUSCA,
   DASH_DIST,
@@ -37,7 +36,6 @@ import {
   STAGE_DEF,
   STATUS_LABEL,
   STEPS_DEF,
-  TECH_DEF,
   TONE,
 } from "./mock-data";
 import { C, fmt } from "./tokens";
@@ -50,6 +48,7 @@ import {
   adaptAnexos,
   adaptChecklist,
   adaptDiagnostico,
+  adaptExecucao,
   adaptFinanceiro,
   adaptFotosEntrada,
   adaptObservacoes,
@@ -59,6 +58,7 @@ import {
   adaptSegurancaEntrada,
   adaptTimeline,
   EMPTY_DIAGNOSTICO_VIEW,
+  EMPTY_EXECUCAO_VIEW,
   EMPTY_FINANCEIRO_VIEW,
   EMPTY_ORCAMENTO_VIEW,
   EMPTY_OS_VIEW,
@@ -91,7 +91,6 @@ const INITIAL: V4State = {
   menu: null,
   toast: "",
   prioridade: "alta",
-  tech: [true, true, true, false],
   acessoriosDev: [true, true, false, false],
   entregaCheck: [true, true, false, false],
   histFilter: "todos",
@@ -124,6 +123,9 @@ function buildVals(
   const finHistReal = timelineReal.filter((e) => e.type === "financeiro");
   // Diagnóstico REAL (defeito/observações/anexos/eventos); vazio honesto sem dado.
   const diagnosticoReal = realOS ? adaptDiagnostico(realOS) : EMPTY_DIAGNOSTICO_VIEW;
+  // Execução REAL (técnico/checklist técnico/apontamentos/estoque/anexos de bancada);
+  // vazio honesto quando não houver execução registrada. Sem técnico/timer/mock.
+  const execucaoReal = realOS ? adaptExecucao(realOS) : EMPTY_EXECUCAO_VIEW;
   const curIdx = (() => {
     let i = ORDER.indexOf(st.status);
     if (i < 0) i = ORDER.indexOf("em_execucao");
@@ -251,31 +253,6 @@ function buildVals(
   }));
   const entregaCheckResumo = st.entregaCheck.filter(Boolean).length + "/" + ENTREGA_CHECK_DEF.length;
 
-  const prioridades = (["baixa", "normal", "alta", "urgente"] as const).map((k) => {
-    const sel = st.prioridade === k;
-    const m = PRIO[k];
-    return {
-      label: m.label,
-      onClick: () => {
-        update({ prioridade: k });
-        notify("Prioridade: " + m.label);
-      },
-      bg: sel ? C.primaryBg : C.surface,
-      fg: sel ? C.primaryHover : C.muted,
-      bd: sel ? C.primaryBd : C.inputBd,
-    };
-  });
-
-  const toggleTech = (i: number) =>
-    update((s) => {
-      const t = s.tech.slice();
-      t[i] = !t[i];
-      return { tech: t };
-    });
-  const tech = TECH_DEF.map((label, i) => ({
-    label, ok: st.tech[i], no: !st.tech[i], onToggle: () => toggleTech(i), color: st.tech[i] ? C.body : C.subtle,
-  }));
-
   // ---- pipeline ----
   // Legendas (sub) das etapas do fluxo eram placeholders fabricados ("Bancada 02",
   // "saldo R$ 590"…) → removidas. Só o nó Histórico exibe um sub REAL derivado da
@@ -394,10 +371,6 @@ function buildVals(
   // ---- handlers "visuais" (só notificam) ----
   const act = {
     addFoto: () => notify("Adicionar foto"),
-    alterarTec: () => notify("Alterar técnico"),
-    pausarTimer: () => notify("Cronômetro pausado"),
-    pararTimer: () => notify("Cronômetro encerrado"),
-    novoApontamento: () => notify("Novo apontamento"),
     pdv: () => notify("Abrindo PDV de Serviço"),
     registrarEntrega: () => notify("Entrega registrada"),
     assinarRetirada: () => notify("Assinatura de retirada"),
@@ -453,11 +426,11 @@ function buildVals(
     primaryLabel: prim ? prim.label : "Concluído", hasPrimary: !!prim, noPrimary: !prim,
     onPrimary: () => advance(), showKbd: true,
 
-    prio: { label: prioM.label, fg: prioM.fg, dot: prioM.dot }, prioridades,
-    steps, checklist, check, checklistVazio, tech,
+    prio: { label: prioM.label, fg: prioM.fg, dot: prioM.dot },
+    steps, checklist, check, checklistVazio,
     entradaAcessorios, entradaFotos, entradaSeguranca,
     acessoriosDev, entregaCheck, entregaCheckResumo,
-    apontamentos: APONTAMENTOS, financeiro: financeiroReal, finHist: finHistReal, retHist: RET_HIST, npsScale,
+    financeiro: financeiroReal, finHist: finHistReal, retHist: RET_HIST, npsScale,
     hist, histCount: hist.length, histFilters, anexos: anexosReais, observacoes: observacoesReais,
     resolved, pending: PENDING, act,
 
@@ -473,7 +446,7 @@ function buildVals(
 
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 
-    diag: diagnosticoReal, orcamento: orcamentoReal, garantia: GARANTIA,
+    diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, garantia: GARANTIA,
     os: osView, pag: pagView,
 
     toast: st.toast, showToast: !!st.toast,

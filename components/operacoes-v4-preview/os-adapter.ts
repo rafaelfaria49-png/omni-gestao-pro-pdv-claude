@@ -12,6 +12,7 @@ import type {
   OrdemServico,
   OSStatus,
   EventoTimeline,
+  EventoTipo,
   ChecklistItem,
   Anexo,
   AnexoTipo,
@@ -752,6 +753,130 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
     lucroTotal: custoNum != null ? fmt(totalNum - custoNum) : null,
     versoesCount,
     temVersoes: versoesCount > 0,
+  };
+}
+
+// ---- Execução (GOAL OPS-V4-P0-011) -----------------------------------------
+// Read-only sobre a OS já carregada. O stage Execução passa a ler só o que a OS
+// persiste: técnico responsável, checklist técnico (pós-reparo, `checklistTecnico`),
+// apontamentos reais (eventos de execução da timeline), peças consumidas
+// (`estoqueMovimentos`) e anexos de bancada. Sem técnico/timer/apontamentos/
+// bancada fabricados. Nada de valor inventado.
+
+/** Eventos da timeline considerados "apontamento de execução / bancada". */
+const EXEC_EVENTO_TIPOS = new Set<EventoTipo>([
+  "servico_iniciado",
+  "servico_concluido",
+  "atribuicao_tecnico",
+  "peca_adicionada",
+  "estoque_consumido",
+  "estoque_item_consumido",
+  "estoque_restaurado",
+  "checklist_finalizado",
+]);
+
+export interface V4ExecChecklistItem {
+  id: string;
+  label: string;
+  ok: boolean;
+}
+
+export interface V4ExecEstoqueItem {
+  id: string;
+  nome: string;
+  /** "2×" quando houver quantidade; vazio honesto caso contrário. */
+  quantidade: string;
+  /** "12 → 10" quando o saldo antes/depois existir; vazio honesto caso contrário. */
+  saldo: string;
+}
+
+export interface V4ExecucaoView {
+  /** true quando há QUALQUER sinal real de execução (técnico/checklist/apontamento/estoque/anexo). */
+  temExecucao: boolean;
+  tecnico: string;
+  temTecnico: boolean;
+  checklist: V4ExecChecklistItem[];
+  checklistOk: number;
+  apontamentos: V4HistEvento[];
+  estoque: V4ExecEstoqueItem[];
+  estoqueConsumido: boolean;
+  /** Data/hora da baixa, "dd/mm HH:MM"; vazio quando ausente. */
+  estoqueConsumidoEm: string;
+  anexos: V4Anexo[];
+}
+
+export const EMPTY_EXECUCAO_VIEW: V4ExecucaoView = {
+  temExecucao: false,
+  tecnico: NI,
+  temTecnico: false,
+  checklist: [],
+  checklistOk: 0,
+  apontamentos: [],
+  estoque: [],
+  estoqueConsumido: false,
+  estoqueConsumidoEm: "",
+  anexos: [],
+};
+
+export function adaptExecucao(os: OrdemServico): V4ExecucaoView {
+  const tecnicoNome = txt(os.tecnico?.nome);
+
+  const checklistRaw = Array.isArray(os.checklistTecnico) ? os.checklistTecnico : [];
+  const checklist: V4ExecChecklistItem[] = checklistRaw.map((it, i) => ({
+    id: txt(it.id) || `chk_${i}`,
+    label: txt(it.label),
+    ok: !!it.ok,
+  }));
+
+  const tl = Array.isArray(os.timeline) ? os.timeline : [];
+  const apontamentos = tl
+    .filter((ev: EventoTimeline) => EXEC_EVENTO_TIPOS.has(ev.tipo))
+    .slice()
+    .sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime())
+    .map((ev: EventoTimeline): V4HistEvento => ({
+      id: ev.id,
+      type: "tecnico",
+      text: txt(ev.titulo) || txt(ev.conteudo) || ev.tipo,
+      meta: `${txt(ev.autor) || "Sistema"} · ${fmtDataHora(ev.criadoEm)}`,
+      dot: C.info,
+    }));
+
+  const movRaw = Array.isArray(os.estoqueMovimentos) ? os.estoqueMovimentos : [];
+  const estoque: V4ExecEstoqueItem[] = movRaw.map((m, i) => {
+    const temSaldo = typeof m.estoqueAnterior === "number" && typeof m.estoqueDepois === "number";
+    return {
+      id: txt(m.id) || txt(m.produtoId) || `mov_${i}`,
+      nome: txt(m.nome) || "Item",
+      quantidade: typeof m.quantidade === "number" ? `${m.quantidade}×` : "",
+      saldo: temSaldo ? `${m.estoqueAnterior} → ${m.estoqueDepois}` : "",
+    };
+  });
+
+  const anexosLista = Array.isArray(os.anexos) ? os.anexos : [];
+  const anexos: V4Anexo[] = anexosLista
+    .filter((a: Anexo) => a.categoria === "bancada")
+    .map((a: Anexo) => ({
+      id: a.id,
+      kind: ANEXO_KIND_LABEL[a.tipo] ?? "ANEXO",
+      name: txt(a.nome) || "Anexo",
+    }));
+
+  return {
+    temExecucao:
+      !!tecnicoNome ||
+      checklist.length > 0 ||
+      apontamentos.length > 0 ||
+      estoque.length > 0 ||
+      anexos.length > 0,
+    tecnico: tecnicoNome || NI,
+    temTecnico: !!tecnicoNome,
+    checklist,
+    checklistOk: checklist.filter((c) => c.ok).length,
+    apontamentos,
+    estoque,
+    estoqueConsumido: !!os.estoqueConsumido,
+    estoqueConsumidoEm: os.estoqueConsumidoEm ? fmtDataHora(os.estoqueConsumidoEm) : "",
+    anexos,
   };
 }
 

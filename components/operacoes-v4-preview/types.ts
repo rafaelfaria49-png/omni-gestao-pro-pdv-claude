@@ -45,7 +45,6 @@ export interface V4State {
   menu: V4Menu;
   toast: string;
   prioridade: "baixa" | "normal" | "alta" | "urgente";
-  tech: boolean[];
   acessoriosDev: boolean[];
   entregaCheck: boolean[];
   histFilter: string;
