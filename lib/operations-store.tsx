@@ -560,12 +560,12 @@ export function OperationsProvider({
           const legInv = peek.inventory
           const legOrd = peek.ordens
           if (legInv.length > 0 || legOrd.length > 0) {
-            await fetch("/api/ops/inventory", {
-              method: "PUT",
-              credentials: "include",
-              headers,
-              body: JSON.stringify({ items: legInv }),
-            })
+            // LEGACY_INVENTORY_SYNC_DISABLED: não persistir snapshot inteiro do client.
+            // O estoque legado do localStorage NÃO é mais enviado por PUT (servidor é a
+            // fonte da verdade; o endpoint PUT está quarentenado). `legInv` segue apenas
+            // como cache visual desta sessão na loja primária legada — persistir estoque
+            // deve ocorrer por fluxo granular do servidor (OPS-INVENTORY-SYNC-SAFETY-001).
+            // O migrate de ORDENS (escopo Operações, fora deste GOAL) permanece.
             await fetch("/api/ops/ordens", {
               method: "PUT",
               credentials: "include",
@@ -740,12 +740,14 @@ export function OperationsProvider({
         "Content-Type": "application/json",
         "x-assistec-loja-id": lj,
       }
-      void fetch("/api/ops/inventory", {
-        method: "PUT",
-        credentials: "include",
-        headers,
-        body: JSON.stringify({ items: state.inventory }),
-      }).catch(() => {})
+      // LEGACY_INVENTORY_SYNC_DISABLED: servidor é fonte da verdade; não enviar
+      // snapshot inteiro do client. O `PUT /api/ops/inventory` automático sobrescrevia
+      // o estoque REAL da loja com o estado local/desatualizado do navegador a cada
+      // mudança (baixa de venda local, cache de outra loja, localStorage antigo).
+      // Removido em OPS-INVENTORY-SYNC-SAFETY-001 (auditoria PDV-WHATSAPP-SALE-AUDIT-001).
+      // A baixa de estoque é feita no servidor (/api/ops/venda-persist); o catálogo é
+      // lido por GET /api/ops/inventory. O endpoint PUT está quarentenado (410).
+      // O sync de ORDENS (escopo Operações, fora deste GOAL) permanece inalterado.
       void fetch("/api/ops/ordens", {
         method: "PUT",
         credentials: "include",

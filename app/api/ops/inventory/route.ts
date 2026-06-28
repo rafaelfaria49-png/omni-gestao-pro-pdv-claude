@@ -6,7 +6,6 @@ import { isVencimentoExpired } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
 import type { Produto } from "@/generated/prisma"
 import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
-import { requireAdmin } from "@/lib/require-admin"
 import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import { getProdutoFiscal, isProdutoFiscalVazio, type ProdutoFiscal } from "@/lib/produto-fiscal"
@@ -101,19 +100,6 @@ function rowToItem(row: Produto): InvPayload {
   }
 }
 
-function itemToCreate(lojaId: string, item: InvPayload) {
-  return {
-    storeId: lojaId,
-    sku: item.id,
-    name: item.name,
-    barcode: typeof item.barcode === "string" && item.barcode.trim() ? item.barcode.trim() : undefined,
-    stock: Math.max(0, Math.floor(item.stock)),
-    precoCusto: Number.isFinite(item.cost) ? item.cost : 0,
-    price: item.price,
-    category: typeof item.category === "string" && item.category.trim() ? item.category.trim() : undefined,
-  }
-}
-
 async function requireSubscription() {
   const sub = await getVerifiedSubscriptionFromCookies()
   if (!sub.ok) {
@@ -166,93 +152,33 @@ export async function GET(req: Request) {
   }
 }
 
+/**
+ * LEGACY_INVENTORY_SYNC_DISABLED — escrita ampla de inventário QUARENTENADA
+ * (GOAL OPS-INVENTORY-SYNC-SAFETY-001 · auditoria PDV-WHATSAPP-SALE-AUDIT-001).
+ *
+ * Este PUT recebia o INVENTÁRIO INTEIRO do client (`{ items: [...] }`) e fazia
+ * `produto.upsert` por SKU, SOBRESCREVENDO o estoque REAL (`stock`/`price`/`precoCusto`)
+ * com o estado local/desatualizado do navegador. Mesmo admin-gated, isso violava
+ * "servidor é fonte da verdade": uma sessão admin, um cache de outra loja ou um
+ * snapshot antigo do localStorage podia regravar o estoque inteiro sem intenção.
+ *
+ * O sync automático do `operations-store` foi removido. A escrita de estoque deve usar
+ * fluxos GRANULARES do servidor: venda → `/api/ops/venda-persist`; cadastro/edição →
+ * `/api/produtos`; inventário assistido → `app/actions/inventario.ts`. A leitura (GET)
+ * permanece ativa. Este endpoint de escrita ampla está desativado (410 Gone).
+ */
 export async function PUT(req: Request) {
-  const gate = await requireSubscription()
-  if (!gate.ok) {
-    if (!bypassSubscriptionCheck()) return gate.res
-    console.warn("[ops/inventory] bypass subscription check (dev mode)")
-  }
-  const adminGate = await requireAdmin()
-  if (!adminGate.ok) return adminGate.res
   const storeId = storeIdFromAssistecRequestForWrite(req)
-  if (!storeId) {
-    return NextResponse.json(
-      { error: "Unidade obrigatória: envie o header x-assistec-loja-id ou query storeId / lojaId." },
-      { status: 400 }
-    )
-  }
-
-  let body: unknown
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: "JSON inválido" }, { status: 400 })
-  }
-
-  const items = (body as { items?: unknown }).items
-  if (!Array.isArray(items)) {
-    return NextResponse.json({ error: "items deve ser um array" }, { status: 400 })
-  }
-
-  const normalized: InvPayload[] = []
-  for (const raw of items) {
-    if (!raw || typeof raw !== "object") continue
-    const o = raw as Record<string, unknown>
-    const id = typeof o.id === "string" ? o.id : ""
-    const name = typeof o.name === "string" ? o.name : ""
-    if (!id || !name) continue
-    const rawSku = typeof (o as { sku?: unknown }).sku === "string" ? String((o as { sku: string }).sku).trim() : ""
-    const rawDb = typeof (o as { dbId?: unknown }).dbId === "string" ? String((o as { dbId: string }).dbId).trim() : ""
-    const rawCodigo = typeof (o as { codigo?: unknown }).codigo === "string" ? String((o as { codigo: string }).codigo).trim() : ""
-    normalized.push({
-      id,
-      name,
-      barcode: typeof o.barcode === "string" ? o.barcode : typeof (o as { codigoBarras?: unknown }).codigoBarras === "string" ? String((o as any).codigoBarras) : "",
-      sku: rawSku || undefined,
-      dbId: rawDb || undefined,
-      codigo: rawCodigo || rawSku || undefined,
-      codigoBarras:
-        typeof o.barcode === "string"
-          ? o.barcode
-          : typeof (o as { codigoBarras?: unknown }).codigoBarras === "string"
-            ? String((o as { codigoBarras: string }).codigoBarras)
-            : "",
-      stock: typeof o.stock === "number" && Number.isFinite(o.stock) ? o.stock : 0,
-      cost: typeof o.cost === "number" && Number.isFinite(o.cost) ? o.cost : 0,
-      price: typeof o.price === "number" && Number.isFinite(o.price) ? o.price : 0,
-      category:
-        typeof o.category === "string"
-          ? o.category
-          : typeof (o as { categoria?: unknown }).categoria === "string"
-            ? String((o as { categoria?: unknown }).categoria)
-            : "",
-      vendaPorPeso: Boolean(o.vendaPorPeso),
-      precoPorKg: typeof o.precoPorKg === "number" && Number.isFinite(o.precoPorKg) ? o.precoPorKg : undefined,
-      atributos: Array.isArray(o.atributos) ? o.atributos : undefined,
-    })
-  }
-
-  try {
-    // Mesclagem segura: não apaga itens antigos da loja; apenas cria/atualiza os ids enviados.
-    let applied = 0
-    await prisma.$transaction(async (tx) => {
-      for (const it of normalized) {
-        await tx.produto.upsert({
-          where: { storeId_sku: { storeId, sku: it.id } },
-          update: itemToCreate(storeId, it),
-          create: itemToCreate(storeId, it),
-        })
-        applied += 1
-      }
-    })
-    return NextResponse.json({ ok: true, count: applied })
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error("[ops/inventory PUT]", msg)
-    const dev = process.env.NODE_ENV === "development"
-    return NextResponse.json(
-      { error: "Falha ao salvar estoque", ...(dev ? { detail: msg } : {}) },
-      { status: 503 }
-    )
-  }
+  console.warn(
+    "[ops/inventory PUT] bloqueado — sincronização ampla de inventário desativada",
+    JSON.stringify({ storeId: storeId ?? null }),
+  )
+  return NextResponse.json(
+    {
+      error:
+        "Sincronização ampla de inventário desativada. Use ajustes granulares — o servidor é a fonte da verdade do estoque.",
+      code: "INVENTORY_BULK_SYNC_DISABLED",
+    },
+    { status: 410 },
+  )
 }
