@@ -24,6 +24,7 @@ vi.mock("@/app/actions/ordens", () => ({
 
 import { buildVals, type V4DataCtx } from "./use-v4-preview"
 import type { V4State } from "./types"
+import type { OrdemServico } from "@/types/os"
 
 const DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -151,5 +152,58 @@ describe("Operações V4 Preview — Nova OS honesta (bug Ariane → Eudis)", ()
 
     const comOs = buildVals(makeState({ selectedOsId: "os-1" }), () => {}, () => {}, ctx)
     expect(comOs.osSelected).toBe(true)
+  })
+})
+
+function mkOS(p: Record<string, unknown> & { id: string }): OrdemServico {
+  return p as unknown as OrdemServico
+}
+
+describe("Operações V4 Preview — telas de rail com identidade real (read-only)", () => {
+  const ordens = [
+    mkOS({ id: "a", status: "aberta", codigo: "OS-A", cliente: { nome: "Cliente A" } }),
+    mkOS({ id: "b", status: "em_execucao", codigo: "OS-B", tecnico: { nome: "Ana" } }),
+    mkOS({ id: "c", status: "entregue", codigo: "OS-C" }),
+  ]
+  const ctxReal: V4DataCtx = { ...ctx, ordens }
+
+  it("expõe moduleId espelhando o módulo do estado", () => {
+    const v = buildVals(makeState({ module: "fila", novaOS: false }), () => {}, () => {}, ctxReal)
+    expect(v.moduleId).toBe("fila")
+  })
+
+  it("dashboard/fila derivam da lista real; fila exclui finalizadas", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxReal)
+    expect(v.dashboardResumo.temDados).toBe(true)
+    expect(v.dashboardResumo.total).toBe(3)
+    expect(v.filaItens.map((r) => r.id)).toEqual(["a", "b"]) // "c" (entregue) fora
+  })
+
+  it("rails ficam com temDados=false quando não há base real (empty honesto)", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctx) // ctx.ordens = []
+    expect(v.dashboardResumo.temDados).toBe(false)
+    expect(v.filaItens).toEqual([])
+    expect(v.bancadaView.temDados).toBe(false)
+    expect(v.slaView.temDados).toBe(false)
+    expect(v.pdvView.temDados).toBe(false)
+  })
+
+  it("openOSFromRail seleciona a OS por id explícito; id inexistente é no-op", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(makeState({ novaOS: false }), (p) => patches.push(p as Record<string, unknown>), () => {}, ctxReal)
+
+    v.openOSFromRail("b")
+    expect(patches.at(-1)).toMatchObject({ selectedOsId: "b", module: "workspace" })
+
+    const antes = patches.length
+    v.openOSFromRail("inexistente")
+    expect(patches.length).toBe(antes) // nada selecionado por fallback
+  })
+
+  it("goToOSSearch limpa a seleção (leva ao seletor de OS, sem auto-abrir)", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(makeState({ selectedOsId: "x", novaOS: false }), (p) => patches.push(p as Record<string, unknown>), () => {}, ctxReal)
+    v.goToOSSearch()
+    expect(patches.at(-1)).toMatchObject({ selectedOsId: null, module: "workspace" })
   })
 })

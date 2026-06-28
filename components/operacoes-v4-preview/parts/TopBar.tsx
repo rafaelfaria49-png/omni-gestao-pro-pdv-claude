@@ -42,6 +42,8 @@ export function TopBar({ v }: { v: V4Vals }) {
 
       <button
         type="button"
+        onClick={v.goToOSSearch}
+        title="Buscar OS por Nº, cliente, aparelho ou IMEI"
         style={{
           display: "flex",
           alignItems: "center",

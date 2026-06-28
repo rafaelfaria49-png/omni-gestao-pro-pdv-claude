@@ -63,6 +63,13 @@ import {
   realStatusToV4,
   stageForStatus,
 } from "./os-adapter";
+import {
+  buildBancadaView,
+  buildDashboardResumo,
+  buildFilaItens,
+  buildPdvView,
+  buildSlaView,
+} from "./rails-adapter";
 
 /** Dados reais injetados no `buildVals` (somente leitura, vindos das Server Actions). */
 export interface V4DataCtx {
@@ -341,6 +348,39 @@ export function buildVals(
   // sem toggle cobrado/brinde/desconto, sem custo/lucro inventado.
   const orcamentoReal = realOS ? adaptOrcamento(realOS) : EMPTY_ORCAMENTO_VIEW;
 
+  // ---- telas de rail (Visão geral / Fila / Bancada / SLA / PDV) ----
+  // View-models READ-ONLY derivados da MESMA lista de OS reais já carregada
+  // (`ctx.ordens`). Cada builder sinaliza `temDados` para a UI escolher entre dado
+  // real e empty state honesto específico do módulo. Sem número/técnico/SLA fabricado.
+  const dashboardResumo = buildDashboardResumo(ctx.ordens);
+  const filaItens = buildFilaItens(ctx.ordens);
+  const bancadaView = buildBancadaView(ctx.ordens);
+  const slaView = buildSlaView(ctx.ordens);
+  const pdvView = buildPdvView(ctx.ordens);
+
+  // Seleciona a OS REAL (identidade/financeiro reais no workspace). Único caminho de
+  // seleção — sempre por clique explícito do operador, nunca por fallback automático.
+  const selectOS = (o: OrdemServico) => {
+    update({
+      selectedOsId: o.id,
+      status: realStatusToV4(o.status),
+      prioridade: realPrioridadeToV4(o.prioridade),
+      stage: stageForStatus(o.status),
+      module: "workspace",
+      view: "cockpit",
+      menu: null,
+    });
+    notify("OS " + (o.codigo || "") + " carregada");
+  };
+  // Abrir a OS de uma linha de rail (Fila/Bancada/SLA/PDV) → leva ao workspace real.
+  const openOSFromRail = (id: string) => {
+    const o = ctx.ordens.find((x) => x.id === id);
+    if (o) selectOS(o);
+  };
+  // Barra de busca do topo: leva ao seletor de OS real (limpa seleção; nunca auto-abre).
+  const goToOSSearch = () =>
+    update({ selectedOsId: null, module: "workspace", view: "cockpit", menu: null });
+
   const prim = PRIMARY[st.status];
   const tone = TONE[st.status] || TONE.em_execucao;
   const prioM = PRIO[st.prioridade];
@@ -418,18 +458,9 @@ export function buildVals(
     // ---- seleção de OS real ----
     osSelected: !!st.selectedOsId,
     selectedOsId: st.selectedOsId,
-    selectOS: (o: OrdemServico) => {
-      update({
-        selectedOsId: o.id,
-        status: realStatusToV4(o.status),
-        prioridade: realPrioridadeToV4(o.prioridade),
-        stage: stageForStatus(o.status),
-        module: "workspace",
-        view: "cockpit",
-        menu: null,
-      });
-      notify("OS " + (o.codigo || "") + " carregada");
-    },
+    selectOS,
+    openOSFromRail,
+    goToOSSearch,
     clearSelection: () => update({ selectedOsId: null }),
     // lista real para o seletor
     ordens: ctx.ordens,
@@ -438,6 +469,14 @@ export function buildVals(
     ordensError: ctx.ordensError,
     reloadOrdens: ctx.reloadOrdens,
     detailLoading: ctx.detailLoading,
+
+    // ---- telas de rail (identidade própria; dado real ou empty honesto) ----
+    moduleId: st.module,
+    dashboardResumo,
+    filaItens,
+    bancadaView,
+    slaView,
+    pdvView,
   };
 }
 
