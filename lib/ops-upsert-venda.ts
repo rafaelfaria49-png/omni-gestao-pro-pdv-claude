@@ -26,14 +26,60 @@ export class InsufficientStockError extends Error {
   }
 }
 
+/**
+ * Lançada no fluxo PDV ao vivo (`enforceStock`) quando uma linha de produto físico
+ * referencia um `inventoryId` que não casa com nenhum `Produto` (id/sku/barcode) da
+ * loja. Antes (P1 OPS-SALE-SAFETY) a venda era gravada mesmo assim e só logava
+ * `estoque-nao-baixado`, deixando venda/financeiro sem baixa de estoque. Agora a
+ * transação inteira é abortada — nada é gravado. Linhas virtuais (O.S./avulso) são
+ * isentas via `isVirtualSaleLine`. O caller (`venda-persist`) traduz para HTTP 409.
+ */
+export class UnresolvedProductError extends Error {
+  readonly code = "PRODUTO_NAO_RESOLVIDO"
+  readonly inventoryIds: string[]
+  constructor(inventoryIds: string[]) {
+    super(
+      "Produto não encontrado para baixa de estoque. Revise o item antes de finalizar a venda.",
+    )
+    this.name = "UnresolvedProductError"
+    this.inventoryIds = inventoryIds
+  }
+}
+
+/**
+ * Lançada quando `requireCaixaSession` está ativo e a venda gera entrada no caixa
+ * (valorImediato > 0) mas NÃO há `SessaoCaixa` ABERTA válida para a loja (sessão
+ * inexistente, fechada, de outra loja, ou nenhuma sessão aberta no terminal). A
+ * venda persistida não pode mover dinheiro sem caixa servidor aberto. Nunca abre
+ * caixa automaticamente. O caller (`venda-persist`) traduz para HTTP 409.
+ */
+export class CaixaSessaoInvalidaError extends Error {
+  readonly code = "CAIXA_FECHADO"
+  constructor() {
+    super("Caixa fechado ou sessão inválida. Abra o caixa antes de finalizar a venda.")
+    this.name = "CaixaSessaoInvalidaError"
+  }
+}
+
 export type UpsertVendaOptions = {
   /**
    * Quando `true`, a baixa de estoque bloqueia qualquer decremento que deixaria o saldo
    * negativo, falhando com `InsufficientStockError`. Usado no fluxo PDV ao vivo
    * (`/api/ops/venda-persist`). O replay legado (`/api/ops/sync-legacy-vendas`) mantém
    * o default `false` para não quebrar a importação histórica.
+   *
+   * Também ativa o bloqueio de produto físico não resolvido (`UnresolvedProductError`):
+   * item com `inventoryId` que não casa com nenhum `Produto` da loja aborta a venda em
+   * vez de gravar venda/financeiro sem baixa de estoque.
    */
   enforceStock?: boolean
+  /**
+   * Quando `true`, vendas que geram entrada no caixa (valorImediato > 0) exigem uma
+   * `SessaoCaixa` ABERTA válida da loja — falha com `CaixaSessaoInvalidaError`. Usado no
+   * fluxo PDV ao vivo (`/api/ops/venda-persist`). O replay legado mantém o default
+   * `false` (não revalida caixa de vendas históricas). Nunca abre caixa automaticamente.
+   */
+  requireCaixaSession?: boolean
 }
 
 export type SalePayload = {
@@ -47,6 +93,11 @@ export type SalePayload = {
   clienteId?: string
   /** Operador/caixa que realizou a venda (extraído de SaleRecord.cashierId). */
   cashierId?: string
+  /**
+   * Sessão de caixa ativa no momento da venda (servidor-confirmada — `caixaSessaoId`
+   * do PDV). Usada para validar `SessaoCaixa` ABERTA quando `requireCaixaSession`.
+   */
+  sessaoId?: string | null
   /**
    * Terminal PDV (PDV1, PDV2...) em que a venda foi feita. Fase 1: persiste apenas no
    * `Venda.payload` (este campo) — a coluna `Venda.terminalId` é preparada no schema
@@ -143,6 +194,38 @@ export async function upsertVendaInTransaction(
     typeof sale.terminalId === "string" && sale.terminalId.trim() ? sale.terminalId.trim() : null
 
   const lines = Array.isArray(sale.lines) ? sale.lines : []
+
+  // REGRA OFICIAL ÚNICA (GOAL_FATURAMENTO_VALE_ALINHAMENTO): receita à vista =
+  // total − aPrazo − creditoVale (ver `valorAVistaVenda`). > 0 ⇒ a venda move a
+  // gaveta (MovimentacaoFinanceira no passo 4) e, portanto, exige caixa aberto.
+  const pb = sale.paymentBreakdown
+  const valorImediato = valorAVistaVenda(total, pb)
+
+  // ── 0. Caixa servidor obrigatório (P1 — OPS-SALE-SAFETY-P1-001) ─────────────
+  // Vendas que geram entrada no caixa (valorImediato > 0) exigem uma `SessaoCaixa`
+  // ABERTA da loja. Vendas 100% à prazo / 100% crédito-vale não movimentam a gaveta
+  // e não exigem caixa. NUNCA abre caixa automaticamente; NUNCA usa fallback `loja-1`
+  // (a loja vem do gate da rota). A resolução espelha de forma mínima
+  // `lib/caixa/recebimento-cr-caixa.ts#resolveSessaoCaixaAberta` — duplicada aqui via
+  // `tx` para manter este módulo livre de `@/lib/prisma` (testado em ambiente node com
+  // TransactionClient fake) e a validação atômica dentro da própria transação da venda.
+  if (options?.requireCaixaSession === true && valorImediato > 0) {
+    const sessaoIdSale =
+      typeof sale.sessaoId === "string" && sale.sessaoId.trim() ? sale.sessaoId.trim() : null
+    const sessao = sessaoIdSale
+      ? await tx.sessaoCaixa.findFirst({
+          // Com sessaoId: a sessão precisa existir, estar ABERTA e ser DESTA loja.
+          where: { id: sessaoIdSale, storeId: lojaId, status: "ABERTA" },
+          select: { id: true },
+        })
+      : await tx.sessaoCaixa.findFirst({
+          // Sem sessaoId: aceita a sessão aberta mais recente da loja (do terminal, se houver).
+          where: { storeId: lojaId, status: "ABERTA", ...(terminalId ? { terminalId } : {}) },
+          orderBy: { abertaEm: "desc" },
+          select: { id: true },
+        })
+    if (!sessao) throw new CaixaSessaoInvalidaError()
+  }
 
   // ── 1. Upsert Venda ─────────────────────────────────────────────────────────
   // Multi-Terminais Fase 3: também popula a coluna `Venda.terminalId` (além do payload)
@@ -256,6 +339,14 @@ export async function upsertVendaInTransaction(
     qtyByProdutoId.set(resolved.dbId, (qtyByProdutoId.get(resolved.dbId) ?? 0) + qty)
   }
   if (unresolvedInventoryIds.length > 0) {
+    if (enforceStock) {
+      // P1 (OPS-SALE-SAFETY-P1-001): no fluxo PDV ao vivo, item de produto FÍSICO que
+      // não casa com nenhum `Produto` (id/sku/barcode) da loja NÃO pode gerar
+      // venda/financeiro sem baixa. Aborta a transação inteira — nada é gravado.
+      // Linhas virtuais (O.S./avulso) já foram excluídas acima por `isVirtualSaleLine`.
+      throw new UnresolvedProductError(unresolvedInventoryIds)
+    }
+    // Replay legado (`enforceStock` default false): preserva o histórico — apenas registra.
     console.warn(
       "[upsert-venda] estoque-nao-baixado",
       JSON.stringify({ pedidoId, lojaId, unresolvedInventoryIds }),
@@ -333,13 +424,10 @@ export async function upsertVendaInTransaction(
   }
 
   // ── 4. MovimentacaoFinanceira (receita à vista PDV) ─────────────────────────
-  // REGRA OFICIAL ÚNICA (GOAL_FATURAMENTO_VALE_ALINHAMENTO): receita à vista =
-  // total − aPrazo − creditoVale (ver `valorAVistaVenda`). aPrazo vira
-  // ContaReceberTitulo (passo 6); creditoVale abate ClienteCredito (passo 5) —
-  // nenhum dos dois é dinheiro novo no caixa. Mesma função usada pela correção.
-  const pb = sale.paymentBreakdown
+  // `pb` e `valorImediato` já calculados no topo (regra única `valorAVistaVenda`):
+  // aPrazo vira ContaReceberTitulo (passo 6); creditoVale abate ClienteCredito
+  // (passo 5) — nenhum dos dois é dinheiro novo no caixa.
   const aPrazoVal = typeof pb?.aPrazo === "number" && pb.aPrazo > 0 ? pb.aPrazo : 0
-  const valorImediato = valorAVistaVenda(total, pb)
 
   if (valorImediato > 0) {
     const dupFinanceiro = await tx.movimentacaoFinanceira.findFirst({

@@ -4,7 +4,13 @@ import { opsLojaIdFromRequestForWrite } from "@/lib/ops-api-gate"
 import { apiGuardEnterpriseOrOps } from "@/lib/auth/api-enterprise-guard"
 import { auth } from "@/auth"
 import { getOperatorLabelFromSession } from "@/lib/auth/session-operator"
-import { upsertVendaInTransaction, InsufficientStockError, type SalePayload } from "@/lib/ops-upsert-venda"
+import {
+  upsertVendaInTransaction,
+  InsufficientStockError,
+  UnresolvedProductError,
+  CaixaSessaoInvalidaError,
+  type SalePayload,
+} from "@/lib/ops-upsert-venda"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -50,11 +56,34 @@ export async function POST(req: Request) {
   try {
     await prismaEnsureConnected()
     await prisma.$transaction(async (tx) => {
-      await upsertVendaInTransaction(tx, lojaId, sale, operadorLabel, { enforceStock: true })
+      await upsertVendaInTransaction(tx, lojaId, sale, operadorLabel, {
+        enforceStock: true,
+        requireCaixaSession: true,
+      })
     })
 
     return NextResponse.json({ ok: true })
   } catch (e) {
+    // Caixa servidor obrigatório (P1 OPS-SALE-SAFETY-P1-001): venda com entrada no caixa
+    // sem `SessaoCaixa` ABERTA válida é falha de negócio (409), não erro de servidor.
+    // Nada foi gravado (validação dentro da transação). O PDV mantém `syncPending` e
+    // mostra o toast — o operador abre o caixa e usa "Reenviar sync".
+    if (e instanceof CaixaSessaoInvalidaError) {
+      console.warn(
+        "[ops/venda-persist] caixa-fechado",
+        JSON.stringify({ lojaId, pedidoId, sessaoId: sale.sessaoId ?? null, terminalId: sale.terminalId ?? null }),
+      )
+      return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
+    }
+    // Produto físico não resolvido (P1): item sem casamento em `Produto` não pode gerar
+    // venda/financeiro sem baixa de estoque. Nada foi gravado (transação revertida).
+    if (e instanceof UnresolvedProductError) {
+      console.warn(
+        "[ops/venda-persist] produto-nao-resolvido",
+        JSON.stringify({ lojaId, pedidoId, inventoryIds: e.inventoryIds }),
+      )
+      return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
+    }
     // Anti-negativo (DT-B): saldo insuficiente é falha de negócio explícita (409),
     // não erro de servidor. O cliente PDV mantém a venda em `syncPending` e mostra o
     // toast com `detail`, permitindo reabrir o caixa/ajustar estoque e reenviar.
