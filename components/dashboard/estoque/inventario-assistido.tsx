@@ -37,6 +37,7 @@ import {
   getInventarioAtivo,
   registrarContagemProduto,
   registrarPendenciaInventario,
+  vincularPendenciaInventario,
   getContextoContagemProduto,
   listInventarioContagens,
   encerrarInventario,
@@ -44,7 +45,11 @@ import {
   type InventarioContagemDTO,
 } from "@/app/actions/inventario"
 import { resumirContagens, type ModoContagem } from "@/lib/estoque/inventario-core"
-import { InventarioPendenciaModal } from "@/components/dashboard/estoque/inventario-pendencia-modal"
+import { criarProdutoRapido } from "@/lib/estoque/inventario-cadastro-rapido-submit"
+import type { CadastroRapidoForm } from "@/lib/estoque/inventario-cadastro-rapido"
+import { InventarioPendenciaModal, type PendenciaDados } from "@/components/dashboard/estoque/inventario-pendencia-modal"
+import { InventarioCadastroRapidoModal } from "@/components/dashboard/estoque/inventario-cadastro-rapido-modal"
+import { InventarioAssociarProdutoModal } from "@/components/dashboard/estoque/inventario-associar-produto-modal"
 import { InventarioContagemModal } from "@/components/dashboard/estoque/inventario-contagem-modal"
 
 // ─── Resolução de código via endpoint existente ────────────────────────────────
@@ -153,6 +158,16 @@ export function InventarioAssistido() {
   // Modal de pendência (código sem produto resolvido)
   const [pendenciaCodigo, setPendenciaCodigo] = useState<string | null>(null)
   const [registrandoPendencia, setRegistrandoPendencia] = useState(false)
+
+  // Cadastro rápido a partir da bipagem (INVENTARIO-CADASTRO-RAPIDO-COM-PENDENCIAS-001): cria o
+  // produto e já registra a contagem como encontrada, sem sair da tela de inventário.
+  const [cadastroRapido, setCadastroRapido] = useState<{ codigo: string; quantidade: number; nomeRapido: string } | null>(null)
+  const [cadastrandoRapido, setCadastrandoRapido] = useState(false)
+
+  // Vincular a produto existente a partir da bipagem: registra a pendência (preserva a contagem) e
+  // abre a busca de produto para fechar o vínculo (alias + resolvido).
+  const [associarContagem, setAssociarContagem] = useState<InventarioContagemDTO | null>(null)
+  const [vinculandoAssociar, setVinculandoAssociar] = useState(false)
 
   // Modal de contagem (produto cadastrado → informar quantidade + modo substituir/somar).
   // Aberto tanto pela bipagem quanto pelo botão "Editar" da tabela ao vivo (modo/qtd iniciais).
@@ -341,25 +356,36 @@ export function InventarioAssistido() {
     inputRef.current?.focus()
   }, [])
 
-  const handleConfirmarPendencia = useCallback(
-    async (dados: { quantidade: number; nomeRapido: string }) => {
-      if (!pendenciaCodigo || !sessao || !storeId) return
+  // Registra (ou soma) a pendência no servidor e devolve a contagem salva. Reutilizado por
+  // "Salvar como pendência" e como 1º passo de "Vincular a existente" (que precisa do id).
+  const registrarPendenciaInterna = useCallback(
+    async (dados: PendenciaDados): Promise<InventarioContagemDTO | null> => {
+      if (!pendenciaCodigo || !sessao || !storeId) return null
+      const res = await registrarPendenciaInventario(storeId, {
+        sessaoId: sessao.id,
+        codigo: pendenciaCodigo,
+        quantidade: dados.quantidade,
+        nomeRapido: dados.nomeRapido || null,
+      })
+      if (!res.ok) {
+        toast({ title: "Falha ao registrar pendência", description: res.reason, variant: "destructive" })
+        return null
+      }
+      setContagens((prev) => mergeContagem(prev, res.contagem))
+      setUltimoBipe(res.contagem)
+      return res.contagem
+    },
+    [pendenciaCodigo, sessao, storeId, toast]
+  )
+
+  const handleSalvarPendencia = useCallback(
+    async (dados: PendenciaDados) => {
       setRegistrandoPendencia(true)
       try {
-        const res = await registrarPendenciaInventario(storeId, {
-          sessaoId: sessao.id,
-          codigo: pendenciaCodigo,
-          quantidade: dados.quantidade,
-          nomeRapido: dados.nomeRapido || null,
-        })
-        if (!res.ok) {
-          toast({ title: "Falha ao registrar pendência", description: res.reason, variant: "destructive" })
-          return
-        }
-        setContagens((prev) => mergeContagem(prev, res.contagem))
-        setUltimoBipe(res.contagem)
+        const contagem = await registrarPendenciaInterna(dados)
+        if (!contagem) return
         toast({
-          title: "Produto não cadastrado",
+          title: "Pendência registrada",
           description: "Separe uma unidade física. O item ficou na fila de reconciliação para identificar depois.",
         })
         setPendenciaCodigo(null)
@@ -368,7 +394,126 @@ export function InventarioAssistido() {
         inputRef.current?.focus()
       }
     },
-    [pendenciaCodigo, sessao, storeId, toast]
+    [registrarPendenciaInterna, toast]
+  )
+
+  // "Cadastrar rápido" a partir da bipagem: leva o código + quantidade observada para o modal de
+  // cadastro rápido (não persiste nada ainda).
+  const handleAbrirCadastroRapido = useCallback(
+    (dados: PendenciaDados) => {
+      if (!pendenciaCodigo) return
+      setCadastroRapido({ codigo: pendenciaCodigo, quantidade: dados.quantidade, nomeRapido: dados.nomeRapido })
+      setPendenciaCodigo(null)
+    },
+    [pendenciaCodigo]
+  )
+
+  const handleCancelarCadastroRapido = useCallback(() => {
+    setCadastroRapido(null)
+    inputRef.current?.focus()
+  }, [])
+
+  // Confirma o cadastro rápido: cria o produto (reusa POST /api/produtos com proteção de
+  // duplicidade) e registra a contagem como ENCONTRADA contra ele — a quantidade contada não se
+  // perde e não gera divergência falsa (estoque inicial = contado).
+  const handleConfirmarCadastroRapido = useCallback(
+    async (form: CadastroRapidoForm) => {
+      if (!cadastroRapido || !sessao || !storeId) return
+      setCadastrandoRapido(true)
+      try {
+        const res = await criarProdutoRapido(storeId, form, {
+          sessaoId: sessao.id,
+          pendenciaCodigo: cadastroRapido.codigo,
+        })
+        let produtoId: string | null = null
+        if (res.ok === "duplicate") {
+          // O código já existe na loja: não duplica — apenas conta contra o produto existente.
+          produtoId = res.produto.id
+          toast({
+            title: "Produto já cadastrado",
+            description: `Já existe "${res.produto.name}". A contagem foi registrada para esse produto.`,
+          })
+        } else if (res.ok) {
+          produtoId = res.produtoId
+        } else {
+          toast({ title: "Não foi possível cadastrar", description: res.erro, variant: "destructive" })
+          return
+        }
+        if (!produtoId) return
+
+        const cont = await registrarContagemProduto(storeId, {
+          sessaoId: sessao.id,
+          codigo: cadastroRapido.codigo,
+          produtoId,
+          quantidade: cadastroRapido.quantidade,
+          modo: "substituir",
+        })
+        if (!cont.ok) {
+          toast({
+            title: "Produto cadastrado, mas a contagem não foi registrada",
+            description: `${cont.reason} Bipe novamente para contar.`,
+            variant: "destructive",
+          })
+          return
+        }
+        setContagens((prev) => mergeContagem(prev, cont.contagem))
+        setUltimoBipe(cont.contagem)
+        if (res.ok !== "duplicate") {
+          toast({
+            title: "Produto cadastrado e contado",
+            description: "Cadastro salvo para operação. Complete o fiscal depois em Cadastros.",
+          })
+        }
+        setCadastroRapido(null)
+      } finally {
+        setCadastrandoRapido(false)
+        inputRef.current?.focus()
+      }
+    },
+    [cadastroRapido, sessao, storeId, toast]
+  )
+
+  // "Vincular a existente" a partir da bipagem: garante a pendência persistida e abre a busca.
+  const handleAbrirVincularExistente = useCallback(
+    async (dados: PendenciaDados) => {
+      setRegistrandoPendencia(true)
+      try {
+        const contagem = await registrarPendenciaInterna(dados)
+        if (!contagem) return
+        setAssociarContagem(contagem)
+        setPendenciaCodigo(null)
+      } finally {
+        setRegistrandoPendencia(false)
+      }
+    },
+    [registrarPendenciaInterna]
+  )
+
+  const handleAssociarSelecionar = useCallback(
+    async (produto: { id: string; nome: string }) => {
+      if (!associarContagem || !sessao || !storeId) return
+      setVinculandoAssociar(true)
+      try {
+        const res = await vincularPendenciaInventario(storeId, sessao.id, associarContagem.id, produto.id, "associado")
+        if (!res.ok) {
+          toast({ title: "Não foi possível vincular", description: res.reason, variant: "destructive" })
+          return
+        }
+        toast({
+          title: "Pendência vinculada",
+          description: res.codigoVinculado
+            ? `Código "${res.codigoVinculado}" vinculado a "${produto.nome}". Nas próximas contagens ele será reconhecido automaticamente.`
+            : `Código vinculado a "${produto.nome}".`,
+        })
+        setAssociarContagem(null)
+        const lista = await listInventarioContagens(storeId, sessao.id)
+        if (lista.ok) setContagens(lista.contagens)
+      } finally {
+        setVinculandoAssociar(false)
+        inputRef.current?.focus()
+      }
+    },
+    [associarContagem, sessao, storeId, toast]
   )
 
   const handleRecarregar = useCallback(async () => {
@@ -743,9 +888,33 @@ export function InventarioAssistido() {
         open={pendenciaCodigo !== null}
         codigo={pendenciaCodigo ?? ""}
         jaPendente={jaPendenteDoModal}
-        registrando={registrandoPendencia}
-        onConfirmar={(dados) => void handleConfirmarPendencia(dados)}
-        onCancelar={handleCancelarPendencia}
+        ocupado={registrandoPendencia}
+        onCadastrarRapido={handleAbrirCadastroRapido}
+        onSalvarPendencia={(dados) => void handleSalvarPendencia(dados)}
+        onVincularExistente={(dados) => void handleAbrirVincularExistente(dados)}
+        onIgnorar={handleCancelarPendencia}
+      />
+
+      <InventarioCadastroRapidoModal
+        open={cadastroRapido !== null}
+        storeId={storeId}
+        codigoBipado={cadastroRapido?.codigo ?? ""}
+        quantidadeInicial={cadastroRapido?.quantidade ?? 1}
+        nomeInicial={cadastroRapido?.nomeRapido ?? null}
+        salvando={cadastrandoRapido}
+        onConfirmar={(form) => void handleConfirmarCadastroRapido(form)}
+        onCancelar={handleCancelarCadastroRapido}
+      />
+
+      <InventarioAssociarProdutoModal
+        open={associarContagem !== null}
+        storeId={storeId}
+        vinculando={vinculandoAssociar}
+        onSelecionar={(produto) => void handleAssociarSelecionar(produto)}
+        onFechar={() => {
+          setAssociarContagem(null)
+          inputRef.current?.focus()
+        }}
       />
 
       <InventarioContagemModal

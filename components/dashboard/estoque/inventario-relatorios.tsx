@@ -78,6 +78,9 @@ import {
   type ClassificacaoReconciliacao,
 } from "@/lib/estoque/inventario-reconciliacao"
 import { InventarioAssociarProdutoModal } from "@/components/dashboard/estoque/inventario-associar-produto-modal"
+import { InventarioCadastroRapidoModal } from "@/components/dashboard/estoque/inventario-cadastro-rapido-modal"
+import { criarProdutoRapido } from "@/lib/estoque/inventario-cadastro-rapido-submit"
+import type { CadastroRapidoForm } from "@/lib/estoque/inventario-cadastro-rapido"
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -340,7 +343,13 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
   // ── Reconciliação F6: vínculo de fechamento (Cadastrar produto / Associar existente) ────────────
   const [associarAlvo, setAssociarAlvo] = useState<RelatorioReconciliacaoDTO | null>(null)
   const [vinculandoId, setVinculandoId] = useState<string | null>(null)
+  // Cadastro rápido in-place (INVENTARIO-CADASTRO-RAPIDO-COM-PENDENCIAS-001): cria o produto e
+  // fecha a pendência SEM sair do inventário (antes, "Cadastrar produto" navegava para Cadastros).
+  const [cadastrarAlvo, setCadastrarAlvo] = useState<RelatorioReconciliacaoDTO | null>(null)
+  const [cadastrando, setCadastrando] = useState(false)
 
+  // Atalho preservado: cadastro COMPLETO (com fiscal) na tela de Cadastros, levando o contexto
+  // da pendência (prefil + vínculo automático ao salvar). Usado como link secundário do modal.
   const abrirCadastrarProduto = useCallback(
     (r: RelatorioReconciliacaoDTO) => {
       const params = new URLSearchParams()
@@ -353,6 +362,55 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
       router.push(`/dashboard/estoque?${params.toString()}`)
     },
     [storeId, router]
+  )
+
+  const handleCadastrarRapido = useCallback(
+    async (form: CadastroRapidoForm) => {
+      if (!cadastrarAlvo || !relatorio || !storeId) return
+      setCadastrando(true)
+      try {
+        const res = await criarProdutoRapido(storeId, form, {
+          sessaoId: relatorio.sessao.id,
+          pendenciaCodigo: cadastrarAlvo.codigoBipado,
+        })
+        if (res.ok === "duplicate") {
+          // EAN/SKU já existe na loja: não duplica — oferece associar a pendência ao item existente.
+          toast({
+            title: "Produto já cadastrado",
+            description: `Já existe "${res.produto.name}" com este código/EAN/SKU. Use "Associar produto" para vincular a pendência a ele.`,
+            variant: "destructive",
+          })
+          setCadastrarAlvo(null)
+          setAssociarAlvo(cadastrarAlvo)
+          return
+        }
+        if (!res.ok) {
+          toast({ title: "Não foi possível cadastrar", description: res.erro, variant: "destructive" })
+          return
+        }
+        // Produto criado → fecha a pendência apontando para ele (grava alias do código bipado).
+        const vinc = await vincularPendenciaInventario(storeId, relatorio.sessao.id, cadastrarAlvo.id, res.produtoId, "cadastrado")
+        if (!vinc.ok) {
+          toast({
+            title: "Produto cadastrado, mas a pendência não foi fechada",
+            description: `${vinc.reason} Use "Associar produto" para concluir o vínculo.`,
+            variant: "destructive",
+          })
+          setCadastrarAlvo(null)
+          await carregarRelatorio(relatorio.sessao.id)
+          return
+        }
+        toast({
+          title: "Produto cadastrado e vinculado",
+          description: "Cadastro salvo para operação. Complete o fiscal depois em Cadastros.",
+        })
+        setCadastrarAlvo(null)
+        await carregarRelatorio(relatorio.sessao.id)
+      } finally {
+        setCadastrando(false)
+      }
+    },
+    [cadastrarAlvo, relatorio, storeId, toast, carregarRelatorio]
   )
 
   const handleAssociarSelecionar = useCallback(
@@ -818,10 +876,10 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
                                     size="sm"
                                     variant="default"
                                     className="gap-1"
-                                    disabled={ocupado}
-                                    onClick={() => abrirCadastrarProduto(r)}
+                                    disabled={ocupado || cadastrando}
+                                    onClick={() => setCadastrarAlvo(r)}
                                   >
-                                    <Package className="h-3.5 w-3.5" /> Cadastrar produto
+                                    <Package className="h-3.5 w-3.5" /> Cadastrar rápido
                                   </Button>
                                   <Button
                                     size="sm"
@@ -1036,6 +1094,19 @@ export function InventarioRelatorios({ sessaoIdInicial }: { sessaoIdInicial?: st
         vinculando={vinculandoId === associarAlvo?.id}
         onSelecionar={(produto) => void handleAssociarSelecionar(produto)}
         onFechar={() => setAssociarAlvo(null)}
+      />
+
+      {/* Cadastro rápido in-place — cria produto + fecha pendência sem sair do inventário */}
+      <InventarioCadastroRapidoModal
+        open={cadastrarAlvo !== null}
+        storeId={storeId}
+        codigoBipado={cadastrarAlvo?.codigoBipado ?? ""}
+        quantidadeInicial={cadastrarAlvo?.quantidadeContada ?? 1}
+        nomeInicial={cadastrarAlvo?.nomeRapido ?? null}
+        salvando={cadastrando}
+        onConfirmar={(form) => void handleCadastrarRapido(form)}
+        onCancelar={() => setCadastrarAlvo(null)}
+        onAbrirCadastroCompleto={cadastrarAlvo ? () => abrirCadastrarProduto(cadastrarAlvo) : undefined}
       />
 
       {/* Confirmação de ajuste (divergência) / zeragem por ausência */}
