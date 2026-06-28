@@ -203,6 +203,24 @@ export type VoiceStockHint = {
   openImport?: boolean
 }
 
+/**
+ * CADASTROS-PRODUTOS-DUPLICIDADE-001 — aviso de produto já cadastrado no cadastro manual.
+ * `forte` = mesmo SKU/EAN na loja (API responde 409 e bloqueia). `provavel` = mesmo nome
+ * sem código (a regra permite, então só avisa e deixa confirmar).
+ */
+type DuplicateProdutoInfo = {
+  mode: "forte" | "provavel"
+  message: string
+  field?: string
+  produto: {
+    id: string
+    name: string
+    sku?: string | null
+    barcode?: string | null
+    stock?: number | null
+  }
+}
+
 interface GestaoProdutosProps {
   voiceStockHint?: VoiceStockHint | null
   onVoiceStockHintConsumed?: () => void
@@ -239,6 +257,7 @@ export function GestaoProdutos({
   const [confirmBulkOpen, setConfirmBulkOpen] = useState(false)
   const [singleDeleting, setSingleDeleting] = useState(false)
   const [saveBusy, setSaveBusy] = useState(false)
+  const [duplicateInfo, setDuplicateInfo] = useState<DuplicateProdutoInfo | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [iaSyncLoading, setIaSyncLoading] = useState(false)
   const [visionQuickScanLoading, setVisionQuickScanLoading] = useState(false)
@@ -554,11 +573,31 @@ export function GestaoProdutos({
     stopFormVoiceListening()
     setRelampagoImageDataUrl(null)
     setRelampagoAudioBlob(null)
+    setDuplicateInfo(null)
     setIsModalOpen(true)
   }
 
   const handleCloseModal = () => {
+    setDuplicateInfo(null)
     setIsModalOpen(false)
+  }
+
+  // CADASTROS-PRODUTOS-DUPLICIDADE-001 — abre o item já existente para editar/ajustar
+  // estoque, em vez de o operador tentar cadastrar de novo. Se o item ainda não estiver
+  // na lista carregada, atualiza e orienta a editar pela tabela (sem criar fluxo novo).
+  const openExistingProduct = (existingId: string) => {
+    setDuplicateInfo(null)
+    const found = products.find((p) => p.dbId === existingId || p.id === existingId)
+    if (found) {
+      handleOpenModal(found)
+      return
+    }
+    handleCloseModal()
+    void reloadInventory()
+    toast({
+      title: "Produto já existe no estoque",
+      description: "Atualizamos a lista. Localize o item e clique em editar para ajustar dados ou estoque.",
+    })
   }
 
   useEffect(() => {
@@ -582,7 +621,7 @@ export function GestaoProdutos({
     onVoiceStockHintConsumed?.()
   }, [voiceStockHint, onVoiceStockHintConsumed])
 
-  const handleSave = async () => {
+  const handleSave = async (opts?: { force?: boolean }) => {
     const nome = formData.nome.trim()
     if (!nome) {
       toast({ title: "Nome obrigatório", description: "Informe o nome do item.", variant: "destructive" })
@@ -591,6 +630,36 @@ export function GestaoProdutos({
     if (!(Number(formData.precoVenda) > 0)) {
       toast({ title: "Preço de venda", description: "Informe um preço de venda válido.", variant: "destructive" })
       return
+    }
+    setDuplicateInfo(null)
+    // CADASTROS-PRODUTOS-DUPLICIDADE-001 — duplicidade PROVÁVEL: cadastro novo, sem código,
+    // mesmo nome de um item já existente na loja. A regra atual permite nomes repetidos,
+    // então só avisa e deixa o operador confirmar ("Cadastrar mesmo assim") — não bloqueia.
+    if (!editingProduct && !opts?.force) {
+      const semCodigo =
+        !normalizeUserCodigoInput(formData.sku) &&
+        !normalizeUserCodigoInput(formData.codigo) &&
+        !formData.barcode?.trim() &&
+        !formData.codigoBarras?.trim()
+      if (semCodigo) {
+        const alvo = nome.toLowerCase()
+        const existente = products.find((p) => p.nome.trim().toLowerCase() === alvo)
+        if (existente) {
+          setDuplicateInfo({
+            mode: "provavel",
+            message:
+              "Já existe um produto com este mesmo nome nesta loja. Confirme se não é o mesmo item antes de cadastrar.",
+            produto: {
+              id: existente.dbId || existente.id,
+              name: existente.nome,
+              sku: existente.sku ?? null,
+              barcode: existente.barcode ?? null,
+              stock: existente.estoqueAtual,
+            },
+          })
+          return
+        }
+      }
     }
     setSaveBusy(true)
     try {
@@ -630,8 +699,43 @@ export function GestaoProdutos({
             headers,
             body: JSON.stringify(payload),
           })
-      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; detail?: string } | null
+      const data = (await res.json().catch(() => null)) as
+        | {
+            ok?: boolean
+            error?: string
+            detail?: string
+            type?: string
+            message?: string
+            field?: string
+            produto?: { id?: string; name?: string; sku?: string | null; barcode?: string | null; stock?: number | null }
+          }
+        | null
       if (!res.ok) {
+        // CADASTROS-PRODUTOS-DUPLICIDADE-001 — duplicidade FORTE (mesmo SKU/EAN na loja):
+        // a API responde 409 com os dados do item existente. Mostra aviso claro + ação,
+        // em vez do antigo "Não foi possível salvar" genérico.
+        if (res.status === 409 && data?.type === "DUPLICATE_PRODUCT") {
+          if (data.produto?.id && data.produto.name) {
+            setDuplicateInfo({
+              mode: "forte",
+              message: data.message || "Produto já cadastrado.",
+              field: data.field,
+              produto: {
+                id: data.produto.id,
+                name: data.produto.name,
+                sku: data.produto.sku ?? null,
+                barcode: data.produto.barcode ?? null,
+                stock: data.produto.stock ?? null,
+              },
+            })
+          }
+          toast({
+            title: "Produto já cadastrado",
+            description: data.message || "Já existe um item com este código/EAN/SKU nesta loja.",
+            variant: "destructive",
+          })
+          return
+        }
         throw new Error(data?.error || data?.detail || `Falha ao salvar (HTTP ${res.status})`)
       }
       const criado = (data as { produto?: { id?: string } } | null)?.produto
@@ -1652,6 +1756,63 @@ export function GestaoProdutos({
               {editingProduct ? "Editar Item" : "Novo Produto ou Serviço"}
             </DialogTitle>
           </DialogHeader>
+
+          {/* CADASTROS-PRODUTOS-DUPLICIDADE-001 — aviso claro de produto já cadastrado. */}
+          {duplicateInfo && (
+            <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <div className="flex items-start gap-2 min-w-0">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="font-semibold text-foreground">
+                    {duplicateInfo.mode === "forte"
+                      ? "Produto já cadastrado"
+                      : "Produto provavelmente já cadastrado"}
+                  </p>
+                  <p className="text-muted-foreground">{duplicateInfo.message}</p>
+                  <div className="rounded-md bg-background/60 p-2 min-w-0">
+                    <p className="font-medium text-foreground truncate">{duplicateInfo.produto.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {[
+                        duplicateInfo.produto.sku ? `SKU ${duplicateInfo.produto.sku}` : null,
+                        duplicateInfo.produto.barcode ? `EAN ${duplicateInfo.produto.barcode}` : null,
+                        typeof duplicateInfo.produto.stock === "number"
+                          ? `Estoque atual: ${duplicateInfo.produto.stock}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "Sem código cadastrado"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openExistingProduct(duplicateInfo.produto.id)}
+                    >
+                      Abrir produto existente
+                    </Button>
+                    {duplicateInfo.mode === "provavel" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setDuplicateInfo(null)
+                          void handleSave({ force: true })
+                        }}
+                      >
+                        Cadastrar mesmo assim
+                      </Button>
+                    )}
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setDuplicateInfo(null)}>
+                      Dispensar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
             <TabsList className="grid w-full grid-cols-3 mb-4">

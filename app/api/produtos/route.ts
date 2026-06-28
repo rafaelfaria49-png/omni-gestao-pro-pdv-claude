@@ -45,6 +45,44 @@ function optTrim(body: Record<string, unknown>, ...keys: string[]): string | und
   return undefined
 }
 
+type ExistingProdutoLite = {
+  id: string
+  name: string
+  sku: string | null
+  barcode: string | null
+  stock: number
+}
+
+const PRODUTO_DUP_SELECT = { id: true, name: true, sku: true, barcode: true, stock: true } as const
+
+/**
+ * CADASTROS-PRODUTOS-DUPLICIDADE-001 — resposta estruturada quando o item já existe na
+ * loja (mesmo SKU/código ou mesmo código de barras/EAN). Substitui o antigo 503 genérico
+ * vindo do unique constraint (P2002), que não avisava o operador que o produto já estava
+ * cadastrado e o levava a tentar de novo sem entender o motivo.
+ */
+function duplicateProductResponse(existing: ExistingProdutoLite, sku?: string, barcode?: string) {
+  const matchedBarcode = !!barcode && !!existing.barcode && existing.barcode === barcode
+  const field = matchedBarcode ? "barcode" : "sku"
+  const codeLabel = matchedBarcode ? "código de barras (EAN)" : "código/SKU"
+  return json(
+    {
+      error: "Produto já cadastrado",
+      type: "DUPLICATE_PRODUCT",
+      field,
+      message: `Produto já cadastrado. Encontramos um item com este mesmo ${codeLabel} nesta loja.`,
+      produto: {
+        id: existing.id,
+        name: existing.name,
+        sku: existing.sku,
+        barcode: existing.barcode,
+        stock: existing.stock,
+      },
+    },
+    { status: 409 },
+  )
+}
+
 const PRODUTO_LIST_SELECT = {
   id: true,
   name: true,
@@ -114,6 +152,10 @@ export async function POST(req: Request) {
   if (!gate.ok) return gate.response
   const storeId = gate.storeId
 
+  // Hoisted para o catch (P2002) também conseguir reconsultar o item existente.
+  let sku: string | undefined
+  let barcode: string | undefined
+
   try {
     const raw = (await req.json()) as Record<string, unknown>
     const body = raw as { name?: unknown; stock?: unknown; price?: unknown }
@@ -123,8 +165,8 @@ export async function POST(req: Request) {
     const price = parsePrice(body.price)
     const precoCusto = parsePrice(raw.precoCusto ?? raw.cost) ?? 0
     const category = optTrim(raw, "category", "categoria")
-    const sku = optTrim(raw, "sku", "codigo")
-    const barcode = optTrim(raw, "barcode", "codigoBarras")
+    sku = optTrim(raw, "sku", "codigo")
+    barcode = optTrim(raw, "barcode", "codigoBarras")
     const brand = optTrim(raw, "brand", "marca") ?? ""
     const supplierName = optTrim(raw, "supplierName", "fornecedor") ?? ""
     const warrantyDaysRaw = parseStock(raw.warrantyDays ?? raw.garantia)
@@ -158,6 +200,21 @@ export async function POST(req: Request) {
     if (precoCusto < 0) return badRequest("Preço de custo não pode ser negativo")
 
     await prismaEnsureConnected()
+
+    // CADASTROS-PRODUTOS-DUPLICIDADE-001 — duplicidade FORTE: mesmo SKU/código ou mesmo
+    // código de barras/EAN já cadastrado nesta loja. Bloqueia com aviso claro ANTES do
+    // insert (antes, a colisão só aparecia como 503 genérico vindo do unique constraint).
+    const dupOr: Prisma.ProdutoWhereInput[] = []
+    if (sku) dupOr.push({ sku })
+    if (barcode) dupOr.push({ barcode })
+    if (dupOr.length > 0) {
+      const existing = await prisma.produto.findFirst({
+        where: { storeId, OR: dupOr },
+        select: PRODUTO_DUP_SELECT,
+      })
+      if (existing) return duplicateProductResponse(existing, sku, barcode)
+    }
+
     const created = await prisma.produto.create({
       data: {
         name,
@@ -180,6 +237,28 @@ export async function POST(req: Request) {
 
     return json({ ok: true, produto: created }, { status: 201 })
   } catch (e) {
+    // Corrida: o item pode ter sido criado entre a verificação e o insert. O unique
+    // constraint (P2002) também vira a MESMA mensagem amigável de duplicidade — nunca um
+    // 503 cru que deixava o operador sem saber que o produto já existia.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const dupOr: Prisma.ProdutoWhereInput[] = []
+      if (sku) dupOr.push({ sku })
+      if (barcode) dupOr.push({ barcode })
+      if (dupOr.length > 0) {
+        const existing = await prisma.produto
+          .findFirst({ where: { storeId, OR: dupOr }, select: PRODUTO_DUP_SELECT })
+          .catch(() => null)
+        if (existing) return duplicateProductResponse(existing, sku, barcode)
+      }
+      return json(
+        {
+          error: "Produto já cadastrado",
+          type: "DUPLICATE_PRODUCT",
+          message: "Produto já cadastrado. Já existe um item com este mesmo código/EAN/SKU nesta loja.",
+        },
+        { status: 409 },
+      )
+    }
     const msg = e instanceof Error ? e.message : String(e)
     console.error("[api/produtos POST]", msg)
     return json(
