@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { fiscalInputFromBody, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
+import { duplicateProductResponse, PRODUTO_DUP_SELECT } from "@/lib/produtos/duplicate-product"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -43,44 +44,6 @@ function optTrim(body: Record<string, unknown>, ...keys: string[]): string | und
     if (t) return t
   }
   return undefined
-}
-
-type ExistingProdutoLite = {
-  id: string
-  name: string
-  sku: string | null
-  barcode: string | null
-  stock: number
-}
-
-const PRODUTO_DUP_SELECT = { id: true, name: true, sku: true, barcode: true, stock: true } as const
-
-/**
- * CADASTROS-PRODUTOS-DUPLICIDADE-001 — resposta estruturada quando o item já existe na
- * loja (mesmo SKU/código ou mesmo código de barras/EAN). Substitui o antigo 503 genérico
- * vindo do unique constraint (P2002), que não avisava o operador que o produto já estava
- * cadastrado e o levava a tentar de novo sem entender o motivo.
- */
-function duplicateProductResponse(existing: ExistingProdutoLite, sku?: string, barcode?: string) {
-  const matchedBarcode = !!barcode && !!existing.barcode && existing.barcode === barcode
-  const field = matchedBarcode ? "barcode" : "sku"
-  const codeLabel = matchedBarcode ? "código de barras (EAN)" : "código/SKU"
-  return json(
-    {
-      error: "Produto já cadastrado",
-      type: "DUPLICATE_PRODUCT",
-      field,
-      message: `Produto já cadastrado. Encontramos um item com este mesmo ${codeLabel} nesta loja.`,
-      produto: {
-        id: existing.id,
-        name: existing.name,
-        sku: existing.sku,
-        barcode: existing.barcode,
-        stock: existing.stock,
-      },
-    },
-    { status: 409 },
-  )
 }
 
 const PRODUTO_LIST_SELECT = {

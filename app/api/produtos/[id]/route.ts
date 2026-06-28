@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { fiscalInputFromBody, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
+import { duplicateProductResponse, PRODUTO_DUP_SELECT } from "@/lib/produtos/duplicate-product"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -58,6 +59,11 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
   const { id } = await context.params
   if (!id?.trim()) return badRequest("ID inválido")
+
+  // Hoisted p/ o catch (P2002) também conseguir reconsultar o item colidente.
+  // Só recebem valor quando o PATCH realmente define um SKU/EAN não-vazio.
+  let nextSku: string | undefined
+  let nextBarcode: string | undefined
 
   try {
     const raw = (await req.json()) as Record<string, unknown>
@@ -161,6 +167,25 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     if (Object.keys(data).length === 0) {
       return badRequest("Nada para atualizar")
     }
+
+    // CADASTROS-PRODUTOS-DUPLICIDADE-002 — duplicidade FORTE na edição: o novo SKU/código ou
+    // código de barras/EAN já pertence a OUTRO produto da mesma loja (`id: { not: id }` ignora
+    // o próprio produto). Bloqueia com aviso claro ANTES do update — antes, a colisão só
+    // aparecia como 503 genérico vindo do unique constraint. Só valores NÃO-VAZIOS entram na
+    // checagem: manter o próprio código, limpar (null) ou não tocar no campo nunca dispara.
+    if (typeof data.sku === "string" && data.sku) nextSku = data.sku
+    if (typeof data.barcode === "string" && data.barcode) nextBarcode = data.barcode
+    const dupOr: Prisma.ProdutoWhereInput[] = []
+    if (nextSku) dupOr.push({ sku: nextSku })
+    if (nextBarcode) dupOr.push({ barcode: nextBarcode })
+    if (dupOr.length > 0) {
+      const existing = await prisma.produto.findFirst({
+        where: { storeId, id: { not: id }, OR: dupOr },
+        select: PRODUTO_DUP_SELECT,
+      })
+      if (existing) return duplicateProductResponse(existing, nextSku, nextBarcode, { context: "update" })
+    }
+
     const upd = await prisma.produto.updateMany({
       where: { id, storeId },
       data,
@@ -176,6 +201,28 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
     return json({ ok: true, produto: updated })
   } catch (e) {
+    // Corrida: o SKU/EAN pode ter sido tomado por outro produto entre a verificação e o
+    // update. O unique constraint (P2002) também vira a MESMA mensagem amigável de
+    // duplicidade — nunca um 503 cru que deixava o operador sem entender o motivo.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      const dupOr: Prisma.ProdutoWhereInput[] = []
+      if (nextSku) dupOr.push({ sku: nextSku })
+      if (nextBarcode) dupOr.push({ barcode: nextBarcode })
+      if (dupOr.length > 0) {
+        const existing = await prisma.produto
+          .findFirst({ where: { storeId, id: { not: id }, OR: dupOr }, select: PRODUTO_DUP_SELECT })
+          .catch(() => null)
+        if (existing) return duplicateProductResponse(existing, nextSku, nextBarcode, { context: "update" })
+      }
+      return json(
+        {
+          error: "Produto já cadastrado",
+          type: "DUPLICATE_PRODUCT",
+          message: "Produto já cadastrado. Outro item já usa este mesmo código/EAN/SKU nesta loja.",
+        },
+        { status: 409 },
+      )
+    }
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025") {
       return json({ error: "Produto não encontrado" }, { status: 404 })
     }
