@@ -82,21 +82,10 @@ import { TypeToConfirmDialog } from "@/components/dashboard/safety/type-to-confi
 import { cn } from "@/lib/utils"
 import { EmptyState, LoadingState } from "@/components/ui/states"
 import { vincularPendenciaInventario } from "@/app/actions/inventario"
-
-/** Prefixos legados (ex.: importação / IDs sintéticos) — só para `codigo`/SKU exibidos e enviados; não altera `id` nem `dbId`. */
-function stripAutoCodigoPrefixes(raw: string): string {
-  let s = raw.trim()
-  const re = /^(?:gc-|prod-|id-)/i
-  while (re.test(s)) s = s.replace(re, "").trim()
-  return s
-}
-
-function normalizeUserCodigoInput(s: string | undefined): string | undefined {
-  const t = (s ?? "").trim()
-  if (!t) return undefined
-  const out = stripAutoCodigoPrefixes(t)
-  return out || undefined
-}
+import {
+  stripAutoCodigoPrefixes,
+  buildProdutoFormCodigos,
+} from "@/lib/produtos/produto-form-codigos"
 
 interface Product {
   id: string
@@ -636,11 +625,8 @@ export function GestaoProdutos({
     // mesmo nome de um item já existente na loja. A regra atual permite nomes repetidos,
     // então só avisa e deixa o operador confirmar ("Cadastrar mesmo assim") — não bloqueia.
     if (!editingProduct && !opts?.force) {
-      const semCodigo =
-        !normalizeUserCodigoInput(formData.sku) &&
-        !normalizeUserCodigoInput(formData.codigo) &&
-        !formData.barcode?.trim() &&
-        !formData.codigoBarras?.trim()
+      const codigos = buildProdutoFormCodigos({ sku: formData.sku, barcode: formData.barcode })
+      const semCodigo = !codigos.sku && !codigos.barcode
       if (semCodigo) {
         const alvo = nome.toLowerCase()
         const existente = products.find((p) => p.nome.trim().toLowerCase() === alvo)
@@ -673,10 +659,10 @@ export function GestaoProdutos({
         price: Number(formData.precoVenda) || 0,
         precoCusto: Math.max(0, Number(formData.precoCusto) || 0),
         category: formData.categoria?.trim() || undefined,
-        sku: normalizeUserCodigoInput(formData.sku),
-        codigo: normalizeUserCodigoInput(formData.codigo),
-        barcode: formData.barcode?.trim() || undefined,
-        codigoBarras: formData.codigoBarras?.trim() || undefined,
+        // PRODUTO-CODIGOS-UI-PAYLOAD-FIX-002 — contrato limpo: só `sku` (Produto.sku) e
+        // `barcode` (Produto.barcode). Sem `codigo`/`codigoBarras` duplicados disputando a
+        // mesma coluna.
+        ...buildProdutoFormCodigos({ sku: formData.sku, barcode: formData.barcode }),
         // Identidade fiscal (GOAL_004): a API persiste em metadata.fiscal — fim do descarte.
         ncm: formData.ncm?.trim() || "",
         cest: formData.cest?.trim() || "",
@@ -2068,17 +2054,22 @@ export function GestaoProdutos({
                 </div>
 
                 {/* Identificação e PDV (logo após o nome) */}
+                {/*
+                  PRODUTO-CODIGOS-UI-PAYLOAD-FIX-002 — dois campos com destino explícito:
+                  "SKU / Código interno" grava em Produto.sku; "Código de barras (EAN/GTIN)"
+                  grava em Produto.barcode (e é onde o código bipado do Inventário aparece).
+                */}
                 <div className="sm:col-span-2">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="sku">SKU</Label>
+                      <Label htmlFor="sku">SKU / Código interno</Label>
                       <div className="relative">
                         <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id="sku"
                           value={formData.sku ?? ""}
                           onChange={(e) => setFormData((prev) => ({ ...prev, sku: e.target.value }))}
-                          placeholder="Opcional"
+                          placeholder="Ex.: 123, ALI-001, REF-FORNECEDOR"
                           className="h-12 border border-border bg-secondary pl-10"
                           autoComplete="off"
                         />
@@ -2086,45 +2077,14 @@ export function GestaoProdutos({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="codigo">Código interno</Label>
-                      <div className="relative">
-                        <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="codigo"
-                          value={formData.codigo}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, codigo: e.target.value }))}
-                          placeholder="Opcional"
-                          className="h-12 border border-border bg-secondary pl-10"
-                          autoComplete="off"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="codigoBarras">Código de barras (EAN)</Label>
-                      <div className="relative">
-                        <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          id="codigoBarras"
-                          value={formData.codigoBarras ?? ""}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, codigoBarras: e.target.value }))}
-                          placeholder="Opcional"
-                          className="h-12 border border-border bg-secondary pl-10"
-                          inputMode="numeric"
-                          autoComplete="off"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="barcode">Código alternativo</Label>
+                      <Label htmlFor="barcode">Código de barras (EAN/GTIN)</Label>
                       <div className="relative">
                         <Barcode className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id="barcode"
                           value={formData.barcode ?? ""}
                           onChange={(e) => setFormData((prev) => ({ ...prev, barcode: e.target.value }))}
-                          placeholder="Opcional"
+                          placeholder="Bipe ou digite o EAN/GTIN"
                           className="h-12 border border-border bg-secondary pl-10"
                           inputMode="numeric"
                           autoComplete="off"
@@ -2132,6 +2092,9 @@ export function GestaoProdutos({
                       </div>
                     </div>
                   </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Use o SKU para o código interno da loja. Use o EAN/GTIN para o código de barras bipado.
+                  </p>
                 </div>
 
                 <div className="sm:col-span-2 space-y-2">
