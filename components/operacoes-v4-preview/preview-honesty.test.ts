@@ -100,9 +100,6 @@ function makeState(over: Partial<V4State> = {}): V4State {
     prioridade: "alta",
     histFilter: "todos",
     novaOS: true,
-    novaTab: "novo",
-    novaEquip: "celular",
-    novaOrigem: "balcao",
     recibo: false,
     selectedOsId: null,
     focus: false,
@@ -126,31 +123,30 @@ const ctx: V4DataCtx = {
   detailLoading: false,
 }
 
-describe("Operações V4 Preview — Nova OS honesta (bug Ariane → Eudis)", () => {
-  it("abrirOS limpa a seleção, fecha o modal e avisa que nenhuma OS foi criada", () => {
+describe("Operações V4 — Nova OS real (cria OS e abre no workspace)", () => {
+  it("onOSCriada fecha o modal, abre a OS criada no workspace e recarrega a lista", () => {
     const patches: Array<Record<string, unknown>> = []
     const msgs: string[] = []
-    // Simula uma OS existente já aberta atrás do modal (ex.: a OS real de outro cliente).
-    const st = makeState({ selectedOsId: "os-existente-de-outro-cliente", novaOS: true })
+    let reloaded = 0
+    const ctxLocal: V4DataCtx = { ...ctx, reloadOrdens: () => { reloaded += 1 } }
+    const st = makeState({ selectedOsId: null, novaOS: true })
     const v = buildVals(
       st,
       (p) => patches.push(p as Record<string, unknown>),
       (m) => msgs.push(m),
-      ctx,
+      ctxLocal,
     )
 
-    v.abrirOS()
+    v.onOSCriada("os-nova-123")
 
-    // Fecha o modal E zera a seleção — não revela a OS que estava atrás dele.
-    expect(patches).toContainEqual({ novaOS: false, selectedOsId: null })
-    // Nunca seleciona/abre uma OS existente por fallback: todo patch de seleção é null.
-    for (const p of patches) {
-      if (p && typeof p === "object" && "selectedOsId" in p) {
-        expect(p.selectedOsId).toBeNull()
-      }
-    }
-    // Mensagem honesta e específica (a Preview não cria OS).
-    expect(msgs).toContain("Indisponível na Preview — nenhuma OS foi criada.")
+    // Fecha o modal, seleciona a OS recém-criada e leva ao workspace.
+    expect(patches).toContainEqual(
+      expect.objectContaining({ novaOS: false, selectedOsId: "os-nova-123", module: "workspace" }),
+    )
+    // Recarrega a lista real para refletir a nova OS.
+    expect(reloaded).toBe(1)
+    // Toast honesto de sucesso.
+    expect(msgs.some((m) => /criada/i.test(m))).toBe(true)
   })
 
   it("osSelected só é verdadeiro com uma OS explicitamente selecionada", () => {

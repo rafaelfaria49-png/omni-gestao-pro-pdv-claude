@@ -57,9 +57,6 @@ export interface V4State {
   prioridade: "baixa" | "normal" | "alta" | "urgente";
   histFilter: string;
   novaOS: boolean;
-  novaTab: "buscar" | "novo";
-  novaEquip: string;
-  novaOrigem: string;
   recibo: boolean;
   /** null = tela limpa (empty state); id = OS real selecionada. */
   selectedOsId: string | null;

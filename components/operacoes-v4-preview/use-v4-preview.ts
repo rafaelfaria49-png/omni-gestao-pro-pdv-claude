@@ -13,12 +13,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  EQUIP_DEF,
   HIST_FILTER_DEF,
   MODE_DEF,
   MODULE_META,
   ORDER,
-  ORIGEM_DEF,
   PENDING,
   PRIMARY,
   PRIO,
@@ -95,9 +93,6 @@ const INITIAL: V4State = {
   prioridade: "alta",
   histFilter: "todos",
   novaOS: false,
-  novaTab: "buscar",
-  novaEquip: "celular",
-  novaOrigem: "balcao",
   recibo: false,
   selectedOsId: null,
   focus: false,
@@ -113,17 +108,15 @@ type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
 
 /**
  * Mensagem honesta para qualquer ação que NÃO persiste nada nesta Preview (somente leitura).
- * Os botões de escrita do protótipo (avançar status, recibo, WhatsApp, exportar, "Abrir OS"…)
- * apenas pré-visualizam o fluxo — nunca confirmam uma operação real. Trocar OS / Histórico /
+ * Os botões de escrita do protótipo (avançar status, recibo, WhatsApp, exportar…) apenas
+ * pré-visualizam o fluxo — nunca confirmam uma operação real. Trocar OS / Histórico /
  * Configurações também não navegam de verdade na Preview.
+ *
+ * EXCEÇÃO (OPS-V4-NOVA-OS-REAL-001): a "Nova OS" deixou de ser preview — cria uma OS REAL
+ * na loja ativa via `criarOSEnterpriseV3` (o próprio modal faz a chamada; aqui só tratamos
+ * o sucesso em `onOSCriada`). As demais ações da V4 seguem em preview.
  */
 const PREVIEW_NOOP = "Indisponível na Preview — nenhuma alteração foi salva.";
-
-/**
- * Mensagem específica da tentativa de criar OS pela Preview: a Preview é somente leitura
- * e NÃO cria Ordem de Serviço. "Abrir OS" nunca abre/seleciona uma OS existente por fallback.
- */
-const PREVIEW_NO_OS = "Indisponível na Preview — nenhuma OS foi criada.";
 
 export function buildVals(
   st: V4State,
@@ -344,20 +337,10 @@ export function buildVals(
   }));
 
   // ---- Nova OS ----
-  const novaEquipBtns = EQUIP_DEF.map(([k, label]) => {
-    const sel = st.novaEquip === k;
-    return {
-      label, onClick: () => update({ novaEquip: k }),
-      bg: sel ? C.black : C.surface, fg: sel ? C.white : C.muted, bd: sel ? C.black : C.inputBd,
-    };
-  });
-  const novaOrigemBtns = ORIGEM_DEF.map(([k, label]) => {
-    const sel = st.novaOrigem === k;
-    return {
-      label, onClick: () => update({ novaOrigem: k }),
-      bg: sel ? C.primaryBg : C.surface, fg: sel ? C.primaryHover : C.muted, bd: sel ? C.primaryBd : C.inputBd,
-    };
-  });
+  // O formulário da Nova OS vive LOCALMENTE no `NovaOSModal` (decisão de design A) e
+  // chama `criarOSEnterpriseV3` direto. Aqui só expomos abrir/fechar o modal e o
+  // callback de sucesso `onOSCriada` (abaixo), que seleciona a OS criada e recarrega a lista.
+
   // ---- orçamento REAL da OS (somente leitura; vazio honesto quando ausente) ----
   // Persistido (status enum real) / prévia sintetizada / ausente. Sem edição,
   // sem toggle cobrado/brinde/desconto, sem custo/lucro inventado.
@@ -395,6 +378,23 @@ export function buildVals(
   // Barra de busca do topo: leva ao seletor de OS real (limpa seleção; nunca auto-abre).
   const goToOSSearch = () =>
     update({ selectedOsId: null, module: "workspace", view: "cockpit", menu: null });
+
+  // Nova OS criada (REAL) pelo modal → fecha o modal, abre a OS recém-criada no workspace
+  // e recarrega a lista. Recebe apenas o id resultante; a identidade/financeiro são
+  // hidratados pelo detalhe (`useOrdemV4`). Uma OS nova nasce "aberta" → etapa "entrada".
+  const onOSCriada = (osId: string) => {
+    update({
+      novaOS: false,
+      selectedOsId: osId,
+      status: "aberta",
+      stage: "entrada",
+      module: "workspace",
+      view: "cockpit",
+      menu: null,
+    });
+    ctx.reloadOrdens();
+    notify("OS criada e aberta no workspace.");
+  };
 
   const prim = PRIMARY[st.status];
   const tone = TONE[st.status] || TONE.em_execucao;
@@ -536,17 +536,9 @@ export function buildVals(
     resolved, pending: PENDING, act,
 
     openNovaOS: () => update({ novaOS: true }), closeNovaOS: () => update({ novaOS: false }), novaOSOpen: st.novaOS,
-    novaBuscar: st.novaTab === "buscar", novaNovo: st.novaTab === "novo",
-    setNovaBuscar: () => update({ novaTab: "buscar" }), setNovaNovo: () => update({ novaTab: "novo" }),
-    buscarBg: st.novaTab === "buscar" ? C.surface : "transparent",
-    buscarFg: st.novaTab === "buscar" ? C.primaryHover : C.muted,
-    novoBg: st.novaTab === "novo" ? C.surface : "transparent",
-    novoFg: st.novaTab === "novo" ? C.primaryHover : C.muted,
-    novaEquipBtns, novaOrigemBtns,
-    // "Abrir OS" na Preview NÃO cria OS e NUNCA abre/seleciona uma OS existente por fallback:
-    // limpa a seleção (volta ao seletor de OS) e avisa de forma honesta. Sem isso, fechar o
-    // modal revelaria a OS que estava aberta atrás dele — parecendo que abriu a "OS errada".
-    abrirOS: () => { update({ novaOS: false, selectedOsId: null }); notify(PREVIEW_NO_OS); },
+    // Nova OS real: o modal coleta o formulário localmente, cria via `criarOSEnterpriseV3`
+    // e chama `onOSCriada(osId)` no sucesso (fecha modal + abre a OS criada + recarrega).
+    onOSCriada,
 
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 
