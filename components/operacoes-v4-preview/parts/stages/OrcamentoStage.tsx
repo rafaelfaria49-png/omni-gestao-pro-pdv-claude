@@ -1,14 +1,23 @@
-/** Operações V4 Preview — etapa Orçamento (somente leitura da OS real).
+/** Operações V4 — etapa Orçamento (REAL · slice OPS-V4-ORCAMENTO-REAL-002).
  *
- * GOAL OPS-V4-P0-010: o editor mock (itens fixos, toggle cobrado/brinde/desconto,
- * custo/lucro ao vivo, card "Disponibilidade de peças") foi removido. O stage lê
- * só o que a OS persiste: serviços, peças, total, desconto e versões reais — ou
- * empty state honesto. Distingue orçamento persistido (status enum real) de
- * prévia sintetizada ("Prévia — não aprovado"). Custo/lucro só quando há custo
- * real (Decisão 2). Nenhuma edição, nenhuma consulta de estoque. */
-import { C, card, cardTitle, upLabel } from "../../tokens";
+ * Deixou de ser somente leitura. Quando há orçamento materializado em rascunho/
+ * enviado, edita itens (serviço manual + peça do catálogo via UI V4-native),
+ * desconto, calcula o total ao vivo (`computeTotaisV3`) e persiste/decide via
+ * actions reais da V3 — `gerarOrcamentoDaOS` / `salvarOrcamentoV3` /
+ * `aprovarOrcamentoV3` / `recusarOrcamentoV3`. NÃO baixa/reserva estoque, NÃO
+ * toca caixa/financeiro real. Estados aprovado/recusado/prévia/ausente ficam
+ * read-only (com CTA "Gerar orçamento" quando aplicável). */
+import { useState } from "react";
+import { C, card, cardTitle, upLabel, fmt } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 import type { V4OrcItemView } from "../../os-adapter";
+import { ProdutoLookupV4 } from "../ProdutoLookupV4";
+import {
+  novoServicoManualV4,
+  pecaFromProdutoV4,
+  totaisEditorV4,
+  type OrcamentoEditorV4,
+} from "@/lib/operacoes-v4/orcamento-form";
 
 const col2 = "minmax(0,1.55fr) minmax(0,1fr)";
 const emptyText = { fontSize: 12, color: C.subtle, padding: "8px 2px", lineHeight: 1.5 } as const;
@@ -21,6 +30,40 @@ const STATUS_BG: Record<string, { bg: string; fg: string }> = {
   neutro: { bg: C.line3, fg: C.muted },
 };
 
+const cellInput: React.CSSProperties = {
+  height: 30,
+  padding: "0 9px",
+  border: `1px solid ${C.inputBd}`,
+  borderRadius: 7,
+  fontSize: 12,
+  color: C.body,
+  background: C.surface,
+};
+
+function num(s: string): number {
+  const n = parseFloat(s.replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+export function OrcamentoStage({ v }: { v: V4Vals }) {
+  if (!v.osSelected) {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>🔧 Orçamento</div>
+        <div style={emptyText}>Selecione uma Ordem de Serviço para trabalhar o orçamento.</div>
+      </div>
+    );
+  }
+  // Editável (materializado + rascunho/enviado) → editor real; senão, read-only.
+  if (v.orcamentoEditavel) {
+    return <OrcamentoEditor key={v.selectedOsId ?? "none"} v={v} />;
+  }
+  return <OrcamentoReadonly v={v} />;
+}
+
+// ---------------------------------------------------------------------------
+// Read-only: prévia / ausente (com CTA "Gerar orçamento") ou já decidido.
+// ---------------------------------------------------------------------------
 function ItemRow({ it }: { it: V4OrcItemView }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, padding: "8px 0", borderBottom: `1px solid ${C.line4}` }}>
@@ -34,14 +77,38 @@ function ItemRow({ it }: { it: V4OrcItemView }) {
   );
 }
 
-export function OrcamentoStage({ v }: { v: V4Vals }) {
+function GerarOrcamentoCTA({ v }: { v: V4Vals }) {
+  const [busy, setBusy] = useState(false);
+  const onGerar = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await v.gerarOrcamento();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={onGerar}
+      disabled={busy}
+      style={{ height: 34, padding: "0 16px", border: "none", background: C.primary, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
+    >
+      {busy ? "Gerando…" : "Gerar orçamento"}
+    </button>
+  );
+}
+
+function OrcamentoReadonly({ v }: { v: V4Vals }) {
   const o = v.orcamento;
 
   if (o.estado === "ausente") {
     return (
       <div style={card}>
         <div style={{ ...cardTitle, marginBottom: 6 }}>🔧 Orçamento</div>
-        <div style={emptyText}>Nenhum orçamento registrado para esta Ordem de Serviço.</div>
+        <div style={{ ...emptyText, marginBottom: 12 }}>Nenhum orçamento registrado para esta Ordem de Serviço.</div>
+        <GerarOrcamentoCTA v={v} />
       </div>
     );
   }
@@ -64,17 +131,18 @@ export function OrcamentoStage({ v }: { v: V4Vals }) {
         </div>
 
         <div style={{ ...upLabel, marginBottom: 4 }}>Serviços / mão de obra</div>
-        {o.servicos.length === 0 ? (
-          <div style={emptyText}>Nenhum serviço no orçamento.</div>
-        ) : (
-          o.servicos.map((it) => <ItemRow key={it.id} it={it} />)
-        )}
+        {o.servicos.length === 0 ? <div style={emptyText}>Nenhum serviço no orçamento.</div> : o.servicos.map((it) => <ItemRow key={it.id} it={it} />)}
 
         <div style={{ ...upLabel, margin: "13px 0 4px" }}>Peças</div>
-        {o.pecas.length === 0 ? (
-          <div style={emptyText}>Nenhuma peça no orçamento.</div>
-        ) : (
-          o.pecas.map((it) => <ItemRow key={it.id} it={it} />)
+        {o.pecas.length === 0 ? <div style={emptyText}>Nenhuma peça no orçamento.</div> : o.pecas.map((it) => <ItemRow key={it.id} it={it} />)}
+
+        {o.isPrevia && (
+          <div style={{ marginTop: 13 }}>
+            <GerarOrcamentoCTA v={v} />
+            <div style={{ fontSize: 10, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>
+              Prévia derivada dos itens da OS. Gere o orçamento para editar e enviar.
+            </div>
+          </div>
         )}
       </div>
 
@@ -90,11 +158,126 @@ export function OrcamentoStage({ v }: { v: V4Vals }) {
             <div><div style={upLabel}>Lucro</div><div style={{ fontSize: 13, fontWeight: 700, color: C.successFg }}>{o.lucroTotal}</div></div>
           </div>
         )}
-        {o.isPrevia && (
-          <div style={{ fontSize: 10, color: C.subtle, marginTop: 10, lineHeight: 1.5 }}>
-            Prévia derivada dos itens da OS — ainda não há orçamento aprovado registrado.
-          </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Editor real (orçamento materializado em rascunho/enviado).
+// ---------------------------------------------------------------------------
+function OrcamentoEditor({ v }: { v: V4Vals }) {
+  const [editor, setEditor] = useState<OrcamentoEditorV4>(() => v.orcamentoEditorSeed);
+  const [lookupOpen, setLookupOpen] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const totais = totaisEditorV4(editor);
+
+  const run = async (fn: () => Promise<boolean>) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addServico = () =>
+    setEditor((e) => ({ ...e, servicos: [...e.servicos, novoServicoManualV4({ descricao: "", valor: 0 })] }));
+  const setServico = (i: number, patch: Partial<{ descricao: string; valor: number }>) =>
+    setEditor((e) => ({ ...e, servicos: e.servicos.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));
+  const removeServico = (i: number) => setEditor((e) => ({ ...e, servicos: e.servicos.filter((_, idx) => idx !== i) }));
+
+  const setPeca = (i: number, patch: Partial<{ quantidade: number; valorUnitario: number }>) =>
+    setEditor((e) => ({ ...e, pecas: e.pecas.map((p, idx) => (idx === i ? { ...p, ...patch } : p)) }));
+  const removePeca = (i: number) => setEditor((e) => ({ ...e, pecas: e.pecas.filter((_, idx) => idx !== i) }));
+
+  const btnPrimary: React.CSSProperties = { height: 34, padding: "0 16px", border: "none", background: C.primary, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 };
+  const btnGhost: React.CSSProperties = { height: 30, padding: "0 12px", border: `1px solid ${C.inputBd2}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: col2, gap: 12, alignItems: "start" }}>
+      <div style={{ ...card, border: `1px solid ${C.primaryBd2}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 11 }}>
+          <span style={cardTitle}>🔧 Orçamento</span>
+          <span style={{ height: 21, padding: "0 9px", display: "inline-flex", alignItems: "center", background: C.infoBg, color: C.infoFg, borderRadius: 999, fontSize: 11, fontWeight: 600 }}>{v.orcamento.statusLabel || "Rascunho"}</span>
+        </div>
+
+        {/* Serviços */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <span style={upLabel}>Serviços / mão de obra</span>
+          <button type="button" onClick={addServico} style={btnGhost}>+ Serviço</button>
+        </div>
+        {editor.servicos.length === 0 ? (
+          <div style={emptyText}>Nenhum serviço. Adicione um serviço manual.</div>
+        ) : (
+          editor.servicos.map((s, i) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: `1px solid ${C.line4}` }}>
+              <input value={s.descricao} onChange={(e) => setServico(i, { descricao: e.target.value })} placeholder="Descrição do serviço" maxLength={120} style={{ ...cellInput, flex: 1, minWidth: 0 }} />
+              <input type="number" min={0} value={s.valor || ""} onChange={(e) => setServico(i, { valor: num(e.target.value) })} placeholder="0,00" style={{ ...cellInput, width: 92, textAlign: "right" }} />
+              <button type="button" onClick={() => removeServico(i)} aria-label="Remover serviço" style={{ width: 28, height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.danger, borderRadius: 7, cursor: "pointer", flex: "none" }}>×</button>
+            </div>
+          ))
         )}
+
+        {/* Peças */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 0 6px" }}>
+          <span style={upLabel}>Peças</span>
+          <button type="button" onClick={() => setLookupOpen((o) => !o)} style={btnGhost}>+ Peça do catálogo</button>
+        </div>
+        {lookupOpen && (
+          <ProdutoLookupV4
+            onSelect={(p) => {
+              setEditor((e) => ({ ...e, pecas: [...e.pecas, pecaFromProdutoV4(p, { quantidade: 1 })] }));
+              setLookupOpen(false);
+            }}
+            onClose={() => setLookupOpen(false)}
+          />
+        )}
+        {editor.pecas.length === 0 ? (
+          <div style={emptyText}>Nenhuma peça. Adicione uma peça do catálogo.</div>
+        ) : (
+          editor.pecas.map((p, i) => (
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: `1px solid ${C.line4}` }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: C.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span>
+              <input type="number" min={1} value={p.quantidade || ""} onChange={(e) => setPeca(i, { quantidade: Math.max(1, Math.trunc(num(e.target.value)) || 1) })} aria-label="Quantidade" style={{ ...cellInput, width: 52, textAlign: "center" }} />
+              <input type="number" min={0} value={p.valorUnitario || ""} onChange={(e) => setPeca(i, { valorUnitario: num(e.target.value) })} aria-label="Valor unitário" placeholder="0,00" style={{ ...cellInput, width: 88, textAlign: "right" }} />
+              <button type="button" onClick={() => removePeca(i)} aria-label="Remover peça" style={{ width: 28, height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.danger, borderRadius: 7, cursor: "pointer", flex: "none" }}>×</button>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Totais + ações */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={card}>
+          <div style={{ ...cardTitle, marginBottom: 10 }}>Totais</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+            <span style={{ fontSize: 12.5, color: C.muted }}>Desconto (R$)</span>
+            <input type="number" min={0} value={editor.desconto || ""} onChange={(e) => setEditor((s) => ({ ...s, desconto: num(e.target.value) }))} placeholder="0,00" style={{ ...cellInput, width: 100, textAlign: "right" }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "4px 0" }}><span style={{ color: C.muted }}>Subtotal</span><span style={{ color: C.body }}>{fmt(totais.subtotal)}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "8px 0 5px", borderTop: `1px solid ${C.line2}`, marginTop: 4 }}><span style={{ fontWeight: 700, color: C.ink }}>Total ao cliente</span><span style={{ fontWeight: 700, color: C.ink }}>{fmt(totais.total)}</span></div>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, borderTop: `1px dashed ${C.inputBd}`, marginTop: 8, paddingTop: 9 }}>
+            <div><div style={upLabel}>Custo interno</div><div style={{ fontSize: 13, fontWeight: 600, color: C.body }}>{fmt(totais.custo)}</div></div>
+            <div><div style={upLabel}>Lucro</div><div style={{ fontSize: 13, fontWeight: 700, color: totais.lucro >= 0 ? C.successFg : C.dangerFg }}>{fmt(totais.lucro)}</div></div>
+          </div>
+        </div>
+
+        <div style={card}>
+          <div style={{ ...cardTitle, marginBottom: 10 }}>Ações</div>
+          <button type="button" onClick={() => run(() => v.salvarOrcamento(editor))} disabled={busy} style={{ ...btnPrimary, width: "100%", marginBottom: 8 }}>{busy ? "Processando…" : "Salvar orçamento"}</button>
+          {v.orcamentoPodeDecidir && (
+            <>
+              <button type="button" onClick={() => run(() => v.aprovarOrcamento())} disabled={busy} style={{ height: 34, width: "100%", padding: "0 16px", border: "none", background: C.success, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1, marginBottom: 10 }}>Aprovar orçamento</button>
+              <div style={{ ...upLabel, marginBottom: 4 }}>Motivo da recusa (opcional)</div>
+              <input value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={200} placeholder="Ex.: cliente não aprovou o valor" style={{ ...cellInput, height: 32, width: "100%", marginBottom: 8 }} />
+              <button type="button" onClick={() => run(() => v.recusarOrcamento(motivo))} disabled={busy} style={{ height: 32, width: "100%", padding: "0 16px", border: `1px solid ${C.dangerBd}`, background: C.surface, color: C.dangerFg, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>Recusar orçamento</button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

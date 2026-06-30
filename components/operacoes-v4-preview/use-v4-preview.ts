@@ -30,8 +30,18 @@ import {
 import { C, fmt } from "./tokens";
 import type { V4State, V4Status, V4Stage } from "./types";
 import { useLojaAtiva } from "@/lib/loja-ativa";
-import type { OrdemServico } from "@/types/os";
+import type { OrdemServico, Orcamento } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
+// Actions REAIS reaproveitadas da V3 (sem criar backend novo) — slice OPS-V4-ORCAMENTO-REAL-002.
+import { salvarDiagnosticoV3 } from "@/lib/operacoes-v3/workspace-actions";
+import {
+  gerarOrcamentoDaOS,
+  salvarOrcamentoV3,
+  aprovarOrcamentoV3,
+  recusarOrcamentoV3,
+} from "@/lib/operacoes-v3/orcamento-actions";
+import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
+import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
 import {
   adaptAcessoriosEntrada,
   adaptAnexos,
@@ -69,16 +79,36 @@ import {
   buildSlaView,
 } from "./rails-adapter";
 
-/** Dados reais injetados no `buildVals` (somente leitura, vindos das Server Actions). */
+/** Entrada do editor de diagnóstico V4 → action `salvarDiagnosticoV3`. */
+export interface DiagnosticoInputV4 {
+  inicial: string;
+  final: string;
+  causa: string;
+  solucao: string;
+}
+
+/** Dados reais injetados no `buildVals` (leitura + ações de escrita reais da V3). */
 export interface V4DataCtx {
   ordens: OrdemServico[];
   ordensLoading: boolean;
   ordensPrimeiraCarga: boolean;
   ordensError: string | null;
   reloadOrdens: () => void;
+  /** Recarrega o detalhe da OS selecionada após uma escrita. */
+  reloadDetail: () => void;
   /** OS selecionada já hidratada (detalhe) ou linha da lista enquanto carrega. */
   realOS: OrdemServico | null;
   detailLoading: boolean;
+  // ---- Ações de escrita REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----
+  // Cada uma chama uma action real da V3 (storeId+osId da loja/OS ativas),
+  // recarrega lista+detalhe e devolve `true` em sucesso. Sem caixa/estoque/financeiro.
+  salvarDiagnostico: (input: DiagnosticoInputV4) => Promise<boolean>;
+  gerarOrcamento: () => Promise<boolean>;
+  salvarOrcamento: (editor: OrcamentoEditorV4) => Promise<boolean>;
+  aprovarOrcamento: () => Promise<boolean>;
+  recusarOrcamento: (motivo?: string) => Promise<boolean>;
+  iniciarDiagnostico: () => Promise<boolean>;
+  iniciarServico: () => Promise<boolean>;
 }
 
 const INITIAL: V4State = {
@@ -159,13 +189,23 @@ export function buildVals(
   const setView = (v: V4State["view"]) => update({ view: v, menu: null });
   const toggleMenu = (m: "print" | "more") =>
     update((s) => ({ menu: s.menu === m ? null : m }));
-  // Transições só pré-visualizam o fluxo no estado local — nada é persistido. O toast é honesto.
+  // Ação primária. SOMENTE as transições seguras desta fase persistem de verdade
+  // (aberta → diagnostico; aprovado → em_execucao), via `aplicarTransicaoStatusV3`.
+  // As demais (enviar orçamento, registrar aprovação, marcar pronta, receber
+  // pagamento…) seguem PREVIEW honesto — não tocam estoque/caixa/financeiro/entrega.
   const advance = () => {
     const p = PRIMARY[st.status];
-    if (p) {
-      update({ status: p.to, stage: p.stage });
-      notify(PREVIEW_NOOP);
+    if (!p) return;
+    if (st.status === "aberta") {
+      void ctx.iniciarDiagnostico();
+      return;
     }
+    if (st.status === "aprovado") {
+      void ctx.iniciarServico();
+      return;
+    }
+    update({ status: p.to, stage: p.stage });
+    notify(PREVIEW_NOOP);
   };
   const setStatusTo = (s: V4Status) => {
     update({ status: s });
@@ -341,10 +381,18 @@ export function buildVals(
   // chama `criarOSEnterpriseV3` direto. Aqui só expomos abrir/fechar o modal e o
   // callback de sucesso `onOSCriada` (abaixo), que seleciona a OS criada e recarrega a lista.
 
-  // ---- orçamento REAL da OS (somente leitura; vazio honesto quando ausente) ----
-  // Persistido (status enum real) / prévia sintetizada / ausente. Sem edição,
-  // sem toggle cobrado/brinde/desconto, sem custo/lucro inventado.
+  // ---- orçamento REAL da OS (view read-only) + estado de edição (slice 002) ----
+  // A view read-only segue mostrando persistido/prévia/ausente. As flags abaixo
+  // habilitam o EDITOR real: materializado = orçamento real (não sintetizado);
+  // editável/decidível = materializado E status rascunho|enviado (mesma regra das
+  // actions `salvarOrcamentoV3`/`aprovar`/`recusar`). O seed alimenta o editor V4.
   const orcamentoReal = realOS ? adaptOrcamento(realOS) : EMPTY_ORCAMENTO_VIEW;
+  const orcRaw = (realOS as { orcamento?: Orcamento } | null)?.orcamento ?? null;
+  const orcamentoMaterializado = !!orcRaw && orcRaw.sintetizado !== true;
+  const orcStatusRaw = orcRaw?.status;
+  const orcamentoEditavel = orcamentoMaterializado && (orcStatusRaw === "rascunho" || orcStatusRaw === "enviado");
+  const orcamentoPodeDecidir = orcamentoEditavel;
+  const orcamentoEditorSeed = seedEditorFromOS(realOS);
 
   // ---- telas de rail (Visão geral / Fila / Bancada / SLA / PDV) ----
   // View-models READ-ONLY derivados da MESMA lista de OS reais já carregada
@@ -545,6 +593,20 @@ export function buildVals(
     diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, entrega: entregaReal,
     os: osView, pag: pagView,
 
+    // ---- Diagnóstico / Orçamento REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----
+    // Handlers de escrita reais (chamam actions da V3 e recarregam lista+detalhe).
+    // Demais stages (Execução/Financeiro/Entrega/Pós-venda/Documentos/WhatsApp/PDV)
+    // permanecem preview/read-only.
+    salvarDiagnostico: ctx.salvarDiagnostico,
+    gerarOrcamento: ctx.gerarOrcamento,
+    salvarOrcamento: ctx.salvarOrcamento,
+    aprovarOrcamento: ctx.aprovarOrcamento,
+    recusarOrcamento: ctx.recusarOrcamento,
+    orcamentoMaterializado,
+    orcamentoEditavel,
+    orcamentoPodeDecidir,
+    orcamentoEditorSeed,
+
     toast: st.toast, showToast: !!st.toast,
 
     // ---- seleção de OS real ----
@@ -587,7 +649,7 @@ export function useV4Preview(): V4Vals {
     error: ordensError,
     reload: reloadOrdens,
   } = useOrdensV4(lojaAtivaId);
-  const { ordem: ordemDetail, loading: detailLoading } = useOrdemV4(lojaAtivaId, st.selectedOsId);
+  const { ordem: ordemDetail, loading: detailLoading, reload: reloadDetail } = useOrdemV4(lojaAtivaId, st.selectedOsId);
 
   useEffect(() => {
     return () => {
@@ -605,6 +667,78 @@ export function useV4Preview(): V4Vals {
     timer.current = setTimeout(() => setSt((prev) => ({ ...prev, toast: "" })), 1900);
   }, []);
 
+  // ---- Ações de escrita REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----------------
+  // Wrapper único: resolve loja/OS ativas (sem fallback loja-1), executa a action
+  // real da V3, recarrega lista+detalhe e dá toast honesto. Devolve `true`/`false`.
+  const selectedOsId = st.selectedOsId;
+  const runWrite = useCallback(
+    async (
+      fn: (sid: string, osId: string) => Promise<unknown>,
+      okMsg: string,
+      after?: () => void,
+    ): Promise<boolean> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      const osId = (selectedOsId ?? "").trim();
+      if (!sid || !osId) {
+        notify("Selecione uma OS na loja ativa para concluir a ação.");
+        return false;
+      }
+      try {
+        await fn(sid, osId);
+        reloadOrdens();
+        reloadDetail();
+        if (after) after();
+        notify(okMsg);
+        return true;
+      } catch (e) {
+        notify(e instanceof Error ? e.message : "Não foi possível concluir a ação.");
+        return false;
+      }
+    },
+    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, notify],
+  );
+
+  const salvarDiagnostico = useCallback(
+    (input: DiagnosticoInputV4) =>
+      runWrite((sid, osId) => salvarDiagnosticoV3(sid, osId, input), "Diagnóstico salvo."),
+    [runWrite],
+  );
+  const gerarOrcamento = useCallback(
+    () => runWrite((sid, osId) => gerarOrcamentoDaOS(sid, osId), "Orçamento gerado."),
+    [runWrite],
+  );
+  const salvarOrcamento = useCallback(
+    (editor: OrcamentoEditorV4) =>
+      runWrite((sid, osId) => salvarOrcamentoV3(sid, osId, editorToSalvarInputV4(editor)), "Orçamento salvo."),
+    [runWrite],
+  );
+  const aprovarOrcamento = useCallback(
+    () => runWrite((sid, osId) => aprovarOrcamentoV3(sid, osId), "Orçamento aprovado.", () => update({ status: "aprovado" })),
+    [runWrite, update],
+  );
+  const recusarOrcamento = useCallback(
+    (motivo?: string) => runWrite((sid, osId) => recusarOrcamentoV3(sid, osId, motivo), "Orçamento recusado."),
+    [runWrite],
+  );
+  const iniciarDiagnostico = useCallback(
+    () =>
+      runWrite(
+        (sid, osId) => aplicarTransicaoStatusV3(sid, osId, "diagnostico"),
+        "OS movida para diagnóstico.",
+        () => update({ status: "diagnostico", stage: "diagnostico" }),
+      ),
+    [runWrite, update],
+  );
+  const iniciarServico = useCallback(
+    () =>
+      runWrite(
+        (sid, osId) => aplicarTransicaoStatusV3(sid, osId, "em_execucao"),
+        "Serviço iniciado.",
+        () => update({ status: "em_execucao", stage: "execucao" }),
+      ),
+    [runWrite, update],
+  );
+
   // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
   const realOS = useMemo<OrdemServico | null>(() => {
     if (!st.selectedOsId) return null;
@@ -619,10 +753,34 @@ export function useV4Preview(): V4Vals {
       ordensPrimeiraCarga,
       ordensError,
       reloadOrdens,
+      reloadDetail,
       realOS,
       detailLoading,
+      salvarDiagnostico,
+      gerarOrcamento,
+      salvarOrcamento,
+      aprovarOrcamento,
+      recusarOrcamento,
+      iniciarDiagnostico,
+      iniciarServico,
     }),
-    [ordens, ordensLoading, ordensPrimeiraCarga, ordensError, reloadOrdens, realOS, detailLoading],
+    [
+      ordens,
+      ordensLoading,
+      ordensPrimeiraCarga,
+      ordensError,
+      reloadOrdens,
+      reloadDetail,
+      realOS,
+      detailLoading,
+      salvarDiagnostico,
+      gerarOrcamento,
+      salvarOrcamento,
+      aprovarOrcamento,
+      recusarOrcamento,
+      iniciarDiagnostico,
+      iniciarServico,
+    ],
   );
 
   return useMemo(() => buildVals(st, update, notify, ctx), [st, update, notify, ctx]);

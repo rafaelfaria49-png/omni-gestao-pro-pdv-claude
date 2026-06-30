@@ -550,25 +550,57 @@ const DIAG_ANEXO_TIPOS = new Set<AnexoTipo>(["laudo", "foto_defeito"]);
 export interface V4DiagnosticoView {
   defeito: string;
   temDefeito: boolean;
+  /** Parecer técnico estruturado real (payload.diagnosticoV3). Campos vazios = "". */
+  parecerInicial: string;
+  parecerFinal: string;
+  causa: string;
+  solucao: string;
+  /** true quando há QUALQUER campo de parecer estruturado preenchido. */
+  temParecer: boolean;
   observacoes: V4Observacao[];
   anexos: V4Anexo[];
   eventos: V4HistEvento[];
-  /** true quando há QUALQUER trabalho de diagnóstico real (parecer/anexo/evento). */
+  /** true quando há QUALQUER trabalho de diagnóstico real (parecer/observação/anexo/evento). */
   temDiagnostico: boolean;
 }
 
 export const EMPTY_DIAGNOSTICO_VIEW: V4DiagnosticoView = {
   defeito: NI,
   temDefeito: false,
+  parecerInicial: "",
+  parecerFinal: "",
+  causa: "",
+  solucao: "",
+  temParecer: false,
   observacoes: [],
   anexos: [],
   eventos: [],
   temDiagnostico: false,
 };
 
+/**
+ * Lê o parecer estruturado real da OS (payload.diagnosticoV3), com semente do
+ * diagnóstico inicial da Nova OS (aberturaV3) — espelha `lerDiagnosticoV3` da V3
+ * sem importar o model. Somente leitura.
+ */
+function lerParecerV3(os: OrdemServico): { inicial: string; final: string; causa: string; solucao: string } {
+  const d = (os as { diagnosticoV3?: Partial<{ inicial: unknown; final: unknown; causa: unknown; solucao: unknown }> } | null | undefined)
+    ?.diagnosticoV3;
+  const abertura = (os as { aberturaV3?: { diagnosticoInicial?: { diagnosticoTecnico?: unknown; solucaoPrevista?: unknown } } } | null | undefined)
+    ?.aberturaV3;
+  return {
+    inicial: txt(d?.inicial) || txt(abertura?.diagnosticoInicial?.diagnosticoTecnico),
+    final: txt(d?.final),
+    causa: txt(d?.causa),
+    solucao: txt(d?.solucao) || txt(abertura?.diagnosticoInicial?.solucaoPrevista),
+  };
+}
+
 export function adaptDiagnostico(os: OrdemServico): V4DiagnosticoView {
   const defeito = txt(os.equipamento?.defeitoRelatado) || txt(os.observacaoCliente);
   const observacoes = adaptObservacoes(os);
+  const parecer = lerParecerV3(os);
+  const temParecer = !!(parecer.inicial || parecer.final || parecer.causa || parecer.solucao);
 
   const anexosLista = Array.isArray(os.anexos) ? os.anexos : [];
   const anexos = anexosLista
@@ -595,10 +627,15 @@ export function adaptDiagnostico(os: OrdemServico): V4DiagnosticoView {
   return {
     defeito: defeito || NI,
     temDefeito: !!defeito,
+    parecerInicial: parecer.inicial,
+    parecerFinal: parecer.final,
+    causa: parecer.causa,
+    solucao: parecer.solucao,
+    temParecer,
     observacoes,
     anexos,
     eventos,
-    temDiagnostico: observacoes.length > 0 || anexos.length > 0 || eventos.length > 0,
+    temDiagnostico: temParecer || observacoes.length > 0 || anexos.length > 0 || eventos.length > 0,
   };
 }
 

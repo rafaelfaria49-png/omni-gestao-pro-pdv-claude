@@ -1,10 +1,11 @@
-/** Operações V4 Preview — etapa Diagnóstico (somente leitura da OS real).
+/** Operações V4 — etapa Diagnóstico (REAL · slice OPS-V4-ORCAMENTO-REAL-002).
  *
- * GOAL OPS-V4-P0-009: o laudo/técnico/causa/solução fabricados e o "Histórico do
- * aparelho" inventado (OS-2025-2207, garantia 08/2025) foram removidos. O stage
- * lê só o que a OS persiste — defeito relatado, observações técnicas (parecer),
- * anexos/laudos de diagnóstico e eventos de diagnóstico da timeline — ou exibe
- * empty state honesto. Nada de valor inventado. */
+ * Deixou de ser somente leitura: além de mostrar defeito relatado, anexos e
+ * eventos reais (read-only), agora EDITA o parecer técnico estruturado e salva
+ * via `salvarDiagnosticoV3` (reuso da action da V3) — grava `payload.diagnosticoV3`
+ * + evento `diagnostico_registrado`. NÃO muda status, NÃO toca valor/estoque/
+ * financeiro. O editor é V4-native (sem shadcn/V3). */
+import { useState } from "react";
 import { C, card, cardTitle, upLabel, HATCH } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 
@@ -20,28 +21,85 @@ const fieldBox = {
 
 const emptyText = { fontSize: 12, color: C.subtle, padding: "8px 2px", lineHeight: 1.5 } as const;
 
+const textarea: React.CSSProperties = {
+  width: "100%",
+  minHeight: 52,
+  padding: "8px 11px",
+  border: `1px solid ${C.inputBd}`,
+  borderRadius: 8,
+  fontSize: 12.5,
+  color: C.body,
+  resize: "vertical",
+  fontFamily: "inherit",
+  background: C.surface,
+};
+
 export function DiagnosticoStage({ v }: { v: V4Vals }) {
+  // Re-monta o editor ao trocar de OS → re-semeia os campos com o parecer real.
+  return <DiagnosticoStageInner key={v.selectedOsId ?? "none"} v={v} />;
+}
+
+function DiagnosticoStageInner({ v }: { v: V4Vals }) {
   const d = v.diag;
+  const [inicial, setInicial] = useState(d.parecerInicial);
+  const [final, setFinal] = useState(d.parecerFinal);
+  const [causa, setCausa] = useState(d.causa);
+  const [solucao, setSolucao] = useState(d.solucao);
+  const [saving, setSaving] = useState(false);
+
+  const podeSalvar = v.osSelected && !saving;
+
+  const onSalvar = async () => {
+    if (!podeSalvar) return;
+    setSaving(true);
+    try {
+      await v.salvarDiagnostico({ inicial, final, causa, solucao });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)", gap: 12, alignItems: "start" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={card}>
           <div style={{ ...cardTitle, marginBottom: 11 }}>🩺 Diagnóstico técnico</div>
           <div style={{ ...upLabel, marginBottom: 4 }}>Defeito relatado</div>
-          <div style={{ ...fieldBox, minHeight: 44, color: d.temDefeito ? C.body : C.subtle }}>{d.defeito}</div>
+          <div style={{ ...fieldBox, minHeight: 40, color: d.temDefeito ? C.body : C.subtle }}>{d.defeito}</div>
 
-          <div style={{ ...upLabel, margin: "13px 0 6px" }}>Parecer técnico (observações)</div>
-          {d.observacoes.length === 0 ? (
-            <div style={emptyText}>Nenhuma observação técnica registrada.</div>
+          {!v.osSelected ? (
+            <div style={{ ...emptyText, marginTop: 12 }}>Selecione uma Ordem de Serviço para registrar o diagnóstico.</div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-              {d.observacoes.map((o) => (
-                <div key={o.id} style={{ border: `1px solid ${C.line2}`, borderRadius: 8, background: C.surface2, padding: 9 }}>
-                  <div style={{ fontSize: 12, color: C.body, lineHeight: 1.5 }}>{o.conteudo}</div>
-                  <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 3 }}>{o.autor}{o.interna ? " · interna" : ""}</div>
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10, marginTop: 13 }}>
+                <div>
+                  <div style={{ ...upLabel, marginBottom: 4 }}>Parecer inicial</div>
+                  <textarea value={inicial} onChange={(e) => setInicial(e.target.value)} maxLength={2000} placeholder="Avaliação inicial do técnico…" style={textarea} />
                 </div>
-              ))}
-            </div>
+                <div>
+                  <div style={{ ...upLabel, marginBottom: 4 }}>Parecer final</div>
+                  <textarea value={final} onChange={(e) => setFinal(e.target.value)} maxLength={2000} placeholder="Conclusão após análise…" style={textarea} />
+                </div>
+                <div>
+                  <div style={{ ...upLabel, marginBottom: 4 }}>Causa provável</div>
+                  <textarea value={causa} onChange={(e) => setCausa(e.target.value)} maxLength={2000} placeholder="Causa identificada…" style={textarea} />
+                </div>
+                <div>
+                  <div style={{ ...upLabel, marginBottom: 4 }}>Solução prevista</div>
+                  <textarea value={solucao} onChange={(e) => setSolucao(e.target.value)} maxLength={2000} placeholder="Solução a aplicar…" style={textarea} />
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                <button
+                  type="button"
+                  onClick={onSalvar}
+                  disabled={!podeSalvar}
+                  style={{ height: 34, padding: "0 16px", border: "none", background: C.primary, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: podeSalvar ? "pointer" : "default", opacity: podeSalvar ? 1 : 0.6 }}
+                >
+                  {saving ? "Salvando…" : "Salvar diagnóstico"}
+                </button>
+              </div>
+            </>
           )}
         </div>
 

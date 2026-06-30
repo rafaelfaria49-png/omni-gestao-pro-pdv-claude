@@ -22,6 +22,23 @@ vi.mock("@/app/actions/ordens", () => ({
   getOrdem: vi.fn(async () => null),
 }))
 
+// As actions reais da V3 importam `@/auth` (next-auth) → não carregam no ambiente
+// node do vitest. Mockamos só os símbolos consumidos por `use-v4-preview` para que
+// `buildVals` possa ser importado. Os GUARDS estáticos leem o SOURCE real via fs,
+// então os mocks não afetam a verificação de reuso/segurança.
+vi.mock("@/lib/operacoes-v3/workspace-actions", () => ({
+  salvarDiagnosticoV3: vi.fn(async () => ({})),
+}))
+vi.mock("@/lib/operacoes-v3/orcamento-actions", () => ({
+  gerarOrcamentoDaOS: vi.fn(async () => ({})),
+  salvarOrcamentoV3: vi.fn(async () => ({})),
+  aprovarOrcamentoV3: vi.fn(async () => ({})),
+  recusarOrcamentoV3: vi.fn(async () => ({})),
+}))
+vi.mock("@/lib/operacoes-v3/status-actions", () => ({
+  aplicarTransicaoStatusV3: vi.fn(async () => ({})),
+}))
+
 import { buildVals, type V4DataCtx } from "./use-v4-preview"
 import type { V4State } from "./types"
 import type { OrdemServico } from "@/types/os"
@@ -119,8 +136,16 @@ const ctx: V4DataCtx = {
   ordensPrimeiraCarga: false,
   ordensError: null,
   reloadOrdens: () => {},
+  reloadDetail: () => {},
   realOS: null,
   detailLoading: false,
+  salvarDiagnostico: async () => false,
+  gerarOrcamento: async () => false,
+  salvarOrcamento: async () => false,
+  aprovarOrcamento: async () => false,
+  recusarOrcamento: async () => false,
+  iniciarDiagnostico: async () => false,
+  iniciarServico: async () => false,
 }
 
 describe("Operações V4 — Nova OS real (cria OS e abre no workspace)", () => {
@@ -237,5 +262,58 @@ describe("Operações V4 Preview — Modo foco e Segurança (preview/no-op)", ()
     expect(msgs.some((m) => /demonstra|preview/i.test(m))).toBe(true)
     // isSeg reflete a superfície ativa
     expect(v.isSeg).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-V4-ORCAMENTO-REAL-002 — Diagnóstico/Orçamento reais (reuso seguro da V3).
+// ---------------------------------------------------------------------------
+describe("Operações V4 — Diagnóstico/Orçamento reais reaproveitam só actions seguras da V3", () => {
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+
+  it("usa as actions reais da V3 de diagnóstico/orçamento (sem backend novo)", () => {
+    for (const action of [
+      "salvarDiagnosticoV3",
+      "gerarOrcamentoDaOS",
+      "salvarOrcamentoV3",
+      "aprovarOrcamentoV3",
+      "recusarOrcamentoV3",
+      "aplicarTransicaoStatusV3",
+    ]) {
+      expect(orquestrador, `esperava reuso de ${action}`).toContain(action)
+    }
+  })
+
+  it("só dispara transições de status SEGURAS (diagnostico / em_execucao)", () => {
+    const args = [...orquestrador.matchAll(/aplicarTransicaoStatusV3\([^,]+,[^,]+,\s*"([a-z_]+)"\)/g)].map((m) => m[1])
+    expect(args.length).toBeGreaterThan(0)
+    expect(new Set(args)).toEqual(new Set(["diagnostico", "em_execucao"]))
+    // Nunca rota proibida neste slice (entrega/cancelamento/pronta tocam estoque/caixa/garantia).
+    for (const proibida of ["entregue", "cancelada", "pronta", "aguardando_peca", "aguardando_aprovacao"]) {
+      expect(args).not.toContain(proibida)
+    }
+  })
+
+  it("o código-fonte da V4 não importa caixa/estoque/financeiro/PDV/WhatsApp/Fiscal", () => {
+    for (const proibido of [
+      'from "@/lib/caixa',
+      'from "@/lib/financeiro',
+      'from "@/lib/estoque',
+      'from "@/lib/whatsapp',
+      'from "@/lib/fiscal',
+      'from "@/components/pdv',
+      'from "@/app/actions/caixa',
+    ]) {
+      expect(allSources, `import proibido encontrado: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("a V4 nunca usa fallback de loja (loja-1 como valor literal)", () => {
+    // Só rejeita o literal entre aspas (um fallback de verdade); menções em comentário
+    // ("sem fallback loja-1") são permitidas.
+    for (const lit of ['"loja-1"', "'loja-1'", "`loja-1`"]) {
+      expect(allSources, `fallback literal encontrado: ${lit}`).not.toContain(lit)
+    }
   })
 })
