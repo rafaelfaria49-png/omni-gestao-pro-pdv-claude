@@ -73,3 +73,30 @@ export function SearchIcon() {
     </svg>
   );
 }
+
+/** Cantos de enquadramento — botão "Modo foco". */
+export function FocusIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" />
+    </svg>
+  );
+}
+
+/** Cadeado/escudo — superfície de Segurança (preview). */
+export function ShieldIcon() {
+  return (
+    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
+/** Chevron esquerdo — voltar. */
+export function ChevronLeftIcon() {
+  return (
+    <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path d="M15 18l-6-6 6-6" />
+    </svg>
+  );
+}

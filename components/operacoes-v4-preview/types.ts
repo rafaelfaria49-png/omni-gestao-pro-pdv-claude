@@ -14,7 +14,17 @@ export type V4Stage =
   | "financeiro"
   | "entrega"
   | "posvenda"
-  | "historico";
+  | "historico"
+  /**
+   * Superfície de **segurança/autorização (preview)** — não é uma fase do fluxo
+   * da OS (não entra no pipeline de 8 etapas). É um destino lateral, alcançado a
+   * partir da Execução, que demonstra os componentes de autorização do gerente
+   * (PIN, padrão 3×3, senha, estados). 100% visual/no-op — não autentica nada.
+   */
+  | "seguranca";
+
+/** Estado da autorização demonstrada na superfície de Segurança (preview). */
+export type V4AuthState = "autorizado" | "negado" | "expirado";
 
 export type V4Status =
   | "aberta"
@@ -53,6 +63,22 @@ export interface V4State {
   recibo: boolean;
   /** null = tela limpa (empty state); id = OS real selecionada. */
   selectedOsId: string | null;
+  /**
+   * Modo foco: recolhe rail interno + as duas gavetas (Cliente/Aparelho e
+   * Atividade) de uma vez, maximizando o workspace. Apenas estado visual local.
+   */
+  focus: boolean;
+  // ---- Segurança/autorização (preview · totalmente visual, não autentica) ----
+  authState: V4AuthState;
+  /** Quantidade de casas preenchidas no PIN de 4 dígitos (0–4, demonstração). */
+  pin4: number;
+  /** Quantidade de casas preenchidas no PIN de 6 dígitos (0–6, demonstração). */
+  pin6: number;
+  /** Pontos selecionados do padrão 3×3 (índices 0–8, na ordem do traçado). */
+  pattern: number[];
+  /** Texto digitado nos campos da demonstração (não é enviado a lugar nenhum). */
+  senha: string;
+  motivo: string;
 }
 
 /** Tom de cor de um status/badge. */

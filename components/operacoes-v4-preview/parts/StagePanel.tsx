@@ -8,6 +8,7 @@ import { FinanceiroStage } from "./stages/FinanceiroStage";
 import { EntregaStage } from "./stages/EntregaStage";
 import { PosVendaStage } from "./stages/PosVendaStage";
 import { HistoricoStage } from "./stages/HistoricoStage";
+import { SegurancaStage } from "./stages/SegurancaStage";
 
 export function StagePanel({ v }: { v: V4Vals }) {
   return (
@@ -20,6 +21,7 @@ export function StagePanel({ v }: { v: V4Vals }) {
       {v.isEntrega && <EntregaStage v={v} />}
       {v.isPos && <PosVendaStage v={v} />}
       {v.isHist && <HistoricoStage v={v} />}
+      {v.isSeg && <SegurancaStage v={v} />}
     </div>
   );
 }

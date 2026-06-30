@@ -48,7 +48,8 @@ export function OperacoesV4Preview() {
       <TopBar v={v} />
 
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-        <IconRail v={v} />
+        {/* Modo foco recolhe o rail interno (junto das gavetas) para maximizar o workspace. */}
+        {!v.focusActive && <IconRail v={v} />}
         {v.isWorkspace && <WorkspaceView v={v} />}
         {v.isModule && <ModuleView v={v} />}
         {v.isAuditoria && <AuditoriaPage v={v} />}

@@ -105,6 +105,13 @@ function makeState(over: Partial<V4State> = {}): V4State {
     novaOrigem: "balcao",
     recibo: false,
     selectedOsId: null,
+    focus: false,
+    authState: "autorizado",
+    pin4: 3,
+    pin6: 3,
+    pattern: [0, 3, 4, 7],
+    senha: "",
+    motivo: "",
     ...over,
   }
 }
@@ -205,5 +212,34 @@ describe("Operações V4 Preview — telas de rail com identidade real (read-onl
     const v = buildVals(makeState({ selectedOsId: "x", novaOS: false }), (p) => patches.push(p as Record<string, unknown>), () => {}, ctxReal)
     v.goToOSSearch()
     expect(patches.at(-1)).toMatchObject({ selectedOsId: null, module: "workspace" })
+  })
+})
+
+describe("Operações V4 Preview — Modo foco e Segurança (preview/no-op)", () => {
+  it("onFoco recolhe rail + as duas gavetas de uma vez", () => {
+    const patches: Array<Record<string, unknown>> = []
+    let st = makeState({ focus: false, left: true, right: true, novaOS: false })
+    const v = buildVals(st, (p) => patches.push(typeof p === "function" ? p(st) : (p as Record<string, unknown>)), () => {}, ctx)
+    v.onFoco()
+    // ativar foco fecha as duas laterais (o rail é ocultado no componente raiz por focusActive)
+    expect(patches.at(-1)).toMatchObject({ focus: true, left: false, right: false })
+  })
+
+  it("goSeguranca leva à superfície seguranca; backFromSeguranca volta à Execução", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(makeState({ novaOS: false }), (p) => patches.push(p as Record<string, unknown>), () => {}, ctx)
+    v.goSeguranca()
+    expect(patches.at(-1)).toMatchObject({ stage: "seguranca" })
+    v.backFromSeguranca()
+    expect(patches.at(-1)).toMatchObject({ stage: "execucao" })
+  })
+
+  it("Autorizar é no-op honesto: avisa que nada é autenticado nem salvo", () => {
+    const msgs: string[] = []
+    const v = buildVals(makeState({ stage: "seguranca", novaOS: false }), () => {}, (m) => msgs.push(m), ctx)
+    v.seg.onAutorizar()
+    expect(msgs.some((m) => /demonstra|preview/i.test(m))).toBe(true)
+    // isSeg reflete a superfície ativa
+    expect(v.isSeg).toBe(true)
   })
 })

@@ -100,6 +100,13 @@ const INITIAL: V4State = {
   novaOrigem: "balcao",
   recibo: false,
   selectedOsId: null,
+  focus: false,
+  authState: "autorizado",
+  pin4: 3,
+  pin6: 3,
+  pattern: [0, 3, 4, 7],
+  senha: "",
+  motivo: "",
 };
 
 type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
@@ -178,8 +185,16 @@ export function buildVals(
       auditoria: [false, true],
     } as const;
     const lr = map[mode] || [true, true];
-    update({ left: lr[0], right: lr[1], module: "workspace", view: "cockpit", menu: null });
+    // Escolher um modo de trabalho sai do Modo foco (as laterais voltam ao layout do modo).
+    update({ left: lr[0], right: lr[1], focus: false, module: "workspace", view: "cockpit", menu: null });
     notify("Modo: " + { recepcao: "Recepção", bancada: "Bancada", auditoria: "Auditoria" }[mode]);
+  };
+  // Modo foco: recolhe rail + as duas gavetas de uma vez (e as reabre ao sair). Só estado visual.
+  const toggleFocus = () => {
+    update((s) => {
+      const f = !s.focus;
+      return { focus: f, left: !f, right: !f, menu: null, module: "workspace", view: "cockpit" };
+    });
   };
 
   // ---- rail ----
@@ -394,6 +409,80 @@ export function buildVals(
     exportHist: () => notify(PREVIEW_NOOP),
   };
 
+  // ---- Segurança/autorização (PREVIEW) ----------------------------------------
+  // Superfície 100% visual: PIN 4/6, padrão 3×3, senha/motivo e estados da
+  // autorização. NADA autentica, NADA persiste, NÃO altera permissões reais —
+  // apenas demonstra os componentes. A interação local serve só à demonstração.
+  const SEG_PREVIEW = "Segurança é apenas demonstração na Preview — nada é autenticado nem salvo.";
+  const mkPin = (n: number, filled: number) =>
+    Array.from({ length: n }, (_, i) => {
+      const on = i < filled;
+      return {
+        v: on ? "•" : "",
+        bd: on ? C.primaryBd : C.inputBd,
+        bg: on ? C.primarySoft : C.surface2,
+      };
+    });
+  const pin4 = mkPin(4, st.pin4);
+  const pin6 = mkPin(6, st.pin6);
+  const patternSel = st.pattern;
+  const patternCells = Array.from({ length: 9 }, (_, i) => {
+    const pos = patternSel.indexOf(i);
+    const on = pos >= 0;
+    return {
+      key: i,
+      n: on ? String(pos + 1) : "",
+      bd: on ? C.primary : C.inputBd,
+      bg: on ? C.primary : "transparent",
+      onClick: () =>
+        update((s) => {
+          const a = s.pattern.slice();
+          const x = a.indexOf(i);
+          if (x >= 0) a.splice(x, 1);
+          else a.push(i);
+          return { pattern: a };
+        }),
+    };
+  });
+  const patternHint = patternSel.length
+    ? "sequência: " + patternSel.map((i) => i + 1).join(" → ")
+    : "toque os pontos para desenhar";
+  const AUTH_DEFS = [
+    { key: "autorizado", label: "Autorizado", glyph: "✓", color: C.success, fg: C.successFg, bd: C.successBd, wash: C.successBg2 },
+    { key: "negado", label: "Negado", glyph: "✕", color: C.danger, fg: C.dangerFg, bd: C.dangerBd, wash: C.dangerBg },
+    { key: "expirado", label: "Expirado", glyph: "⏱", color: C.warn, fg: C.warnFg, bd: C.warnBd, wash: C.warnBg },
+  ] as const;
+  const authStates = AUTH_DEFS.map((d) => ({
+    ...d,
+    active: d.key === st.authState,
+    opacity: d.key === st.authState ? 1 : 0.5,
+    ring: d.key === st.authState ? `0 0 0 2px ${d.color}` : "none",
+    onClick: () => update({ authState: d.key }),
+  }));
+  const curAuth = AUTH_DEFS.find((d) => d.key === st.authState) ?? AUTH_DEFS[0];
+  const seg = {
+    pin4,
+    pin6,
+    onPin4: () => update((s) => ({ pin4: (s.pin4 + 1) % 5 })),
+    onPin6: () => update((s) => ({ pin6: (s.pin6 + 1) % 7 })),
+    pattern: patternCells,
+    patternHint,
+    authStates,
+    authLabel: curAuth.label,
+    authColor: curAuth.color,
+    authFg: curAuth.fg,
+    senha: st.senha,
+    motivo: st.motivo,
+    onSenha: (val: string) => update({ senha: val }),
+    onMotivo: (val: string) => update({ motivo: val }),
+    onAutorizar: () => notify(SEG_PREVIEW),
+    audit: [
+      { dot: C.success, text: "Autorização concedida · alterar status crítico", meta: "preview" },
+      { dot: C.danger, text: "Autorização negada · aprovar desconto", meta: "preview" },
+      { dot: C.warn, text: "Sessão de autorização expirada", meta: "preview" },
+    ],
+  };
+
   return {
     view: st.view,
     isAuditoria: st.view === "auditoria",
@@ -412,12 +501,23 @@ export function buildVals(
     isEntrada: st.stage === "entrada", isDiag: st.stage === "diagnostico", isOrc: st.stage === "orcamento",
     isExec: st.stage === "execucao", isFin: st.stage === "financeiro", isEntrega: st.stage === "entrega",
     isPos: st.stage === "posvenda", isHist: st.stage === "historico",
+    isSeg: st.stage === "seguranca",
 
     leftOpen: st.left, leftClosed: !st.left, rightOpen: st.right, rightClosed: !st.right,
     toggleLeft: () => update((s) => ({ left: !s.left })),
     toggleRight: () => update((s) => ({ right: !s.right })),
     onTrocar: () => notify(PREVIEW_NOOP),
     toHistCliente: () => notify(PREVIEW_NOOP),
+
+    // ---- Modo foco (recolhe rail + gavetas; só visual) ----
+    focusActive: st.focus,
+    focoLabel: st.focus ? "Sair do foco" : "Modo foco",
+    onFoco: toggleFocus,
+
+    // ---- Segurança (preview) ----
+    seg,
+    goSeguranca: () => update({ stage: "seguranca", module: "workspace", view: "cockpit", menu: null }),
+    backFromSeguranca: () => update({ stage: "execucao", module: "workspace", view: "cockpit", menu: null }),
 
     menu: st.menu, menuPrint: st.menu === "print", menuMore: st.menu === "more",
     togglePrint: () => toggleMenu("print"), toggleMore: () => toggleMenu("more"),

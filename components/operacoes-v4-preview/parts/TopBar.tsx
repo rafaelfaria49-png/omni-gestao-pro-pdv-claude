@@ -1,7 +1,7 @@
 /** Operações V4 Preview — barra superior (40px): marca, busca, modos, ações. */
 import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
-import { SearchIcon } from "./icons";
+import { SearchIcon, FocusIcon } from "./icons";
 
 export function TopBar({ v }: { v: V4Vals }) {
   return (
@@ -122,6 +122,31 @@ export function TopBar({ v }: { v: V4Vals }) {
           </button>
         ))}
       </div>
+
+      <button
+        type="button"
+        onClick={v.onFoco}
+        title="Recolhe rail, Cliente e Atividade de uma vez"
+        style={{
+          flex: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          height: 28,
+          padding: "0 12px",
+          border: `1px solid ${v.focusActive ? C.primary : C.primaryBd}`,
+          background: v.focusActive ? C.primary : C.surface,
+          color: v.focusActive ? C.white : C.primary,
+          borderRadius: 8,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <FocusIcon />
+        {v.focoLabel}
+      </button>
 
       <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
         <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>Loja ativa</span>
