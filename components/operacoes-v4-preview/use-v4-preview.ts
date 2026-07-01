@@ -32,8 +32,8 @@ import type { V4State, V4Status, V4Stage } from "./types";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import type { OrdemServico, Orcamento } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
-// Actions REAIS reaproveitadas da V3 (sem criar backend novo) — slice OPS-V4-ORCAMENTO-REAL-002.
-import { salvarDiagnosticoV3 } from "@/lib/operacoes-v3/workspace-actions";
+// Actions REAIS reaproveitadas da V3 (sem criar backend novo) — slices OPS-V4-ORCAMENTO-REAL-002 / -ENTRADA-RECEPCAO-REAL-003.
+import { salvarDiagnosticoV3, salvarChecklistEntradaV3 } from "@/lib/operacoes-v3/workspace-actions";
 import {
   gerarOrcamentoDaOS,
   salvarOrcamentoV3,
@@ -41,7 +41,16 @@ import {
   recusarOrcamentoV3,
 } from "@/lib/operacoes-v3/orcamento-actions";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
+import {
+  salvarIdentificacaoV3,
+  salvarProvaEntradaV3,
+  salvarAcessoriosEntradaV3,
+  type SalvarProvaEntradaInputV3,
+} from "@/lib/operacoes-v3/prova-entrada-actions";
+import type { IdentificacaoV3, AcessorioEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
+import type { ChecklistEntradaItemV3 } from "@/lib/operacoes-v3/workspace-model";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
+import { seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
 import {
   adaptAcessoriosEntrada,
   adaptAnexos,
@@ -109,6 +118,11 @@ export interface V4DataCtx {
   recusarOrcamento: (motivo?: string) => Promise<boolean>;
   iniciarDiagnostico: () => Promise<boolean>;
   iniciarServico: () => Promise<boolean>;
+  // ---- Entrada/Recepção (slice OPS-V4-ENTRADA-RECEPCAO-REAL-003) ----
+  salvarIdentificacao: (input: IdentificacaoV3) => Promise<boolean>;
+  salvarProvaEntrada: (input: SalvarProvaEntradaInputV3) => Promise<boolean>;
+  salvarAcessorios: (acessorios: AcessorioEntradaV3[]) => Promise<boolean>;
+  salvarChecklist: (itens: ChecklistEntradaItemV3[]) => Promise<boolean>;
 }
 
 const INITIAL: V4State = {
@@ -358,7 +372,8 @@ export function buildVals(
     { icon: "🌐", label: "Portal do cliente", onClick: () => notify(PREVIEW_NOOP) },
   ];
   const moreItems: Array<{ icon: string; label: string; color: string; onClick: () => void }> = [
-    { icon: "✏", label: "Editar OS", color: C.body, onClick: () => notify(PREVIEW_NOOP) },
+    // "Editar OS" leva à aba Entrada real (edição dos grupos seguros) — não é mais no-op.
+    { icon: "✏", label: "Editar OS (Entrada)", color: C.body, onClick: () => go("entrada") },
     { icon: "⇄", label: "Trocar OS", color: C.body, onClick: () => notify(PREVIEW_NOOP) },
   ];
   if (st.status === "em_execucao" || st.status === "aprovado")
@@ -393,6 +408,9 @@ export function buildVals(
   const orcamentoEditavel = orcamentoMaterializado && (orcStatusRaw === "rascunho" || orcStatusRaw === "enviado");
   const orcamentoPodeDecidir = orcamentoEditavel;
   const orcamentoEditorSeed = seedEditorFromOS(realOS);
+
+  // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
+  const entradaEditorSeed: EntradaEditorV4 = seedEntradaEditor(realOS);
 
   // ---- telas de rail (Visão geral / Fila / Bancada / SLA / PDV) ----
   // View-models READ-ONLY derivados da MESMA lista de OS reais já carregada
@@ -607,6 +625,16 @@ export function buildVals(
     orcamentoPodeDecidir,
     orcamentoEditorSeed,
 
+    // ---- Entrada/Recepção REAL (slice OPS-V4-ENTRADA-RECEPCAO-REAL-003) ----
+    // Handlers reais (actions V3 prova-entrada/checklist). Fotos/assinatura/anexos/
+    // documentos e os dados básicos avançados (defeito/prioridade/recepção/observações)
+    // seguem preview/futuro (slice 3B).
+    salvarIdentificacao: ctx.salvarIdentificacao,
+    salvarProvaEntrada: ctx.salvarProvaEntrada,
+    salvarAcessorios: ctx.salvarAcessorios,
+    salvarChecklist: ctx.salvarChecklist,
+    entradaEditorSeed,
+
     toast: st.toast, showToast: !!st.toast,
 
     // ---- seleção de OS real ----
@@ -739,6 +767,28 @@ export function useV4Preview(): V4Vals {
     [runWrite, update],
   );
 
+  // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
+  const salvarIdentificacao = useCallback(
+    (input: IdentificacaoV3) =>
+      runWrite((sid, osId) => salvarIdentificacaoV3(sid, osId, input), "Identificação salva."),
+    [runWrite],
+  );
+  const salvarProvaEntrada = useCallback(
+    (input: SalvarProvaEntradaInputV3) =>
+      runWrite((sid, osId) => salvarProvaEntradaV3(sid, osId, input), "Prova de entrada salva."),
+    [runWrite],
+  );
+  const salvarAcessorios = useCallback(
+    (acessorios: AcessorioEntradaV3[]) =>
+      runWrite((sid, osId) => salvarAcessoriosEntradaV3(sid, osId, acessorios), "Acessórios salvos."),
+    [runWrite],
+  );
+  const salvarChecklist = useCallback(
+    (itens: ChecklistEntradaItemV3[]) =>
+      runWrite((sid, osId) => salvarChecklistEntradaV3(sid, osId, itens), "Checklist salvo."),
+    [runWrite],
+  );
+
   // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
   const realOS = useMemo<OrdemServico | null>(() => {
     if (!st.selectedOsId) return null;
@@ -763,6 +813,10 @@ export function useV4Preview(): V4Vals {
       recusarOrcamento,
       iniciarDiagnostico,
       iniciarServico,
+      salvarIdentificacao,
+      salvarProvaEntrada,
+      salvarAcessorios,
+      salvarChecklist,
     }),
     [
       ordens,
@@ -780,6 +834,10 @@ export function useV4Preview(): V4Vals {
       recusarOrcamento,
       iniciarDiagnostico,
       iniciarServico,
+      salvarIdentificacao,
+      salvarProvaEntrada,
+      salvarAcessorios,
+      salvarChecklist,
     ],
   );
 

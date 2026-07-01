@@ -24,6 +24,8 @@ import type {
 } from "@/types/os";
 import type { V4Status, V4Stage } from "./types";
 import { C, fmt } from "./tokens";
+// Reuso PURO (read-only) do reader da V3: identificação rica da prova de entrada.
+import { lerProvaEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
 
 export const NI = "Não informado";
 
@@ -187,7 +189,13 @@ export function osTotalNumero(os: OrdemServico): number {
 export function adaptOsHeader(os: OrdemServico): V4OsView {
   const eq = os.equipamento;
   const acessorios = Array.isArray(eq?.acessorios) ? eq!.acessorios.filter(Boolean) : [];
-  const imei = txt(eq?.numeroSerie);
+  // Identificação rica da prova de entrada (V3): prefere serial/operadora/cor reais.
+  // `lerProvaEntradaV3` já semeia imei/modelo dos campos legados.
+  const ident = lerProvaEntradaV3(os).identificacao;
+  const imei = txt(ident.imei) || txt(eq?.numeroSerie);
+  const serial = txt(ident.serial);
+  const operadora = txt(ident.operadora);
+  const cor = txt(ident.cor);
   const senha = txt(os.senhaEquipamento);
   const senhaTipo = txt(os.senhaEquipamentoTipo);
   const prazoGar =
@@ -202,11 +210,11 @@ export function adaptOsHeader(os: OrdemServico): V4OsView {
     email: txt(os.cliente?.email) || NI,
     aparelho: aparelhoLabel(os),
     tipo: txt(eq?.tipo) || NI,
-    cor: NI,
+    cor: cor || NI,
     serieCurta: imei || NI,
     imei: imei || NI,
-    serial: NI,
-    operadora: NI,
+    serial: serial || NI,
+    operadora: operadora || NI,
     senha: senha ? (senhaTipo ? `${senha} (${SENHA_TIPO_LABEL[senhaTipo] ?? senhaTipo})` : senha) : NI,
     senhaTipo,
     acessorios: acessorios.length ? acessorios.join(", ") : NI,

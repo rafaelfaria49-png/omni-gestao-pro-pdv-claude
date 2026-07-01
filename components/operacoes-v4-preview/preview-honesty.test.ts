@@ -28,6 +28,7 @@ vi.mock("@/app/actions/ordens", () => ({
 // então os mocks não afetam a verificação de reuso/segurança.
 vi.mock("@/lib/operacoes-v3/workspace-actions", () => ({
   salvarDiagnosticoV3: vi.fn(async () => ({})),
+  salvarChecklistEntradaV3: vi.fn(async () => ({})),
 }))
 vi.mock("@/lib/operacoes-v3/orcamento-actions", () => ({
   gerarOrcamentoDaOS: vi.fn(async () => ({})),
@@ -37,6 +38,11 @@ vi.mock("@/lib/operacoes-v3/orcamento-actions", () => ({
 }))
 vi.mock("@/lib/operacoes-v3/status-actions", () => ({
   aplicarTransicaoStatusV3: vi.fn(async () => ({})),
+}))
+vi.mock("@/lib/operacoes-v3/prova-entrada-actions", () => ({
+  salvarIdentificacaoV3: vi.fn(async () => ({})),
+  salvarProvaEntradaV3: vi.fn(async () => ({})),
+  salvarAcessoriosEntradaV3: vi.fn(async () => ({})),
 }))
 
 import { buildVals, type V4DataCtx } from "./use-v4-preview"
@@ -146,6 +152,10 @@ const ctx: V4DataCtx = {
   recusarOrcamento: async () => false,
   iniciarDiagnostico: async () => false,
   iniciarServico: async () => false,
+  salvarIdentificacao: async () => false,
+  salvarProvaEntrada: async () => false,
+  salvarAcessorios: async () => false,
+  salvarChecklist: async () => false,
 }
 
 describe("Operações V4 — Nova OS real (cria OS e abre no workspace)", () => {
@@ -280,6 +290,11 @@ describe("Operações V4 — Diagnóstico/Orçamento reais reaproveitam só acti
       "aprovarOrcamentoV3",
       "recusarOrcamentoV3",
       "aplicarTransicaoStatusV3",
+      // Entrada/Recepção (slice 003)
+      "salvarIdentificacaoV3",
+      "salvarProvaEntradaV3",
+      "salvarAcessoriosEntradaV3",
+      "salvarChecklistEntradaV3",
     ]) {
       expect(orquestrador, `esperava reuso de ${action}`).toContain(action)
     }
