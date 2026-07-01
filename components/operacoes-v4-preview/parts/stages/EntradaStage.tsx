@@ -1,12 +1,14 @@
-/** Operações V4 — etapa Entrada (REAL parcial · slice OPS-V4-ENTRADA-RECEPCAO-REAL-003).
+/** Operações V4 — etapa Entrada (REAL · slices OPS-V4-ENTRADA-RECEPCAO-REAL-003 + -DADOS-BASICOS-OS-REAL-003B).
  *
- * Deixou de ser somente leitura nos grupos com action V3 segura: identificação,
- * estado físico, avarias, credenciais/acesso, acessórios e checklist — editáveis
- * e persistidos via `salvarIdentificacaoV3` / `salvarProvaEntradaV3` /
- * `salvarAcessoriosEntradaV3` / `salvarChecklistEntradaV3` (reuso V3, sem backend
- * novo, sem estoque/caixa/financeiro). Fotos, assinatura, anexos e documentos
- * seguem PREVIEW. Dados básicos avançados (defeito/prioridade/recepção/observações)
- * ficam para o slice 3B (nova action payload-only). */
+ * Editável e persistido via reuso de actions V3 seguras (sem backend novo, sem
+ * estoque/caixa/financeiro):
+ *   • identificação/estado físico/avarias/credenciais/acessórios/checklist →
+ *     `salvarIdentificacaoV3` / `salvarProvaEntradaV3` / `salvarAcessoriosEntradaV3` /
+ *     `salvarChecklistEntradaV3` (slice 003);
+ *   • dados básicos da recepção (defeito relatado, prioridade, origem, recebido por,
+ *     localização, previsão/SLA, observações internas) → `salvarDadosBasicosOSV3`
+ *     (slice 003B, payload-only + coluna `defeito`).
+ * Fotos, assinatura, anexos e documentos seguem PREVIEW. */
 import { useState } from "react";
 import { C, card, cardTitle, HATCH, MONO, upLabel } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
@@ -29,6 +31,14 @@ import {
   type EntradaEditorV4,
   type EstadoFisicoStatusV3,
 } from "@/lib/operacoes-v4/entrada-form";
+import {
+  LOCAL_FISICO_V3,
+  ORIGEM_V3,
+  PRIORIDADE_V3,
+  setDadosBasicos,
+  toDadosBasicosInput,
+  type DadosBasicosEditorV4,
+} from "@/lib/operacoes-v4/dados-basicos-form";
 
 const col3 = "minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)";
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
@@ -45,6 +55,19 @@ const inp: React.CSSProperties = {
   background: C.surface,
 };
 const sel: React.CSSProperties = { ...inp, cursor: "pointer" };
+const ta: React.CSSProperties = {
+  width: "100%",
+  minHeight: 58,
+  padding: "7px 9px",
+  border: `1px solid ${C.inputBd}`,
+  borderRadius: 7,
+  fontSize: 12,
+  color: C.body,
+  background: C.surface,
+  resize: "vertical",
+  lineHeight: 1.45,
+  fontFamily: "inherit",
+};
 
 const CHECK_TONE: Record<string, { bg: string; fg: string; bd: string }> = {
   success: { bg: C.successBg, fg: C.successFg, bd: C.successBd },
@@ -71,6 +94,7 @@ function btnPrimary(busy: boolean): React.CSSProperties {
 
 function EntradaEditor({ v }: { v: V4Vals }) {
   const [ed, setEd] = useState<EntradaEditorV4>(() => v.entradaEditorSeed);
+  const [db, setDb] = useState<DadosBasicosEditorV4>(() => v.dadosBasicosSeed);
   const [busy, setBusy] = useState(false);
 
   const runSave = async (fn: () => Promise<boolean>) => {
@@ -87,11 +111,51 @@ function EntradaEditor({ v }: { v: V4Vals }) {
     setEd((e) => ({ ...e, identificacao: { ...e.identificacao, ...patch } }));
   const setCred = (patch: Partial<EntradaEditorV4["credenciais"]>) =>
     setEd((e) => ({ ...e, credenciais: { ...e.credenciais, ...patch } }));
+  const setBasico = <K extends keyof DadosBasicosEditorV4>(key: K, value: DadosBasicosEditorV4[K]) =>
+    setDb((d) => setDadosBasicos(d, key, value));
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: col3, gap: 12, alignItems: "start" }}>
-      {/* Coluna 1 — Identificação + Estado físico + Avarias */}
+      {/* Coluna 1 — Dados básicos + Identificação + Estado físico + Avarias */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={card}>
+          <div style={{ ...cardTitle, marginBottom: 10 }}>Dados básicos / Recepção</div>
+          <div>
+            <div style={{ ...upLabel, marginBottom: 3 }}>Defeito relatado</div>
+            <textarea value={db.defeitoRelatado} onChange={(e) => setBasico("defeitoRelatado", e.target.value)} maxLength={600} placeholder="Descreva o problema informado pelo cliente…" style={ta} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: col2, gap: 8, marginTop: 8 }}>
+            <div><div style={{ ...upLabel, marginBottom: 3 }}>Prioridade</div>
+              <select value={db.prioridade} onChange={(e) => setBasico("prioridade", e.target.value as DadosBasicosEditorV4["prioridade"])} style={sel}>
+                {PRIORIDADE_V3.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}
+              </select>
+            </div>
+            <div><div style={{ ...upLabel, marginBottom: 3 }}>Origem</div>
+              <select value={db.origem} onChange={(e) => setBasico("origem", e.target.value as DadosBasicosEditorV4["origem"])} style={sel}>
+                {ORIGEM_V3.map((o) => (<option key={o.value} value={o.value}>{o.label}</option>))}
+              </select>
+            </div>
+            <div><div style={{ ...upLabel, marginBottom: 3 }}>Localização física</div>
+              <select value={db.localFisico} onChange={(e) => setBasico("localFisico", e.target.value as DadosBasicosEditorV4["localFisico"])} style={sel}>
+                {LOCAL_FISICO_V3.map((l) => (<option key={l.value} value={l.value}>{l.label}</option>))}
+              </select>
+            </div>
+            <div><div style={{ ...upLabel, marginBottom: 3 }}>Recebido por</div>
+              <input value={db.recebidoPor} onChange={(e) => setBasico("recebidoPor", e.target.value)} maxLength={80} placeholder="Atendente…" style={inp} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}><div style={{ ...upLabel, marginBottom: 3 }}>Previsão de entrega / SLA</div>
+              <input type="datetime-local" value={db.previsaoLocal} onChange={(e) => setBasico("previsaoLocal", e.target.value)} style={inp} />
+            </div>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <div style={{ ...upLabel, marginBottom: 3 }}>Observações internas</div>
+            <textarea value={db.observacoes} onChange={(e) => setBasico("observacoes", e.target.value)} maxLength={800} placeholder="Notas internas da recepção (não impressas ao cliente)…" style={ta} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+            <button type="button" disabled={busy} onClick={() => runSave(() => v.salvarDadosBasicos(toDadosBasicosInput(db)))} style={btnPrimary(busy)}>Salvar dados básicos</button>
+          </div>
+        </div>
+
         <div style={card}>
           <div style={{ ...cardTitle, marginBottom: 10 }}>Identificação do aparelho</div>
           <div style={{ display: "grid", gridTemplateColumns: col2, gap: 8 }}>

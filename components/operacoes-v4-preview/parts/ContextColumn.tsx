@@ -139,10 +139,18 @@ export function ContextColumn({ v }: { v: V4Vals }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}><span style={{ color: C.subtle }}>Senha</span><span style={{ color: C.body, fontWeight: 600, fontFamily: MONO, background: C.muted50, padding: "1px 7px", borderRadius: 5 }}>{os.senha}</span></div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Acessórios</span><span style={{ color: C.body, fontWeight: 500 }}>{os.acessorios}</span></div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Recebido por</span><span style={{ color: C.body, fontWeight: 500 }}>{os.recebidoPor}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Origem</span><span style={{ color: C.body, fontWeight: 500 }}>{os.origem}</span></div>
         </div>
 
         <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".05em", color: C.warnFg, fontWeight: 700, margin: "12px 0 6px" }}>Defeito relatado</div>
         <p style={{ margin: "0 0 12px", fontSize: 12.5, lineHeight: 1.5, color: C.bodySoft }}>{os.defeito}</p>
+
+        {os.observacoesInternas ? (
+          <>
+            <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".05em", color: C.subtle, fontWeight: 700, margin: "0 0 6px" }}>Observações internas</div>
+            <p style={{ margin: "0 0 12px", fontSize: 12.5, lineHeight: 1.5, color: C.bodySoft }}>{os.observacoesInternas}</p>
+          </>
+        ) : null}
 
         <div style={{ border: `1px solid ${C.line2}`, borderRadius: 10, padding: 10, background: C.surface2 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, marginBottom: 7 }}>

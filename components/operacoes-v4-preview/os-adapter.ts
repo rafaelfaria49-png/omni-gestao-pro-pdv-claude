@@ -24,8 +24,14 @@ import type {
 } from "@/types/os";
 import type { V4Status, V4Stage } from "./types";
 import { C, fmt } from "./tokens";
-// Reuso PURO (read-only) do reader da V3: identificação rica da prova de entrada.
+// Reuso PURO (read-only) dos readers da V3: identificação rica da prova de entrada
+// e dados básicos da recepção (recebido por / localização / origem / observações).
 import { lerProvaEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
+import {
+  lerDadosBasicosV3,
+  LOCAL_FISICO_LABEL_V3,
+  ORIGEM_LABEL_V3,
+} from "@/lib/operacoes-v3/dados-basicos-model";
 
 export const NI = "Não informado";
 
@@ -163,6 +169,8 @@ export interface V4OsView {
   contaGoogle: string;
   contaApple: string;
   defeito: string;
+  /** Observações internas da recepção (aberturaV3.observacoesInternas); "" quando ausente. */
+  observacoesInternas: string;
   entrada: string;
   previsao: string;
   tecnico: string;
@@ -196,6 +204,9 @@ export function adaptOsHeader(os: OrdemServico): V4OsView {
   const serial = txt(ident.serial);
   const operadora = txt(ident.operadora);
   const cor = txt(ident.cor);
+  // Dados básicos reais da recepção (slice 3B): recebido por / localização / origem
+  // rica / observações — antes eram "Não informado" fixos.
+  const db = lerDadosBasicosV3(os);
   const senha = txt(os.senhaEquipamento);
   const senhaTipo = txt(os.senhaEquipamentoTipo);
   const prazoGar =
@@ -218,16 +229,18 @@ export function adaptOsHeader(os: OrdemServico): V4OsView {
     senha: senha ? (senhaTipo ? `${senha} (${SENHA_TIPO_LABEL[senhaTipo] ?? senhaTipo})` : senha) : NI,
     senhaTipo,
     acessorios: acessorios.length ? acessorios.join(", ") : NI,
-    origem: ORIGEM_LABEL[txt(os.origem)] ?? (txt(os.origem) || NI),
-    recebidoPor: NI,
+    // Origem rica (aberturaV3) prevalece; cai para a origem colapsada do top-level.
+    origem: db.origem ? (ORIGEM_LABEL_V3[db.origem] ?? db.origem) : (ORIGEM_LABEL[txt(os.origem)] ?? (txt(os.origem) || NI)),
+    recebidoPor: db.recebidoPor || NI,
     contaGoogle: NI,
     contaApple: NI,
     defeito: txt(eq?.defeitoRelatado) || txt(os.observacaoCliente) || NI,
+    observacoesInternas: db.observacoes,
     entrada: fmtDataHora(os.criadoEm),
     previsao: os.sla?.prazo ? fmtDataHora(os.sla.prazo) : NI,
     tecnico: txt(os.tecnico?.nome) || NI,
     sla: os.sla?.status ? (SLA_LABEL[os.sla.status] ?? os.sla.status) : NI,
-    localizacao: NI,
+    localizacao: db.localFisico ? (LOCAL_FISICO_LABEL_V3[db.localFisico] ?? db.localFisico) : NI,
     garantiaPrazo: typeof prazoGar === "number" && prazoGar > 0 ? `${prazoGar} dias` : NI,
   };
 }
@@ -282,6 +295,7 @@ export const EMPTY_OS_VIEW: V4OsView = {
   contaGoogle: NI,
   contaApple: NI,
   defeito: NI,
+  observacoesInternas: "",
   entrada: NI,
   previsao: NI,
   tecnico: NI,

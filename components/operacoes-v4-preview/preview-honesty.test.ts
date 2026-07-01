@@ -44,6 +44,9 @@ vi.mock("@/lib/operacoes-v3/prova-entrada-actions", () => ({
   salvarProvaEntradaV3: vi.fn(async () => ({})),
   salvarAcessoriosEntradaV3: vi.fn(async () => ({})),
 }))
+vi.mock("@/lib/operacoes-v3/dados-basicos-actions", () => ({
+  salvarDadosBasicosOSV3: vi.fn(async () => ({})),
+}))
 
 import { buildVals, type V4DataCtx } from "./use-v4-preview"
 import type { V4State } from "./types"
@@ -156,6 +159,7 @@ const ctx: V4DataCtx = {
   salvarProvaEntrada: async () => false,
   salvarAcessorios: async () => false,
   salvarChecklist: async () => false,
+  salvarDadosBasicos: async () => false,
 }
 
 describe("Operações V4 — Nova OS real (cria OS e abre no workspace)", () => {
@@ -295,6 +299,8 @@ describe("Operações V4 — Diagnóstico/Orçamento reais reaproveitam só acti
       "salvarProvaEntradaV3",
       "salvarAcessoriosEntradaV3",
       "salvarChecklistEntradaV3",
+      // Dados básicos da OS (slice 003B)
+      "salvarDadosBasicosOSV3",
     ]) {
       expect(orquestrador, `esperava reuso de ${action}`).toContain(action)
     }

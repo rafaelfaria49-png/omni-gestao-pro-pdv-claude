@@ -49,8 +49,11 @@ import {
 } from "@/lib/operacoes-v3/prova-entrada-actions";
 import type { IdentificacaoV3, AcessorioEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
 import type { ChecklistEntradaItemV3 } from "@/lib/operacoes-v3/workspace-model";
+import { salvarDadosBasicosOSV3 } from "@/lib/operacoes-v3/dados-basicos-actions";
+import type { SalvarDadosBasicosInputV3 } from "@/lib/operacoes-v3/dados-basicos-model";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
 import { seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
+import { seedDadosBasicos, type DadosBasicosEditorV4 } from "@/lib/operacoes-v4/dados-basicos-form";
 import {
   adaptAcessoriosEntrada,
   adaptAnexos,
@@ -123,6 +126,8 @@ export interface V4DataCtx {
   salvarProvaEntrada: (input: SalvarProvaEntradaInputV3) => Promise<boolean>;
   salvarAcessorios: (acessorios: AcessorioEntradaV3[]) => Promise<boolean>;
   salvarChecklist: (itens: ChecklistEntradaItemV3[]) => Promise<boolean>;
+  // ---- Dados básicos da OS (slice OPS-V4-DADOS-BASICOS-OS-REAL-003B) ----
+  salvarDadosBasicos: (input: SalvarDadosBasicosInputV3) => Promise<boolean>;
 }
 
 const INITIAL: V4State = {
@@ -411,6 +416,8 @@ export function buildVals(
 
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
   const entradaEditorSeed: EntradaEditorV4 = seedEntradaEditor(realOS);
+  // ---- Dados básicos da OS (slice 003B): seed do editor a partir da OS real ----
+  const dadosBasicosSeed: DadosBasicosEditorV4 = seedDadosBasicos(realOS);
 
   // ---- telas de rail (Visão geral / Fila / Bancada / SLA / PDV) ----
   // View-models READ-ONLY derivados da MESMA lista de OS reais já carregada
@@ -634,6 +641,9 @@ export function buildVals(
     salvarAcessorios: ctx.salvarAcessorios,
     salvarChecklist: ctx.salvarChecklist,
     entradaEditorSeed,
+    // ---- Dados básicos da OS REAL (slice OPS-V4-DADOS-BASICOS-OS-REAL-003B) ----
+    salvarDadosBasicos: ctx.salvarDadosBasicos,
+    dadosBasicosSeed,
 
     toast: st.toast, showToast: !!st.toast,
 
@@ -789,6 +799,13 @@ export function useV4Preview(): V4Vals {
     [runWrite],
   );
 
+  // ---- Dados básicos da OS (slice 003B): handler real (payload-only, sem financeiro) ----
+  const salvarDadosBasicos = useCallback(
+    (input: SalvarDadosBasicosInputV3) =>
+      runWrite((sid, osId) => salvarDadosBasicosOSV3(sid, osId, input), "Dados básicos salvos."),
+    [runWrite],
+  );
+
   // OS real: detalhe hidratado quando já carregou; senão, a linha da lista (identidade imediata).
   const realOS = useMemo<OrdemServico | null>(() => {
     if (!st.selectedOsId) return null;
@@ -817,6 +834,7 @@ export function useV4Preview(): V4Vals {
       salvarProvaEntrada,
       salvarAcessorios,
       salvarChecklist,
+      salvarDadosBasicos,
     }),
     [
       ordens,
@@ -838,6 +856,7 @@ export function useV4Preview(): V4Vals {
       salvarProvaEntrada,
       salvarAcessorios,
       salvarChecklist,
+      salvarDadosBasicos,
     ],
   );
 
