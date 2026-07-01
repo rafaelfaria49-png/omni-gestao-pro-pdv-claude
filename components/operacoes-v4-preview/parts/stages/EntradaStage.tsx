@@ -1,4 +1,4 @@
-/** Operações V4 — etapa Entrada (REAL · slices OPS-V4-ENTRADA-RECEPCAO-REAL-003 + -DADOS-BASICOS-OS-REAL-003B).
+/** Operações V4 — etapa Entrada (REAL · slices OPS-V4-ENTRADA-RECEPCAO-REAL-003 + -DADOS-BASICOS-OS-REAL-003B + -SEGURANCA-ACESSO-PARITY-004A).
  *
  * Editável e persistido via reuso de actions V3 seguras (sem backend novo, sem
  * estoque/caixa/financeiro):
@@ -8,6 +8,11 @@
  *   • dados básicos da recepção (defeito relatado, prioridade, origem, recebido por,
  *     localização, previsão/SLA, observações internas) → `salvarDadosBasicosOSV3`
  *     (slice 003B, payload-only + coluna `defeito`).
+ * Quando `senhaTipo === "padrao"`, o campo "Senha / PIN" vira o widget `PatternPadV4`
+ * (paridade com `PatternPadV3` da V3) — mesmo campo `credenciais.senha`, mesma
+ * persistência via `salvarProvaEntrada` (slice 004A). É a senha REAL do aparelho
+ * do cliente; não confundir com a autorização de gerente (100% preview em
+ * `SegurancaStage.tsx`, não tocado por este slice).
  * Fotos, assinatura, anexos e documentos seguem PREVIEW. */
 import { useState } from "react";
 import { C, card, cardTitle, HATCH, MONO, upLabel } from "../../tokens";
@@ -39,6 +44,7 @@ import {
   toDadosBasicosInput,
   type DadosBasicosEditorV4,
 } from "@/lib/operacoes-v4/dados-basicos-form";
+import { PatternPadV4 } from "../PatternPadV4";
 
 const col3 = "minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)";
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
@@ -224,9 +230,21 @@ function EntradaEditor({ v }: { v: V4Vals }) {
                 <option value="padrao">Padrão</option>
               </select>
             </div>
-            <div><div style={{ ...upLabel, marginBottom: 3 }}>Senha / PIN</div><input value={ed.credenciais.senha} onChange={(e) => setCred({ senha: e.target.value })} maxLength={60} style={{ ...inp, fontFamily: MONO }} /></div>
             <div><div style={{ ...upLabel, marginBottom: 3 }}>Conta Google</div><input value={ed.credenciais.contaGoogle} onChange={(e) => setCred({ contaGoogle: e.target.value })} maxLength={120} placeholder="email@gmail.com" style={inp} /></div>
             <div><div style={{ ...upLabel, marginBottom: 3 }}>Conta Apple</div><input value={ed.credenciais.contaApple} onChange={(e) => setCred({ contaApple: e.target.value })} maxLength={120} placeholder="email@icloud.com" style={inp} /></div>
+          </div>
+          <div style={{ marginTop: 8 }}>
+            {ed.credenciais.senhaTipo === "padrao" ? (
+              <>
+                <div style={{ ...upLabel, marginBottom: 5 }}>Padrão 3×3 do aparelho</div>
+                <PatternPadV4 value={ed.credenciais.senha} onChange={(val) => setCred({ senha: val })} />
+              </>
+            ) : (
+              <>
+                <div style={{ ...upLabel, marginBottom: 3 }}>Senha / PIN</div>
+                <input value={ed.credenciais.senha} onChange={(e) => setCred({ senha: e.target.value })} maxLength={60} style={{ ...inp, fontFamily: MONO }} />
+              </>
+            )}
           </div>
           <div style={{ display: "flex", gap: 14, marginTop: 9 }}>
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.body, cursor: "pointer" }}>

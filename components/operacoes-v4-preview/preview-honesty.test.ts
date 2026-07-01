@@ -338,3 +338,38 @@ describe("Operações V4 — Diagnóstico/Orçamento reais reaproveitam só acti
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// OPS-V4-SEGURANCA-ACESSO-PARITY-004A — Padrão 3×3 V4-nativo na Entrada.
+// ---------------------------------------------------------------------------
+describe("Operações V4 — Padrão 3×3 (PatternPadV4) na Entrada, sem tocar autorização de gerente", () => {
+  const entradaStage = readFileSync(join(DIR, "parts", "stages", "EntradaStage.tsx"), "utf8")
+  const patternPad = readFileSync(join(DIR, "parts", "PatternPadV4.tsx"), "utf8")
+  const segurancaStage = readFileSync(join(DIR, "parts", "stages", "SegurancaStage.tsx"), "utf8")
+
+  it("EntradaStage renderiza PatternPadV4 quando senhaTipo === \"padrao\"", () => {
+    expect(entradaStage).toContain("PatternPadV4")
+    expect(entradaStage).toMatch(/senhaTipo\s*===\s*"padrao"/)
+  })
+
+  it("PatternPadV4 não importa o PatternPadV3 nem o sistema de estilo do V3 (Tailwind/cn/ButtonV3)", () => {
+    // Rejeita a IMPORTAÇÃO real (menção ao nome em comentário explicando a decisão é permitida).
+    for (const proibido of [
+      'from "@/components/operacoes-v3/components/PatternPadV3"',
+      'from "@/components/operacoes-v3/components/UiV3"',
+      'from "@/lib/utils"',
+    ]) {
+      expect(patternPad, `import proibido: ${proibido}`).not.toContain(proibido)
+    }
+    expect(patternPad, "não deve usar className (V3 usa Tailwind; V4 usa style inline)").not.toContain("className")
+  })
+
+  it("PatternPadV4 é puramente apresentacional: delega a lógica de sequência ao helper puro de lib/operacoes-v4", () => {
+    expect(patternPad).toContain("togglePadraoPonto")
+    expect(patternPad).toContain("@/lib/operacoes-v4/entrada-form")
+  })
+
+  it("SegurancaStage (autorização de gerente) não foi tocado por este slice: não referencia PatternPadV4", () => {
+    expect(segurancaStage).not.toContain("PatternPadV4")
+  })
+})

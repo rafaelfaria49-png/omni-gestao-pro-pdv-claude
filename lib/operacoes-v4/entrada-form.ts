@@ -232,3 +232,17 @@ export function setAvaria(
 export function removeAvaria(editor: EntradaEditorV4, id: string): EntradaEditorV4 {
   return { ...editor, avarias: editor.avarias.filter((a) => a.id !== id) };
 }
+
+// ---- Padrão 3×3 (senha tipo "padrao") ---------------------------------------
+
+/**
+ * Alterna um ponto (0–8) na sequência do Padrão 3×3, serializada como "1-3-4"
+ * (1-indexado, ordem de toque). Mesmo comportamento do `PatternPadV3` da V3:
+ * ponto já presente na sequência é no-op (correção só via limpar tudo).
+ */
+export function togglePadraoPonto(value: string, ponto: number): string {
+  const seq = value ? value.split("-").filter(Boolean) : [];
+  const token = String(ponto + 1);
+  if (seq.includes(token)) return value;
+  return [...seq, token].join("-");
+}

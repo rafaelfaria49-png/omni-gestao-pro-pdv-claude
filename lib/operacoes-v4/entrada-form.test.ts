@@ -12,6 +12,7 @@ import {
   toAcessoriosInput,
   toChecklistInput,
   toIdentificacaoInput,
+  togglePadraoPonto,
   toProvaEntradaInput,
   toggleAcessorio,
 } from "./entrada-form";
@@ -139,5 +140,28 @@ describe("toggles puros", () => {
     expect(e.avarias[0]!.local).toBe("traseira");
     e = removeAvaria(e, id);
     expect(e.avarias).toHaveLength(0);
+  });
+});
+
+describe("togglePadraoPonto (Padrão 3×3 — slice OPS-V4-SEGURANCA-ACESSO-PARITY-004A)", () => {
+  it("adiciona pontos em sequência (1-indexado)", () => {
+    let v = togglePadraoPonto("", 0);
+    expect(v).toBe("1");
+    v = togglePadraoPonto(v, 4);
+    expect(v).toBe("1-5");
+    v = togglePadraoPonto(v, 8);
+    expect(v).toBe("1-5-9");
+  });
+
+  it("ponto já presente é no-op (mesmo comportamento do PatternPadV3)", () => {
+    const v = togglePadraoPonto("1-5", 0);
+    expect(v).toBe("1-5");
+  });
+
+  it("não muta a string original (imutável)", () => {
+    const original = "2-3";
+    const v = togglePadraoPonto(original, 6);
+    expect(v).toBe("2-3-7");
+    expect(original).toBe("2-3");
   });
 });
