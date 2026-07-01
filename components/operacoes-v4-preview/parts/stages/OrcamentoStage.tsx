@@ -13,6 +13,9 @@ import type { V4Vals } from "../../use-v4-preview";
 import type { V4OrcItemView } from "../../os-adapter";
 import { ProdutoLookupV4 } from "../ProdutoLookupV4";
 import {
+  custoInformadoPeca,
+  itensSemCustoV4,
+  margemPercentualV4,
   novoServicoManualV4,
   pecaFromProdutoV4,
   totaisEditorV4,
@@ -153,10 +156,13 @@ function OrcamentoReadonly({ v }: { v: V4Vals }) {
         )}
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, padding: "8px 0 5px", borderTop: `1px solid ${C.line2}`, marginTop: 4 }}><span style={{ fontWeight: 700, color: C.ink }}>Total ao cliente</span><span style={{ fontWeight: 700, color: C.ink }}>{o.total}</span></div>
         {o.custoTotal && o.lucroTotal && (
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, borderTop: `1px dashed ${C.inputBd}`, marginTop: 8, paddingTop: 9 }}>
-            <div><div style={upLabel}>Custo interno</div><div style={{ fontSize: 13, fontWeight: 600, color: C.body }}>{o.custoTotal}</div></div>
-            <div><div style={upLabel}>Lucro</div><div style={{ fontSize: 13, fontWeight: 700, color: C.successFg }}>{o.lucroTotal}</div></div>
-          </div>
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, borderTop: `1px dashed ${C.inputBd}`, marginTop: 8, paddingTop: 9 }}>
+              <div><div style={upLabel}>Custo interno</div><div style={{ fontSize: 13, fontWeight: 600, color: C.body }}>{o.custoTotal}</div></div>
+              <div><div style={upLabel}>Lucro</div><div style={{ fontSize: 13, fontWeight: 700, color: C.successFg }}>{o.lucroTotal}</div></div>
+            </div>
+            <div style={{ fontSize: 10, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>Custo interno — não aparece para o cliente.</div>
+          </>
         )}
       </div>
     </div>
@@ -173,6 +179,8 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
   const [busy, setBusy] = useState(false);
 
   const totais = totaisEditorV4(editor);
+  const margem = margemPercentualV4(totais);
+  const semCusto = itensSemCustoV4(editor);
 
   const run = async (fn: () => Promise<boolean>) => {
     if (busy) return;
@@ -186,7 +194,7 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
 
   const addServico = () =>
     setEditor((e) => ({ ...e, servicos: [...e.servicos, novoServicoManualV4({ descricao: "", valor: 0 })] }));
-  const setServico = (i: number, patch: Partial<{ descricao: string; valor: number }>) =>
+  const setServico = (i: number, patch: Partial<{ descricao: string; valor: number; custoV3: number }>) =>
     setEditor((e) => ({ ...e, servicos: e.servicos.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }));
   const removeServico = (i: number) => setEditor((e) => ({ ...e, servicos: e.servicos.filter((_, idx) => idx !== i) }));
 
@@ -213,13 +221,22 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
         {editor.servicos.length === 0 ? (
           <div style={emptyText}>Nenhum serviço. Adicione um serviço manual.</div>
         ) : (
-          editor.servicos.map((s, i) => (
-            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: `1px solid ${C.line4}` }}>
-              <input value={s.descricao} onChange={(e) => setServico(i, { descricao: e.target.value })} placeholder="Descrição do serviço" maxLength={120} style={{ ...cellInput, flex: 1, minWidth: 0 }} />
-              <input type="number" min={0} value={s.valor || ""} onChange={(e) => setServico(i, { valor: num(e.target.value) })} placeholder="0,00" style={{ ...cellInput, width: 92, textAlign: "right" }} />
-              <button type="button" onClick={() => removeServico(i)} aria-label="Remover serviço" style={{ width: 28, height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.danger, borderRadius: 7, cursor: "pointer", flex: "none" }}>×</button>
+          <>
+            <div style={{ display: "flex", gap: 6, padding: "0 0 3px" }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 9.5, color: C.subtle }}>Descrição</span>
+              <span style={{ width: 92, textAlign: "right", fontSize: 9.5, color: C.subtle }}>Valor cliente</span>
+              <span style={{ width: 84, textAlign: "right", fontSize: 9.5, color: C.subtle }}>Custo interno</span>
+              <span style={{ width: 28, flex: "none" }} />
             </div>
-          ))
+            {editor.servicos.map((s, i) => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: `1px solid ${C.line4}` }}>
+                <input value={s.descricao} onChange={(e) => setServico(i, { descricao: e.target.value })} placeholder="Descrição do serviço" maxLength={120} style={{ ...cellInput, flex: 1, minWidth: 0 }} />
+                <input type="number" min={0} value={s.valor || ""} onChange={(e) => setServico(i, { valor: num(e.target.value) })} placeholder="0,00" style={{ ...cellInput, width: 92, textAlign: "right" }} />
+                <input type="number" min={0} value={s.custoV3 || ""} onChange={(e) => setServico(i, { custoV3: num(e.target.value) })} placeholder="0,00" aria-label="Custo interno do serviço" style={{ ...cellInput, width: 84, textAlign: "right" }} />
+                <button type="button" onClick={() => removeServico(i)} aria-label="Remover serviço" style={{ width: 28, height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.danger, borderRadius: 7, cursor: "pointer", flex: "none" }}>×</button>
+              </div>
+            ))}
+          </>
         )}
 
         {/* Peças */}
@@ -239,14 +256,22 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
         {editor.pecas.length === 0 ? (
           <div style={emptyText}>Nenhuma peça. Adicione uma peça do catálogo.</div>
         ) : (
-          editor.pecas.map((p, i) => (
-            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: `1px solid ${C.line4}` }}>
-              <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: C.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span>
-              <input type="number" min={1} value={p.quantidade || ""} onChange={(e) => setPeca(i, { quantidade: Math.max(1, Math.trunc(num(e.target.value)) || 1) })} aria-label="Quantidade" style={{ ...cellInput, width: 52, textAlign: "center" }} />
-              <input type="number" min={0} value={p.valorUnitario || ""} onChange={(e) => setPeca(i, { valorUnitario: num(e.target.value) })} aria-label="Valor unitário" placeholder="0,00" style={{ ...cellInput, width: 88, textAlign: "right" }} />
-              <button type="button" onClick={() => removePeca(i)} aria-label="Remover peça" style={{ width: 28, height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.danger, borderRadius: 7, cursor: "pointer", flex: "none" }}>×</button>
-            </div>
-          ))
+          editor.pecas.map((p, i) => {
+            const custoOk = custoInformadoPeca(p);
+            return (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: `1px solid ${C.line4}` }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, color: C.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</div>
+                  <div style={{ fontSize: 10, color: custoOk ? C.subtle : C.warnFg }}>
+                    {custoOk ? `Custo ${fmt(p.custoUnitario as number)} / un.` : "Custo não informado"}
+                  </div>
+                </div>
+                <input type="number" min={1} value={p.quantidade || ""} onChange={(e) => setPeca(i, { quantidade: Math.max(1, Math.trunc(num(e.target.value)) || 1) })} aria-label="Quantidade" style={{ ...cellInput, width: 52, textAlign: "center" }} />
+                <input type="number" min={0} value={p.valorUnitario || ""} onChange={(e) => setPeca(i, { valorUnitario: num(e.target.value) })} aria-label="Valor unitário" placeholder="0,00" style={{ ...cellInput, width: 88, textAlign: "right" }} />
+                <button type="button" onClick={() => removePeca(i)} aria-label="Remover peça" style={{ width: 28, height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.danger, borderRadius: 7, cursor: "pointer", flex: "none" }}>×</button>
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -264,6 +289,18 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
             <div><div style={upLabel}>Custo interno</div><div style={{ fontSize: 13, fontWeight: 600, color: C.body }}>{fmt(totais.custo)}</div></div>
             <div><div style={upLabel}>Lucro</div><div style={{ fontSize: 13, fontWeight: 700, color: totais.lucro >= 0 ? C.successFg : C.dangerFg }}>{fmt(totais.lucro)}</div></div>
           </div>
+          <div style={{ marginTop: 8 }}>
+            <div style={upLabel}>Margem estimada</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: margem == null ? C.subtle : margem >= 0 ? C.successFg : C.dangerFg }}>
+              {margem == null ? "—" : `${margem.toFixed(0)}%`}
+            </div>
+          </div>
+          {semCusto > 0 && (
+            <div style={{ fontSize: 10, color: C.warnFg, marginTop: 8, lineHeight: 1.5 }}>
+              {semCusto === 1 ? "1 item sem custo informado" : `${semCusto} itens sem custo informado`} — custo/lucro/margem podem estar incompletos.
+            </div>
+          )}
+          <div style={{ fontSize: 10, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>Custo interno — não aparece para o cliente.</div>
         </div>
 
         <div style={card}>

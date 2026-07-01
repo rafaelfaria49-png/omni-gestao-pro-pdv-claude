@@ -68,14 +68,16 @@ export function seedEditorFromOS(os: OrdemServico | null | undefined): Orcamento
 }
 
 /** Cria uma linha de SERVIÇO manual (sempre "cobrado" nesta fase). */
-export function novoServicoManualV4(input: { descricao: string; valor: number; garantiaDias?: number }): ServicoV3 {
+export function novoServicoManualV4(input: { descricao: string; valor: number; custo?: number; garantiaDias?: number }): ServicoV3 {
   const garantia = Math.max(0, Math.trunc(Number(input.garantiaDias ?? 0) || 0));
+  const custo = nonNeg(input.custo);
   return {
     id: uid("srv"),
     descricao: (input.descricao ?? "").trim(),
     valor: nonNeg(input.valor),
     desconto: 0,
     kindV3: "cobrado",
+    ...(custo > 0 ? { custoV3: custo } : {}),
     ...(garantia > 0 ? { prazoGarantiaDias: garantia } : {}),
   };
 }
@@ -93,21 +95,58 @@ export function totaisEditorV4(editor: OrcamentoEditorV4): TotaisOrcamentoV3 {
   return computeTotaisV3({ servicos: editor.servicos, pecas: editor.pecas, desconto: editor.desconto });
 }
 
+function servicoValidoV4(s: ServicoV3): boolean {
+  return (s.descricao ?? "").trim().length > 0;
+}
+function pecaValidaV4(p: PecaV3): boolean {
+  return (p.nome ?? "").trim().length > 0 && (p.quantidade || 0) > 0;
+}
+
+/**
+ * Custo interno "informado" = número > 0. Um custo ausente ou zerado (peça do
+ * catálogo sem custo cadastrado; serviço manual ainda não preenchido) é tratado
+ * como NÃO informado — mesma convenção usada em outras telas de custo/margem do
+ * OmniGestão. Não confundir com "custo realmente igual a zero".
+ */
+export function custoInformadoServico(s: ServicoV3): boolean {
+  return typeof s.custoV3 === "number" && s.custoV3 > 0;
+}
+export function custoInformadoPeca(p: PecaV3): boolean {
+  return typeof p.custoUnitario === "number" && p.custoUnitario > 0;
+}
+
+/** Conta, entre as linhas válidas (que seriam persistidas), quantas não têm custo interno informado. */
+export function itensSemCustoV4(editor: OrcamentoEditorV4): number {
+  const servicos = editor.servicos.filter(servicoValidoV4).filter((s) => !custoInformadoServico(s)).length;
+  const pecas = editor.pecas.filter(pecaValidaV4).filter((p) => !custoInformadoPeca(p)).length;
+  return servicos + pecas;
+}
+
+/** Margem estimada (%) = lucro / total ao cliente. `null` quando não há total (sem base de cálculo). */
+export function margemPercentualV4(t: Pick<TotaisOrcamentoV3, "total" | "lucro">): number | null {
+  if (!t.total || t.total <= 0) return null;
+  return (t.lucro / t.total) * 100;
+}
+
 /**
  * Normaliza o editor para o input da action `salvarOrcamentoV3`:
  * descarta serviços sem descrição e peças sem nome/quantidade; clampa números.
  */
 export function editorToSalvarInputV4(editor: OrcamentoEditorV4): SalvarOrcamentoV3Input {
   const servicos = (Array.isArray(editor.servicos) ? editor.servicos : [])
-    .filter((s) => (s.descricao ?? "").trim().length > 0)
-    .map((s) => ({
-      ...s,
-      descricao: s.descricao.trim(),
-      valor: nonNeg(s.valor),
-      desconto: Math.max(0, Number(s.desconto) || 0),
-    }));
+    .filter(servicoValidoV4)
+    .map(({ custoV3, ...s }) => {
+      const custo = nonNeg(custoV3);
+      return {
+        ...s,
+        descricao: s.descricao.trim(),
+        valor: nonNeg(s.valor),
+        desconto: Math.max(0, Number(s.desconto) || 0),
+        ...(custo > 0 ? { custoV3: custo } : {}),
+      };
+    });
   const pecas = (Array.isArray(editor.pecas) ? editor.pecas : [])
-    .filter((p) => (p.nome ?? "").trim().length > 0 && (p.quantidade || 0) > 0)
+    .filter(pecaValidaV4)
     .map((p) => ({
       ...p,
       nome: p.nome.trim(),

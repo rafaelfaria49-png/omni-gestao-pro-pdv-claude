@@ -2,8 +2,12 @@
 // Ambiente node: o helper, computeTotaisV3 e pecaFromProdutoV3 são puros.
 import { describe, expect, it } from "vitest";
 import {
+  custoInformadoPeca,
+  custoInformadoServico,
   editorToSalvarInputV4,
   editorVazioV4,
+  itensSemCustoV4,
+  margemPercentualV4,
   novoServicoManualV4,
   pecaFromProdutoV4,
   seedEditorFromOS,
@@ -39,6 +43,60 @@ describe("novoServicoManualV4", () => {
     expect(s.prazoGarantiaDias).toBeUndefined();
     const g = novoServicoManualV4({ descricao: "Y", valor: 10, garantiaDias: 30 });
     expect(g.prazoGarantiaDias).toBe(30);
+  });
+
+  it("custo interno só é gravado quando > 0 (custo ausente/zerado = não informado)", () => {
+    const semCusto = novoServicoManualV4({ descricao: "X", valor: 100 });
+    expect(semCusto.custoV3).toBeUndefined();
+    const zerado = novoServicoManualV4({ descricao: "X", valor: 100, custo: 0 });
+    expect(zerado.custoV3).toBeUndefined();
+    const negativo = novoServicoManualV4({ descricao: "X", valor: 100, custo: -5 });
+    expect(negativo.custoV3).toBeUndefined();
+    const comCusto = novoServicoManualV4({ descricao: "Troca de tela", valor: 320, custo: 120 });
+    expect(comCusto.custoV3).toBe(120);
+  });
+});
+
+describe("custoInformadoServico / custoInformadoPeca", () => {
+  it("custo > 0 é informado; ausente/zero/negativo não é", () => {
+    expect(custoInformadoServico({ id: "s1", descricao: "X", valor: 10 })).toBe(false);
+    expect(custoInformadoServico({ id: "s1", descricao: "X", valor: 10, custoV3: 0 })).toBe(false);
+    expect(custoInformadoServico({ id: "s1", descricao: "X", valor: 10, custoV3: 50 })).toBe(true);
+
+    expect(custoInformadoPeca(pecaFromProdutoV4({ ...PRODUTO, custo: 0 }))).toBe(false);
+    expect(custoInformadoPeca(pecaFromProdutoV4(PRODUTO))).toBe(true);
+  });
+});
+
+describe("margemPercentualV4", () => {
+  it("calcula lucro/total em %; sem total vira null", () => {
+    expect(margemPercentualV4({ total: 0, lucro: 0 })).toBeNull();
+    expect(margemPercentualV4({ total: 200, lucro: 100 })).toBe(50);
+    expect(margemPercentualV4({ total: 200, lucro: -50 })).toBe(-25);
+  });
+});
+
+describe("itensSemCustoV4", () => {
+  it("conta só linhas válidas (com dados) sem custo informado", () => {
+    const editor: OrcamentoEditorV4 = {
+      servicos: [
+        novoServicoManualV4({ descricao: "Com custo", valor: 100, custo: 40 }),
+        novoServicoManualV4({ descricao: "Sem custo", valor: 50 }),
+        novoServicoManualV4({ descricao: "   ", valor: 10 }), // inválido, não conta
+      ],
+      pecas: [pecaFromProdutoV4({ ...PRODUTO, custo: 0 })], // peça sem custo cadastrado
+      desconto: 0,
+    };
+    expect(itensSemCustoV4(editor)).toBe(2); // 1 serviço sem custo + 1 peça sem custo
+  });
+
+  it("editor totalmente informado retorna 0", () => {
+    const editor: OrcamentoEditorV4 = {
+      servicos: [novoServicoManualV4({ descricao: "Com custo", valor: 100, custo: 40 })],
+      pecas: [pecaFromProdutoV4(PRODUTO)],
+      desconto: 0,
+    };
+    expect(itensSemCustoV4(editor)).toBe(0);
   });
 });
 
@@ -78,6 +136,18 @@ describe("totaisEditorV4", () => {
     const t = totaisEditorV4(editorVazioV4());
     expect(t).toEqual({ subtotal: 0, desconto: 0, total: 0, custo: 0, lucro: 0 });
   });
+
+  it("custo interno de serviço manual entra no custo/lucro do orçamento", () => {
+    const editor: OrcamentoEditorV4 = {
+      servicos: [novoServicoManualV4({ descricao: "Troca de tela", valor: 320, custo: 120 })],
+      pecas: [],
+      desconto: 0,
+    };
+    const t = totaisEditorV4(editor);
+    expect(t.total).toBe(320);
+    expect(t.custo).toBe(120);
+    expect(t.lucro).toBe(200);
+  });
 });
 
 describe("editorToSalvarInputV4", () => {
@@ -100,6 +170,22 @@ describe("editorToSalvarInputV4", () => {
     expect(input.pecas).toHaveLength(1);
     expect(input.desconto).toBe(0);
     expect(input.observacao).toBe("obs");
+  });
+
+  it("preserva custoV3 do serviço manual (clampado) e omite quando ausente/zerado", () => {
+    const editor: OrcamentoEditorV4 = {
+      servicos: [
+        novoServicoManualV4({ descricao: "Com custo", valor: 200, custo: 80 }),
+        { ...novoServicoManualV4({ descricao: "Custo negativo", valor: 100 }), custoV3: -10 },
+        novoServicoManualV4({ descricao: "Sem custo", valor: 50 }),
+      ],
+      pecas: [],
+      desconto: 0,
+    };
+    const input = editorToSalvarInputV4(editor);
+    expect(input.servicos[0]!.custoV3).toBe(80);
+    expect(input.servicos[1]!.custoV3).toBeUndefined(); // negativo clampado para 0 → omitido
+    expect(input.servicos[2]!.custoV3).toBeUndefined(); // nunca informado
   });
 });
 
