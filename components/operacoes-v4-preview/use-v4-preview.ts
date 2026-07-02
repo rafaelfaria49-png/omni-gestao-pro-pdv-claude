@@ -28,7 +28,7 @@ import {
   TONE,
 } from "./mock-data";
 import { C, fmt } from "./tokens";
-import type { V4State, V4Status, V4Stage } from "./types";
+import type { V4State, V4Stage } from "./types";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import type { OrdemServico, Orcamento } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
@@ -167,6 +167,10 @@ type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
  */
 const PREVIEW_NOOP = "Indisponível na Preview — nenhuma alteração foi salva.";
 
+/** Aviso honesto do recebimento: o PDV de Serviço ainda não está ligado à V4. */
+const PDV_NAO_CONECTADO =
+  "Recebimento no PDV de Serviço ainda não está conectado à V4 — nenhuma cobrança foi executada.";
+
 export function buildVals(
   st: V4State,
   update: (p: Patch) => void,
@@ -195,8 +199,11 @@ export function buildVals(
   // Pós-venda REAL (garantia/retornos em garantia/eventos de pós-venda); vazio
   // honesto quando não houver registro. Sem NPS/satisfação/follow-up fabricados.
   const posVendaReal = realOS ? adaptPosVenda(realOS) : EMPTY_POSVENDA_VIEW;
+  // Status exibido: SEMPRE o da OS real carregada (sem drift após escritas/reloads);
+  // o snapshot local `st.status` é só fallback enquanto nenhuma OS está selecionada.
+  const status = realOS ? realStatusToV4(realOS.status) : st.status;
   const curIdx = (() => {
-    let i = ORDER.indexOf(st.status);
+    let i = ORDER.indexOf(status);
     if (i < 0) i = ORDER.indexOf("em_execucao");
     return i;
   })();
@@ -211,23 +218,27 @@ export function buildVals(
   // Ação primária. SOMENTE as transições seguras desta fase persistem de verdade
   // (aberta → diagnostico; aprovado → em_execucao), via `aplicarTransicaoStatusV3`.
   // As demais (enviar orçamento, registrar aprovação, marcar pronta, receber
-  // pagamento…) seguem PREVIEW honesto — não tocam estoque/caixa/financeiro/entrega.
+  // pagamento…) seguem PREVIEW honesto: apenas NAVEGAM à etapa relacionada + toast —
+  // NUNCA mudam o status exibido (o status mostrado é sempre o real da OS carregada).
   const advance = () => {
-    const p = PRIMARY[st.status];
+    const p = PRIMARY[status];
     if (!p) return;
-    if (st.status === "aberta") {
+    if (status === "aberta") {
       void ctx.iniciarDiagnostico();
       return;
     }
-    if (st.status === "aprovado") {
+    if (status === "aprovado") {
       void ctx.iniciarServico();
       return;
     }
-    update({ status: p.to, stage: p.stage });
-    notify(PREVIEW_NOOP);
-  };
-  const setStatusTo = (s: V4Status) => {
-    update({ status: s });
+    // "Receber pagamento" leva ao Financeiro (onde vive a explicação do PDV de
+    // Serviço) com aviso específico — nunca à Entrega, nunca abre PDV real.
+    if (status === "pronta") {
+      update({ stage: p.stage });
+      notify(PDV_NAO_CONECTADO);
+      return;
+    }
+    update({ stage: p.stage });
     notify(PREVIEW_NOOP);
   };
   const setMode = (mode: "recepcao" | "bancada" | "auditoria") => {
@@ -366,6 +377,12 @@ export function buildVals(
     };
   });
 
+  // Barra de busca do topo E "Trocar OS": levam ao seletor de OS real (limpa a
+  // seleção; nunca auto-abre outra OS por fallback). Definido antes dos menus
+  // porque "Trocar OS" reusa este fluxo real (GOAL 006 — fim do no-op).
+  const goToOSSearch = () =>
+    update({ selectedOsId: null, module: "workspace", view: "cockpit", menu: null });
+
   // ---- menus ----
   // Documentos são protótipo: não geram/abrem nada na Preview → toast honesto.
   const printItems = [
@@ -379,14 +396,18 @@ export function buildVals(
   const moreItems: Array<{ icon: string; label: string; color: string; onClick: () => void }> = [
     // "Editar OS" leva à aba Entrada real (edição dos grupos seguros) — não é mais no-op.
     { icon: "✏", label: "Editar OS (Entrada)", color: C.body, onClick: () => go("entrada") },
-    { icon: "⇄", label: "Trocar OS", color: C.body, onClick: () => notify(PREVIEW_NOOP) },
+    // "Trocar OS" usa o fluxo real de busca: limpa a seleção e abre o seletor.
+    { icon: "⇄", label: "Trocar OS", color: C.body, onClick: goToOSSearch },
   ];
-  if (st.status === "em_execucao" || st.status === "aprovado")
-    moreItems.push({ icon: "⏸", label: "Marcar “Aguardando peça”", color: C.body, onClick: () => setStatusTo("aguardando_peca") });
-  if (st.status === "aguardando_peca")
-    moreItems.push({ icon: "▶", label: "Peça chegou — retomar", color: C.body, onClick: () => setStatusTo("em_execucao") });
-  if (st.status !== "entregue" && st.status !== "cancelada")
-    moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => setStatusTo("cancelada") });
+  // Transições sem escrita real são no-op honesto: toast, SEM mudar o status exibido
+  // (antes mudavam o header localmente — ex.: "Cancelar OS" pintava a OS de cancelada
+  // sem cancelar nada de verdade).
+  if (status === "em_execucao" || status === "aprovado")
+    moreItems.push({ icon: "⏸", label: "Marcar “Aguardando peça”", color: C.body, onClick: () => notify(PREVIEW_NOOP) });
+  if (status === "aguardando_peca")
+    moreItems.push({ icon: "▶", label: "Peça chegou — retomar", color: C.body, onClick: () => notify(PREVIEW_NOOP) });
+  if (status !== "entregue" && status !== "cancelada")
+    moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => notify(PREVIEW_NOOP) });
 
   // ---- módulos (rail) — só metadados; as telas de módulo são protótipo sem dados fake ----
   const mod = MODULE_META[st.module] || MODULE_META.dashboard;
@@ -448,9 +469,6 @@ export function buildVals(
     const o = ctx.ordens.find((x) => x.id === id);
     if (o) selectOS(o);
   };
-  // Barra de busca do topo: leva ao seletor de OS real (limpa seleção; nunca auto-abre).
-  const goToOSSearch = () =>
-    update({ selectedOsId: null, module: "workspace", view: "cockpit", menu: null });
 
   // Nova OS criada (REAL) pelo modal → fecha o modal, abre a OS recém-criada no workspace
   // e recarrega a lista. Recebe apenas o id resultante; a identidade/financeiro são
@@ -469,15 +487,16 @@ export function buildVals(
     notify("OS criada e aberta no workspace.");
   };
 
-  const prim = PRIMARY[st.status];
-  const tone = TONE[st.status] || TONE.em_execucao;
+  const prim = PRIMARY[status];
+  const tone = TONE[status] || TONE.em_execucao;
   const prioM = PRIO[st.prioridade];
 
   // ---- handlers "visuais" (não persistem nada → toast honesto de Preview) ----
   const act = {
     addFoto: () => notify(PREVIEW_NOOP),
-    pdv: () => notify(PREVIEW_NOOP),
+    pdv: () => notify(PDV_NAO_CONECTADO),
     whatsapp: () => notify(PREVIEW_NOOP),
+    ligar: () => notify(PREVIEW_NOOP),
     novaObs: () => notify(PREVIEW_NOOP),
     exportHist: () => notify(PREVIEW_NOOP),
   };
@@ -579,7 +598,8 @@ export function buildVals(
     leftOpen: st.left, leftClosed: !st.left, rightOpen: st.right, rightClosed: !st.right,
     toggleLeft: () => update((s) => ({ left: !s.left })),
     toggleRight: () => update((s) => ({ right: !s.right })),
-    onTrocar: () => notify(PREVIEW_NOOP),
+    // "Trocar OS" (coluna de contexto) usa o fluxo real de busca/seleção.
+    onTrocar: goToOSSearch,
     toHistCliente: () => notify(PREVIEW_NOOP),
 
     // ---- Modo foco (recolhe rail + gavetas; só visual) ----
@@ -597,7 +617,7 @@ export function buildVals(
     closeMenus: () => update({ menu: null }),
     printItems, moreItems,
 
-    statusLabel: STATUS_LABEL[st.status], tone,
+    statusLabel: STATUS_LABEL[status], tone,
     primaryLabel: prim ? prim.label : "Concluído", hasPrimary: !!prim, noPrimary: !prim,
     onPrimary: () => advance(), showKbd: true,
 

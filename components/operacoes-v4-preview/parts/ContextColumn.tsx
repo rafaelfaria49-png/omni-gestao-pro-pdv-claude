@@ -1,6 +1,39 @@
 /** Operações V4 Preview — coluna de contexto (cliente + aparelho), recolhível. */
+import { useState } from "react";
 import { C, MONO } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
+import { maskSenhaV4, NI } from "../os-adapter";
+
+/**
+ * Senha do aparelho MASCARADA por padrão (GOAL 006 — anti shoulder-surfing no
+ * balcão). Revelar é estado local puramente visual: nada é persistido e o
+ * mascaramento de impressão da V3 (`print-model`) segue intocado.
+ */
+function SenhaRow({ senha, senhaTipo }: { senha: string; senhaTipo: string }) {
+  const [revelada, setRevelada] = useState(false);
+  const temSenha = !!senha && senha !== NI;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, fontSize: 12 }}>
+      <span style={{ color: C.subtle, flex: "none" }}>Senha</span>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+        <span title={temSenha && !revelada ? "Senha oculta — use o botão para revelar" : undefined} style={{ color: C.body, fontWeight: 600, fontFamily: MONO, background: C.muted50, padding: "1px 7px", borderRadius: 5, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {temSenha ? (revelada ? senha : maskSenhaV4(senha, senhaTipo)) : NI}
+        </span>
+        {temSenha && (
+          <button
+            type="button"
+            onClick={() => setRevelada((r) => !r)}
+            title={revelada ? "Ocultar senha" : "Revelar senha"}
+            aria-label={revelada ? "Ocultar senha" : "Revelar senha"}
+            style={{ flex: "none", width: 24, height: 22, border: `1px solid ${C.inputBd}`, background: C.surface, borderRadius: 6, fontSize: 11, color: C.muted, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+          >
+            {revelada ? "🙈" : "👁"}
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
 
 export function ContextColumn({ v }: { v: V4Vals }) {
   if (!v.leftOpen) {
@@ -124,10 +157,10 @@ export function ContextColumn({ v }: { v: V4Vals }) {
         </div>
 
         <div style={{ display: "flex", gap: 6, marginBottom: 13 }}>
-          <button type="button" style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 29, border: `1px solid ${C.inputBd}`, background: C.surface, borderRadius: 8, fontSize: 12, fontWeight: 500, color: C.body, cursor: "pointer" }}>
+          <button type="button" onClick={v.act.whatsapp} style={{ flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, height: 29, border: `1px solid ${C.inputBd}`, background: C.surface, borderRadius: 8, fontSize: 12, fontWeight: 500, color: C.body, cursor: "pointer" }}>
             💬 WhatsApp
           </button>
-          <button type="button" title="Ligar" style={{ flex: "none", width: 34, height: 29, border: `1px solid ${C.inputBd}`, background: C.surface, borderRadius: 8, fontSize: 13, color: C.body, cursor: "pointer" }}>📞</button>
+          <button type="button" onClick={v.act.ligar} title="Ligar" style={{ flex: "none", width: 34, height: 29, border: `1px solid ${C.inputBd}`, background: C.surface, borderRadius: 8, fontSize: 13, color: C.body, cursor: "pointer" }}>📞</button>
           <button type="button" onClick={v.toHistCliente} title="Histórico do cliente" style={{ flex: "none", width: 34, height: 29, border: `1px solid ${C.inputBd}`, background: C.surface, borderRadius: 8, fontSize: 13, color: C.body, cursor: "pointer" }}>🕑</button>
         </div>
 
@@ -136,10 +169,10 @@ export function ContextColumn({ v }: { v: V4Vals }) {
         <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 9 }}>{os.cor} · {os.tipo}</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 5, paddingBottom: 12, borderBottom: `1px solid ${C.line3}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>IMEI / Série</span><span style={{ color: C.body, fontWeight: 500 }}>{os.serieCurta}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}><span style={{ color: C.subtle }}>Senha</span><span style={{ color: C.body, fontWeight: 600, fontFamily: MONO, background: C.muted50, padding: "1px 7px", borderRadius: 5 }}>{os.senha}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Acessórios</span><span style={{ color: C.body, fontWeight: 500 }}>{os.acessorios}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Recebido por</span><span style={{ color: C.body, fontWeight: 500 }}>{os.recebidoPor}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.subtle }}>Origem</span><span style={{ color: C.body, fontWeight: 500 }}>{os.origem}</span></div>
+          <SenhaRow senha={os.senha} senhaTipo={os.senhaTipo} />
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12 }}><span style={{ color: C.subtle, flex: "none" }}>Acessórios</span><span title={os.acessorios} style={{ color: C.body, fontWeight: 500, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "right" }}>{os.acessorios}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12 }}><span style={{ color: C.subtle, flex: "none" }}>Recebido por</span><span title={os.recebidoPor} style={{ color: C.body, fontWeight: 500, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "right" }}>{os.recebidoPor}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: 12 }}><span style={{ color: C.subtle, flex: "none" }}>Origem</span><span title={os.origem} style={{ color: C.body, fontWeight: 500, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "right" }}>{os.origem}</span></div>
         </div>
 
         <div style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: ".05em", color: C.warnFg, fontWeight: 700, margin: "12px 0 6px" }}>Defeito relatado</div>

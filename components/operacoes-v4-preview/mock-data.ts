@@ -63,7 +63,8 @@ export const PRIMARY: Record<
   aprovado: { label: "Iniciar serviço", to: "em_execucao", stage: "execucao" },
   aguardando_peca: { label: "Marcar peça chegou", to: "em_execucao", stage: "execucao" },
   em_execucao: { label: "Marcar pronta", to: "pronta", stage: "financeiro" },
-  pronta: { label: "Receber pagamento", to: "entregue", stage: "entrega" },
+  // "Receber pagamento" leva ao Financeiro (a baixa real vive no PDV de Serviço).
+  pronta: { label: "Receber pagamento", to: "entregue", stage: "financeiro" },
   entregue: null,
   cancelada: null,
 };
@@ -130,7 +131,7 @@ export const RESOLVED_RAW: Array<[string, string]> = [
   ["Rolagem horizontal", "Raiz agora 100% fluida (100vw/100vh); grids em fr; só o palco rola. Cabe em FHD, notebook e ultrawide."],
   ["Recolhíveis reais", "Cliente e Atividade recolhem para trilhos de 32px; o workspace central expande sozinho."],
   ["3 modos de uso", "Recepção, Bancada e Auditoria no topo — ajustam as duas laterais de uma vez e refletem o estado atual."],
-  ["Aba Financeiro", "Total/recebido/saldo, forma de pagamento, plano, recebimentos, histórico financeiro e CTA Receber no PDV + aviso de baixa no PDV."],
+  ["Aba Financeiro", "Total, forma de pagamento, plano de parcelas e histórico financeiro reais; recebido/saldo/status lidos do espelho real de pagamento (payload.pagamentoV3) quando há recebimento; CTA Receber no PDV honesto (integração ainda não conectada)."],
   ["Aba Entrega", "Retirado por, documento, data/hora, assinatura, checklist final, acessórios devolvidos, garantia e imprimir termo + estado “precisa estar Pronta”."],
   ["Aba Pós-venda", "Garantia real (op/payload), retornos por garantia_acionada e eventos de pós-venda da timeline real — NPS, satisfação e follow-up não fazem parte do modelo de dados."],
   ["Espaços vazios", "Execução, Histórico, Financeiro e Entrega agora usam colunas densas — sem cards enormes vazios."],
@@ -148,7 +149,7 @@ export const PENDING = [
   { title: "Ações de escrita reais", text: "Inputs de Entrega/Pós-venda são visuais; persistência (entregar, abrir retorno, assinar) virá pela ligação com os hooks da V3." },
   { title: "Catálogo / ProductPicker", text: "Os botões + Serviço / + Peça abrem o catálogo real do estoque na integração final." },
   { title: "Módulos completos", text: "Dashboard, Fila, Bancada, SLA e PDV são protótipos — exibem estado vazio honesto até serem conectados aos dados ao vivo." },
-  { title: "Responsivo < 1280px", text: "Abaixo de notebook padrão as colunas devem colapsar para 2/1 — regras de breakpoint na próxima fase." },
+  { title: "Responsivo < 1280px", text: "Colunas dos painéis de etapa já colapsam 3→2→1 automaticamente (auto-fit); breakpoints finos do shell (largura das gavetas/rail) ficam para a próxima fase." },
 ];
 
 /* ---- Nova OS / segurança ---- */

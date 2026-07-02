@@ -27,6 +27,9 @@ import { C, fmt } from "./tokens";
 // Reuso PURO (read-only) dos readers da V3: identificação rica da prova de entrada
 // e dados básicos da recepção (recebido por / localização / origem / observações).
 import { lerProvaEntradaV3 } from "@/lib/operacoes-v3/prova-entrada-model";
+// Reuso PURO (read-only) do leitor de pagamento da V3: lê o espelho
+// `payload.pagamentoV3` gravado pelo PDV de Serviço (GOAL 006). Nenhuma escrita.
+import { lerPagamentoV3, PAGAMENTO_STATUS_META_V3 } from "@/lib/operacoes-v3/payment-model";
 import {
   lerDadosBasicosV3,
   LOCAL_FISICO_LABEL_V3,
@@ -252,10 +255,30 @@ export interface V4PagView {
   statusPagamento: string;
   ultimaForma: string;
   previsto: string;
+  /** true quando há recebimento REAL espelhado (payload.pagamentoV3, recebido > 0). */
+  temPagamento: boolean;
+  /** "Parcial" / "Quitado" (do espelho real); "" quando não há pagamento. */
+  pagamentoStatusLabel: string;
+}
+
+/**
+ * Espelho de pagamento REAL da OS (`payload.pagamentoV3`), gravado pelo PDV de
+ * Serviço V3 a cada recebimento. Só existe depois de uma baixa real — por isso
+ * é o gate de "temPagamento": sem espelho, recebido/saldo ficam NI (não inventamos
+ * um "saldo devedor" para OS que nunca teve título/recebimento).
+ */
+function pagamentoEspelhado(os: OrdemServico): boolean {
+  const m = (os as { pagamentoV3?: { total?: unknown } }).pagamentoV3;
+  return !!m && typeof m === "object" && typeof m.total === "number";
 }
 
 export function adaptPag(os: OrdemServico): V4PagView {
-  const total = osTotalNumero(os);
+  const temEspelho = pagamentoEspelhado(os);
+  const pag = lerPagamentoV3(os);
+  const temPagamento = temEspelho && pag.recebido > 0;
+  // Total: o espelho (valor do título real) prevalece; sem espelho, mesma fonte
+  // que o restante da V4 (`osTotalNumero`).
+  const totalNum = temEspelho && pag.total > 0 ? pag.total : osTotalNumero(os);
   const statusPag =
     os.faturamentoStatus === "cancelado"
       ? "Faturamento cancelado"
@@ -263,12 +286,14 @@ export function adaptPag(os: OrdemServico): V4PagView {
         ? "Faturamento pendente"
         : NI;
   return {
-    total: total > 0 ? fmt(total) : NI,
-    recebido: NI,
-    saldo: NI,
+    total: totalNum > 0 ? fmt(totalNum) : NI,
+    recebido: temPagamento ? fmt(pag.recebido) : NI,
+    saldo: temPagamento ? fmt(pag.saldo) : NI,
     statusPagamento: statusPag,
-    ultimaForma: txt(os.faturamentoFormaPagamento) || NI,
+    ultimaForma: (temPagamento && txt(pag.ultimaForma)) || txt(os.faturamentoFormaPagamento) || NI,
     previsto: NI,
+    temPagamento,
+    pagamentoStatusLabel: temPagamento ? PAGAMENTO_STATUS_META_V3[pag.status].label : "",
   };
 }
 
@@ -311,13 +336,27 @@ export const EMPTY_PAG_VIEW: V4PagView = {
   statusPagamento: NI,
   ultimaForma: NI,
   previsto: NI,
+  temPagamento: false,
+  pagamentoStatusLabel: "",
 };
 
-// ---- Financeiro da OS (GOAL OPS-V4-P0-008) ---------------------------------
-// A V4 Preview NÃO lê a baixa real (PDV / Caixa / Conta a Receber). Só expõe o
-// que a própria OS carrega: total, status do faturamento, forma/modo de cobrança
-// e o plano de parcelas. "Recebido"/"saldo pago" não têm fonte na OS → vazio
-// honesto. Nada de valor inventado.
+/**
+ * Máscara LOCAL (só exibição) da credencial do aparelho na coluna de contexto —
+ * GOAL 006. Nunca altera payload nem o mascaramento de impressão da V3
+ * (`print-model`). Comprimento fixo para não vazar o tamanho da senha.
+ */
+export function maskSenhaV4(senha: string, senhaTipo?: string): string {
+  const s = txt(senha);
+  if (!s || s === NI) return NI;
+  if (senhaTipo === "padrao") return "Padrão cadastrado";
+  return "••••••";
+}
+
+// ---- Financeiro da OS (GOAL OPS-V4-P0-008 + 006) ----------------------------
+// Expõe o que a OS carrega: total, status do faturamento, forma/modo de cobrança
+// e o plano de parcelas. Recebido/saldo/status de pagamento vêm do espelho REAL
+// `payload.pagamentoV3` (gravado pelo PDV de Serviço V3) via `lerPagamentoV3` —
+// leitura pura, sem tocar PDV/Caixa/Financeiro. Sem espelho → vazio honesto.
 
 const MODO_COBRANCA_LABEL: Record<string, string> = {
   avista: "À vista",
@@ -343,6 +382,16 @@ export interface V4FinanceiroView {
   formaPagamento: string;
   modoCobranca: string;
   parcelas: V4ParcelaView[];
+  /** true quando há recebimento REAL espelhado (payload.pagamentoV3, recebido > 0). */
+  temPagamento: boolean;
+  /** Recebido/saldo do espelho real; NI quando não há pagamento. */
+  recebido: string;
+  saldo: string;
+  /** true quando ainda resta saldo a receber (> 0) no espelho real. */
+  temSaldo: boolean;
+  /** "Parcial" / "Quitado" (do espelho real); "" quando não há pagamento. */
+  pagamentoStatusLabel: string;
+  pagamentoStatusTone: "success" | "info";
 }
 
 export const EMPTY_FINANCEIRO_VIEW: V4FinanceiroView = {
@@ -354,10 +403,20 @@ export const EMPTY_FINANCEIRO_VIEW: V4FinanceiroView = {
   formaPagamento: NI,
   modoCobranca: NI,
   parcelas: [],
+  temPagamento: false,
+  recebido: NI,
+  saldo: NI,
+  temSaldo: false,
+  pagamentoStatusLabel: "",
+  pagamentoStatusTone: "info",
 };
 
 export function adaptFinanceiro(os: OrdemServico): V4FinanceiroView {
-  const totalNum = osTotalNumero(os);
+  // Espelho de pagamento real (mesma regra do adaptPag): título/recebido/saldo.
+  const temEspelho = pagamentoEspelhado(os);
+  const pag = lerPagamentoV3(os);
+  const temPagamento = temEspelho && pag.recebido > 0;
+  const totalNum = temEspelho && pag.total > 0 ? pag.total : osTotalNumero(os);
   const temTotal = totalNum > 0;
   const forma = txt(os.faturamentoFormaPagamento);
   const modo = txt(os.faturamentoModoCobranca);
@@ -382,7 +441,7 @@ export function adaptFinanceiro(os: OrdemServico): V4FinanceiroView {
         ? "Faturamento pendente"
         : NI;
   return {
-    temDados: temTotal || !!forma || !!modo || parcelas.length > 0 || statusTone !== "neutro",
+    temDados: temTotal || !!forma || !!modo || parcelas.length > 0 || statusTone !== "neutro" || temPagamento,
     temTotal,
     total: temTotal ? fmt(totalNum) : NI,
     statusFaturamento,
@@ -390,6 +449,12 @@ export function adaptFinanceiro(os: OrdemServico): V4FinanceiroView {
     formaPagamento: forma || NI,
     modoCobranca: modo ? (MODO_COBRANCA_LABEL[modo] ?? modo) : NI,
     parcelas,
+    temPagamento,
+    recebido: temPagamento ? fmt(pag.recebido) : NI,
+    saldo: temPagamento ? fmt(pag.saldo) : NI,
+    temSaldo: temPagamento && pag.saldo > 0,
+    pagamentoStatusLabel: temPagamento ? PAGAMENTO_STATUS_META_V3[pag.status].label : "",
+    pagamentoStatusTone: temPagamento && pag.status === "quitado" ? "success" : "info",
   };
 }
 
@@ -687,6 +752,21 @@ const ORC_STATUS_TONE: Record<OrcamentoStatus, V4OrcamentoView["statusTone"]> = 
   expirado: "warn",
 };
 
+/** Classificação real da linha (V3 `kindV3`); rótulos read-only da V4 (GOAL 006). */
+export type V4OrcKind = "cobrado" | "brinde" | "interno";
+
+export const ORC_KIND_LABEL: Record<V4OrcKind, string> = {
+  cobrado: "Cobrado",
+  brinde: "Brinde",
+  interno: "Interno",
+};
+
+/** Lê o `kindV3` persistido de uma linha de orçamento; null quando ausente/inválido. */
+export function lerOrcKindV4(linha: unknown): V4OrcKind | null {
+  const k = (linha as { kindV3?: unknown } | null | undefined)?.kindV3;
+  return k === "cobrado" || k === "brinde" || k === "interno" ? k : null;
+}
+
 export interface V4OrcItemView {
   id: string;
   descricao: string;
@@ -696,6 +776,10 @@ export interface V4OrcItemView {
   valor: string;
   /** Custo da linha — somente quando `custoUnitario` real existir; senão null. */
   custo: string | null;
+  /** Classificação persistida da linha (`kindV3`); null quando a OS não registra. */
+  kind: V4OrcKind | null;
+  /** "Cobrado" / "Brinde" / "Interno"; "" quando sem classificação. */
+  kindLabel: string;
 }
 
 export interface V4OrcamentoView {
@@ -756,25 +840,33 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
   const isPrevia = orc.sintetizado === true;
   const estado: V4OrcamentoEstado = isPrevia ? "previa" : "persistido";
 
-  const servicos: V4OrcItemView[] = servicosRaw.map((s, i) => ({
-    id: txt(s.id) || `svc_${i}`,
-    descricao: txt(s.descricao) || "Serviço",
-    detalhe: typeof s.prazoGarantiaDias === "number" && s.prazoGarantiaDias > 0 ? `garantia ${s.prazoGarantiaDias}d` : "",
-    valor: fmt(servicoLineTotal(s)),
-    // Servico não tem custo no modelo → nunca exibe margem por linha.
-    custo: null,
-  }));
+  const servicos: V4OrcItemView[] = servicosRaw.map((s, i) => {
+    const kind = lerOrcKindV4(s);
+    return {
+      id: txt(s.id) || `svc_${i}`,
+      descricao: txt(s.descricao) || "Serviço",
+      detalhe: typeof s.prazoGarantiaDias === "number" && s.prazoGarantiaDias > 0 ? `garantia ${s.prazoGarantiaDias}d` : "",
+      valor: fmt(servicoLineTotal(s)),
+      // Servico não tem custo no modelo → nunca exibe margem por linha.
+      custo: null,
+      kind,
+      kindLabel: kind ? ORC_KIND_LABEL[kind] : "",
+    };
+  });
 
   const pecas: V4OrcItemView[] = pecasRaw.map((p, i) => {
     const det: string[] = [`${p.quantidade || 0}×`];
     if (typeof p.prazoGarantiaDias === "number" && p.prazoGarantiaDias > 0) det.push(`garantia ${p.prazoGarantiaDias}d`);
     const temCusto = typeof p.custoUnitario === "number";
+    const kind = lerOrcKindV4(p);
     return {
       id: txt(p.id) || `peca_${i}`,
       descricao: txt(p.nome) || "Peça",
       detalhe: det.join(" · "),
       valor: fmt(pecaLineTotal(p)),
       custo: temCusto ? fmt((p.custoUnitario as number) * (p.quantidade || 0)) : null,
+      kind,
+      kindLabel: kind ? ORC_KIND_LABEL[kind] : "",
     };
   });
 

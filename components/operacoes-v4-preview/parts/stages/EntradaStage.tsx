@@ -46,7 +46,9 @@ import {
 } from "@/lib/operacoes-v4/dados-basicos-form";
 import { PatternPadV4 } from "../PatternPadV4";
 
-const col3 = "minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)";
+// Colunas do stage colapsam 3→2→1 conforme o espaço (notebook 1366px com as
+// gavetas abertas deixa o centro estreito — sem isso os cards ficam espremidos).
+const col3 = "repeat(auto-fit, minmax(290px, 1fr))";
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
 const emptyText = { fontSize: 12, color: C.subtle, padding: "10px 2px", lineHeight: 1.5 } as const;
 
@@ -63,7 +65,7 @@ const inp: React.CSSProperties = {
 const sel: React.CSSProperties = { ...inp, cursor: "pointer" };
 const ta: React.CSSProperties = {
   width: "100%",
-  minHeight: 58,
+  minHeight: 74,
   padding: "7px 9px",
   border: `1px solid ${C.inputBd}`,
   borderRadius: 7,
@@ -95,7 +97,7 @@ export function EntradaStage({ v }: { v: V4Vals }) {
 }
 
 function btnPrimary(busy: boolean): React.CSSProperties {
-  return { height: 32, padding: "0 14px", border: "none", background: C.primary, color: C.white, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 };
+  return { height: 32, padding: "0 14px", border: "none", background: C.primary, color: C.white, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1, whiteSpace: "nowrap" };
 }
 
 function EntradaEditor({ v }: { v: V4Vals }) {
@@ -265,7 +267,7 @@ function EntradaEditor({ v }: { v: V4Vals }) {
               const meta = CHECKLIST_ESTADO_META_V3[c.estado];
               const tone = CHECK_TONE[meta.tone] ?? CHECK_TONE.neutral;
               return (
-                <button key={c.id} type="button" onClick={() => setEd((s) => cycleChecklistEstado(s, c.id))} title="Clique para alternar OK / Ruim / N/T" style={{ border: `1px solid ${C.line2}`, borderRadius: 8, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, minWidth: 0, background: C.surface, cursor: "pointer" }}>
+                <button key={c.id} type="button" onClick={() => setEd((s) => cycleChecklistEstado(s, c.id))} title={`${c.label} — clique para alternar OK / Ruim / N/T`} style={{ border: `1px solid ${C.line2}`, borderRadius: 8, padding: "7px 8px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, minWidth: 0, background: C.surface, cursor: "pointer" }}>
                   <span style={{ fontSize: 11.5, color: C.body, fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{c.label}</span>
                   <span style={{ flex: "none", border: `1px solid ${tone.bd}`, background: tone.bg, color: tone.fg, borderRadius: 5, padding: "2px 7px", fontSize: 9.5, fontWeight: 700 }}>{meta.label}</span>
                 </button>
@@ -304,7 +306,7 @@ function EntradaEditor({ v }: { v: V4Vals }) {
             {ed.acessorios.map((a) => {
               const on = a.presente;
               return (
-                <button key={a.id} type="button" onClick={() => setEd((s) => toggleAcessorio(s, a.id))} style={{ display: "flex", alignItems: "center", gap: 7, border: `1px solid ${on ? C.successBd : C.line2}`, background: on ? C.successBg : C.surface, borderRadius: 7, padding: "6px 8px", minWidth: 0, cursor: "pointer", textAlign: "left" }}>
+                <button key={a.id} type="button" onClick={() => setEd((s) => toggleAcessorio(s, a.id))} title={acessorioEntradaLabelV3(a.id)} style={{ display: "flex", alignItems: "center", gap: 7, border: `1px solid ${on ? C.successBd : C.line2}`, background: on ? C.successBg : C.surface, borderRadius: 7, padding: "6px 8px", minWidth: 0, cursor: "pointer", textAlign: "left" }}>
                   <span style={{ width: 15, height: 15, borderRadius: 4, background: on ? C.success : C.muted100, color: on ? C.white : C.subtle, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, flex: "none" }}>{on ? "✓" : ""}</span>
                   <span style={{ fontSize: 11.5, color: C.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{acessorioEntradaLabelV3(a.id)}</span>
                 </button>

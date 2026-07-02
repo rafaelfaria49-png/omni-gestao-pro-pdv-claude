@@ -60,7 +60,7 @@ function DiagnosticoStageInner({ v }: { v: V4Vals }) {
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)", gap: 12, alignItems: "start" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12, alignItems: "start" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={card}>
           <div style={{ ...cardTitle, marginBottom: 11 }}>🩺 Diagnóstico técnico</div>

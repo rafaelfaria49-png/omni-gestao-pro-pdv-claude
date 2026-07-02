@@ -11,7 +11,7 @@ import type { ReactNode } from "react";
 import { C, card, cardTitle, upLabel, pill } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 
-const col3 = "minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)";
+const col3 = "repeat(auto-fit, minmax(280px, 1fr))";
 
 type Tone = "success" | "info" | "warn" | "danger" | "neutro";
 

@@ -20,6 +20,7 @@ export function PipelineSpine({ v }: { v: V4Vals }) {
           key={n.id}
           type="button"
           onClick={n.onClick}
+          title={n.sub ? `${n.label} — ${n.sub}` : n.label}
           style={{
             flex: 1,
             minWidth: 0,

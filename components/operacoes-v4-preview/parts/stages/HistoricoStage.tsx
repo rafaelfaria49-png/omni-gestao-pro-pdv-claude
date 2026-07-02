@@ -12,7 +12,7 @@ export function HistoricoStage({ v }: { v: V4Vals }) {
         <span style={{ flex: 1 }} />
         <button type="button" onClick={v.act.exportHist} style={{ height: 28, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 11.5, fontWeight: 500, cursor: "pointer" }}>⬇ Exportar auditoria</button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.3fr) minmax(0,1fr)", gap: 12, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12, alignItems: "start" }}>
         <div style={card}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <span style={cardTitle}>Histórico completo (auditoria)</span>

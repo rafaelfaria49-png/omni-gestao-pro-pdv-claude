@@ -10,7 +10,7 @@
 import { useState } from "react";
 import { C, card, cardTitle, upLabel, fmt } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
-import type { V4OrcItemView } from "../../os-adapter";
+import { lerOrcKindV4, ORC_KIND_LABEL, type V4OrcItemView, type V4OrcKind } from "../../os-adapter";
 import { ProdutoLookupV4 } from "../ProdutoLookupV4";
 import {
   custoInformadoPeca,
@@ -22,7 +22,7 @@ import {
   type OrcamentoEditorV4,
 } from "@/lib/operacoes-v4/orcamento-form";
 
-const col2 = "minmax(0,1.55fr) minmax(0,1fr)";
+const col2 = "repeat(auto-fit, minmax(330px, 1fr))";
 const emptyText = { fontSize: 12, color: C.subtle, padding: "8px 2px", lineHeight: 1.5 } as const;
 
 const STATUS_BG: Record<string, { bg: string; fg: string }> = {
@@ -46,6 +46,25 @@ const cellInput: React.CSSProperties = {
 function num(s: string): number {
   const n = parseFloat(s.replace(",", "."));
   return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// Tons do badge de classificação da linha (kindV3 persistido; read-only — GOAL 006).
+// Brinde/Interno não somam no total ao cliente, por isso o destaque visual.
+const KIND_TONE: Record<V4OrcKind, { bg: string; fg: string; bd: string }> = {
+  cobrado: { bg: C.surface2, fg: C.muted, bd: C.line2 },
+  brinde: { bg: C.successBg, fg: C.successFg, bd: C.successBd },
+  interno: { bg: C.warnBg, fg: C.warnFg, bd: C.warnBd },
+};
+
+/** Badge read-only da classificação da linha; nada quando a OS não registra kind. */
+function KindBadge({ kind }: { kind: V4OrcKind | null }) {
+  if (!kind) return null;
+  const t = KIND_TONE[kind];
+  return (
+    <span title={kind === "cobrado" ? "Linha cobrada do cliente" : "Não soma no total ao cliente"} style={{ flex: "none", border: `1px solid ${t.bd}`, background: t.bg, color: t.fg, borderRadius: 5, padding: "1px 6px", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".03em", whiteSpace: "nowrap" }}>
+      {ORC_KIND_LABEL[kind]}
+    </span>
+  );
 }
 
 export function OrcamentoStage({ v }: { v: V4Vals }) {
@@ -74,6 +93,7 @@ function ItemRow({ it }: { it: V4OrcItemView }) {
         <div style={{ color: C.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.descricao}</div>
         {it.detalhe && <div style={{ fontSize: 10, color: C.subtle }}>{it.detalhe}</div>}
       </div>
+      <KindBadge kind={it.kind} />
       {it.custo && <span style={{ width: 92, textAlign: "right", fontSize: 11, color: C.subtle }}>custo {it.custo}</span>}
       <span style={{ width: 78, textAlign: "right", fontWeight: 600, color: C.ink }}>{it.valor}</span>
     </div>
@@ -216,7 +236,7 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
         {/* Serviços */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
           <span style={upLabel}>Serviços / mão de obra</span>
-          <button type="button" onClick={addServico} style={btnGhost}>+ Serviço</button>
+          <button type="button" onClick={addServico} title="Serviço manual novo entra como Cobrado" style={btnGhost}>+ Serviço</button>
         </div>
         {editor.servicos.length === 0 ? (
           <div style={emptyText}>Nenhum serviço. Adicione um serviço manual.</div>
@@ -230,7 +250,10 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
             </div>
             {editor.servicos.map((s, i) => (
               <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: `1px solid ${C.line4}` }}>
-                <input value={s.descricao} onChange={(e) => setServico(i, { descricao: e.target.value })} placeholder="Descrição do serviço" maxLength={120} style={{ ...cellInput, flex: 1, minWidth: 0 }} />
+                <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                  <input value={s.descricao} onChange={(e) => setServico(i, { descricao: e.target.value })} placeholder="Descrição do serviço" maxLength={120} style={{ ...cellInput, flex: 1, minWidth: 0 }} />
+                  <KindBadge kind={lerOrcKindV4(s)} />
+                </div>
                 <input type="number" min={0} value={s.valor || ""} onChange={(e) => setServico(i, { valor: num(e.target.value) })} placeholder="0,00" style={{ ...cellInput, width: 92, textAlign: "right" }} />
                 <input type="number" min={0} value={s.custoV3 || ""} onChange={(e) => setServico(i, { custoV3: num(e.target.value) })} placeholder="0,00" aria-label="Custo interno do serviço" style={{ ...cellInput, width: 84, textAlign: "right" }} />
                 <button type="button" onClick={() => removeServico(i)} aria-label="Remover serviço" style={{ width: 28, height: 30, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.danger, borderRadius: 7, cursor: "pointer", flex: "none" }}>×</button>
@@ -238,6 +261,9 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
             ))}
           </>
         )}
+        <div style={{ fontSize: 10, color: C.subtle, marginTop: 6, lineHeight: 1.4 }}>
+          Serviço manual novo entra como <b>Cobrado</b>. Linhas <b>Brinde</b>/<b>Interno</b> (classificadas na V3) são preservadas e não somam no total ao cliente — a edição da classificação fica para uma próxima etapa.
+        </div>
 
         {/* Peças */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "14px 0 6px" }}>
@@ -261,7 +287,10 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
             return (
               <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 0", borderBottom: `1px solid ${C.line4}` }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, color: C.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, color: C.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>{p.nome}</div>
+                    <KindBadge kind={lerOrcKindV4(p)} />
+                  </div>
                   <div style={{ fontSize: 10, color: custoOk ? C.subtle : C.warnFg }}>
                     {custoOk ? `Custo ${fmt(p.custoUnitario as number)} / un.` : "Custo não informado"}
                   </div>

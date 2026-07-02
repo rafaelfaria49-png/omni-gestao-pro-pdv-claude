@@ -49,6 +49,8 @@ vi.mock("@/lib/operacoes-v3/dados-basicos-actions", () => ({
 }))
 
 import { buildVals, type V4DataCtx } from "./use-v4-preview"
+import { adaptPag, adaptFinanceiro, adaptOrcamento, maskSenhaV4, NI } from "./os-adapter"
+import { fmt } from "./tokens"
 import type { V4State } from "./types"
 import type { OrdemServico } from "@/types/os"
 
@@ -280,6 +282,56 @@ describe("Operações V4 Preview — Modo foco e Segurança (preview/no-op)", ()
 })
 
 // ---------------------------------------------------------------------------
+// OPS-V4-UX-PARITY-E-PDV-SERVICO-AUDIT-005 — ações de preview não fingem status.
+// ---------------------------------------------------------------------------
+describe("Operações V4 Preview — ações sem escrita real NUNCA mutam o status exibido", () => {
+  it("onPrimary em status sem transição segura navega à etapa, avisa e não muda status", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ status: "em_execucao", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctx,
+    )
+    v.onPrimary() // "Marcar pronta" — sem escrita real neste slice
+    expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status").toBe(true)
+    expect(msgs.some((m) => /nenhuma alteração/i.test(m))).toBe(true)
+  })
+
+  it("Cancelar OS / Aguardando peça no menu são no-op honesto (toast, sem status)", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ status: "em_execucao", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctx,
+    )
+    for (const item of v.moreItems.filter((m) => /Cancelar OS|Aguardando peça/.test(m.label))) {
+      item.onClick()
+    }
+    expect(patches.every((p) => !("status" in p))).toBe(true)
+    expect(msgs.length).toBeGreaterThan(0)
+    expect(msgs.every((m) => /nenhuma alteração/i.test(m))).toBe(true)
+  })
+
+  it("Receber no PDV (act.pdv) avisa que a integração não está conectada e não patcheia nada", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctx,
+    )
+    v.act.pdv()
+    expect(patches).toEqual([])
+    expect(msgs.some((m) => /não está conectado|nenhuma cobrança/i.test(m))).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // OPS-V4-ORCAMENTO-REAL-002 — Diagnóstico/Orçamento reais (reuso seguro da V3).
 // ---------------------------------------------------------------------------
 describe("Operações V4 — Diagnóstico/Orçamento reais reaproveitam só actions seguras da V3", () => {
@@ -371,5 +423,182 @@ describe("Operações V4 — Padrão 3×3 (PatternPadV4) na Entrada, sem tocar a
 
   it("SegurancaStage (autorização de gerente) não foi tocado por este slice: não referencia PatternPadV4", () => {
     expect(segurancaStage).not.toContain("PatternPadV4")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-V4-FINANCEIRO-READONLY-HIGIENE-006 — leitura pura do espelho de pagamento,
+// status sem drift, CTA honesta, senha mascarada, kind do orçamento e guards.
+// Nenhum recebimento real: só leitura de payload já persistido pela V3.
+// ---------------------------------------------------------------------------
+describe("OPS-V4-006 — Financeiro read-only lê o espelho real payload.pagamentoV3", () => {
+  const osComPagamento = mkOS({
+    id: "os-pag",
+    status: "pronta",
+    pagamentoV3: { total: 890, recebido: 300, saldo: 590, status: "parcial", ultimaForma: "PIX" },
+  })
+
+  it("adaptPag lê total/recebido/saldo/status do espelho (sem inventar nada)", () => {
+    const pag = adaptPag(osComPagamento)
+    expect(pag.temPagamento).toBe(true)
+    expect(pag.total).toBe(fmt(890))
+    expect(pag.recebido).toBe(fmt(300))
+    expect(pag.saldo).toBe(fmt(590))
+    expect(pag.pagamentoStatusLabel).toBe("Parcial")
+  })
+
+  it("sem espelho, recebido/saldo continuam NI (vazio honesto — nada de saldo fabricado)", () => {
+    const pag = adaptPag(mkOS({ id: "os-sem", status: "aberta" }))
+    expect(pag.temPagamento).toBe(false)
+    expect(pag.recebido).toBe(NI)
+    expect(pag.saldo).toBe(NI)
+    expect(pag.pagamentoStatusLabel).toBe("")
+  })
+
+  it("adaptFinanceiro expõe recebido/saldo/temSaldo; quitado zera o saldo e vira success", () => {
+    const parcial = adaptFinanceiro(osComPagamento)
+    expect(parcial.temPagamento).toBe(true)
+    expect(parcial.temSaldo).toBe(true)
+    expect(parcial.recebido).toBe(fmt(300))
+
+    const quitado = adaptFinanceiro(
+      mkOS({ id: "os-q", status: "pronta", pagamentoV3: { total: 890, recebido: 890, saldo: 0, status: "quitado" } }),
+    )
+    expect(quitado.temPagamento).toBe(true)
+    expect(quitado.temSaldo).toBe(false)
+    expect(quitado.pagamentoStatusLabel).toBe("Quitado")
+    expect(quitado.pagamentoStatusTone).toBe("success")
+  })
+
+  it("FinanceiroStage só diz 'Nenhum pagamento registrado' no ramo SEM pagamento real", () => {
+    const src = readFileSync(join(DIR, "parts", "stages", "FinanceiroStage.tsx"), "utf8")
+    expect(src, "bloco de pagamento deve ser condicional em temPagamento").toMatch(/f\.temPagamento\s*\?/)
+    expect((src.match(/Nenhum pagamento registrado/g) ?? []).length, "copy de vazio deve existir apenas no ramo sem pagamento").toBe(1)
+  })
+})
+
+describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem drift)", () => {
+  it("realOS.status vence o snapshot local st.status", () => {
+    const v = buildVals(
+      makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
+      () => {},
+      () => {},
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }) },
+    )
+    expect(v.statusLabel).toBe("Pronta")
+    expect(v.primaryLabel).toBe("Receber pagamento")
+  })
+
+  it("sem OS carregada, cai no fallback do estado local", () => {
+    const v = buildVals(makeState({ status: "em_execucao", novaOS: false }), () => {}, () => {}, ctx)
+    expect(v.statusLabel).toBe("Em execução")
+  })
+
+  it("CTA 'Receber pagamento' navega ao Financeiro com aviso honesto (nunca à Entrega, sem PDV real)", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }) },
+    )
+    v.onPrimary()
+    expect(patches.at(-1)).toMatchObject({ stage: "financeiro" })
+    expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status").toBe(true)
+    expect(msgs.some((m) => /não está conectado|nenhuma cobrança/i.test(m))).toBe(true)
+  })
+
+  it("'Trocar OS' usa o fluxo real de busca (limpa a seleção; sem no-op)", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ selectedOsId: "os-x", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctx,
+    )
+    const trocar = v.moreItems.find((m) => m.label === "Trocar OS")
+    expect(trocar).toBeDefined()
+    trocar!.onClick()
+    expect(patches.at(-1)).toMatchObject({ selectedOsId: null, module: "workspace" })
+    expect(msgs).toEqual([]) // não é mais toast de indisponível
+  })
+})
+
+describe("OPS-V4-006 — senha do aparelho mascarada por padrão", () => {
+  it("maskSenhaV4 nunca devolve a senha: PIN/texto viram máscara fixa; padrão vira rótulo", () => {
+    expect(maskSenhaV4("1234 (PIN)", "numerica")).toBe("••••••")
+    expect(maskSenhaV4("hunter2", "texto")).toBe("••••••")
+    expect(maskSenhaV4("1 → 2 → 3", "padrao")).toBe("Padrão cadastrado")
+    expect(maskSenhaV4("", "")).toBe(NI)
+    expect(maskSenhaV4(NI, "numerica")).toBe(NI)
+  })
+
+  it("ContextColumn usa SenhaRow com máscara e revelação local (sem persistir nada)", () => {
+    const src = readFileSync(join(DIR, "parts", "ContextColumn.tsx"), "utf8")
+    expect(src).toContain("maskSenhaV4")
+    expect(src).toContain("SenhaRow")
+    expect(src).toMatch(/Revelar senha/)
+  })
+})
+
+describe("OPS-V4-006 — classificação (kindV3) visível no orçamento, read-only", () => {
+  it("adaptOrcamento expõe kind/kindLabel por linha quando kindV3 existir", () => {
+    const o = adaptOrcamento(
+      mkOS({
+        id: "os-orc",
+        status: "aguardando_aprovacao",
+        orcamento: {
+          status: "enviado",
+          total: 100,
+          servicos: [
+            { id: "s1", descricao: "Troca de tela", valor: 100, kindV3: "cobrado" },
+            { id: "s2", descricao: "Película", valor: 30, kindV3: "brinde" },
+          ],
+          pecas: [{ id: "p1", nome: "Cabo flex", quantidade: 1, valorUnitario: 20, kindV3: "interno" }],
+        },
+      }),
+    )
+    expect(o.servicos.map((s) => s.kindLabel)).toEqual(["Cobrado", "Brinde"])
+    expect(o.pecas[0]!.kind).toBe("interno")
+    expect(o.pecas[0]!.kindLabel).toBe("Interno")
+  })
+
+  it("linha sem kindV3 fica sem badge (kind null, label vazio)", () => {
+    const o = adaptOrcamento(
+      mkOS({ id: "os-o2", orcamento: { status: "rascunho", total: 50, servicos: [{ id: "s1", descricao: "Limpeza", valor: 50 }], pecas: [] } }),
+    )
+    expect(o.servicos[0]!.kind).toBeNull()
+    expect(o.servicos[0]!.kindLabel).toBe("")
+  })
+
+  it("OrcamentoStage renderiza o KindBadge e explica que serviço manual novo é Cobrado", () => {
+    const src = readFileSync(join(DIR, "parts", "stages", "OrcamentoStage.tsx"), "utf8")
+    expect(src).toContain("KindBadge")
+    expect(src).toMatch(/entra como/i)
+  })
+})
+
+describe("OPS-V4-006 — guards: nada de recebimento real / imports proibidos", () => {
+  const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+
+  it("a Preview não importa prisma, actions de recebimento, updateOSPayload nem app/api", () => {
+    for (const proibido of [
+      'from "@/lib/prisma',
+      "pdv-servico-actions", // recebimento real fica FORA deste slice
+      "receberOSV3",
+      "estornarRecebimentoOSV3",
+      "updateOSPayload",
+      'from "@/app/api',
+    ]) {
+      expect(allSources, `proibido encontrado: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("a leitura do pagamento vem do reader PURO da V3 (payment-model), não de service", () => {
+    const adapter = readFileSync(join(DIR, "os-adapter.ts"), "utf8")
+    expect(adapter).toContain('from "@/lib/operacoes-v3/payment-model"')
+    expect(adapter).toContain("lerPagamentoV3")
   })
 })
