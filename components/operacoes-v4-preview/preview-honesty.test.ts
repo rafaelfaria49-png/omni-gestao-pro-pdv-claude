@@ -157,6 +157,8 @@ const ctx: V4DataCtx = {
   recusarOrcamento: async () => false,
   iniciarDiagnostico: async () => false,
   iniciarServico: async () => false,
+  marcarAguardandoPeca: async () => false,
+  marcarPronta: async () => false,
   salvarIdentificacao: async () => false,
   salvarProvaEntrada: async () => false,
   salvarAcessorios: async () => false,
@@ -358,12 +360,17 @@ describe("Operações V4 — Diagnóstico/Orçamento reais reaproveitam só acti
     }
   })
 
-  it("só dispara transições de status SEGURAS (diagnostico / em_execucao)", () => {
+  it("só dispara transições de status SEGURAS (diagnostico / em_execucao / aguardando_peca / pronta)", () => {
     const args = [...orquestrador.matchAll(/aplicarTransicaoStatusV3\([^,]+,[^,]+,\s*"([a-z_]+)"\)/g)].map((m) => m[1])
     expect(args.length).toBeGreaterThan(0)
-    expect(new Set(args)).toEqual(new Set(["diagnostico", "em_execucao"]))
-    // Nunca rota proibida neste slice (entrega/cancelamento/pronta tocam estoque/caixa/garantia).
-    for (const proibida of ["entregue", "cancelada", "pronta", "aguardando_peca", "aguardando_aprovacao"]) {
+    // OPS-V4-EXECUCAO-REAL-007 estende o conjunto seguro do slice 002 com as duas
+    // transições da Execução (aguardando_peca / pronta) — `aplicarTransicaoStatusV3`
+    // só tem efeito de estoque/caixa/garantia para "entregue"/"cancelada"; as demais
+    // (incluindo estas duas) são status + timeline apenas.
+    expect(new Set(args)).toEqual(new Set(["diagnostico", "em_execucao", "aguardando_peca", "pronta"]))
+    // Nunca rota proibida (entrega/cancelamento tocam estoque/caixa/garantia; aguardando_aprovacao
+    // não tem UI real nesta Preview).
+    for (const proibida of ["entregue", "cancelada", "aguardando_aprovacao"]) {
       expect(args).not.toContain(proibida)
     }
   })
@@ -600,5 +607,142 @@ describe("OPS-V4-006 — guards: nada de recebimento real / imports proibidos", 
     const adapter = readFileSync(join(DIR, "os-adapter.ts"), "utf8")
     expect(adapter).toContain('from "@/lib/operacoes-v3/payment-model"')
     expect(adapter).toContain("lerPagamentoV3")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-V4-EXECUCAO-REAL-007 — Execução real mínima: transições de status
+// (iniciar/retomar execução, marcar aguardando peça, marcar pronta) via reuso
+// de `aplicarTransicaoStatusV3`; habilitadas SÓ quando a máquina única permite
+// a partir do status real. Checklist técnico/peças/estoque/observação técnica
+// seguem read-only (sem action V3 segura).
+// ---------------------------------------------------------------------------
+describe("OPS-V4-EXECUCAO-REAL-007 — execAcoes só habilita a transição que a máquina única permite", () => {
+  function ctxComStatus(status: string) {
+    return { ...ctx, realOS: mkOS({ id: "os-exec", status }) }
+  }
+
+  it("aprovado: pode iniciar execução E marcar aguardando peça; não pode marcar pronta", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-exec", novaOS: false }),
+      () => {},
+      () => {},
+      ctxComStatus("aprovado"),
+    )
+    expect(v.execAcoes.podeIniciar).toBe(true)
+    expect(v.execAcoes.iniciarLabel).toBe("Iniciar execução")
+    expect(v.execAcoes.podeAguardarPeca).toBe(true)
+    expect(v.execAcoes.podePronta).toBe(false)
+  })
+
+  it("aguardando_peca: só pode retomar (rótulo muda); não pode marcar aguardando peça de novo", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-exec", novaOS: false }),
+      () => {},
+      () => {},
+      ctxComStatus("aguardando_peca"),
+    )
+    expect(v.execAcoes.podeIniciar).toBe(true)
+    expect(v.execAcoes.iniciarLabel).toBe("Retomar execução")
+    expect(v.execAcoes.podeAguardarPeca).toBe(false)
+    expect(v.execAcoes.podePronta).toBe(false)
+  })
+
+  it("em_execucao: só pode marcar pronta; não pode iniciar nem aguardar peça", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-exec", novaOS: false }),
+      () => {},
+      () => {},
+      ctxComStatus("em_execucao"),
+    )
+    expect(v.execAcoes.podeIniciar).toBe(false)
+    expect(v.execAcoes.podeAguardarPeca).toBe(false)
+    expect(v.execAcoes.podePronta).toBe(true)
+  })
+
+  it("pronta / diagnostico / aberta / entregue / cancelada: nenhuma ação de Execução disponível", () => {
+    for (const status of ["pronta", "diagnostico", "aberta", "entregue", "cancelada"]) {
+      const v = buildVals(
+        makeState({ selectedOsId: "os-exec", novaOS: false }),
+        () => {},
+        () => {},
+        ctxComStatus(status),
+      )
+      expect(v.execAcoes, `status ${status}`).toMatchObject({
+        podeIniciar: false,
+        podeAguardarPeca: false,
+        podePronta: false,
+      })
+    }
+  })
+
+  it("sem OS selecionada, nenhuma ação fica disponível mesmo com o snapshot local 'em_execucao'", () => {
+    const v = buildVals(makeState({ status: "em_execucao", selectedOsId: null, novaOS: false }), () => {}, () => {}, ctx)
+    expect(v.execAcoes).toEqual({
+      podeIniciar: false,
+      iniciarLabel: "Iniciar execução",
+      podeAguardarPeca: false,
+      podePronta: false,
+    })
+  })
+})
+
+describe("OPS-V4-EXECUCAO-REAL-007 — handlers reais (runWrite) e wiring do ExecucaoStage", () => {
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const execStage = readFileSync(join(DIR, "parts", "stages", "ExecucaoStage.tsx"), "utf8")
+
+  it("marcarAguardandoPeca/marcarPronta chamam aplicarTransicaoStatusV3 (novas transições seguras)", () => {
+    expect(orquestrador).toContain('aplicarTransicaoStatusV3(sid, osId, "aguardando_peca")')
+    expect(orquestrador).toContain('aplicarTransicaoStatusV3(sid, osId, "pronta")')
+  })
+
+  it("os dois novos handlers passam pelo wrapper runWrite — reload/patch de status só ocorrem em sucesso, nunca direto na falha", () => {
+    // Mesma garantia estrutural que salvarDiagnostico/iniciarServico já têm: o
+    // handler é `() => runWrite(...)`, então reload+toast+after() só correm dentro
+    // do try, após o `await fn()` resolver — a falha cai no catch (return false)
+    // sem tocar patches/status. Ver `runWrite` (única definição, não duplicada).
+    expect(orquestrador).toMatch(/const marcarAguardandoPeca = useCallback\(\s*\(\)\s*=>\s*runWrite\(/)
+    expect(orquestrador).toMatch(/const marcarPronta = useCallback\(\s*\(\)\s*=>\s*runWrite\(/)
+    // runWrite só existe uma vez (fonte única de reload/patch-em-sucesso) — os novos
+    // handlers reaproveitam-na, não duplicam a lógica de guarda/patch.
+    expect(orquestrador.match(/const runWrite = useCallback/g)?.length).toBe(1)
+  })
+
+  it("ExecucaoStage chama os handlers reais (iniciarServico/marcarAguardandoPeca/marcarPronta) — não um toast de preview", () => {
+    expect(execStage).toContain("v.iniciarServico")
+    expect(execStage).toContain("v.marcarAguardandoPeca")
+    expect(execStage).toContain("v.marcarPronta")
+    expect(execStage).not.toContain("PREVIEW_NOOP")
+  })
+
+  it("ExecAcoesCard só renderiza quando alguma transição de v.execAcoes é permitida (sem botão sempre ligado)", () => {
+    expect(execStage).toMatch(/if \(!ex\.podeIniciar && !ex\.podeAguardarPeca && !ex\.podePronta\) return null/)
+  })
+
+  it("botões de Execução têm busy-lock (evita duplo clique) e não chamam PDV/Caixa/Financeiro/Estoque/WhatsApp/Fiscal", () => {
+    expect(execStage).toContain("useState")
+    expect(execStage).toMatch(/disabled=\{busy\}/)
+    for (const proibido of [
+      'from "@/lib/caixa',
+      'from "@/lib/financeiro',
+      'from "@/lib/estoque',
+      'from "@/lib/whatsapp',
+      'from "@/lib/fiscal',
+      'from "@/components/pdv',
+      "updateOSPayload",
+      "receberOSV3",
+      "estornarRecebimentoOSV3",
+      '"loja-1"',
+    ]) {
+      expect(execStage, `referência proibida encontrada: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("checklist técnico e consumo de estoque continuam read-only (sem novo handler de escrita para eles)", () => {
+    // Nenhuma action V3 segura existe para checklist técnico (só via updateOSPayload
+    // legado, fora do escopo) nem para consumo de peças — por isso o stage não ganhou
+    // nenhum botão de "salvar checklist" ou "consumir peça" neste slice.
+    expect(execStage).not.toMatch(/salvarChecklistTecnico/i)
+    expect(execStage).not.toMatch(/consumirPeca|baixarEstoque/i)
   })
 })

@@ -1,4 +1,4 @@
-/** Operações V4 Preview — etapa Execução (somente leitura da OS real).
+/** Operações V4 Preview — etapa Execução.
  *
  * GOAL OPS-V4-P0-011: o técnico/timer/apontamentos/checklist/bancada/consumo
  * fabricados ("Bancada 02", timer "02:14", TECH_DEF, APONTAMENTOS, "baixado /
@@ -6,7 +6,16 @@
  * persiste — técnico responsável, checklist técnico (pós-reparo), apontamentos
  * reais (eventos de execução da timeline), peças consumidas (estoqueMovimentos)
  * e anexos de bancada — ou exibe empty state honesto. Nada de valor inventado.
- * Permanece read-only: nenhuma ação de escrita. */
+ *
+ * GOAL OPS-V4-EXECUCAO-REAL-007: as transições de status (iniciar/retomar
+ * execução, marcar aguardando peça, marcar pronta) deixam de ser preview —
+ * chamam `aplicarTransicaoStatusV3` (reuso da V3, via `use-v4-preview`) e só
+ * ficam habilitadas quando a máquina única permite a partir do status real
+ * (`v.execAcoes`). Checklist técnico, apontamentos, peças/estoque e observação
+ * técnica permanecem read-only: não existe action V3 segura para editá-los
+ * ainda (checklist técnico só grava pelo write-path legado da V2, fora do
+ * escopo permitido). */
+import { useState } from "react";
 import { C, card, cardTitle, upLabel, HATCH } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 
@@ -23,6 +32,87 @@ const fieldBox = {
   fontSize: 12.5,
   color: C.body,
 } as const;
+
+const btnPrimary: React.CSSProperties = {
+  height: 34,
+  padding: "0 16px",
+  border: "none",
+  borderRadius: 8,
+  fontSize: 12.5,
+  fontWeight: 600,
+  color: C.white,
+};
+const btnGhost: React.CSSProperties = {
+  height: 34,
+  padding: "0 16px",
+  borderRadius: 8,
+  fontSize: 12.5,
+  fontWeight: 600,
+  background: C.surface,
+  color: C.body,
+  border: `1px solid ${C.inputBd2}`,
+};
+
+/**
+ * Ações reais de transição de status da Execução (slice OPS-V4-EXECUCAO-REAL-007).
+ * Cada botão só aparece quando `v.execAcoes` (máquina única `podeTransicionarV3`
+ * a partir do status real da OS) permite a transição — nunca todas ao mesmo tempo
+ * por acidente. Busy-lock local evita duplo clique; o toast e o reload pós-sucesso
+ * vêm do próprio handler (`runWrite`, em `use-v4-preview`), não daqui.
+ */
+function ExecAcoesCard({ v }: { v: V4Vals }) {
+  const [busy, setBusy] = useState(false);
+  const ex = v.execAcoes;
+  if (!ex.podeIniciar && !ex.podeAguardarPeca && !ex.podePronta) return null;
+
+  const run = async (fn: () => Promise<boolean>) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={card}>
+      <div style={{ ...cardTitle, marginBottom: 10 }}>Ações de execução</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {ex.podeIniciar && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(v.iniciarServico)}
+            style={{ ...btnPrimary, background: C.primary, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
+          >
+            {busy ? "Processando…" : ex.iniciarLabel}
+          </button>
+        )}
+        {ex.podeAguardarPeca && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(v.marcarAguardandoPeca)}
+            style={{ ...btnGhost, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
+          >
+            {busy ? "Processando…" : "Marcar aguardando peça"}
+          </button>
+        )}
+        {ex.podePronta && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(v.marcarPronta)}
+            style={{ ...btnPrimary, background: C.success, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
+          >
+            {busy ? "Processando…" : "Marcar como pronta"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Cartão de entrada para a superfície de Segurança (PREVIEW). Não é dado da OS:
@@ -84,6 +174,7 @@ export function ExecucaoStage({ v }: { v: V4Vals }) {
   if (!e.temExecucao) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <ExecAcoesCard v={v} />
         <div style={card}>
           <div style={{ ...cardTitle, marginBottom: 6 }}>Execução</div>
           <div style={emptyText}>Ainda não existe execução registrada para esta Ordem de Serviço.</div>
@@ -95,6 +186,7 @@ export function ExecucaoStage({ v }: { v: V4Vals }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <ExecAcoesCard v={v} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, alignItems: "start" }}>
         {/* Produção / Técnico (real, somente leitura) */}
         <div style={card}>

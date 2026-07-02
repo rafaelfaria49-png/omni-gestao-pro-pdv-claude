@@ -41,6 +41,9 @@ import {
   recusarOrcamentoV3,
 } from "@/lib/operacoes-v3/orcamento-actions";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
+// Máquina única de status (pura, sem I/O) — reaproveitada para habilitar/desabilitar
+// as ações de Execução exatamente igual ao servidor decide (slice OPS-V4-EXECUCAO-REAL-007).
+import { podeTransicionarV3 } from "@/lib/operacoes-v3/status-machine";
 import {
   salvarIdentificacaoV3,
   salvarProvaEntradaV3,
@@ -121,6 +124,11 @@ export interface V4DataCtx {
   recusarOrcamento: (motivo?: string) => Promise<boolean>;
   iniciarDiagnostico: () => Promise<boolean>;
   iniciarServico: () => Promise<boolean>;
+  // ---- Execução (slice OPS-V4-EXECUCAO-REAL-007) ----
+  // "iniciarServico" (acima) é reaproveitado para em_execucao a partir de aprovado
+  // OU aguardando_peca (mesmo destino "em_execucao"; o rótulo muda na UI).
+  marcarAguardandoPeca: () => Promise<boolean>;
+  marcarPronta: () => Promise<boolean>;
   // ---- Entrada/Recepção (slice OPS-V4-ENTRADA-RECEPCAO-REAL-003) ----
   salvarIdentificacao: (input: IdentificacaoV3) => Promise<boolean>;
   salvarProvaEntrada: (input: SalvarProvaEntradaInputV3) => Promise<boolean>;
@@ -435,6 +443,17 @@ export function buildVals(
   const orcamentoPodeDecidir = orcamentoEditavel;
   const orcamentoEditorSeed = seedEditorFromOS(realOS);
 
+  // ---- Execução (slice OPS-V4-EXECUCAO-REAL-007): ações habilitadas SÓ quando a
+  // máquina única (`podeTransicionarV3`) permite a partir do status real atual —
+  // mesma regra que o servidor aplica em `aplicarTransicaoStatusV3`. Sem OS real
+  // selecionada, nenhuma ação fica disponível (nada de status fabricado).
+  const execAcoes = {
+    podeIniciar: !!realOS && podeTransicionarV3(status, "em_execucao").ok,
+    iniciarLabel: status === "aguardando_peca" ? "Retomar execução" : "Iniciar execução",
+    podeAguardarPeca: !!realOS && podeTransicionarV3(status, "aguardando_peca").ok,
+    podePronta: !!realOS && podeTransicionarV3(status, "pronta").ok,
+  };
+
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
   const entradaEditorSeed: EntradaEditorV4 = seedEntradaEditor(realOS);
   // ---- Dados básicos da OS (slice 003B): seed do editor a partir da OS real ----
@@ -638,6 +657,17 @@ export function buildVals(
     diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, entrega: entregaReal,
     os: osView, pag: pagView,
 
+    // ---- Execução REAL (slice OPS-V4-EXECUCAO-REAL-007) ----
+    // Transições reais via `aplicarTransicaoStatusV3` (reuso, sem editar V3).
+    // "iniciarServico" é o MESMO handler usado pelo avanço aprovado→em_execucao
+    // (ação primária); aqui também serve a aguardando_peca→em_execucao ("retomar") —
+    // o rótulo certo vem de `execAcoes.iniciarLabel`. Peças/estoque/observação
+    // técnica seguem read-only (sem action V3 segura para isso ainda).
+    iniciarServico: ctx.iniciarServico,
+    marcarAguardandoPeca: ctx.marcarAguardandoPeca,
+    marcarPronta: ctx.marcarPronta,
+    execAcoes,
+
     // ---- Diagnóstico / Orçamento REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----
     // Handlers de escrita reais (chamam actions da V3 e recarregam lista+detalhe).
     // Demais stages (Execução/Financeiro/Entrega/Pós-venda/Documentos/WhatsApp/PDV)
@@ -797,6 +827,28 @@ export function useV4Preview(): V4Vals {
     [runWrite, update],
   );
 
+  // ---- Execução (slice OPS-V4-EXECUCAO-REAL-007): demais transições seguras da
+  // Execução — mesmo wrapper `runWrite` (reload + toast honesto; sem mutar status
+  // local se a action falhar). Sem estoque/caixa/financeiro.
+  const marcarAguardandoPeca = useCallback(
+    () =>
+      runWrite(
+        (sid, osId) => aplicarTransicaoStatusV3(sid, osId, "aguardando_peca"),
+        "OS marcada como aguardando peça.",
+        () => update({ status: "aguardando_peca" }),
+      ),
+    [runWrite, update],
+  );
+  const marcarPronta = useCallback(
+    () =>
+      runWrite(
+        (sid, osId) => aplicarTransicaoStatusV3(sid, osId, "pronta"),
+        "OS marcada como pronta.",
+        () => update({ status: "pronta" }),
+      ),
+    [runWrite, update],
+  );
+
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
   const salvarIdentificacao = useCallback(
     (input: IdentificacaoV3) =>
@@ -850,6 +902,8 @@ export function useV4Preview(): V4Vals {
       recusarOrcamento,
       iniciarDiagnostico,
       iniciarServico,
+      marcarAguardandoPeca,
+      marcarPronta,
       salvarIdentificacao,
       salvarProvaEntrada,
       salvarAcessorios,
@@ -872,6 +926,8 @@ export function useV4Preview(): V4Vals {
       recusarOrcamento,
       iniciarDiagnostico,
       iniciarServico,
+      marcarAguardandoPeca,
+      marcarPronta,
       salvarIdentificacao,
       salvarProvaEntrada,
       salvarAcessorios,
