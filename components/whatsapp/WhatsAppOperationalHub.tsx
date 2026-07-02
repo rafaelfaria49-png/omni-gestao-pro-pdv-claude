@@ -135,7 +135,7 @@ export default function WhatsAppOperationalHub() {
               WhatsApp HUB
             </h1>
             <p className="text-[11px] text-muted-foreground">
-              Atendimento agentic · OmniGestão Pro
+              Atendimento assistido por IA · OmniGestão Pro
               {lojaAtivaRaw?.nomeFantasia ? ` · ${lojaAtivaRaw.nomeFantasia}` : ""}
             </p>
           </div>
