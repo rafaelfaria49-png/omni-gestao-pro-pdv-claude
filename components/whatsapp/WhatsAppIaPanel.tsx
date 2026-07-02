@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { Sparkles, Wand2 } from "lucide-react"
+import { ShieldAlert, Sparkles, Wand2 } from "lucide-react"
 import { AiAnalyzingPulse } from "./agentic-ui"
+import { PreviewBadge, PreviewFootnote, previewToast } from "./whatsapp-preview-ui"
 
 type AiSettings = {
   tone: string
@@ -175,6 +176,8 @@ export function WhatsAppIaPanel({
         </div>
       </div>
 
+      <AiGuardrailsPreviewCard />
+
       <div className="glass-card rounded-xl p-5">
         <h3 className="mb-3 text-sm font-semibold">Recursos visuais no inbox</h3>
         <ul className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
@@ -193,6 +196,65 @@ export function WhatsAppIaPanel({
           ))}
         </ul>
       </div>
+    </div>
+  )
+}
+
+const FORBIDDEN_TOPICS = [
+  { label: "Reembolso e estorno", detail: "A IA encaminha ao humano, nunca decide." },
+  { label: "Assuntos jurídicos", detail: "Processos, Procon e ações legais." },
+  { label: "Dados sensíveis", detail: "Documentos, senhas e dados de cartão." },
+  { label: "Negociação de desconto", detail: "Descontos acima da tabela aprovada." },
+]
+
+/**
+ * Guardrails adicionais (limite de confiança, assuntos bloqueados) exibidos como prévia —
+ * não existe hoje persistência para esses campos; a IA já nunca executa ações sensíveis
+ * sozinha (handoff automático), mas os controles finos abaixo ainda não gravam no servidor.
+ */
+function AiGuardrailsPreviewCard() {
+  return (
+    <div className="glass-card space-y-4 rounded-xl p-5">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="flex items-center gap-2 text-sm font-semibold">
+          <ShieldAlert className="h-4 w-4 text-red-500" />
+          Guardrails adicionais
+        </h3>
+        <PreviewBadge />
+      </div>
+      <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+        <div>
+          <p className="text-sm font-medium">Limite de confiança da IA</p>
+          <p className="text-[11px] text-muted-foreground">
+            Conversas abaixo do limite são encaminhadas para Handoff.
+          </p>
+        </div>
+        <span className="text-lg font-bold text-primary">70%</span>
+      </div>
+      <div>
+        <p className="mb-2 text-xs font-semibold text-foreground/80">
+          Assuntos que a IA nunca trata sozinha
+        </p>
+        <div className="space-y-1.5">
+          {FORBIDDEN_TOPICS.map((t) => (
+            <div key={t.label} className="flex items-start gap-2 rounded-lg border border-border/50 bg-muted/10 px-3 py-2">
+              <span className="mt-0.5 text-red-500">🔴</span>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-foreground">{t.label}</p>
+                <p className="text-[11px] text-muted-foreground">{t.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <Button variant="outline" size="sm" onClick={() => previewToast("salvar guardrails")}>
+        Salvar regras
+      </Button>
+      <PreviewFootnote>
+        A IA sempre consulta o ERP em modo somente leitura e nunca executa ações sensíveis sem
+        aprovação humana. Ajustar o limite de confiança e a lista de assuntos bloqueados aqui é uma
+        prévia — o comportamento real de handoff já é aplicado no sistema.
+      </PreviewFootnote>
     </div>
   )
 }

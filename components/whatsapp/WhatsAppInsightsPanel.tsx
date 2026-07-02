@@ -10,6 +10,7 @@ import {
   Users,
 } from "lucide-react"
 import { AlertRow, deriveInsights, HubStatCard } from "./agentic-ui"
+import { PreviewBadge } from "./whatsapp-preview-ui"
 
 export type InsightsConversation = {
   id: string
@@ -26,9 +27,12 @@ export type InsightsConversation = {
 export function WhatsAppInsightsPanel({
   conversations,
   loading,
+  showChannelHealth,
 }: {
   conversations: InsightsConversation[]
   loading?: boolean
+  /** Exibe o card ilustrativo "Saúde do canal" (Visão Geral) — sempre marcado como preview. */
+  showChannelHealth?: boolean
 }) {
   const stats = useMemo(() => {
     const total = conversations.length
@@ -78,12 +82,14 @@ export function WhatsAppInsightsPanel({
     <div className="space-y-6 p-4 md:p-6">
       <div>
         <h2 className="text-lg font-semibold tracking-tight text-foreground">
-          Painel operacional
+          Visão Geral
         </h2>
         <p className="text-sm text-muted-foreground">
           Métricas calculadas em tempo real das conversas da loja ativa.
         </p>
       </div>
+
+      {showChannelHealth && <ChannelHealthCard />}
 
       <div className="grid gap-3 grid-cols-2 md:grid-cols-3 2xl:grid-cols-6">
         <HubStatCard icon={MessageSquare} label="Conversas" value={stats.total} hint={`${stats.open} abertas`} />
@@ -145,6 +151,39 @@ export function WhatsAppInsightsPanel({
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Card ilustrativo de saúde do canal (conexão Meta, quality rating, tier de envio).
+ * Não existe hoje uma leitura server-side ao vivo desses campos exposta ao HUB —
+ * por isso o card é sempre honesto/preview, sem fabricar status de produção.
+ */
+function ChannelHealthCard() {
+  return (
+    <div className="glass-card rounded-xl p-5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Saúde do canal</h3>
+        <PreviewBadge />
+      </div>
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+        {[
+          { label: "Conexão", value: "—" },
+          { label: "Número conectado", value: "—" },
+          { label: "Quality rating", value: "—" },
+          { label: "Webhook", value: "—" },
+        ].map((f) => (
+          <div key={f.label} className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{f.label}</p>
+            <p className="mt-0.5 text-sm font-medium text-foreground">{f.value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        Prévia visual — status de conexão, número e qualidade da Cloud API ainda não têm uma leitura
+        ao vivo neste painel. Configure e valide em Configurações.
+      </p>
     </div>
   )
 }
