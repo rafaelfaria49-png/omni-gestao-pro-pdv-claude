@@ -4,11 +4,15 @@
  * fabricado. Exibe o que a OS carrega de fato: total, status do faturamento,
  * forma/modo de cobrança, plano de parcelas, histórico financeiro real (timeline)
  * e — quando o PDV de Serviço V3 já registrou baixas — recebido/saldo/status do
- * espelho real `payload.pagamentoV3` (leitura pura). O aviso de "nenhum pagamento"
- * só aparece quando recebido = 0. A baixa continua vivendo APENAS no PDV de
- * Serviço (nada é recebido por aqui). Sem fonte real → empty state honesto. */
+ * espelho real `payload.pagamentoV3` (leitura pura).
+ *
+ * PDV-SERVICO-OS-RECEBIMENTO-REAL-001: o recebimento deixou de ser preview —
+ * `ReceberPagamentoV4` chama o motor único da V3 (`receberOSV3`, via
+ * `v.pdvServico`), exige caixa aberto e recarrega a lista/detalhe no sucesso.
+ * Ainda sem estorno (follow-up) e sem parcelamento novo (só valor <= saldo). */
 import { C, card, cardTitle, upLabel } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
+import { ReceberPagamentoV4 } from "../ReceberPagamentoV4";
 
 const col3 = "repeat(auto-fit, minmax(270px, 1fr))";
 const emptyText = { fontSize: 12, color: C.subtle, padding: "8px 2px", lineHeight: 1.5 } as const;
@@ -59,22 +63,18 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
             </div>
             <div style={{ fontSize: 10.5, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Baixas registradas no <b>PDV de Serviço</b> (Conta a Receber + caixa do dia). O detalhe de cada recebimento está no Histórico financeiro ao lado.</div>
             <div style={{ display: "flex", gap: 7, marginTop: 9 }}>
-              {f.temSaldo && (
-                <button type="button" onClick={v.act.pdv} title="Integração com o PDV de Serviço ainda não conectada — nenhum recebimento é executado nesta Preview" style={{ flex: 1, height: 34, border: `1px solid ${C.inputBd2}`, background: C.surface, color: C.muted, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Receber no PDV — em breve</button>
-              )}
-              <button type="button" onClick={v.openRecibo} style={{ flex: f.temSaldo ? "none" : 1, height: 34, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>🧾 Recibo</button>
+              <button type="button" onClick={v.openRecibo} style={{ flex: "none", height: 34, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>🧾 Recibo</button>
             </div>
           </div>
         ) : (
           <div style={{ marginTop: 12, padding: 11, border: `1px dashed ${C.inputBd}`, borderRadius: 9, background: C.surface2 }}>
             <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5, marginBottom: 9 }}>Nenhum pagamento registrado nesta OS. A baixa do recebimento acontece no <b>PDV de Serviço</b> (Conta a Receber + caixa do dia), com caixa aberto.</div>
             <div style={{ display: "flex", gap: 7 }}>
-              <button type="button" onClick={v.act.pdv} title="Integração com o PDV de Serviço ainda não conectada — nenhum recebimento é executado nesta Preview" style={{ flex: 1, height: 34, border: `1px solid ${C.inputBd2}`, background: C.surface, color: C.muted, borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Receber no PDV — em breve</button>
               <button type="button" onClick={v.openRecibo} style={{ flex: "none", height: 34, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>🧾 Recibo</button>
             </div>
-            <div style={{ fontSize: 10, color: C.subtle, marginTop: 7, lineHeight: 1.4 }}>O recebimento pela V4 ainda não está conectado — nenhuma cobrança é executada nesta Preview.</div>
           </div>
         )}
+        <ReceberPagamentoV4 v={v} />
       </div>
 
       {/* Plano de parcelas */}

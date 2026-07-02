@@ -47,12 +47,22 @@ vi.mock("@/lib/operacoes-v3/prova-entrada-actions", () => ({
 vi.mock("@/lib/operacoes-v3/dados-basicos-actions", () => ({
   salvarDadosBasicosOSV3: vi.fn(async () => ({})),
 }))
+// PDV de Serviço (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001): mesma razão dos
+// mocks acima — `use-pdv-servico-v3` (hook real, importado por `use-v4-preview`)
+// importa esta action "use server" (→ @/auth) em tempo de carregamento do módulo.
+vi.mock("@/lib/operacoes-v3/pdv-servico-actions", () => ({
+  getCaixaSessaoAbertaV3: vi.fn(async () => ({ aberta: false })),
+  lerPagamentoOSV3: vi.fn(async () => ({ total: 0, recebido: 0, saldo: 0, status: "sem_cobranca", sessao: { aberta: false } })),
+  receberOSV3: vi.fn(async () => ({})),
+  estornarRecebimentoOSV3: vi.fn(async () => ({})),
+}))
 
 import { buildVals, type V4DataCtx } from "./use-v4-preview"
 import { adaptPag, adaptFinanceiro, adaptOrcamento, maskSenhaV4, NI } from "./os-adapter"
 import { fmt } from "./tokens"
 import type { V4State } from "./types"
 import type { OrdemServico } from "@/types/os"
+import type { PagamentoV3 } from "@/lib/operacoes-v3/payment-model"
 
 const DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -159,6 +169,19 @@ const ctx: V4DataCtx = {
   iniciarServico: async () => false,
   marcarAguardandoPeca: async () => false,
   marcarPronta: async () => false,
+  pdvServico: {
+    pagamento: null,
+    sessao: null,
+    loading: false,
+    recebendo: false,
+    estornando: false,
+    error: null,
+    ultimoRecibo: null,
+    reload: () => {},
+    receber: async () => false,
+    estornar: async () => false,
+    limparRecibo: () => {},
+  },
   salvarIdentificacao: async () => false,
   salvarProvaEntrada: async () => false,
   salvarAcessorios: async () => false,
@@ -318,19 +341,6 @@ describe("Operações V4 Preview — ações sem escrita real NUNCA mutam o stat
     expect(msgs.every((m) => /nenhuma alteração/i.test(m))).toBe(true)
   })
 
-  it("Receber no PDV (act.pdv) avisa que a integração não está conectada e não patcheia nada", () => {
-    const patches: Array<Record<string, unknown>> = []
-    const msgs: string[] = []
-    const v = buildVals(
-      makeState({ novaOS: false }),
-      (p) => patches.push(p as Record<string, unknown>),
-      (m) => msgs.push(m),
-      ctx,
-    )
-    v.act.pdv()
-    expect(patches).toEqual([])
-    expect(msgs.some((m) => /não está conectado|nenhuma cobrança/i.test(m))).toBe(true)
-  })
 })
 
 // ---------------------------------------------------------------------------
@@ -501,7 +511,7 @@ describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem dri
     expect(v.statusLabel).toBe("Em execução")
   })
 
-  it("CTA 'Receber pagamento' navega ao Financeiro com aviso honesto (nunca à Entrega, sem PDV real)", () => {
+  it("CTA 'Receber pagamento' navega ao Financeiro (recebimento real vive lá, nunca na Entrega)", () => {
     const patches: Array<Record<string, unknown>> = []
     const msgs: string[] = []
     const v = buildVals(
@@ -513,7 +523,7 @@ describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem dri
     v.onPrimary()
     expect(patches.at(-1)).toMatchObject({ stage: "financeiro" })
     expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status").toBe(true)
-    expect(msgs.some((m) => /não está conectado|nenhuma cobrança/i.test(m))).toBe(true)
+    expect(msgs.some((m) => /financeiro/i.test(m))).toBe(true)
   })
 
   it("'Trocar OS' usa o fluxo real de busca (limpa a seleção; sem no-op)", () => {
@@ -590,14 +600,15 @@ describe("OPS-V4-006 — classificação (kindV3) visível no orçamento, read-o
 describe("OPS-V4-006 — guards: nada de recebimento real / imports proibidos", () => {
   const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
 
-  it("a Preview não importa prisma, actions de recebimento, updateOSPayload nem app/api", () => {
+  it("a Preview não importa prisma, estorno, updateOSPayload nem app/api", () => {
     for (const proibido of [
       'from "@/lib/prisma',
-      "pdv-servico-actions", // recebimento real fica FORA deste slice
-      "receberOSV3",
+      // PDV-SERVICO-OS-RECEBIMENTO-REAL-001: recebimento (receberOSV3/pdv-servico-actions)
+      // passou a ser REAL e sancionado — só o ESTORNO continua fora deste slice.
       "estornarRecebimentoOSV3",
       "updateOSPayload",
       'from "@/app/api',
+      "openCaixaIfClosed",
     ]) {
       expect(allSources, `proibido encontrado: ${proibido}`).not.toContain(proibido)
     }
@@ -744,5 +755,143 @@ describe("OPS-V4-EXECUCAO-REAL-007 — handlers reais (runWrite) e wiring do Exe
     // nenhum botão de "salvar checklist" ou "consumir peça" neste slice.
     expect(execStage).not.toMatch(/salvarChecklistTecnico/i)
     expect(execStage).not.toMatch(/consumirPeca|baixarEstoque/i)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — recebimento real da OS na V4, via o
+// motor único da V3 (usePdvServicoV3 → receberOSV3). Caixa aberto obrigatório;
+// parcial permitido (validarRecebimentoV3, sem parcelamento novo); sem
+// estorno/venda/estoque neste slice.
+// ---------------------------------------------------------------------------
+describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — v.recebimento só habilita com total>0, saldo>0 e caixa aberto", () => {
+  function ctxComPdv(pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null, sessaoAberta: boolean) {
+    return {
+      ...ctx,
+      pdvServico: {
+        ...ctx.pdvServico,
+        pagamento,
+        sessao: { aberta: sessaoAberta, sessaoId: sessaoAberta ? "sessao-1" : undefined },
+      },
+    }
+  }
+
+  it("total>0, saldo>0, caixa aberto: podeReceber true", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv({ total: 200, recebido: 0, saldo: 200, status: "aberto" }, true))
+    expect(v.recebimento).toEqual({ semTotal: false, quitado: false, caixaAberto: true, podeReceber: true })
+  })
+
+  it("caixa fechado: podeReceber false mesmo com saldo aberto", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv({ total: 200, recebido: 0, saldo: 200, status: "aberto" }, false))
+    expect(v.recebimento.caixaAberto).toBe(false)
+    expect(v.recebimento.podeReceber).toBe(false)
+  })
+
+  it("quitado (saldo <= 0): podeReceber false mesmo com caixa aberto", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv({ total: 200, recebido: 200, saldo: 0, status: "quitado" }, true))
+    expect(v.recebimento.quitado).toBe(true)
+    expect(v.recebimento.podeReceber).toBe(false)
+  })
+
+  it("sem total (OS sem orçamento/valor): semTotal true, podeReceber false", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv({ total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }, true))
+    expect(v.recebimento.semTotal).toBe(true)
+    expect(v.recebimento.podeReceber).toBe(false)
+  })
+
+  it("pagamento ainda não carregado (null): tudo honesto/false, sem crash", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv(null, true))
+    expect(v.recebimento).toEqual({ semTotal: false, quitado: false, caixaAberto: true, podeReceber: false })
+  })
+
+  it("parcial (recebido parcial > 0, saldo > 0): continua podeReceber true", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv({ total: 500, recebido: 100, saldo: 400, status: "parcial" }, true))
+    expect(v.recebimento.podeReceber).toBe(true)
+  })
+})
+
+describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — receberPagamentoV4 só recarrega a V4 depois do sucesso", () => {
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+
+  it("reaproveita o hook e o motor de recebimento real da V3 (usePdvServicoV3 → receberOSV3), sem motor novo", () => {
+    expect(orquestrador).toContain("usePdvServicoV3")
+    expect(orquestrador).toContain('from "@/components/operacoes-v3/hooks/use-pdv-servico-v3"')
+    expect(orquestrador).toContain("receberOSV3")
+  })
+
+  it("o wrapper só chama reloadOrdens/reloadDetail dentro do if (ok) — nunca incondicional", () => {
+    expect(orquestrador).toMatch(/const receberPagamentoV4 = useCallback\(/)
+    expect(orquestrador).toMatch(/if \(ok\) \{\s*reloadOrdens\(\);\s*reloadDetail\(\);\s*\}/)
+  })
+})
+
+describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina sobre o motor V3)", () => {
+  const card = readFileSync(join(DIR, "parts", "ReceberPagamentoV4.tsx"), "utf8")
+  const financeiroStage = readFileSync(join(DIR, "parts", "stages", "FinanceiroStage.tsx"), "utf8")
+  const reciboModal = readFileSync(join(DIR, "parts", "ReciboModal.tsx"), "utf8")
+  const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+
+  it("só chama pdv.receber(...) uma vez no arquivo, dentro do onConfirmar (nunca fora de um clique)", () => {
+    expect(card).toMatch(/const onConfirmar = async \(\) => \{[\s\S]*?pdv\.receber\(/)
+    expect((card.match(/\.receber\(/g) ?? []).length).toBe(1)
+  })
+
+  it("bloqueia ANTES do formulário quando sem total, quitado ou caixa fechado (early return, nesta ordem)", () => {
+    const idxSemTotal = card.indexOf("if (semTotal)")
+    const idxQuitado = card.indexOf("if (quitado)")
+    const idxCaixaFechado = card.indexOf("if (!caixaAberto)")
+    const idxConfirmar = card.indexOf("const onConfirmar")
+    for (const idx of [idxSemTotal, idxQuitado, idxCaixaFechado, idxConfirmar]) expect(idx).toBeGreaterThan(-1)
+    expect(idxQuitado).toBeGreaterThan(idxSemTotal)
+    expect(idxCaixaFechado).toBeGreaterThan(idxQuitado)
+    expect(idxConfirmar).toBeGreaterThan(idxCaixaFechado)
+  })
+
+  it("valida o valor com o mesmo validador da V3 (validarRecebimentoV3) — sem regra nova de parcial", () => {
+    expect(card).toContain("validarRecebimentoV3")
+    expect(card).toContain('from "@/lib/operacoes-v3/payment-model"')
+  })
+
+  it("só oferece formas já suportadas pelo contrato real (FORMAS_RECEBIMENTO_V3, sem enum novo)", () => {
+    expect(card).toMatch(/FORMAS_RECEBIMENTO_V3\.filter\(\(f\) => f\.suportada\)/)
+    expect(card).not.toMatch(/type FormaRecebimentoV3\s*=\s*"/)
+  })
+
+  it("busy-lock: botão de confirmar desabilita durante o recebimento (evita duplo clique)", () => {
+    expect(card).toMatch(/disabled=\{!podeConfirmar\}/)
+    expect(card).toContain("pdv.recebendo")
+  })
+
+  it("no sucesso abre o recibo real (v.openRecibo) — não inventa modal próprio", () => {
+    expect(card).toMatch(/if \(ok\) \{[\s\S]*?v\.openRecibo\(\)/)
+  })
+
+  it("FinanceiroStage usa o card real; não sobrou botão preview de 'em breve' nem v.act.pdv", () => {
+    expect(financeiroStage).toContain("<ReceberPagamentoV4")
+    expect(financeiroStage).not.toContain("em breve")
+    expect(financeiroStage).not.toContain("v.act.pdv")
+  })
+
+  it("ReciboModal mostra o comprovante real quando existir, sem recalcular o recibo (só exibe o que a V3 montou)", () => {
+    expect(reciboModal).toContain("v.pdvServico.ultimoRecibo")
+    expect(reciboModal).not.toContain("montarComprovanteReciboV3")
+  })
+
+  it("não cria Venda, não toca estoque/inventário/services financeiros/caixa diretos, sem openCaixaIfClosed/loja-1", () => {
+    for (const proibido of [
+      "criarVenda",
+      "SaleRecord",
+      "finalizeSale",
+      'from "@/lib/estoque',
+      'from "@/lib/financeiro/services',
+      'from "@/lib/caixa',
+      "openCaixaIfClosed",
+      '"loja-1"',
+      "updateOSPayload",
+      'from "@/lib/prisma',
+      'from "@/app/api',
+    ]) {
+      expect(allSources, `referência proibida: ${proibido}`).not.toContain(proibido)
+    }
   })
 })

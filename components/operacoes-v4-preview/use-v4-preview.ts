@@ -44,6 +44,12 @@ import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
 // Máquina única de status (pura, sem I/O) — reaproveitada para habilitar/desabilitar
 // as ações de Execução exatamente igual ao servidor decide (slice OPS-V4-EXECUCAO-REAL-007).
 import { podeTransicionarV3 } from "@/lib/operacoes-v3/status-machine";
+// PDV de Serviço V3 (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001): hook client-side
+// já pronto (carrega pagamento+sessão de caixa, expõe receber/estornar/reload) —
+// reaproveitado tal como é, sem motor novo. A V4 só adiciona o reload da lista/
+// detalhe da OS depois do recebimento (ver `receberPagamentoV4` abaixo).
+import { usePdvServicoV3, type PdvServicoState } from "@/components/operacoes-v3/hooks/use-pdv-servico-v3";
+import type { ReceberOSInputV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import {
   salvarIdentificacaoV3,
   salvarProvaEntradaV3,
@@ -129,6 +135,11 @@ export interface V4DataCtx {
   // OU aguardando_peca (mesmo destino "em_execucao"; o rótulo muda na UI).
   marcarAguardandoPeca: () => Promise<boolean>;
   marcarPronta: () => Promise<boolean>;
+  // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
+  // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
+  // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
+  // recarregar lista+detalhe da V4 depois do sucesso.
+  pdvServico: PdvServicoState;
   // ---- Entrada/Recepção (slice OPS-V4-ENTRADA-RECEPCAO-REAL-003) ----
   salvarIdentificacao: (input: IdentificacaoV3) => Promise<boolean>;
   salvarProvaEntrada: (input: SalvarProvaEntradaInputV3) => Promise<boolean>;
@@ -175,9 +186,12 @@ type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
  */
 const PREVIEW_NOOP = "Indisponível na Preview — nenhuma alteração foi salva.";
 
-/** Aviso honesto do recebimento: o PDV de Serviço ainda não está ligado à V4. */
-const PDV_NAO_CONECTADO =
-  "Recebimento no PDV de Serviço ainda não está conectado à V4 — nenhuma cobrança foi executada.";
+/**
+ * PDV-SERVICO-OS-RECEBIMENTO-REAL-001: o recebimento passou a ser real (aba
+ * Financeiro, via `usePdvServicoV3`/`receberOSV3`) — este toast só confirma a
+ * navegação, sem prometer nada que a aba não entregue.
+ */
+const RECEBIMENTO_NO_FINANCEIRO = "Receba o pagamento na aba Financeiro.";
 
 export function buildVals(
   st: V4State,
@@ -239,11 +253,11 @@ export function buildVals(
       void ctx.iniciarServico();
       return;
     }
-    // "Receber pagamento" leva ao Financeiro (onde vive a explicação do PDV de
-    // Serviço) com aviso específico — nunca à Entrega, nunca abre PDV real.
+    // "Receber pagamento" leva ao Financeiro — o recebimento real (motor V3)
+    // acontece lá, no card de recebimento; aqui só navegamos + avisamos.
     if (status === "pronta") {
       update({ stage: p.stage });
-      notify(PDV_NAO_CONECTADO);
+      notify(RECEBIMENTO_NO_FINANCEIRO);
       return;
     }
     update({ stage: p.stage });
@@ -454,6 +468,19 @@ export function buildVals(
     podePronta: !!realOS && podeTransicionarV3(status, "pronta").ok,
   };
 
+  // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
+  // Gating derivado do estado REAL de `usePdvServicoV3` (pagamento + sessão de
+  // caixa da OS ativa) — nunca do snapshot local. `podeReceber` exige total>0,
+  // saldo>0 E caixa aberto ao mesmo tempo; sem isso, a Preview nunca chama `receber`.
+  const pdvPag = ctx.pdvServico.pagamento;
+  const pdvCaixaAberto = !!ctx.pdvServico.sessao?.aberta;
+  const recebimento = {
+    semTotal: !!pdvPag && pdvPag.total <= 0,
+    quitado: !!pdvPag && pdvPag.total > 0 && pdvPag.saldo <= 0,
+    caixaAberto: pdvCaixaAberto,
+    podeReceber: !!pdvPag && pdvPag.total > 0 && pdvPag.saldo > 0 && pdvCaixaAberto,
+  };
+
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
   const entradaEditorSeed: EntradaEditorV4 = seedEntradaEditor(realOS);
   // ---- Dados básicos da OS (slice 003B): seed do editor a partir da OS real ----
@@ -511,9 +538,10 @@ export function buildVals(
   const prioM = PRIO[st.prioridade];
 
   // ---- handlers "visuais" (não persistem nada → toast honesto de Preview) ----
+  // "pdv" (Receber no PDV) saiu daqui: o recebimento é real agora (ver
+  // `v.pdvServico` + `ReceberPagamentoV4`, no stage Financeiro).
   const act = {
     addFoto: () => notify(PREVIEW_NOOP),
-    pdv: () => notify(PDV_NAO_CONECTADO),
     whatsapp: () => notify(PREVIEW_NOOP),
     ligar: () => notify(PREVIEW_NOOP),
     novaObs: () => notify(PREVIEW_NOOP),
@@ -668,6 +696,13 @@ export function buildVals(
     marcarPronta: ctx.marcarPronta,
     execAcoes,
 
+    // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
+    // Estado (pagamento/sessão de caixa/recibo) e ações (receber) do motor V3 —
+    // consumido por `ReceberPagamentoV4` dentro do FinanceiroStage. `recebimento`
+    // é o gating pré-computado (mesma regra do servidor: total>0 && saldo>0 && caixa aberto).
+    pdvServico: ctx.pdvServico,
+    recebimento,
+
     // ---- Diagnóstico / Orçamento REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----
     // Handlers de escrita reais (chamam actions da V3 e recarregam lista+detalhe).
     // Demais stages (Execução/Financeiro/Entrega/Pós-venda/Documentos/WhatsApp/PDV)
@@ -739,6 +774,17 @@ export function useV4Preview(): V4Vals {
   } = useOrdensV4(lojaAtivaId);
   const { ordem: ordemDetail, loading: detailLoading, reload: reloadDetail } = useOrdemV4(lojaAtivaId, st.selectedOsId);
 
+  // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
+  // Hook V3 já pronto: carrega pagamento (saldo/status) + sessão de caixa da OS
+  // selecionada, e expõe receber/estornar/recibo. Sem motor novo — só envolvemos
+  // `receber` abaixo para também recarregar a lista/detalhe da V4.
+  const pdvServicoV3 = usePdvServicoV3(lojaAtivaId, st.selectedOsId);
+  const { limparRecibo: limparReciboPdvV3 } = pdvServicoV3;
+  // Troca de OS não deve arrastar o recibo da OS anterior para a próxima seleção.
+  useEffect(() => {
+    limparReciboPdvV3();
+  }, [st.selectedOsId, limparReciboPdvV3]);
+
   useEffect(() => {
     return () => {
       if (timer.current) clearTimeout(timer.current);
@@ -785,6 +831,23 @@ export function useV4Preview(): V4Vals {
     },
     [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, notify],
   );
+
+  // ---- PDV de Serviço / recebimento real: envolve `receber` para também
+  // recarregar lista+detalhe da V4 depois do sucesso (o hook V3 só atualiza o
+  // próprio estado local de pagamento/recibo — reload/patch de status da V4
+  // NUNCA rodam se `receber` falhar, porque só entram no `if (ok)` abaixo).
+  const receberPagamentoV4 = useCallback(
+    async (input: ReceberOSInputV3) => {
+      const ok = await pdvServicoV3.receber(input);
+      if (ok) {
+        reloadOrdens();
+        reloadDetail();
+      }
+      return ok;
+    },
+    [pdvServicoV3.receber, reloadOrdens, reloadDetail],
+  );
+  const pdvServico: PdvServicoState = { ...pdvServicoV3, receber: receberPagamentoV4 };
 
   const salvarDiagnostico = useCallback(
     (input: DiagnosticoInputV4) =>
@@ -904,6 +967,7 @@ export function useV4Preview(): V4Vals {
       iniciarServico,
       marcarAguardandoPeca,
       marcarPronta,
+      pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,
       salvarAcessorios,
@@ -928,6 +992,7 @@ export function useV4Preview(): V4Vals {
       iniciarServico,
       marcarAguardandoPeca,
       marcarPronta,
+      pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,
       salvarAcessorios,

@@ -58,7 +58,7 @@ function txt(v: unknown): string {
 }
 
 /** Data/hora curta "dd/mm HH:MM" a partir de ISO; vazio honesto se inválida. */
-function fmtDataHora(iso?: string | null): string {
+export function fmtDataHora(iso?: string | null): string {
   const s = txt(iso);
   if (!s) return NI;
   const d = new Date(s);
