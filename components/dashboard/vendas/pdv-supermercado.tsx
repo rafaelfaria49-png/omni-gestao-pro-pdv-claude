@@ -78,6 +78,7 @@ import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { VendaEsperaModal } from "./venda-espera-modal"
 import { TrocasDevolucao } from "./trocas-devolucao"
 import { appendAuditLog } from "@/lib/audit-log"
+import { AUDIT_DISCOUNT_ALERT_PCT } from "@/lib/audit-constants"
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
 import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
 import { buildPagamentosResumo, type PdvReceiptInput } from "@/lib/escpos"
@@ -411,7 +412,20 @@ export function PdvSupermercado({
     [pushCartLine, toast]
   )
 
-  const removeFromCart = useCallback((lineId: string) => setCart((prev) => prev.filter((i) => i.lineId !== lineId)), [])
+  const removeFromCart = useCallback(
+    (lineId: string) => {
+      const removed = cart.find((i) => i.lineId === lineId)
+      setCart((prev) => prev.filter((i) => i.lineId !== lineId))
+      if (removed) {
+        appendAuditLog({
+          action: "pdv_item_removido",
+          userLabel: cashierId.slice(0, 8),
+          detail: `${removed.name} (qty: ${removed.vendaPorPeso ? removed.quantity.toFixed(3) : removed.quantity}) — ${brl(removed.price * removed.quantity)}`,
+        })
+      }
+    },
+    [cart, cashierId]
+  )
 
   /** Item Avulso (INSERT) — não passa por `addToCart` porque não há produto/estoque. */
   const addItemAvulso = useCallback(
@@ -991,6 +1005,11 @@ export function PdvSupermercado({
                 onClick={() => {
                   if (cart.length === 0) return
                   if (isModoRapido) {
+                    appendAuditLog({
+                      action: "pdv_carrinho_limpo",
+                      userLabel: cashierId.slice(0, 8),
+                      detail: `${cart.length} ${cart.length === 1 ? "item" : "itens"} removidos do carrinho`,
+                    })
                     setCart([])
                     setDiscountPercent(0)
                     setDiscountReais(0)
@@ -1000,6 +1019,11 @@ export function PdvSupermercado({
                     return
                   }
                   if (adminSessionOk) {
+                    appendAuditLog({
+                      action: "pdv_carrinho_limpo",
+                      userLabel: cashierId.slice(0, 8),
+                      detail: `${cart.length} ${cart.length === 1 ? "item" : "itens"} removidos do carrinho`,
+                    })
                     setCart([])
                     setDiscountPercent(0)
                     setDiscountReais(0)
@@ -1354,6 +1378,22 @@ export function PdvSupermercado({
             /* fila é auxiliar — não interrompe o pós-venda */
           }
 
+          appendAuditLog({
+            action: "sale_finalized",
+            userLabel: cashierId.slice(0, 8),
+            detail: `Venda ${result.saleId} Total ${brl(total)} | Din ${brl(dinheiro)} Pix ${brl(pix)} Déb ${brl(cartaoDebito)} Créd ${brl(cartaoCredito)} Carnê ${brl(carne)} Prazo ${brl(aPrazo)} Vale ${brl(creditoVale)}`,
+          })
+          if (subtotal > 0 && discountTotal > 0) {
+            const pct = (discountTotal / subtotal) * 100
+            if (pct >= AUDIT_DISCOUNT_ALERT_PCT) {
+              appendAuditLog({
+                action: "desconto_elevado",
+                userLabel: cashierId.slice(0, 8),
+                detail: `Desconto ${pct.toFixed(1)}% (${brl(discountTotal)}) sobre base ${brl(subtotal)}`,
+              })
+            }
+          }
+
           setCart([])
           setSelectedCustomer(null)
           setDiscountReais(0)
@@ -1558,6 +1598,11 @@ export function PdvSupermercado({
                       removeFromCart(pendingRemoveLineId)
                       toast({ title: "Item removido", description: "Autorizado pelo supervisor." })
                     } else {
+                      appendAuditLog({
+                        action: "pdv_carrinho_limpo",
+                        userLabel: cashierId.slice(0, 8),
+                        detail: `${cart.length} ${cart.length === 1 ? "item" : "itens"} removidos do carrinho — autorizado pelo supervisor`,
+                      })
                       setCart([])
                       setDiscountPercent(0)
                       setDiscountReais(0)
