@@ -62,7 +62,7 @@ export const PRIMARY: Record<
   aguardando_aprovacao: { label: "Registrar aprovação", to: "aprovado", stage: "orcamento" },
   aprovado: { label: "Iniciar serviço", to: "em_execucao", stage: "execucao" },
   aguardando_peca: { label: "Marcar peça chegou", to: "em_execucao", stage: "execucao" },
-  em_execucao: { label: "Marcar pronta", to: "pronta", stage: "financeiro" },
+  em_execucao: { label: "Marcar pronta", to: "pronta", stage: "execucao" },
   // "Receber pagamento" leva ao Financeiro (a baixa real vive no PDV de Serviço).
   pronta: { label: "Receber pagamento", to: "entregue", stage: "financeiro" },
   entregue: null,

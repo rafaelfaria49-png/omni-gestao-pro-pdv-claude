@@ -311,7 +311,7 @@ describe("Operações V4 Preview — Modo foco e Segurança (preview/no-op)", ()
 // OPS-V4-UX-PARITY-E-PDV-SERVICO-AUDIT-005 — ações de preview não fingem status.
 // ---------------------------------------------------------------------------
 describe("Operações V4 Preview — ações sem escrita real NUNCA mutam o status exibido", () => {
-  it("onPrimary em status sem transição segura navega à etapa, avisa e não muda status", () => {
+  it("Cancelar OS no menu é no-op honesto (toast, sem status) — sem ação V3 segura", () => {
     const patches: Array<Record<string, unknown>> = []
     const msgs: string[] = []
     const v = buildVals(
@@ -320,21 +320,7 @@ describe("Operações V4 Preview — ações sem escrita real NUNCA mutam o stat
       (m) => msgs.push(m),
       ctx,
     )
-    v.onPrimary() // "Marcar pronta" — sem escrita real neste slice
-    expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status").toBe(true)
-    expect(msgs.some((m) => /nenhuma alteração/i.test(m))).toBe(true)
-  })
-
-  it("Cancelar OS / Aguardando peça no menu são no-op honesto (toast, sem status)", () => {
-    const patches: Array<Record<string, unknown>> = []
-    const msgs: string[] = []
-    const v = buildVals(
-      makeState({ status: "em_execucao", novaOS: false }),
-      (p) => patches.push(p as Record<string, unknown>),
-      (m) => msgs.push(m),
-      ctx,
-    )
-    for (const item of v.moreItems.filter((m) => /Cancelar OS|Aguardando peça/.test(m.label))) {
+    for (const item of v.moreItems.filter((m) => /Cancelar OS/.test(m.label))) {
       item.onClick()
     }
     expect(patches.every((p) => !("status" in p))).toBe(true)
@@ -342,6 +328,93 @@ describe("Operações V4 Preview — ações sem escrita real NUNCA mutam o stat
     expect(msgs.every((m) => /nenhuma alteração/i.test(m))).toBe(true)
   })
 
+})
+
+// ---------------------------------------------------------------------------
+// OPS-V4-ACTIONS-RECONCILE-010 — CTA global e menu "..." reconciliados com as
+// transições reais que já existem na aba Execução (marcarAguardandoPeca /
+// marcarPronta / iniciarServico como "retomar"). Nem o header nem o menu
+// disparam a transição direto: ambos só NAVEGAM à Execução, onde vive o botão
+// real com busy-lock — nunca mais um toast de preview fingindo indisponível.
+// ---------------------------------------------------------------------------
+describe("OPS-V4-ACTIONS-RECONCILE-010 — CTA global e menu navegam à Execução (sem no-op falso)", () => {
+  it("em_execucao: onPrimary ('Marcar pronta') navega à Execução, avisa e não muda status", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ status: "em_execucao", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctx,
+    )
+    v.onPrimary()
+    expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status").toBe(true)
+    expect(patches).toContainEqual(expect.objectContaining({ stage: "execucao" }))
+    expect(msgs.some((m) => /execução/i.test(m))).toBe(true)
+  })
+
+  it("aguardando_peca: onPrimary ('Marcar peça chegou') navega à Execução, avisa e não muda status", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ status: "aguardando_peca", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctx,
+    )
+    v.onPrimary()
+    expect(patches.every((p) => !("status" in p))).toBe(true)
+    expect(patches).toContainEqual(expect.objectContaining({ stage: "execucao" }))
+    expect(msgs.some((m) => /execução/i.test(m))).toBe(true)
+  })
+
+  it("em_execucao: menu 'Marcar Aguardando peça' navega à Execução (não é mais no-op)", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ status: "em_execucao", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctx,
+    )
+    const item = v.moreItems.find((m) => /Aguardando peça/.test(m.label))
+    expect(item).toBeTruthy()
+    item!.onClick()
+    expect(patches).toContainEqual(expect.objectContaining({ stage: "execucao" }))
+    expect(patches.every((p) => !("status" in p))).toBe(true)
+    expect(msgs.every((m) => !/indisponível|nenhuma alteração/i.test(m))).toBe(true)
+  })
+
+  it("aguardando_peca: menu 'Peça chegou — retomar' navega à Execução (não é mais no-op)", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ status: "aguardando_peca", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctx,
+    )
+    const item = v.moreItems.find((m) => /retomar/i.test(m.label))
+    expect(item).toBeTruthy()
+    item!.onClick()
+    expect(patches).toContainEqual(expect.objectContaining({ stage: "execucao" }))
+    expect(patches.every((p) => !("status" in p))).toBe(true)
+    expect(msgs.every((m) => !/indisponível|nenhuma alteração/i.test(m))).toBe(true)
+  })
+
+  it("aprovado: menu 'Marcar Aguardando peça' também navega à Execução", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(
+      makeState({ status: "aprovado", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      () => {},
+      ctx,
+    )
+    const item = v.moreItems.find((m) => /Aguardando peça/.test(m.label))
+    expect(item).toBeTruthy()
+    item!.onClick()
+    expect(patches).toContainEqual(expect.objectContaining({ stage: "execucao" }))
+  })
 })
 
 // ---------------------------------------------------------------------------

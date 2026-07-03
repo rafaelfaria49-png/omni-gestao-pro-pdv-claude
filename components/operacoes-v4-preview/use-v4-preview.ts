@@ -206,6 +206,15 @@ const RECEBIMENTO_NO_FINANCEIRO = "Receba o pagamento na aba Financeiro.";
 const ENTREGA_NA_ABA_ENTREGA = "Confirme a entrega na aba Entrega.";
 
 /**
+ * OPS-V4-ACTIONS-RECONCILE-010: "Marcar pronta" (em_execucao) e "Peça chegou —
+ * retomar" (aguardando_peca) já têm ação real (`marcarPronta`/`iniciarServico`
+ * via `aplicarTransicaoStatusV3`), mas o botão dedicado — com seu próprio
+ * busy-lock — vive na aba Execução, nunca no header. Este toast só confirma a
+ * navegação, igual ao padrão já usado para Financeiro/Entrega.
+ */
+const EXECUCAO_NA_ABA_EXECUCAO = "Confirme a transição na aba Execução.";
+
+/**
  * Saldo confirmado zerado: exige o pagamento JÁ carregado (`!!pag`) e `saldo<=0`.
  * Nunca libera "Entregar OS" só por o pagamento ainda não ter carregado — nesse
  * caso (`pag` null) o default seguro é continuar tratando como saldo pendente.
@@ -288,6 +297,14 @@ export function buildVals(
     }
     if (status === "aprovado") {
       void ctx.iniciarServico();
+      return;
+    }
+    if (status === "em_execucao" || status === "aguardando_peca") {
+      // "Marcar pronta" / "Peça chegou — retomar" já têm ação real, mas o botão
+      // com busy-lock vive na aba Execução (`execAcoes` + marcarPronta/iniciarServico)
+      // — aqui só navegamos e avisamos, nunca disparamos a transição direto do header.
+      update({ stage: "execucao" });
+      notify(EXECUCAO_NA_ABA_EXECUCAO);
       return;
     }
     if (status === "pronta") {
@@ -465,13 +482,16 @@ export function buildVals(
     // "Trocar OS" usa o fluxo real de busca: limpa a seleção e abre o seletor.
     { icon: "⇄", label: "Trocar OS", color: C.body, onClick: goToOSSearch },
   ];
-  // Transições sem escrita real são no-op honesto: toast, SEM mudar o status exibido
-  // (antes mudavam o header localmente — ex.: "Cancelar OS" pintava a OS de cancelada
-  // sem cancelar nada de verdade).
+  // OPS-V4-ACTIONS-RECONCILE-010: "Aguardando peça"/"retomar" já têm ação real na
+  // aba Execução (`execAcoes` + marcarAguardandoPeca/iniciarServico) — o menu só
+  // NAVEGA até lá (mesmo padrão de "Editar OS (Entrada)" acima), nunca finge um
+  // no-op. "Cancelar OS" segue sem ação V3 segura: continua no-op honesto (toast,
+  // sem mudar o status exibido — antes mudava o header localmente sem cancelar
+  // nada de verdade).
   if (status === "em_execucao" || status === "aprovado")
-    moreItems.push({ icon: "⏸", label: "Marcar “Aguardando peça”", color: C.body, onClick: () => notify(PREVIEW_NOOP) });
+    moreItems.push({ icon: "⏸", label: "Marcar “Aguardando peça”", color: C.body, onClick: () => go("execucao") });
   if (status === "aguardando_peca")
-    moreItems.push({ icon: "▶", label: "Peça chegou — retomar", color: C.body, onClick: () => notify(PREVIEW_NOOP) });
+    moreItems.push({ icon: "▶", label: "Peça chegou — retomar", color: C.body, onClick: () => go("execucao") });
   if (status !== "entregue" && status !== "cancelada")
     moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => notify(PREVIEW_NOOP) });
 
