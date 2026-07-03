@@ -22,6 +22,7 @@ import { ModuleView } from "./parts/ModuleView";
 import { AuditoriaPage } from "./parts/AuditoriaPage";
 import { NovaOSModal } from "./parts/NovaOSModal";
 import { ReciboModal } from "./parts/ReciboModal";
+import { DocPrintModal } from "./parts/DocPrintModal";
 import { Toast } from "./parts/Toast";
 
 export function OperacoesV4Preview() {
@@ -57,6 +58,7 @@ export function OperacoesV4Preview() {
 
       <NovaOSModal v={v} />
       <ReciboModal v={v} />
+      <DocPrintModal v={v} />
       <Toast v={v} />
     </div>
   );

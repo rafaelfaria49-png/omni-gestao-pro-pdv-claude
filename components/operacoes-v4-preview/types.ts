@@ -76,6 +76,13 @@ export interface V4State {
   /** Texto digitado nos campos da demonstração (não é enviado a lugar nenhum). */
   senha: string;
   motivo: string;
+  /**
+   * Documento aberto no modal de impressão real (GOAL OPS-V4-DOCS-ASSINATURA-
+   * TERMOS-ANEXOS-012) — `null` = fechado. Tipado como string (não `DocumentoTipoV3`)
+   * para manter este módulo isolado dos tipos da V3; a leitura tipada acontece em
+   * `use-v4-preview`, que já consome contratos da V3.
+   */
+  docPrint: string | null;
 }
 
 /** Tom de cor de um status/badge. */

@@ -11,10 +11,18 @@
  * via `use-v4-preview`) — habilitada só quando `v.entregaAcoes.podeConfirmar`
  * (status "pronta" e saldo confirmado <= 0). O restante da etapa segue
  * read-only (checklist final de entrega continua sem action V3 segura).
+ *
+ * GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012: a assinatura de retirada passa
+ * a ser a imagem digital REAL (`entregaV3.assinaturaRetirada`, mesma fonte do
+ * Termo de Entrega impresso) em vez do antigo texto fabricado. Quando a OS já
+ * foi entregue e ainda não há assinatura capturada, reaproveita o MESMO canvas
+ * (`SignaturePadV3`) já usado pela Prova de Entrada/Entrega da V3 — sem motor
+ * de captura novo — persistindo via `salvarAssinaturaRetiradaV3`.
  */
 import { useState, type ReactNode } from "react";
 import { C, card, cardTitle, upLabel, pill } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
+import { SignaturePadV3 } from "@/components/operacoes-v3/components/SignaturePadV3";
 
 const col3 = "repeat(auto-fit, minmax(280px, 1fr))";
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
@@ -109,6 +117,32 @@ function Field({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Captura da assinatura de retirada (só aparece após a entrega, quando ainda não
+ * há assinatura salva). Reaproveita `SignaturePadV3` (canvas já usado pela V3) e
+ * `v.salvarAssinaturaRetirada` (reuso de `salvarAssinaturaRetiradaV3`).
+ */
+function AssinaturaRetiradaCard({ v }: { v: V4Vals }) {
+  const [salvando, setSalvando] = useState(false);
+  const onSave = async (dataUrl: string) => {
+    setSalvando(true);
+    try {
+      await v.salvarAssinaturaRetirada(dataUrl);
+    } finally {
+      setSalvando(false);
+    }
+  };
+  return (
+    <SignaturePadV3
+      onSave={onSave}
+      salvando={salvando}
+      height={110}
+      label="Salvar assinatura"
+      hint="Colete a assinatura de quem retirou o equipamento."
+    />
+  );
+}
+
 export function EntregaStage({ v }: { v: V4Vals }) {
   const e = v.entrega;
   const g = e.garantia;
@@ -151,9 +185,12 @@ export function EntregaStage({ v }: { v: V4Vals }) {
 
         <div style={{ ...upLabel, margin: "13px 0 5px" }}>Assinatura de retirada</div>
         {e.temAssinatura ? (
-          <div style={{ border: `1px solid ${C.line2}`, background: C.surface2, borderRadius: 8, padding: "9px 11px", fontSize: 13, color: C.body, fontStyle: "italic" }}>
-            {e.assinatura}
+          <div style={{ border: `1px solid ${C.line2}`, background: C.surface2, borderRadius: 8, padding: 8, display: "flex", justifyContent: "center" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={e.assinaturaDataUrl} alt="Assinatura de retirada" style={{ maxHeight: 90, objectFit: "contain" }} />
           </div>
+        ) : e.entregue ? (
+          <AssinaturaRetiradaCard v={v} />
         ) : (
           <Empty>Nenhuma assinatura de entrega registrada.</Empty>
         )}

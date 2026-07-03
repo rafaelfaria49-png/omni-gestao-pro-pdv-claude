@@ -60,6 +60,11 @@ import type { IdentificacaoV3, AcessorioEntradaV3 } from "@/lib/operacoes-v3/pro
 import type { ChecklistEntradaItemV3 } from "@/lib/operacoes-v3/workspace-model";
 import { salvarDadosBasicosOSV3 } from "@/lib/operacoes-v3/dados-basicos-actions";
 import type { SalvarDadosBasicosInputV3 } from "@/lib/operacoes-v3/dados-basicos-model";
+// Assinatura de retirada real (SPRINT_3E.2) e auditoria de impressão (Fase 1E) —
+// reuso direto das actions V3 (GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012).
+import { salvarAssinaturaRetiradaV3 } from "@/lib/operacoes-v3/entrega-actions";
+import { registrarImpressaoDocumentoV3 } from "@/lib/operacoes-v3/garantia-actions";
+import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
 import { seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
 import { seedDadosBasicos, type DadosBasicosEditorV4 } from "@/lib/operacoes-v4/dados-basicos-form";
@@ -139,6 +144,12 @@ export interface V4DataCtx {
   // Confirma a entrega via `aplicarTransicaoStatusV3(sid, osId, "entregue")` (mesmo
   // reuso dos handlers acima). Só deve ser chamada quando `entregaAcoes.podeConfirmar`.
   confirmarEntrega: () => Promise<boolean>;
+  // ---- Assinatura de retirada + auditoria de impressão (GOAL OPS-V4-DOCS-
+  // ASSINATURA-TERMOS-ANEXOS-012) ----
+  /** Persiste a assinatura de retirada (reuso de `salvarAssinaturaRetiradaV3`). */
+  salvarAssinaturaRetirada: (dataUrl: string) => Promise<boolean>;
+  /** Registra na timeline que um documento foi impresso (best-effort). */
+  registrarImpressaoDoc: (tipo: DocumentoTipoV3) => void;
   // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
@@ -174,6 +185,7 @@ const INITIAL: V4State = {
   pattern: [0, 3, 4, 7],
   senha: "",
   motivo: "",
+  docPrint: null,
 };
 
 type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
@@ -467,11 +479,16 @@ export function buildVals(
     update({ selectedOsId: null, module: "workspace", view: "cockpit", menu: null });
 
   // ---- menus ----
-  // Documentos são protótipo: não geram/abrem nada na Preview → toast honesto.
+  // GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012: "Termo de Garantia" e "Termo de
+  // Entrega" deixam de ser no-op — abrem o MESMO modal de impressão real da V3
+  // (`PrintPreviewV3`, montado em `DocPrintModal`), preenchido com o termo/dados
+  // reais da OS. Os demais documentos (OS cliente / via interna / etiqueta /
+  // portal) seguem protótipo — sem contrato de leitura ligado nesta fase.
+  const openDocPrint = (tipo: DocumentoTipoV3) => update({ docPrint: tipo, menu: null });
   const printItems = [
     { icon: "📄", label: "Imprimir OS (cliente)", onClick: () => notify(PREVIEW_NOOP) },
-    { icon: "🛡", label: "Termo de Garantia", onClick: () => notify(PREVIEW_NOOP) },
-    { icon: "📦", label: "Termo de Entrega", onClick: () => notify(PREVIEW_NOOP) },
+    { icon: "🛡", label: "Termo de Garantia", onClick: () => openDocPrint("termo_garantia") },
+    { icon: "📦", label: "Termo de Entrega", onClick: () => openDocPrint("termo_entrega") },
     { icon: "🔒", label: "Via Interna", onClick: () => notify(PREVIEW_NOOP) },
     { icon: "🏷", label: "Etiqueta", onClick: () => notify(PREVIEW_NOOP) },
     { icon: "🌐", label: "Portal do cliente", onClick: () => notify(PREVIEW_NOOP) },
@@ -800,6 +817,17 @@ export function buildVals(
     confirmarEntrega: ctx.confirmarEntrega,
     entregaAcoes,
 
+    // ---- Assinatura de retirada + documentos reais (GOAL OPS-V4-DOCS-
+    // ASSINATURA-TERMOS-ANEXOS-012) ----
+    // `salvarAssinaturaRetirada` reusa `salvarAssinaturaRetiradaV3` (mesmo canvas
+    // `SignaturePadV3` da V3); `docPrintTipo`/`closeDocPrint` controlam o modal de
+    // impressão real (`DocPrintModal` → `PrintPreviewV3`, sem motor novo).
+    salvarAssinaturaRetirada: ctx.salvarAssinaturaRetirada,
+    docPrintTipo: st.docPrint as DocumentoTipoV3 | null,
+    closeDocPrint: () => update({ docPrint: null }),
+    registrarImpressaoDoc: ctx.registrarImpressaoDoc,
+    realOS,
+
     // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
     // Estado (pagamento/sessão de caixa/recibo) e ações (receber) do motor V3 —
     // consumido por `ReceberPagamentoV4` dentro do FinanceiroStage. `recebimento`
@@ -1032,6 +1060,28 @@ export function useV4Preview(): V4Vals {
     [runWrite, update],
   );
 
+  // ---- Assinatura de retirada (SPRINT_3E.2, GOAL OPS-V4-DOCS-ASSINATURA-
+  // TERMOS-ANEXOS-012): mesmo wrapper `runWrite`; reusa `salvarAssinaturaRetiradaV3`
+  // (só grava após a entrega já registrada — a própria action valida o estado).
+  const salvarAssinaturaRetirada = useCallback(
+    (dataUrl: string) =>
+      runWrite((sid, osId) => salvarAssinaturaRetiradaV3(sid, osId, dataUrl), "Assinatura de retirada salva."),
+    [runWrite],
+  );
+
+  // ---- Auditoria de impressão (Fase 1E, GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-
+  // ANEXOS-012): best-effort, mesma action usada pelo `onPrinted` da V3
+  // (`PrintPreviewV3`) — registra na timeline, nunca bloqueia a impressão.
+  const registrarImpressaoDoc = useCallback(
+    (tipo: DocumentoTipoV3) => {
+      const sid = (lojaAtivaId ?? "").trim();
+      const osId = (selectedOsId ?? "").trim();
+      if (!sid || !osId) return;
+      void registrarImpressaoDocumentoV3(sid, osId, tipo).catch(() => {});
+    },
+    [lojaAtivaId, selectedOsId],
+  );
+
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
   const salvarIdentificacao = useCallback(
     (input: IdentificacaoV3) =>
@@ -1088,6 +1138,8 @@ export function useV4Preview(): V4Vals {
       marcarAguardandoPeca,
       marcarPronta,
       confirmarEntrega,
+      salvarAssinaturaRetirada,
+      registrarImpressaoDoc,
       pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,
@@ -1114,6 +1166,8 @@ export function useV4Preview(): V4Vals {
       marcarAguardandoPeca,
       marcarPronta,
       confirmarEntrega,
+      salvarAssinaturaRetirada,
+      registrarImpressaoDoc,
       pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,

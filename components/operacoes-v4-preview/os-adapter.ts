@@ -35,6 +35,11 @@ import {
   LOCAL_FISICO_LABEL_V3,
   ORIGEM_LABEL_V3,
 } from "@/lib/operacoes-v3/dados-basicos-model";
+// Reuso PURO (read-only) da garantia/entrega REAIS da V3 (GOAL OPS-V4-DOCS-
+// ASSINATURA-TERMOS-ANEXOS-012): mesma fonte já usada pelas telas de pós-venda
+// e pela impressão da OS (`aberturaV3.garantiaPrevista` / `entregaV3`).
+import { lerGarantiaV3, lerEntregaV3, GARANTIA_SITUACAO_META_V3, resumoRetornosV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { termoGarantiaDaOSV3 } from "@/lib/operacoes-v3/print-model";
 
 export const NI = "Não informado";
 
@@ -576,26 +581,34 @@ export function adaptAcessoriosEntrada(os: OrdemServico): string[] {
   return lista.map((a) => txt(a)).filter(Boolean);
 }
 
-/** Anexos considerados "fotos de entrada" (registrados na recepção do aparelho). */
-const FOTO_ENTRADA_TIPOS: AnexoTipo[] = ["foto_antes", "foto_defeito"];
+const CATEGORIA_FOTO_TAG: Record<string, string> = {
+  frontal: "FRONTAL",
+  traseira: "TRASEIRA",
+  lateral: "LATERAL",
+  defeito: "DEFEITO",
+};
 
 export interface V4FotoEntrada {
   id: string;
-  /** Etiqueta curta derivada do tipo do anexo (ANTES / DEFEITO). */
+  /** Etiqueta curta derivada da categoria da foto (FRONTAL / TRASEIRA / LATERAL / DEFEITO). */
   tag: string;
   name: string;
+  /** Imagem real (data URL JPEG), já reduzida na captura — SPRINT_3E.1. */
+  dataUrl: string;
 }
 
-/** Fotos de entrada reais (anexos antes/defeito da OS); lista vazia = honesto. */
+/**
+ * Fotos de entrada reais — lidas de `payload.provaEntradaV3.fotos` (SPRINT_3E.1),
+ * o contrato que efetivamente grava fotos da OS (`salvarProvaEntradaV3`). O campo
+ * legado `os.anexos` nunca é escrito por nenhuma action da V3; lista vazia = honesto.
+ */
 export function adaptFotosEntrada(os: OrdemServico): V4FotoEntrada[] {
-  const lista = Array.isArray(os.anexos) ? os.anexos : [];
-  return lista
-    .filter((a: Anexo) => FOTO_ENTRADA_TIPOS.includes(a.tipo))
-    .map((a: Anexo) => ({
-      id: a.id,
-      tag: ANEXO_KIND_LABEL[a.tipo] ?? "FOTO",
-      name: txt(a.nome) || "Foto",
-    }));
+  return lerProvaEntradaV3(os).fotos.map((f) => ({
+    id: f.id,
+    tag: CATEGORIA_FOTO_TAG[f.categoria] ?? "FOTO",
+    name: txt(f.nome) || "Foto",
+    dataUrl: f.dataUrl,
+  }));
 }
 
 export interface V4SegurancaEntrada {
@@ -1051,7 +1064,7 @@ export interface V4GarantiaView {
   /** true quando há garantia real (operacional ou de payload). */
   temGarantia: boolean;
   situacao: string;
-  situacaoTone: "success" | "warn" | "danger" | "neutro";
+  situacaoTone: "success" | "info" | "warn" | "danger" | "neutro";
   prazo: string;
   inicio: string;
   fim: string;
@@ -1074,51 +1087,40 @@ export const EMPTY_GARANTIA_VIEW: V4GarantiaView = {
   acionamentos: "",
 };
 
-const GARANTIA_OP_LABEL: Record<string, { label: string; tone: V4GarantiaView["situacaoTone"] }> = {
-  ativa: { label: "Ativa", tone: "success" },
-  expirada: { label: "Expirada", tone: "warn" },
-  cancelada: { label: "Cancelada", tone: "danger" },
+const GARANTIA_TONE_MAP: Record<(typeof GARANTIA_SITUACAO_META_V3)[keyof typeof GARANTIA_SITUACAO_META_V3]["tone"], V4GarantiaView["situacaoTone"]> = {
+  neutral: "neutro",
+  info: "info",
+  warning: "warn",
+  success: "success",
+  danger: "danger",
 };
 
-/** Garantia real da OS: prioriza a operacional (Prisma) sobre a de payload. */
+/**
+ * Garantia real da OS — reusa os leitores PUROS já usados pelo pós-venda e pela
+ * impressão da OS (`lerGarantiaV3` para situação/prazo/vigência a partir de
+ * `aberturaV3.garantiaPrevista`, com fallback `os.garantia`/`garantiasOperacionais`;
+ * `termoGarantiaDaOSV3` para o texto de cobertura/exclusões/observação do MESMO
+ * catálogo oficial usado no Termo de Garantia impresso). Nenhuma lógica nova.
+ */
 function adaptGarantia(os: OrdemServico): V4GarantiaView {
-  const op = Array.isArray(os.garantiasOperacionais) ? os.garantiasOperacionais[0] : undefined;
-  const g = os.garantia;
-  const acion =
-    typeof g?.acionamentos === "number" && g.acionamentos > 0 ? String(g.acionamentos) : "";
+  const view = lerGarantiaV3(os);
+  if (!view.temGarantia) return EMPTY_GARANTIA_VIEW;
 
-  if (op) {
-    const m = GARANTIA_OP_LABEL[op.status] ?? { label: op.status || NI, tone: "neutro" as const };
-    return {
-      temGarantia: true,
-      situacao: m.label,
-      situacaoTone: m.tone,
-      prazo: typeof op.prazoDias === "number" && op.prazoDias > 0 ? `${op.prazoDias} dias` : NI,
-      inicio: fmtData(op.dataInicio),
-      fim: fmtData(op.dataFim),
-      cobertura: txt(op.cobertura) || NI,
-      observacoes: txt(op.observacoes),
-      acionamentos: acion,
-    };
-  }
+  const situacaoMeta = GARANTIA_SITUACAO_META_V3[view.situacao];
+  const termo = termoGarantiaDaOSV3(os);
+  const acionamentos = resumoRetornosV3(os).total;
 
-  const temPayload =
-    !!g && (g.ativa || typeof g.prazoDias === "number" || !!txt(g.inicioEm) || !!txt(g.fimEm) || !!txt(g.termo));
-  if (temPayload && g) {
-    return {
-      temGarantia: true,
-      situacao: g.ativa ? "Ativa" : "Inativa",
-      situacaoTone: g.ativa ? "success" : "neutro",
-      prazo: typeof g.prazoDias === "number" && g.prazoDias > 0 ? `${g.prazoDias} dias` : NI,
-      inicio: fmtData(g.inicioEm),
-      fim: fmtData(g.fimEm),
-      cobertura: NI,
-      observacoes: txt(g.termo),
-      acionamentos: acion,
-    };
-  }
-
-  return EMPTY_GARANTIA_VIEW;
+  return {
+    temGarantia: true,
+    situacao: situacaoMeta.label,
+    situacaoTone: GARANTIA_TONE_MAP[situacaoMeta.tone],
+    prazo: !view.semCobertura && view.prazoDias > 0 ? `${view.prazoDias} dias` : NI,
+    inicio: view.inicio ? fmtData(view.inicio) : NI,
+    fim: view.vencimento ? fmtData(view.vencimento) : NI,
+    cobertura: termo.cobertura.length ? termo.cobertura.join(" · ") : NI,
+    observacoes: termo.observacao ?? "",
+    acionamentos: acionamentos > 0 ? String(acionamentos) : "",
+  };
 }
 
 export interface V4EntregaView {
@@ -1133,8 +1135,8 @@ export interface V4EntregaView {
   /** Observação real da retirada; vazio quando não houver. */
   observacao: string;
   temAssinatura: boolean;
-  /** Assinatura textual real (fase simples); vazio quando ausente. */
-  assinatura: string;
+  /** Assinatura digital real de retirada (data URL PNG); vazio quando ausente. */
+  assinaturaDataUrl: string;
   /** Acessórios reais do aparelho (devolvidos com o equipamento). */
   acessorios: string[];
   eventos: V4HistEvento[];
@@ -1150,7 +1152,7 @@ export const EMPTY_ENTREGA_VIEW: V4EntregaView = {
   retiradoEm: NI,
   observacao: "",
   temAssinatura: false,
-  assinatura: "",
+  assinaturaDataUrl: "",
   acessorios: [],
   eventos: [],
   garantia: EMPTY_GARANTIA_VIEW,
@@ -1158,6 +1160,7 @@ export const EMPTY_ENTREGA_VIEW: V4EntregaView = {
 
 export function adaptEntrega(os: OrdemServico): V4EntregaView {
   const retirada = os.retirada;
+  const entregaV3 = lerEntregaV3(os);
   const entregue = os.status === "entregue" || !!retirada?.confirmado || !!txt(os.entregueEm);
   const statusLabel = entregue ? "Entregue" : os.status === "pronta" ? "Pronta para retirada" : "Não entregue";
   const statusTone: V4EntregaView["statusTone"] = entregue
@@ -1168,7 +1171,9 @@ export function adaptEntrega(os: OrdemServico): V4EntregaView {
 
   const retiradoPor = txt(retirada?.retiradoPor);
   const retiradoEmRaw = txt(retirada?.retiradoEm) || txt(os.entregueEm);
-  const assinatura = txt(retirada?.assinaturaTexto);
+  // Assinatura digital real de retirada (SPRINT_3E.2) — mesma fonte usada pelo
+  // Termo de Entrega impresso (`montarTermoEntregaV3`). Nunca texto fabricado.
+  const assinaturaDataUrl = txt(entregaV3.assinaturaRetiradaDataUrl);
   const observacao = txt(retirada?.observacao);
   const acessorios = adaptAcessoriosEntrada(os);
 
@@ -1189,15 +1194,15 @@ export function adaptEntrega(os: OrdemServico): V4EntregaView {
 
   return {
     temRegistro:
-      entregue || !!retiradoPor || !!assinatura || !!observacao || eventos.length > 0 || garantia.temGarantia,
+      entregue || !!retiradoPor || !!assinaturaDataUrl || !!observacao || eventos.length > 0 || garantia.temGarantia,
     entregue,
     statusLabel,
     statusTone,
     retiradoPor: retiradoPor || NI,
     retiradoEm: retiradoEmRaw ? fmtDataHora(retiradoEmRaw) : NI,
     observacao,
-    temAssinatura: !!assinatura,
-    assinatura,
+    temAssinatura: !!assinaturaDataUrl,
+    assinaturaDataUrl,
     acessorios,
     eventos,
     garantia,

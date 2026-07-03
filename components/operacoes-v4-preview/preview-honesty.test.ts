@@ -47,6 +47,16 @@ vi.mock("@/lib/operacoes-v3/prova-entrada-actions", () => ({
 vi.mock("@/lib/operacoes-v3/dados-basicos-actions", () => ({
   salvarDadosBasicosOSV3: vi.fn(async () => ({})),
 }))
+// Assinatura de retirada + auditoria de impressão (GOAL OPS-V4-DOCS-ASSINATURA-
+// TERMOS-ANEXOS-012): mesma razão dos mocks acima — ambas são "use server" (→ @/auth).
+vi.mock("@/lib/operacoes-v3/entrega-actions", () => ({
+  salvarAssinaturaRetiradaV3: vi.fn(async () => ({})),
+  registrarEntregaV3: vi.fn(async () => ({})),
+}))
+vi.mock("@/lib/operacoes-v3/garantia-actions", () => ({
+  registrarImpressaoDocumentoV3: vi.fn(async () => ({})),
+  salvarGarantiaOSV3: vi.fn(async () => ({})),
+}))
 // PDV de Serviço (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001): mesma razão dos
 // mocks acima — `use-pdv-servico-v3` (hook real, importado por `use-v4-preview`)
 // importa esta action "use server" (→ @/auth) em tempo de carregamento do módulo.
@@ -147,6 +157,7 @@ function makeState(over: Partial<V4State> = {}): V4State {
     pattern: [0, 3, 4, 7],
     senha: "",
     motivo: "",
+    docPrint: null,
     ...over,
   }
 }
@@ -170,6 +181,8 @@ const ctx: V4DataCtx = {
   marcarAguardandoPeca: async () => false,
   marcarPronta: async () => false,
   confirmarEntrega: async () => false,
+  salvarAssinaturaRetirada: async () => false,
+  registrarImpressaoDoc: () => {},
   pdvServico: {
     pagamento: null,
     sessao: null,
@@ -1341,5 +1354,128 @@ describe("OPS-V4-NOVA-OS-AUTOFILL-ISOLATION-009 — Nova OS sem autofill do nave
     expect(campos.length).toBeGreaterThan(0)
     const semAutoComplete = campos.filter((tag) => !/autoComplete=/.test(tag))
     expect(semAutoComplete, `campos sem autoComplete: ${semAutoComplete.join(" | ")}`).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — termo de garantia, assinatura
+// de retirada e fotos de entrada passam a ler os contratos REAIS já usados pela
+// V3 (aberturaV3.garantiaPrevista / entregaV3.assinaturaRetirada /
+// provaEntradaV3.fotos) em vez de campos legados/mortos. Nada fabricado: sem
+// garantia/assinatura/foto real na OS, os cards mostram empty state honesto.
+// ---------------------------------------------------------------------------
+describe("GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Termo de Garantia real", () => {
+  it("OS com garantiaPrevista real (aberturaV3): v.entrega.garantia vem preenchida (situação/prazo/cobertura)", () => {
+    const os = mkOS({
+      id: "os-gar-1",
+      status: "entregue",
+      entregueEm: "2026-01-10T12:00:00.000Z",
+      aberturaV3: { garantiaPrevista: { modelo: "tela", label: "Troca de Tela", prazoDias: 90 } },
+    })
+    const v = buildVals(makeState({ selectedOsId: "os-gar-1", novaOS: false }), () => {}, () => {}, { ...ctx, realOS: os })
+    expect(v.entrega.garantia.temGarantia).toBe(true)
+    expect(v.entrega.garantia.prazo).toBe("90 dias")
+    expect(v.entrega.garantia.cobertura).not.toBe(NI)
+    expect(v.entrega.garantia.situacao).not.toBe(NI)
+  })
+
+  it("OS sem NENHUM dado de garantia: empty state honesto (temGarantia false, campos NI)", () => {
+    const os = mkOS({ id: "os-gar-2", status: "aberta" })
+    const v = buildVals(makeState({ selectedOsId: "os-gar-2", novaOS: false }), () => {}, () => {}, { ...ctx, realOS: os })
+    expect(v.entrega.garantia.temGarantia).toBe(false)
+    expect(v.entrega.garantia.prazo).toBe(NI)
+    expect(v.entrega.garantia.inicio).toBe(NI)
+    expect(v.entrega.garantia.fim).toBe(NI)
+  })
+
+  it('"Termo de Garantia" no menu Docs abre o modal real (docPrint) em vez do toast de preview', () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(makeState({ novaOS: false }), (p) => patches.push(p as Record<string, unknown>), (m) => msgs.push(m), ctx)
+    const item = v.printItems.find((d) => /Termo de Garantia/.test(d.label))!
+    item.onClick()
+    expect(patches.at(-1)).toMatchObject({ docPrint: "termo_garantia", menu: null })
+    expect(msgs.some((m) => /indisponível/i.test(m))).toBe(false)
+  })
+
+  it('"Termo de Entrega" no menu Docs abre o modal real (docPrint) em vez do toast de preview', () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(makeState({ novaOS: false }), (p) => patches.push(p as Record<string, unknown>), () => {}, ctx)
+    const item = v.printItems.find((d) => /Termo de Entrega/.test(d.label))!
+    item.onClick()
+    expect(patches.at(-1)).toMatchObject({ docPrint: "termo_entrega", menu: null })
+  })
+
+  it("DocPrintModal reaproveita o PrintPreviewV3 já usado pela V3 (sem motor de documento novo)", () => {
+    const src = readFileSync(join(DIR, "parts", "DocPrintModal.tsx"), "utf8")
+    expect(src).toContain('from "@/components/operacoes-v3/components/print/PrintPreviewV3"')
+  })
+})
+
+describe("GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Assinatura de retirada real", () => {
+  it("OS com assinatura de retirada real (entregaV3): v.entrega.temAssinatura + assinaturaDataUrl vêm da OS", () => {
+    const os = mkOS({
+      id: "os-assin-1",
+      status: "entregue",
+      entregueEm: "2026-01-10T12:00:00.000Z",
+      entregaV3: { assinaturaRetirada: { dataUrl: "data:image/png;base64,AAAA", criadoEm: "2026-01-10T12:00:00.000Z" } },
+    })
+    const v = buildVals(makeState({ selectedOsId: "os-assin-1", novaOS: false }), () => {}, () => {}, { ...ctx, realOS: os })
+    expect(v.entrega.temAssinatura).toBe(true)
+    expect(v.entrega.assinaturaDataUrl).toBe("data:image/png;base64,AAAA")
+  })
+
+  it("OS entregue sem assinatura registrada: temAssinatura false, dataUrl vazio (empty honesto)", () => {
+    const os = mkOS({ id: "os-assin-2", status: "entregue", entregueEm: "2026-01-10T12:00:00.000Z" })
+    const v = buildVals(makeState({ selectedOsId: "os-assin-2", novaOS: false }), () => {}, () => {}, { ...ctx, realOS: os })
+    expect(v.entrega.temAssinatura).toBe(false)
+    expect(v.entrega.assinaturaDataUrl).toBe("")
+  })
+
+  it("EntregaStage renderiza a assinatura como imagem real (não mais texto fabricado)", () => {
+    const src = readFileSync(join(DIR, "parts", "stages", "EntregaStage.tsx"), "utf8")
+    expect(src).toContain("e.assinaturaDataUrl")
+    expect(src).not.toMatch(/\{e\.assinatura\}/)
+  })
+
+  it("captura de assinatura reaproveita o SignaturePadV3 da V3 (sem canvas/motor novo) e persiste via salvarAssinaturaRetirada", () => {
+    const src = readFileSync(join(DIR, "parts", "stages", "EntregaStage.tsx"), "utf8")
+    expect(src).toContain('from "@/components/operacoes-v3/components/SignaturePadV3"')
+    expect(src).toContain("v.salvarAssinaturaRetirada")
+  })
+})
+
+describe("GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Fotos de entrada reais (provaEntradaV3)", () => {
+  it("OS com fotos reais na prova de entrada: v.entradaFotos reflete o payload real (id/tag/dataUrl)", () => {
+    const os = mkOS({
+      id: "os-foto-1",
+      status: "aberta",
+      provaEntradaV3: {
+        versao: 1,
+        criadoEm: "2026-01-05T10:00:00.000Z",
+        fotos: [{ id: "f1", categoria: "defeito", dataUrl: "data:image/jpeg;base64,BBBB", tamanho: 100, criadoEm: "2026-01-05T10:00:00.000Z" }],
+      },
+    })
+    const v = buildVals(makeState({ selectedOsId: "os-foto-1", novaOS: false }), () => {}, () => {}, { ...ctx, realOS: os })
+    expect(v.entradaFotos).toHaveLength(1)
+    expect(v.entradaFotos[0]).toMatchObject({ id: "f1", tag: "DEFEITO", dataUrl: "data:image/jpeg;base64,BBBB" })
+  })
+
+  it("OS sem fotos de entrada: lista vazia honesta (nada fabricado)", () => {
+    const os = mkOS({ id: "os-foto-2", status: "aberta" })
+    const v = buildVals(makeState({ selectedOsId: "os-foto-2", novaOS: false }), () => {}, () => {}, { ...ctx, realOS: os })
+    expect(v.entradaFotos).toEqual([])
+  })
+
+  it("o campo legado os.anexos NÃO é mais a fonte das fotos de entrada (contrato morto — nunca escrito por nenhuma action V3)", () => {
+    const adapter = readFileSync(join(DIR, "os-adapter.ts"), "utf8")
+    const fn = adapter.slice(adapter.indexOf("export function adaptFotosEntrada"), adapter.indexOf("export interface V4SegurancaEntrada"))
+    expect(fn).not.toContain("os.anexos")
+    expect(fn).toContain("lerProvaEntradaV3")
+  })
+
+  it("EntradaStage não finge upload real: o botão/estado permanece honesto sobre a ausência de contrato de upload", () => {
+    const src = readFileSync(join(DIR, "parts", "stages", "EntradaStage.tsx"), "utf8")
+    expect(src).toMatch(/upload em breve/i)
   })
 })

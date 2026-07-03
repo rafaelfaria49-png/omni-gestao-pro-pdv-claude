@@ -13,7 +13,10 @@
  * persistência via `salvarProvaEntrada` (slice 004A). É a senha REAL do aparelho
  * do cliente; não confundir com a autorização de gerente (100% preview em
  * `SegurancaStage.tsx`, não tocado por este slice).
- * Fotos, assinatura, anexos e documentos seguem PREVIEW. */
+ * Fotos de entrada (GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012): a LISTAGEM já
+ * lê `payload.provaEntradaV3.fotos` (real, via `adaptFotosEntrada`); o UPLOAD em
+ * si ainda não tem botão nesta etapa. Assinatura de entrada, anexos genéricos e
+ * documentos seguem PREVIEW. */
 import { useState } from "react";
 import { C, card, cardTitle, HATCH, MONO, upLabel } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
@@ -282,14 +285,18 @@ function EntradaEditor({ v }: { v: V4Vals }) {
         <div style={card}>
           <div style={{ ...cardTitle, marginBottom: 9 }}>
             Fotos de entrada{v.entradaFotos.length > 0 ? ` · ${v.entradaFotos.length}` : ""}
-            <span style={{ fontSize: 10, fontWeight: 500, color: C.subtle, marginLeft: 6 }}>(preview)</span>
+            {v.entradaFotos.length === 0 && (
+              <span style={{ fontSize: 10, fontWeight: 500, color: C.subtle, marginLeft: 6 }}>(upload em breve)</span>
+            )}
           </div>
           {v.entradaFotos.length === 0 ? (
-            <div style={emptyText}>Upload de fotos chega em uma próxima etapa.</div>
+            <div style={emptyText}>Nenhuma foto registrada na entrada desta OS.</div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,minmax(0,1fr))", gap: 6 }}>
               {v.entradaFotos.map((f) => (
-                <div key={f.id} title={f.name} style={{ aspectRatio: "1", borderRadius: 7, background: HATCH, position: "relative" }}>
+                <div key={f.id} title={f.name} style={{ aspectRatio: "1", borderRadius: 7, background: HATCH, position: "relative", overflow: "hidden" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={f.dataUrl} alt={f.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   <span style={{ position: "absolute", left: 3, top: 3, fontSize: 8, background: "rgba(0,0,0,.55)", color: C.white, padding: "1px 4px", borderRadius: 3 }}>{f.tag}</span>
                 </div>
               ))}
