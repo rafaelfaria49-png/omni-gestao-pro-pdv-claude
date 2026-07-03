@@ -1,18 +1,80 @@
 /**
- * Operações V4 Preview — etapa Entrega (somente leitura).
+ * Operações V4 Preview — etapa Entrega.
  *
  * GOAL OPS-V4-P0-012: lê apenas o que a OS persiste — retirada confirmada,
  * data de entrega, assinatura textual, acessórios reais do aparelho, eventos
  * de entrega/garantia e a garantia real (operacional ou de payload). Nenhum
- * dado fabricado: onde não houver fonte, mostra empty state honesto. Sem
- * formulários/escrita (a V4 Preview é read-only).
+ * dado fabricado: onde não houver fonte, mostra empty state honesto.
+ *
+ * GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008: a etapa ganha UMA ação real —
+ * "Confirmar entrega" (`v.confirmarEntrega`, reuso de `aplicarTransicaoStatusV3`
+ * via `use-v4-preview`) — habilitada só quando `v.entregaAcoes.podeConfirmar`
+ * (status "pronta" e saldo confirmado <= 0). O restante da etapa segue
+ * read-only (checklist final de entrega continua sem action V3 segura).
  */
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { C, card, cardTitle, upLabel, pill } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 
 const col3 = "repeat(auto-fit, minmax(280px, 1fr))";
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
+
+const btnPrimary: React.CSSProperties = {
+  height: 34,
+  padding: "0 16px",
+  border: "none",
+  borderRadius: 8,
+  fontSize: 12.5,
+  fontWeight: 600,
+  color: C.white,
+};
+
+/**
+ * Ação real de confirmação de entrega (slice OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008).
+ * Só aparece quando há algo a decidir (`podeConfirmar` ou `bloqueadaPorSaldo`);
+ * busy-lock local evita duplo clique — toast e reload pós-sucesso vêm do próprio
+ * handler (`runWrite`, em `use-v4-preview`), não daqui.
+ */
+function EntregaAcaoCard({ v }: { v: V4Vals }) {
+  const [busy, setBusy] = useState(false);
+  const ea = v.entregaAcoes;
+  if (!ea.podeConfirmar && !ea.bloqueadaPorSaldo) return null;
+
+  const run = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await v.confirmarEntrega();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (ea.bloqueadaPorSaldo) {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
+        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5 }}>
+          Esta OS tem saldo a receber — quite o pagamento na aba Financeiro antes de confirmar a entrega.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={card}>
+      <div style={{ ...cardTitle, marginBottom: 10 }}>Entrega</div>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void run()}
+        style={{ ...btnPrimary, background: C.success, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
+      >
+        {busy ? "Confirmando…" : "Confirmar entrega"}
+      </button>
+    </div>
+  );
+}
 
 type Tone = "success" | "info" | "warn" | "danger" | "neutro";
 
@@ -53,18 +115,23 @@ export function EntregaStage({ v }: { v: V4Vals }) {
 
   if (!e.temRegistro) {
     return (
-      <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "40px 18px", textAlign: "center" }}>
-        <span style={{ fontSize: 22 }}>📦</span>
-        <div style={{ fontSize: 13, fontWeight: 600, color: C.body }}>Esta Ordem de Serviço ainda não foi entregue.</div>
-        <div style={{ fontSize: 11.5, color: C.subtle, maxWidth: 360, lineHeight: 1.5 }}>
-          O registro de retirada, a assinatura e a garantia aparecem aqui assim que a entrega for concluída.
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <EntregaAcaoCard v={v} />
+        <div style={{ ...card, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, padding: "40px 18px", textAlign: "center" }}>
+          <span style={{ fontSize: 22 }}>📦</span>
+          <div style={{ fontSize: 13, fontWeight: 600, color: C.body }}>Esta Ordem de Serviço ainda não foi entregue.</div>
+          <div style={{ fontSize: 11.5, color: C.subtle, maxWidth: 360, lineHeight: 1.5 }}>
+            O registro de retirada, a assinatura e a garantia aparecem aqui assim que a entrega for concluída.
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: col3, gap: 12, alignItems: "start" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <EntregaAcaoCard v={v} />
+      <div style={{ display: "grid", gridTemplateColumns: col3, gap: 12, alignItems: "start" }}>
       {/* Registro de entrega (real) */}
       <div style={card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -161,6 +228,7 @@ export function EntregaStage({ v }: { v: V4Vals }) {
         ) : (
           <Empty>Nenhuma garantia registrada para esta OS.</Empty>
         )}
+      </div>
       </div>
     </div>
   );

@@ -118,6 +118,14 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
           <span style={{ fontSize: 11.5, color: C.muted }}>Recebimento desta OS</span>
           <span style={{ height: 21, padding: "0 9px", display: "inline-flex", alignItems: "center", background: C.successBg, color: C.successFg, borderRadius: 999, fontSize: 11, fontWeight: 600 }}>✓ Quitado</span>
         </div>
+        {/* GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008: só navega — a ação real de
+            entrega vive no botão dedicado da aba Entrega (v.confirmarEntrega). */}
+        {!v.entrega.entregue && (
+          <div style={{ marginTop: 9, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: C.subtle }}>OS pronta e paga — falta confirmar a entrega.</span>
+            <button type="button" onClick={v.goEntrega} style={{ ...btnGhost, height: 30, padding: "0 12px", fontSize: 11.5 }}>Ir para Entrega →</button>
+          </div>
+        )}
       </div>
     );
   }

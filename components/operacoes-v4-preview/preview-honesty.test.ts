@@ -169,6 +169,7 @@ const ctx: V4DataCtx = {
   iniciarServico: async () => false,
   marcarAguardandoPeca: async () => false,
   marcarPronta: async () => false,
+  confirmarEntrega: async () => false,
   pdvServico: {
     pagamento: null,
     sessao: null,
@@ -370,17 +371,20 @@ describe("Operações V4 — Diagnóstico/Orçamento reais reaproveitam só acti
     }
   })
 
-  it("só dispara transições de status SEGURAS (diagnostico / em_execucao / aguardando_peca / pronta)", () => {
+  it("só dispara transições de status SEGURAS (diagnostico / em_execucao / aguardando_peca / pronta / entregue)", () => {
     const args = [...orquestrador.matchAll(/aplicarTransicaoStatusV3\([^,]+,[^,]+,\s*"([a-z_]+)"\)/g)].map((m) => m[1])
     expect(args.length).toBeGreaterThan(0)
-    // OPS-V4-EXECUCAO-REAL-007 estende o conjunto seguro do slice 002 com as duas
-    // transições da Execução (aguardando_peca / pronta) — `aplicarTransicaoStatusV3`
-    // só tem efeito de estoque/caixa/garantia para "entregue"/"cancelada"; as demais
-    // (incluindo estas duas) são status + timeline apenas.
-    expect(new Set(args)).toEqual(new Set(["diagnostico", "em_execucao", "aguardando_peca", "pronta"]))
-    // Nunca rota proibida (entrega/cancelamento tocam estoque/caixa/garantia; aguardando_aprovacao
-    // não tem UI real nesta Preview).
-    for (const proibida of ["entregue", "cancelada", "aguardando_aprovacao"]) {
+    // OPS-V4-EXECUCAO-REAL-007 estendeu o conjunto seguro do slice 002 com as duas
+    // transições da Execução (aguardando_peca / pronta). OPS-V4-ENTREGA-REAL-E-CTA-
+    // QUITADO-008 soma "entregue": `aplicarTransicaoStatusV3` delega esse caso a
+    // `registrarEntregaV3` (idempotente, guard de permissão próprio — Fase 0 do
+    // GOAL), cujo único efeito colateral é estoque via adapter oficial
+    // (`consumirEstoqueOSV3`, idempotente/best-effort) — sem caixa/financeiro
+    // diretos. "cancelada" continua fora (restaura estoque + cancela CR — rota
+    // maior, fora do escopo deste GOAL); "aguardando_aprovacao" não tem UI real
+    // nesta Preview.
+    expect(new Set(args)).toEqual(new Set(["diagnostico", "em_execucao", "aguardando_peca", "pronta", "entregue"]))
+    for (const proibida of ["cancelada", "aguardando_aprovacao"]) {
       expect(args).not.toContain(proibida)
     }
   })
@@ -540,6 +544,213 @@ describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem dri
     trocar!.onClick()
     expect(patches.at(-1)).toMatchObject({ selectedOsId: null, module: "workspace" })
     expect(msgs).toEqual([]) // não é mais toast de indisponível
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — CTA global coerente com o pagamento:
+// "Receber pagamento" só aparece com saldo pendente; quitada mostra "Entregar OS"
+// e leva à Entrega (nunca confirma a entrega a partir do header); Entregue
+// mantém "Fluxo concluído" (sem CTA de receber).
+// ---------------------------------------------------------------------------
+describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — CTA global reflete o saldo real", () => {
+  function ctxProntaComPagamento(pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null) {
+    return {
+      ...ctx,
+      realOS: mkOS({ id: "os-x", status: "pronta" }),
+      pdvServico: { ...ctx.pdvServico, pagamento },
+    }
+  }
+
+  it("pronta + saldo > 0: CTA continua 'Receber pagamento' e navega ao Financeiro", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ selectedOsId: "os-x", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctxProntaComPagamento({ total: 320, recebido: 0, saldo: 320, status: "aberto" }),
+    )
+    expect(v.primaryLabel).toBe("Receber pagamento")
+    v.onPrimary()
+    expect(patches.at(-1)).toMatchObject({ stage: "financeiro" })
+    expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status").toBe(true)
+    expect(msgs.some((m) => /financeiro/i.test(m))).toBe(true)
+  })
+
+  it("pronta + saldo == 0 (quitada): CTA vira 'Entregar OS' e navega à Entrega — nunca confirma direto do header", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const msgs: string[] = []
+    const v = buildVals(
+      makeState({ selectedOsId: "os-x", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      (m) => msgs.push(m),
+      ctxProntaComPagamento({ total: 320, recebido: 320, saldo: 0, status: "quitado" }),
+    )
+    expect(v.primaryLabel).toBe("Entregar OS")
+    expect(v.hasPrimary).toBe(true)
+    v.onPrimary()
+    expect(patches.at(-1)).toMatchObject({ stage: "entrega" })
+    expect(patches.every((p) => !("status" in p)), "nenhum patch pode conter status — a confirmação real fica no botão da Entrega").toBe(true)
+    expect(msgs.some((m) => /entrega/i.test(m))).toBe(true)
+  })
+
+  it("pronta sem cobrança nenhuma (total=0): trata como sem saldo pendente — CTA 'Entregar OS'", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-x", novaOS: false }),
+      () => {},
+      () => {},
+      ctxProntaComPagamento({ total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }),
+    )
+    expect(v.primaryLabel).toBe("Entregar OS")
+  })
+
+  it("pronta + pagamento ainda não carregado (null): mantém o default seguro 'Receber pagamento'", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-x", novaOS: false }),
+      () => {},
+      () => {},
+      ctxProntaComPagamento(null),
+    )
+    expect(v.primaryLabel).toBe("Receber pagamento")
+  })
+
+  it("entregue: sem CTA de receber — mostra estado final honesto ('Fluxo concluído')", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-x", novaOS: false }),
+      () => {},
+      () => {},
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "entregue" }) },
+    )
+    expect(v.hasPrimary).toBe(false)
+    expect(v.noPrimary).toBe(true)
+  })
+})
+
+describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — entregaAcoes só habilita com status pronta e saldo confirmado <= 0", () => {
+  function ctxEntrega(status: string, pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null) {
+    return {
+      ...ctx,
+      realOS: mkOS({ id: "os-ent", status }),
+      pdvServico: { ...ctx.pdvServico, pagamento },
+    }
+  }
+
+  it("pronta + saldo 0: podeConfirmar true, bloqueadaPorSaldo false", () => {
+    const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", { total: 320, recebido: 320, saldo: 0, status: "quitado" }))
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: true, bloqueadaPorSaldo: false })
+  })
+
+  it("pronta + saldo > 0: podeConfirmar false, bloqueadaPorSaldo true (mensagem de bloqueio, não botão)", () => {
+    const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", { total: 320, recebido: 0, saldo: 320, status: "aberto" }))
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: true })
+  })
+
+  it("pronta + pagamento não carregado (null): nenhuma ação disponível ainda (nem confirmar nem bloqueio) — evita flicker", () => {
+    const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", null))
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false })
+  })
+
+  it("outros status (em_execucao, entregue, aberta): entregaAcoes sempre desabilitada", () => {
+    for (const status of ["em_execucao", "aberta", "entregue", "diagnostico"]) {
+      const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega(status, { total: 320, recebido: 320, saldo: 0, status: "quitado" }))
+      expect(v.entregaAcoes, `status ${status}`).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false })
+    }
+  })
+
+  it("sem OS selecionada, entregaAcoes fica desabilitada mesmo com snapshot local 'pronta'", () => {
+    const v = buildVals(makeState({ status: "pronta", selectedOsId: null, novaOS: false }), () => {}, () => {}, ctx)
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false })
+  })
+})
+
+describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — confirmarEntrega reusa aplicarTransicaoStatusV3 via runWrite", () => {
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const entregaStage = readFileSync(join(DIR, "parts", "stages", "EntregaStage.tsx"), "utf8")
+
+  it("chama aplicarTransicaoStatusV3(sid, osId, \"entregue\") — mesmo contrato V3 usado pelas outras transições", () => {
+    expect(orquestrador).toContain('aplicarTransicaoStatusV3(sid, osId, "entregue")')
+  })
+
+  it("passa pelo wrapper runWrite (fonte única de reload/patch-em-sucesso) — falha não muta status", () => {
+    expect(orquestrador).toMatch(/const confirmarEntrega = useCallback\(\s*\(\)\s*=>\s*runWrite\(/)
+    // runWrite continua definido uma única vez — confirmarEntrega reaproveita, não duplica.
+    expect(orquestrador.match(/const runWrite = useCallback/g)?.length).toBe(1)
+  })
+
+  it("EntregaStage chama o handler real (v.confirmarEntrega) — não é toast de preview", () => {
+    expect(entregaStage).toContain("v.confirmarEntrega")
+    expect(entregaStage).not.toContain("PREVIEW_NOOP")
+  })
+
+  it("EntregaAcaoCard só renderiza quando há algo a decidir (podeConfirmar ou bloqueadaPorSaldo) — sem botão sempre ligado", () => {
+    expect(entregaStage).toMatch(/if \(!ea\.podeConfirmar && !ea\.bloqueadaPorSaldo\) return null/)
+  })
+
+  it("botão de confirmar tem busy-lock (evita duplo clique)", () => {
+    expect(entregaStage).toContain("useState")
+    expect(entregaStage).toMatch(/disabled=\{busy\}/)
+  })
+
+  it("EntregaStage não chama PDV/Caixa/Financeiro/Estoque/WhatsApp/Fiscal nem recebimento (só a transição de status)", () => {
+    // Escopo = só o arquivo novo (EntregaStage.tsx), mesmo padrão do guard já
+    // existente para o ExecucaoStage — não `allSources`, que já tem menções
+    // legítimas de `receberOSV3` em outros arquivos (slice de recebimento, já
+    // sancionado e coberto pelos próprios guards daquele slice).
+    for (const proibido of [
+      'from "@/lib/caixa',
+      'from "@/lib/financeiro',
+      'from "@/lib/estoque',
+      'from "@/lib/whatsapp',
+      'from "@/lib/fiscal',
+      'from "@/components/pdv',
+      "updateOSPayload",
+      "receberOSV3",
+      "estornarRecebimentoOSV3",
+      '"loja-1"',
+      "openCaixaIfClosed",
+    ]) {
+      expect(entregaStage, `referência proibida encontrada: ${proibido}`).not.toContain(proibido)
+    }
+  })
+})
+
+describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — Financeiro sinaliza 'falta entregar' quando quitada", () => {
+  function ctxQuitada(entregue: boolean) {
+    return {
+      ...ctx,
+      realOS: mkOS({
+        id: "os-fin",
+        status: entregue ? "entregue" : "pronta",
+        ...(entregue ? { retirada: { confirmado: true, retiradoPor: "Cliente" }, entregueEm: "2026-07-01T10:00:00.000Z" } : {}),
+      }),
+      pdvServico: { ...ctx.pdvServico, pagamento: { total: 320, recebido: 320, saldo: 0, status: "quitado" as const } },
+    }
+  }
+
+  it("quitada e ainda não entregue: v.entrega.entregue é false (a UI mostra a chamada para ir à Entrega)", () => {
+    const v = buildVals(makeState({ selectedOsId: "os-fin", novaOS: false }), () => {}, () => {}, ctxQuitada(false))
+    expect(v.recebimento.quitado).toBe(true)
+    expect(v.entrega.entregue).toBe(false)
+  })
+
+  it("quitada e já entregue: v.entrega.entregue é true (a UI não repete a chamada para ir à Entrega)", () => {
+    const v = buildVals(makeState({ selectedOsId: "os-fin", novaOS: false }), () => {}, () => {}, ctxQuitada(true))
+    expect(v.recebimento.quitado).toBe(true)
+    expect(v.entrega.entregue).toBe(true)
+  })
+
+  it("goEntrega navega à etapa Entrega (só navegação; a ação real fica no botão de lá)", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(makeState({ selectedOsId: "os-fin", novaOS: false }), (p) => patches.push(p as Record<string, unknown>), () => {}, ctxQuitada(false))
+    v.goEntrega()
+    expect(patches.at(-1)).toMatchObject({ stage: "entrega" })
+  })
+
+  it("ReceberPagamentoV4 mostra a chamada para Entrega só quando quitado e ainda não entregue", () => {
+    const card = readFileSync(join(DIR, "parts", "ReceberPagamentoV4.tsx"), "utf8")
+    expect(card).toContain("v.entrega.entregue")
+    expect(card).toContain("v.goEntrega")
   })
 })
 

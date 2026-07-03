@@ -135,6 +135,10 @@ export interface V4DataCtx {
   // OU aguardando_peca (mesmo destino "em_execucao"; o rótulo muda na UI).
   marcarAguardandoPeca: () => Promise<boolean>;
   marcarPronta: () => Promise<boolean>;
+  // ---- Entrega (slice OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
+  // Confirma a entrega via `aplicarTransicaoStatusV3(sid, osId, "entregue")` (mesmo
+  // reuso dos handlers acima). Só deve ser chamada quando `entregaAcoes.podeConfirmar`.
+  confirmarEntrega: () => Promise<boolean>;
   // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
@@ -193,6 +197,35 @@ const PREVIEW_NOOP = "Indisponível na Preview — nenhuma alteração foi salva
  */
 const RECEBIMENTO_NO_FINANCEIRO = "Receba o pagamento na aba Financeiro.";
 
+/**
+ * GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008: quando a OS está pronta e sem saldo
+ * pendente confirmado, a ação primária global passa a levar à aba Entrega (onde
+ * vive o botão real "Confirmar entrega") em vez de repetir "Receba o pagamento" —
+ * a OS já não deve nada.
+ */
+const ENTREGA_NA_ABA_ENTREGA = "Confirme a entrega na aba Entrega.";
+
+/**
+ * Saldo confirmado zerado: exige o pagamento JÁ carregado (`!!pag`) e `saldo<=0`.
+ * Nunca libera "Entregar OS" só por o pagamento ainda não ter carregado — nesse
+ * caso (`pag` null) o default seguro é continuar tratando como saldo pendente.
+ * Cobre também OS sem cobrança nenhuma (`saldo` já nasce 0 quando `total` é 0).
+ */
+function pagamentoSemSaldoPendente(pag: { saldo: number } | null | undefined): boolean {
+  return !!pag && pag.saldo <= 0;
+}
+
+/**
+ * Ação primária quando a OS está "pronta" E sem saldo pendente (ver
+ * `pagamentoSemSaldoPendente`). Tipada a partir de `PRIMARY` (mock-data) para não
+ * precisar importar `V4Status`/`V4Stage` só para esta constante.
+ */
+const PRIMARY_ENTREGAR_OS: NonNullable<(typeof PRIMARY)[keyof typeof PRIMARY]> = {
+  label: "Entregar OS",
+  to: "entregue",
+  stage: "entrega",
+};
+
 export function buildVals(
   st: V4State,
   update: (p: Patch) => void,
@@ -239,11 +272,15 @@ export function buildVals(
     update((s) => ({ menu: s.menu === m ? null : m }));
   // Ação primária. SOMENTE as transições seguras desta fase persistem de verdade
   // (aberta → diagnostico; aprovado → em_execucao), via `aplicarTransicaoStatusV3`.
-  // As demais (enviar orçamento, registrar aprovação, marcar pronta, receber
-  // pagamento…) seguem PREVIEW honesto: apenas NAVEGAM à etapa relacionada + toast —
-  // NUNCA mudam o status exibido (o status mostrado é sempre o real da OS carregada).
+  // As demais (enviar orçamento, registrar aprovação…) seguem PREVIEW honesto:
+  // apenas NAVEGAM à etapa relacionada + toast — NUNCA mudam o status exibido (o
+  // status mostrado é sempre o real da OS carregada). "pronta" é especial: navega
+  // a Financeiro OU Entrega conforme o saldo real — nunca confirma a entrega a
+  // partir do header (a ação real fica no botão dedicado da aba Entrega, com seu
+  // próprio busy-lock — ver `entregaAcoes`/`confirmarEntrega`).
   const advance = () => {
-    const p = PRIMARY[status];
+    const semSaldoPendente = pagamentoSemSaldoPendente(ctx.pdvServico.pagamento);
+    const p = status === "pronta" && semSaldoPendente ? PRIMARY_ENTREGAR_OS : PRIMARY[status];
     if (!p) return;
     if (status === "aberta") {
       void ctx.iniciarDiagnostico();
@@ -253,9 +290,16 @@ export function buildVals(
       void ctx.iniciarServico();
       return;
     }
-    // "Receber pagamento" leva ao Financeiro — o recebimento real (motor V3)
-    // acontece lá, no card de recebimento; aqui só navegamos + avisamos.
     if (status === "pronta") {
+      if (semSaldoPendente) {
+        // Quitada (sem saldo pendente confirmado): leva à Entrega, onde vive o
+        // botão real de confirmação.
+        update({ stage: "entrega" });
+        notify(ENTREGA_NA_ABA_ENTREGA);
+        return;
+      }
+      // Saldo pendente — "Receber pagamento" leva ao Financeiro (o recebimento
+      // real acontece lá, no card de recebimento; aqui só navegamos + avisamos).
       update({ stage: p.stage });
       notify(RECEBIMENTO_NO_FINANCEIRO);
       return;
@@ -492,6 +536,25 @@ export function buildVals(
     podeReceber: !!pdvPag && pdvPag.total > 0 && pdvPag.saldo > 0 && pdvCaixaAberto,
   };
 
+  // ---- Entrega (GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
+  // Só libera "Confirmar entrega" quando a OS está "pronta" (view V4 — nunca
+  // mostra "recebida": ver `projetarStatusV2`) E o pagamento confirma saldo<=0.
+  // NÃO usamos `podeTransicionarV3(status, "entregue")` aqui: o grafo puro da V3
+  // só liga pronta→recebida→entregue em 2 passos, mas `aplicarTransicaoStatusV3`
+  // trata "entregue" como caso especial (delega a `registrarEntregaV3`, que aceita
+  // "pronta" OU "recebida" direto) — usar o grafo genérico bloquearia o botão
+  // incorretamente para uma OS "pronta" de verdade. Sem caixa envolvido (a
+  // condição é só o saldo, igual à regra pedida — "bloquear se saldo > 0").
+  const semSaldoPendenteEntrega = pagamentoSemSaldoPendente(pdvPag);
+  // `bloqueadaPorSaldo` exige saldo > 0 CONFIRMADO (não é só "!semSaldoPendente" —
+  // isso incluiria o pagamento ainda não carregado, mostrando o aviso de bloqueio
+  // sem necessidade). Com `pdvPag` null, as duas ficam false (nada a decidir ainda).
+  const saldoPendenteConfirmado = !!pdvPag && pdvPag.saldo > 0;
+  const entregaAcoes = {
+    podeConfirmar: !!realOS && status === "pronta" && semSaldoPendenteEntrega,
+    bloqueadaPorSaldo: !!realOS && status === "pronta" && saldoPendenteConfirmado,
+  };
+
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
   const entradaEditorSeed: EntradaEditorV4 = seedEntradaEditor(realOS);
   // ---- Dados básicos da OS (slice 003B): seed do editor a partir da OS real ----
@@ -544,7 +607,7 @@ export function buildVals(
     notify("OS criada e aberta no workspace.");
   };
 
-  const prim = PRIMARY[status];
+  const prim = status === "pronta" && semSaldoPendenteEntrega ? PRIMARY_ENTREGAR_OS : PRIMARY[status];
   const tone = TONE[status] || TONE.em_execucao;
   const prioM = PRIO[st.prioridade];
 
@@ -668,6 +731,9 @@ export function buildVals(
     // ---- Segurança (preview) ----
     seg,
     goSeguranca: () => update({ stage: "seguranca", module: "workspace", view: "cockpit", menu: null }),
+    // GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008: usado pelo aviso "quitada, falta
+    // entregar" do FinanceiroStage — só navega (a ação real vive no botão da Entrega).
+    goEntrega: () => update({ stage: "entrega", module: "workspace", view: "cockpit", menu: null }),
     backFromSeguranca: () => update({ stage: "execucao", module: "workspace", view: "cockpit", menu: null }),
 
     menu: st.menu, menuPrint: st.menu === "print", menuMore: st.menu === "more",
@@ -706,6 +772,13 @@ export function buildVals(
     marcarAguardandoPeca: ctx.marcarAguardandoPeca,
     marcarPronta: ctx.marcarPronta,
     execAcoes,
+
+    // ---- Entrega REAL (GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
+    // `confirmarEntrega` reusa `aplicarTransicaoStatusV3(sid, osId, "entregue")`
+    // (mesmo `runWrite`); `entregaAcoes` é o gating pré-computado (mesma regra do
+    // saldo usada pelo CTA global e pelo aviso do Financeiro).
+    confirmarEntrega: ctx.confirmarEntrega,
+    entregaAcoes,
 
     // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
     // Estado (pagamento/sessão de caixa/recibo) e ações (receber) do motor V3 —
@@ -923,6 +996,22 @@ export function useV4Preview(): V4Vals {
     [runWrite, update],
   );
 
+  // ---- Entrega (GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008): mesmo wrapper
+  // `runWrite` (reload + toast honesto; sem mutar status local se a action falhar).
+  // `aplicarTransicaoStatusV3` trata "entregue" como caso especial e delega a
+  // `registrarEntregaV3` (idempotente, com guard próprio de permissão/estado —
+  // ver Fase 0 do GOAL). O gate de saldo (`entregaAcoes.podeConfirmar`) é decidido
+  // no cliente antes de chamar; a action em si não verifica saldo/financeiro.
+  const confirmarEntrega = useCallback(
+    () =>
+      runWrite(
+        (sid, osId) => aplicarTransicaoStatusV3(sid, osId, "entregue"),
+        "Entrega confirmada.",
+        () => update({ status: "entregue", stage: "entrega" }),
+      ),
+    [runWrite, update],
+  );
+
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
   const salvarIdentificacao = useCallback(
     (input: IdentificacaoV3) =>
@@ -978,6 +1067,7 @@ export function useV4Preview(): V4Vals {
       iniciarServico,
       marcarAguardandoPeca,
       marcarPronta,
+      confirmarEntrega,
       pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,
@@ -1003,6 +1093,7 @@ export function useV4Preview(): V4Vals {
       iniciarServico,
       marcarAguardandoPeca,
       marcarPronta,
+      confirmarEntrega,
       pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,
