@@ -80,7 +80,7 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
 
   // Gating vem pré-computado de `buildVals` (mesma regra do servidor — ver
   // `v.recebimento` em use-v4-preview.ts) para ficar testável sem renderizar React.
-  const { semTotal, quitado, caixaAberto } = v.recebimento;
+  const { semTotal, previaNaoMaterializada, quitado, caixaAberto } = v.recebimento;
 
   const openForm = () => {
     setValor(String(pagamento.saldo));
@@ -98,8 +98,15 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
     return (
       <div style={box}>
         <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5 }}>
-          Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber.
+          {previaNaoMaterializada
+            ? "O valor em “Total da OS” ainda é uma prévia. Gere e aprove um orçamento real antes de receber."
+            : "Esta OS não tem valor a cobrar. Gere e aprove o orçamento antes de receber."}
         </div>
+        {previaNaoMaterializada && (
+          <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 6, lineHeight: 1.5 }}>
+            Nenhuma cobrança foi feita — o recebimento só fica disponível depois que o orçamento for materializado e aprovado.
+          </div>
+        )}
       </div>
     );
   }

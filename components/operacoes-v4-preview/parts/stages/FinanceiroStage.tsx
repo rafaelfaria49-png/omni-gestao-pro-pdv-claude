@@ -39,8 +39,16 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
       {/* Faturamento da OS */}
       <div style={card}>
         <div style={{ ...cardTitle, marginBottom: 11 }}>Faturamento da OS</div>
-        <div style={{ ...upLabel, fontSize: 10.5 }}>Total da OS</div>
-        <div style={{ fontSize: 21, fontWeight: 700, color: f.temTotal ? C.ink : C.subtle, marginTop: 3, marginBottom: 11 }}>{f.total}</div>
+        <div style={{ ...upLabel, fontSize: 10.5, display: "flex", alignItems: "center", gap: 6 }}>
+          <span>Total da OS</span>
+          {f.temTotal && !v.orcamentoMaterializado && (
+            <span style={{ height: 15, padding: "0 6px", display: "inline-flex", alignItems: "center", background: C.infoBg, color: C.infoFg, borderRadius: 999, fontSize: 9, fontWeight: 700, textTransform: "none" }}>Prévia</span>
+          )}
+        </div>
+        <div style={{ fontSize: 21, fontWeight: 700, color: f.temTotal ? C.ink : C.subtle, marginTop: 3, marginBottom: f.temTotal && !v.orcamentoMaterializado ? 4 : 11 }}>{f.total}</div>
+        {f.temTotal && !v.orcamentoMaterializado && (
+          <div style={{ fontSize: 10, color: C.subtle, marginBottom: 11, lineHeight: 1.4 }}>Prévia derivada dos itens da OS — ainda não é um orçamento aprovado.</div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
           {f.statusTone !== "neutro" && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>

@@ -778,7 +778,7 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — v.recebimento só habilita com
 
   it("total>0, saldo>0, caixa aberto: podeReceber true", () => {
     const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv({ total: 200, recebido: 0, saldo: 200, status: "aberto" }, true))
-    expect(v.recebimento).toEqual({ semTotal: false, quitado: false, caixaAberto: true, podeReceber: true })
+    expect(v.recebimento).toEqual({ semTotal: false, previaNaoMaterializada: false, quitado: false, caixaAberto: true, podeReceber: true })
   })
 
   it("caixa fechado: podeReceber false mesmo com saldo aberto", () => {
@@ -797,16 +797,141 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — v.recebimento só habilita com
     const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv({ total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }, true))
     expect(v.recebimento.semTotal).toBe(true)
     expect(v.recebimento.podeReceber).toBe(false)
+    // Sem `realOS` (ctx.realOS fica null neste helper) não há total visível em lugar
+    // nenhum — não é o caso de "prévia não materializada", é ausência genuína.
+    expect(v.recebimento.previaNaoMaterializada).toBe(false)
   })
 
   it("pagamento ainda não carregado (null): tudo honesto/false, sem crash", () => {
     const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv(null, true))
-    expect(v.recebimento).toEqual({ semTotal: false, quitado: false, caixaAberto: true, podeReceber: false })
+    expect(v.recebimento).toEqual({ semTotal: false, previaNaoMaterializada: false, quitado: false, caixaAberto: true, podeReceber: false })
   })
 
   it("parcial (recebido parcial > 0, saldo > 0): continua podeReceber true", () => {
     const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv({ total: 500, recebido: 100, saldo: 400, status: "parcial" }, true))
     expect(v.recebimento.podeReceber).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002 — a tela não pode contradizer a si mesma:
+// "Total da OS" (osTotalNumero/adaptFinanceiro, aceita orçamento sintetizado pela
+// hidratação) e o total cobrável do motor V3 (totalCobravelV3, rejeita sintetizado)
+// podem divergir. O motor continua rejeitando prévia (nenhuma mudança de gate) —
+// só a mensagem passa a explicar a causa real em vez de dizer "sem valor".
+// ---------------------------------------------------------------------------
+describe("OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002 — total visível (prévia) vs total cobrável real (motor V3)", () => {
+  const osPrevia = mkOS({
+    id: "os-previa",
+    status: "pronta",
+    orcamento: {
+      id: "orc-previa",
+      status: "aprovado",
+      servicos: [{ id: "svc_os-previa", descricao: "Serviços (valor registrado)", valor: 300, desconto: 0 }],
+      pecas: [],
+      desconto: 0,
+      total: 300,
+      criadoEm: "2026-01-01T00:00:00.000Z",
+      atualizadoEm: "2026-01-01T00:00:00.000Z",
+      // Marca de hidratação (`mergeOrcamentoFromPrismaRow`): prévia derivada dos itens
+      // da OS, NUNCA um orçamento real aprovado pelo fluxo da V3.
+      sintetizado: true,
+    },
+  })
+  const osMaterializada = mkOS({
+    id: "os-real",
+    status: "pronta",
+    orcamento: {
+      id: "orc-real",
+      status: "aprovado",
+      servicos: [{ id: "s1", descricao: "Troca de tela", valor: 300, desconto: 0 }],
+      pecas: [],
+      desconto: 0,
+      total: 300,
+      criadoEm: "2026-01-01T00:00:00.000Z",
+      atualizadoEm: "2026-01-01T00:00:00.000Z",
+    },
+  })
+  const osVazia = mkOS({ id: "os-vazia", status: "aberta" })
+
+  function ctxCom(realOS: OrdemServico | null, pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null, sessaoAberta: boolean): V4DataCtx {
+    return {
+      ...ctx,
+      realOS,
+      pdvServico: {
+        ...ctx.pdvServico,
+        pagamento,
+        sessao: { aberta: sessaoAberta, sessaoId: sessaoAberta ? "sessao-1" : undefined },
+      },
+    }
+  }
+
+  it("prévia sintetizada (Total da OS > 0) + motor V3 em 0: previaNaoMaterializada true, sem habilitar recebimento", () => {
+    const v = buildVals(
+      makeState({ novaOS: false }),
+      () => {},
+      () => {},
+      ctxCom(osPrevia, { total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }, true),
+    )
+    expect(v.financeiro.temTotal).toBe(true) // "Total da OS" aparece na tela
+    expect(v.orcamentoMaterializado).toBe(false)
+    expect(v.recebimento.semTotal).toBe(true)
+    expect(v.recebimento.previaNaoMaterializada).toBe(true)
+    expect(v.recebimento.podeReceber).toBe(false)
+  })
+
+  it("orçamento materializado (não sintetizado) com total cobrável real: previaNaoMaterializada false, recebimento habilita normalmente", () => {
+    const v = buildVals(
+      makeState({ novaOS: false }),
+      () => {},
+      () => {},
+      ctxCom(osMaterializada, { total: 300, recebido: 0, saldo: 300, status: "aberto" }, true),
+    )
+    expect(v.orcamentoMaterializado).toBe(true)
+    expect(v.recebimento.semTotal).toBe(false)
+    expect(v.recebimento.previaNaoMaterializada).toBe(false)
+    expect(v.recebimento.podeReceber).toBe(true)
+  })
+
+  it("OS genuinamente sem valor (sem orçamento, sem total em lugar nenhum): não rotula como prévia", () => {
+    const v = buildVals(
+      makeState({ novaOS: false }),
+      () => {},
+      () => {},
+      ctxCom(osVazia, { total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }, true),
+    )
+    expect(v.financeiro.temTotal).toBe(false)
+    expect(v.recebimento.semTotal).toBe(true)
+    expect(v.recebimento.previaNaoMaterializada).toBe(false)
+  })
+
+  it("ReceberPagamentoV4: mensagem de prévia substitui a genérica só quando previaNaoMaterializada; motor V3 intocado", () => {
+    const card = readFileSync(join(DIR, "parts", "ReceberPagamentoV4.tsx"), "utf8")
+    expect(card).toContain("previaNaoMaterializada")
+    expect(card).toMatch(/prévia/i)
+    // A copy genérica continua existindo para o caso de ausência real (sem orçamento nenhum).
+    expect(card).toContain("Esta OS não tem valor a cobrar")
+    // Nenhuma chamada nova ao motor: `pdv.receber(` continua existindo uma única vez,
+    // dentro de `onConfirmar` (mesma garantia do slice 001 — ver describe acima).
+    expect((card.match(/\.receber\(/g) ?? []).length).toBe(1)
+    // A prévia é decidida por `v.recebimento` (pré-computado); o card não reimplementa
+    // nem importa o cálculo autoritativo do servidor (`totalCobravelV3`).
+    expect(card).not.toContain("totalCobravelV3")
+  })
+
+  it("FinanceiroStage sinaliza 'Total da OS' como prévia reaproveitando orcamentoMaterializado (sem lógica nova de sintetizado)", () => {
+    const financeiroStage = readFileSync(join(DIR, "parts", "stages", "FinanceiroStage.tsx"), "utf8")
+    expect(financeiroStage).toContain("v.orcamentoMaterializado")
+    expect(financeiroStage).not.toContain(".sintetizado")
+  })
+
+  it("previaNaoMaterializada é derivada só de valores já existentes (orcamentoMaterializado + financeiroReal), sem recalcular o motor V3 no cliente", () => {
+    const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+    expect(orquestrador).toContain("previaNaoMaterializada")
+    expect(orquestrador).toMatch(/previaNaoMaterializada\s*=\s*semTotal\s*&&\s*!orcamentoMaterializado\s*&&\s*financeiroReal\.temTotal/)
+    // `totalCobravelV3` é o cálculo AUTORITATIVO do motor V3 (servidor) — a V4 nunca
+    // o reimplementa/importa no cliente para decidir a prévia.
+    expect(orquestrador).not.toContain("totalCobravelV3")
   })
 })
 

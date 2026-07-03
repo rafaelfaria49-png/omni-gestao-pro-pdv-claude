@@ -474,8 +474,19 @@ export function buildVals(
   // saldo>0 E caixa aberto ao mesmo tempo; sem isso, a Preview nunca chama `receber`.
   const pdvPag = ctx.pdvServico.pagamento;
   const pdvCaixaAberto = !!ctx.pdvServico.sessao?.aberta;
+  const semTotal = !!pdvPag && pdvPag.total <= 0;
+  // OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002: o card de Faturamento mostra `financeiroReal.temTotal`
+  // (aceita orçamento sintetizado pela hidratação — prévia, não materializado; ver
+  // `orcamentoMaterializado` acima). Quando esse total visível é > 0 mas o motor V3
+  // não reconhece valor cobrável (`semTotal`), a causa é sempre a mesma: falta
+  // materializar/aprovar o orçamento — nunca "a OS não tem valor". Sem essa distinção,
+  // a tela contradiz a si mesma (Total R$ X + "não tem valor a cobrar"). Não muda o
+  // gate real (`podeReceber` continua exigindo `pdvPag.total > 0`, ou seja, nunca
+  // habilita recebimento sobre prévia) — só corrige a mensagem.
+  const previaNaoMaterializada = semTotal && !orcamentoMaterializado && financeiroReal.temTotal;
   const recebimento = {
-    semTotal: !!pdvPag && pdvPag.total <= 0,
+    semTotal,
+    previaNaoMaterializada,
     quitado: !!pdvPag && pdvPag.total > 0 && pdvPag.saldo <= 0,
     caixaAberto: pdvCaixaAberto,
     podeReceber: !!pdvPag && pdvPag.total > 0 && pdvPag.saldo > 0 && pdvCaixaAberto,
