@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Barcode,
@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Loader2,
   Check,
+  RotateCcw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -75,6 +76,8 @@ import {
 } from "@/lib/pdv-produtos-a-cadastrar"
 import { PdvRecebimentoModal } from "./pdv-recebimento-modal"
 import { VendaEsperaModal } from "./venda-espera-modal"
+import { TrocasDevolucao } from "./trocas-devolucao"
+import { appendAuditLog } from "@/lib/audit-log"
 import { printPdvSaleReceipt } from "@/lib/pdv-print-runtime"
 import { resolveCupomRodape } from "@/lib/pdv-impressao-config"
 import { buildPagamentosResumo, type PdvReceiptInput } from "@/lib/escpos"
@@ -212,6 +215,7 @@ export function PdvSupermercado({
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
   const [recebimentoOpen, setRecebimentoOpen] = useState(false)
+  const [trocasOpen, setTrocasOpen] = useState(false)
 
   const hardFocusSearch = useCallback(() => {
     // Hard-focus: o caixa não deve precisar tocar no mouse.
@@ -708,19 +712,27 @@ export function PdvSupermercado({
         e.key !== "F3" &&
         e.key !== "F4" &&
         e.key !== "F7" &&
+        e.key !== "F8" &&
         e.key !== "F9" &&
         e.key !== "F12" &&
         e.key !== "Insert"
       )
         return
       // Quando modal aberto, não interceptar (deixa o modal controlar o teclado)
-      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || showItemAvulsoModal || vendaEsperaOpen || recebimentoOpen) return
+      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || showItemAvulsoModal || vendaEsperaOpen || recebimentoOpen || trocasOpen) return
 
       e.preventDefault()
       e.stopPropagation()
       if (e.key === "Insert") setShowItemAvulsoModal(true)
       else if (e.key === "F7") setVendaEsperaOpen(true)
-      else if (e.key === "F9") setRecebimentoOpen(true)
+      else if (e.key === "F8") {
+        appendAuditLog({
+          action: "pdv_troca_aberta",
+          userLabel: cashierId.slice(0, 8),
+          detail: "Painel de trocas/devoluções aberto via F8",
+        })
+        setTrocasOpen(true)
+      } else if (e.key === "F9") setRecebimentoOpen(true)
       else if (e.key === "F2") {
         const r = toPaymentMethodType(formasSupermercado.quick[0]?.id ?? "dinheiro")
         if (r) openPaymentModal(r)
@@ -734,7 +746,7 @@ export function PdvSupermercado({
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, openPaymentModal, openMultipayModal, formasSupermercado])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado])
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = getHeldSales(lojaKey, terminalIdForHold)
@@ -827,15 +839,36 @@ export function PdvSupermercado({
                     Modo Rápido Ativo
                   </div>
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-9 rounded-xl border-border/50 bg-card/50 px-3 text-xs font-bold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30"
-                  onClick={() => setEditAtalhosOpen(true)}
-                >
-                  <Settings2 className="mr-1.5 h-3.5 w-3.5" />
-                  Gerenciar Grade
-                </Button>
+                <div className="flex items-center gap-2">
+                  {!isModoRapido ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 rounded-xl border-border/50 bg-card/50 px-3 text-xs font-bold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                      onClick={() => {
+                        appendAuditLog({
+                          action: "pdv_troca_aberta",
+                          userLabel: cashierId.slice(0, 8),
+                          detail: "Painel de trocas/devoluções aberto",
+                        })
+                        setTrocasOpen(true)
+                      }}
+                      title="Troca / Devolução (F8)"
+                    >
+                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                      Trocas <span className="ml-1 text-[9px] font-normal opacity-50">[F8]</span>
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 rounded-xl border-border/50 bg-card/50 px-3 text-xs font-bold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                    onClick={() => setEditAtalhosOpen(true)}
+                  >
+                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                    Gerenciar Grade
+                  </Button>
+                </div>
               </div>
 
               <div className="relative group">
@@ -1381,6 +1414,23 @@ export function PdvSupermercado({
         onResume={handleResumeSale}
         onDiscard={handleDiscardHeldSale}
       />
+
+      {/* F8 — Troca / Devolução real (reaproveita o fluxo compartilhado TrocasDevolucao) */}
+      <Dialog open={trocasOpen} onOpenChange={(o) => !o && setTrocasOpen(false)}>
+        <DialogContent className="max-h-[min(90vh,680px)] w-[min(100vw-2rem,82rem)] sm:max-w-[82rem] border-border bg-card p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="border-b border-border px-4 py-3 sm:px-6">
+            <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+              <RotateCcw className="h-4 w-4 text-primary" />
+              Troca / Devolução
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0 p-4 sm:p-6">
+            <Suspense fallback={<div className="py-8 text-center text-muted-foreground">Carregando…</div>}>
+              <TrocasDevolucao />
+            </Suspense>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <PdvPostSaleDialog
         open={postSalePrintOpen}
