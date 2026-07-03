@@ -18,11 +18,19 @@
  * foi entregue e ainda não há assinatura capturada, reaproveita o MESMO canvas
  * (`SignaturePadV3`) já usado pela Prova de Entrada/Entrega da V3 — sem motor
  * de captura novo — persistindo via `salvarAssinaturaRetiradaV3`.
+ *
+ * GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014: o card "Garantia da OS" ganha o lado de
+ * escrita — definir/editar modelo + prazo — reusando o MESMO catálogo/contrato
+ * da V3 (`GARANTIA_CATALOGO_V3`/`prazoPadraoGarantiaV3` de `garantia-textos.ts`,
+ * `salvarGarantiaOSV3` via `v.salvarGarantia`). Paridade com `GarantiaOSV3.tsx`
+ * da V3: só modelo + prazo (sem termo customizado nesta etapa).
  */
-import { useState, type ReactNode } from "react";
-import { C, card, cardTitle, upLabel, pill } from "../../tokens";
+import { useEffect, useState, type ReactNode } from "react";
+import { C, card, cardTitle, upLabel, pill, inputBase } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 import { SignaturePadV3 } from "@/components/operacoes-v3/components/SignaturePadV3";
+import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
+import { GARANTIA_CATALOGO_V3, prazoPadraoGarantiaV3 } from "@/lib/operacoes-v3/garantia-textos";
 
 const col3 = "repeat(auto-fit, minmax(280px, 1fr))";
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
@@ -143,6 +151,95 @@ function AssinaturaRetiradaCard({ v }: { v: V4Vals }) {
   );
 }
 
+/**
+ * Definir/editar a garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014). Seed
+ * vem de `lerGarantiaV3(v.realOS)` — mesmo leitor puro que `os-adapter` usa —
+ * só para ler o `modeloId` bruto (não exposto em `V4GarantiaView`, que já
+ * resolve o texto pronto para exibição). Salva via `v.salvarGarantia`, reuso
+ * direto de `salvarGarantiaOSV3` (mesmo contrato/payload que a V3 grava).
+ */
+function GarantiaFormCard({ v }: { v: V4Vals }) {
+  const seed = lerGarantiaV3(v.realOS);
+  const seedModeloId = seed.temGarantia ? seed.modeloId : "sem_garantia";
+  const seedPrazoDias = seed.temGarantia ? seed.prazoDias : prazoPadraoGarantiaV3("sem_garantia");
+
+  const [modeloId, setModeloId] = useState(seedModeloId);
+  const [prazoDias, setPrazoDias] = useState(seedPrazoDias);
+  const [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  // Reseta o formulário quando a OS/garantia muda (troca de OS ou reload pós-save).
+  const seedKey = `${v.realOS?.id ?? ""}:${v.realOS?.atualizadoEm ?? ""}`;
+  useEffect(() => {
+    setModeloId(seedModeloId);
+    setPrazoDias(seedPrazoDias);
+    setDirty(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedKey]);
+
+  const aplicarModelo = (id: string) => {
+    setModeloId(id);
+    setPrazoDias(prazoPadraoGarantiaV3(id));
+    setDirty(true);
+  };
+
+  const onSalvar = async () => {
+    if (busy || !dirty) return;
+    setBusy(true);
+    try {
+      const ok = await v.salvarGarantia({ modeloId, prazoDias });
+      if (ok) setDirty(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{ ...upLabel, marginBottom: 8 }}>{seed.temGarantia ? "Editar garantia" : "Definir garantia"}</div>
+      <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 10 }}>
+        <label>
+          <div style={{ ...upLabel, marginBottom: 4 }}>Modelo de garantia</div>
+          <select value={modeloId} onChange={(e) => aplicarModelo(e.target.value)} style={inputBase}>
+            {GARANTIA_CATALOGO_V3.map((m) => (
+              <option key={m.id} value={m.id}>{m.titulo}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <div style={{ ...upLabel, marginBottom: 4 }}>Prazo em dias</div>
+          <input
+            type="number"
+            min={0}
+            value={prazoDias}
+            onChange={(e) => {
+              setPrazoDias(Math.max(0, Math.trunc(Number(e.target.value) || 0)));
+              setDirty(true);
+            }}
+            style={inputBase}
+          />
+        </label>
+      </div>
+      <button
+        type="button"
+        disabled={busy || !dirty}
+        onClick={() => void onSalvar()}
+        style={{
+          ...btnPrimary,
+          background: C.primary,
+          cursor: busy || !dirty ? "default" : "pointer",
+          opacity: busy || !dirty ? 0.6 : 1,
+        }}
+      >
+        {busy ? "Salvando…" : "Salvar garantia"}
+      </button>
+      <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>
+        A garantia fica prevista na OS e passa a valer na entrega.
+      </div>
+    </div>
+  );
+}
+
 export function EntregaStage({ v }: { v: V4Vals }) {
   const e = v.entrega;
   const g = e.garantia;
@@ -242,29 +339,31 @@ export function EntregaStage({ v }: { v: V4Vals }) {
           <span style={cardTitle}>🛡 Garantia da OS</span>
           {g.temGarantia && <StatusBadge label={g.situacao} tone={g.situacaoTone} />}
         </div>
-        {g.temGarantia ? (
+        {g.temGarantia && (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: g.observacoes || g.acionamentos ? 11 : 0 }}>
+            <div style={{ display: "grid", gridTemplateColumns: col2, gap: 10, marginBottom: 11 }}>
               <Field label="Prazo" value={g.prazo} />
               <Field label="Cobertura" value={g.cobertura} />
               <Field label="Início" value={g.inicio} />
               <Field label="Validade" value={g.fim} />
             </div>
             {g.observacoes && (
-              <div style={{ marginBottom: g.acionamentos ? 11 : 0 }}>
+              <div style={{ marginBottom: 11 }}>
                 <div style={{ ...upLabel, marginBottom: 3 }}>Condições</div>
                 <div style={{ fontSize: 12, color: C.bodySoft, lineHeight: 1.5 }}>{g.observacoes}</div>
               </div>
             )}
             {g.acionamentos && (
-              <div style={{ fontSize: 11.5, color: C.warnFg }}>
+              <div style={{ fontSize: 11.5, color: C.warnFg, marginBottom: 11 }}>
                 Acionamentos registrados: <b>{g.acionamentos}</b>
               </div>
             )}
+            <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 11 }}>
+              <GarantiaFormCard v={v} />
+            </div>
           </>
-        ) : (
-          <Empty>Nenhuma garantia registrada para esta OS.</Empty>
         )}
+        {!g.temGarantia && <GarantiaFormCard v={v} />}
       </div>
       </div>
     </div>

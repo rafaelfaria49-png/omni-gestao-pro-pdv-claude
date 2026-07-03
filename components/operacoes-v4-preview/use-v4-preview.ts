@@ -63,7 +63,7 @@ import type { SalvarDadosBasicosInputV3 } from "@/lib/operacoes-v3/dados-basicos
 // Assinatura de retirada real (SPRINT_3E.2) e auditoria de impressão (Fase 1E) —
 // reuso direto das actions V3 (GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012).
 import { salvarAssinaturaRetiradaV3 } from "@/lib/operacoes-v3/entrega-actions";
-import { registrarImpressaoDocumentoV3 } from "@/lib/operacoes-v3/garantia-actions";
+import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operacoes-v3/garantia-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
 import { seedEntradaEditor, type EntradaEditorV4 } from "@/lib/operacoes-v4/entrada-form";
@@ -150,6 +150,9 @@ export interface V4DataCtx {
   salvarAssinaturaRetirada: (dataUrl: string) => Promise<boolean>;
   /** Registra na timeline que um documento foi impresso (best-effort). */
   registrarImpressaoDoc: (tipo: DocumentoTipoV3) => void;
+  // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
+  /** Define/edita a garantia prevista da OS (reuso de `salvarGarantiaOSV3`). */
+  salvarGarantia: (input: { modeloId: string; prazoDias?: number }) => Promise<boolean>;
   // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
@@ -826,6 +829,10 @@ export function buildVals(
     docPrintTipo: st.docPrint as DocumentoTipoV3 | null,
     closeDocPrint: () => update({ docPrint: null }),
     registrarImpressaoDoc: ctx.registrarImpressaoDoc,
+    // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
+    // `salvarGarantia` reusa `salvarGarantiaOSV3` (mesmo contrato da V3, mesmo
+    // campo `aberturaV3.garantiaPrevista`); consumido pelo form do EntregaStage.
+    salvarGarantia: ctx.salvarGarantia,
     realOS,
 
     // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
@@ -1082,6 +1089,16 @@ export function useV4Preview(): V4Vals {
     [lojaAtivaId, selectedOsId],
   );
 
+  // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014): mesmo wrapper
+  // `runWrite`; reusa `salvarGarantiaOSV3` (mesma action que a V3 usa em
+  // `GarantiaOSV3.tsx`), gravando no mesmo `payload.aberturaV3.garantiaPrevista`.
+  // Paridade com a V3: só modelo + prazo (sem termoCustom nesta etapa).
+  const salvarGarantia = useCallback(
+    (input: { modeloId: string; prazoDias?: number }) =>
+      runWrite((sid, osId) => salvarGarantiaOSV3(sid, osId, input), "Garantia salva."),
+    [runWrite],
+  );
+
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
   const salvarIdentificacao = useCallback(
     (input: IdentificacaoV3) =>
@@ -1140,6 +1157,7 @@ export function useV4Preview(): V4Vals {
       confirmarEntrega,
       salvarAssinaturaRetirada,
       registrarImpressaoDoc,
+      salvarGarantia,
       pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,
@@ -1168,6 +1186,7 @@ export function useV4Preview(): V4Vals {
       confirmarEntrega,
       salvarAssinaturaRetirada,
       registrarImpressaoDoc,
+      salvarGarantia,
       pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,

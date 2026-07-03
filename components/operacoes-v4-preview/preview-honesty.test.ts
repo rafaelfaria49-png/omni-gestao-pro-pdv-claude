@@ -183,6 +183,7 @@ const ctx: V4DataCtx = {
   confirmarEntrega: async () => false,
   salvarAssinaturaRetirada: async () => false,
   registrarImpressaoDoc: () => {},
+  salvarGarantia: async () => false,
   pdvServico: {
     pagamento: null,
     sessao: null,
@@ -1477,5 +1478,91 @@ describe("GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012 — Fotos de entrada rea
   it("EntradaStage não finge upload real: o botão/estado permanece honesto sobre a ausência de contrato de upload", () => {
     const src = readFileSync(join(DIR, "parts", "stages", "EntradaStage.tsx"), "utf8")
     expect(src).toMatch(/upload em breve/i)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — a V4 ganha o lado de escrita da
+// garantia (definir/editar modelo + prazo), reusando o MESMO contrato que a V3
+// já usa em `GarantiaOSV3.tsx` (`salvarGarantiaOSV3`, mesmo payload
+// `aberturaV3.garantiaPrevista`). Sem termoCustom neste slice (paridade com a
+// V3); sem API/backend novo; leitura do termo/menu Docs permanece intocada.
+// ---------------------------------------------------------------------------
+describe("GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — salvarGarantia reusa salvarGarantiaOSV3 via runWrite", () => {
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const entregaStage = readFileSync(join(DIR, "parts", "stages", "EntregaStage.tsx"), "utf8")
+  const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+
+  it("importa e reusa salvarGarantiaOSV3 (mesmo contrato/payload da V3 — sem backend novo)", () => {
+    expect(orquestrador).toContain('from "@/lib/operacoes-v3/garantia-actions"')
+    expect(orquestrador).toContain("salvarGarantiaOSV3")
+  })
+
+  it("salvarGarantia passa pelo wrapper runWrite (fonte única de reload/toast-em-sucesso)", () => {
+    expect(orquestrador).toContain("const salvarGarantia = useCallback(")
+    expect(orquestrador).toContain('runWrite((sid, osId) => salvarGarantiaOSV3(sid, osId, input), "Garantia salva.")')
+    // runWrite continua definido uma única vez — salvarGarantia reaproveita, não duplica.
+    expect(orquestrador.match(/const runWrite = useCallback/g)?.length).toBe(1)
+  })
+
+  it("EntregaStage renderiza o form real (v.salvarGarantia) com o catálogo/prazo padrão da V3", () => {
+    expect(entregaStage).toContain("v.salvarGarantia")
+    expect(entregaStage).toContain("GARANTIA_CATALOGO_V3")
+    expect(entregaStage).toContain("prazoPadraoGarantiaV3")
+    expect(entregaStage).toMatch(/Definir garantia|Editar garantia/)
+    expect(entregaStage).toContain("Salvar garantia")
+  })
+
+  it("botão de salvar tem busy-lock e fica desabilitado sem mudança (evita duplo clique / salvar sem editar)", () => {
+    expect(entregaStage).toContain("useState")
+    expect(entregaStage).toMatch(/disabled=\{busy \|\| !dirty\}/)
+  })
+
+  it("não expõe termoCustom neste slice — paridade com a V3 (GarantiaOSV3.tsx só edita modelo+prazo)", () => {
+    expect(entregaStage).not.toContain("termoCustom")
+  })
+
+  it("copy honesta sobre quando a garantia passa a valer", () => {
+    expect(entregaStage).toContain("A garantia fica prevista na OS e passa a valer na entrega.")
+  })
+
+  it("não cria rota de API nova nem referencia updateOSPayload/loja-1/openCaixaIfClosed", () => {
+    for (const proibido of ['from "@/app/api', "updateOSPayload", '"loja-1"', "openCaixaIfClosed"]) {
+      expect(allSources, `referência proibida encontrada: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it('"Termo de Garantia" no menu Docs continua no mesmo fluxo existente (docPrint → PrintPreviewV3), sem motor de impressão duplicado', () => {
+    const docPrintModal = readFileSync(join(DIR, "parts", "DocPrintModal.tsx"), "utf8")
+    expect(orquestrador).toContain('openDocPrint("termo_garantia")')
+    expect(docPrintModal).toContain('from "@/components/operacoes-v3/components/print/PrintPreviewV3"')
+  })
+})
+
+describe("GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — v.salvarGarantia expõe o handler real do ctx", () => {
+  it("repassa o input recebido a ctx.salvarGarantia e devolve o resultado (sem transformar nada)", async () => {
+    let recebido: unknown = null
+    const ctxLocal: V4DataCtx = {
+      ...ctx,
+      realOS: mkOS({ id: "os-gar", status: "em_execucao" }),
+      salvarGarantia: async (input) => {
+        recebido = input
+        return true
+      },
+    }
+    const v = buildVals(makeState({ selectedOsId: "os-gar", novaOS: false }), () => {}, () => {}, ctxLocal)
+    const ok = await v.salvarGarantia({ modeloId: "tela", prazoDias: 90 })
+    expect(ok).toBe(true)
+    expect(recebido).toEqual({ modeloId: "tela", prazoDias: 90 })
+  })
+
+  it("falha do handler devolve false sem lançar (mesma garantia dos demais writes)", async () => {
+    const ctxLocal: V4DataCtx = {
+      ...ctx,
+      realOS: mkOS({ id: "os-gar-2", status: "em_execucao" }),
+      salvarGarantia: async () => false,
+    }
+    const v = buildVals(makeState({ selectedOsId: "os-gar-2", novaOS: false }), () => {}, () => {}, ctxLocal)
+    await expect(v.salvarGarantia({ modeloId: "sem_garantia" })).resolves.toBe(false)
   })
 })
