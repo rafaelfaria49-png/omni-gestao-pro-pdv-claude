@@ -74,7 +74,7 @@ const PosField = forwardRef<
         <input
           ref={ref}
           className={cn(
-            "tabular-pdv h-9 w-full rounded-md border border-border bg-background text-foreground placeholder:text-muted-foreground/70 shadow-sm outline-none transition-colors focus:border-[hsl(var(--pos-action))]/60 focus:ring-2 focus:ring-[hsl(var(--pos-action))]/20",
+            "tabular-pdv h-9 w-full rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground/70 shadow-sm outline-none transition-colors focus:border-[hsl(var(--pos-action))]/60 focus:ring-2 focus:ring-[hsl(var(--pos-action))]/20",
             icon && "pl-8",
             className
           )}
@@ -93,7 +93,7 @@ const shortcuts = [
   { key: "F4", label: "Alt. Qtd" },
   { key: "F5", label: "Receber Conta", tone: "accent" as const },
   { key: "F6", label: "Cancelar Venda", tone: "destructive" as const },
-  { key: "F7", label: "Voltar ao Bipe" },
+  { key: "F7", label: "Venda em Espera" },
   { key: "F8", label: "Voltar ao Bipe" },
   { key: "F9", label: "Receber Conta" },
   { key: "CTRL", label: "Funções Avançadas" },
@@ -108,7 +108,7 @@ function ShortcutBar({ onAction }: { onAction: (key: string) => void }) {
           type="button"
           onClick={() => onAction(s.key)}
           className={cn(
-            "group flex items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs font-medium shadow-sm transition-all cursor-pointer hover:-translate-y-px hover:border-primary/50 hover:shadow-md active:translate-y-0 text-foreground/80"
+            "group flex items-center gap-2 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium shadow-sm transition-all cursor-pointer hover:-translate-y-px hover:border-primary/50 hover:shadow-md active:translate-y-0 text-foreground/80"
           )}
         >
           <kbd
@@ -146,7 +146,7 @@ function ItemsTable({
   onSelect: (id: string) => void
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-x-auto rounded-md border border-border bg-card shadow-sm">
+    <div className="flex h-full min-h-0 flex-col overflow-x-auto rounded-xl border border-border bg-card shadow-sm">
       <div className="min-w-[820px] flex flex-col flex-1 min-h-0">
         <div className="grid grid-cols-[48px_130px_1fr_64px_110px_80px_130px] gap-2 border-b border-border bg-muted/30 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/75">
           <div>Item</div>
@@ -404,7 +404,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col bg-background text-foreground">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 shadow-sm sm:px-4">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card/80 px-3 py-2 shadow-sm backdrop-blur-xl sm:px-4">
         <div className="flex min-w-0 items-center gap-3 md:gap-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary shadow-sm">
             <Zap className="h-5 w-5" />
@@ -550,7 +550,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               />
             </div>
             <aside className="flex w-[min(280px,34vw)] min-w-[232px] max-w-[300px] shrink-0 flex-col justify-between gap-3 self-stretch border-l border-border bg-card px-3 py-3 sm:px-4">
-              <div className="min-w-0 rounded-2xl border border-border p-4 bg-muted/20 shadow-sm space-y-4">
+              <div className="min-w-0 rounded-xl border border-border p-4 bg-muted/20 shadow-sm space-y-4">
                 <div>
                   <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
                     Total
@@ -623,7 +623,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               />
             </div>
             <aside className="col-span-12 flex min-h-0 flex-col gap-3 overflow-y-auto md:col-span-4 lg:col-span-3">
-              <div className="rounded-md border border-border bg-card p-4 shadow-sm">
+              <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
                     Total da Venda
@@ -659,14 +659,21 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   <kbd className="ml-auto rounded border border-b-2 border-primary-foreground/30 bg-primary-foreground/10 px-1.5 py-0.5 text-[10px] font-bold font-mono">F1</kbd>
                 </Button>
               </div>
-              <div className="rounded-md border border-border bg-muted/40 p-3 text-[11px] text-muted-foreground/70">
-                <div className="flex justify-between">
-                  <span>Caixa</span>
-                  <span className="font-medium text-foreground">PDV</span>
+              <div className="rounded-xl border border-border bg-card p-3 shadow-sm space-y-2 text-xs">
+                <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                  Também disponíveis
                 </div>
-                <div className="flex justify-between">
-                  <span>Atalhos</span>
-                  <span className="font-medium text-foreground">F1–F9</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Pagamento Múltiplo</span>
+                  <kbd className="rounded border border-b-2 border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold font-mono">F12</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Item Avulso</span>
+                  <kbd className="rounded border border-b-2 border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold font-mono">INS</kbd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Venda em Espera</span>
+                  <kbd className="rounded border border-b-2 border-border bg-muted/60 px-1.5 py-0.5 text-[9px] font-bold font-mono">F7</kbd>
                 </div>
               </div>
             </aside>
@@ -707,13 +714,13 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             </span>
           </div>
           {productsForDialog.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-border px-4 py-12 text-center text-sm text-muted-foreground/60">
+            <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border px-4 py-12 text-center text-sm text-muted-foreground/60">
               <PackageOpen className="h-9 w-9 opacity-40" strokeWidth={1.5} />
               <p className="font-medium text-foreground">Nenhum produto encontrado</p>
               <p className="text-xs">Ajuste o termo ou limpe o filtro para ver o catálogo completo.</p>
             </div>
           ) : (
-            <div className="rounded-md border border-border">
+            <div className="overflow-hidden rounded-xl border border-border">
               <div className="grid grid-cols-[minmax(220px,50fr)_minmax(96px,15fr)_minmax(104px,15fr)_minmax(64px,10fr)_minmax(88px,10fr)] items-center gap-3 border-b border-border bg-muted/50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>Produto</span>
                 <span>Cód. / SKU</span>
@@ -776,7 +783,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       </Dialog>
 
       <Dialog open={props.clientSearchOpen} onOpenChange={props.onClientSearchOpenChange}>
-        <DialogContent className="max-w-md border-border bg-card text-foreground">
+        <DialogContent className="w-[92vw] max-w-xl border-border bg-card text-foreground">
           <DialogHeader>
             <DialogTitle>Pesquisar Cliente (F2)</DialogTitle>
             <DialogDescription className="text-muted-foreground/75">Identifique o cliente desta venda.</DialogDescription>
@@ -792,7 +799,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               value={props.clientSearchQuery ?? ""}
               onChange={(e) => props.onClientSearchQueryChange?.(e.target.value)}
               placeholder="Nome, CPF/CNPJ ou telefone…"
-              className="h-9 rounded-xl border-border bg-background pl-9 text-sm"
+              className="h-9 rounded-lg border-border bg-background pl-9 text-sm"
             />
           </div>
           {/* Always show CONSUMIDOR as "no client" option */}
@@ -802,7 +809,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
               props.onPickClient("CONSUMIDOR")
               props.onClientSearchOpenChange(false)
             }}
-            className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/50 cursor-pointer"
+            className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/50 cursor-pointer"
           >
             <span className="font-medium text-foreground">CONSUMIDOR (sem identificação)</span>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -832,7 +839,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                       props.onPickClient(c.label)
                       props.onClientSearchOpenChange(false)
                     }}
-                    className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/50 cursor-pointer"
+                    className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary/50 cursor-pointer"
                   >
                     <span className="font-medium text-foreground">{c.label}</span>
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
@@ -854,7 +861,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             ref={qtyEditRef}
             defaultValue={props.qtyEditDefault}
             inputMode="decimal"
-            className="tabular-pdv h-11 w-full rounded-md border border-border bg-background px-3 text-2xl font-semibold outline-none focus:border-[hsl(var(--pos-action))]/60 focus:ring-1 focus:ring-[hsl(var(--pos-action))]/25"
+            className="tabular-pdv h-11 w-full rounded-lg border border-border bg-background px-3 text-2xl font-semibold outline-none focus:border-[hsl(var(--pos-action))]/60 focus:ring-1 focus:ring-[hsl(var(--pos-action))]/25"
           />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" className="cursor-pointer" onClick={() => props.onQtyEditOpenChange(false)}>
@@ -915,7 +922,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
                   props.onAdvancedOpenChange(false)
                   if (opt === "Trocas" || opt === "Devoluções") props.onOpenTrocas?.()
                 }}
-                className="rounded-md border border-border bg-background px-3 py-3 text-sm font-medium text-foreground hover:bg-muted/65 cursor-pointer"
+                className="rounded-lg border border-border bg-background px-3 py-3 text-sm font-medium text-foreground hover:border-primary/40 hover:bg-muted/65 cursor-pointer transition-colors"
               >
                 {opt}
               </button>

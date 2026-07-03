@@ -604,7 +604,7 @@ function EditarAtalhosModal({
         {/* Ativo toggle */}
         <button type="button" onClick={() => toggleAtivo(e._idx)} title={e.ativo ? "Desativar" : "Ativar"}
           className={cn("relative h-5 w-9 shrink-0 rounded-full transition-colors", e.ativo ? "bg-primary" : "bg-muted")}>
-          <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+          <span className={cn("absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-transform",
             e.ativo ? "translate-x-4" : "translate-x-0.5")} />
         </button>
 
@@ -1756,7 +1756,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                 appendAuditLog({ action: "pdv_troca_aberta", userLabel: cashierId.slice(0, 8), detail: "Painel de trocas/devoluções aberto" })
                 setTrocasOpen(true)
               }}
-              className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:border-blue-500/40 hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400"
+              className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               Trocas
