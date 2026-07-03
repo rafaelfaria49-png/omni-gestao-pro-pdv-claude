@@ -198,7 +198,7 @@ export function CaixaStatusBar({
   }
 
   const terminalPill = terminal ? (
-    <Badge variant="outline" className="shrink-0 text-xs">
+    <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
       <Monitor className="mr-1 h-3 w-3" />
       {terminal.code || terminal.name}
     </Badge>
@@ -249,15 +249,15 @@ export function CaixaStatusBar({
             variant === "pdv" && "rounded-none border-x-0 border-t-0 mb-0 px-2 py-2.5 sm:px-3"
           )}
         >
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-warning/20 flex items-center justify-center">
-                <Lock className="w-5 h-5 text-warning" />
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-warning/15 text-warning">
+                <Lock className="h-4 w-4" />
               </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-warning">Caixa Fechado</span>
-                  <AlertTriangle className="w-4 h-4 text-warning" />
+              <div className="min-w-0 leading-tight">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-sm font-bold text-warning">Caixa Fechado</span>
+                  <AlertTriangle className="h-3.5 w-3.5 text-warning" />
                   {terminalPill}
                   {terminal && (
                     <button
@@ -269,10 +269,10 @@ export function CaixaStatusBar({
                     </button>
                   )}
                 </div>
-                <p className="text-sm text-muted-foreground">Abra o caixa para realizar vendas</p>
+                <p className="text-xs text-muted-foreground">Abra o caixa para realizar vendas</p>
               </div>
             </div>
-            <Button onClick={() => setShowAbertura(true)} className="bg-primary hover:bg-primary/90 font-semibold">
+            <Button onClick={() => setShowAbertura(true)} className="h-9 rounded-lg bg-primary font-semibold hover:bg-primary/90">
               <Unlock className="w-4 h-4 mr-2" />
               Abrir Caixa
             </Button>
@@ -298,78 +298,78 @@ export function CaixaStatusBar({
             <CaixaDashboard />
             <div
               className={cn(
-                "flex flex-col lg:flex-row items-center justify-between gap-4 p-4",
+                "flex flex-col gap-3 p-3 xl:flex-row xl:items-center",
                 variant === "pdv" && "px-2 py-2.5 sm:px-3"
               )}
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center shrink-0">
-                  <Unlock className="w-5 h-5 text-success" />
+              {/* Identidade do caixa */}
+              <div className="flex min-w-0 shrink-0 items-center gap-2.5">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-success/15 text-success">
+                  <Unlock className="h-4 w-4" />
                 </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-success">Caixa Aberto</span>
-                    <Badge variant="outline" className="text-xs border-success/30 bg-success/5 text-success shrink-0">
-                      <Clock className="w-3 h-3 mr-1" />
+                <div className="min-w-0 leading-tight">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-bold text-success">Caixa Aberto</span>
+                    <Badge variant="outline" className="shrink-0 border-success/30 bg-success/5 px-1.5 py-0 text-[10px] text-success">
+                      <Clock className="mr-1 h-3 w-3" />
                       Desde {formatTime(caixa.dataAbertura)}
                     </Badge>
                     {terminalPill}
                   </div>
-                  <p className="text-sm text-muted-foreground">Pronto para vendas</p>
+                  <p className="text-xs text-muted-foreground">Pronto para vendas</p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 min-w-0">
-                <div className="flex items-center gap-2 px-3 py-2 bg-secondary rounded-lg min-w-0">
-                  <DollarSign className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <div className="text-right min-w-0">
-                    <p className="text-xs text-muted-foreground">Abertura</p>
-                    <p className="font-semibold text-sm truncate">{formatCurrency(caixa.saldoInicial)}</p>
-                  </div>
+              {/* Resumo — grid uniforme: nunca desalinha ao quebrar linha */}
+              <div className="grid min-w-0 flex-1 grid-cols-2 gap-1.5 sm:grid-cols-4 xl:mx-auto xl:max-w-2xl">
+                <div className="min-w-0 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5">
+                  <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                    <DollarSign className="h-3 w-3 shrink-0" />
+                    Abertura
+                  </p>
+                  <p className="truncate text-sm font-semibold tabular-nums text-foreground">{formatCurrency(caixa.saldoInicial)}</p>
                 </div>
-
-                <div className="flex items-center gap-2 px-3 py-2 bg-success/10 rounded-lg min-w-0">
-                  <TrendingUp className="w-4 h-4 text-success shrink-0" />
-                  <div className="text-right min-w-0">
-                    <p className="text-xs text-success/80 dark:text-success/70">Entradas</p>
-                    <p className="font-semibold text-sm text-success truncate">{formatCurrency(entradas)}</p>
-                  </div>
+                <div className="min-w-0 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5">
+                  <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                    <TrendingUp className="h-3 w-3 shrink-0 text-success" />
+                    Entradas
+                  </p>
+                  <p className="truncate text-sm font-semibold tabular-nums text-success">{formatCurrency(entradas)}</p>
                 </div>
-
-                <div className="flex items-center gap-2 px-3 py-2 bg-destructive/10 rounded-lg min-w-0">
-                  <TrendingDown className="w-4 h-4 text-destructive shrink-0" />
-                  <div className="text-right min-w-0">
-                    <p className="text-xs text-destructive/80 dark:text-destructive/70">Saídas</p>
-                    <p className="font-semibold text-sm text-destructive truncate">{formatCurrency(saidas)}</p>
-                  </div>
+                <div className="min-w-0 rounded-lg border border-border/60 bg-background/70 px-2.5 py-1.5">
+                  <p className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                    <TrendingDown className="h-3 w-3 shrink-0 text-destructive" />
+                    Saídas
+                  </p>
+                  <p className="truncate text-sm font-semibold tabular-nums text-destructive">{formatCurrency(saidas)}</p>
                 </div>
-
-                <div className="flex items-center gap-2 px-4 py-2 bg-success/15 border border-success/30 rounded-lg min-w-0">
-                  <div className="text-right min-w-0">
-                    <p className="text-xs text-success/90 dark:text-success">Saldo Atual</p>
-                    <p className="font-bold text-lg text-success truncate">{formatCurrency(saldoEsperado)}</p>
-                  </div>
+                <div className="min-w-0 rounded-lg border border-success/35 bg-success/10 px-2.5 py-1.5">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-success/90 dark:text-success">
+                    Saldo Atual
+                  </p>
+                  <p className="truncate text-base font-bold leading-snug tabular-nums text-success">{formatCurrency(saldoEsperado)}</p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-2 shrink-0">
+              {/* Ações */}
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={hideResumo}
-                  className="text-muted-foreground hover:text-foreground"
+                  className="h-8 rounded-lg text-muted-foreground hover:text-foreground"
                 >
-                  <EyeOff className="w-4 h-4 mr-1.5" />
-                  Ocultar resumo
+                  <EyeOff className="mr-1.5 h-4 w-4" />
+                  Ocultar
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setOperationType("sangria")}
                   disabled={opSaving || showFechamento}
-                  className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                  className="h-8 rounded-lg border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
                 >
-                  <TrendingDown className="w-4 h-4 mr-1.5" />
+                  <TrendingDown className="mr-1.5 h-4 w-4" />
                   Sangria
                 </Button>
                 <Button
@@ -377,18 +377,19 @@ export function CaixaStatusBar({
                   size="sm"
                   onClick={() => setOperationType("suprimento")}
                   disabled={opSaving || showFechamento}
-                  className="border-success/40 text-success hover:bg-success hover:text-success-foreground transition-colors"
+                  className="h-8 rounded-lg border-success/40 text-success hover:bg-success hover:text-success-foreground transition-colors"
                 >
-                  <TrendingUp className="w-4 h-4 mr-1.5" />
+                  <TrendingUp className="mr-1.5 h-4 w-4" />
                   Suprimento
                 </Button>
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => setShowFechamento(true)}
                   disabled={opSaving || showFechamento}
-                  className="border-destructive/50 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                  className="h-8 rounded-lg border-destructive/50 font-semibold text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
                 >
-                  <Lock className="w-4 h-4 mr-2" />
+                  <Lock className="mr-1.5 h-4 w-4" />
                   Fechar Caixa
                 </Button>
               </div>
@@ -397,31 +398,31 @@ export function CaixaStatusBar({
         ) : (
           <div
             className={cn(
-              "flex flex-col sm:flex-row items-center justify-between gap-3 p-4",
+              "flex flex-col sm:flex-row items-center justify-between gap-3 p-3",
               variant === "pdv" && "px-2 py-2.5 sm:px-3"
             )}
           >
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center shrink-0">
-                <Unlock className="w-5 h-5 text-success" />
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-success/15 text-success">
+                <Unlock className="h-4 w-4" />
               </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-semibold text-success">Caixa Aberto</span>
-                  <Badge variant="outline" className="text-xs border-success/30 bg-success/5 text-success shrink-0">
-                    <Clock className="w-3 h-3 mr-1" />
+              <div className="min-w-0 leading-tight">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-sm font-bold text-success">Caixa Aberto</span>
+                  <Badge variant="outline" className="shrink-0 border-success/30 bg-success/5 px-1.5 py-0 text-[10px] text-success">
+                    <Clock className="mr-1 h-3 w-3" />
                     Desde {formatTime(caixa.dataAbertura)}
                   </Badge>
                   {terminalPill}
                 </div>
-                <p className="text-sm text-muted-foreground">Resumo do caixa protegido</p>
+                <p className="text-xs text-muted-foreground">Resumo do caixa protegido</p>
               </div>
             </div>
             <Button
               variant="outline"
               size="sm"
               onClick={() => requestGate(null)}
-              className="shrink-0 border-border"
+              className="h-8 shrink-0 rounded-lg border-border"
             >
               <Lock className="w-4 h-4 mr-2" />
               Resumo do Caixa
