@@ -25,8 +25,8 @@ export function ConstructionBadgeV3({
       className={cn(
         "inline-flex items-center gap-1 rounded-full border border-dashed px-2 py-0.5 text-[11px] font-medium",
         isConectar
-          ? "border-info/40 bg-info/10 text-info"
-          : "border-warning/40 bg-warning/10 text-warning",
+          ? "border-[var(--ops-v3-info-bd)] bg-[var(--ops-v3-info-bg)] text-[var(--ops-v3-info-fg)]"
+          : "border-[var(--ops-v3-warning-bd)] bg-[var(--ops-v3-warning-bg)] text-[var(--ops-v3-warning-fg)]",
         className,
       )}
     >

@@ -21,7 +21,7 @@ export function OSModeToggleV3({
   onChange: (m: ModoOperacoesV3) => void;
 }) {
   return (
-    <div className="flex h-7 items-center gap-[3px] rounded-lg border border-border bg-muted p-0.5">
+    <div className="flex h-7 items-center gap-[3px] rounded-[9px] border border-[var(--ops-v3-line)] bg-[var(--ops-v3-muted-bg-2)] p-0.5">
       {MODOS.map((m) => {
         const Icon = m.icon;
         const active = m.id === value;
@@ -35,8 +35,8 @@ export function OSModeToggleV3({
             className={cn(
               "inline-flex h-6 items-center gap-1.5 rounded-md px-2.5 text-[11.5px] font-semibold transition-colors",
               active
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
+                ? "bg-[var(--ops-v3-surface)] text-[var(--ops-v3-primary)] shadow-sm"
+                : "text-[var(--ops-v3-muted)] hover:text-[var(--ops-v3-ink)]",
             )}
           >
             <Icon className="h-[13px] w-[13px] shrink-0" aria-hidden />

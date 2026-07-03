@@ -5,7 +5,7 @@ import { EmptyStateV3 } from "./EmptyStateV3";
 
 export function LoadingBlockV3({ label = "Carregando ordens de serviço…" }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card py-16 text-sm text-muted-foreground">
+    <div className="flex items-center justify-center gap-2 rounded-[12px] border border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)] py-16 text-sm text-[var(--ops-v3-muted)] shadow-sm">
       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
       {label}
     </div>
@@ -25,7 +25,7 @@ export function NoStoreBlockV3() {
 export function ErrorBlockV3({ message }: { message: string }) {
   return (
     <EmptyStateV3
-      icon={<AlertTriangle className="h-8 w-8 text-warning" />}
+      icon={<AlertTriangle className="h-8 w-8 text-[var(--ops-v3-warning)]" />}
       titulo="Não foi possível carregar"
       descricao={message}
     />

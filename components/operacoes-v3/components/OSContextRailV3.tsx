@@ -19,10 +19,10 @@ function RailCard({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+    <div className="rounded-[12px] border border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)] p-3 shadow-sm">
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-muted-foreground">{icon}</span>
-        <h4 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{titulo}</h4>
+        <span className="text-[var(--ops-v3-subtle)]">{icon}</span>
+        <h4 className="min-w-0 flex-1 truncate text-sm font-semibold text-[var(--ops-v3-body)]">{titulo}</h4>
         {badge}
       </div>
       {children}
@@ -31,7 +31,7 @@ function RailCard({
 }
 
 function RailEmpty({ children }: { children: ReactNode }) {
-  return <p className="text-xs text-muted-foreground">{children}</p>;
+  return <p className="text-xs text-[var(--ops-v3-muted)]">{children}</p>;
 }
 
 /** Lateral de contexto da OS: timeline, comunicação, anexos, observações, histórico. */
@@ -55,9 +55,9 @@ export function OSContextRailV3({
           <ol className="space-y-3">
             {timeline.map((ev) => (
               <li key={ev.id} className="relative pl-4">
-                <span className="absolute left-0 top-1.5 h-1.5 w-1.5 rounded-full bg-primary/60" aria-hidden />
-                <p className="text-xs text-foreground">{ev.conteudo}</p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                <span className="absolute left-0 top-1.5 h-1.5 w-1.5 rounded-full bg-[var(--ops-v3-success)]" aria-hidden />
+                <p className="text-xs text-[var(--ops-v3-body)]">{ev.conteudo}</p>
+                <p className="mt-0.5 text-[11px] text-[var(--ops-v3-muted)]">
                   {ev.autor} · {formatRelativo(ev.criadoEm)}
                 </p>
               </li>
@@ -83,8 +83,8 @@ export function OSContextRailV3({
         {anexos.length > 0 ? (
           <ul className="space-y-1.5">
             {anexos.slice(0, 8).map((a) => (
-              <li key={a.id} className="flex items-center gap-2 text-xs text-foreground">
-                <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+              <li key={a.id} className="flex items-center gap-2 text-xs text-[var(--ops-v3-body)]">
+                <Paperclip className="h-3 w-3 shrink-0 text-[var(--ops-v3-subtle)]" aria-hidden />
                 <span className="truncate">{a.nome}</span>
               </li>
             ))}
@@ -98,9 +98,9 @@ export function OSContextRailV3({
         {observacoes.length > 0 ? (
           <ul className="space-y-2">
             {observacoes.slice(0, 6).map((o) => (
-              <li key={o.id} className="rounded-md border border-border bg-muted/30 p-2 text-xs text-foreground">
+              <li key={o.id} className="rounded-md border border-[var(--ops-v3-line)] bg-[var(--ops-v3-soft)] p-2 text-xs text-[var(--ops-v3-body)]">
                 <p className="whitespace-pre-wrap">{o.conteudo}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
+                <p className="mt-1 text-[11px] text-[var(--ops-v3-muted)]">
                   {o.autor}
                   {o.interna ? " · interna" : ""}
                 </p>

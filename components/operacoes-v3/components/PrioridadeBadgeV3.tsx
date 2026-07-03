@@ -16,11 +16,11 @@ import {
 } from "@/lib/operacoes-v3/producao-model";
 
 const TONE_CLS: Record<string, string> = {
-  neutral: "border-border bg-muted text-muted-foreground",
-  info: "border-info/30 bg-info/10 text-info",
-  warning: "border-warning/30 bg-warning/10 text-warning",
-  danger: "border-destructive/30 bg-destructive/10 text-destructive",
-  success: "border-success/30 bg-success/10 text-success",
+  neutral: "border-[var(--ops-v3-input)] bg-[var(--ops-v3-muted-bg)] text-[var(--ops-v3-muted)]",
+  info: "border-[var(--ops-v3-info-bd)] bg-[var(--ops-v3-info-bg)] text-[var(--ops-v3-info-fg)]",
+  warning: "border-[var(--ops-v3-warning-bd)] bg-[var(--ops-v3-warning-bg)] text-[var(--ops-v3-warning-fg)]",
+  danger: "border-[var(--ops-v3-danger-bd)] bg-[var(--ops-v3-danger-bg)] text-[var(--ops-v3-danger-fg)]",
+  success: "border-[var(--ops-v3-success-bd)] bg-[var(--ops-v3-success-bg)] text-[var(--ops-v3-success-fg)]",
 };
 
 /** Chip de prioridade. Por padrão oculta "normal" (ruído); `force` mostra sempre. */

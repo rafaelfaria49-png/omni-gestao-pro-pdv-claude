@@ -50,14 +50,14 @@ export function OSCommandBarV3({
   const busy = pendingTo !== null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
+    <div className="flex flex-wrap items-center gap-2 rounded-[12px] border border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)] p-3 shadow-sm">
       {primaria ? (
         <ButtonV3 variant="primary" disabled={busy} onClick={() => handle(primaria.to)}>
           {pendingTo === primaria.to ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
           {primaria.label}
         </ButtonV3>
       ) : (
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--ops-v3-line)] bg-[var(--ops-v3-success-bg-soft)] px-3 py-1.5 text-sm font-medium text-[var(--ops-v3-success-fg)]">
           <CheckCircle2 className="h-4 w-4" aria-hidden />
           {meta.label} — fluxo de status concluído
         </span>
@@ -82,7 +82,7 @@ export function OSCommandBarV3({
         Mais ações
       </ButtonV3>
 
-      <span className="ml-auto text-xs text-muted-foreground">
+      <span className="ml-auto text-xs text-[var(--ops-v3-subtle)]">
         Transições validadas pela máquina única da V3.
       </span>
     </div>

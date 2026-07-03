@@ -5,13 +5,13 @@ import { formatBRL } from "../lib/format";
 import type { PagamentoEstado } from "../lib/os-derive";
 
 const CONFIG: Record<PagamentoEstado, { label: string; cls: string }> = {
-  aberto: { label: "Em aberto", cls: "bg-warning/10 text-warning border-warning/25" },
-  parcial: { label: "Parcial", cls: "bg-info/10 text-info border-info/25" },
-  quitado: { label: "Quitado", cls: "bg-success/10 text-success border-success/25" },
-  "sem-cobranca": { label: "Sem cobrança", cls: "bg-muted text-muted-foreground border-border" },
+  aberto: { label: "Em aberto", cls: "border-[var(--ops-v3-warning-bd)] bg-[var(--ops-v3-warning-bg)] text-[var(--ops-v3-warning-fg)]" },
+  parcial: { label: "Parcial", cls: "border-[var(--ops-v3-info-bd)] bg-[var(--ops-v3-info-bg)] text-[var(--ops-v3-info-fg)]" },
+  quitado: { label: "Quitado", cls: "border-[var(--ops-v3-success-bd)] bg-[var(--ops-v3-success-bg)] text-[var(--ops-v3-success-fg)]" },
+  "sem-cobranca": { label: "Sem cobrança", cls: "border-[var(--ops-v3-input)] bg-[var(--ops-v3-muted-bg)] text-[var(--ops-v3-muted)]" },
   "a-conectar": {
     label: "Pagamento a conectar",
-    cls: "bg-muted text-muted-foreground border-dashed border-border",
+    cls: "border-dashed border-[var(--ops-v3-dashed)] bg-[var(--ops-v3-soft)] text-[var(--ops-v3-muted)]",
   },
 };
 

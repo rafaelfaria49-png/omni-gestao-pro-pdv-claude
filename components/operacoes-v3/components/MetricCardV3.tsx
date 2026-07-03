@@ -6,12 +6,12 @@ import { cn } from "@/lib/utils";
 export type MetricTone = "neutral" | "primary" | "success" | "warning" | "danger" | "info";
 
 const TONE_ACCENT: Record<MetricTone, string> = {
-  neutral: "text-foreground",
-  primary: "text-primary",
-  success: "text-success",
-  warning: "text-warning",
-  danger: "text-destructive",
-  info: "text-info",
+  neutral: "text-[var(--ops-v3-ink)]",
+  primary: "text-[var(--ops-v3-primary)]",
+  success: "text-[var(--ops-v3-success)]",
+  warning: "text-[var(--ops-v3-warning)]",
+  danger: "text-[var(--ops-v3-danger)]",
+  info: "text-[var(--ops-v3-info)]",
 };
 
 export interface MetricCardV3Props {
@@ -36,16 +36,16 @@ export function MetricCardV3({
 }: MetricCardV3Props) {
   const aConectar = estado === "a-conectar";
   return (
-    <div className={cn("min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm", className)}>
+    <div className={cn("min-w-0 rounded-[12px] border border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)] p-4 shadow-sm", className)}>
       <div className="flex items-center justify-between gap-2">
-        <span className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="truncate text-xs font-medium uppercase tracking-wide text-[var(--ops-v3-muted)]">
           {label}
         </span>
-        {icon ? <span className="shrink-0 text-muted-foreground/70">{icon}</span> : null}
+        {icon ? <span className="shrink-0 text-[var(--ops-v3-subtle)]">{icon}</span> : null}
       </div>
       {aConectar ? (
         <div className="mt-2">
-          <span className="inline-flex items-center rounded-md border border-dashed border-border bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
+          <span className="inline-flex items-center rounded-md border border-dashed border-[var(--ops-v3-dashed)] bg-[var(--ops-v3-soft)] px-2 py-0.5 text-xs text-[var(--ops-v3-muted)]">
             a conectar
           </span>
         </div>
@@ -54,7 +54,7 @@ export function MetricCardV3({
           {value}
         </p>
       )}
-      {hint ? <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className="mt-1 truncate text-xs text-[var(--ops-v3-muted)]">{hint}</p> : null}
     </div>
   );
 }

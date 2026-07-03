@@ -1,0 +1,200 @@
+.skin {
+  --ops-v3-ink: #11131a;
+  --ops-v3-body: #1a1d23;
+  --ops-v3-muted: #6b7280;
+  --ops-v3-subtle: #9aa0ab;
+  --ops-v3-faint: #c2c6cd;
+  --ops-v3-surface: #ffffff;
+  --ops-v3-app: #f5f6f8;
+  --ops-v3-soft: #fafbfc;
+  --ops-v3-soft-2: #fbfbfc;
+  --ops-v3-muted-bg: #f4f5f7;
+  --ops-v3-muted-bg-2: #f1f2f5;
+  --ops-v3-line: #e9eaee;
+  --ops-v3-line-hover: #d9dbe1;
+  --ops-v3-dashed: #d3d6dc;
+  --ops-v3-input: #e2e4e8;
+  --ops-v3-primary: #4f46e5;
+  --ops-v3-primary-hover: #4338ca;
+  --ops-v3-primary-bg: #eef0fe;
+  --ops-v3-primary-bd: #c7ccfa;
+  --ops-v3-success: #16a34a;
+  --ops-v3-success-fg: #15803d;
+  --ops-v3-success-bg: #e7f6ec;
+  --ops-v3-success-bg-soft: #f1f6f2;
+  --ops-v3-success-bd: #bfe6cc;
+  --ops-v3-warning: #d97706;
+  --ops-v3-warning-fg: #b45309;
+  --ops-v3-warning-bg: #fbf1e3;
+  --ops-v3-warning-bd: #fbe7c8;
+  --ops-v3-danger: #dc2626;
+  --ops-v3-danger-fg: #b91c1c;
+  --ops-v3-danger-hover: #f8dddd;
+  --ops-v3-danger-bg: #fbeaea;
+  --ops-v3-danger-bd: #f3cccc;
+  --ops-v3-info: #2563eb;
+  --ops-v3-info-fg: #1d4ed8;
+  --ops-v3-info-bg: #eaf1fe;
+  --ops-v3-info-bd: #cfe0fb;
+  /* Sombras específicas (não são uma reversão de shadow-sm — ver histórico do GOAL
+     OPS-V3-VISUAL-TOKEN-CLEANUP-002). Demais sombras neutras voltaram a `shadow-sm`. */
+  --ops-v3-shadow-tab-active: 0 1px 2px rgba(79, 70, 229, 0.12);
+  --ops-v3-shadow-rail-active: 0 2px 8px rgba(17, 19, 26, 0.14);
+  --ops-v3-shadow-toast: 0 12px 32px rgba(17, 19, 26, 0.16);
+  --ops-v3-shadow-primary-btn: 0 1px 2px rgba(79, 70, 229, 0.28);
+}
+
+.skin :global(.bg-card),
+.skin :global(.bg-background),
+.skin :global([class~="bg-card/95"]),
+.skin :global([class~="bg-card/80"]),
+.skin :global([class~="bg-background/40"]) {
+  background-color: var(--ops-v3-surface) !important;
+}
+
+.skin :global(.bg-muted),
+.skin :global([class~="bg-muted/20"]),
+.skin :global([class~="bg-muted/30"]),
+.skin :global([class~="bg-muted/40"]),
+.skin :global([class~="bg-muted/50"]),
+.skin :global([class~="bg-muted/70"]) {
+  background-color: var(--ops-v3-muted-bg) !important;
+}
+
+.skin :global([class~="hover:bg-muted"]:hover),
+.skin :global([class~="hover:bg-muted/30"]:hover),
+.skin :global([class~="hover:bg-muted/40"]:hover),
+.skin :global([class~="hover:bg-muted/50"]:hover),
+.skin :global([class~="hover:bg-muted/70"]:hover) {
+  background-color: var(--ops-v3-muted-bg) !important;
+}
+
+.skin :global(.border-border),
+.skin :global([class~="border-border/50"]),
+.skin :global([class~="border-border/60"]) {
+  border-color: var(--ops-v3-line) !important;
+}
+
+.skin :global([class~="hover:border-border"]:hover),
+.skin :global([class~="hover:border-border-hover"]:hover) {
+  border-color: var(--ops-v3-line-hover) !important;
+}
+
+.skin :global(.text-foreground) {
+  color: var(--ops-v3-body) !important;
+}
+
+.skin :global(.text-muted-foreground),
+.skin :global([class~="text-muted-foreground/60"]),
+.skin :global([class~="text-muted-foreground/70"]),
+.skin :global([class~="text-muted-foreground/80"]) {
+  color: var(--ops-v3-muted) !important;
+}
+
+.skin :global([class~="hover:text-foreground"]:hover) {
+  color: var(--ops-v3-ink) !important;
+}
+
+.skin :global(.text-primary) {
+  color: var(--ops-v3-primary) !important;
+}
+
+.skin :global([class~="bg-primary/5"]),
+.skin :global([class~="bg-primary/10"]),
+.skin :global([class~="bg-primary/15"]) {
+  background-color: var(--ops-v3-primary-bg) !important;
+  color: var(--ops-v3-primary) !important;
+}
+
+.skin :global([class~="border-primary/25"]),
+.skin :global([class~="border-primary/30"]),
+.skin :global([class~="border-primary/40"]) {
+  border-color: var(--ops-v3-primary-bd) !important;
+}
+
+.skin :global(.text-success) {
+  color: var(--ops-v3-success) !important;
+}
+
+.skin :global([class~="bg-success/5"]),
+.skin :global([class~="bg-success/10"]),
+.skin :global([class~="bg-success/15"]) {
+  background-color: var(--ops-v3-success-bg) !important;
+  color: var(--ops-v3-success-fg) !important;
+}
+
+.skin :global([class~="border-success/25"]),
+.skin :global([class~="border-success/30"]) {
+  border-color: var(--ops-v3-success-bd) !important;
+}
+
+.skin :global(.text-warning) {
+  color: var(--ops-v3-warning) !important;
+}
+
+.skin :global([class~="bg-warning/5"]),
+.skin :global([class~="bg-warning/10"]),
+.skin :global([class~="bg-warning/15"]) {
+  background-color: var(--ops-v3-warning-bg) !important;
+  color: var(--ops-v3-warning-fg) !important;
+}
+
+.skin :global([class~="border-warning/25"]),
+.skin :global([class~="border-warning/30"]),
+.skin :global([class~="border-warning/40"]) {
+  border-color: var(--ops-v3-warning-bd) !important;
+}
+
+.skin :global(.text-destructive) {
+  color: var(--ops-v3-danger) !important;
+}
+
+.skin :global([class~="bg-destructive/5"]),
+.skin :global([class~="bg-destructive/10"]),
+.skin :global([class~="bg-destructive/15"]) {
+  background-color: var(--ops-v3-danger-bg) !important;
+  color: var(--ops-v3-danger-fg) !important;
+}
+
+.skin :global([class~="border-destructive/25"]),
+.skin :global([class~="border-destructive/30"]) {
+  border-color: var(--ops-v3-danger-bd) !important;
+}
+
+.skin :global(.text-info) {
+  color: var(--ops-v3-info) !important;
+}
+
+.skin :global([class~="bg-info/5"]),
+.skin :global([class~="bg-info/10"]),
+.skin :global([class~="bg-info/15"]) {
+  background-color: var(--ops-v3-info-bg) !important;
+  color: var(--ops-v3-info-fg) !important;
+}
+
+.skin :global([class~="border-info/25"]),
+.skin :global([class~="border-info/30"]),
+.skin :global([class~="border-info/40"]) {
+  border-color: var(--ops-v3-info-bd) !important;
+}
+
+.skin :global(.shadow-sm) {
+  box-shadow: 0 1px 2px rgba(17, 19, 26, 0.05) !important;
+}
+
+.skin :global(.rounded-xl) {
+  border-radius: 12px !important;
+}
+
+.skin :global(input),
+.skin :global(select),
+.skin :global(textarea) {
+  border-color: var(--ops-v3-input);
+  background-color: var(--ops-v3-surface);
+  color: var(--ops-v3-body);
+}
+
+.skin :global(input::placeholder),
+.skin :global(textarea::placeholder) {
+  color: var(--ops-v3-subtle);
+}

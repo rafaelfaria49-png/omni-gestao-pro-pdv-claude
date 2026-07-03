@@ -40,8 +40,8 @@ import { matchOrdem } from "../lib/os-derive";
 function KV({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="truncate text-sm text-foreground">{value || "—"}</dd>
+      <dt className="text-xs text-[var(--ops-v3-subtle)]">{label}</dt>
+      <dd className="truncate text-sm text-[var(--ops-v3-body)]">{value || "—"}</dd>
     </div>
   );
 }
@@ -71,9 +71,9 @@ function Picker() {
     >
       <div className="mb-4">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--ops-v3-subtle)]" aria-hidden />
           <input
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 pl-9 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="w-full rounded-lg border border-[var(--ops-v3-input)] bg-[var(--ops-v3-surface)] px-3 py-2 pl-9 text-sm text-[var(--ops-v3-body)] placeholder:text-[var(--ops-v3-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ops-v3-primary)]/20"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Selecione uma OS para abrir o prontuário…"
@@ -205,9 +205,9 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
               <KV label="Recebido por" value={recepcao.recebidoPor} />
             </dl>
             {os.equipamento?.defeitoRelatado ? (
-              <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3">
-                <p className="text-xs font-medium text-muted-foreground">Defeito relatado</p>
-                <p className="mt-0.5 text-sm text-foreground">{os.equipamento.defeitoRelatado}</p>
+              <div className="mt-3 rounded-lg border border-[var(--ops-v3-line)] bg-[var(--ops-v3-soft)] p-3">
+                <p className="text-xs font-medium text-[var(--ops-v3-muted)]">Defeito relatado</p>
+                <p className="mt-0.5 text-sm text-[var(--ops-v3-body)]">{os.equipamento.defeitoRelatado}</p>
               </div>
             ) : null}
           </OSSectionV3>
@@ -289,7 +289,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
               <KV label="Última forma" value={pagV3.ultimaForma} />
               <KV label="Pagamento previsto (abertura)" value={os.faturamentoFormaPagamento ?? os.faturamentoModoCobranca} />
             </dl>
-            <p className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
+            <p className="mt-3 rounded-lg border border-dashed border-[var(--ops-v3-dashed)] bg-[var(--ops-v3-soft)] px-3 py-1.5 text-xs text-[var(--ops-v3-muted)]">
               O recebimento real (Dinheiro/PIX/Débito/Crédito, parcial e quitação) é feito no <strong>PDV de Serviço</strong> — baixa em Conta a Receber + entra no caixa do dia. Exige caixa aberto.
             </p>
           </OSSectionV3>
@@ -299,14 +299,14 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             tone={os.status === "em_execucao" ? "primary" : "neutral"}
             statusVisual={os.status === "em_execucao" ? "em andamento" : undefined}
             resumo="Checklist técnico de bancada (pós-reparo)"
-            vazio={<p className="text-sm text-muted-foreground">Sem checklist técnico registrado nesta OS.</p>}
+            vazio={<p className="text-sm text-[var(--ops-v3-muted)]">Sem checklist técnico registrado nesta OS.</p>}
           >
             {os.checklistTecnico && os.checklistTecnico.length > 0 ? (
               <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
                 {os.checklistTecnico.map((c) => (
                   <div key={c.id} className="flex items-center gap-2 text-sm">
-                    <span className={`h-2 w-2 shrink-0 rounded-full ${c.ok ? "bg-success" : "bg-muted-foreground/40"}`} aria-hidden />
-                    <span className="truncate text-foreground">{c.label}</span>
+                    <span className={`h-2 w-2 shrink-0 rounded-full ${c.ok ? "bg-[var(--ops-v3-success)]" : "bg-[var(--ops-v3-faint)]"}`} aria-hidden />
+                    <span className="truncate text-[var(--ops-v3-body)]">{c.label}</span>
                   </div>
                 ))}
               </div>
@@ -318,7 +318,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
             tone={os.status === "entregue" ? "success" : "neutral"}
             statusVisual={os.retirada?.confirmado ? "retirada confirmada" : os.entregueEm ? "entregue" : undefined}
             resumo="Retirada e conferência pelo cliente"
-            vazio={<p className="text-sm text-muted-foreground">Entrega ainda não registrada.</p>}
+            vazio={<p className="text-sm text-[var(--ops-v3-muted)]">Entrega ainda não registrada.</p>}
           >
             {os.retirada?.confirmado || os.entregueEm ? (
               <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -359,7 +359,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
       </div>
 
       {/* Rodapé utilitário — documentos (Fase 1E) */}
-      <footer className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
+      <footer className="flex flex-wrap items-center gap-2 rounded-[12px] border border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)] p-3 shadow-sm">
         <ButtonV3 variant="outline" onClick={() => setPrintTipo("os_cliente")}>
           <Printer className="h-4 w-4" />
           Imprimir OS
@@ -380,7 +380,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
           <Globe className="h-4 w-4" />
           Portal do cliente
         </ButtonV3>
-        <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="ml-auto flex items-center gap-1.5 text-xs text-[var(--ops-v3-muted)]">
           <ListChecks className="h-3.5 w-3.5" aria-hidden />
           Prontuário do equipamento — tudo da OS em uma tela.
         </span>

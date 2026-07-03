@@ -45,8 +45,8 @@ function ListaCurta({
   onOpen: (id: string) => void;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-foreground">{titulo}</h3>
+    <div className="rounded-[12px] border border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)] p-4 shadow-sm">
+      <h3 className="mb-3 text-sm font-semibold text-[var(--ops-v3-body)]">{titulo}</h3>
       {ordens.length > 0 ? (
         <div className="space-y-2">
           {ordens.slice(0, 6).map((os) => (
@@ -54,7 +54,7 @@ function ListaCurta({
           ))}
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-[var(--ops-v3-dashed)] bg-[var(--ops-v3-soft)] px-3 py-6 text-center text-sm text-[var(--ops-v3-muted)]">
           {vazio}
         </p>
       )}
@@ -101,7 +101,7 @@ export function DashboardV3() {
     body = <LoadingBlockV3 />;
   } else {
     body = (
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-5">
           <MetricCardV3 label="OS abertas" value={dados.counts.aberta} tone="info" icon={<Inbox className="h-4 w-4" />} />
           <MetricCardV3 label="Aguardando aprovação" value={dados.counts.aguardando_aprovacao} tone="warning" icon={<Clock className="h-4 w-4" />} />
@@ -115,7 +115,7 @@ export function DashboardV3() {
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Orçamentos</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ops-v3-muted)]">Orçamentos</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MetricCardV3 label="Em rascunho" value={dados.orcamentos.rascunho} tone="neutral" icon={<FileText className="h-4 w-4" />} />
             <MetricCardV3 label="Enviados" value={dados.orcamentos.enviado} tone="info" icon={<Send className="h-4 w-4" />} />
@@ -125,7 +125,7 @@ export function DashboardV3() {
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Produção</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ops-v3-muted)]">Produção</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             <MetricCardV3 label="Em diagnóstico" value={dados.producao.emDiagnostico} tone="info" icon={<Wrench className="h-4 w-4" />} />
             <MetricCardV3 label="Em execução" value={dados.producao.emExecucao} tone="primary" icon={<Loader className="h-4 w-4" />} />
@@ -136,7 +136,7 @@ export function DashboardV3() {
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Pós-venda</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ops-v3-muted)]">Pós-venda</p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MetricCardV3 label="Garantias ativas" value={dados.posVenda.garantiasAtivas} tone="success" icon={<ShieldCheck className="h-4 w-4" />} />
             <MetricCardV3 label="Garantias vencendo" value={dados.posVenda.garantiasVencendo} tone="warning" hint="Próximos 15 dias" icon={<Clock className="h-4 w-4" />} />

@@ -38,22 +38,28 @@ export function statusFlow(status: OSStatus | string | undefined | null): Status
   return { label: status ? String(status) : "—", tone: "neutral", primaryAction: "Ver detalhes" };
 }
 
-/** Classes de badge por tom — apenas tokens semânticos (sem cor hardcoded). */
+/**
+ * Classes de badge por tom. Usam a paleta V3 centralizada em
+ * `operacoes-v3-skin.module.css` (`var(--ops-v3-*)`) — exceção escopada e
+ * documentada (mesmo precedente do `tokens.ts` da Operações V4 Preview), não
+ * os tokens semânticos globais do OmniGestão. Nenhuma cor solta neste arquivo:
+ * qualquer ajuste de tom é feito num único lugar (o CSS module).
+ */
 export const TONE_BADGE_CLASS: Record<Tone, string> = {
-  neutral: "bg-muted text-muted-foreground border-border",
-  info: "bg-info/10 text-info border-info/25",
-  warning: "bg-warning/10 text-warning border-warning/25",
-  success: "bg-success/10 text-success border-success/25",
-  danger: "bg-destructive/10 text-destructive border-destructive/25",
-  primary: "bg-primary/10 text-primary border-primary/25",
+  neutral: "border-[var(--ops-v3-input)] bg-[var(--ops-v3-muted-bg)] text-[var(--ops-v3-muted)]",
+  info: "border-[var(--ops-v3-info-bd)] bg-[var(--ops-v3-info-bg)] text-[var(--ops-v3-info-fg)]",
+  warning: "border-[var(--ops-v3-warning-bd)] bg-[var(--ops-v3-warning-bg)] text-[var(--ops-v3-warning-fg)]",
+  success: "border-[var(--ops-v3-success-bd)] bg-[var(--ops-v3-success-bg)] text-[var(--ops-v3-success-fg)]",
+  danger: "border-[var(--ops-v3-danger-bd)] bg-[var(--ops-v3-danger-bg)] text-[var(--ops-v3-danger-fg)]",
+  primary: "border-[var(--ops-v3-primary-bd)] bg-[var(--ops-v3-primary-bg)] text-[var(--ops-v3-primary)]",
 };
 
 /** Classe de "ponto" (dot) por tom — usada em listas e na timeline. */
 export const TONE_DOT_CLASS: Record<Tone, string> = {
-  neutral: "bg-muted-foreground/50",
-  info: "bg-info",
-  warning: "bg-warning",
-  success: "bg-success",
-  danger: "bg-destructive",
-  primary: "bg-primary",
+  neutral: "bg-[var(--ops-v3-subtle)]",
+  info: "bg-[var(--ops-v3-info)]",
+  warning: "bg-[var(--ops-v3-warning)]",
+  success: "bg-[var(--ops-v3-success)]",
+  danger: "bg-[var(--ops-v3-danger)]",
+  primary: "bg-[var(--ops-v3-primary)]",
 };

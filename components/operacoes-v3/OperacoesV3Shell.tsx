@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
-import { Activity, ChevronRight, MessageSquare, Paperclip, Plus, RefreshCw, Search } from "lucide-react";
+import { ChevronRight, Maximize2, Minimize2, Plus, RefreshCw, Search } from "lucide-react";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import { cn } from "@/lib/utils";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
@@ -9,12 +9,13 @@ import { statusMetaV3, type OperacaoStatusV3 } from "@/lib/operacoes-v3/status-m
 import { OperacoesV3Context, type OperacoesV3ContextValue } from "./context/OperacoesV3Context";
 import { NovaOSEnterpriseModalV3 } from "./components/NovaOSEnterpriseModalV3";
 import { OSContextRailV3 } from "./components/OSContextRailV3";
-import { OperacoesV3Nav } from "./OperacoesV3Nav";
+import { OperacoesV3MiniRail, OperacoesV3TopTabs } from "./OperacoesV3Nav";
 import { OSModeToggleV3, type ModoOperacoesV3 } from "./components/OSModeToggleV3";
 import { OSClienteColV3 } from "./components/OSClienteColV3";
 import { useOrdensV3 } from "./hooks/use-ordens-v3";
 import type { ScreenId } from "./data/types";
 import { ButtonV3 } from "./components/UiV3";
+import styles from "./operacoes-v3-skin.module.css";
 
 import { DashboardV3 } from "./pages/DashboardV3";
 import { FilaOSV3 } from "./pages/FilaOSV3";
@@ -184,23 +185,34 @@ export function OperacoesV3Shell() {
     ? (ordens.find((o) => o.id === selectedOsId) ?? null)
     : null;
   const showCols = selectedOs !== null;
+  const focusActive = showCols && !leftOpen && !rightOpen;
+
+  const toggleFocus = useCallback(() => {
+    if (focusActive) {
+      handleModo("recepcao");
+      return;
+    }
+    setModo("bancada");
+    setLeftOpen(false);
+    setRightOpen(false);
+  }, [focusActive, handleModo]);
 
   const unidade = empresaDocumentos?.nomeFantasia?.trim() || storeId || null;
 
   return (
     <OperacoesV3Context.Provider value={ctx}>
-      <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-background">
+      <div className={cn(styles.skin, "flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-[12px] border border-[var(--ops-v3-line)] bg-[var(--ops-v3-app)] text-[var(--ops-v3-ink)]")}>
 
         {/* ── Top bar (40 px) ────────────────────────────────────────────── */}
-        <header className="flex h-10 flex-none items-center gap-2 border-b border-border bg-card px-3">
+        <header className="flex h-10 flex-none items-center gap-3 border-b border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)] px-3">
           {/* Identidade */}
           <div className="flex flex-none items-center gap-2">
-            <span className="inline-flex h-[23px] w-[23px] shrink-0 items-center justify-center rounded-md bg-foreground text-[12px] font-bold text-background">
+            <span className="inline-flex h-[23px] w-[23px] shrink-0 items-center justify-center rounded-md bg-[var(--ops-v3-ink)] text-[12px] font-bold text-white">
               O
             </span>
-            <span className="hidden text-[13px] font-semibold text-foreground sm:inline">OmniGestão</span>
-            <span className="hidden whitespace-nowrap text-[11.5px] text-muted-foreground md:inline">
-              Operações <span className="font-semibold text-primary">V3</span>
+            <span className="hidden text-[13px] font-semibold text-[var(--ops-v3-body)] sm:inline">OmniGestão</span>
+            <span className="hidden whitespace-nowrap text-[11.5px] text-[var(--ops-v3-subtle)] md:inline">
+              Operações <span className="font-semibold text-[var(--ops-v3-primary)]">V3</span>
             </span>
           </div>
 
@@ -209,20 +221,32 @@ export function OperacoesV3Shell() {
             type="button"
             onClick={() => navigate("workspace", null)}
             title="Buscar ordem de serviço"
-            className="flex h-7 min-w-0 max-w-[380px] flex-1 items-center gap-2 rounded-lg border border-border bg-muted px-2.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+            className="flex h-7 min-w-0 max-w-[380px] flex-1 items-center gap-2 rounded-lg border border-[var(--ops-v3-line)] bg-[var(--ops-v3-muted-bg)] px-2.5 text-[12.5px] text-[var(--ops-v3-subtle)] transition-colors hover:bg-[var(--ops-v3-muted-bg-2)] hover:text-[var(--ops-v3-body)]"
           >
             <Search className="h-[13px] w-[13px] shrink-0" aria-hidden />
             <span className="min-w-0 flex-1 truncate text-left">Ir para OS, cliente, IMEI…</span>
-            <kbd className="shrink-0 rounded border border-border bg-card px-1 py-px text-[10px] font-medium text-muted-foreground/80">⌘K</kbd>
+            <kbd className="shrink-0 rounded border border-[var(--ops-v3-input)] bg-[var(--ops-v3-surface)] px-1 py-px text-[10px] font-medium text-[var(--ops-v3-subtle)]">⌘K</kbd>
           </button>
 
           {/* Modo de uso — segmented no command header, imediatamente após a busca global */}
           <OSModeToggleV3 value={modo} onChange={handleModo} />
+          <ButtonV3
+            variant="outline"
+            onClick={toggleFocus}
+            disabled={!showCols}
+            className={cn(
+              "h-7 shrink-0 px-3 text-xs",
+              focusActive && "border-[var(--ops-v3-primary)] bg-[var(--ops-v3-primary)] text-white hover:bg-[var(--ops-v3-primary-hover)]",
+            )}
+          >
+            {focusActive ? <Minimize2 className="h-3.5 w-3.5" aria-hidden /> : <Maximize2 className="h-3.5 w-3.5" aria-hidden />}
+            <span className="hidden xl:inline">{focusActive ? "Sair do foco" : "Modo foco"}</span>
+          </ButtonV3>
 
           {/* Grupo direito */}
           <div className="ml-auto flex items-center gap-2">
             {unidade ? (
-              <span className="hidden truncate text-[11.5px] text-muted-foreground lg:inline" title={unidade}>
+              <span className="hidden truncate text-[11.5px] text-[var(--ops-v3-muted)] lg:inline" title={unidade}>
                 {unidade}
               </span>
             ) : null}
@@ -237,11 +261,13 @@ export function OperacoesV3Shell() {
           </div>
         </header>
 
+        <OperacoesV3TopTabs active={activeScreen} onNavigate={(id) => navigate(id)} />
+
         {/* ── Cockpit body ────────────────────────────────────────────────── */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
 
-          {/* Rail de ícones */}
-          <OperacoesV3Nav active={activeScreen} onNavigate={(id) => navigate(id)} />
+          {/* Rail mínimo de módulos-chave */}
+          <OperacoesV3MiniRail active={activeScreen} onNavigate={(id) => navigate(id)} />
 
           {/* Coluna de cliente (esquerda) — workspace com OS, ≥ xl */}
           {showCols && (
@@ -251,8 +277,8 @@ export function OperacoesV3Shell() {
           )}
 
           {/* Centro: conteúdo principal */}
-          <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto">
-            <div className="w-full px-4 py-4 sm:px-6">
+          <main ref={mainRef} className="min-w-0 flex-1 overflow-y-auto bg-[var(--ops-v3-app)]">
+            <div className="w-full px-4 py-4 sm:px-5">
               <ActiveScreen />
             </div>
           </main>
@@ -261,10 +287,10 @@ export function OperacoesV3Shell() {
           {showCols && (
             <div className="hidden shrink-0 xl:flex">
               {rightOpen ? (
-                <aside className="flex w-72 flex-none flex-col border-l border-border bg-card">
+                <aside className="flex w-72 flex-none flex-col border-l border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)]">
                   {/* Header strip 36 px */}
-                  <div className="flex h-9 flex-none items-center justify-between border-b border-border px-3">
-                    <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
+                  <div className="flex h-9 flex-none items-center justify-between border-b border-[var(--ops-v3-line)] px-3">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-[var(--ops-v3-subtle)]">
                       Atividade
                     </span>
                     <button
@@ -272,7 +298,7 @@ export function OperacoesV3Shell() {
                       onClick={() => setRightOpen(false)}
                       title="Recolher atividade"
                       aria-label="Recolher coluna de atividade"
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[var(--ops-v3-subtle)] hover:bg-[var(--ops-v3-muted-bg)] hover:text-[var(--ops-v3-ink)]"
                     >
                       <ChevronRight className="h-4 w-4" aria-hidden />
                     </button>
@@ -292,11 +318,14 @@ export function OperacoesV3Shell() {
                   onClick={() => setRightOpen(true)}
                   title="Expandir atividade"
                   aria-label="Expandir coluna de atividade"
-                  className="flex w-8 flex-none flex-col items-center gap-[9px] border-l border-border bg-card pt-[9px] text-muted-foreground transition-colors hover:text-foreground"
+                  className="flex w-8 flex-none flex-col items-center gap-[9px] border-l border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)] pt-[9px] text-[var(--ops-v3-subtle)] transition-colors hover:bg-[var(--ops-v3-soft)] hover:text-[var(--ops-v3-ink)]"
                 >
-                  <Activity className="h-4 w-4" aria-hidden />
-                  <MessageSquare className="h-4 w-4" aria-hidden />
-                  <Paperclip className="h-4 w-4" aria-hidden />
+                  <span className="flex h-[23px] w-[23px] items-center justify-center rounded-md bg-[var(--ops-v3-muted-bg)] text-[13px] font-semibold">
+                    ‹
+                  </span>
+                  <span className="[writing-mode:vertical-rl] mt-1 text-[10.5px] font-semibold uppercase tracking-[0.04em]">
+                    Atividade
+                  </span>
                 </button>
               )}
             </div>
@@ -309,7 +338,7 @@ export function OperacoesV3Shell() {
             {toasts.map((t) => (
               <div
                 key={t.id}
-                className="pointer-events-auto max-w-md rounded-lg border border-border bg-card px-4 py-2 text-center text-sm text-foreground shadow-md"
+                className="pointer-events-auto max-w-md rounded-lg border border-[var(--ops-v3-line)] bg-[var(--ops-v3-surface)] px-4 py-2 text-center text-sm text-[var(--ops-v3-body)] shadow-[var(--ops-v3-shadow-toast)]"
               >
                 {t.msg}
               </div>

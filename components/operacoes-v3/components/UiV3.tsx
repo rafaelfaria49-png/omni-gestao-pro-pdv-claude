@@ -6,11 +6,11 @@ import { cn } from "@/lib/utils";
 type Variant = "primary" | "outline" | "ghost" | "subtle" | "danger";
 
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-primary text-primary-foreground hover:bg-primary/90 border border-transparent",
-  outline: "bg-transparent text-foreground hover:bg-muted border border-border",
-  ghost: "bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted border border-transparent",
-  subtle: "bg-muted text-foreground hover:bg-muted/70 border border-transparent",
-  danger: "bg-destructive/10 text-destructive hover:bg-destructive/15 border border-destructive/25",
+  primary: "border border-transparent bg-[var(--ops-v3-primary)] text-white shadow-[var(--ops-v3-shadow-primary-btn)] hover:bg-[var(--ops-v3-primary-hover)]",
+  outline: "border border-[var(--ops-v3-input)] bg-[var(--ops-v3-surface)] text-[var(--ops-v3-body)] hover:bg-[var(--ops-v3-muted-bg)]",
+  ghost: "border border-transparent bg-transparent text-[var(--ops-v3-muted)] hover:bg-[var(--ops-v3-muted-bg)] hover:text-[var(--ops-v3-ink)]",
+  subtle: "border border-transparent bg-[var(--ops-v3-muted-bg-2)] text-[var(--ops-v3-body)] hover:bg-[var(--ops-v3-line)]",
+  danger: "border border-[var(--ops-v3-danger-bd)] bg-[var(--ops-v3-danger-bg)] text-[var(--ops-v3-danger-fg)] hover:bg-[var(--ops-v3-danger-hover)]",
 };
 
 /** Botão self-contained da V3 (sem depender do kit shadcn global). */
@@ -40,7 +40,7 @@ export function PillV3({ children, className }: { children: ReactNode; className
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-0.5 text-xs text-muted-foreground",
+        "inline-flex items-center gap-1 rounded-full border border-[var(--ops-v3-line)] bg-[var(--ops-v3-muted-bg)] px-2.5 py-0.5 text-xs text-[var(--ops-v3-muted)]",
         className,
       )}
     >
