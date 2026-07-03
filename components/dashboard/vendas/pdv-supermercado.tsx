@@ -52,6 +52,13 @@ import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
+import {
+  isWebSerialSupported,
+  openScalePort,
+  closeScalePort,
+  waitForStableWeightKg,
+  peekLastWeightKg,
+} from "@/services/hardware-bridge"
 import { PdvPainelLateralTerminal, PdvVisorTotal } from "./painel-total"
 import { PdvTabelaItemLinha, PdvTabelaItens } from "./tabela-itens"
 import { getOrCreatePdvOperatorId } from "@/lib/pdv-operator-id"
@@ -198,6 +205,7 @@ export function PdvSupermercado({
   const [weightDialogOpen, setWeightDialogOpen] = useState(false)
   const [weightProduct, setWeightProduct] = useState<Product | null>(null)
   const [weightKgInput, setWeightKgInput] = useState("")
+  const [scaleBusy, setScaleBusy] = useState(false)
   const [attrDialogOpen, setAttrDialogOpen] = useState(false)
   const [attrProduct, setAttrProduct] = useState<Product | null>(null)
   const [attrSelections, setAttrSelections] = useState<Record<string, string>>({})
@@ -543,6 +551,46 @@ export function PdvSupermercado({
     setAttrProduct(null)
     queueMicrotask(hardFocusSearch)
   }, [attrSelections, hardFocusSearch, inventory, pushCartLine, toast, weightKgInput, weightProduct])
+
+  /** Leitura real de balança USB (Web Serial) — mesmo mecanismo do PDV Clássico (`services/hardware-bridge.ts`). */
+  const handleLerBalança = useCallback(async () => {
+    if (!isWebSerialSupported()) {
+      toast({
+        title: "Web Serial",
+        description: "Use Chrome ou Edge em HTTPS ou localhost. Conecte a balança via USB.",
+        variant: "destructive",
+      })
+      return
+    }
+    setScaleBusy(true)
+    try {
+      await openScalePort({ baudRate: 9600 })
+      const w = await waitForStableWeightKg("auto", 3200)
+      await closeScalePort()
+      if (w != null && w > 0) {
+        setWeightKgInput(w.toFixed(3))
+        toast({ title: "Peso lido", description: `${w.toFixed(3)} kg` })
+      } else {
+        const peek = peekLastWeightKg("auto")
+        if (peek != null && peek > 0) setWeightKgInput(peek.toFixed(3))
+        else
+          toast({
+            title: "Peso",
+            description: "Não estabilizou a tempo. Digite manualmente ou verifique baud rate (ex.: 9600).",
+            variant: "destructive",
+          })
+      }
+    } catch (e) {
+      await closeScalePort()
+      toast({
+        title: "Balança",
+        description: e instanceof Error ? e.message : "Falha na leitura serial",
+        variant: "destructive",
+      })
+    } finally {
+      setScaleBusy(false)
+    }
+  }, [toast])
 
   // Voz: item no carrinho
   useEffect(() => {
@@ -1366,8 +1414,8 @@ export function PdvSupermercado({
         weightKgInput={weightKgInput}
         onWeightKgInputChange={setWeightKgInput}
         onConfirm={confirmWeightDialog}
-        onReadScale={() => {}}
-        scaleBusy={false}
+        onReadScale={handleLerBalança}
+        scaleBusy={scaleBusy}
       />
 
       <EditarAtalhosModal
