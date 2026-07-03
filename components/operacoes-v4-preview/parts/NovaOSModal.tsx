@@ -189,10 +189,10 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
 
           {tab === "novo" && (
             <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10, marginBottom: 16 }}>
-              <div><div style={{ ...upLabel, marginBottom: 3 }}>Nome completo</div><input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} placeholder="Nome do cliente" style={input} /></div>
-              <div><div style={{ ...upLabel, marginBottom: 3 }}>Telefone</div><input value={telefone} onChange={(e) => setTelefone(e.target.value)} maxLength={20} placeholder="(11) 90000-0000" style={input} /></div>
-              <div><div style={{ ...upLabel, marginBottom: 3 }}>Documento (CPF/CNPJ)</div><input value={documento} onChange={(e) => setDocumento(e.target.value)} maxLength={20} placeholder="000.000.000-00" style={input} /></div>
-              <div><div style={{ ...upLabel, marginBottom: 3 }}>E-mail</div><input value={email} onChange={(e) => setEmail(e.target.value)} maxLength={120} placeholder="cliente@email.com" style={input} /></div>
+              <div><div style={{ ...upLabel, marginBottom: 3 }}>Nome completo</div><input value={nome} onChange={(e) => setNome(e.target.value)} maxLength={120} placeholder="Nome do cliente" style={input} autoComplete="off" /></div>
+              <div><div style={{ ...upLabel, marginBottom: 3 }}>Telefone</div><input value={telefone} onChange={(e) => setTelefone(e.target.value)} maxLength={20} placeholder="(11) 90000-0000" style={input} autoComplete="off" /></div>
+              <div><div style={{ ...upLabel, marginBottom: 3 }}>Documento (CPF/CNPJ)</div><input value={documento} onChange={(e) => setDocumento(e.target.value)} maxLength={20} placeholder="000.000.000-00" style={input} autoComplete="off" /></div>
+              <div><div style={{ ...upLabel, marginBottom: 3 }}>E-mail</div><input value={email} onChange={(e) => setEmail(e.target.value)} maxLength={120} placeholder="cliente@email.com" style={input} autoComplete="off" /></div>
             </div>
           )}
 
@@ -206,12 +206,12 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
             })}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 10, marginBottom: 11 }}>
-            <div><div style={{ ...upLabel, marginBottom: 3 }}>Marca</div><input value={marca} onChange={(e) => setMarca(e.target.value)} maxLength={40} placeholder="Apple, Samsung…" style={input} /></div>
-            <div><div style={{ ...upLabel, marginBottom: 3 }}>Modelo</div><input value={modelo} onChange={(e) => setModelo(e.target.value)} maxLength={60} placeholder="iPhone 13 Pro…" style={input} /></div>
+            <div><div style={{ ...upLabel, marginBottom: 3 }}>Marca</div><input value={marca} onChange={(e) => setMarca(e.target.value)} maxLength={40} placeholder="Apple, Samsung…" style={input} autoComplete="off" /></div>
+            <div><div style={{ ...upLabel, marginBottom: 3 }}>Modelo</div><input value={modelo} onChange={(e) => setModelo(e.target.value)} maxLength={60} placeholder="iPhone 13 Pro…" style={input} autoComplete="off" /></div>
           </div>
-          <div style={{ marginBottom: 14 }}><div style={{ ...upLabel, marginBottom: 3 }}>IMEI / Serial</div><input value={imei} onChange={(e) => setImei(e.target.value)} maxLength={40} placeholder="35 000000 000000 0" style={{ ...input, fontFamily: MONO }} /></div>
-          <div style={{ marginBottom: 11 }}><div style={{ ...upLabel, marginBottom: 3 }}>Defeito relatado</div><textarea value={defeito} onChange={(e) => setDefeito(e.target.value)} maxLength={1000} placeholder="Descreva o problema relatado pelo cliente…" style={{ width: "100%", minHeight: 54, padding: "8px 11px", border: `1px solid ${C.inputBd}`, borderRadius: 8, fontSize: 12.5, color: C.body, resize: "vertical", fontFamily: "inherit" }} /></div>
-          <div style={{ marginBottom: 14 }}><div style={{ ...upLabel, marginBottom: 3 }}>Observações iniciais</div><textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} maxLength={1000} placeholder="Observações internas (opcional)…" style={{ width: "100%", minHeight: 44, padding: "8px 11px", border: `1px solid ${C.inputBd}`, borderRadius: 8, fontSize: 12.5, color: C.body, resize: "vertical", fontFamily: "inherit" }} /></div>
+          <div style={{ marginBottom: 14 }}><div style={{ ...upLabel, marginBottom: 3 }}>IMEI / Serial</div><input value={imei} onChange={(e) => setImei(e.target.value)} maxLength={40} placeholder="35 000000 000000 0" style={{ ...input, fontFamily: MONO }} autoComplete="off" /></div>
+          <div style={{ marginBottom: 11 }}><div style={{ ...upLabel, marginBottom: 3 }}>Defeito relatado</div><textarea value={defeito} onChange={(e) => setDefeito(e.target.value)} maxLength={1000} placeholder="Descreva o problema relatado pelo cliente…" style={{ width: "100%", minHeight: 54, padding: "8px 11px", border: `1px solid ${C.inputBd}`, borderRadius: 8, fontSize: 12.5, color: C.body, resize: "vertical", fontFamily: "inherit" }} autoComplete="off" /></div>
+          <div style={{ marginBottom: 14 }}><div style={{ ...upLabel, marginBottom: 3 }}>Observações iniciais</div><textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} maxLength={1000} placeholder="Observações internas (opcional)…" style={{ width: "100%", minHeight: 44, padding: "8px 11px", border: `1px solid ${C.inputBd}`, borderRadius: 8, fontSize: 12.5, color: C.body, resize: "vertical", fontFamily: "inherit" }} autoComplete="off" /></div>
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.4fr) minmax(0,1fr)", gap: 12, alignItems: "end" }}>
             <div>
               <div style={{ ...upLabel, marginBottom: 6 }}>Origem</div>
@@ -224,7 +224,7 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
                 })}
               </div>
             </div>
-            <div><div style={{ ...upLabel, marginBottom: 3 }}>Recebido por</div><input value={recebidoPor} onChange={(e) => setRecebidoPor(e.target.value)} maxLength={80} placeholder="Nome do atendente" style={input} /></div>
+            <div><div style={{ ...upLabel, marginBottom: 3 }}>Recebido por</div><input value={recebidoPor} onChange={(e) => setRecebidoPor(e.target.value)} maxLength={80} placeholder="Nome do atendente" style={input} autoComplete="off" /></div>
           </div>
         </div>
 
@@ -266,6 +266,7 @@ function ClienteBuscaPanel({
         }}
         placeholder="Buscar por nome, telefone ou documento…"
         style={{ ...input, height: 34, marginBottom: 8 }}
+        autoComplete="off"
       />
 
       {selecionado ? (

@@ -1231,3 +1231,42 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina so
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// OPS-V4-NOVA-OS-AUTOFILL-ISOLATION-009 — o navegador não pode sugerir/autopreencher
+// cliente, telefone, documento, e-mail, aparelho, IMEI, defeito ou observações de
+// uma loja/conta anterior no mesmo computador. Guard estático: todo <input>/<textarea>
+// do modal Nova OS declara autoComplete explícito.
+describe("OPS-V4-NOVA-OS-AUTOFILL-ISOLATION-009 — Nova OS sem autofill do navegador", () => {
+  const novaOSSource = readFileSync(join(DIR, "parts", "NovaOSModal.tsx"), "utf8")
+
+  /**
+   * Extrai tags JSX inteiras por nome, respeitando profundidade de `{}` e
+   * ignorando `>` de arrow functions (`=>`) dentro dos atributos — uma regex
+   * "gulosa até o primeiro `>`" quebra em `onChange={(e) => ...}`.
+   */
+  function extractJsxTags(source: string, tagNames: string[]): string[] {
+    const tags: string[] = []
+    const startRe = new RegExp(`<(?:${tagNames.join("|")})\\b`, "g")
+    for (const m of source.matchAll(startRe)) {
+      const start = m.index!
+      let depth = 0
+      let i = start
+      for (; i < source.length; i++) {
+        const ch = source[i]
+        if (ch === "{") depth++
+        else if (ch === "}") depth--
+        else if (ch === ">" && depth === 0 && source[i - 1] !== "=") break
+      }
+      tags.push(source.slice(start, i + 1))
+    }
+    return tags
+  }
+
+  it("todo campo de input/textarea do modal Nova OS declara autoComplete explícito", () => {
+    const campos = extractJsxTags(novaOSSource, ["input", "textarea"])
+    expect(campos.length).toBeGreaterThan(0)
+    const semAutoComplete = campos.filter((tag) => !/autoComplete=/.test(tag))
+    expect(semAutoComplete, `campos sem autoComplete: ${semAutoComplete.join(" | ")}`).toEqual([])
+  })
+})
