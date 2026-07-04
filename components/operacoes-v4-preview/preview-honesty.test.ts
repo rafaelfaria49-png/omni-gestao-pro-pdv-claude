@@ -207,6 +207,9 @@ const ctx: V4DataCtx = {
   salvarAcessorios: async () => false,
   salvarChecklist: async () => false,
   salvarDadosBasicos: async () => false,
+  enviarOrcamentoPorCanal: async () => ({ ok: false }),
+  orcamentoRapidoPrefill: null,
+  definirOrcamentoRapidoPrefill: () => {},
 }
 
 describe("Operações V4 — Nova OS real (cria OS e abre no workspace)", () => {
@@ -1993,9 +1996,16 @@ describe("GOAL OPS-V4-ORC-RAPIDO-024 — ⚡ Orçamento Rápido conecta ao contr
     expect(modal).toMatch(/busy/)
   })
 
-  it("GOAL 025/026 fora do escopo: sem envio/mensagem/wa.me e sem seleção/aprovação no modal", () => {
-    for (const proibido of ["wa.me", "enviarOrcamentoV3", "aprovarOrcamentoV3", "recusarOrcamentoV3", "registrarEnvioOrcamento"]) {
-      expect(modal, `referência fora de escopo (025/026) encontrada: ${proibido}`).not.toContain(proibido)
+  it("GOAL 025/026 — o modal 'Orçamento Rápido' CONTINUA proibido de enviar/aprovar/recusar (isso agora vive em OrcamentoEnvioCluster/OrcamentoDuplicarButton, arquivos dedicados do GOAL 025)", () => {
+    for (const proibido of [
+      "wa.me",
+      "enviarOrcamentoV3",
+      "enviarOrcamentoPorCanalV3",
+      "aprovarOrcamentoV3",
+      "recusarOrcamentoV3",
+      "registrarEnvioOrcamento",
+    ]) {
+      expect(modal, `referência fora de escopo encontrada no modal: ${proibido}`).not.toContain(proibido)
     }
   })
 
@@ -2003,6 +2013,111 @@ describe("GOAL OPS-V4-ORC-RAPIDO-024 — ⚡ Orçamento Rápido conecta ao contr
     for (const proibido of ['"loja-1"', "'loja-1'", "`loja-1`", "openCaixaIfClosed", "updateOSPayload"]) {
       expect(allSources, `proibido encontrado: ${proibido}`).not.toContain(proibido)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-ORC-ENVIO-WA-025 — fecha o ciclo visível do orçamento: mensagem
+// multiopção (gerada da projeção client-safe do GOAL 023), envio por canal
+// (`enviarOrcamentoPorCanalV3`, GOAL 025 motor), painel pós-envio e "Duplicar
+// orçamento" (prefill do GOAL 024). SÓ `OrcamentoEnvioCluster.tsx` e
+// `OrcamentoDuplicarButton.tsx` estão autorizados a chamar essas actions — o
+// `OrcamentoRapidoModal.tsx` (GOAL 024) permanece proibido (guard acima).
+// ---------------------------------------------------------------------------
+describe("GOAL OPS-V4-ORC-ENVIO-WA-025 — envio por canal, mensagem e duplicar", () => {
+  const envioCluster = readFileSync(join(DIR, "parts", "stages", "OrcamentoEnvioCluster.tsx"), "utf8")
+  const duplicarBtn = readFileSync(join(DIR, "parts", "stages", "OrcamentoDuplicarButton.tsx"), "utf8")
+  const orcamentoStage = readFileSync(join(DIR, "parts", "stages", "OrcamentoStage.tsx"), "utf8")
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const modal = readFileSync(join(DIR, "parts", "OrcamentoRapidoModal.tsx"), "utf8")
+
+  it("SÓ o cluster de envio chama enviarOrcamentoPorCanal — o motor real fica em use-v4-preview.ts → orcamento-envio-actions", () => {
+    expect(envioCluster).toContain("v.enviarOrcamentoPorCanal")
+    expect(orquestrador).toContain('from "@/lib/operacoes-v3/orcamento-envio-actions"')
+    expect(orquestrador).toContain("enviarOrcamentoPorCanalV3")
+  })
+
+  it("a mensagem nasce da projeção client-safe (GOAL 023) — nunca de payload/orçamento cru", () => {
+    expect(envioCluster).toContain("v.orcamentoClienteView")
+    expect(envioCluster).toContain("montarMensagemOrcamentoV4")
+    expect(envioCluster).not.toContain(".payload")
+    expect(envioCluster).not.toContain("os.orcamento")
+  })
+
+  it("window.open (WhatsApp) só aparece no painel PÓS-envio (dentro do bloco ultimoResultado), nunca dentro de handleEnviar (popup-safe: nunca encadeado depois de um await)", () => {
+    const idxHandle = envioCluster.indexOf("const handleEnviar")
+    const idxFimHandle = envioCluster.indexOf("const handleCopiarERegistrar")
+    const corpoHandle = envioCluster.slice(idxHandle, idxFimHandle)
+    expect(corpoHandle).not.toContain("window.open")
+    expect(envioCluster).toContain("window.open(linkWa.url")
+  })
+
+  it("Duplicar orçamento nunca envia/aprova/recusa nem cria OS — só monta prefill e abre o modal 024", () => {
+    for (const proibido of [
+      "enviarOrcamentoPorCanalV3",
+      "enviarOrcamentoV3",
+      "registrarEnvioOrcamento",
+      "aprovarOrcamentoV3",
+      "recusarOrcamentoV3",
+      "criarOrcamentoRapidoV3",
+    ]) {
+      expect(duplicarBtn, `referência proibida encontrada em OrcamentoDuplicarButton: ${proibido}`).not.toContain(proibido)
+    }
+    expect(duplicarBtn).toContain("montarPrefillDuplicarOrcamentoV4")
+    expect(duplicarBtn).toContain("v.abrirOrcamentoRapidoComPrefill")
+  })
+
+  it("o cluster de envio e o botão duplicar não importam prisma/@/app/api/caixa/financeiro/estoque/whatsapp/fiscal direto", () => {
+    for (const alvo of [envioCluster, duplicarBtn]) {
+      for (const proibido of [
+        'from "@/lib/prisma',
+        'from "@/app/api',
+        'from "@/lib/caixa',
+        'from "@/lib/financeiro',
+        'from "@/lib/estoque',
+        'from "@/lib/whatsapp',
+        'from "@/lib/fiscal',
+        'from "@/components/pdv',
+      ]) {
+        expect(alvo, `proibido encontrado: ${proibido}`).not.toContain(proibido)
+      }
+    }
+  })
+
+  it("nenhum arquivo novo usa loja-1/openCaixaIfClosed/updateOSPayload", () => {
+    for (const alvo of [envioCluster, duplicarBtn]) {
+      for (const proibido of ['"loja-1"', "'loja-1'", "`loja-1`", "openCaixaIfClosed", "updateOSPayload"]) {
+        expect(alvo, `proibido encontrado: ${proibido}`).not.toContain(proibido)
+      }
+    }
+  })
+
+  it("o cluster de envio é montado no OrcamentoStage (etapa editável), junto do botão Duplicar", () => {
+    expect(orcamentoStage).toContain("<OrcamentoEnvioCluster")
+    expect(orcamentoStage).toContain("<OrcamentoDuplicarButton")
+  })
+
+  it("gating honesto por canal: sem itens desabilita o cluster; WhatsApp desabilita quando o telefone é inválido (demais canais continuam ativos)", () => {
+    expect(envioCluster).toContain("semItens")
+    expect(envioCluster).toMatch(/disabled=\{!linkWa\.valido\}/)
+    // "Copiar mensagem" e "Entregue em mãos" não dependem de linkWa.valido.
+    const idxCopiar = envioCluster.indexOf("handleCopiarERegistrar()} style")
+    const idxPresencial = envioCluster.indexOf('handleEnviar("presencial")')
+    expect(idxCopiar).toBeGreaterThan(-1)
+    expect(idxPresencial).toBeGreaterThan(-1)
+  })
+
+  it("o modal 024 lê initialValues (prefill) mas nunca monta o prefill sozinho — quem monta é orcamento-prefill.ts", () => {
+    expect(modal).toContain("v.orcamentoRapidoInitialValues")
+    expect(modal).not.toContain("montarPrefillDuplicarOrcamentoV4")
+  })
+
+  it("reenvio preserva validoAte: o orquestrador NÃO chama enviarOrcamentoV3 de novo (isso é responsabilidade exclusiva de orcamento-envio-actions no servidor)", () => {
+    const idxFn = orquestrador.indexOf("const enviarOrcamentoPorCanal = useCallback")
+    const idxFim = orquestrador.indexOf("const orcamentoRapidoPrefill", idxFn)
+    const corpo = orquestrador.slice(idxFn, idxFim)
+    expect(corpo).not.toContain("enviarOrcamentoV3(")
+    expect(corpo).toContain("enviarOrcamentoPorCanalV3(")
   })
 })
 

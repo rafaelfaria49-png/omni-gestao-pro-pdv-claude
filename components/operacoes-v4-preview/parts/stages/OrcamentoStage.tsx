@@ -21,6 +21,8 @@ import {
   totaisEditorV4,
   type OrcamentoEditorV4,
 } from "@/lib/operacoes-v4/orcamento-form";
+import { OrcamentoEnvioCluster } from "./OrcamentoEnvioCluster";
+import { OrcamentoDuplicarButton } from "./OrcamentoDuplicarButton";
 
 const col2 = "repeat(auto-fit, minmax(330px, 1fr))";
 const emptyText = { fontSize: 12, color: C.subtle, padding: "8px 2px", lineHeight: 1.5 } as const;
@@ -184,6 +186,11 @@ function OrcamentoReadonly({ v }: { v: V4Vals }) {
             <div style={{ fontSize: 10, color: C.subtle, marginTop: 8, lineHeight: 1.5 }}>Custo interno — não aparece para o cliente.</div>
           </>
         )}
+        {!o.isPrevia && (
+          <div style={{ marginTop: 13 }}>
+            <OrcamentoDuplicarButton v={v} />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -343,7 +350,12 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
               <button type="button" onClick={() => run(() => v.recusarOrcamento(motivo))} disabled={busy} style={{ height: 32, width: "100%", padding: "0 16px", border: `1px solid ${C.dangerBd}`, background: C.surface, color: C.dangerFg, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>Recusar orçamento</button>
             </>
           )}
+          <div style={{ marginTop: 10 }}>
+            <OrcamentoDuplicarButton v={v} />
+          </div>
         </div>
+
+        <OrcamentoEnvioCluster v={v} />
       </div>
     </div>
   );

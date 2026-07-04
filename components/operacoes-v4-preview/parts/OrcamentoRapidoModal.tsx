@@ -66,7 +66,9 @@ function OrcamentoRapidoModalContent({ v }: { v: V4Vals }) {
   const { lojaAtivaId } = useLojaAtiva();
   const sid = (lojaAtivaId ?? "").trim();
 
-  const [form, setForm] = useState<OrcamentoRapidoFormV4>(() => orcamentoRapidoFormVazioV4());
+  // Prefill de "Duplicar orçamento" (GOAL 025) — quando presente, nasce com os
+  // dados da OS original (visão interna, cliente sempre vazio); senão, vazio.
+  const [form, setForm] = useState<OrcamentoRapidoFormV4>(() => v.orcamentoRapidoInitialValues ?? orcamentoRapidoFormVazioV4());
   const [busy, setBusy] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 

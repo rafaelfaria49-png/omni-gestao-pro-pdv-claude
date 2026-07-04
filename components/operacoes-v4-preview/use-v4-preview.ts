@@ -41,6 +41,13 @@ import {
   recusarOrcamentoV3,
 } from "@/lib/operacoes-v3/orcamento-actions";
 import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
+// Envio por canal (GOAL OPS-V4-ORC-ENVIO-WA-025) — action fina de orquestração
+// (decide enviar 1ª vez vs. só registrar reenvio); a mensagem NASCE da projeção
+// client-safe do GOAL 023, nunca do payload cru.
+import { enviarOrcamentoPorCanalV3 } from "@/lib/operacoes-v3/orcamento-envio-actions";
+import type { CanalEnvioOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-model";
+import { montarOrcamentoClienteViewV4 } from "@/lib/operacoes-v4/orcamento-cliente-view";
+import type { OrcamentoRapidoFormV4 } from "@/lib/operacoes-v4/orcamento-rapido-form";
 // Máquina única de status (pura, sem I/O) — reaproveitada para habilitar/desabilitar
 // as ações de Execução exatamente igual ao servidor decide (slice OPS-V4-EXECUCAO-REAL-007).
 import { podeTransicionarV3 } from "@/lib/operacoes-v3/status-machine";
@@ -168,6 +175,22 @@ export interface V4DataCtx {
   salvarChecklist: (itens: ChecklistEntradaItemV3[]) => Promise<boolean>;
   // ---- Dados básicos da OS (slice OPS-V4-DADOS-BASICOS-OS-REAL-003B) ----
   salvarDadosBasicos: (input: SalvarDadosBasicosInputV3) => Promise<boolean>;
+  // ---- Envio de orçamento por canal (GOAL OPS-V4-ORC-ENVIO-WA-025) ----
+  // Diferente do padrão `runWrite` (booleano): devolve `reenvio`/`avisoRegistro`
+  // porque o painel pós-envio precisa saber qual mensagem honesta mostrar.
+  enviarOrcamentoPorCanal: (canal: CanalEnvioOrcamentoV3) => Promise<EnviarOrcamentoPorCanalUiResultV4>;
+  // ---- Prefill de "Duplicar orçamento" (GOAL 025) — estado do prefill vive
+  // fora do `V4State` (objeto rico, não é um flag visual simples); o modal só
+  // lê `orcamentoRapidoPrefill` quando abre.
+  orcamentoRapidoPrefill: OrcamentoRapidoFormV4 | null;
+  definirOrcamentoRapidoPrefill: (values: OrcamentoRapidoFormV4 | null) => void;
+}
+
+/** Resultado honesto de `enviarOrcamentoPorCanal` para a UI decidir o que mostrar. */
+export interface EnviarOrcamentoPorCanalUiResultV4 {
+  ok: boolean;
+  reenvio?: boolean;
+  avisoRegistro?: boolean;
 }
 
 const INITIAL: V4State = {
@@ -288,6 +311,9 @@ export function buildVals(
   // Orçamento REAL — calculado cedo (GOAL 023) para gatear o item "Orçamento
   // (via cliente)" do menu Docs por dado real (`estado === "persistido"`).
   const orcamentoReal = realOS ? adaptOrcamento(realOS) : EMPTY_ORCAMENTO_VIEW;
+  // Projeção client-safe do orçamento (GOAL 023) — fonte ÚNICA da mensagem de
+  // envio (GOAL 025): nunca lemos o payload cru para montar a mensagem.
+  const orcamentoClienteView = realOS ? montarOrcamentoClienteViewV4(realOS) : null;
   // Status exibido: SEMPRE o da OS real carregada (sem drift após escritas/reloads);
   // o snapshot local `st.status` é só fallback enquanto nenhuma OS está selecionada.
   const status = realOS ? realStatusToV4(realOS.status) : st.status;
@@ -894,9 +920,24 @@ export function buildVals(
     // direto (mesmo padrão do Nova OS/Atendimento Rápido) — sem motor novo. A OS
     // nasce mínima com o orçamento multiopção já em rascunho; `onOrcamentoRapidoCriado`
     // fecha o modal, abre a OS no workspace (aba Orçamento) e recarrega a lista.
-    openOrcamentoRapido: () => update({ orcamentoRapido: true }),
-    closeOrcamentoRapido: () => update({ orcamentoRapido: false }),
+    // Abrir "do zero" (botão ⚡ do header) limpa qualquer prefill anterior —
+    // nunca herda dados de uma duplicação prévia por engano.
+    openOrcamentoRapido: () => {
+      ctx.definirOrcamentoRapidoPrefill(null);
+      update({ orcamentoRapido: true });
+    },
+    closeOrcamentoRapido: () => {
+      update({ orcamentoRapido: false });
+      ctx.definirOrcamentoRapidoPrefill(null);
+    },
     orcamentoRapidoOpen: st.orcamentoRapido,
+    orcamentoRapidoInitialValues: ctx.orcamentoRapidoPrefill,
+    // "Duplicar orçamento" (GOAL 025): o OrcamentoStage monta o prefill (visão
+    // INTERNA — inclui custo) e chama isto para abrir a modal já preenchida.
+    abrirOrcamentoRapidoComPrefill: (values: OrcamentoRapidoFormV4) => {
+      ctx.definirOrcamentoRapidoPrefill(values);
+      update({ orcamentoRapido: true });
+    },
     onOrcamentoRapidoCriado,
 
     // ---- Estorno de recebimento REAL (GOAL OPS-V4-RECEBIMENTO-ESTORNO-016) ----
@@ -976,6 +1017,10 @@ export function buildVals(
     orcamentoEditavel,
     orcamentoPodeDecidir,
     orcamentoEditorSeed,
+    // ---- Envio de orçamento por canal + projeção client-safe (GOAL 025) ----
+    orcamentoClienteView,
+    enviarOrcamentoPorCanal: ctx.enviarOrcamentoPorCanal,
+    openDocPrint,
 
     // ---- Entrada/Recepção REAL (slice OPS-V4-ENTRADA-RECEPCAO-REAL-003) ----
     // Handlers reais (actions V3 prova-entrada/checklist). Fotos/assinatura/anexos/
@@ -1145,6 +1190,47 @@ export function useV4Preview(): V4Vals {
     (motivo?: string) => runWrite((sid, osId) => recusarOrcamentoV3(sid, osId, motivo), "Orçamento recusado."),
     [runWrite],
   );
+
+  // ---- Envio de orçamento por canal (GOAL OPS-V4-ORC-ENVIO-WA-025) ----
+  // Bespoke (não usa `runWrite`) porque o painel pós-envio precisa saber
+  // `reenvio`/`avisoRegistro` para mostrar a mensagem honesta certa — o
+  // `runWrite` genérico só devolve `boolean`. Mesma resolução de loja/OS,
+  // mesmo reload de lista+detalhe.
+  const enviarOrcamentoPorCanal = useCallback(
+    async (canal: CanalEnvioOrcamentoV3): Promise<EnviarOrcamentoPorCanalUiResultV4> => {
+      const sid = (lojaAtivaId ?? "").trim();
+      const osId = (selectedOsId ?? "").trim();
+      if (!sid || !osId) {
+        notify("Selecione uma OS na loja ativa para concluir a ação.");
+        return { ok: false };
+      }
+      try {
+        const res = await enviarOrcamentoPorCanalV3(sid, osId, canal);
+        reloadOrdens();
+        reloadDetail();
+        notify(
+          res.avisoRegistro
+            ? "Orçamento enviado — o registro do canal falhou (auditoria incompleta)."
+            : res.reenvio
+              ? "Novo envio registrado."
+              : "Orçamento enviado ao cliente.",
+        );
+        return { ok: true, reenvio: res.reenvio, avisoRegistro: res.avisoRegistro };
+      } catch (e) {
+        notify(e instanceof Error ? e.message : "Não foi possível enviar o orçamento.");
+        return { ok: false };
+      }
+    },
+    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, notify],
+  );
+
+  // ---- Prefill de "Duplicar orçamento" (GOAL 025) — objeto rico, fora do
+  // `V4State` (que só guarda flags visuais simples). O modal lê isto só na
+  // abertura; `null` = formulário vazio (abertura normal, botão ⚡ do header).
+  const [orcamentoRapidoPrefill, setOrcamentoRapidoPrefill] = useState<OrcamentoRapidoFormV4 | null>(null);
+  const definirOrcamentoRapidoPrefill = useCallback((values: OrcamentoRapidoFormV4 | null) => {
+    setOrcamentoRapidoPrefill(values);
+  }, []);
   const iniciarDiagnostico = useCallback(
     () =>
       runWrite(
@@ -1316,6 +1402,9 @@ export function useV4Preview(): V4Vals {
       salvarAcessorios,
       salvarChecklist,
       salvarDadosBasicos,
+      enviarOrcamentoPorCanal,
+      orcamentoRapidoPrefill,
+      definirOrcamentoRapidoPrefill,
     }),
     [
       ordens,
@@ -1346,6 +1435,9 @@ export function useV4Preview(): V4Vals {
       salvarAcessorios,
       salvarChecklist,
       salvarDadosBasicos,
+      enviarOrcamentoPorCanal,
+      orcamentoRapidoPrefill,
+      definirOrcamentoRapidoPrefill,
     ],
   );
 
