@@ -18,6 +18,7 @@ import {
   type RegistrarMovimentacaoCarteiraInput,
 } from "../context/FinanceiroRealContext";
 import { toast } from "sonner";
+import { formatDateBR } from "@/lib/financeiro/contracts/valores";
 import {
   Wallet,
   ArrowDownCircle,
@@ -701,10 +702,16 @@ function VisaoGeral() {
 
 // ContaReceber type imported from FinanceiroRealContext
 
+/** Saldo em aberto de um título — mesma conta usada na tabela e no fluxo "Receber de cliente". */
+function saldoAbertoReceber(c: ContaReceber): number {
+  return Math.max(0, c.valor - c.recebido);
+}
+
 function ContasReceber() {
   const { receber, loading, error, reload, liquidarReceber, receberParcial, estornarReceber, criarReceber } = useFinanceiroReal();
   const [filter, setFilter] = useState<string>("todos");
   const [openNovo, setOpenNovo] = useState(false);
+  const [openReceberCliente, setOpenReceberCliente] = useState(false);
   const [selected, setSelected] = useState<ContaReceber | null>(null);
   const [modal, setModal] = useState<"receber" | "recibo" | "estorno" | "historico" | "renegociar" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -780,8 +787,11 @@ function ContasReceber() {
                 <SelectItem value="pago">Pago</SelectItem>
               </SelectContent>
             </Select>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => setOpenReceberCliente(true)}>
+              <User className="h-4 w-4" /> Receber de cliente
+            </Button>
             <Button size="sm" className="gap-1" onClick={() => setOpenNovo(true)}>
-              <Plus className="h-4 w-4" /> Novo recebimento
+              <Plus className="h-4 w-4" /> Nova conta a receber
             </Button>
           </div>
         </CardHeader>
@@ -802,7 +812,7 @@ function ContasReceber() {
               </TableHeader>
               <TableBody>
                 {list.map((r) => {
-                  const saldoAberto = Math.max(0, r.valor - r.recebido)
+                  const saldoAberto = saldoAbertoReceber(r)
                   return (
                   <TableRow key={r.id}>
                     <TableCell className="max-w-[260px] truncate text-sm" title={r.descricao || r.id}>
@@ -811,7 +821,7 @@ function ContasReceber() {
                     <TableCell>{r.cliente}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{r.parcela ?? "—"}</TableCell>
                     <TableCell className="text-muted-foreground">
-                      {r.venc ? new Date(r.venc).toLocaleDateString("pt-BR") : "—"}
+                      {formatDateBR(r.venc, "Sem vencimento")}
                     </TableCell>
                     <TableCell>{statusBadge(r.status)}</TableCell>
                     <TableCell className="text-right font-medium">{fmt(r.valor)}</TableCell>
@@ -849,6 +859,15 @@ function ContasReceber() {
         </CardContent>
       </Card>
       <NovoRecebimentoModal open={openNovo} onOpenChange={setOpenNovo} onSave={criarReceber} />
+      <ReceberClienteModal
+        open={openReceberCliente}
+        onOpenChange={setOpenReceberCliente}
+        receber={receber}
+        onSelectTitulo={(item) => {
+          setOpenReceberCliente(false);
+          open("receber", item);
+        }}
+      />
       <ReceberContaModal
         open={modal === "receber"}
         onOpenChange={(v) => !v && setModal(null)}
@@ -1014,7 +1033,7 @@ function ContasPagar() {
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{p.parcela ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {p.venc ? new Date(p.venc).toLocaleDateString("pt-BR") : "—"}
+                    {formatDateBR(p.venc, "Sem vencimento")}
                   </TableCell>
                   <TableCell>{statusBadge(p.status)}</TableCell>
                   <TableCell className="text-right font-medium">{fmt(p.valor)}</TableCell>
@@ -2520,6 +2539,131 @@ function FinanceiroHubInner() {
   );
 }
 
+function ReceberClienteModal({
+  open,
+  onOpenChange,
+  receber,
+  onSelectTitulo,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  receber: ContaReceber[];
+  onSelectTitulo: (conta: ContaReceber) => void;
+}) {
+  const [cliente, setCliente] = useState("");
+
+  const clientesComSaldo = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          receber
+            .filter((r) => saldoAbertoReceber(r) > 0)
+            .map((r) => r.cliente)
+            .filter(Boolean),
+        ),
+      ).sort(),
+    [receber],
+  );
+
+  const titulosDoCliente = useMemo(() => {
+    if (!cliente.trim()) return [];
+    return receber.filter((r) => r.cliente === cliente && saldoAbertoReceber(r) > 0);
+  }, [receber, cliente]);
+
+  const handleClose = (v: boolean) => {
+    onOpenChange(v);
+    if (!v) setCliente("");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 p-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <User className="h-4 w-4 text-primary" />
+            Receber de cliente
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Selecione um cliente para ver os títulos em aberto dele e receber um deles.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="receber-cliente-busca">Cliente</Label>
+            <Input
+              id="receber-cliente-busca"
+              list="clientes-list-receber-cliente"
+              placeholder="Buscar cliente com título em aberto..."
+              value={cliente}
+              onChange={(e) => setCliente(e.target.value)}
+              autoFocus
+            />
+            <datalist id="clientes-list-receber-cliente">
+              {clientesComSaldo.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </div>
+
+          <div className="mt-4">
+            {!cliente.trim() ? (
+              <p className="text-xs text-muted-foreground">
+                Digite ou selecione um cliente com título em aberto.
+              </p>
+            ) : titulosDoCliente.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+                Nenhum título em aberto para este cliente.
+              </p>
+            ) : (
+              <div className="min-w-0 overflow-x-auto rounded-lg border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Título</TableHead>
+                      <TableHead>Vencimento</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-right">Recebido</TableHead>
+                      <TableHead className="text-right">Saldo aberto</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {titulosDoCliente.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell className="max-w-[220px] truncate text-sm" title={t.descricao || t.id}>
+                          {t.descricao || <span className="font-mono text-xs text-muted-foreground">{t.id}</span>}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">{formatDateBR(t.venc, "Sem vencimento")}</TableCell>
+                        <TableCell>{statusBadge(t.status)}</TableCell>
+                        <TableCell className="text-right font-medium">{fmt(t.valor)}</TableCell>
+                        <TableCell className="text-right text-primary">{fmt(t.recebido)}</TableCell>
+                        <TableCell className="text-right font-semibold">{fmt(saldoAbertoReceber(t))}</TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" onClick={() => onSelectTitulo(t)}>
+                            Receber
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter className="border-t border-border bg-muted/20 px-6 py-3">
+          <Button variant="outline" onClick={() => handleClose(false)}>
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function NovoRecebimentoModal({
   open,
   onOpenChange,
@@ -2582,7 +2726,7 @@ function NovoRecebimentoModal({
         carteiraId: carteiraId || undefined,
         observacao: observacao.trim() || undefined,
       });
-      toast.success("Recebimento criado");
+      toast.success("Conta a receber criada");
       handleClose(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao salvar");
@@ -2599,9 +2743,10 @@ function NovoRecebimentoModal({
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-base">
             <ArrowDownCircle className="h-4 w-4 text-primary" />
-            Novo recebimento
+            Nova conta a receber
           </DialogTitle>
           <DialogDescription className="text-xs">
+            Cria um título manual novo. Para receber um título já existente, use "Receber de cliente".
             Cliente, valor e vencimento são obrigatórios. Demais campos são opcionais e persistidos em payload.
           </DialogDescription>
         </DialogHeader>
@@ -2748,7 +2893,7 @@ function NovoRecebimentoModal({
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Salvando..." : "Salvar recebimento"}
+            {saving ? "Salvando..." : "Salvar conta"}
           </Button>
         </DialogFooter>
       </DialogContent>

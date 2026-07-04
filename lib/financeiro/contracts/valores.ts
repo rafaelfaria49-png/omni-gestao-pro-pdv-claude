@@ -64,3 +64,13 @@ export function parseDateStringSafe(raw: string | null | undefined): Date | null
   if (!Number.isNaN(t)) return new Date(t)
   return null
 }
+
+/**
+ * Formata vencimento para exibição (pt-BR), aceitando ISO ou `dd/mm/aaaa`.
+ * Nunca produz "Invalid Date" — retorna `fallback` quando a data é vazia/inválida.
+ */
+export function formatDateBR(raw: string | null | undefined, fallback = "—"): string {
+  const d = parseDateStringSafe(raw)
+  if (!d) return fallback
+  return d.toLocaleDateString("pt-BR")
+}
