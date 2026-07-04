@@ -23,7 +23,8 @@ import { PrintPreviewV3 } from "../components/print/PrintPreviewV3";
 import { EmptyStateV3 } from "../components/EmptyStateV3";
 import { ButtonV3 } from "../components/UiV3";
 import { LoadingBlockV3, NoStoreBlockV3 } from "../components/ScreenStateV3";
-import { statusV3FromOS, type OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
+import { statusMetaV3, statusV3FromOS, type OperacaoStatusV3 } from "@/lib/operacoes-v3/status-machine";
+import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
 import { lerRecepcaoV3 } from "@/lib/operacoes-v3/workspace-model";
 import { lerPagamentoV3, PAGAMENTO_STATUS_META_V3 } from "@/lib/operacoes-v3/payment-model";
 import type { EmpresaPrintInputV3 } from "@/lib/operacoes-v3/print-model";
@@ -141,6 +142,31 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
     [mudarStatus, os.id, reloadOrdem],
   );
 
+  // Cancelamento (GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019): chama
+  // `aplicarTransicaoStatusV3` direto (mesmo contrato reforçado) em vez do
+  // `mudarStatus` genérico do contexto, para poder exigir motivo sem alterar a
+  // assinatura compartilhada por outras telas (Bancada/Fila). Recarrega a OS E a
+  // lista (mesmos dois reloads que `mudarStatus` já fazia).
+  const onCancelarOS = useCallback(
+    async (motivo: string): Promise<boolean> => {
+      if (!storeId) {
+        notificar("Selecione uma unidade ativa para cancelar.");
+        return false;
+      }
+      try {
+        await aplicarTransicaoStatusV3(storeId, os.id, "cancelada", { motivo });
+        reloadOrdem();
+        reloadLista();
+        notificar(`Status atualizado para "${statusMetaV3("cancelada").label}".`);
+        return true;
+      } catch (e) {
+        notificar(e instanceof Error ? e.message : "Não foi possível cancelar a OS.");
+        return false;
+      }
+    },
+    [storeId, os.id, reloadOrdem, reloadLista, notificar],
+  );
+
   const irPara = (id: string) =>
     typeof document !== "undefined" && document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -184,7 +210,7 @@ function Workspace({ os, reloadOrdem }: { os: OrdemServico; reloadOrdem: () => v
       </div>
 
       <OSHeaderV3 os={os} actions={quickActions} />
-      <OSCommandBarV3 os={os} onMudarStatus={onMudarStatus} onAcao={acaoEmConstrucao} />
+      <OSCommandBarV3 os={os} onMudarStatus={onMudarStatus} onCancelar={onCancelarOS} onAcao={acaoEmConstrucao} />
       <OSTimelineV3 os={os} />
 
       <div className="min-w-0 space-y-3">

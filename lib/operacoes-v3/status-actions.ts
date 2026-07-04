@@ -12,12 +12,17 @@
 //   • entregue → consumo de estoque + criação de garantia + evento Omni Agent
 //   • cancelada/reabertura → restauração de estoque
 //   • qualquer patch → sync de Financeiro (Conta a Receber)
-// Aqui é status + timeline. EXCEÇÃO (Correção 2A.1): ao CANCELAR, faz um
-// best-effort de cancelar a Conta a Receber ÚNICA da OS (mesma chave do PDV de
-// Serviço / adapter V2) para não deixar título órfão — não materializa nada novo,
-// não toca estoque/garantia, não bloqueia a transição se o financeiro falhar.
-// Estoque/Garantia entram em fase posterior (1C/2). Não toca schema, V2, PDV,
-// WhatsApp, Marketplace, BL-07.
+// Aqui é status + timeline. Estoque/Garantia entram em fase posterior (1C/2).
+// Não toca schema, V2, PDV, WhatsApp, Marketplace, BL-07.
+//
+// GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019 — cancelamento (to==="cancelada")
+// exige `opts.motivo` (mín. 5 caracteres) e BLOQUEIA se houver qualquer valor já
+// recebido (`lerPagamentoOSV3`, fonte autoritativa — não o espelho do payload):
+// nesse caso lança erro orientando a estornar primeiro (`estornarRecebimentoOSV3`).
+// O cancelamento da Conta a Receber acontece ANTES do write de status (não
+// depois, como antes) e o retorno NUNCA é ignorado: se `cancelContaReceber`
+// falhar por um motivo que não seja "título inexistente" (ex.: título pago/
+// estornado), o cancelamento inteiro é abortado — a OS NÃO muda de status.
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
@@ -30,6 +35,7 @@ import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { cancelContaReceber } from "@/lib/financeiro/services/contas-receber-service";
 import { localKeyContaReceberOSV3 } from "./payment-model";
+import { lerPagamentoOSV3 } from "./pdv-servico-actions";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
 import { statusV3ParaEvento } from "./event-model";
 import { restaurarEstoqueOSV3 } from "./estoque-sync";
@@ -56,15 +62,24 @@ function operadorLabel(session: Session | null): string {
   return (u?.name || u?.email || "Você").trim() || "Você";
 }
 
+export interface AplicarTransicaoStatusOptsV3 {
+  /** Obrigatório (mín. 5 caracteres) quando `to === "cancelada"`. Ignorado nas demais transições. */
+  motivo?: string;
+}
+
 /**
  * Aplica uma transição de status da OS pela máquina única da V3.
  * Lança Error com mensagem amigável quando a transição é inválida ou sem permissão.
  * Retorna o payload atualizado (mesmo shape que `getOrdem` hidrata).
+ *
+ * Cancelamento (`to === "cancelada"`) exige `opts.motivo` e é bloqueado se a OS
+ * tiver qualquer valor recebido — ver cabeçalho do módulo.
  */
 export async function aplicarTransicaoStatusV3(
   storeId: string,
   osId: string,
   to: OperacaoStatusV3,
+  opts?: AplicarTransicaoStatusOptsV3,
 ): Promise<OrdemServico> {
   const sid = (storeId ?? "").trim();
   const id = (osId ?? "").trim();
@@ -109,14 +124,51 @@ export async function aplicarTransicaoStatusV3(
   const veredito = podeTransicionarV3(from, to);
   if (!veredito.ok) throw new Error(veredito.motivo ?? "Transição de status não permitida.");
 
+  // ---- Cancelamento seguro (GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019) ----
+  // Motivo obrigatório + bloqueio por pagamento ANTES de qualquer write. A leitura
+  // de pagamento é sempre a autoritativa (mesma fonte do estorno/recebimento),
+  // nunca o espelho `payload.pagamentoV3`. O cancelamento do CR também acontece
+  // aqui (antes do status) e seu retorno é verificado — "not_found" (OS nunca
+  // cobrada) é o caso comum e seguro; qualquer outra falha aborta tudo.
+  let motivoCancelamento: string | undefined;
+  if (to === "cancelada") {
+    const motivo = (opts?.motivo ?? "").trim();
+    if (motivo.length < 5) {
+      throw new Error("Informe o motivo do cancelamento (mín. 5 caracteres).");
+    }
+    motivoCancelamento = motivo;
+
+    const pagamento = await lerPagamentoOSV3(sid, id);
+    if (pagamento.recebido > 0) {
+      throw new Error("Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar.");
+    }
+
+    const resCr = await cancelContaReceber({
+      storeId: sid,
+      localKey: localKeyContaReceberOSV3(sid, id),
+      motivo: motivoCancelamento,
+      userLabel: operadorLabel(session),
+    });
+    if (!resCr.ok && resCr.reason !== "not_found") {
+      throw new Error(
+        resCr.reason === "titulo_pago_nao_cancela_aqui"
+          ? "Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar."
+          : `Não foi possível cancelar o financeiro desta OS (${resCr.reason}). Cancelamento abortado.`,
+      );
+    }
+  }
+
   const statusV2 = projetarStatusV2(to);
   const evento: EventoTimeline = {
     id: eventId(),
     tipo: "mudanca_status",
     autor: operadorLabel(session),
     autorTipo: "usuario",
-    conteudo: `Status alterado para "${statusMetaV3(to).label}".`,
-    metadata: { de: from, para: to, engine: "operacoes-v3" },
+    conteudo:
+      to === "cancelada"
+        ? `Status alterado para "${statusMetaV3(to).label}". Motivo: ${motivoCancelamento}`
+        : `Status alterado para "${statusMetaV3(to).label}".`,
+    metadata: { de: from, para: to, engine: "operacoes-v3", ...(motivoCancelamento ? { motivo: motivoCancelamento } : {}) },
     criadoEm: nowIso(),
   };
   const timeline: EventoTimeline[] = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
@@ -137,23 +189,6 @@ export async function aplicarTransicaoStatusV3(
       payload: nextPayload as unknown as Prisma.InputJsonValue,
     },
   });
-
-  // Correção 2A.1 — proteção de cancelamento: cancela a Conta a Receber ÚNICA da OS
-  // (mesma chave do PDV de Serviço / adapter V2) para não deixar título órfão em
-  // aberto. Best-effort e idempotente: título inexistente é no-op; título já pago/
-  // estornado é preservado pelo próprio serviço. Falha financeira NÃO desfaz o status.
-  if (to === "cancelada") {
-    try {
-      await cancelContaReceber({
-        storeId: sid,
-        localKey: localKeyContaReceberOSV3(sid, id),
-        motivo: "OS cancelada (Operações V3).",
-        userLabel: operadorLabel(session),
-      });
-    } catch (e) {
-      console.error("[aplicarTransicaoStatusV3 cancelCR]", e);
-    }
-  }
 
   // SPRINT_3D.1 — restauração REAL de estoque ao CANCELAR, via adapter oficial.
   // Idempotente e best-effort: a falha NÃO desfaz a transição (vira

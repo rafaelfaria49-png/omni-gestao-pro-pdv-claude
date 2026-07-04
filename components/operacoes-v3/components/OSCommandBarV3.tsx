@@ -13,19 +13,30 @@ import {
 } from "@/lib/operacoes-v3/status-machine";
 import { ButtonV3 } from "./UiV3";
 
+/** Mínimo de caracteres do motivo de cancelamento — mesma regra do servidor (`aplicarTransicaoStatusV3`). */
+const MOTIVO_CANCELAMENTO_MIN_LEN = 5;
+
 /**
  * Barra de comando da OS — dirige a MÁQUINA ÚNICA de status (write real).
  * Mostra a ação primária recomendada + transições válidas + cancelar, todas
  * derivadas de `proximasTransicoesV3`/`acaoPrimariaV3`. Caminhos inválidos não
  * são oferecidos (a engine é a única fonte). "Mais ações" segue placeholder.
+ *
+ * GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019: "Cancelar OS" não dispara mais a
+ * transição em um clique — primeiro pede o motivo obrigatório (prompt nativo,
+ * sem inventar modal novo) e só chama `onCancelar` se o motivo tiver conteúdo
+ * mínimo. A validação real (autoritativa) continua no servidor.
  */
 export function OSCommandBarV3({
   os,
   onMudarStatus,
+  onCancelar,
   onAcao,
 }: {
   os: OrdemServico;
   onMudarStatus: (to: OperacaoStatusV3) => Promise<boolean>;
+  /** Cancelamento com motivo obrigatório — write dedicado (não passa por `onMudarStatus`). */
+  onCancelar: (motivo: string) => Promise<boolean>;
   onAcao: (label: string) => void;
 }) {
   const [pendingTo, setPendingTo] = useState<OperacaoStatusV3 | null>(null);
@@ -42,6 +53,24 @@ export function OSCommandBarV3({
     setPendingTo(to);
     try {
       await onMudarStatus(to);
+    } finally {
+      setPendingTo(null);
+    }
+  };
+
+  const handleCancelar = async () => {
+    if (pendingTo) return;
+    // `window.prompt` é bloqueante — impossível clicar duas vezes enquanto está aberto.
+    const digitado = window.prompt("Motivo do cancelamento (obrigatório):");
+    if (digitado === null) return; // operador desistiu do prompt
+    const motivo = digitado.trim();
+    if (motivo.length < MOTIVO_CANCELAMENTO_MIN_LEN) {
+      window.alert(`Informe um motivo com pelo menos ${MOTIVO_CANCELAMENTO_MIN_LEN} caracteres. Cancelamento não realizado.`);
+      return;
+    }
+    setPendingTo("cancelada");
+    try {
+      await onCancelar(motivo);
     } finally {
       setPendingTo(null);
     }
@@ -71,7 +100,7 @@ export function OSCommandBarV3({
       ))}
 
       {podeCancelar ? (
-        <ButtonV3 variant="danger" disabled={busy} onClick={() => handle("cancelada")}>
+        <ButtonV3 variant="danger" disabled={busy} onClick={handleCancelar}>
           {pendingTo === "cancelada" ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
           Cancelar OS
         </ButtonV3>

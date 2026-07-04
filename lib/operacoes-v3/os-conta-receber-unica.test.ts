@@ -139,6 +139,11 @@ vi.mock("@/lib/financeiro/services/fechamento-service", () => ({
 vi.mock("@/lib/financeiro/services/movimentacoes-service", () => ({
   createMovimentacaoEntradaFromReceber: vi.fn(async () => ({})),
 }));
+// GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019: cancelamento restaura estoque via
+// adapter oficial — mockado aqui porque este arquivo testa a chave única de CR
+// (não estoque, que tem suíte própria em estoque-sync.test.ts) e o harness Prisma
+// em memória acima não modela as tabelas de produto/depósito.
+vi.mock("./estoque-sync", () => ({ restaurarEstoqueOSV3: vi.fn(async () => ({ status: "restored" })) }));
 
 import { receberOSV3, lerPagamentoOSV3, estornarRecebimentoOSV3 } from "./pdv-servico-actions";
 import { aplicarTransicaoStatusV3 } from "./status-actions";
@@ -270,15 +275,72 @@ describe("Correção 2A.1 — chave única: nunca duas Contas a Receber por OS",
     expect(h.titulos.size).toBe(1);
   });
 
-  it("cancelamento: cancelar a OS na V3 cancela o título único (sem órfão)", async () => {
+  it("GOAL OPS-V3-CANCELAR-OS-CONTRATO-SEGURO-019 — cancelamento sem motivo é rejeitado (nada muda)", async () => {
+    seedOS(480);
+    await expect(aplicarTransicaoStatusV3(STORE, OS, "cancelada")).rejects.toThrow(/motivo/i);
+    expect(h.ordens.get(OS).payload.operacaoStatusV3).toBe("aberta");
+  });
+
+  it("cancelamento com motivo curto (<5 caracteres) é rejeitado", async () => {
+    seedOS(480);
+    await expect(aplicarTransicaoStatusV3(STORE, OS, "cancelada", { motivo: "abc" })).rejects.toThrow(/mín/i);
+    expect(h.ordens.get(OS).payload.operacaoStatusV3).toBe("aberta");
+  });
+
+  it("cancelamento com pagamento PARCIAL recebido: BLOQUEADO — título e status da OS permanecem intactos", async () => {
     seedOS(480);
     await receberOSV3(STORE, OS, { valor: 200, forma: dinheiro, sessaoId: "sess-1" });
     expect(h.titulos.size).toBe(1);
 
-    await aplicarTransicaoStatusV3(STORE, OS, "cancelada");
+    await expect(
+      aplicarTransicaoStatusV3(STORE, OS, "cancelada", { motivo: "Cliente desistiu do serviço" }),
+    ).rejects.toThrow("Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar.");
+
+    const t = await getContaReceberByLocalKey(STORE, localKeyContaReceberOSV3(STORE, OS));
+    expect(t!.status).toBe("parcial");
+    expect(h.titulos.size).toBe(1);
+    expect(h.ordens.get(OS).payload.operacaoStatusV3).toBe("aberta");
+  });
+
+  it("cancelamento com pagamento TOTAL recebido: BLOQUEADO — título e status da OS permanecem intactos", async () => {
+    seedOS(480);
+    await receberOSV3(STORE, OS, { valor: 480, forma: dinheiro, sessaoId: "sess-1" });
+
+    await expect(
+      aplicarTransicaoStatusV3(STORE, OS, "cancelada", { motivo: "Cliente desistiu do serviço" }),
+    ).rejects.toThrow("Esta OS possui pagamento recebido. Estorne o recebimento antes de cancelar.");
+
+    const t = await getContaReceberByLocalKey(STORE, localKeyContaReceberOSV3(STORE, OS));
+    expect(t!.status).toBe("pago");
+    expect(h.ordens.get(OS).payload.operacaoStatusV3).toBe("aberta");
+  });
+
+  it("cancelamento SEM pagamento recebido: sucesso — cancela o CR em aberto, muda status e grava motivo na timeline", async () => {
+    seedOS(480);
+    await upsertContaReceberFromOS(faturamentoV2(480));
+    expect(h.titulos.size).toBe(1);
+
+    await aplicarTransicaoStatusV3(STORE, OS, "cancelada", { motivo: "Cliente desistiu do serviço" });
+
     const t = await getContaReceberByLocalKey(STORE, localKeyContaReceberOSV3(STORE, OS));
     expect(t!.status).toBe("cancelado");
     expect(h.titulos.size).toBe(1); // continua único, agora cancelado
+
+    const osRow = h.ordens.get(OS);
+    expect(osRow.payload.operacaoStatusV3).toBe("cancelada");
+    const evento = osRow.payload.timeline.at(-1);
+    expect(evento.conteudo).toContain("Cliente desistiu do serviço");
+    expect(evento.metadata.motivo).toBe("Cliente desistiu do serviço");
+  });
+
+  it("cancelamento de OS nunca cobrada (sem título nenhum): sucesso, nada órfão", async () => {
+    seedOS(480);
+    expect(h.titulos.size).toBe(0);
+
+    await aplicarTransicaoStatusV3(STORE, OS, "cancelada", { motivo: "Aberta por engano" });
+
+    expect(h.titulos.size).toBe(0);
+    expect(h.ordens.get(OS).payload.operacaoStatusV3).toBe("cancelada");
   });
 
   it("nenhuma chave receber:os:* é criada em nenhum fluxo", async () => {
