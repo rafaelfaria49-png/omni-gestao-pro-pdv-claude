@@ -151,6 +151,7 @@ function makeState(over: Partial<V4State> = {}): V4State {
     recibo: false,
     atendimentoRapido: false,
     estornoRecebimento: false,
+    cancelamentoOS: false,
     selectedOsId: null,
     focus: false,
     authState: "autorizado",
@@ -186,6 +187,7 @@ const ctx: V4DataCtx = {
   salvarAssinaturaRetirada: async () => false,
   registrarImpressaoDoc: () => {},
   salvarGarantia: async () => false,
+  cancelarOS: async () => false,
   pdvServico: {
     pagamento: null,
     sessao: null,
@@ -327,21 +329,22 @@ describe("Operações V4 Preview — Modo foco e Segurança (preview/no-op)", ()
 // OPS-V4-UX-PARITY-E-PDV-SERVICO-AUDIT-005 — ações de preview não fingem status.
 // ---------------------------------------------------------------------------
 describe("Operações V4 Preview — ações sem escrita real NUNCA mutam o status exibido", () => {
-  it("Cancelar OS no menu é no-op honesto (toast, sem status) — sem ação V3 segura", () => {
+  it("Cancelar OS no menu abre o modal real (GOAL OPS-V4-CANCELAR-OS-CONNECT-021) — nunca muda status sozinho", () => {
     const patches: Array<Record<string, unknown>> = []
-    const msgs: string[] = []
     const v = buildVals(
       makeState({ status: "em_execucao", novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
-      (m) => msgs.push(m),
+      () => {},
       ctx,
     )
     for (const item of v.moreItems.filter((m) => /Cancelar OS/.test(m.label))) {
       item.onClick()
     }
+    // O clique no menu só abre o modal (ação explícita) — a escrita real
+    // (`aplicarTransicaoStatusV3`) só acontece depois de motivo + confirmação
+    // dentro do modal (ver describe dedicado do GOAL OPS-V4-CANCELAR-OS-CONNECT-021).
     expect(patches.every((p) => !("status" in p))).toBe(true)
-    expect(msgs.length).toBeGreaterThan(0)
-    expect(msgs.every((m) => /nenhuma alteração/i.test(m))).toBe(true)
+    expect(patches.some((p) => p.cancelamentoOS === true)).toBe(true)
   })
 
 })
@@ -1793,5 +1796,175 @@ describe("GOAL OPS-V4-RECEBIMENTO-ESTORNO-016 — estorno de recebimento conecta
 
   it("só existe uma chamada a pdv.estornar( no modal (sem motor duplicado / sem clique disparando duas escritas)", () => {
     expect((modal.match(/pdv\.estornar\(/g) ?? []).length).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-CANCELAR-OS-CONNECT-021 — expõe o cancelamento de OS na V4,
+// consumindo EXCLUSIVAMENTE o contrato REAL já blindado da V3
+// (`aplicarTransicaoStatusV3(sid, osId, "cancelada", { motivo })`, commit
+// f825867: motivo obrigatório, bloqueia qualquer pagamento recebido, nunca
+// ignora o retorno do cancelamento do CR). Sem motor novo, sem API nova. A V4
+// só acrescenta gating client-side (mesma máquina única `podeTransicionarV3`
+// que já governa execAcoes + mesma leitura de pagamento de recebimento/estorno).
+// ---------------------------------------------------------------------------
+describe("GOAL OPS-V4-CANCELAR-OS-CONNECT-021 — cancelamento de OS conecta ao contrato real da V3", () => {
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const modal = readFileSync(join(DIR, "parts", "CancelamentoOSModal.tsx"), "utf8")
+  const formHelper = readFileSync(join(DIR, "..", "..", "lib", "operacoes-v4", "cancelamento-form.ts"), "utf8")
+  const shell = readFileSync(join(DIR, "OperacoesV4Preview.tsx"), "utf8")
+
+  function ctxComCancelamento(
+    realOSStatus: string,
+    pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null,
+  ): V4DataCtx {
+    return {
+      ...ctx,
+      realOS: mkOS({ id: "os-cancel", status: realOSStatus }),
+      pdvServico: { ...ctx.pdvServico, pagamento },
+    }
+  }
+
+  it("v.cancelamento habilita quando status permite e não há pagamento recebido", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-cancel", novaOS: false, status: "em_execucao" }),
+      () => {},
+      () => {},
+      ctxComCancelamento("em_execucao", { total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }),
+    )
+    expect(v.cancelamento.statusPermite).toBe(true)
+    expect(v.cancelamento.semPagamento).toBe(true)
+    expect(v.cancelamento.podeCancelar).toBe(true)
+  })
+
+  it("OS entregue: bloqueia (status não permite) — mensagem vem da máquina única, não inventada", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-cancel", novaOS: false, status: "entregue" }),
+      () => {},
+      () => {},
+      ctxComCancelamento("entregue", null),
+    )
+    expect(v.cancelamento.statusPermite).toBe(false)
+    expect(v.cancelamento.statusMotivoBloqueio).toMatch(/entregue/i)
+    expect(v.cancelamento.podeCancelar).toBe(false)
+  })
+
+  it("OS já cancelada: bloqueia (status não permite)", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-cancel", novaOS: false, status: "cancelada" }),
+      () => {},
+      () => {},
+      ctxComCancelamento("cancelada", null),
+    )
+    expect(v.cancelamento.statusPermite).toBe(false)
+    expect(v.cancelamento.podeCancelar).toBe(false)
+  })
+
+  it("pagamento TOTAL recebido: bloqueia mesmo com status permitido", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-cancel", novaOS: false, status: "pronta" }),
+      () => {},
+      () => {},
+      ctxComCancelamento("pronta", { total: 300, recebido: 300, saldo: 0, status: "quitado" }),
+    )
+    expect(v.cancelamento.statusPermite).toBe(true)
+    expect(v.cancelamento.semPagamento).toBe(false)
+    expect(v.cancelamento.podeCancelar).toBe(false)
+  })
+
+  it("pagamento PARCIAL recebido: bloqueia mesmo com status permitido", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-cancel", novaOS: false, status: "pronta" }),
+      () => {},
+      () => {},
+      ctxComCancelamento("pronta", { total: 480, recebido: 200, saldo: 280, status: "parcial" }),
+    )
+    expect(v.cancelamento.semPagamento).toBe(false)
+    expect(v.cancelamento.podeCancelar).toBe(false)
+  })
+
+  it("sem pagamento e status permitido: habilita cancelamento", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-cancel", novaOS: false, status: "aberta" }),
+      () => {},
+      () => {},
+      ctxComCancelamento("aberta", { total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }),
+    )
+    expect(v.cancelamento.podeCancelar).toBe(true)
+  })
+
+  it("pagamento ainda não carregado (null): não bloqueia por pagamento (mesma regra honesta de recebimento/estorno)", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-cancel", novaOS: false, status: "aberta" }),
+      () => {},
+      () => {},
+      ctxComCancelamento("aberta", null),
+    )
+    expect(v.cancelamento.semPagamento).toBe(true)
+    expect(v.cancelamento.podeCancelar).toBe(true)
+  })
+
+  it("a ação chama aplicarTransicaoStatusV3 com storeId, osId, cancelada e motivo — mesmo wrapper runWrite dos demais handlers", () => {
+    expect(orquestrador).toContain('aplicarTransicaoStatusV3(sid, osId, "cancelada", { motivo })')
+    expect(orquestrador).toMatch(/const cancelarOS = useCallback\(/)
+    expect(orquestrador).toMatch(/\(motivo: string\) =>\s*runWrite\(/)
+    // runWrite só existe uma vez (fonte única de reload/toast/after-em-sucesso).
+    expect(orquestrador.match(/const runWrite = useCallback/g)?.length).toBe(1)
+  })
+
+  it("motivo obrigatório: validação pura no cliente (mesmo mínimo do servidor), sem duplicar regra financeira/status", () => {
+    expect(formHelper).toContain("export function validarMotivoCancelamentoV4")
+    expect(formHelper).not.toContain("aplicarTransicaoStatusV3(")
+    expect(formHelper).not.toContain("podeTransicionarV3")
+    expect(modal).toContain("validarMotivoCancelamentoV4")
+  })
+
+  it("não importa caixa/financeiro/estoque/whatsapp/fiscal/prisma/app-api direto no modal nem no form helper", () => {
+    for (const proibido of [
+      'from "@/lib/caixa',
+      'from "@/lib/financeiro',
+      'from "@/lib/estoque',
+      'from "@/lib/whatsapp',
+      'from "@/lib/fiscal',
+      'from "@/components/pdv',
+      'from "@/lib/prisma',
+      'from "@/app/api',
+    ]) {
+      expect(modal, `import proibido encontrado no modal: ${proibido}`).not.toContain(proibido)
+      expect(formHelper, `import proibido encontrado no form helper: ${proibido}`).not.toContain(proibido)
+    }
+    // O modal nunca importa a action V3 direto — só via `v.cancelarOS` (wrapper do runWrite).
+    expect(modal).not.toContain('from "@/lib/operacoes-v3/status-actions"')
+  })
+
+  it("nunca usa updateOSPayload, loja-1 (fallback literal) nem openCaixaIfClosed", () => {
+    for (const proibido of ["updateOSPayload", '"loja-1"', "'loja-1'", "`loja-1`", "openCaixaIfClosed"]) {
+      expect(modal, `referência proibida encontrada no modal: ${proibido}`).not.toContain(proibido)
+      expect(formHelper, `referência proibida encontrada no form helper: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("é honesto sobre bloqueio de status/pagamento: mostra mensagem real (não inventada) e mantém a confirmação desabilitada", () => {
+    expect(modal).toContain("statusMotivoBloqueio")
+    expect(modal).toMatch(/Esta OS possui pagamento recebido\. Estorne o recebimento antes de cancelar\./)
+    expect(modal).toContain("disabled={!podeConfirmar}")
+  })
+
+  it("o fluxo fica atrás de ação explícita do operador: estado nasce fechado e o modal só monta quando aberto", () => {
+    expect(orquestrador).toMatch(/cancelamentoOS:\s*false,/)
+    expect(modal).toMatch(/if \(!v\.cancelamentoOSOpen\) return null/)
+  })
+
+  it("botão 'Cancelar OS' no menu abre o modal (update cancelamentoOS: true) — não é mais preview/no-op", () => {
+    expect(orquestrador).toContain("onClick: () => update({ cancelamentoOS: true })")
+  })
+
+  it("o modal é montado na casca da V4, ao lado dos demais modais reais", () => {
+    expect(shell).toContain("<CancelamentoOSModal")
+    expect(shell).toContain('from "./parts/CancelamentoOSModal"')
+  })
+
+  it("só existe uma chamada a v.cancelarOS( no modal (sem motor duplicado / sem clique disparando duas escritas)", () => {
+    expect((modal.match(/v\.cancelarOS\(/g) ?? []).length).toBe(1)
   })
 })

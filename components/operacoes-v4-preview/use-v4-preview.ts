@@ -153,6 +153,9 @@ export interface V4DataCtx {
   // ---- Garantia da OS (GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014) ----
   /** Define/edita a garantia prevista da OS (reuso de `salvarGarantiaOSV3`). */
   salvarGarantia: (input: { modeloId: string; prazoDias?: number }) => Promise<boolean>;
+  // ---- Cancelamento de OS (GOAL OPS-V4-CANCELAR-OS-CONNECT-021) ----
+  /** Cancela a OS via `aplicarTransicaoStatusV3(sid, osId, "cancelada", { motivo })` (motivo obrigatório, contrato já blindado — commit f825867). */
+  cancelarOS: (motivo: string) => Promise<boolean>;
   // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
@@ -182,6 +185,7 @@ const INITIAL: V4State = {
   recibo: false,
   atendimentoRapido: false,
   estornoRecebimento: false,
+  cancelamentoOS: false,
   selectedOsId: null,
   focus: false,
   authState: "autorizado",
@@ -507,15 +511,17 @@ export function buildVals(
   // OPS-V4-ACTIONS-RECONCILE-010: "Aguardando peça"/"retomar" já têm ação real na
   // aba Execução (`execAcoes` + marcarAguardandoPeca/iniciarServico) — o menu só
   // NAVEGA até lá (mesmo padrão de "Editar OS (Entrada)" acima), nunca finge um
-  // no-op. "Cancelar OS" segue sem ação V3 segura: continua no-op honesto (toast,
-  // sem mudar o status exibido — antes mudava o header localmente sem cancelar
-  // nada de verdade).
+  // no-op. "Cancelar OS" deixou de ser no-op (GOAL OPS-V4-CANCELAR-OS-CONNECT-021):
+  // abre o modal real, que reaproveita o mesmo veredito da máquina única
+  // (`v.cancelamento`, computado abaixo) para explicar bloqueio por status ou
+  // pagamento — a visibilidade aqui usa a mesma dupla de status finais (entregue/
+  // cancelada) que a máquina única já bloquearia de qualquer forma.
   if (status === "em_execucao" || status === "aprovado")
     moreItems.push({ icon: "⏸", label: "Marcar “Aguardando peça”", color: C.body, onClick: () => go("execucao") });
   if (status === "aguardando_peca")
     moreItems.push({ icon: "▶", label: "Peça chegou — retomar", color: C.body, onClick: () => go("execucao") });
   if (status !== "entregue" && status !== "cancelada")
-    moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => notify(PREVIEW_NOOP) });
+    moreItems.push({ icon: "✕", label: "Cancelar OS", color: C.danger, onClick: () => update({ cancelamentoOS: true }) });
 
   // ---- módulos (rail) — só metadados; as telas de módulo são protótipo sem dados fake ----
   const mod = MODULE_META[st.module] || MODULE_META.dashboard;
@@ -586,6 +592,22 @@ export function buildVals(
     temRecebido: !!pdvPag && pdvPag.recebido > 0,
     caixaAberto: pdvCaixaAberto,
     podeEstornar: !!pdvPag && pdvPag.recebido > 0 && pdvCaixaAberto,
+  };
+
+  // ---- Cancelamento de OS (slice OPS-V4-CANCELAR-OS-CONNECT-021) ----
+  // `statusPermite` reaproveita a MESMA máquina única que já governa `execAcoes`
+  // (`podeTransicionarV3`, pura, importada da V3) — nunca inventa status; bloqueia
+  // sozinha entregue/cancelada (estados finais). `statusMotivoBloqueio` guarda o
+  // motivo exato que o servidor usaria, para a UI mostrar a mesma mensagem sem
+  // duplicar texto. `semPagamento` reaproveita `pdvPag` (mesma leitura de
+  // `recebimento`/`estorno`, sem novo read) — mesma regra que a V3 já aplica
+  // (bloqueia cancelamento com QUALQUER valor recebido, total ou parcial).
+  const cancelamentoVeredito = podeTransicionarV3(status, "cancelada");
+  const cancelamento = {
+    statusPermite: !!realOS && cancelamentoVeredito.ok,
+    statusMotivoBloqueio: cancelamentoVeredito.motivo,
+    semPagamento: !pdvPag || pdvPag.recebido <= 0,
+    podeCancelar: !!realOS && cancelamentoVeredito.ok && (!pdvPag || pdvPag.recebido <= 0),
   };
 
   // ---- Entrega (GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
@@ -844,6 +866,17 @@ export function buildVals(
     openEstornoRecebimento: () => update({ estornoRecebimento: true }),
     closeEstornoRecebimento: () => update({ estornoRecebimento: false }),
     estornoRecebimentoOpen: st.estornoRecebimento,
+
+    // ---- Cancelamento de OS REAL (GOAL OPS-V4-CANCELAR-OS-CONNECT-021) ----
+    // Modal só abre atrás de ação explícita (menu "Mais ações"); a escrita real é
+    // `cancelarOS` (acima, via runWrite → aplicarTransicaoStatusV3 já blindada).
+    // `cancelamento` é o gating pré-computado (mesma máquina única + mesma leitura
+    // de pagamento que já alimentam execAcoes/estorno — nunca um novo read).
+    openCancelamentoOS: () => update({ cancelamentoOS: true }),
+    closeCancelamentoOS: () => update({ cancelamentoOS: false }),
+    cancelamentoOSOpen: st.cancelamentoOS,
+    cancelamento,
+    cancelarOS: ctx.cancelarOS,
 
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 
@@ -1162,6 +1195,22 @@ export function useV4Preview(): V4Vals {
     [runWrite],
   );
 
+  // ---- Cancelamento de OS (GOAL OPS-V4-CANCELAR-OS-CONNECT-021): mesmo wrapper
+  // `runWrite` (reload + toast honesto; sem mutar status local se a action
+  // falhar) — reaproveita `aplicarTransicaoStatusV3` já blindada na V3 (commit
+  // f825867: exige motivo, bloqueia pagamento recebido, nunca ignora o retorno
+  // do cancelamento do CR). O modal só fecha via `after`, ou seja, só em sucesso
+  // real confirmado pelo servidor — nunca estado otimista.
+  const cancelarOS = useCallback(
+    (motivo: string) =>
+      runWrite(
+        (sid, osId) => aplicarTransicaoStatusV3(sid, osId, "cancelada", { motivo }),
+        "OS cancelada.",
+        () => update({ status: "cancelada", cancelamentoOS: false }),
+      ),
+    [runWrite, update],
+  );
+
   // ---- Entrada/Recepção (slice 003): handlers reais (prova-entrada / checklist) ----
   const salvarIdentificacao = useCallback(
     (input: IdentificacaoV3) =>
@@ -1221,6 +1270,7 @@ export function useV4Preview(): V4Vals {
       salvarAssinaturaRetirada,
       registrarImpressaoDoc,
       salvarGarantia,
+      cancelarOS,
       pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,
@@ -1250,6 +1300,7 @@ export function useV4Preview(): V4Vals {
       salvarAssinaturaRetirada,
       registrarImpressaoDoc,
       salvarGarantia,
+      cancelarOS,
       pdvServico,
       salvarIdentificacao,
       salvarProvaEntrada,
