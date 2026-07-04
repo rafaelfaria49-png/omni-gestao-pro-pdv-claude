@@ -180,6 +180,7 @@ const INITIAL: V4State = {
   histFilter: "todos",
   novaOS: false,
   recibo: false,
+  atendimentoRapido: false,
   selectedOsId: null,
   focus: false,
   authState: "autorizado",
@@ -647,6 +648,26 @@ export function buildVals(
     notify("OS criada e aberta no workspace.");
   };
 
+  // Atendimento rápido concluído (REAL, GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014)
+  // pelo modal → fecha o modal, abre a OS já finalizada no workspace e recarrega a
+  // lista. `finalizarAtendimentoRapidoV3` (V3) cria + orça + aprova + recebe + entrega
+  // em um único passo — por isso o snapshot local aponta direto "entregue"/"entrega"
+  // (nunca "aberta"), evitando o flicker de mostrar a OS como recém-aberta até o
+  // detalhe real (`realOS`) carregar e sobrescrever o snapshot.
+  const onAtendimentoRapidoConcluido = (osId: string) => {
+    update({
+      atendimentoRapido: false,
+      selectedOsId: osId,
+      status: "entregue",
+      stage: "entrega",
+      module: "workspace",
+      view: "cockpit",
+      menu: null,
+    });
+    ctx.reloadOrdens();
+    notify("Atendimento rápido concluído — OS criada, recebida e entregue.");
+  };
+
   const prim = status === "pronta" && semSaldoPendenteEntrega ? PRIMARY_ENTREGAR_OS : PRIMARY[status];
   const tone = TONE[status] || TONE.em_execucao;
   const prioM = PRIO[st.prioridade];
@@ -796,6 +817,15 @@ export function buildVals(
     // Nova OS real: o modal coleta o formulário localmente, cria via `criarOSEnterpriseV3`
     // e chama `onOSCriada(osId)` no sucesso (fecha modal + abre a OS criada + recarrega).
     onOSCriada,
+
+    // ---- Atendimento rápido REAL (GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014) ----
+    // O modal coleta o formulário localmente e chama `finalizarAtendimentoRapidoV3`
+    // direto (mesmo padrão do Nova OS acima) — sem motor novo. `onAtendimentoRapidoConcluido`
+    // fecha o modal, abre a OS já finalizada no workspace e recarrega a lista.
+    openAtendimentoRapido: () => update({ atendimentoRapido: true }),
+    closeAtendimentoRapido: () => update({ atendimentoRapido: false }),
+    atendimentoRapidoOpen: st.atendimentoRapido,
+    onAtendimentoRapidoConcluido,
 
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 

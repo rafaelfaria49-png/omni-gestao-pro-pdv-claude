@@ -58,6 +58,8 @@ export interface V4State {
   histFilter: string;
   novaOS: boolean;
   recibo: boolean;
+  /** Modal "Atendimento rápido" (GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014). */
+  atendimentoRapido: boolean;
   /** null = tela limpa (empty state); id = OS real selecionada. */
   selectedOsId: string | null;
   /**

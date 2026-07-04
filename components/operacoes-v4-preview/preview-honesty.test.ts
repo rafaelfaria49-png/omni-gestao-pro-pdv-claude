@@ -149,6 +149,7 @@ function makeState(over: Partial<V4State> = {}): V4State {
     histFilter: "todos",
     novaOS: true,
     recibo: false,
+    atendimentoRapido: false,
     selectedOsId: null,
     focus: false,
     authState: "autorizado",
@@ -1564,5 +1565,100 @@ describe("GOAL OPS-V4-GARANTIA-EDITOR-IMPL-014 — v.salvarGarantia expõe o han
     }
     const v = buildVals(makeState({ selectedOsId: "os-gar-2", novaOS: false }), () => {}, () => {}, ctxLocal)
     await expect(v.salvarGarantia({ modeloId: "sem_garantia" })).resolves.toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014 — "Atendimento rápido" conecta a
+// V4 ao contrato REAL já existente da V3 (`finalizarAtendimentoRapidoV3`): cria
+// a OS pelo caminho seguro, gera e aprova o orçamento, recebe no caixa e marca
+// como entregue — em um único passo, com compensação automática no servidor se
+// algo falhar no meio. Sem motor novo, sem API nova, sem tocar caixa/financeiro/
+// estoque/whatsapp/fiscal diretamente. Os checks abaixo leem o SOURCE real via
+// fs (não importam os componentes), então não precisam de mocks novos.
+// ---------------------------------------------------------------------------
+describe("GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014 — conecta ao contrato real da V3", () => {
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const modal = readFileSync(join(DIR, "parts", "AtendimentoRapidoModal.tsx"), "utf8")
+  const formHelper = readFileSync(join(DIR, "..", "..", "lib", "operacoes-v4", "atendimento-rapido-form.ts"), "utf8")
+  const topBar = readFileSync(join(DIR, "parts", "TopBar.tsx"), "utf8")
+  const shell = readFileSync(join(DIR, "OperacoesV4Preview.tsx"), "utf8")
+  const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+
+  it("reutiliza finalizarAtendimentoRapidoV3 (V3, sem motor novo)", () => {
+    expect(modal).toContain('from "@/lib/operacoes-v3/atendimento-rapido-actions"')
+    expect(modal).toContain("finalizarAtendimentoRapidoV3")
+  })
+
+  it("reutiliza validarAtendimentoRapidoV3 (V3) em vez de duplicar a validação (uma única fonte de verdade para as mensagens de erro)", () => {
+    expect(modal).toContain('from "@/lib/operacoes-v3/atendimento-rapido-model"')
+    expect(modal).toContain("validarAtendimentoRapidoV3")
+    expect(modal).not.toContain("Informe o serviço realizado.")
+    expect(modal).not.toContain("Informe um valor maior que zero para o serviço.")
+  })
+
+  it("não cria rota de API nova — chama a Server Action direto, como o Nova OS já faz", () => {
+    expect(modal).not.toContain('from "@/app/api')
+    expect(formHelper).not.toContain('from "@/app/api')
+    expect(allSources).not.toContain('from "@/app/api')
+  })
+
+  it("não importa caixa/financeiro/estoque/whatsapp/fiscal/prisma direto — só lê o status do caixa via contrato V3 (getCaixaSessaoAbertaV3)", () => {
+    for (const proibido of [
+      'from "@/lib/caixa',
+      'from "@/lib/financeiro',
+      'from "@/lib/estoque',
+      'from "@/lib/whatsapp',
+      'from "@/lib/fiscal',
+      'from "@/components/pdv',
+      'from "@/lib/prisma',
+    ]) {
+      expect(modal, `import proibido encontrado no modal: ${proibido}`).not.toContain(proibido)
+      expect(formHelper, `import proibido encontrado no form helper: ${proibido}`).not.toContain(proibido)
+    }
+    expect(modal).toContain('from "@/lib/operacoes-v3/pdv-servico-actions"')
+    expect(modal).toContain("getCaixaSessaoAbertaV3")
+  })
+
+  it("nunca usa updateOSPayload, loja-1 (fallback literal) nem openCaixaIfClosed", () => {
+    for (const proibido of ["updateOSPayload", '"loja-1"', "'loja-1'", "`loja-1`", "openCaixaIfClosed"]) {
+      expect(modal, `referência proibida encontrada no modal: ${proibido}`).not.toContain(proibido)
+      expect(formHelper, `referência proibida encontrada no form helper: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("é honesto sobre caixa fechado: mostra aviso real e mantém o botão desabilitado (nunca finge sucesso)", () => {
+    expect(modal).toMatch(/Caixa fechado/i)
+    expect(modal).toMatch(/caixaAberta\s*===\s*true/)
+    expect(modal).toContain("disabled={!podeFinalizar}")
+    // Nunca abre caixa por conta própria — só lê o estado real.
+    expect(modal).not.toContain("abrirCaixa")
+  })
+
+  it("não há dado fabricado no modal — usa o catálogo curado real da V3 (SERVICOS_RAPIDOS_V3), sem cliente/OS de exemplo hardcoded", () => {
+    expect(modal).toContain("SERVICOS_RAPIDOS_V3")
+    for (const fake of ["Cliente Teste", "OS-0001", "João da Silva"]) {
+      expect(modal, `dado fabricado encontrado: ${fake}`).not.toContain(fake)
+    }
+  })
+
+  it("o fluxo fica atrás de ação explícita do operador: estado nasce fechado e o modal só monta o formulário quando aberto", () => {
+    expect(orquestrador).toMatch(/atendimentoRapido:\s*false,/)
+    expect(modal).toMatch(/if \(!v\.atendimentoRapidoOpen\) return null/)
+  })
+
+  it("botão 'Atendimento rápido' no TopBar chama v.openAtendimentoRapido (ação explícita, ao lado do + Nova OS)", () => {
+    expect(topBar).toContain("v.openAtendimentoRapido")
+    expect(topBar).toMatch(/Atendimento rápido/)
+  })
+
+  it("o modal é montado na casca da V4, ao lado do Nova OS", () => {
+    expect(shell).toContain("<AtendimentoRapidoModal")
+    expect(shell).toContain('from "./parts/AtendimentoRapidoModal"')
+  })
+
+  it("ao concluir, reusa o mesmo padrão de reload do Nova OS (reloadOrdens + seleciona a OS + fecha o modal) — sem estado local fake", () => {
+    expect(orquestrador).toMatch(/const onAtendimentoRapidoConcluido = \(osId: string\) => \{/)
+    expect(orquestrador).toMatch(/ctx\.reloadOrdens\(\);\s*notify\("Atendimento rápido concluído/)
   })
 })

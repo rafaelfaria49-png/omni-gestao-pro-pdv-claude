@@ -171,6 +171,27 @@ export function TopBar({ v }: { v: V4Vals }) {
         </button>
         <button
           type="button"
+          onClick={v.openAtendimentoRapido}
+          title="Cria uma OS rápida com orçamento, pagamento e entrega em uma única etapa"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            height: 28,
+            padding: "0 12px",
+            border: `1px solid ${C.primaryBd}`,
+            background: C.surface,
+            color: C.primary,
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          ⚡ Atendimento rápido
+        </button>
+        <button
+          type="button"
           onClick={v.openNovaOS}
           style={{
             display: "inline-flex",

@@ -21,6 +21,7 @@ import { WorkspaceView } from "./parts/WorkspaceView";
 import { ModuleView } from "./parts/ModuleView";
 import { AuditoriaPage } from "./parts/AuditoriaPage";
 import { NovaOSModal } from "./parts/NovaOSModal";
+import { AtendimentoRapidoModal } from "./parts/AtendimentoRapidoModal";
 import { ReciboModal } from "./parts/ReciboModal";
 import { DocPrintModal } from "./parts/DocPrintModal";
 import { Toast } from "./parts/Toast";
@@ -57,6 +58,7 @@ export function OperacoesV4Preview() {
       </div>
 
       <NovaOSModal v={v} />
+      <AtendimentoRapidoModal v={v} />
       <ReciboModal v={v} />
       <DocPrintModal v={v} />
       <Toast v={v} />
