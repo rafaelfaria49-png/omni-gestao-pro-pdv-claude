@@ -18,7 +18,7 @@ import {
   type RegistrarMovimentacaoCarteiraInput,
 } from "../context/FinanceiroRealContext";
 import { toast } from "sonner";
-import { formatDateBR } from "@/lib/financeiro/contracts/valores";
+import { distribuirRecebimentoPorVencimento, formatDateBR, parseDateStringSafe } from "@/lib/financeiro/contracts/valores";
 import {
   Wallet,
   ArrowDownCircle,
@@ -787,10 +787,10 @@ function ContasReceber() {
                 <SelectItem value="pago">Pago</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="sm" variant="outline" className="gap-1" onClick={() => setOpenReceberCliente(true)}>
+            <Button size="sm" className="gap-1" onClick={() => setOpenReceberCliente(true)}>
               <User className="h-4 w-4" /> Receber de cliente
             </Button>
-            <Button size="sm" className="gap-1" onClick={() => setOpenNovo(true)}>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => setOpenNovo(true)}>
               <Plus className="h-4 w-4" /> Nova conta a receber
             </Button>
           </div>
@@ -867,6 +867,9 @@ function ContasReceber() {
           setOpenReceberCliente(false);
           open("receber", item);
         }}
+        onLiquidarTitulo={liquidarReceber}
+        onReceberParcialTitulo={receberParcial}
+        onReload={reload}
       />
       <ReceberContaModal
         open={modal === "receber"}
@@ -2544,13 +2547,23 @@ function ReceberClienteModal({
   onOpenChange,
   receber,
   onSelectTitulo,
+  onLiquidarTitulo,
+  onReceberParcialTitulo,
+  onReload,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   receber: ContaReceber[];
   onSelectTitulo: (conta: ContaReceber) => void;
+  onLiquidarTitulo: (id: string, observacao?: string) => Promise<void>;
+  onReceberParcialTitulo: (id: string, valor: number, observacao?: string) => Promise<void>;
+  onReload: () => void;
 }) {
   const [cliente, setCliente] = useState("");
+  const [valorRecebido, setValorRecebido] = useState("");
+  const [formaPagamento, setFormaPagamento] = useState("");
+  const [observacao, setObservacao] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const clientesComSaldo = useMemo(
     () =>
@@ -2567,24 +2580,92 @@ function ReceberClienteModal({
 
   const titulosDoCliente = useMemo(() => {
     if (!cliente.trim()) return [];
-    return receber.filter((r) => r.cliente === cliente && saldoAbertoReceber(r) > 0);
+    return receber
+      .filter((r) => r.cliente === cliente && saldoAbertoReceber(r) > 0)
+      .sort((a, b) => {
+        const ta = parseDateStringSafe(a.venc)?.getTime() ?? Number.POSITIVE_INFINITY;
+        const tb = parseDateStringSafe(b.venc)?.getTime() ?? Number.POSITIVE_INFINITY;
+        return ta - tb;
+      });
   }, [receber, cliente]);
 
+  const valorNum = parseFloat(valorRecebido.replace(",", "."));
+  const plano = useMemo(
+    () =>
+      distribuirRecebimentoPorVencimento(
+        titulosDoCliente.map((t) => ({ id: t.id, saldoAberto: saldoAbertoReceber(t), vencimento: t.venc })),
+        Number.isFinite(valorNum) ? valorNum : 0,
+      ),
+    [titulosDoCliente, valorNum],
+  );
+
   const handleClose = (v: boolean) => {
+    if (busy) return;
     onOpenChange(v);
-    if (!v) setCliente("");
+    if (!v) {
+      setCliente("");
+      setValorRecebido("");
+      setFormaPagamento("");
+      setObservacao("");
+    }
+  };
+
+  const handleReceberValor = async () => {
+    if (busy) return;
+    if (titulosDoCliente.length === 0) {
+      toast.error("Nenhum título em aberto para este cliente.");
+      return;
+    }
+    if (!plano.ok) {
+      toast.error(
+        plano.erro === "valor_maior_que_saldo"
+          ? "O valor recebido não pode ser maior que o saldo em aberto do cliente."
+          : "Informe um valor recebido maior que zero.",
+      );
+      return;
+    }
+    setBusy(true);
+    const obsPartes = ["Recebimento avulso por cliente"];
+    if (formaPagamento) obsPartes.push(`forma: ${formaPagamento}`);
+    if (observacao.trim()) obsPartes.push(observacao.trim());
+    const obs = obsPartes.join(" — ");
+    let executadas = 0;
+    try {
+      for (const baixa of plano.baixas) {
+        if (baixa.total) {
+          await onLiquidarTitulo(baixa.id, obs);
+        } else {
+          await onReceberParcialTitulo(baixa.id, baixa.valor, obs);
+        }
+        executadas += 1;
+      }
+      toast.success("Recebimento registrado com sucesso.");
+      setValorRecebido("");
+      setFormaPagamento("");
+      setObservacao("");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Falha ao registrar recebimento";
+      toast.error(
+        executadas > 0
+          ? `Falha na baixa ${executadas + 1} de ${plano.baixas.length}: ${msg}. As ${executadas} baixas anteriores foram registradas.`
+          : `Falha ao registrar recebimento: ${msg}`,
+      );
+      onReload();
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col gap-0 p-0">
+      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="flex items-center gap-2 text-base">
             <User className="h-4 w-4 text-primary" />
             Receber de cliente
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Selecione um cliente para ver os títulos em aberto dele e receber um deles.
+            Receba um valor avulso do cliente (baixado nos títulos mais antigos primeiro) ou receba um título específico.
           </DialogDescription>
         </DialogHeader>
 
@@ -2616,46 +2697,118 @@ function ReceberClienteModal({
                 Nenhum título em aberto para este cliente.
               </p>
             ) : (
-              <div className="min-w-0 overflow-x-auto rounded-lg border border-border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Título</TableHead>
-                      <TableHead>Vencimento</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
-                      <TableHead className="text-right">Recebido</TableHead>
-                      <TableHead className="text-right">Saldo aberto</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {titulosDoCliente.map((t) => (
-                      <TableRow key={t.id}>
-                        <TableCell className="max-w-[220px] truncate text-sm" title={t.descricao || t.id}>
-                          {t.descricao || <span className="font-mono text-xs text-muted-foreground">{t.id}</span>}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{formatDateBR(t.venc, "Sem vencimento")}</TableCell>
-                        <TableCell>{statusBadge(t.status)}</TableCell>
-                        <TableCell className="text-right font-medium">{fmt(t.valor)}</TableCell>
-                        <TableCell className="text-right text-primary">{fmt(t.recebido)}</TableCell>
-                        <TableCell className="text-right font-semibold">{fmt(saldoAbertoReceber(t))}</TableCell>
-                        <TableCell className="text-right">
-                          <Button size="sm" onClick={() => onSelectTitulo(t)}>
-                            Receber
-                          </Button>
-                        </TableCell>
+              <div className="space-y-4">
+                {/* Recebimento por valor avulso */}
+                <section className="rounded-lg border border-primary/30 bg-primary/5 p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Receber valor do cliente
+                    </h3>
+                    <p className="text-sm">
+                      Total em aberto: <span className="font-semibold text-primary">{fmt(plano.totalAberto)}</span>
+                    </p>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="receber-cliente-valor">Valor recebido agora (R$)</Label>
+                      <Input
+                        id="receber-cliente-valor"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0,00"
+                        value={valorRecebido}
+                        onChange={(e) => setValorRecebido(e.target.value)}
+                        disabled={busy}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Forma de pagamento</Label>
+                      <Select value={formaPagamento} onValueChange={setFormaPagamento} disabled={busy}>
+                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Dinheiro">Dinheiro</SelectItem>
+                          <SelectItem value="PIX">PIX</SelectItem>
+                          <SelectItem value="Cartão de crédito">Cartão de crédito</SelectItem>
+                          <SelectItem value="Cartão de débito">Cartão de débito</SelectItem>
+                          <SelectItem value="Boleto">Boleto</SelectItem>
+                          <SelectItem value="Transferência">Transferência</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="receber-cliente-obs">Observação (opcional)</Label>
+                      <Input
+                        id="receber-cliente-obs"
+                        placeholder="Ex.: pagamento parcial combinado"
+                        value={observacao}
+                        onChange={(e) => setObservacao(e.target.value)}
+                        disabled={busy}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {!valorRecebido.trim()
+                        ? "O valor será distribuído automaticamente nos títulos mais antigos primeiro."
+                        : plano.ok
+                          ? `Esse recebimento quitará ${plano.quitados} título(s) e fará baixa parcial em ${plano.parciais} título(s).`
+                          : plano.erro === "valor_maior_que_saldo"
+                            ? "O valor recebido não pode ser maior que o saldo em aberto do cliente."
+                            : "Informe um valor maior que zero."}
+                    </p>
+                    <Button size="sm" onClick={handleReceberValor} disabled={busy || !plano.ok}>
+                      {busy ? "Registrando..." : "Receber valor"}
+                    </Button>
+                  </div>
+                </section>
+
+                {/* Títulos em aberto — recebimento individual */}
+                <div className="min-w-0 rounded-lg border border-border">
+                  <Table className="table-fixed">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Título</TableHead>
+                        <TableHead className="w-28">Vencimento</TableHead>
+                        <TableHead className="w-28 text-right">Saldo aberto</TableHead>
+                        <TableHead className="w-24 text-right">Ação</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {titulosDoCliente.map((t) => (
+                        <TableRow key={t.id}>
+                          <TableCell className="max-w-0">
+                            <div className="truncate text-sm" title={t.descricao || t.id}>
+                              {t.descricao || <span className="font-mono text-xs text-muted-foreground">{t.id}</span>}
+                            </div>
+                            <div className="mt-0.5">{statusBadge(t.status)}</div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {formatDateBR(t.venc, "Sem vencimento")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="font-semibold">{fmt(saldoAbertoReceber(t))}</span>
+                            {t.recebido > 0 ? (
+                              <div className="text-[10px] text-muted-foreground">de {fmt(t.valor)}</div>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button size="sm" variant="outline" disabled={busy} onClick={() => onSelectTitulo(t)}>
+                              Receber
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             )}
           </div>
         </div>
 
         <DialogFooter className="border-t border-border bg-muted/20 px-6 py-3">
-          <Button variant="outline" onClick={() => handleClose(false)}>
+          <Button variant="outline" onClick={() => handleClose(false)} disabled={busy}>
             Fechar
           </Button>
         </DialogFooter>

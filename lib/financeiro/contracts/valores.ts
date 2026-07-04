@@ -74,3 +74,61 @@ export function formatDateBR(raw: string | null | undefined, fallback = "—"): 
   if (!d) return fallback
   return d.toLocaleDateString("pt-BR")
 }
+
+// ── Recebimento avulso por cliente (FINANCEIRO-RECEBER-CLIENTE-VALOR-AVULSO-003) ──
+
+export type TituloAbertoDistribuicao = {
+  id: string
+  saldoAberto: number
+  /** Vencimento textual (ISO ou dd/mm/aaaa). Ausente/inválido vai para o fim da fila. */
+  vencimento?: string | null
+}
+
+export type BaixaDistribuida = {
+  id: string
+  valor: number
+  /** `true` = quita o saldo do título (baixa total); `false` = baixa parcial. */
+  total: boolean
+}
+
+export type DistribuicaoRecebimento =
+  | { ok: true; totalAberto: number; baixas: BaixaDistribuida[]; quitados: number; parciais: number }
+  | { ok: false; erro: "sem_titulos" | "valor_invalido" | "valor_maior_que_saldo"; totalAberto: number }
+
+/**
+ * Distribui um valor recebido do cliente entre os títulos em aberto,
+ * do vencimento mais antigo para o mais novo. Títulos sem saldo aberto
+ * são ignorados. Não executa baixa — apenas calcula o plano.
+ */
+export function distribuirRecebimentoPorVencimento(
+  titulos: TituloAbertoDistribuicao[],
+  valorRecebido: unknown,
+): DistribuicaoRecebimento {
+  const abertos = titulos
+    .map((t, idx) => ({ id: t.id, saldo: safeMoney(t.saldoAberto), venc: parseDateStringSafe(t.vencimento), idx }))
+    .filter((t) => t.saldo > 0)
+    .sort((a, b) => {
+      const ta = a.venc ? a.venc.getTime() : Number.POSITIVE_INFINITY
+      const tb = b.venc ? b.venc.getTime() : Number.POSITIVE_INFINITY
+      return ta !== tb ? ta - tb : a.idx - b.idx
+    })
+
+  const totalAberto = sumMoney(...abertos.map((t) => t.saldo))
+  const valor = safeMoney(valorRecebido)
+
+  if (abertos.length === 0) return { ok: false, erro: "sem_titulos", totalAberto }
+  if (valor <= 0) return { ok: false, erro: "valor_invalido", totalAberto }
+  if (valor > totalAberto) return { ok: false, erro: "valor_maior_que_saldo", totalAberto }
+
+  const baixas: BaixaDistribuida[] = []
+  let restante = valor
+  for (const t of abertos) {
+    if (restante <= 0) break
+    const aplicado = safeMoney(Math.min(restante, t.saldo))
+    baixas.push({ id: t.id, valor: aplicado, total: aplicado >= t.saldo })
+    restante = safeMoney(restante - aplicado)
+  }
+
+  const quitados = baixas.filter((b) => b.total).length
+  return { ok: true, totalAberto, baixas, quitados, parciais: baixas.length - quitados }
+}
