@@ -1,19 +1,31 @@
 /**
  * Operações V4 — recebimento real da OS (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001).
+ * GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002: paridade com o split imediato que a V3
+ * já expõe — múltiplas formas (dinheiro/PIX/débito/crédito) num único recebimento.
  *
  * UI fina sobre o motor único da V3: lê/escreve por `v.pdvServico`
  * (`usePdvServicoV3` → `receberOSV3`/`lerPagamentoOSV3`, sem motor novo). Exige
  * sessão de caixa ABERTA (nunca abre caixa por aqui); permite valor parcial
- * (validado pelo mesmo `validarRecebimentoV3` da V3); só usa formas já
- * suportadas pelo contrato real. Sem estoque, sem venda, sem services
- * financeiros diretos — tudo passa por `receberOSV3`.
+ * (validado pelo mesmo `validarSplitV3` da V3); só usa formas já suportadas
+ * pelo contrato real. Sem estoque, sem venda, sem services financeiros
+ * diretos — tudo passa por `receberOSV3`.
+ *
+ * A prazo/parcelado/crediário/carteira ficam fora deste GOAL (próximo trabalho:
+ * OS-RECEBIMENTO-A-PRAZO-CONTRATO) — precisam de um contrato próprio (entrada +
+ * parcelas + vencimentos + Conta a Receber), não são uma "forma" a mais no split.
  */
 "use client";
 
 import { useState } from "react";
 import { C, fmt } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
-import { FORMAS_RECEBIMENTO_V3, validarRecebimentoV3, type FormaRecebimentoV3 } from "@/lib/operacoes-v3/payment-model";
+import {
+  FORMAS_RECEBIMENTO_V3,
+  somaSplitV3,
+  validarSplitV3,
+  type FormaRecebimentoV3,
+  type SplitLinhaV3,
+} from "@/lib/operacoes-v3/payment-model";
 
 const box = {
   marginTop: 12,
@@ -56,6 +68,13 @@ const btnGhost: React.CSSProperties = {
   cursor: "pointer",
 };
 
+const btnGhostSm: React.CSSProperties = {
+  ...btnGhost,
+  height: 32,
+  padding: "0 9px",
+  fontSize: 10.5,
+};
+
 const FORMAS_SUPORTADAS = FORMAS_RECEBIMENTO_V3.filter((f) => f.suportada);
 
 function num(s: string): number {
@@ -63,11 +82,16 @@ function num(s: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+type LinhaDraft = { forma: FormaRecebimentoV3; valorStr: string };
+
+function linhaVazia(valorStr = ""): LinhaDraft {
+  return { forma: "pix", valorStr };
+}
+
 export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
   const pdv = v.pdvServico;
   const [open, setOpen] = useState(false);
-  const [valor, setValor] = useState("");
-  const [forma, setForma] = useState<FormaRecebimentoV3>("dinheiro");
+  const [linhas, setLinhas] = useState<LinhaDraft[]>([{ forma: "dinheiro", valorStr: "" }]);
   const [observacao, setObservacao] = useState("");
 
   if (!v.osSelected) return null;
@@ -83,14 +107,13 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
   const { semTotal, previaNaoMaterializada, quitado, caixaAberto } = v.recebimento;
 
   const openForm = () => {
-    setValor(String(pagamento.saldo));
-    setForma("dinheiro");
+    setLinhas([{ forma: "dinheiro", valorStr: String(pagamento.saldo) }]);
     setObservacao("");
     setOpen(true);
   };
   const cancelar = () => {
     setOpen(false);
-    setValor("");
+    setLinhas([{ forma: "dinheiro", valorStr: "" }]);
     setObservacao("");
   };
 
@@ -152,14 +175,36 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
     );
   }
 
-  const veredito = validarRecebimentoV3(num(valor), pagamento.saldo);
-  const podeConfirmar = veredito.ok && !pdv.recebendo;
+  // Linha com valor <= 0 bloqueia a confirmação mesmo que outras linhas sejam
+  // válidas — evita enviar um split com uma forma "esquecida" em branco.
+  const algumaLinhaInvalida = linhas.some((l) => !(num(l.valorStr) > 0));
+  const linhasValidas: SplitLinhaV3[] = linhas
+    .map((l) => ({ forma: l.forma, valor: num(l.valorStr) }))
+    .filter((l) => l.valor > 0);
+  const totalInformado = somaSplitV3(linhasValidas);
+  const saldoRestante = Math.max(0, pagamento.saldo - totalInformado);
+  const veredito = validarSplitV3(linhasValidas, pagamento.saldo);
+  const podeConfirmar = veredito.ok && !algumaLinhaInvalida && !pdv.recebendo;
+
+  const addLinha = () => {
+    const restanteAtual = Math.max(0, pagamento.saldo - totalInformado);
+    setLinhas((arr) => [...arr, linhaVazia(restanteAtual > 0 ? String(restanteAtual) : "")]);
+  };
+  const removeLinha = (i: number) => {
+    setLinhas((arr) => (arr.length > 1 ? arr.filter((_, idx) => idx !== i) : arr));
+  };
+  const usarRestante = (i: number) => {
+    setLinhas((arr) => {
+      const outros = arr.reduce((acc, l, idx) => (idx === i ? acc : acc + Math.max(0, num(l.valorStr))), 0);
+      const restante = Math.max(0, money2(pagamento.saldo - outros));
+      return arr.map((l, idx) => (idx === i ? { ...l, valorStr: restante > 0 ? String(restante) : "" } : l));
+    });
+  };
 
   const onConfirmar = async () => {
     if (!podeConfirmar || !pdv.sessao?.sessaoId) return;
     const ok = await pdv.receber({
-      valor: num(valor),
-      forma,
+      linhas: linhasValidas,
       sessaoId: pdv.sessao.sessaoId,
       observacao: observacao.trim() || undefined,
     });
@@ -172,27 +217,54 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
   return (
     <div style={box}>
       <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 9 }}>Saldo a receber: <b style={{ color: C.warnFg }}>{fmt(pagamento.saldo)}</b></div>
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 8, marginBottom: 8 }}>
-        <div>
-          <div style={{ fontSize: 10, color: C.subtle, marginBottom: 3 }}>Valor a receber</div>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={valor}
-            onChange={(e) => setValor(e.target.value)}
-            placeholder="0,00"
-            style={{ ...cellInput, width: "100%" }}
-          />
-        </div>
-        <div>
-          <div style={{ fontSize: 10, color: C.subtle, marginBottom: 3 }}>Forma de pagamento</div>
-          <select value={forma} onChange={(e) => setForma(e.target.value as FormaRecebimentoV3)} style={{ ...cellInput, width: "100%", cursor: "pointer" }}>
-            {FORMAS_SUPORTADAS.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
-          </select>
-        </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+        {linhas.map((l, i) => (
+          <div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr) auto auto", gap: 6, alignItems: "end" }}>
+            <div>
+              {i === 0 && <div style={{ fontSize: 10, color: C.subtle, marginBottom: 3 }}>Forma</div>}
+              <select
+                value={l.forma}
+                onChange={(e) => setLinhas((arr) => arr.map((x, idx) => (idx === i ? { ...x, forma: e.target.value as FormaRecebimentoV3 } : x)))}
+                style={{ ...cellInput, width: "100%", cursor: "pointer" }}
+              >
+                {FORMAS_SUPORTADAS.map((f) => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              {i === 0 && <div style={{ fontSize: 10, color: C.subtle, marginBottom: 3 }}>Valor</div>}
+              <input
+                type="text"
+                inputMode="decimal"
+                value={l.valorStr}
+                onChange={(e) => setLinhas((arr) => arr.map((x, idx) => (idx === i ? { ...x, valorStr: e.target.value } : x)))}
+                placeholder="0,00"
+                style={{ ...cellInput, width: "100%" }}
+              />
+            </div>
+            <button type="button" onClick={() => usarRestante(i)} style={btnGhostSm}>Usar restante</button>
+            <button
+              type="button"
+              onClick={() => removeLinha(i)}
+              disabled={linhas.length <= 1}
+              style={{ ...btnGhostSm, opacity: linhas.length <= 1 ? 0.5 : 1, cursor: linhas.length <= 1 ? "default" : "pointer" }}
+              aria-label="Remover forma"
+            >
+              ×
+            </button>
+          </div>
+        ))}
       </div>
+
+      <button type="button" onClick={addLinha} style={{ ...btnGhost, marginBottom: 9 }}>+ Adicionar forma</button>
+
+      <div style={{ marginBottom: 9, display: "flex", justifyContent: "space-between", gap: 8, fontSize: 11 }}>
+        <span style={{ color: C.subtle }}>Total informado: <b style={{ color: C.body }}>{fmt(totalInformado)}</b></span>
+        <span style={{ color: saldoRestante <= 0.009 ? C.successFg : C.warnFg }}>Saldo restante: <b>{fmt(saldoRestante)}</b></span>
+      </div>
+
       <div style={{ marginBottom: 9 }}>
         <div style={{ fontSize: 10, color: C.subtle, marginBottom: 3 }}>Observação (opcional)</div>
         <input
@@ -204,8 +276,10 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
           style={{ ...cellInput, width: "100%" }}
         />
       </div>
-      {valor.trim() !== "" && !veredito.ok && (
-        <div style={{ fontSize: 11, color: C.dangerFg, marginBottom: 9 }}>{veredito.motivo}</div>
+      {(algumaLinhaInvalida || !veredito.ok) && (
+        <div style={{ fontSize: 11, color: C.dangerFg, marginBottom: 9 }}>
+          {algumaLinhaInvalida ? "Informe um valor maior que zero em todas as formas adicionadas." : veredito.motivo}
+        </div>
       )}
       {pdv.error && <div style={{ fontSize: 11, color: C.dangerFg, marginBottom: 9 }}>{pdv.error}</div>}
       <div style={{ display: "flex", gap: 8 }}>
@@ -221,4 +295,8 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
       </div>
     </div>
   );
+}
+
+function money2(v: number): number {
+  return Math.round(v * 100) / 100;
 }

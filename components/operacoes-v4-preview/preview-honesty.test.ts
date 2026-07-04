@@ -1448,8 +1448,8 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina so
     expect(idxConfirmar).toBeGreaterThan(idxCaixaFechado)
   })
 
-  it("valida o valor com o mesmo validador da V3 (validarRecebimentoV3) — sem regra nova de parcial", () => {
-    expect(card).toContain("validarRecebimentoV3")
+  it("valida o split com o mesmo validador da V3 (validarSplitV3) — sem regra nova de soma/parcial (GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002)", () => {
+    expect(card).toContain("validarSplitV3")
     expect(card).toContain('from "@/lib/operacoes-v3/payment-model"')
   })
 
@@ -1483,6 +1483,8 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina so
       "criarVenda",
       "SaleRecord",
       "finalizeSale",
+      "finalizeSaleTransaction",
+      "ops-upsert-venda",
       'from "@/lib/estoque',
       'from "@/lib/financeiro/services',
       'from "@/lib/caixa',
@@ -1494,6 +1496,54 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — ReceberPagamentoV4 (UI fina so
     ]) {
       expect(allSources, `referência proibida: ${proibido}`).not.toContain(proibido)
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002 — paridade de split imediato com a V3.
+// A auditoria PDV-SERVICO-FORMAS-PAGAMENTO-AUDIT-001 confirmou que `receberOSV3`
+// já suporta múltiplas formas (`linhas: SplitLinhaV3[]`) num mesmo recebimento;
+// a V4 só precisava deixar de mandar forma única. Nenhum motor novo, nenhuma
+// forma nova (a prazo/parcelado/crediário/carteira ficam para
+// OS-RECEBIMENTO-A-PRAZO-CONTRATO).
+// ---------------------------------------------------------------------------
+describe("OPS-V4-RECEBER-SPLIT-PARIDADE-002 — ReceberPagamentoV4 envia split imediato", () => {
+  const card = readFileSync(join(DIR, "parts", "ReceberPagamentoV4.tsx"), "utf8")
+
+  it("mantém estado de múltiplas linhas (array), não forma única", () => {
+    expect(card).toMatch(/useState<LinhaDraft\[\]>/)
+    expect(card).toContain("addLinha")
+    expect(card).toContain("removeLinha")
+  })
+
+  it("envia o split para receberOSV3 no formato `linhas: SplitLinhaV3[]` (nunca forma/valor soltos)", () => {
+    expect(card).toMatch(/pdv\.receber\(\{\s*linhas:\s*linhasValidas,/)
+    expect(card).not.toMatch(/pdv\.receber\(\{\s*valor:/)
+  })
+
+  it("bloqueia quando alguma linha tem valor <= 0, mesmo com outras linhas válidas", () => {
+    expect(card).toMatch(/algumaLinhaInvalida\s*=\s*linhas\.some\(\(l\)\s*=>\s*!\(num\(l\.valorStr\)\s*>\s*0\)\)/)
+    expect(card).toMatch(/podeConfirmar\s*=\s*veredito\.ok\s*&&\s*!algumaLinhaInvalida\s*&&\s*!pdv\.recebendo/)
+  })
+
+  it("total informado e saldo restante derivam de somaSplitV3 (mesmo cálculo do contrato, sem soma nova)", () => {
+    expect(card).toContain("somaSplitV3(linhasValidas)")
+    expect(card).toMatch(/saldoRestante\s*=\s*Math\.max\(0,\s*pagamento\.saldo\s*-\s*totalInformado\)/)
+  })
+
+  it("permite remover uma linha e preencher rápido com o saldo restante (não trava em forma única)", () => {
+    expect(card).toContain("usarRestante")
+    expect(card).toMatch(/arr\.length > 1 \? arr\.filter\(\(_, idx\) => idx !== i\) : arr/)
+  })
+
+  it("não expõe parcelado/crediário/carteira nesta tela (só formas com suportada:true)", () => {
+    for (const naoSuportada of ["Parcelado", "Crediário", "Carteira"]) {
+      expect(card, `forma "${naoSuportada}" não deveria aparecer hardcoded`).not.toContain(naoSuportada)
+    }
+  })
+
+  it("veredito de bloqueio usa validarSplitV3 (não reimplementa a regra de soma > saldo)", () => {
+    expect(card).toContain("validarSplitV3(linhasValidas, pagamento.saldo)")
   })
 })
 
