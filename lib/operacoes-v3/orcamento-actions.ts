@@ -37,6 +37,8 @@ import {
   computeTotaisV3,
   montarEventoEnvioOrcamentoV3,
   recalcOrcamentoV3,
+  validarGruposOrcamentoV3,
+  VALIDADE_PADRAO_DIAS,
   type CanalEnvioOrcamentoV3,
   type OrcamentoV3,
   type OrcamentoVersaoV3,
@@ -48,8 +50,6 @@ import { emitirEventoOperacaoV3 } from "./event-publisher";
 export async function gerarOrcamentoDaOS(storeId: string, osId: string): Promise<OrdemServico> {
   return gerarOrcamentoDaOSImpl(storeId, osId);
 }
-
-const VALIDADE_PADRAO_DIAS = 7;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -140,6 +140,14 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
   const atual = orcamentoEditavel(payload);
   assertStatus(atual, ["rascunho", "enviado"], "editar");
 
+  const servicosInput = Array.isArray(input.servicos) ? input.servicos : [];
+  const pecasInput = Array.isArray(input.pecas) ? input.pecas : [];
+  // GOAL OPS-V4-ORC-RAPIDO-024: valida o limite de linhas por grupo de escolha
+  // (MAX_LINHAS_POR_GRUPO_V3). Sem `grupoId` em nenhuma linha (caso de sempre
+  // até aqui), `validarGruposOrcamentoV3` retorna [] — comportamento inalterado.
+  const errosGrupos = validarGruposOrcamentoV3({ pecas: pecasInput, servicos: servicosInput });
+  if (errosGrupos.length > 0) throw new Error(errosGrupos[0]);
+
   const versoesAtuais = Array.isArray(payload.orcamentoVersoesV3) ? (payload.orcamentoVersoesV3 as OrcamentoVersaoV3[]) : [];
   const versao: OrcamentoVersaoV3 = {
     versao: versoesAtuais.length + 1,
@@ -153,8 +161,8 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
 
   const editado = recalcOrcamentoV3({
     ...atual,
-    servicos: Array.isArray(input.servicos) ? input.servicos : [],
-    pecas: Array.isArray(input.pecas) ? input.pecas : [],
+    servicos: servicosInput,
+    pecas: pecasInput,
     desconto: Math.max(0, Number(input.desconto) || 0),
     observacao: input.observacao ?? atual.observacao,
     atualizadoEm: nowIso(),

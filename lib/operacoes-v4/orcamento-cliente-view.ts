@@ -25,20 +25,12 @@ import {
   orcamentoRealV3,
   pecaValorCliente,
   servicoValorCliente,
+  VALIDADE_PADRAO_DIAS,
   type OrcamentoLinhaKindV3,
   type PecaV3,
   type ServicoV3,
 } from "@/lib/operacoes-v3/orcamento-model";
 import { dadosEmpresaPrintV3, type EmpresaPrintInputV3 } from "@/lib/operacoes-v3/print-model";
-
-/**
- * Dias de validade padrão quando o orçamento ainda não foi enviado (sem
- * `validoAte` gravado). Mesmo valor de `VALIDADE_PADRAO_DIAS` em
- * `lib/operacoes-v3/orcamento-actions.ts` — duplicado aqui porque aquele
- * arquivo é "use server" e não pode exportar uma constante simples. Se o
- * valor mudar lá, atualizar também aqui (ver relatório do GOAL 023).
- */
-const DIAS_VALIDADE_PADRAO_DOC_CLIENTE = 7;
 
 export interface OrcamentoClienteLojaV4 {
   nome: string;
@@ -226,7 +218,7 @@ export function montarOrcamentoClienteViewV4(os: OrdemServico, empresa?: Empresa
 
   const validade: OrcamentoClienteValidadeV4 = orc.validoAte
     ? { validoAte: orc.validoAte }
-    : { politicaTexto: `Validade de ${DIAS_VALIDADE_PADRAO_DOC_CLIENTE} dias a partir do envio ao cliente.` };
+    : { politicaTexto: `Validade de ${VALIDADE_PADRAO_DIAS} dias a partir do envio ao cliente.` };
 
   const observacaoOrcamento = txt(orc.observacao);
 

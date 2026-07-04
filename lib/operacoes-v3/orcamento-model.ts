@@ -282,6 +282,13 @@ export function montarEventoEnvioOrcamentoV3(canal: CanalEnvioOrcamentoV3, total
 // Estados do orçamento (badge + status efetivo com EXPIRADO derivado por data)
 // ----------------------------------------------------------------------------
 
+/**
+ * Dias de validade padrão aplicados ao enviar um orçamento (`enviarOrcamentoV3`)
+ * e usados como texto de política antes do primeiro envio (documento "Orçamento
+ * via cliente", GOAL 023). Fonte única — mova daqui, não duplique o valor.
+ */
+export const VALIDADE_PADRAO_DIAS = 7;
+
 export type ToneOrcV3 = "neutral" | "info" | "warning" | "success" | "danger";
 
 export const ORCAMENTO_STATUS_META_V3: Record<OrcamentoStatus, { label: string; tone: ToneOrcV3 }> = {

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CANAL_ENVIO_LABEL_V3,
@@ -9,6 +11,7 @@ import {
   recalcOrcamentoV3,
   statusEfetivoOrcamentoV3,
   validarGruposOrcamentoV3,
+  VALIDADE_PADRAO_DIAS,
   type OrcamentoV3,
   type PecaV3,
   type ServicoV3,
@@ -248,5 +251,35 @@ describe("orçamento V3 — registro de envio por canal (GOAL 021)", () => {
   it("totalSnapshot nunca fica negativo/NaN", () => {
     expect(montarEventoEnvioOrcamentoV3("outro", -10).metadata.totalSnapshot).toBe(0);
     expect(montarEventoEnvioOrcamentoV3("outro", Number.NaN).metadata.totalSnapshot).toBe(0);
+  });
+});
+
+describe("orçamento V3 — GOAL OPS-V4-ORC-RAPIDO-024 — constante única + wiring do validador", () => {
+  it("VALIDADE_PADRAO_DIAS mantém o valor de sempre (7)", () => {
+    expect(VALIDADE_PADRAO_DIAS).toBe(7);
+  });
+
+  // `orcamento-actions.ts` não é importável diretamente aqui (usa o alias fino
+  // `@/api/os`, que o vitest.config.ts não resolve — só `@` → raiz). A leitura
+  // de texto abaixo não executa o módulo, só confirma a fiação no source real.
+  it("orcamento-actions.ts importa VALIDADE_PADRAO_DIAS de orcamento-model.ts (sem duplicar a constante)", () => {
+    const src = readFileSync(join(__dirname, "orcamento-actions.ts"), "utf8");
+    expect(src).toContain("VALIDADE_PADRAO_DIAS");
+    expect(src).not.toMatch(/const\s+VALIDADE_PADRAO_DIAS\s*=/);
+  });
+
+  it("salvarOrcamentoV3 chama validarGruposOrcamentoV3 antes de gravar", () => {
+    const src = readFileSync(join(__dirname, "orcamento-actions.ts"), "utf8");
+    const inicio = src.indexOf("export async function salvarOrcamentoV3");
+    const fimAprox = src.indexOf("\n}", inicio);
+    const corpo = src.slice(inicio, fimAprox);
+    expect(corpo).toContain("validarGruposOrcamentoV3(");
+  });
+
+  it("lib/operacoes-v4/orcamento-cliente-view.ts importa a mesma constante (sem duplicar)", () => {
+    const src = readFileSync(join(__dirname, "..", "operacoes-v4", "orcamento-cliente-view.ts"), "utf8");
+    expect(src).toContain("VALIDADE_PADRAO_DIAS");
+    expect(src).not.toMatch(/const\s+VALIDADE_PADRAO_DIAS\s*=/);
+    expect(src).not.toContain("DIAS_VALIDADE_PADRAO_DOC_CLIENTE");
   });
 });
