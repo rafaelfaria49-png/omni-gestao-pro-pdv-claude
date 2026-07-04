@@ -1014,6 +1014,63 @@ describe("OPS-V4-ORC-MULTIOPCAO-MODEL-021 — grupos/variantes/faixa, read-only 
   })
 })
 
+describe("OPS-V4-ORC-VIEWMODEL-DOC-023 — documento 'Orçamento (via cliente)'", () => {
+  it("o item do menu Docs só aparece com orçamento REAL materializado (temDados honesto)", () => {
+    const semOrcamento = buildVals(
+      makeState({ selectedOsId: "os-doc-1", novaOS: false }),
+      () => {},
+      () => {},
+      { ...ctx, realOS: mkOS({ id: "os-doc-1", status: "aberta" }) },
+    )
+    expect(semOrcamento.printItems.map((d) => d.label)).not.toContain("Orçamento (via cliente)")
+
+    const comPrevia = buildVals(
+      makeState({ selectedOsId: "os-doc-2", novaOS: false }),
+      () => {},
+      () => {},
+      {
+        ...ctx,
+        realOS: mkOS({ id: "os-doc-2", status: "aberta", orcamento: { status: "rascunho", total: 50, sintetizado: true, servicos: [{ id: "s1", descricao: "X", valor: 50 }], pecas: [] } }),
+      },
+    )
+    expect(comPrevia.printItems.map((d) => d.label)).not.toContain("Orçamento (via cliente)")
+
+    const comReal = buildVals(
+      makeState({ selectedOsId: "os-doc-3", novaOS: false }),
+      () => {},
+      () => {},
+      {
+        ...ctx,
+        realOS: mkOS({ id: "os-doc-3", status: "aguardando_aprovacao", orcamento: { status: "enviado", total: 100, servicos: [{ id: "s1", descricao: "X", valor: 100 }], pecas: [] } }),
+      },
+    )
+    expect(comReal.printItems.map((d) => d.label)).toContain("Orçamento (via cliente)")
+  })
+
+  it("DocPrintModal suporta o tipo 'orcamento_cliente'", () => {
+    const src = readFileSync(join(DIR, "parts", "DocPrintModal.tsx"), "utf8")
+    expect(src).toContain("orcamento_cliente")
+  })
+
+  it("o render do documento cobre os 3 estados: faixa (sem seleção), seleção destacada e bloco de cortesia", () => {
+    const src = readFileSync(join(DIR, "parts", "OrcamentoClienteDocV4.tsx"), "utf8")
+    expect(src).toContain("faixa")
+    expect(src).toContain("selecionada")
+    expect(src).toContain("Cortesia")
+    expect(src).toContain("Total com esta opção")
+  })
+
+  it("o documento e a projeção não importam prisma/@/app/api nem usam loja-1/openCaixaIfClosed", () => {
+    const alvos = [join(DIR, "parts", "OrcamentoClienteDocV4.tsx"), join(DIR, "parts", "DocPrintModal.tsx")]
+    for (const alvo of alvos) {
+      const src = readFileSync(alvo, "utf8")
+      for (const proibido of ['from "@/lib/prisma', 'from "@/app/api', "updateOSPayload", "openCaixaIfClosed", '"loja-1"', "'loja-1'", "`loja-1`"]) {
+        expect(src, `proibido "${proibido}" encontrado em ${alvo}`).not.toContain(proibido)
+      }
+    }
+  })
+})
+
 describe("OPS-V4-006 — guards: nada de recebimento real / imports proibidos", () => {
   const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
 

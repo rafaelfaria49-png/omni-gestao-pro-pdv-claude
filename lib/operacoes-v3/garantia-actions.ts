@@ -130,6 +130,7 @@ export async function registrarImpressaoDocumentoV3(
     termo_entrega: "Termo de Entrega",
     comprovante_interno: "Via Interna",
     etiqueta: "Etiqueta técnica",
+    orcamento_cliente: "Orçamento (via cliente)",
   };
   const evento = makeEvento("documento_impresso", operadorLabel(session), `Documento impresso: ${label[tipo]}.`, { documento: tipo });
   const next: OSPayloadFull = { ...payload, timeline: appendTimeline(payload, evento) } as OSPayloadFull;

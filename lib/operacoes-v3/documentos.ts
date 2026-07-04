@@ -5,7 +5,7 @@
 // Módulo puro (sem I/O, sem React).
 // ============================================================================
 
-export type DocumentoTipoV3 = "os_cliente" | "comprovante_interno" | "termo_garantia" | "termo_entrega" | "etiqueta";
+export type DocumentoTipoV3 = "os_cliente" | "comprovante_interno" | "termo_garantia" | "termo_entrega" | "etiqueta" | "orcamento_cliente";
 
 export interface DocumentoMetaV3 {
   tipo: DocumentoTipoV3;
@@ -51,6 +51,13 @@ export const DOCUMENTO_META_V3: Record<DocumentoTipoV3, DocumentoMetaV3> = {
     label: "Etiqueta Técnica",
     descricao: "Identificação do aparelho na bancada.",
     cliente: false,
+    disponivel: true,
+  },
+  orcamento_cliente: {
+    tipo: "orcamento_cliente",
+    label: "Orçamento (via cliente)",
+    descricao: "Projeção segura do orçamento para entregar ao cliente — sem custo/lucro internos.",
+    cliente: true,
     disponivel: true,
   },
 };

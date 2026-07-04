@@ -21,11 +21,15 @@ import {
   type EmpresaPrintInputV3,
 } from "@/lib/operacoes-v3/print-model";
 import { documentoMetaV3, type DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
+import { montarOrcamentoClienteViewV4 } from "@/lib/operacoes-v4/orcamento-cliente-view";
 import { ButtonV3 } from "../UiV3";
 import { OSPrintDocumentV3 } from "./OSPrintDocumentV3";
 import { TermoGarantiaDocV3 } from "./TermoGarantiaDocV3";
 import { TermoEntregaDocV3 } from "./TermoEntregaDocV3";
 import { EtiquetaTecnicaV3 } from "./EtiquetaTecnicaV3";
+// GOAL OPS-V4-ORC-VIEWMODEL-DOC-023: novo documento "Orçamento (via cliente)",
+// mesmo motor de impressão — consome a projeção client-safe, nunca a OS crua.
+import { OrcamentoClienteDocV4 } from "@/components/operacoes-v4-preview/parts/OrcamentoClienteDocV4";
 
 const PRINT_CSS = `
 @media print {
@@ -71,6 +75,10 @@ export function PrintPreviewV3({
         return <TermoEntregaDocV3 doc={montarTermoEntregaV3(os, empresa)} />;
       case "etiqueta":
         return <EtiquetaTecnicaV3 etiqueta={montarEtiquetaV3(os)} />;
+      case "orcamento_cliente": {
+        const view = montarOrcamentoClienteViewV4(os, empresa);
+        return view ? <OrcamentoClienteDocV4 doc={view} /> : null;
+      }
       default:
         return null;
     }

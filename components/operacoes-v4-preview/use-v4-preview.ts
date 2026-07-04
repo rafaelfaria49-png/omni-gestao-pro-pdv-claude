@@ -284,6 +284,9 @@ export function buildVals(
   // Pós-venda REAL (garantia/retornos em garantia/eventos de pós-venda); vazio
   // honesto quando não houver registro. Sem NPS/satisfação/follow-up fabricados.
   const posVendaReal = realOS ? adaptPosVenda(realOS) : EMPTY_POSVENDA_VIEW;
+  // Orçamento REAL — calculado cedo (GOAL 023) para gatear o item "Orçamento
+  // (via cliente)" do menu Docs por dado real (`estado === "persistido"`).
+  const orcamentoReal = realOS ? adaptOrcamento(realOS) : EMPTY_ORCAMENTO_VIEW;
   // Status exibido: SEMPRE o da OS real carregada (sem drift após escritas/reloads);
   // o snapshot local `st.status` é só fallback enquanto nenhuma OS está selecionada.
   const status = realOS ? realStatusToV4(realOS.status) : st.status;
@@ -494,10 +497,17 @@ export function buildVals(
   // reais da OS. Os demais documentos (OS cliente / via interna / etiqueta /
   // portal) seguem protótipo — sem contrato de leitura ligado nesta fase.
   const openDocPrint = (tipo: DocumentoTipoV3) => update({ docPrint: tipo, menu: null });
+  // GOAL 023: "Orçamento (via cliente)" só aparece no menu com orçamento REAL
+  // materializado (`estado === "persistido"`) — prévia/ausente não têm o que
+  // mostrar; empty honesto = item nem aparece (mesmo padrão de gating do resto
+  // da V4, nunca um item habilitado que abriria um documento vazio).
   const printItems = [
     { icon: "📄", label: "Imprimir OS (cliente)", onClick: () => notify(PREVIEW_NOOP) },
     { icon: "🛡", label: "Termo de Garantia", onClick: () => openDocPrint("termo_garantia") },
     { icon: "📦", label: "Termo de Entrega", onClick: () => openDocPrint("termo_entrega") },
+    ...(orcamentoReal.estado === "persistido"
+      ? [{ icon: "🧾", label: "Orçamento (via cliente)", onClick: () => openDocPrint("orcamento_cliente") }]
+      : []),
     { icon: "🔒", label: "Via Interna", onClick: () => notify(PREVIEW_NOOP) },
     { icon: "🏷", label: "Etiqueta", onClick: () => notify(PREVIEW_NOOP) },
     { icon: "🌐", label: "Portal do cliente", onClick: () => notify(PREVIEW_NOOP) },
@@ -541,7 +551,7 @@ export function buildVals(
   // habilitam o EDITOR real: materializado = orçamento real (não sintetizado);
   // editável/decidível = materializado E status rascunho|enviado (mesma regra das
   // actions `salvarOrcamentoV3`/`aprovar`/`recusar`). O seed alimenta o editor V4.
-  const orcamentoReal = realOS ? adaptOrcamento(realOS) : EMPTY_ORCAMENTO_VIEW;
+  // (`orcamentoReal` já foi calculado acima, antes do menu Docs.)
   const orcRaw = (realOS as { orcamento?: Orcamento } | null)?.orcamento ?? null;
   const orcamentoMaterializado = !!orcRaw && orcRaw.sintetizado !== true;
   const orcStatusRaw = orcRaw?.status;
