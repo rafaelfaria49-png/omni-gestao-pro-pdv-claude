@@ -22,13 +22,12 @@ import type { EventoTimeline, OrdemServico } from "@/types/os";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
-import { listClientes, criarCliente } from "@/api/clientes";
 import { criarOSEnterpriseV3 } from "./nova-os-actions";
 import { getCaixaSessaoAbertaV3, receberOSV3 } from "./pdv-servico-actions";
 import { gerarOrcamentoDaOS, aprovarOrcamentoV3 } from "./orcamento-actions";
 import { projetarStatusV2 } from "./status-machine";
+import { resolverClienteOperacoesV3, type ClienteResolvidoOperacoesV3 } from "./cliente-resolver";
 import {
-  CLIENTE_BALCAO_NOME_V3,
   montarDraftAtendimentoRapidoV3,
   validarAtendimentoRapidoV3,
   type AtendimentoRapidoInputV3,
@@ -44,26 +43,6 @@ function nowIso(): string {
 }
 function eventId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `ev_${Date.now()}`;
-}
-
-interface ClienteResolvidoV3 {
-  id: string;
-  nome: string;
-  telefone?: string;
-}
-
-/**
- * "Cliente Balcão" como SINGLETON por unidade — evita poluir o cadastro com um
- * cliente novo a cada atendimento. Reaproveita o existente (match por nome) ou
- * cria UMA vez. Sem documento/telefone (não exige dados pessoais).
- */
-async function resolverClienteBalcaoV3(storeId: string): Promise<ClienteResolvidoV3> {
-  const clientes = await listClientes(storeId);
-  const alvo = CLIENTE_BALCAO_NOME_V3.toLowerCase();
-  const existente = clientes.find((c) => (c.nome ?? "").trim().toLowerCase() === alvo);
-  if (existente) return { id: existente.id, nome: existente.nome, telefone: existente.telefone ?? undefined };
-  const novo = await criarCliente(storeId, { nome: CLIENTE_BALCAO_NOME_V3, tipo: "PF" });
-  return { id: novo.id, nome: novo.nome, telefone: undefined };
 }
 
 export interface FinalizarAtendimentoRapidoResultV3 {
@@ -98,18 +77,26 @@ export async function finalizarAtendimentoRapidoV3(
   }
 
   // 1. Cliente (sem duplicar): balcão singleton / novo / existente.
-  let cliente: ClienteResolvidoV3;
+  //    GOAL 022: helper único (`resolverClienteOperacoesV3`), Cliente Balcão
+  //    permitido (`permitirBalcao: true`) e sem campos estendidos (`permitirCamposEstendidos: false`,
+  //    igual a hoje — sempre PF, sem documento/email). As validações e o fallback
+  //    de nome ("Cliente") continuam aqui, com as MESMAS mensagens de antes.
+  let cliente: ClienteResolvidoOperacoesV3;
+  const opts = { permitirBalcao: true, permitirCamposEstendidos: false };
   if (input.cliente.modo === "existente") {
     const id = input.cliente.clienteId?.trim();
     if (!id) throw new Error("Selecione o cliente existente ou use Cliente balcão.");
-    cliente = { id, nome: input.cliente.nome?.trim() || "Cliente", telefone: input.cliente.telefone?.trim() || undefined };
+    cliente = await resolverClienteOperacoesV3(
+      sid,
+      { modo: "existente", clienteId: id, nome: input.cliente.nome?.trim() || "Cliente", telefone: input.cliente.telefone?.trim() || undefined },
+      opts,
+    );
   } else if (input.cliente.modo === "novo") {
     const nome = input.cliente.nome?.trim();
     if (!nome) throw new Error("Informe o nome do novo cliente ou use Cliente balcão.");
-    const novo = await criarCliente(sid, { nome, telefone: input.cliente.telefone?.trim() || undefined, tipo: "PF" });
-    cliente = { id: novo.id, nome: novo.nome, telefone: novo.telefone ?? undefined };
+    cliente = await resolverClienteOperacoesV3(sid, { modo: "novo", nome, telefone: input.cliente.telefone?.trim() || undefined }, opts);
   } else {
-    cliente = await resolverClienteBalcaoV3(sid);
+    cliente = await resolverClienteOperacoesV3(sid, { modo: "balcao" }, opts);
   }
 
   // 2. Cria a OS reusando a Nova OS Enterprise (caminho seguro, audita + numera).

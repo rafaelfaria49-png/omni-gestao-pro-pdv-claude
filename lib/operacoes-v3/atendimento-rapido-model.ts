@@ -13,9 +13,11 @@
 
 import { novaOSDraftVazioV3, type NovaOSDraftV3, type NovaOSPagamentoFormaV3 } from "./nova-os-model";
 import type { FormaRecebimentoV3 } from "./payment-model";
+// GOAL 022: fonte única do label — o resolver de cliente compartilhado é quem
+// decide o nome do singleton "Cliente Balcão" (mesmo valor de sempre).
+import { CLIENTE_BALCAO_NOME_V3 } from "./cliente-resolver";
 
-/** Label operacional do consumidor de balcão (cliente singleton por unidade). */
-export const CLIENTE_BALCAO_NOME_V3 = "Cliente Balcão";
+export { CLIENTE_BALCAO_NOME_V3 };
 
 /** Serviços rápidos sugeridos (seleção rápida; o operador pode editar/!manual). */
 export const SERVICOS_RAPIDOS_V3: { id: string; nome: string; valorPadrao: number }[] = [

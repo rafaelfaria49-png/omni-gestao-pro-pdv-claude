@@ -22,7 +22,7 @@ import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
 import { criarOS as criarOSImpl } from "@/api/os";
-import { criarCliente as criarClienteImpl } from "@/api/clientes";
+import { resolverClienteOperacoesV3 } from "./cliente-resolver";
 import {
   computeTotaisNovaOSV3,
   garantiaModeloV3,
@@ -71,18 +71,28 @@ export async function criarOSEnterpriseV3(
   const operador = operadorLabel(session);
 
   // 1. Resolve um cliente REAL — nunca um id temporário (evita violar a FK da OS).
-  let clienteId = draft.cliente.id?.trim() || "";
-  let nome = draft.cliente.nome.trim();
-  let telefone = draft.cliente.telefone?.trim() || undefined;
-  let documento = draft.cliente.documento?.trim() || undefined;
-  const email = draft.cliente.email?.trim() || undefined;
-  if (!clienteId) {
-    const novo = await criarClienteImpl(sid, { nome, telefone, documento, tipo: draft.cliente.tipo });
-    clienteId = novo.id;
-    nome = novo.nome || nome;
-    telefone = novo.telefone ?? telefone;
-    documento = novo.documento ?? documento;
-  }
+  //    GOAL 022: helper único (`resolverClienteOperacoesV3`), sem Cliente Balcão
+  //    aqui (`permitirBalcao: false`) e com documento/email/tipo PJ habilitados
+  //    (`permitirCamposEstendidos: true`) — mesmo fallthrough de antes.
+  const draftClienteId = draft.cliente.id?.trim() || undefined;
+  const clienteResolvido = await resolverClienteOperacoesV3(
+    sid,
+    {
+      modo: draftClienteId ? "existente" : "novo",
+      clienteId: draftClienteId,
+      nome: draft.cliente.nome.trim(),
+      telefone: draft.cliente.telefone?.trim() || undefined,
+      documento: draft.cliente.documento?.trim() || undefined,
+      email: draft.cliente.email?.trim() || undefined,
+      tipo: draft.cliente.tipo,
+    },
+    { permitirBalcao: false, permitirCamposEstendidos: true },
+  );
+  const clienteId = clienteResolvido.id;
+  const nome = clienteResolvido.nome;
+  const telefone = clienteResolvido.telefone;
+  const documento = clienteResolvido.documento;
+  const email = clienteResolvido.email;
 
   // 2. Itens → peças (PecaUsada + extras kindV3/baixaEstoqueV3) e serviços (servicosCatalogo + kindV3).
   //    Para brinde/interno o valor ao cliente é zerado na persistência (R$ 0,00 ao cliente),
