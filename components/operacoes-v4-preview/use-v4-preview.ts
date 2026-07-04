@@ -184,6 +184,7 @@ const INITIAL: V4State = {
   novaOS: false,
   recibo: false,
   atendimentoRapido: false,
+  orcamentoRapido: false,
   estornoRecebimento: false,
   cancelamentoOS: false,
   selectedOsId: null,
@@ -711,6 +712,24 @@ export function buildVals(
     notify("Atendimento rápido concluído — OS criada, recebida e entregue.");
   };
 
+  // Orçamento Rápido criado (REAL, GOAL OPS-V4-ORC-RAPIDO-024) pelo modal → fecha
+  // o modal, abre a OS no workspace já na aba Orçamento (o rascunho multiopção já
+  // está lá) e recarrega a lista. A OS nasce "aberta" — SEM transição de status
+  // manual (o envio, em 025, é quem move para "aguardando_aprovacao").
+  const onOrcamentoRapidoCriado = (osId: string) => {
+    update({
+      orcamentoRapido: false,
+      selectedOsId: osId,
+      status: "aberta",
+      stage: "orcamento",
+      module: "workspace",
+      view: "cockpit",
+      menu: null,
+    });
+    ctx.reloadOrdens();
+    notify("Orçamento rápido criado — OS aberta com orçamento em rascunho.");
+  };
+
   const prim = status === "pronta" && semSaldoPendenteEntrega ? PRIMARY_ENTREGAR_OS : PRIMARY[status];
   const tone = TONE[status] || TONE.em_execucao;
   const prioM = PRIO[st.prioridade];
@@ -869,6 +888,16 @@ export function buildVals(
     closeAtendimentoRapido: () => update({ atendimentoRapido: false }),
     atendimentoRapidoOpen: st.atendimentoRapido,
     onAtendimentoRapidoConcluido,
+
+    // ---- ⚡ Orçamento Rápido REAL (GOAL OPS-V4-ORC-RAPIDO-024) ----
+    // O modal coleta o formulário localmente e chama `criarOrcamentoRapidoV3`
+    // direto (mesmo padrão do Nova OS/Atendimento Rápido) — sem motor novo. A OS
+    // nasce mínima com o orçamento multiopção já em rascunho; `onOrcamentoRapidoCriado`
+    // fecha o modal, abre a OS no workspace (aba Orçamento) e recarrega a lista.
+    openOrcamentoRapido: () => update({ orcamentoRapido: true }),
+    closeOrcamentoRapido: () => update({ orcamentoRapido: false }),
+    orcamentoRapidoOpen: st.orcamentoRapido,
+    onOrcamentoRapidoCriado,
 
     // ---- Estorno de recebimento REAL (GOAL OPS-V4-RECEBIMENTO-ESTORNO-016) ----
     // Modal só abre atrás de ação explícita (botão na aba Financeiro, já gated por

@@ -192,6 +192,27 @@ export function TopBar({ v }: { v: V4Vals }) {
         </button>
         <button
           type="button"
+          onClick={v.openOrcamentoRapido}
+          title="Cria uma OS mínima com orçamento multiopção (grupo de escolha) já em rascunho, sem cobrar/entregar"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            height: 28,
+            padding: "0 12px",
+            border: `1px solid ${C.primaryBd}`,
+            background: C.surface,
+            color: C.primary,
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          ⚡ Orçamento rápido
+        </button>
+        <button
+          type="button"
           onClick={v.openNovaOS}
           style={{
             display: "inline-flex",

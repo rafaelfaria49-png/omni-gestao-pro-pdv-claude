@@ -22,6 +22,7 @@ import { ModuleView } from "./parts/ModuleView";
 import { AuditoriaPage } from "./parts/AuditoriaPage";
 import { NovaOSModal } from "./parts/NovaOSModal";
 import { AtendimentoRapidoModal } from "./parts/AtendimentoRapidoModal";
+import { OrcamentoRapidoModal } from "./parts/OrcamentoRapidoModal";
 import { EstornoRecebimentoModal } from "./parts/EstornoRecebimentoModal";
 import { CancelamentoOSModal } from "./parts/CancelamentoOSModal";
 import { ReciboModal } from "./parts/ReciboModal";
@@ -61,6 +62,7 @@ export function OperacoesV4Preview() {
 
       <NovaOSModal v={v} />
       <AtendimentoRapidoModal v={v} />
+      <OrcamentoRapidoModal v={v} />
       <EstornoRecebimentoModal v={v} />
       <CancelamentoOSModal v={v} />
       <ReciboModal v={v} />

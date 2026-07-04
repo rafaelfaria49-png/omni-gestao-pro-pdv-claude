@@ -60,6 +60,8 @@ export interface V4State {
   recibo: boolean;
   /** Modal "Atendimento rápido" (GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014). */
   atendimentoRapido: boolean;
+  /** Modal "⚡ Orçamento Rápido" (GOAL OPS-V4-ORC-RAPIDO-024). */
+  orcamentoRapido: boolean;
   /** Modal de confirmação "Estornar recebimento" (GOAL OPS-V4-RECEBIMENTO-ESTORNO-016). */
   estornoRecebimento: boolean;
   /** Modal de confirmação "Cancelar OS" (GOAL OPS-V4-CANCELAR-OS-CONNECT-021). */

@@ -150,6 +150,7 @@ function makeState(over: Partial<V4State> = {}): V4State {
     novaOS: true,
     recibo: false,
     atendimentoRapido: false,
+    orcamentoRapido: false,
     estornoRecebimento: false,
     cancelamentoOS: false,
     selectedOsId: null,
@@ -1836,6 +1837,122 @@ describe("GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014 — conecta ao contrato rea
   it("ao concluir, reusa o mesmo padrão de reload do Nova OS (reloadOrdens + seleciona a OS + fecha o modal) — sem estado local fake", () => {
     expect(orquestrador).toMatch(/const onAtendimentoRapidoConcluido = \(osId: string\) => \{/)
     expect(orquestrador).toMatch(/ctx\.reloadOrdens\(\);\s*notify\("Atendimento rápido concluído/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-ORC-RAPIDO-024 — "⚡ Orçamento Rápido" conecta a V4 ao contrato
+// REAL da V3 (`criarOrcamentoRapidoV3`): cria a OS mínima e materializa o
+// orçamento multiopção (itens fixos + 1 grupo de escolha) em RASCUNHO — sem
+// enviar, sem seleção/aprovação, sem transição de status manual. Compensação
+// (cancelamento pelo caminho seguro) acontece no servidor. Os checks abaixo
+// leem o SOURCE real via fs (não importam os componentes/action "use server").
+// ---------------------------------------------------------------------------
+describe("GOAL OPS-V4-ORC-RAPIDO-024 — ⚡ Orçamento Rápido conecta ao contrato real da V3", () => {
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const modal = readFileSync(join(DIR, "parts", "OrcamentoRapidoModal.tsx"), "utf8")
+  const formHelper = readFileSync(join(DIR, "..", "..", "lib", "operacoes-v4", "orcamento-rapido-form.ts"), "utf8")
+  const topBar = readFileSync(join(DIR, "parts", "TopBar.tsx"), "utf8")
+  const shell = readFileSync(join(DIR, "OperacoesV4Preview.tsx"), "utf8")
+  const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
+
+  it("reutiliza criarOrcamentoRapidoV3 (V3, sem motor novo)", () => {
+    expect(modal).toContain('from "@/lib/operacoes-v3/orcamento-rapido-actions"')
+    expect(modal).toContain("criarOrcamentoRapidoV3")
+  })
+
+  it("reutiliza validarOrcamentoRapidoFormV4 (helper puro) em vez de duplicar mensagens de erro no componente", () => {
+    expect(modal).toContain("validarOrcamentoRapidoFormV4")
+    expect(modal).not.toContain("Selecione o cliente existente.")
+  })
+
+  it("a faixa de total exibida reusa previaTotaisOrcamentoRapidoV4 (que por sua vez reusa computeTotaisV3) — zero aritmética própria no modal", () => {
+    expect(modal).toContain("previaTotaisOrcamentoRapidoV4")
+    expect(formHelper).toContain("computeTotaisV3")
+    // O modal não soma valores manualmente (nenhum `.reduce(` ali).
+    expect(modal).not.toContain(".reduce(")
+  })
+
+  it("não cria rota de API nova — chama a Server Action direto, como o Nova OS/Atendimento Rápido já fazem", () => {
+    expect(modal).not.toContain('from "@/app/api')
+    expect(formHelper).not.toContain('from "@/app/api')
+  })
+
+  it("não importa caixa/financeiro/estoque/whatsapp/fiscal/prisma direto (a OS nasce sem cobrança — nada disso é necessário aqui)", () => {
+    for (const proibido of [
+      'from "@/lib/caixa',
+      'from "@/lib/financeiro',
+      'from "@/lib/estoque',
+      'from "@/lib/whatsapp',
+      'from "@/lib/fiscal',
+      'from "@/components/pdv',
+      'from "@/lib/prisma',
+    ]) {
+      expect(modal, `import proibido encontrado no modal: ${proibido}`).not.toContain(proibido)
+      expect(formHelper, `import proibido encontrado no form helper: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("nunca usa updateOSPayload, loja-1 (fallback literal) nem openCaixaIfClosed", () => {
+    for (const proibido of ["updateOSPayload", '"loja-1"', "'loja-1'", "`loja-1`", "openCaixaIfClosed"]) {
+      expect(modal, `referência proibida encontrada no modal: ${proibido}`).not.toContain(proibido)
+      expect(formHelper, `referência proibida encontrada no form helper: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("não há dado fabricado no modal — sem cliente/OS de exemplo hardcoded", () => {
+    for (const fake of ["Cliente Teste", "OS-0001", "João da Silva"]) {
+      expect(modal, `dado fabricado encontrado: ${fake}`).not.toContain(fake)
+    }
+  })
+
+  it("o fluxo fica atrás de ação explícita do operador: estado nasce fechado e o modal só monta o formulário quando aberto", () => {
+    expect(orquestrador).toMatch(/orcamentoRapido:\s*false,/)
+    expect(modal).toMatch(/if \(!v\.orcamentoRapidoOpen\) return null/)
+  })
+
+  it("botão '⚡ Orçamento rápido' no TopBar chama v.openOrcamentoRapido, ao lado do Atendimento rápido", () => {
+    expect(topBar).toContain("v.openOrcamentoRapido")
+    expect(topBar).toMatch(/Orçamento rápido/)
+    // Está fisicamente ao lado do botão de Atendimento rápido (mesmo bloco de botões).
+    const idxAtend = topBar.indexOf("openAtendimentoRapido")
+    const idxOrc = topBar.indexOf("openOrcamentoRapido")
+    expect(idxAtend).toBeGreaterThan(-1)
+    expect(idxOrc).toBeGreaterThan(idxAtend)
+  })
+
+  it("o modal é montado na casca da V4, ao lado do Nova OS/Atendimento Rápido", () => {
+    expect(shell).toContain("<OrcamentoRapidoModal")
+    expect(shell).toContain('from "./parts/OrcamentoRapidoModal"')
+  })
+
+  it("ao criar, reusa o mesmo padrão de reload do Nova OS (reloadOrdens + seleciona a OS + fecha o modal) — sem transição de status manual, OS nasce 'aberta'", () => {
+    expect(orquestrador).toMatch(/const onOrcamentoRapidoCriado = \(osId: string\) => \{/)
+    expect(orquestrador).toMatch(/ctx\.reloadOrdens\(\);\s*notify\("Orçamento rápido criado/)
+    // Verifica, no CORPO do handler, que o status setado é "aberta" (nunca uma
+    // transição manual tipo "aguardando_aprovacao" — isso é responsabilidade do envio, GOAL 025).
+    const inicio = orquestrador.indexOf("const onOrcamentoRapidoCriado")
+    const fim = orquestrador.indexOf("};", inicio)
+    const corpo = orquestrador.slice(inicio, fim)
+    expect(corpo).toContain('status: "aberta"')
+    expect(corpo).not.toContain("aplicarTransicaoStatusV3")
+  })
+
+  it("duplo-submit é bloqueado por `busy` (uma OS por clique)", () => {
+    expect(modal).toMatch(/disabled=\{!podeSalvar\}/)
+    expect(modal).toMatch(/busy/)
+  })
+
+  it("GOAL 025/026 fora do escopo: sem envio/mensagem/wa.me e sem seleção/aprovação no modal", () => {
+    for (const proibido of ["wa.me", "enviarOrcamentoV3", "aprovarOrcamentoV3", "recusarOrcamentoV3", "registrarEnvioOrcamento"]) {
+      expect(modal, `referência fora de escopo (025/026) encontrada: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("guard geral: nenhum arquivo da Preview usa loja-1/openCaixaIfClosed/updateOSPayload (cobre os arquivos novos deste GOAL)", () => {
+    for (const proibido of ['"loja-1"', "'loja-1'", "`loja-1`", "openCaixaIfClosed", "updateOSPayload"]) {
+      expect(allSources, `proibido encontrado: ${proibido}`).not.toContain(proibido)
+    }
   })
 })
 
