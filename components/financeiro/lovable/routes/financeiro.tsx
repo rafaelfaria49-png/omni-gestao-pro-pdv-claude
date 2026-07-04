@@ -2542,6 +2542,18 @@ function FinanceiroHubInner() {
   );
 }
 
+/** Extrai identificador do documento (ex.: "OS OS-2026-00010", "Venda PDV cuid...") da descrição
+ *  livre do título, separando do restante ("Faturamento", "À prazo 1/3") pelo travessão. */
+function parseTituloDisplay(descricao: string, id: string): { principal: string; secundaria: string } {
+  const texto = (descricao || "").trim();
+  if (!texto) return { principal: id, secundaria: "" };
+  const partes = texto.split(" — ");
+  if (partes.length > 1) {
+    return { principal: partes[0].trim(), secundaria: partes.slice(1).join(" — ").trim() };
+  }
+  return { principal: texto, secundaria: "" };
+}
+
 function ReceberClienteModal({
   open,
   onOpenChange,
@@ -2578,16 +2590,19 @@ function ReceberClienteModal({
     [receber],
   );
 
+  const clienteTrim = cliente.trim();
+  const clienteReconhecido = clienteTrim.length > 0 && clientesComSaldo.includes(clienteTrim);
+
   const titulosDoCliente = useMemo(() => {
-    if (!cliente.trim()) return [];
+    if (!clienteReconhecido) return [];
     return receber
-      .filter((r) => r.cliente === cliente && saldoAbertoReceber(r) > 0)
+      .filter((r) => r.cliente === clienteTrim && saldoAbertoReceber(r) > 0)
       .sort((a, b) => {
         const ta = parseDateStringSafe(a.venc)?.getTime() ?? Number.POSITIVE_INFINITY;
         const tb = parseDateStringSafe(b.venc)?.getTime() ?? Number.POSITIVE_INFINITY;
         return ta - tb;
       });
-  }, [receber, cliente]);
+  }, [receber, clienteTrim, clienteReconhecido]);
 
   const valorNum = parseFloat(valorRecebido.replace(",", "."));
   const plano = useMemo(
@@ -2688,9 +2703,13 @@ function ReceberClienteModal({
           </div>
 
           <div className="mt-4">
-            {!cliente.trim() ? (
+            {!clienteTrim ? (
               <p className="text-xs text-muted-foreground">
-                Digite ou selecione um cliente com título em aberto.
+                Digite ou selecione um cliente para ver os títulos em aberto.
+              </p>
+            ) : !clienteReconhecido ? (
+              <p className="text-xs text-muted-foreground">
+                Selecione um cliente da lista para ver os títulos em aberto.
               </p>
             ) : titulosDoCliente.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
@@ -2775,30 +2794,63 @@ function ReceberClienteModal({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {titulosDoCliente.map((t) => (
-                        <TableRow key={t.id}>
-                          <TableCell className="max-w-0">
-                            <div className="truncate text-sm" title={t.descricao || t.id}>
-                              {t.descricao || <span className="font-mono text-xs text-muted-foreground">{t.id}</span>}
-                            </div>
-                            <div className="mt-0.5">{statusBadge(t.status)}</div>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {formatDateBR(t.venc, "Sem vencimento")}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <span className="font-semibold">{fmt(saldoAbertoReceber(t))}</span>
-                            {t.recebido > 0 ? (
-                              <div className="text-[10px] text-muted-foreground">de {fmt(t.valor)}</div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button size="sm" variant="outline" disabled={busy} onClick={() => onSelectTitulo(t)}>
-                              Receber
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {titulosDoCliente.map((t) => {
+                        const { principal, secundaria } = parseTituloDisplay(t.descricao, t.id);
+                        const baixa = valorNum > 0 && plano.ok ? plano.baixas.find((b) => b.id === t.id) : undefined;
+                        const previewLabel = !(valorNum > 0)
+                          ? null
+                          : baixa
+                            ? baixa.total
+                              ? `Quita ${fmt(baixa.valor)}`
+                              : `Parcial ${fmt(baixa.valor)}`
+                            : plano.ok
+                              ? "Não alcançado"
+                              : null;
+                        return (
+                          <TableRow key={t.id}>
+                            <TableCell className="max-w-0">
+                              <div className="truncate text-sm font-medium" title={t.descricao || t.id}>
+                                {principal}
+                              </div>
+                              {secundaria ? (
+                                <div className="truncate text-xs text-muted-foreground" title={secundaria}>
+                                  {secundaria}
+                                </div>
+                              ) : null}
+                              <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                {statusBadge(t.status)}
+                                {previewLabel ? (
+                                  <span
+                                    className={
+                                      baixa?.total
+                                        ? "text-[10px] font-medium text-success"
+                                        : baixa
+                                          ? "text-[10px] font-medium text-warning"
+                                          : "text-[10px] text-muted-foreground"
+                                    }
+                                  >
+                                    {previewLabel}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {formatDateBR(t.venc, "Sem vencimento")}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="font-semibold">{fmt(saldoAbertoReceber(t))}</span>
+                              {t.recebido > 0 ? (
+                                <div className="text-[10px] text-muted-foreground">de {fmt(t.valor)}</div>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button size="sm" variant="outline" disabled={busy} onClick={() => onSelectTitulo(t)}>
+                                Receber
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
