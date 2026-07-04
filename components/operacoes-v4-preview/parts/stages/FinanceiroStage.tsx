@@ -70,9 +70,23 @@ export function FinanceiroStage({ v }: { v: V4Vals }) {
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span style={{ color: C.subtle }}>Saldo a receber</span><span style={{ color: f.temSaldo ? C.warnFg : C.body, fontWeight: 600 }}>{f.saldo}</span></div>
             </div>
             <div style={{ fontSize: 10.5, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Baixas registradas no <b>PDV de Serviço</b> (Conta a Receber + caixa do dia). O detalhe de cada recebimento está no Histórico financeiro ao lado.</div>
-            <div style={{ display: "flex", gap: 7, marginTop: 9 }}>
+            <div style={{ display: "flex", gap: 7, marginTop: 9, alignItems: "center", flexWrap: "wrap" }}>
               <button type="button" onClick={v.openRecibo} style={{ flex: "none", height: 34, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>🧾 Recibo</button>
+              {v.estorno.temRecebido && (
+                <button
+                  type="button"
+                  onClick={v.openEstornoRecebimento}
+                  disabled={!v.estorno.podeEstornar}
+                  title={!v.estorno.caixaAberto ? "Caixa fechado — abra o caixa para estornar." : undefined}
+                  style={{ flex: "none", height: 34, padding: "0 12px", border: `1px solid ${C.dangerBd}`, background: C.surface, color: C.dangerFg, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: v.estorno.podeEstornar ? "pointer" : "default", opacity: v.estorno.podeEstornar ? 1 : 0.55 }}
+                >
+                  ↩ Estornar
+                </button>
+              )}
             </div>
+            {v.estorno.temRecebido && !v.estorno.caixaAberto && (
+              <div style={{ fontSize: 10.5, color: C.warnFg, marginTop: 7, lineHeight: 1.5 }}>Caixa fechado — abra o caixa para estornar o recebimento.</div>
+            )}
           </div>
         ) : (
           <div style={{ marginTop: 12, padding: 11, border: `1px dashed ${C.inputBd}`, borderRadius: 9, background: C.surface2 }}>

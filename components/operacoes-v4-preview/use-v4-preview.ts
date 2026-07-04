@@ -49,7 +49,7 @@ import { podeTransicionarV3 } from "@/lib/operacoes-v3/status-machine";
 // reaproveitado tal como é, sem motor novo. A V4 só adiciona o reload da lista/
 // detalhe da OS depois do recebimento (ver `receberPagamentoV4` abaixo).
 import { usePdvServicoV3, type PdvServicoState } from "@/components/operacoes-v3/hooks/use-pdv-servico-v3";
-import type { ReceberOSInputV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
+import type { EstornarRecebimentoInputV3, ReceberOSInputV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
 import {
   salvarIdentificacaoV3,
   salvarProvaEntradaV3,
@@ -181,6 +181,7 @@ const INITIAL: V4State = {
   novaOS: false,
   recibo: false,
   atendimentoRapido: false,
+  estornoRecebimento: false,
   selectedOsId: null,
   focus: false,
   authState: "autorizado",
@@ -577,6 +578,16 @@ export function buildVals(
     podeReceber: !!pdvPag && pdvPag.total > 0 && pdvPag.saldo > 0 && pdvCaixaAberto,
   };
 
+  // ---- Estorno de recebimento (slice OPS-V4-RECEBIMENTO-ESTORNO-016) ----
+  // Mesma fonte real do recebimento (`pdvPag`/`pdvCaixaAberto`, sem novo read).
+  // `estornarRecebimentoOSV3` (V3) exige `titulo.recebido > 0` E caixa aberto —
+  // `temRecebido` espelha a primeira condição; `podeEstornar` as duas juntas.
+  const estorno = {
+    temRecebido: !!pdvPag && pdvPag.recebido > 0,
+    caixaAberto: pdvCaixaAberto,
+    podeEstornar: !!pdvPag && pdvPag.recebido > 0 && pdvCaixaAberto,
+  };
+
   // ---- Entrega (GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
   // Só libera "Confirmar entrega" quando a OS está "pronta" (view V4 — nunca
   // mostra "recebida": ver `projetarStatusV2`) E o pagamento confirma saldo<=0.
@@ -827,6 +838,13 @@ export function buildVals(
     atendimentoRapidoOpen: st.atendimentoRapido,
     onAtendimentoRapidoConcluido,
 
+    // ---- Estorno de recebimento REAL (GOAL OPS-V4-RECEBIMENTO-ESTORNO-016) ----
+    // Modal só abre atrás de ação explícita (botão na aba Financeiro, já gated por
+    // `v.estorno.podeEstornar`); a escrita real é `v.pdvServico.estornar` (acima).
+    openEstornoRecebimento: () => update({ estornoRecebimento: true }),
+    closeEstornoRecebimento: () => update({ estornoRecebimento: false }),
+    estornoRecebimentoOpen: st.estornoRecebimento,
+
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 
     diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, entrega: entregaReal,
@@ -871,6 +889,7 @@ export function buildVals(
     // é o gating pré-computado (mesma regra do servidor: total>0 && saldo>0 && caixa aberto).
     pdvServico: ctx.pdvServico,
     recebimento,
+    estorno,
 
     // ---- Diagnóstico / Orçamento REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----
     // Handlers de escrita reais (chamam actions da V3 e recarregam lista+detalhe).
@@ -1016,7 +1035,21 @@ export function useV4Preview(): V4Vals {
     },
     [pdvServicoV3.receber, reloadOrdens, reloadDetail],
   );
-  const pdvServico: PdvServicoState = { ...pdvServicoV3, receber: receberPagamentoV4 };
+  // ---- Estorno de recebimento (slice OPS-V4-RECEBIMENTO-ESTORNO-016): mesmo
+  // padrão do `receberPagamentoV4` acima — envolve `estornar` (já pronto no hook
+  // V3) só para também recarregar lista+detalhe da V4 depois do sucesso.
+  const estornarRecebimentoV4 = useCallback(
+    async (input: EstornarRecebimentoInputV3) => {
+      const ok = await pdvServicoV3.estornar(input);
+      if (ok) {
+        reloadOrdens();
+        reloadDetail();
+      }
+      return ok;
+    },
+    [pdvServicoV3.estornar, reloadOrdens, reloadDetail],
+  );
+  const pdvServico: PdvServicoState = { ...pdvServicoV3, receber: receberPagamentoV4, estornar: estornarRecebimentoV4 };
 
   const salvarDiagnostico = useCallback(
     (input: DiagnosticoInputV4) =>

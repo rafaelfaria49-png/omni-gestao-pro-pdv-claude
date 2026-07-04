@@ -150,6 +150,7 @@ function makeState(over: Partial<V4State> = {}): V4State {
     novaOS: true,
     recibo: false,
     atendimentoRapido: false,
+    estornoRecebimento: false,
     selectedOsId: null,
     focus: false,
     authState: "autorizado",
@@ -899,12 +900,13 @@ describe("OPS-V4-006 — classificação (kindV3) visível no orçamento, read-o
 describe("OPS-V4-006 — guards: nada de recebimento real / imports proibidos", () => {
   const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
 
-  it("a Preview não importa prisma, estorno, updateOSPayload nem app/api", () => {
+  it("a Preview não importa prisma, updateOSPayload nem app/api", () => {
     for (const proibido of [
       'from "@/lib/prisma',
       // PDV-SERVICO-OS-RECEBIMENTO-REAL-001: recebimento (receberOSV3/pdv-servico-actions)
-      // passou a ser REAL e sancionado — só o ESTORNO continua fora deste slice.
-      "estornarRecebimentoOSV3",
+      // passou a ser REAL e sancionado. OPS-V4-RECEBIMENTO-ESTORNO-016: o estorno
+      // (estornarRecebimentoOSV3) também passou a ser REAL e sancionado — ver
+      // guards dedicados mais abaixo (describe "OPS-V4-RECEBIMENTO-ESTORNO-016").
       "updateOSPayload",
       'from "@/app/api',
       "openCaixaIfClosed",
@@ -1660,5 +1662,136 @@ describe("GOAL OPS-V4-ATENDIMENTO-RAPIDO-CONNECT-014 — conecta ao contrato rea
   it("ao concluir, reusa o mesmo padrão de reload do Nova OS (reloadOrdens + seleciona a OS + fecha o modal) — sem estado local fake", () => {
     expect(orquestrador).toMatch(/const onAtendimentoRapidoConcluido = \(osId: string\) => \{/)
     expect(orquestrador).toMatch(/ctx\.reloadOrdens\(\);\s*notify\("Atendimento rápido concluído/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-RECEBIMENTO-ESTORNO-016 — expõe o estorno de recebimento na aba
+// Financeiro da V4, consumindo EXCLUSIVAMENTE o hook/action REAIS já existentes
+// da V3 (`usePdvServicoV3.estornar` → `estornarRecebimentoOSV3`): sem motor
+// novo, sem duplicar a regra financeira (elegibilidade = recebido>0 + caixa
+// aberto, mesma leitura que já alimenta `v.recebimento`). A V4 só acrescenta um
+// motivo obrigatório (mínimo de caracteres) antes de liberar a confirmação —
+// a V3 aceita motivo opcional, a V4 exige mais para manter o estorno auditável.
+// ---------------------------------------------------------------------------
+describe("GOAL OPS-V4-RECEBIMENTO-ESTORNO-016 — estorno de recebimento conecta ao contrato real da V3", () => {
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+  const modal = readFileSync(join(DIR, "parts", "EstornoRecebimentoModal.tsx"), "utf8")
+  const formHelper = readFileSync(join(DIR, "..", "..", "lib", "operacoes-v4", "estorno-recebimento-form.ts"), "utf8")
+  const financeiroStage = readFileSync(join(DIR, "parts", "stages", "FinanceiroStage.tsx"), "utf8")
+  const shell = readFileSync(join(DIR, "OperacoesV4Preview.tsx"), "utf8")
+  const hookV3 = readFileSync(join(DIR, "..", "operacoes-v3", "hooks", "use-pdv-servico-v3.ts"), "utf8")
+
+  function ctxComPdvEstorno(pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null, sessaoAberta: boolean): V4DataCtx {
+    return {
+      ...ctx,
+      pdvServico: {
+        ...ctx.pdvServico,
+        pagamento,
+        sessao: { aberta: sessaoAberta, sessaoId: sessaoAberta ? "sessao-1" : undefined },
+      },
+    }
+  }
+
+  it("v.estorno só habilita com recebido>0 e caixa aberto (mesma regra do servidor)", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdvEstorno({ total: 300, recebido: 300, saldo: 0, status: "quitado" }, true))
+    expect(v.estorno).toEqual({ temRecebido: true, caixaAberto: true, podeEstornar: true })
+  })
+
+  it("caixa fechado: podeEstornar false mesmo com recebido>0", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdvEstorno({ total: 300, recebido: 300, saldo: 0, status: "quitado" }, false))
+    expect(v.estorno.caixaAberto).toBe(false)
+    expect(v.estorno.podeEstornar).toBe(false)
+  })
+
+  it("sem recebimento (recebido=0): temRecebido false, podeEstornar false mesmo com caixa aberto", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdvEstorno({ total: 300, recebido: 0, saldo: 300, status: "aberto" }, true))
+    expect(v.estorno.temRecebido).toBe(false)
+    expect(v.estorno.podeEstornar).toBe(false)
+  })
+
+  it("pagamento ainda não carregado (null): tudo honesto/false, sem crash", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdvEstorno(null, true))
+    expect(v.estorno).toEqual({ temRecebido: false, caixaAberto: true, podeEstornar: false })
+  })
+
+  it("recebimento parcial (recebido>0, saldo>0) também habilita estorno — a V3 reverte o último pagamento, não exige quitação", () => {
+    const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdvEstorno({ total: 500, recebido: 100, saldo: 400, status: "parcial" }, true))
+    expect(v.estorno.podeEstornar).toBe(true)
+  })
+
+  it("o hook real (usePdvServicoV3) já conecta estornar a estornarRecebimentoOSV3 — a V4 reaproveita, não duplica o motor", () => {
+    expect(hookV3).toContain("estornarRecebimentoOSV3")
+    expect(hookV3).toContain("estornar:")
+  })
+
+  it("estornarRecebimentoV4 envolve o estornar do hook (mesmo padrão do receberPagamentoV4) e só recarrega lista+detalhe no sucesso", () => {
+    expect(orquestrador).toMatch(/const estornarRecebimentoV4 = useCallback\(/)
+    expect(orquestrador).toContain("pdvServicoV3.estornar(input)")
+    expect(orquestrador).toContain("estornar: estornarRecebimentoV4")
+  })
+
+  it("motivo obrigatório: a V4 exige mais que a V3 (que aceita motivo opcional) — validação pura, sem duplicar regra financeira", () => {
+    expect(formHelper).toContain("export function validarMotivoEstornoV4")
+    expect(formHelper).not.toContain("estornarContaReceber")
+    expect(modal).toContain("validarMotivoEstornoV4")
+    expect(modal).toContain("buildEstornarRecebimentoInputV4")
+  })
+
+  it("não importa caixa/financeiro/estoque/whatsapp/fiscal/prisma/app-api direto no modal nem no form helper", () => {
+    for (const proibido of [
+      'from "@/lib/caixa',
+      'from "@/lib/financeiro',
+      'from "@/lib/estoque',
+      'from "@/lib/whatsapp',
+      'from "@/lib/fiscal',
+      'from "@/components/pdv',
+      'from "@/lib/prisma',
+      'from "@/app/api',
+    ]) {
+      expect(modal, `import proibido encontrado no modal: ${proibido}`).not.toContain(proibido)
+      expect(formHelper, `import proibido encontrado no form helper: ${proibido}`).not.toContain(proibido)
+    }
+    // O modal nunca importa a action V3 direto — só via `v.pdvServico.estornar`
+    // (hook já sancionado). O form helper importa só o TIPO do contrato V3, nunca
+    // chama a action.
+    expect(modal).not.toContain('from "@/lib/operacoes-v3/pdv-servico-actions"')
+    expect(formHelper).not.toContain("estornarRecebimentoOSV3(")
+  })
+
+  it("nunca usa updateOSPayload, loja-1 (fallback literal) nem openCaixaIfClosed", () => {
+    for (const proibido of ["updateOSPayload", '"loja-1"', "'loja-1'", "`loja-1`", "openCaixaIfClosed"]) {
+      expect(modal, `referência proibida encontrada no modal: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("é honesto sobre caixa fechado: mostra aviso real e mantém a confirmação desabilitada (nunca finge sucesso)", () => {
+    expect(modal).toMatch(/Caixa fechado/i)
+    expect(modal).toContain("v.estorno.caixaAberto")
+    expect(modal).toContain("disabled={!podeConfirmar}")
+  })
+
+  it("o fluxo fica atrás de ação explícita do operador: estado nasce fechado e o modal só monta quando aberto", () => {
+    expect(orquestrador).toMatch(/estornoRecebimento:\s*false,/)
+    expect(modal).toMatch(/if \(!v\.estornoRecebimentoOpen\) return null/)
+  })
+
+  it("botão 'Estornar' no FinanceiroStage chama v.openEstornoRecebimento, só aparece quando há recebimento e respeita o gating", () => {
+    expect(financeiroStage).toContain("v.openEstornoRecebimento")
+    expect(financeiroStage).toContain("v.estorno.temRecebido")
+    expect(financeiroStage).toMatch(/disabled=\{!v\.estorno\.podeEstornar\}/)
+  })
+
+  it("o modal é montado na casca da V4, ao lado dos demais modais reais", () => {
+    expect(shell).toContain("<EstornoRecebimentoModal")
+    expect(shell).toContain('from "./parts/EstornoRecebimentoModal"')
+  })
+
+  it("no sucesso, fecha o modal e limpa o motivo local — sem estado otimista (quem atualiza a tela é o reload real)", () => {
+    expect(modal).toMatch(/const ok = await pdv\.estornar\(input\);\s*if \(ok\) fechar\(\);/)
+  })
+
+  it("só existe uma chamada a pdv.estornar( no modal (sem motor duplicado / sem clique disparando duas escritas)", () => {
+    expect((modal.match(/pdv\.estornar\(/g) ?? []).length).toBe(1)
   })
 })
