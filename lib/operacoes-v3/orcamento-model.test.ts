@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  CANAL_ENVIO_LABEL_V3,
   computeTotaisV3,
   contarOrcamentosPorStatusV3,
   linhaKind,
+  MAX_LINHAS_POR_GRUPO_V3,
+  montarEventoEnvioOrcamentoV3,
   recalcOrcamentoV3,
   statusEfetivoOrcamentoV3,
+  validarGruposOrcamentoV3,
   type OrcamentoV3,
   type PecaV3,
   type ServicoV3,
@@ -95,5 +99,154 @@ describe("orçamento V3 — métricas do dashboard", () => {
     expect(c.enviado).toBe(1);
     expect(c.expirado).toBe(1);
     expect(c.recusado).toBe(0);
+  });
+});
+
+describe("orçamento V3 — grupos de escolha (GOAL 021) — regressão N=0", () => {
+  it("orçamento sem nenhum grupoId: totais idênticos ao formato anterior (sem faixa)", () => {
+    const orc = {
+      desconto: 50,
+      servicos: [servico({ descricao: "Troca de tela", valor: 300, custoV3: 120, kindV3: "cobrado" })],
+      pecas: [
+        peca({ nome: "Película", quantidade: 1, valorUnitario: 40, custoUnitario: 10, kindV3: "brinde" }),
+        peca({ nome: "Tela", quantidade: 1, valorUnitario: 250, custoUnitario: 150, kindV3: "cobrado" }),
+      ],
+    };
+    const t = computeTotaisV3(orc);
+    expect(t).toEqual({ subtotal: 550, desconto: 50, total: 500, custo: 280, lucro: 220, faixa: undefined });
+  });
+});
+
+describe("orçamento V3 — grupos de escolha (GOAL 021) — faixa e seleção", () => {
+  it("grupo sem seleção vira faixa {min,max}; linhas fixas somam sempre", () => {
+    const orc = {
+      desconto: 0,
+      servicos: [
+        servico({ id: "fix", descricao: "Mão de obra", valor: 50, kindV3: "cobrado" }),
+        servico({ id: "opt-a", descricao: "Tela genérica", valor: 150, kindV3: "cobrado", grupoId: "g1" }),
+        servico({ id: "opt-b", descricao: "Tela original", valor: 300, kindV3: "cobrado", grupoId: "g1" }),
+      ],
+      pecas: [],
+    };
+    const t = computeTotaisV3(orc);
+    // fixo (50) + faixa min do grupo (150) = 200 ; total = mínimo conservador
+    expect(t.total).toBe(200);
+    expect(t.faixa).toEqual({ min: 200, max: 350 }); // 50+150 .. 50+300
+  });
+
+  it("grupo com uma linha selecionada: soma só a selecionada, sem faixa", () => {
+    const orc = {
+      desconto: 0,
+      servicos: [
+        servico({ id: "opt-a", descricao: "Tela genérica", valor: 150, kindV3: "cobrado", grupoId: "g1" }),
+        servico({ id: "opt-b", descricao: "Tela original", valor: 300, kindV3: "cobrado", grupoId: "g1", selecionadaV3: true }),
+      ],
+      pecas: [],
+    };
+    const t = computeTotaisV3(orc);
+    expect(t.total).toBe(300);
+    expect(t.faixa).toBeUndefined();
+  });
+
+  it("kindV3 (brinde/interno) é respeitado dentro de um grupo: opção brinde vale 0 ao cliente", () => {
+    const orc = {
+      desconto: 0,
+      pecas: [
+        peca({ id: "opt-a", nome: "Capa simples", quantidade: 1, valorUnitario: 0, custoUnitario: 20, kindV3: "brinde", grupoId: "g1" }),
+        peca({ id: "opt-b", nome: "Capa premium", quantidade: 1, valorUnitario: 80, custoUnitario: 40, kindV3: "cobrado", grupoId: "g1" }),
+      ],
+      servicos: [],
+    };
+    const t = computeTotaisV3(orc);
+    // sem seleção: faixa min=0 (brinde) .. max=80 (cobrado)
+    expect(t.faixa).toEqual({ min: 0, max: 80 });
+    expect(t.total).toBe(0);
+  });
+
+  it("custo de grupo não resolvido não é somado; custo de grupo resolvido soma só a escolhida", () => {
+    const naoResolvido = computeTotaisV3({
+      desconto: 0,
+      servicos: [],
+      pecas: [
+        peca({ id: "a", nome: "A", quantidade: 1, valorUnitario: 100, custoUnitario: 50, kindV3: "cobrado", grupoId: "g1" }),
+        peca({ id: "b", nome: "B", quantidade: 1, valorUnitario: 200, custoUnitario: 90, kindV3: "cobrado", grupoId: "g1" }),
+      ],
+    });
+    expect(naoResolvido.custo).toBe(0);
+
+    const resolvido = computeTotaisV3({
+      desconto: 0,
+      servicos: [],
+      pecas: [
+        peca({ id: "a", nome: "A", quantidade: 1, valorUnitario: 100, custoUnitario: 50, kindV3: "cobrado", grupoId: "g1" }),
+        peca({ id: "b", nome: "B", quantidade: 1, valorUnitario: 200, custoUnitario: 90, kindV3: "cobrado", grupoId: "g1", selecionadaV3: true }),
+      ],
+    });
+    expect(resolvido.custo).toBe(90);
+  });
+
+  it("desconto geral é aplicado sobre o total mínimo (faixa também reflete o desconto)", () => {
+    const t = computeTotaisV3({
+      desconto: 20,
+      servicos: [
+        servico({ id: "opt-a", descricao: "A", valor: 100, kindV3: "cobrado", grupoId: "g1" }),
+        servico({ id: "opt-b", descricao: "B", valor: 200, kindV3: "cobrado", grupoId: "g1" }),
+      ],
+      pecas: [],
+    });
+    expect(t.total).toBe(80); // 100 - 20
+    expect(t.faixa).toEqual({ min: 80, max: 180 }); // 200 - 20
+  });
+});
+
+describe("orçamento V3 — validação de máximo de linhas por grupo (GOAL 021)", () => {
+  it("grupo com até 4 linhas é válido", () => {
+    const orc = {
+      pecas: [
+        peca({ id: "1", grupoId: "g1" }),
+        peca({ id: "2", grupoId: "g1" }),
+        peca({ id: "3", grupoId: "g1" }),
+        peca({ id: "4", grupoId: "g1" }),
+      ],
+      servicos: [],
+    };
+    expect(validarGruposOrcamentoV3(orc)).toEqual([]);
+    expect(MAX_LINHAS_POR_GRUPO_V3).toBe(4);
+  });
+
+  it("grupo com 5 linhas (combinando peças + serviços) é inválido", () => {
+    const orc = {
+      pecas: [peca({ id: "1", grupoId: "g1" }), peca({ id: "2", grupoId: "g1" }), peca({ id: "3", grupoId: "g1" })],
+      servicos: [servico({ id: "4", grupoId: "g1" }), servico({ id: "5", grupoId: "g1" })],
+    };
+    const erros = validarGruposOrcamentoV3(orc);
+    expect(erros).toHaveLength(1);
+    expect(erros[0]).toContain("g1");
+  });
+
+  it("linhas fixas (sem grupoId) nunca contam para o limite", () => {
+    const orc = { pecas: Array.from({ length: 10 }, (_, i) => peca({ id: `f${i}` })), servicos: [] };
+    expect(validarGruposOrcamentoV3(orc)).toEqual([]);
+  });
+});
+
+describe("orçamento V3 — registro de envio por canal (GOAL 021)", () => {
+  it("monta evento com tipo/conteudo/metadata corretos por canal", () => {
+    const evt = montarEventoEnvioOrcamentoV3("whatsapp", 550);
+    expect(evt.tipo).toBe("orcamento_enviado");
+    expect(evt.conteudo).toBe(`Orçamento enviado ao cliente via ${CANAL_ENVIO_LABEL_V3.whatsapp}.`);
+    expect(evt.metadata).toEqual({ canal: "whatsapp", totalSnapshot: 550 });
+  });
+
+  it("todos os canais têm rótulo definido", () => {
+    for (const canal of ["whatsapp", "impresso", "presencial", "outro"] as const) {
+      expect(CANAL_ENVIO_LABEL_V3[canal]).toBeTruthy();
+      expect(montarEventoEnvioOrcamentoV3(canal, 0).metadata.canal).toBe(canal);
+    }
+  });
+
+  it("totalSnapshot nunca fica negativo/NaN", () => {
+    expect(montarEventoEnvioOrcamentoV3("outro", -10).metadata.totalSnapshot).toBe(0);
+    expect(montarEventoEnvioOrcamentoV3("outro", Number.NaN).metadata.totalSnapshot).toBe(0);
   });
 });

@@ -18,14 +18,58 @@ import type { Orcamento, OrcamentoStatus, PecaUsada, Servico } from "@/types/os"
 
 export type OrcamentoLinhaKindV3 = "cobrado" | "brinde" | "interno";
 
+// ----------------------------------------------------------------------------
+// Grupos de escolha + variantes (GOAL OPS-V4-ORC-MULTIOPCAO-MODEL-021)
+// ----------------------------------------------------------------------------
+// Um "grupo de escolha" agrupa 2+ linhas alternativas (ex.: "Tela genérica" vs
+// "Tela original") das quais o cliente escolhe UMA. Vive 100% dentro do payload
+// (campos opcionais nas linhas + metadados do grupo no orçamento) — orçamento
+// sem grupos mantém o comportamento V3 anterior byte a byte.
+
+/** Única regra suportada nesta fase: exatamente uma linha selecionada por grupo. */
+export type OrcamentoGrupoRegraV3 = "escolha_1";
+
+export interface OrcamentoGrupoV3 {
+  id: string;
+  rotulo: string;
+  regra: OrcamentoGrupoRegraV3;
+}
+
+/** Metadados de exibição de uma alternativa dentro de um grupo (não afeta cálculo). */
+export interface VarianteV3 {
+  rotulo: string;
+  descricaoCurta?: string;
+  garantiaDias?: number;
+  prazoTexto?: string;
+  badge?: string;
+}
+
+/** Máximo de linhas alternativas por grupo de escolha. */
+export const MAX_LINHAS_POR_GRUPO_V3 = 4;
+
 /** Linhas com a extensão V3 (campos extras persistidos no JSONB). */
-export type PecaV3 = PecaUsada & { kindV3?: OrcamentoLinhaKindV3 };
-export type ServicoV3 = Servico & { kindV3?: OrcamentoLinhaKindV3; custoV3?: number };
+export type PecaV3 = PecaUsada & {
+  kindV3?: OrcamentoLinhaKindV3;
+  /** Id do grupo de escolha ao qual esta linha pertence (ausente = linha fixa). */
+  grupoId?: string;
+  varianteV3?: VarianteV3;
+  /** true quando esta é a linha escolhida do grupo (no máx. uma por grupo). */
+  selecionadaV3?: boolean;
+};
+export type ServicoV3 = Servico & {
+  kindV3?: OrcamentoLinhaKindV3;
+  custoV3?: number;
+  grupoId?: string;
+  varianteV3?: VarianteV3;
+  selecionadaV3?: boolean;
+};
 
 /** Orçamento na visão V3 (mesmo objeto persistido, com as linhas tipadas em V3). */
 export type OrcamentoV3 = Omit<Orcamento, "pecas" | "servicos"> & {
   pecas: PecaV3[];
   servicos: ServicoV3[];
+  /** Metadados dos grupos de escolha referenciados pelas linhas (rótulo + regra). */
+  gruposV3?: OrcamentoGrupoV3[];
 };
 
 export interface OrcamentoVersaoV3 {
@@ -52,12 +96,17 @@ export interface TotaisOrcamentoV3 {
   subtotal: number;
   /** Desconto geral do orçamento (R$). */
   desconto: number;
-  /** Total final ao cliente = subtotal − desconto (≥ 0). */
+  /** Total final ao cliente = subtotal − desconto (≥ 0). Quando há grupo sem
+   *  seleção, é o total MÍNIMO (conservador) — ver `faixa` para o máximo. */
   total: number;
-  /** Custo interno = soma dos custos de todas as linhas (inclui brindes/internos). */
+  /** Custo interno = soma dos custos das linhas fixas + linhas de grupo JÁ
+   *  selecionadas (inclui brindes/internos). Grupos sem seleção não somam custo. */
   custo: number;
   /** Lucro estimado = total − custo (pode ser negativo). */
   lucro: number;
+  /** Presente somente quando há ≥1 grupo de escolha sem linha selecionada:
+   *  faixa de total possível conforme a opção do grupo que vier a ser escolhida. */
+  faixa?: { min: number; max: number };
 }
 
 // ----------------------------------------------------------------------------
@@ -101,25 +150,132 @@ export function servicoCusto(s: ServicoV3): number {
 // Totais
 // ----------------------------------------------------------------------------
 
+interface LinhaGrupoInfoV3 {
+  valorCliente: number;
+  custo: number;
+  selecionada: boolean;
+}
+
+/** Agrupa as linhas (peças + serviços) que têm `grupoId`, por grupo. */
+function coletarLinhasPorGrupoV3(pecas: PecaV3[], servicos: ServicoV3[]): Map<string, LinhaGrupoInfoV3[]> {
+  const map = new Map<string, LinhaGrupoInfoV3[]>();
+  const add = (grupoId: string | undefined, info: LinhaGrupoInfoV3) => {
+    const gid = (grupoId ?? "").trim();
+    if (!gid) return;
+    const arr = map.get(gid) ?? [];
+    arr.push(info);
+    map.set(gid, arr);
+  };
+  for (const p of pecas) add(p.grupoId, { valorCliente: pecaValorCliente(p), custo: pecaCusto(p), selecionada: p.selecionadaV3 === true });
+  for (const s of servicos) add(s.grupoId, { valorCliente: servicoValorCliente(s), custo: servicoCusto(s), selecionada: s.selecionadaV3 === true });
+  return map;
+}
+
 export function computeTotaisV3(orc: Pick<OrcamentoV3, "pecas" | "servicos" | "desconto">): TotaisOrcamentoV3 {
   const pecas = Array.isArray(orc.pecas) ? orc.pecas : [];
   const servicos = Array.isArray(orc.servicos) ? orc.servicos : [];
-  const subtotal =
-    pecas.reduce((acc, p) => acc + pecaValorCliente(p), 0) +
-    servicos.reduce((acc, s) => acc + servicoValorCliente(s), 0);
+
+  // Linhas fixas (sem grupoId) somam sempre, exatamente como antes dos grupos.
+  const pecasFixas = pecas.filter((p) => !(p.grupoId ?? "").trim());
+  const servicosFixos = servicos.filter((s) => !(s.grupoId ?? "").trim());
+  const subtotalFixo =
+    pecasFixas.reduce((acc, p) => acc + pecaValorCliente(p), 0) +
+    servicosFixos.reduce((acc, s) => acc + servicoValorCliente(s), 0);
+  const custoFixo =
+    pecasFixas.reduce((acc, p) => acc + pecaCusto(p), 0) +
+    servicosFixos.reduce((acc, s) => acc + servicoCusto(s), 0);
+
+  // Grupos de escolha: com seleção soma só a escolhida; sem seleção vira faixa.
+  const grupos = coletarLinhasPorGrupoV3(pecas, servicos);
+  let subtotalGrupos = 0;
+  let custoGrupos = 0;
+  let faixaMinExtra = 0;
+  let faixaMaxExtra = 0;
+  let temGrupoNaoResolvido = false;
+
+  for (const linhas of grupos.values()) {
+    const escolhida = linhas.find((l) => l.selecionada);
+    if (escolhida) {
+      subtotalGrupos += escolhida.valorCliente;
+      custoGrupos += escolhida.custo;
+      continue;
+    }
+    temGrupoNaoResolvido = true;
+    const valores = linhas.map((l) => l.valorCliente);
+    faixaMinExtra += Math.min(...valores);
+    faixaMaxExtra += Math.max(...valores);
+    // Custo de opções ainda não escolhidas não é somado (nada foi decidido/gasto).
+  }
+
+  const subtotal = subtotalFixo + subtotalGrupos + faixaMinExtra;
   const desconto = Math.max(0, orc.desconto ?? 0);
   const total = Math.max(0, subtotal - desconto);
-  const custo =
-    pecas.reduce((acc, p) => acc + pecaCusto(p), 0) +
-    servicos.reduce((acc, s) => acc + servicoCusto(s), 0);
+  const custo = custoFixo + custoGrupos;
   const lucro = total - custo;
-  return { subtotal, desconto, total, custo, lucro };
+  const faixa = temGrupoNaoResolvido
+    ? { min: total, max: Math.max(0, subtotalFixo + subtotalGrupos + faixaMaxExtra - desconto) }
+    : undefined;
+
+  return { subtotal, desconto, total, custo, lucro, faixa };
+}
+
+/**
+ * Valida o limite de linhas alternativas por grupo de escolha (payload puro,
+ * sem I/O). Retorna a lista de mensagens de erro; vazia quando tudo é válido.
+ * NÃO é chamada automaticamente por `salvarOrcamentoV3` nesta fase — fica
+ * pronta para o GOAL que ligar a edição de grupos na V4.
+ */
+export function validarGruposOrcamentoV3(orc: Pick<OrcamentoV3, "pecas" | "servicos">): string[] {
+  const contagem = new Map<string, number>();
+  const contar = (grupoId: string | undefined) => {
+    const gid = (grupoId ?? "").trim();
+    if (!gid) return;
+    contagem.set(gid, (contagem.get(gid) ?? 0) + 1);
+  };
+  for (const p of orc.pecas ?? []) contar(p.grupoId);
+  for (const s of orc.servicos ?? []) contar(s.grupoId);
+
+  const erros: string[] = [];
+  for (const [grupoId, count] of contagem) {
+    if (count > MAX_LINHAS_POR_GRUPO_V3) {
+      erros.push(`Grupo "${grupoId}" tem ${count} linhas — máximo permitido é ${MAX_LINHAS_POR_GRUPO_V3}.`);
+    }
+  }
+  return erros;
 }
 
 /** Recalcula e fixa o campo `total` do orçamento de forma consistente com a regra de brindes. */
 export function recalcOrcamentoV3(orc: OrcamentoV3): OrcamentoV3 {
   const { total } = computeTotaisV3(orc);
   return { ...orc, total };
+}
+
+// ----------------------------------------------------------------------------
+// Registro de envio (canal) — molde = `registrarImpressaoDocumentoV3`
+// ----------------------------------------------------------------------------
+
+export type CanalEnvioOrcamentoV3 = "whatsapp" | "impresso" | "presencial" | "outro";
+
+export const CANAL_ENVIO_LABEL_V3: Record<CanalEnvioOrcamentoV3, string> = {
+  whatsapp: "WhatsApp",
+  impresso: "impresso",
+  presencial: "presencial",
+  outro: "outro canal",
+};
+
+export interface EnvioOrcamentoEventoV3 {
+  tipo: "orcamento_enviado";
+  conteudo: string;
+  metadata: { canal: CanalEnvioOrcamentoV3; totalSnapshot: number };
+}
+
+/** Monta (puro) o conteúdo/metadata do evento de registro de envio por canal. */
+export function montarEventoEnvioOrcamentoV3(canal: CanalEnvioOrcamentoV3, totalSnapshot: number): EnvioOrcamentoEventoV3 {
+  return {
+    tipo: "orcamento_enviado",
+    conteudo: `Orçamento enviado ao cliente via ${CANAL_ENVIO_LABEL_V3[canal]}.`,
+    metadata: { canal, totalSnapshot: Number.isFinite(totalSnapshot) ? Math.max(0, totalSnapshot) : 0 },
+  };
 }
 
 // ----------------------------------------------------------------------------

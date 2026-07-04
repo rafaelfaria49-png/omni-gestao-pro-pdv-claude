@@ -13,6 +13,8 @@
 //   • enviarOrcamentoV3   — rascunho/enviado → enviado (+ OS → aguardando_aprovacao).
 //   • aprovarOrcamentoV3  — → aprovado (+ OS → aprovado pela máquina). Sem financeiro.
 //   • recusarOrcamentoV3  — → recusado (+ timeline). Sem outros efeitos.
+//   • registrarEnvioOrcamento — auditoria best-effort do canal de envio (mesmo
+//     molde de `registrarImpressaoDocumentoV3`); NÃO muda status do orçamento.
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
@@ -33,7 +35,9 @@ import {
 import { gerarOrcamentoDaOS as gerarOrcamentoDaOSImpl } from "@/api/os";
 import {
   computeTotaisV3,
+  montarEventoEnvioOrcamentoV3,
   recalcOrcamentoV3,
+  type CanalEnvioOrcamentoV3,
   type OrcamentoV3,
   type OrcamentoVersaoV3,
   type SalvarOrcamentoV3Input,
@@ -241,4 +245,35 @@ export async function recusarOrcamentoV3(storeId: string, osId: string, motivo?:
     orcamento: recusado,
     eventos: [makeEvento("orcamento_recusado", operadorLabel(session), motivoLimpo ? `Orçamento recusado: ${motivoLimpo}` : "Orçamento recusado.")],
   });
+}
+
+// ----------------------------------------------------------------------------
+// Registro de envio por canal (auditoria — não muda status do orçamento)
+// ----------------------------------------------------------------------------
+
+/**
+ * Registra na timeline que o orçamento foi enviado ao cliente por um canal
+ * específico (WhatsApp/impresso/presencial/outro). Best-effort, mesmo molde de
+ * `registrarImpressaoDocumentoV3` (garantia-actions.ts): só grava evento +
+ * timeline, NÃO altera `orcamento.status`/`validoAte` — complementa
+ * `enviarOrcamentoV3` (que já muda status) para os casos em que o canal
+ * precisa ficar auditado (reenvio por outro canal, envio manual/presencial).
+ */
+export async function registrarEnvioOrcamento(
+  storeId: string,
+  osId: string,
+  canal: CanalEnvioOrcamentoV3,
+): Promise<OrdemServico> {
+  const { id, session, payload } = await carregar(storeId, osId);
+  const atual = orcamentoEditavel(payload);
+  const totalSnapshot = computeTotaisV3(atual).total;
+  const evt = montarEventoEnvioOrcamentoV3(canal, totalSnapshot);
+  const evento = makeEvento(evt.tipo, operadorLabel(session), evt.conteudo, evt.metadata);
+
+  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+  const nextPayload: OSPayloadFull = { ...payload, timeline: [...timeline, evento] };
+  const data: Prisma.OrdemServicoUpdateInput = { payload: nextPayload as unknown as Prisma.InputJsonValue };
+  await prisma.ordemServico.update({ where: { id }, data });
+  revalidatePath("/dashboard/operacoes-v3");
+  return nextPayload as unknown as OrdemServico;
 }

@@ -40,6 +40,9 @@ import {
 // e pela impressão da OS (`aberturaV3.garantiaPrevista` / `entregaV3`).
 import { lerGarantiaV3, lerEntregaV3, GARANTIA_SITUACAO_META_V3, resumoRetornosV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { termoGarantiaDaOSV3 } from "@/lib/operacoes-v3/print-model";
+// Reuso PURO (read-only) dos totais com faixa/grupo da V3 (GOAL OPS-V4-ORC-
+// MULTIOPCAO-MODEL-021): mesma função que a V3 usa para persistir o total.
+import { computeTotaisV3, pecaValorCliente, servicoValorCliente, type PecaV3, type ServicoV3 } from "@/lib/operacoes-v3/orcamento-model";
 
 export const NI = "Não informado";
 
@@ -780,6 +783,36 @@ export function lerOrcKindV4(linha: unknown): V4OrcKind | null {
   return k === "cobrado" || k === "brinde" || k === "interno" ? k : null;
 }
 
+/** Lê o `grupoId` persistido de uma linha; "" quando a linha é fixa (sem grupo). */
+function lerGrupoIdV4(linha: unknown): string {
+  const g = (linha as { grupoId?: unknown } | null | undefined)?.grupoId;
+  return typeof g === "string" ? g.trim() : "";
+}
+
+/** Lê `selecionadaV3` persistido de uma linha de grupo. */
+function lerSelecionadaV4(linha: unknown): boolean {
+  return (linha as { selecionadaV3?: unknown } | null | undefined)?.selecionadaV3 === true;
+}
+
+export interface V4OrcVarianteView {
+  rotulo: string;
+  descricaoCurta: string;
+  garantiaDias: number | null;
+  prazoTexto: string;
+  badge: string;
+}
+
+/** Lê `varianteV3` persistido de uma linha; null quando ausente/sem rótulo. */
+function lerVarianteV4(linha: unknown): V4OrcVarianteView | null {
+  const v = (linha as { varianteV3?: unknown } | null | undefined)?.varianteV3;
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const rotulo = txt(o.rotulo);
+  if (!rotulo) return null;
+  const garantiaDias = typeof o.garantiaDias === "number" && o.garantiaDias > 0 ? o.garantiaDias : null;
+  return { rotulo, descricaoCurta: txt(o.descricaoCurta), garantiaDias, prazoTexto: txt(o.prazoTexto), badge: txt(o.badge) };
+}
+
 export interface V4OrcItemView {
   id: string;
   descricao: string;
@@ -793,6 +826,25 @@ export interface V4OrcItemView {
   kind: V4OrcKind | null;
   /** "Cobrado" / "Brinde" / "Interno"; "" quando sem classificação. */
   kindLabel: string;
+  /** Id do grupo de escolha; "" quando a linha é fixa (fora de grupo). */
+  grupoId: string;
+  /** Metadados de exibição da variante (rótulo/garantia/badge); null quando ausentes. */
+  variante: V4OrcVarianteView | null;
+  /** true quando esta é a linha escolhida do grupo. */
+  selecionada: boolean;
+}
+
+export interface V4OrcGrupoView {
+  id: string;
+  /** Rótulo do grupo (`gruposV3` da OS); fallback honesto quando não cadastrado. */
+  rotulo: string;
+  itens: V4OrcItemView[];
+  /** true quando alguma linha do grupo já foi selecionada. */
+  resolvido: boolean;
+  selecionadaId: string | null;
+  /** Faixa de valor possível (menor/maior opção do grupo), formatada. */
+  faixaMin: string;
+  faixaMax: string;
 }
 
 export interface V4OrcamentoView {
@@ -813,6 +865,14 @@ export interface V4OrcamentoView {
   /** Versões reais (revisões registradas na OS). */
   versoesCount: number;
   temVersoes: boolean;
+  /** Grupos de escolha reais da OS; [] quando não há nenhum (empty honesto). */
+  grupos: V4OrcGrupoView[];
+  temGrupos: boolean;
+  /** true quando ≥1 grupo ainda não tem linha selecionada (total é faixa, não fixo). */
+  temFaixa: boolean;
+  /** Faixa de total (menor/maior conforme escolhas pendentes); NI quando não há grupo pendente. */
+  faixaMin: string;
+  faixaMax: string;
 }
 
 export const EMPTY_ORCAMENTO_VIEW: V4OrcamentoView = {
@@ -828,6 +888,11 @@ export const EMPTY_ORCAMENTO_VIEW: V4OrcamentoView = {
   lucroTotal: null,
   versoesCount: 0,
   temVersoes: false,
+  grupos: [],
+  temGrupos: false,
+  temFaixa: false,
+  faixaMin: NI,
+  faixaMax: NI,
 };
 
 function servicoLineTotal(s: Servico): number {
@@ -864,6 +929,9 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
       custo: null,
       kind,
       kindLabel: kind ? ORC_KIND_LABEL[kind] : "",
+      grupoId: lerGrupoIdV4(s),
+      variante: lerVarianteV4(s),
+      selecionada: lerSelecionadaV4(s),
     };
   });
 
@@ -880,6 +948,9 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
       custo: temCusto ? fmt((p.custoUnitario as number) * (p.quantidade || 0)) : null,
       kind,
       kindLabel: kind ? ORC_KIND_LABEL[kind] : "",
+      grupoId: lerGrupoIdV4(p),
+      variante: lerVarianteV4(p),
+      selecionada: lerSelecionadaV4(p),
     };
   });
 
@@ -904,6 +975,58 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
 
   const versoesCount = Array.isArray(os.orcamentoHistorico) ? os.orcamentoHistorico.length : 0;
 
+  // Grupos de escolha: rótulo real de `gruposV3` (fallback honesto quando a OS
+  // referencia um grupoId sem metadado cadastrado) + faixa via `computeTotaisV3`
+  // (mesma função que a V3 usa para persistir o total — nenhuma conta nova aqui).
+  const gruposMetaRaw = Array.isArray((orc as { gruposV3?: unknown }).gruposV3) ? ((orc as { gruposV3?: unknown }).gruposV3 as unknown[]) : [];
+  const rotuloPorGrupo = new Map<string, string>();
+  for (const g of gruposMetaRaw) {
+    const o = g as Record<string, unknown>;
+    const gid = txt(o.id);
+    const rotulo = txt(o.rotulo);
+    if (gid && rotulo) rotuloPorGrupo.set(gid, rotulo);
+  }
+
+  const itensPorGrupo = new Map<string, V4OrcItemView[]>();
+  const valoresPorGrupo = new Map<string, number[]>();
+  const selecionadaPorGrupo = new Map<string, string | null>();
+  for (const item of [...servicos, ...pecas]) {
+    if (!item.grupoId) continue;
+    itensPorGrupo.set(item.grupoId, [...(itensPorGrupo.get(item.grupoId) ?? []), item]);
+    if (item.selecionada) selecionadaPorGrupo.set(item.grupoId, item.id);
+    else if (!selecionadaPorGrupo.has(item.grupoId)) selecionadaPorGrupo.set(item.grupoId, null);
+  }
+  for (const s of servicosRaw) {
+    const gid = lerGrupoIdV4(s);
+    if (gid) valoresPorGrupo.set(gid, [...(valoresPorGrupo.get(gid) ?? []), servicoValorCliente(s as ServicoV3)]);
+  }
+  for (const p of pecasRaw) {
+    const gid = lerGrupoIdV4(p);
+    if (gid) valoresPorGrupo.set(gid, [...(valoresPorGrupo.get(gid) ?? []), pecaValorCliente(p as PecaV3)]);
+  }
+
+  const grupos: V4OrcGrupoView[] = Array.from(itensPorGrupo.keys()).map((gid, idx) => {
+    const valores = valoresPorGrupo.get(gid) ?? [0];
+    const selecionadaId = selecionadaPorGrupo.get(gid) ?? null;
+    return {
+      id: gid,
+      rotulo: rotuloPorGrupo.get(gid) || `Opções ${idx + 1}`,
+      itens: itensPorGrupo.get(gid) ?? [],
+      resolvido: selecionadaId != null,
+      selecionadaId,
+      faixaMin: fmt(Math.min(...valores)),
+      faixaMax: fmt(Math.max(...valores)),
+    };
+  });
+
+  // Faixa de total do orçamento inteiro (reusa `computeTotaisV3`, fonte única
+  // do cálculo de faixa — nenhuma lógica de min/max duplicada aqui).
+  const totaisComFaixa = computeTotaisV3({
+    pecas: pecasRaw as PecaV3[],
+    servicos: servicosRaw as ServicoV3[],
+    desconto: typeof orc?.desconto === "number" ? orc.desconto : 0,
+  });
+
   return {
     estado,
     isPrevia,
@@ -917,6 +1040,11 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
     lucroTotal: custoNum != null ? fmt(totalNum - custoNum) : null,
     versoesCount,
     temVersoes: versoesCount > 0,
+    grupos,
+    temGrupos: grupos.length > 0,
+    temFaixa: !!totaisComFaixa.faixa,
+    faixaMin: totaisComFaixa.faixa ? fmt(totaisComFaixa.faixa.min) : NI,
+    faixaMax: totaisComFaixa.faixa ? fmt(totaisComFaixa.faixa.max) : NI,
   };
 }
 

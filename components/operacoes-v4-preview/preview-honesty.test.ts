@@ -900,6 +900,120 @@ describe("OPS-V4-006 — classificação (kindV3) visível no orçamento, read-o
   })
 })
 
+describe("OPS-V4-ORC-MULTIOPCAO-MODEL-021 — grupos/variantes/faixa, read-only e honestos", () => {
+  it("orçamento sem grupoId: temGrupos=false, faixa NI, itens com grupoId=\"\"/variante=null/selecionada=false", () => {
+    const o = adaptOrcamento(
+      mkOS({
+        id: "os-sem-grupo",
+        orcamento: { status: "rascunho", total: 100, servicos: [{ id: "s1", descricao: "Limpeza", valor: 100 }], pecas: [] },
+      }),
+    )
+    expect(o.temGrupos).toBe(false)
+    expect(o.grupos).toEqual([])
+    expect(o.temFaixa).toBe(false)
+    expect(o.faixaMin).toBe(NI)
+    expect(o.faixaMax).toBe(NI)
+    expect(o.servicos[0]!.grupoId).toBe("")
+    expect(o.servicos[0]!.variante).toBeNull()
+    expect(o.servicos[0]!.selecionada).toBe(false)
+  })
+
+  it("grupo sem seleção: expõe faixa min/max e resolvido=false", () => {
+    const o = adaptOrcamento(
+      mkOS({
+        id: "os-grupo-aberto",
+        orcamento: {
+          status: "enviado",
+          total: 0,
+          servicos: [
+            { id: "opt-a", descricao: "Tela genérica", valor: 150, kindV3: "cobrado", grupoId: "g1" },
+            { id: "opt-b", descricao: "Tela original", valor: 300, kindV3: "cobrado", grupoId: "g1" },
+          ],
+          pecas: [],
+          gruposV3: [{ id: "g1", rotulo: "Escolha a tela", regra: "escolha_1" }],
+        },
+      }),
+    )
+    expect(o.temGrupos).toBe(true)
+    expect(o.grupos).toHaveLength(1)
+    expect(o.grupos[0]!.rotulo).toBe("Escolha a tela")
+    expect(o.grupos[0]!.resolvido).toBe(false)
+    expect(o.grupos[0]!.selecionadaId).toBeNull()
+    expect(o.temFaixa).toBe(true)
+  })
+
+  it("grupo com linha selecionada: resolvido=true, selecionadaId aponta pra ela, sem faixa geral", () => {
+    const o = adaptOrcamento(
+      mkOS({
+        id: "os-grupo-resolvido",
+        orcamento: {
+          status: "aprovado",
+          total: 300,
+          servicos: [
+            { id: "opt-a", descricao: "Tela genérica", valor: 150, kindV3: "cobrado", grupoId: "g1" },
+            { id: "opt-b", descricao: "Tela original", valor: 300, kindV3: "cobrado", grupoId: "g1", selecionadaV3: true },
+          ],
+          pecas: [],
+        },
+      }),
+    )
+    expect(o.grupos[0]!.resolvido).toBe(true)
+    expect(o.grupos[0]!.selecionadaId).toBe("opt-b")
+    expect(o.temFaixa).toBe(false)
+    const selecionada = o.servicos.find((s) => s.id === "opt-b")!
+    expect(selecionada.selecionada).toBe(true)
+  })
+
+  it("grupo sem gruposV3 cadastrado: rótulo cai em fallback honesto (não fabrica nome)", () => {
+    const o = adaptOrcamento(
+      mkOS({
+        id: "os-grupo-sem-meta",
+        orcamento: {
+          status: "rascunho",
+          total: 0,
+          pecas: [
+            { id: "a", nome: "A", quantidade: 1, valorUnitario: 10, grupoId: "sem-meta" },
+            { id: "b", nome: "B", quantidade: 1, valorUnitario: 20, grupoId: "sem-meta" },
+          ],
+          servicos: [],
+        },
+      }),
+    )
+    expect(o.grupos[0]!.rotulo).toBe("Opções 1")
+  })
+
+  it("variante (varianteV3) é exposta com rótulo/garantia/badge; sem varianteV3 fica null", () => {
+    const o = adaptOrcamento(
+      mkOS({
+        id: "os-variante",
+        orcamento: {
+          status: "rascunho",
+          total: 0,
+          pecas: [
+            {
+              id: "a",
+              nome: "Tela original",
+              quantidade: 1,
+              valorUnitario: 300,
+              grupoId: "g1",
+              varianteV3: { rotulo: "Original", garantiaDias: 90, badge: "Recomendado" },
+            },
+          ],
+          servicos: [],
+        },
+      }),
+    )
+    expect(o.pecas[0]!.variante).toEqual({ rotulo: "Original", descricaoCurta: "", garantiaDias: 90, prazoTexto: "", badge: "Recomendado" })
+  })
+
+  it("a Preview não importa prisma/@/app/api nem usa loja-1 no os-adapter.ts (novo código de grupos incluso)", () => {
+    const src = readFileSync(join(DIR, "os-adapter.ts"), "utf8")
+    for (const proibido of ['from "@/lib/prisma', 'from "@/app/api', "updateOSPayload", "openCaixaIfClosed", '"loja-1"', "'loja-1'", "`loja-1`"]) {
+      expect(src, `proibido encontrado: ${proibido}`).not.toContain(proibido)
+    }
+  })
+})
+
 describe("OPS-V4-006 — guards: nada de recebimento real / imports proibidos", () => {
   const allSources = collectSourceFiles(DIR).map((f) => readFileSync(f, "utf8")).join("\n")
 
