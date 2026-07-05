@@ -48,6 +48,7 @@ import {
   type DadosBasicosEditorV4,
 } from "@/lib/operacoes-v4/dados-basicos-form";
 import { PatternPadV4 } from "../PatternPadV4";
+import { EntradaPendenciasPanel } from "./EntradaPendenciasPanel";
 
 // Colunas do stage colapsam 3→2→1 conforme o espaço (notebook 1366px com as
 // gavetas abertas deixa o centro estreito — sem isso os cards ficam espremidos).
@@ -127,9 +128,10 @@ function EntradaEditor({ v }: { v: V4Vals }) {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: col3, gap: 12, alignItems: "start" }}>
+      <EntradaPendenciasPanel v={v} />
       {/* Coluna 1 — Dados básicos + Identificação + Estado físico + Avarias */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={card}>
+        <div id="entrada-card-dados-basicos" style={card}>
           <div style={{ ...cardTitle, marginBottom: 10 }}>Dados básicos / Recepção</div>
           <div>
             <div style={{ ...upLabel, marginBottom: 3 }}>Defeito relatado</div>
@@ -167,7 +169,7 @@ function EntradaEditor({ v }: { v: V4Vals }) {
           </div>
         </div>
 
-        <div style={card}>
+        <div id="entrada-card-identificacao" style={card}>
           <div style={{ ...cardTitle, marginBottom: 10 }}>Identificação do aparelho</div>
           <div style={{ display: "grid", gridTemplateColumns: col2, gap: 8 }}>
             <div><div style={{ ...upLabel, marginBottom: 3 }}>IMEI</div><input value={ed.identificacao.imei} onChange={(e) => setIdent({ imei: e.target.value })} maxLength={40} style={{ ...inp, fontFamily: MONO }} /></div>
@@ -225,7 +227,7 @@ function EntradaEditor({ v }: { v: V4Vals }) {
 
       {/* Coluna 2 — Acesso/Credenciais (salva a prova) + Checklist + Fotos (preview) */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={card}>
+        <div id="entrada-card-estado-avarias-acesso" style={card}>
           <div style={{ ...cardTitle, marginBottom: 10 }}>🔐 Segurança / Acesso</div>
           <div style={{ display: "grid", gridTemplateColumns: col2, gap: 8 }}>
             <div><div style={{ ...upLabel, marginBottom: 3 }}>Tipo de senha</div>
@@ -263,7 +265,7 @@ function EntradaEditor({ v }: { v: V4Vals }) {
           <button type="button" disabled={busy} onClick={() => runSave(() => v.salvarProvaEntrada(toProvaEntradaInput(ed)))} style={{ ...btnPrimary(busy), width: "100%" }}>Salvar estado, avarias e acesso</button>
         </div>
 
-        <div style={card}>
+        <div id="entrada-card-checklist" style={card}>
           <div style={{ ...cardTitle, marginBottom: 9 }}>Checklist do aparelho</div>
           <div style={{ display: "grid", gridTemplateColumns: col2, gap: 7 }}>
             {ed.checklist.map((c) => {
@@ -307,7 +309,7 @@ function EntradaEditor({ v }: { v: V4Vals }) {
 
       {/* Coluna 3 — Acessórios + Assinatura (preview) */}
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={card}>
+        <div id="entrada-card-acessorios" style={card}>
           <div style={{ ...cardTitle, marginBottom: 9 }}>Acessórios recebidos</div>
           <div style={{ display: "grid", gridTemplateColumns: col2, gap: 6 }}>
             {ed.acessorios.map((a) => {
