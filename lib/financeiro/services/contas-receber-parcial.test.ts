@@ -241,6 +241,59 @@ describe("GOAL_FIX — baixa parcial SmartGenius (valor_maior_que_aberto)", () =
   })
 })
 
+describe("FINANCEIRO-RECEBER-CLIENTE-UX-004 — formaPagamento persistida na baixa", () => {
+  function ultimaEntradaHistorico(payload: unknown): Record<string, unknown> {
+    const hist = (payload as { historico?: Record<string, unknown>[] })?.historico ?? []
+    expect(hist.length).toBeGreaterThan(0)
+    return hist[hist.length - 1]!
+  }
+
+  it("registrarPagamentoParcial grava formaPagamento na entrada do historico", async () => {
+    const localKey = await seedSmartGenius(300)
+    const res = await registrarPagamentoParcial({
+      storeId: STORE,
+      localKey,
+      valorPago: 100,
+      observacao: "Recebimento avulso por cliente",
+      formaPagamento: "PIX",
+    })
+    expect(res.ok).toBe(true)
+    if (!res.ok) throw new Error(res.reason)
+    const entrada = ultimaEntradaHistorico(res.data.payload)
+    expect(entrada.tipo).toBe("pagamento")
+    expect(entrada.formaPagamento).toBe("PIX")
+    expect(entrada.observacao).toBe("Recebimento avulso por cliente")
+  })
+
+  it("liquidarContaReceber grava formaPagamento na entrada do historico", async () => {
+    const localKey = await seedSmartGenius(300)
+    const res = await liquidarContaReceber({ storeId: STORE, localKey, formaPagamento: "Dinheiro" })
+    expect(res.ok).toBe(true)
+    if (!res.ok) throw new Error(res.reason)
+    const entrada = ultimaEntradaHistorico(res.data.payload)
+    expect(entrada.tipo).toBe("liquidacao")
+    expect(entrada.formaPagamento).toBe("Dinheiro")
+  })
+
+  it("sem formaPagamento a entrada do historico não ganha o campo (compat com baixas antigas)", async () => {
+    const localKey = await seedSmartGenius(300)
+    const res = await registrarPagamentoParcial({ storeId: STORE, localKey, valorPago: 50 })
+    expect(res.ok).toBe(true)
+    if (!res.ok) throw new Error(res.reason)
+    const entrada = ultimaEntradaHistorico(res.data.payload)
+    expect(entrada.formaPagamento).toBeUndefined()
+  })
+
+  it("formaPagamento vazia/whitespace é normalizada para ausente", async () => {
+    const localKey = await seedSmartGenius(300)
+    const res = await liquidarContaReceber({ storeId: STORE, localKey, formaPagamento: "   " })
+    expect(res.ok).toBe(true)
+    if (!res.ok) throw new Error(res.reason)
+    const entrada = ultimaEntradaHistorico(res.data.payload)
+    expect(entrada.formaPagamento).toBeUndefined()
+  })
+})
+
 describe("GOAL_FIX — idempotência da movimentação de caixa (não duplica em retry)", () => {
   it("parcial de R$ 200 repetido com mesma referência soma apenas uma vez (skipped_idempotent)", async () => {
     // Mock pontual de movimentacaoFinanceira sobre o mesmo Prisma em memória.

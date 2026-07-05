@@ -208,6 +208,7 @@ export async function liquidarContaReceber(params: {
   id?: string
   localKey?: string
   observacao?: string
+  formaPagamento?: string
   userLabel?: string
 }): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
   const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey })
@@ -225,6 +226,7 @@ export async function liquidarContaReceber(params: {
     tipo: "liquidacao",
     valor: aberto,
     observacao: safeStr(params.observacao) || undefined,
+    formaPagamento: safeStr(params.formaPagamento).trim() || undefined,
     userLabel: safeStr(params.userLabel) || undefined,
   })
 
@@ -244,6 +246,7 @@ export async function registrarPagamentoParcial(params: {
   localKey?: string
   valorPago: number
   observacao?: string
+  formaPagamento?: string
   userLabel?: string
 }): Promise<ContaReceberServiceResult<ContaReceberTitulo>> {
   const row = await findTitulo(params.storeId, { id: params.id, localKey: params.localKey })
@@ -265,6 +268,7 @@ export async function registrarPagamentoParcial(params: {
     tipo: "pagamento",
     valor: vp,
     observacao: safeStr(params.observacao) || undefined,
+    formaPagamento: safeStr(params.formaPagamento).trim() || undefined,
     userLabel: safeStr(params.userLabel) || undefined,
   })
 

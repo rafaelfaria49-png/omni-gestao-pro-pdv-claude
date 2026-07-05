@@ -405,8 +405,8 @@ type FinanceiroRealState = {
   refreshDRE: (mes?: number, ano?: number) => Promise<void>
   criarCarteira: (data: NovaCarteiraInput) => Promise<CarteiraPublica>
   transferirEntreCarteiras: (data: TransferenciaCarteiraInput) => Promise<void>
-  liquidarReceber: (id: string, observacao?: string) => Promise<void>
-  receberParcial: (id: string, valor: number, observacao?: string) => Promise<void>
+  liquidarReceber: (id: string, observacao?: string, formaPagamento?: string) => Promise<void>
+  receberParcial: (id: string, valor: number, observacao?: string, formaPagamento?: string) => Promise<void>
   estornarReceber: (id: string, motivo?: string) => Promise<void>
   criarReceber: (data: NovoReceberInput) => Promise<void>
   liquidarPagar: (id: string, observacao?: string) => Promise<void>
@@ -964,13 +964,13 @@ export function FinanceiroRealProvider({ children }: { children: ReactNode }) {
     return json
   }, [])
 
-  const liquidarReceber = useCallback(async (id: string, observacao?: string) => {
-    await callApi("/api/financeiro/receber", { op: "liquidar", localKey: id, observacao }, "PATCH")
+  const liquidarReceber = useCallback(async (id: string, observacao?: string, formaPagamento?: string) => {
+    await callApi("/api/financeiro/receber", { op: "liquidar", localKey: id, observacao, formaPagamento }, "PATCH")
     await fetchData()
   }, [callApi, fetchData])
 
-  const receberParcial = useCallback(async (id: string, valor: number, observacao?: string) => {
-    await callApi("/api/financeiro/receber", { op: "parcial", localKey: id, valor, observacao }, "PATCH")
+  const receberParcial = useCallback(async (id: string, valor: number, observacao?: string, formaPagamento?: string) => {
+    await callApi("/api/financeiro/receber", { op: "parcial", localKey: id, valor, observacao, formaPagamento }, "PATCH")
     await fetchData()
   }, [callApi, fetchData])
 

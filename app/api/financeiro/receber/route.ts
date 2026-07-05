@@ -49,7 +49,7 @@ function readSid(req: Request, forWrite = false): string | null {
     : opsLojaIdFromRequest(req)
 }
 
-type HistEntry = { at?: string; tipo?: string; userLabel?: string; valor?: number; observacao?: string }
+type HistEntry = { at?: string; tipo?: string; userLabel?: string; valor?: number; observacao?: string; formaPagamento?: string }
 
 function parseHistorico(payload: unknown): HistEntry[] {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return []
@@ -99,6 +99,7 @@ const patchSchema = z.discriminatedUnion("op", [
     lojaId: z.string().max(120).optional(),
     localKey: z.string().min(1).max(260),
     observacao: z.string().max(2000).optional(),
+    formaPagamento: z.string().max(80).optional(),
   }),
   z.object({
     op: z.literal("parcial"),
@@ -106,6 +107,7 @@ const patchSchema = z.discriminatedUnion("op", [
     localKey: z.string().min(1).max(260),
     valor: z.number().finite().positive("Valor deve ser positivo"),
     observacao: z.string().max(2000).optional(),
+    formaPagamento: z.string().max(80).optional(),
   }),
   z.object({
     op: z.literal("estornar"),
@@ -363,7 +365,7 @@ export async function PATCH(req: Request) {
       const atual = await getContaReceberByLocalKey(storeId, parsed.data.localKey)
       const abertoAntes = atual ? buildContaReceberAuditTrail([atual])[0]?.saldoAberto ?? 0 : 0
 
-      const res = await liquidarContaReceber({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, userLabel })
+      const res = await liquidarContaReceber({ storeId, localKey: parsed.data.localKey, observacao: parsed.data.observacao, formaPagamento: parsed.data.formaPagamento, userLabel })
       if (!res.ok) return err(res.reason, `liquidar_${res.reason}`, 422)
       const valorMov = abertoAntes > 0 ? abertoAntes : res.data.valor
       const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
@@ -375,13 +377,13 @@ export async function PATCH(req: Request) {
       ).catch((e) => console.error("[receber/liquidar mov]", e))
       void logAuditoriaFinanceira({
         storeId, entidade: "receber", entidadeId: res.data.id, acao: "liquidar", actor,
-        depois: { localKey: parsed.data.localKey, valor: valorMov, carteiraId },
+        depois: { localKey: parsed.data.localKey, valor: valorMov, carteiraId, ...(parsed.data.formaPagamento ? { formaPagamento: parsed.data.formaPagamento } : {}) },
       })
       return NextResponse.json({ ok: true, op: "liquidar" })
     }
 
     if (parsed.data.op === "parcial") {
-      const res = await registrarPagamentoParcial({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, userLabel })
+      const res = await registrarPagamentoParcial({ storeId, localKey: parsed.data.localKey, valorPago: parsed.data.valor, observacao: parsed.data.observacao, formaPagamento: parsed.data.formaPagamento, userLabel })
       if (!res.ok) return err(res.reason, `parcial_${res.reason}`, 422)
       const carteiraId = await resolveCarteiraIdFromPayload(res.data.payload, storeId)
       // Gerar movimentação de entrada parcial (idempotente por soma total)
@@ -392,7 +394,7 @@ export async function PATCH(req: Request) {
       ).catch((e) => console.error("[receber/parcial mov]", e))
       void logAuditoriaFinanceira({
         storeId, entidade: "receber", entidadeId: res.data.id, acao: "liquidar", actor,
-        depois: { localKey: parsed.data.localKey, valorPago: parsed.data.valor, parcial: true, carteiraId },
+        depois: { localKey: parsed.data.localKey, valorPago: parsed.data.valor, parcial: true, carteiraId, ...(parsed.data.formaPagamento ? { formaPagamento: parsed.data.formaPagamento } : {}) },
       })
       return NextResponse.json({ ok: true, op: "parcial" })
     }
