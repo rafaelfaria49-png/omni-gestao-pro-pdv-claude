@@ -2703,24 +2703,32 @@ function ReceberClienteModal({
   return (
     <>
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 p-0">
-        <DialogHeader className="border-b border-border px-6 py-4">
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <User className="h-4 w-4 text-primary" />
+      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-4xl">
+        <DialogHeader className="border-b border-border bg-muted/30 px-8 py-5">
+          <DialogTitle className="flex items-center gap-3 text-lg font-semibold tracking-tight">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+              <User className="h-5 w-5 text-primary" />
+            </span>
             Receber de cliente
           </DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription className="text-xs leading-relaxed">
             Receba um valor avulso do cliente (baixado nos títulos mais antigos primeiro) ou receba um título específico.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="receber-cliente-busca">Cliente</Label>
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+          <div className="space-y-2">
+            <Label
+              htmlFor="receber-cliente-busca"
+              className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+            >
+              Cliente
+            </Label>
             <Input
               id="receber-cliente-busca"
               list="clientes-list-receber-cliente"
               placeholder="Buscar cliente com título em aberto..."
+              className="h-11 rounded-lg text-sm"
               value={cliente}
               onChange={(e) => setCliente(e.target.value)}
               autoFocus
@@ -2732,14 +2740,17 @@ function ReceberClienteModal({
             </datalist>
           </div>
 
-          <div className="mt-4">
+          <div className="mt-5">
             {!clienteTrim ? (
-              <p className="text-xs text-muted-foreground">
-                Digite ou selecione um cliente para ver os títulos em aberto.
-              </p>
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
+                <User className="h-5 w-5 text-muted-foreground/60" />
+                <p className="text-sm text-muted-foreground">
+                  Digite ou selecione um cliente para ver os títulos em aberto.
+                </p>
+              </div>
             ) : !clienteReconhecido ? (
               clientesTodos.has(clienteTrim) ? (
-                <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+                <p className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
                   Nenhum título em aberto para este cliente.
                 </p>
               ) : (
@@ -2757,7 +2768,7 @@ function ReceberClienteModal({
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="h-7 rounded-full px-3 text-xs"
+                          className="h-8 rounded-full px-4 text-xs"
                           onClick={() => setCliente(c)}
                         >
                           {c}
@@ -2768,39 +2779,53 @@ function ReceberClienteModal({
                 </div>
               )
             ) : titulosDoCliente.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+              <p className="rounded-xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center text-sm text-muted-foreground">
                 Nenhum título em aberto para este cliente.
               </p>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {/* Recebimento por valor avulso */}
-                <section className="rounded-lg border border-primary/30 bg-primary/5 p-4">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <section className="overflow-hidden rounded-xl border border-primary/20">
+                  <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-primary/15 bg-primary/5 px-5 py-3">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
                       Receber valor do cliente
                     </h3>
-                    <p className="text-sm">
-                      Total em aberto: <span className="font-semibold text-primary">{fmt(plano.totalAberto)}</span>
+                    <p className="flex items-baseline gap-2">
+                      <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Total em aberto</span>
+                      <span className="text-lg font-semibold tracking-tight text-primary">{fmt(plano.totalAberto)}</span>
                     </p>
                   </div>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="receber-cliente-valor">Valor recebido (R$)</Label>
+                  <div className="grid grid-cols-1 gap-4 bg-card px-5 py-5 sm:grid-cols-[1fr_1fr_1.4fr]">
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="receber-cliente-valor"
+                        className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                      >
+                        Valor recebido (R$)
+                      </Label>
                       <Input
                         id="receber-cliente-valor"
                         type="number"
                         step="0.01"
                         min="0"
                         placeholder="0,00"
+                        className="h-10 rounded-lg text-base font-semibold"
                         value={valorRecebido}
                         onChange={(e) => setValorRecebido(e.target.value)}
                         disabled={busy}
                       />
                     </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="receber-cliente-forma">Forma de pagamento</Label>
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="receber-cliente-forma"
+                        className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                      >
+                        Forma de pagamento
+                      </Label>
                       <Select value={formaPagamento} onValueChange={setFormaPagamento} disabled={busy}>
-                        <SelectTrigger id="receber-cliente-forma"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger id="receber-cliente-forma" className="h-10 w-full rounded-lg">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Dinheiro">Dinheiro</SelectItem>
                           <SelectItem value="PIX">PIX</SelectItem>
@@ -2811,18 +2836,24 @@ function ReceberClienteModal({
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="receber-cliente-obs">Observação (opcional)</Label>
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="receber-cliente-obs"
+                        className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+                      >
+                        Observação (opcional)
+                      </Label>
                       <Input
                         id="receber-cliente-obs"
                         placeholder="Ex.: pagamento parcial combinado"
+                        className="h-10 rounded-lg"
                         value={observacao}
                         onChange={(e) => setObservacao(e.target.value)}
                         disabled={busy}
                       />
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-primary/15 bg-primary/5 px-5 py-3">
                     <p className="text-xs text-muted-foreground">
                       {!valorRecebido.trim()
                         ? "O valor será distribuído automaticamente nos títulos mais antigos primeiro."
@@ -2832,21 +2863,29 @@ function ReceberClienteModal({
                             ? "O valor recebido não pode ser maior que o saldo em aberto do cliente."
                             : "Informe um valor maior que zero."}
                     </p>
-                    <Button size="sm" onClick={handleReceberValor} disabled={busy || !plano.ok}>
+                    <Button className="h-9 rounded-lg px-6" onClick={handleReceberValor} disabled={busy || !plano.ok}>
                       {busy ? "Registrando..." : "Receber valor"}
                     </Button>
                   </div>
                 </section>
 
                 {/* Títulos em aberto — recebimento individual */}
-                <div className="min-w-0 rounded-lg border border-border">
+                <div className="min-w-0 overflow-hidden rounded-xl border border-border">
+                  <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Títulos em aberto
+                    </h3>
+                    <span className="text-xs text-muted-foreground">
+                      {titulosDoCliente.length} título(s)
+                    </span>
+                  </div>
                   <Table className="table-fixed">
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Título</TableHead>
-                        <TableHead className="w-28">Vencimento</TableHead>
-                        <TableHead className="w-28 text-right">Saldo aberto</TableHead>
-                        <TableHead className="w-24 text-right">Ação</TableHead>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="text-[11px] uppercase tracking-wide">Título</TableHead>
+                        <TableHead className="w-28 text-[11px] uppercase tracking-wide">Vencimento</TableHead>
+                        <TableHead className="w-28 text-right text-[11px] uppercase tracking-wide">Saldo aberto</TableHead>
+                        <TableHead className="w-24 text-right text-[11px] uppercase tracking-wide">Ação</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -2915,8 +2954,8 @@ function ReceberClienteModal({
           </div>
         </div>
 
-        <DialogFooter className="border-t border-border bg-muted/20 px-6 py-3">
-          <Button variant="outline" onClick={() => handleClose(false)} disabled={busy}>
+        <DialogFooter className="border-t border-border bg-muted/30 px-8 py-4">
+          <Button variant="outline" className="rounded-lg px-6" onClick={() => handleClose(false)} disabled={busy}>
             Fechar
           </Button>
         </DialogFooter>
