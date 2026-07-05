@@ -9,11 +9,16 @@
 // um atendimento novo, o operador escolhe o cliente de novo (existente ou
 // outro novo) a cada duplicação.
 //
-// Limitação registrada: o modal "Orçamento Rápido" só distingue Cobrado/
-// Cortesia (sem opção "Interno" na UI) — uma linha "interno" no orçamento
-// original vira um item cobrado comum no prefill (o operador revisa/ajusta
-// antes de salvar). Só o PRIMEIRO grupo é usado (o motor desta V4 sempre
-// cria exatamente um grupo; grupos extras, se um dia existirem, são ignorados).
+// Decisão sobre "Interno" (risco herdado do GOAL 025, resolvido aqui — GOAL
+// 026): o modal "Orçamento Rápido" só distingue Cobrado/Cortesia na UI (sem
+// opção "Interno"). Rebaixar uma linha "interno" a "cobrado" inflaria o valor
+// cobrado do cliente silenciosamente — inaceitável. A opção escolhida foi
+// DROPAR (nunca incluir) linhas `kindV3 === "interno"` no prefill, tanto nos
+// itens fixos quanto nas variantes de grupo — mais simples e seguro do que
+// redesenhar a UI do modal para um seletor de 3 estados; o operador nunca vê
+// um valor que não devia ser cobrado. Só o PRIMEIRO grupo é usado (o motor
+// desta V4 sempre cria exatamente um grupo; grupos extras, se um dia
+// existirem, são ignorados).
 // ============================================================================
 
 import type { OrdemServico } from "@/types/os";
@@ -48,7 +53,7 @@ export function montarPrefillDuplicarOrcamentoV4(os: OrdemServico): OrcamentoRap
 
   const itensFixos: OrcamentoRapidoItemFixoFormV4[] = [];
   for (const p of pecas) {
-    if (txt(p.grupoId)) continue;
+    if (txt(p.grupoId) || p.kindV3 === "interno") continue;
     itensFixos.push({
       ...novoItemFixoVazioV4(),
       descricao: txt(p.nome) || "Peça",
@@ -58,7 +63,7 @@ export function montarPrefillDuplicarOrcamentoV4(os: OrdemServico): OrcamentoRap
     });
   }
   for (const sv of servicos) {
-    if (txt(sv.grupoId)) continue;
+    if (txt(sv.grupoId) || sv.kindV3 === "interno") continue;
     itensFixos.push({
       ...novoItemFixoVazioV4(),
       descricao: txt(sv.descricao) || "Serviço",
@@ -71,7 +76,7 @@ export function montarPrefillDuplicarOrcamentoV4(os: OrdemServico): OrcamentoRap
   const variantesRaw: OrcamentoRapidoVarianteFormV4[] = [];
   if (primeiroGrupoId) {
     for (const p of pecas) {
-      if (txt(p.grupoId) !== primeiroGrupoId) continue;
+      if (txt(p.grupoId) !== primeiroGrupoId || p.kindV3 === "interno") continue;
       variantesRaw.push({
         ...novaVarianteVaziaV4(),
         rotulo: txt(p.varianteV3?.rotulo) || txt(p.nome) || "Opção",
@@ -83,7 +88,7 @@ export function montarPrefillDuplicarOrcamentoV4(os: OrdemServico): OrcamentoRap
       });
     }
     for (const sv of servicos) {
-      if (txt(sv.grupoId) !== primeiroGrupoId) continue;
+      if (txt(sv.grupoId) !== primeiroGrupoId || sv.kindV3 === "interno") continue;
       variantesRaw.push({
         ...novaVarianteVaziaV4(),
         rotulo: txt(sv.varianteV3?.rotulo) || txt(sv.descricao) || "Opção",

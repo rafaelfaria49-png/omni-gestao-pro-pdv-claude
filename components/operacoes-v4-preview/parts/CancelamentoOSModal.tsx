@@ -47,7 +47,9 @@ export function CancelamentoOSModal({ v }: { v: V4Vals }) {
 }
 
 function CancelamentoOSModalContent({ v }: { v: V4Vals }) {
-  const [motivo, setMotivo] = useState("");
+  // GOAL 026: link honesto pós-recusa/expiração pode sugerir um motivo — o
+  // operador ainda confirma/edita antes de cancelar de verdade.
+  const [motivo, setMotivo] = useState(() => v.cancelamentoMotivoPrefill ?? "");
   const [busy, setBusy] = useState(false);
 
   const fechar = () => {

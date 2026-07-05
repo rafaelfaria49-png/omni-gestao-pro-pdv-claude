@@ -23,6 +23,7 @@ import {
 } from "@/lib/operacoes-v4/orcamento-form";
 import { OrcamentoEnvioCluster } from "./OrcamentoEnvioCluster";
 import { OrcamentoDuplicarButton } from "./OrcamentoDuplicarButton";
+import { OrcamentoDecisaoCluster } from "./OrcamentoDecisaoCluster";
 
 const col2 = "repeat(auto-fit, minmax(330px, 1fr))";
 const emptyText = { fontSize: 12, color: C.subtle, padding: "8px 2px", lineHeight: 1.5 } as const;
@@ -202,7 +203,6 @@ function OrcamentoReadonly({ v }: { v: V4Vals }) {
 function OrcamentoEditor({ v }: { v: V4Vals }) {
   const [editor, setEditor] = useState<OrcamentoEditorV4>(() => v.orcamentoEditorSeed);
   const [lookupOpen, setLookupOpen] = useState(false);
-  const [motivo, setMotivo] = useState("");
   const [busy, setBusy] = useState(false);
 
   const totais = totaisEditorV4(editor);
@@ -342,18 +342,12 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
         <div style={card}>
           <div style={{ ...cardTitle, marginBottom: 10 }}>Ações</div>
           <button type="button" onClick={() => run(() => v.salvarOrcamento(editor))} disabled={busy} style={{ ...btnPrimary, width: "100%", marginBottom: 8 }}>{busy ? "Processando…" : "Salvar orçamento"}</button>
-          {v.orcamentoPodeDecidir && (
-            <>
-              <button type="button" onClick={() => run(() => v.aprovarOrcamento())} disabled={busy} style={{ height: 34, width: "100%", padding: "0 16px", border: "none", background: C.success, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1, marginBottom: 10 }}>Aprovar orçamento</button>
-              <div style={{ ...upLabel, marginBottom: 4 }}>Motivo da recusa (opcional)</div>
-              <input value={motivo} onChange={(e) => setMotivo(e.target.value)} maxLength={200} placeholder="Ex.: cliente não aprovou o valor" style={{ ...cellInput, height: 32, width: "100%", marginBottom: 8 }} />
-              <button type="button" onClick={() => run(() => v.recusarOrcamento(motivo))} disabled={busy} style={{ height: 32, width: "100%", padding: "0 16px", border: `1px solid ${C.dangerBd}`, background: C.surface, color: C.dangerFg, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}>Recusar orçamento</button>
-            </>
-          )}
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 2 }}>
             <OrcamentoDuplicarButton v={v} />
           </div>
         </div>
+
+        {v.orcamentoPodeDecidir && <OrcamentoDecisaoCluster v={v} />}
 
         <OrcamentoEnvioCluster v={v} />
       </div>

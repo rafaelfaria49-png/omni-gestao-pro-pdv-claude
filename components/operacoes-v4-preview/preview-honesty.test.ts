@@ -210,6 +210,9 @@ const ctx: V4DataCtx = {
   enviarOrcamentoPorCanal: async () => ({ ok: false }),
   orcamentoRapidoPrefill: null,
   definirOrcamentoRapidoPrefill: () => {},
+  selecionarVarianteOrcamento: async () => false,
+  cancelamentoMotivoPrefill: null,
+  definirCancelamentoMotivoPrefill: () => {},
 }
 
 describe("Operações V4 — Nova OS real (cria OS e abre no workspace)", () => {
@@ -2118,6 +2121,92 @@ describe("GOAL OPS-V4-ORC-ENVIO-WA-025 — envio por canal, mensagem e duplicar"
     const corpo = orquestrador.slice(idxFn, idxFim)
     expect(corpo).not.toContain("enviarOrcamentoV3(")
     expect(corpo).toContain("enviarOrcamentoPorCanalV3(")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-ORC-APROVACAO-SELECAO-026 — seleção de variante por grupo +
+// decisão (aprovar/recusar com motivo estruturado) + Duplicar não copia
+// linhas "interno". SÓ `OrcamentoDecisaoCluster.tsx` está autorizado a chamar
+// `aprovarOrcamentoV3`/`recusarOrcamentoV3`/`selecionarVarianteOrcamento` — o
+// modal 024 e o cluster de envio 025 continuam proibidos (guards já existentes).
+// ---------------------------------------------------------------------------
+describe("GOAL OPS-V4-ORC-APROVACAO-SELECAO-026 — seleção de variante e decisão", () => {
+  const decisaoCluster = readFileSync(join(DIR, "parts", "stages", "OrcamentoDecisaoCluster.tsx"), "utf8")
+  const envioCluster = readFileSync(join(DIR, "parts", "stages", "OrcamentoEnvioCluster.tsx"), "utf8")
+  const duplicarBtn = readFileSync(join(DIR, "parts", "stages", "OrcamentoDuplicarButton.tsx"), "utf8")
+  const orcamentoStage = readFileSync(join(DIR, "parts", "stages", "OrcamentoStage.tsx"), "utf8")
+  const modal = readFileSync(join(DIR, "parts", "OrcamentoRapidoModal.tsx"), "utf8")
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+
+  it("SÓ o cluster de decisão chama aprovar/recusar/selecionar — motor real fica em use-v4-preview.ts", () => {
+    expect(decisaoCluster).toContain("v.aprovarOrcamento")
+    expect(decisaoCluster).toContain("v.recusarOrcamento")
+    expect(decisaoCluster).toContain("v.selecionarVarianteOrcamento")
+    expect(orquestrador).toContain("aprovarOrcamentoV3")
+    expect(orquestrador).toContain("recusarOrcamentoV3")
+  })
+
+  it("o modal 024 e o cluster de envio 025 CONTINUAM proibidos de aprovar/recusar/selecionar", () => {
+    for (const proibido of ["aprovarOrcamentoV3", "recusarOrcamentoV3", "selecionarVarianteOrcamento", "v.aprovarOrcamento", "v.recusarOrcamento"]) {
+      expect(modal, `referência proibida encontrada no modal: ${proibido}`).not.toContain(proibido)
+      expect(envioCluster, `referência proibida encontrada no cluster de envio: ${proibido}`).not.toContain(proibido)
+      expect(duplicarBtn, `referência proibida encontrada no botão duplicar: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("recusa usa motivo ESTRUTURADO (enum) — nunca texto livre solto", () => {
+    expect(decisaoCluster).toContain("MOTIVO_RECUSA_LABEL_V3")
+    expect(decisaoCluster).toMatch(/recusarOrcamento\(\{\s*motivo,\s*observacao/)
+  })
+
+  it("Aprovar fica desabilitado enquanto houver grupo sem seleção (mesma regra que o servidor aplicaria)", () => {
+    expect(decisaoCluster).toContain("podeAprovar")
+    expect(decisaoCluster).toMatch(/disabled=\{busyDecisao \|\| !podeAprovar\}/)
+  })
+
+  it("'Pediu alteração' não chama nenhuma action (nota honesta, sem transição forçada)", () => {
+    const idxNota = decisaoCluster.indexOf('"Pediu alteração"')
+    expect(idxNota).toBeGreaterThan(-1)
+    // Não deve haver runWrite/action de escrita colado ao botão de nota — só toggle de estado local.
+    expect(decisaoCluster).toContain("setNotaAlteracao")
+  })
+
+  it("oferta de cancelamento pós-recusa/expiração reusa o fluxo existente (abrirCancelamentoComMotivo), sem duplicar o modal", () => {
+    expect(decisaoCluster).toContain("v.abrirCancelamentoComMotivo")
+    expect(orquestrador).toContain("abrirCancelamentoComMotivo")
+    // Não recria um segundo modal de cancelamento.
+    expect(decisaoCluster).not.toContain("CancelamentoOSModal")
+  })
+
+  it("o cluster de decisão é montado no OrcamentoStage, ao lado do cluster de envio", () => {
+    expect(orcamentoStage).toContain("<OrcamentoDecisaoCluster")
+    expect(orcamentoStage).toContain("<OrcamentoEnvioCluster")
+  })
+
+  it("o cluster de decisão não importa prisma/@/app/api/caixa/financeiro/estoque/whatsapp/fiscal direto", () => {
+    for (const proibido of [
+      'from "@/lib/prisma',
+      'from "@/app/api',
+      'from "@/lib/caixa',
+      'from "@/lib/financeiro',
+      'from "@/lib/estoque',
+      'from "@/lib/whatsapp',
+      'from "@/lib/fiscal',
+      'from "@/components/pdv',
+    ]) {
+      expect(decisaoCluster, `proibido encontrado: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("nenhum arquivo novo usa loja-1/openCaixaIfClosed/updateOSPayload", () => {
+    for (const proibido of ['"loja-1"', "'loja-1'", "`loja-1`", "openCaixaIfClosed", "updateOSPayload"]) {
+      expect(decisaoCluster, `proibido encontrado: ${proibido}`).not.toContain(proibido)
+    }
+  })
+
+  it("não adiciona transição NOVA na status-machine — só reusa aprovarOrcamentoV3/recusarOrcamentoV3 existentes", () => {
+    expect(decisaoCluster).not.toContain("aplicarTransicaoStatusV3")
   })
 })
 

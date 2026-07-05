@@ -149,3 +149,41 @@ describe("montarPrefillDuplicarOrcamentoV4 — grupo com variantes completas", (
     expect(form.variantes.map((v) => v.rotulo).sort()).toEqual(["Bateria genérica", "Bateria original"].sort());
   });
 });
+
+describe("montarPrefillDuplicarOrcamentoV4 — GOAL 026 — linhas 'interno' são DROPADAS (nunca rebaixadas a cobrado)", () => {
+  it("item fixo interno não aparece nos itensFixos do prefill", () => {
+    const form = montarPrefillDuplicarOrcamentoV4(
+      mkOS({
+        ...ORCAMENTO_BASE,
+        servicos: [
+          { id: "s1", descricao: "Mão de obra", valor: 50, kindV3: "cobrado" },
+          { id: "s2", descricao: "Anotação interna", valor: 999, kindV3: "interno" },
+        ],
+        pecas: [{ id: "p1", nome: "Peça interna", quantidade: 1, valorUnitario: 500, kindV3: "interno" }],
+      }),
+    )!;
+    const descricoes = form.itensFixos.map((it) => it.descricao);
+    expect(descricoes).toContain("Mão de obra");
+    expect(descricoes).not.toContain("Anotação interna");
+    expect(descricoes).not.toContain("Peça interna");
+    // Nenhum valor de linha interna vaza para o prefill (nada de 999/500 cobrado).
+    expect(form.itensFixos.every((it) => it.valor !== 999 && it.valor !== 500)).toBe(true);
+  });
+
+  it("variante interna dentro de um grupo não aparece nas variantes do prefill", () => {
+    const form = montarPrefillDuplicarOrcamentoV4(
+      mkOS({
+        ...ORCAMENTO_BASE,
+        gruposV3: [{ id: "g1", rotulo: "Escolha a tela", regra: "escolha_1" }],
+        servicos: [
+          { id: "a", descricao: "Genérica", valor: 150, kindV3: "cobrado", grupoId: "g1" },
+          { id: "b", descricao: "Nota interna do grupo", valor: 999, kindV3: "interno", grupoId: "g1" },
+        ],
+        pecas: [],
+      }),
+    )!;
+    const rotulos = form.variantes.map((v) => v.rotulo);
+    expect(rotulos).toContain("Genérica");
+    expect(rotulos).not.toContain("Nota interna do grupo");
+  });
+});

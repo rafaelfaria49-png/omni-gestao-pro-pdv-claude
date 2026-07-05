@@ -45,9 +45,13 @@ import { aplicarTransicaoStatusV3 } from "@/lib/operacoes-v3/status-actions";
 // (decide enviar 1ª vez vs. só registrar reenvio); a mensagem NASCE da projeção
 // client-safe do GOAL 023, nunca do payload cru.
 import { enviarOrcamentoPorCanalV3 } from "@/lib/operacoes-v3/orcamento-envio-actions";
-import type { CanalEnvioOrcamentoV3 } from "@/lib/operacoes-v3/orcamento-model";
+import type { CanalEnvioOrcamentoV3, PecaV3, RecusarOrcamentoV3Input, ServicoV3 } from "@/lib/operacoes-v3/orcamento-model";
 import { montarOrcamentoClienteViewV4 } from "@/lib/operacoes-v4/orcamento-cliente-view";
 import type { OrcamentoRapidoFormV4 } from "@/lib/operacoes-v4/orcamento-rapido-form";
+// Seleção de variante (GOAL OPS-V4-ORC-APROVACAO-SELECAO-026) — utilitário
+// puro que marca `selecionadaV3`; grava pelo contrato oficial (`salvarOrcamentoV3`
+// com `gruposV3`, GOAL 026 aposentou o patch cru do GOAL 024).
+import { marcarSelecaoVarianteV4 } from "@/lib/operacoes-v4/orcamento-selecao";
 // Máquina única de status (pura, sem I/O) — reaproveitada para habilitar/desabilitar
 // as ações de Execução exatamente igual ao servidor decide (slice OPS-V4-EXECUCAO-REAL-007).
 import { podeTransicionarV3 } from "@/lib/operacoes-v3/status-machine";
@@ -139,7 +143,14 @@ export interface V4DataCtx {
   gerarOrcamento: () => Promise<boolean>;
   salvarOrcamento: (editor: OrcamentoEditorV4) => Promise<boolean>;
   aprovarOrcamento: () => Promise<boolean>;
-  recusarOrcamento: (motivo?: string) => Promise<boolean>;
+  // GOAL 026: motivo estruturado (enum + observação opcional) — substitui o
+  // texto livre solto de antes; `recusarOrcamentoV3` (motor) ainda aceita
+  // string legada para OUTROS chamadores (hub V3), mas a V4 sempre manda a
+  // entrada estruturada a partir daqui.
+  recusarOrcamento: (input: RecusarOrcamentoV3Input) => Promise<boolean>;
+  // Marca a variante escolhida de um grupo (grava via `salvarOrcamentoV3`,
+  // contrato oficial com `gruposV3`) — estado sempre do servidor.
+  selecionarVarianteOrcamento: (grupoId: string, itemId: string) => Promise<boolean>;
   iniciarDiagnostico: () => Promise<boolean>;
   iniciarServico: () => Promise<boolean>;
   // ---- Execução (slice OPS-V4-EXECUCAO-REAL-007) ----
@@ -163,6 +174,11 @@ export interface V4DataCtx {
   // ---- Cancelamento de OS (GOAL OPS-V4-CANCELAR-OS-CONNECT-021) ----
   /** Cancela a OS via `aplicarTransicaoStatusV3(sid, osId, "cancelada", { motivo })` (motivo obrigatório, contrato já blindado — commit f825867). */
   cancelarOS: (motivo: string) => Promise<boolean>;
+  // GOAL 026: link honesto (não automático) pós-recusa/expiração — abre o
+  // MESMO modal de cancelamento acima, só que com um motivo pré-preenchido
+  // (o operador ainda confirma/edita antes de cancelar de verdade).
+  cancelamentoMotivoPrefill: string | null;
+  definirCancelamentoMotivoPrefill: (motivo: string | null) => void;
   // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
   // Estado + ações vêm DIRETO do hook V3 `usePdvServicoV3` (pagamento/sessão de
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
@@ -952,9 +968,22 @@ export function buildVals(
     // `cancelarOS` (acima, via runWrite → aplicarTransicaoStatusV3 já blindada).
     // `cancelamento` é o gating pré-computado (mesma máquina única + mesma leitura
     // de pagamento que já alimentam execAcoes/estorno — nunca um novo read).
-    openCancelamentoOS: () => update({ cancelamentoOS: true }),
-    closeCancelamentoOS: () => update({ cancelamentoOS: false }),
+    openCancelamentoOS: () => {
+      ctx.definirCancelamentoMotivoPrefill(null);
+      update({ cancelamentoOS: true });
+    },
+    closeCancelamentoOS: () => {
+      update({ cancelamentoOS: false });
+      ctx.definirCancelamentoMotivoPrefill(null);
+    },
     cancelamentoOSOpen: st.cancelamentoOS,
+    cancelamentoMotivoPrefill: ctx.cancelamentoMotivoPrefill,
+    // GOAL 026: link honesto pós-recusa — abre o MESMO modal já com um motivo
+    // sugerido (o operador confirma/edita antes de cancelar de verdade).
+    abrirCancelamentoComMotivo: (motivo: string) => {
+      ctx.definirCancelamentoMotivoPrefill(motivo);
+      update({ cancelamentoOS: true });
+    },
     cancelamento,
     cancelarOS: ctx.cancelarOS,
 
@@ -1021,6 +1050,8 @@ export function buildVals(
     orcamentoClienteView,
     enviarOrcamentoPorCanal: ctx.enviarOrcamentoPorCanal,
     openDocPrint,
+    // ---- Seleção de variante + decisão granular (GOAL 026) ----
+    selecionarVarianteOrcamento: ctx.selecionarVarianteOrcamento,
 
     // ---- Entrada/Recepção REAL (slice OPS-V4-ENTRADA-RECEPCAO-REAL-003) ----
     // Handlers reais (actions V3 prova-entrada/checklist). Fotos/assinatura/anexos/
@@ -1187,7 +1218,7 @@ export function useV4Preview(): V4Vals {
     [runWrite, update],
   );
   const recusarOrcamento = useCallback(
-    (motivo?: string) => runWrite((sid, osId) => recusarOrcamentoV3(sid, osId, motivo), "Orçamento recusado."),
+    (input: RecusarOrcamentoV3Input) => runWrite((sid, osId) => recusarOrcamentoV3(sid, osId, input), "Orçamento recusado."),
     [runWrite],
   );
 
@@ -1372,6 +1403,35 @@ export function useV4Preview(): V4Vals {
     return ordens.find((o) => o.id === st.selectedOsId) ?? null;
   }, [st.selectedOsId, ordemDetail, ordens]);
 
+  // ---- Seleção de variante (GOAL OPS-V4-ORC-APROVACAO-SELECAO-026) ----
+  // Lê o orçamento REAL (não o estado local do editor de itens) para nunca
+  // gravar uma seleção sobre dados desatualizados; marca via helper puro e
+  // grava pelo contrato oficial (`gruposV3` preservado explicitamente).
+  const selecionarVarianteOrcamento = useCallback(
+    (grupoId: string, itemId: string) =>
+      runWrite((sid, osId) => {
+        const orc = (realOS as { orcamento?: { servicos?: ServicoV3[]; pecas?: PecaV3[]; desconto?: number; gruposV3?: unknown } } | null)
+          ?.orcamento;
+        const servicosAtuais = Array.isArray(orc?.servicos) ? orc!.servicos! : [];
+        const pecasAtuais = Array.isArray(orc?.pecas) ? orc!.pecas! : [];
+        const marcado = marcarSelecaoVarianteV4({ servicos: servicosAtuais, pecas: pecasAtuais }, grupoId, itemId);
+        return salvarOrcamentoV3(sid, osId, {
+          servicos: marcado.servicos,
+          pecas: marcado.pecas,
+          desconto: orc?.desconto ?? 0,
+          gruposV3: orc?.gruposV3 as Parameters<typeof salvarOrcamentoV3>[2]["gruposV3"],
+        });
+      }, "Opção selecionada."),
+    [runWrite, realOS],
+  );
+
+  // ---- Prefill do cancelamento pós-recusa (GOAL 026) — objeto simples, fora
+  // do `V4State`, mesmo padrão do prefill do Orçamento Rápido (GOAL 025).
+  const [cancelamentoMotivoPrefill, setCancelamentoMotivoPrefill] = useState<string | null>(null);
+  const definirCancelamentoMotivoPrefill = useCallback((motivo: string | null) => {
+    setCancelamentoMotivoPrefill(motivo);
+  }, []);
+
   const ctx = useMemo<V4DataCtx>(
     () => ({
       ordens,
@@ -1405,6 +1465,9 @@ export function useV4Preview(): V4Vals {
       enviarOrcamentoPorCanal,
       orcamentoRapidoPrefill,
       definirOrcamentoRapidoPrefill,
+      selecionarVarianteOrcamento,
+      cancelamentoMotivoPrefill,
+      definirCancelamentoMotivoPrefill,
     }),
     [
       ordens,
@@ -1438,6 +1501,9 @@ export function useV4Preview(): V4Vals {
       enviarOrcamentoPorCanal,
       orcamentoRapidoPrefill,
       definirOrcamentoRapidoPrefill,
+      selecionarVarianteOrcamento,
+      cancelamentoMotivoPrefill,
+      definirCancelamentoMotivoPrefill,
     ],
   );
 
