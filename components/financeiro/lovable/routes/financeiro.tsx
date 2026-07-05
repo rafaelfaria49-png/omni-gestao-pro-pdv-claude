@@ -98,6 +98,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -2577,6 +2578,7 @@ function ReceberClienteModal({
   const [observacao, setObservacao] = useState("");
   const [busy, setBusy] = useState(false);
   const [recibo, setRecibo] = useState<ReciboAvulsoData | null>(null);
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
   const clientesComSaldo = useMemo(
     () =>
@@ -2625,6 +2627,25 @@ function ReceberClienteModal({
     return clientesComSaldo.filter((c) => c.toLowerCase().includes(q)).slice(0, 6);
   }, [clienteTrim, clienteReconhecido, clientesComSaldo]);
 
+  // Seleção manual de títulos: quita integralmente os marcados (independe da distribuição FIFO).
+  const selecionadosValidos = useMemo(
+    () => titulosDoCliente.filter((t) => selecionados.has(t.id)),
+    [titulosDoCliente, selecionados],
+  );
+  const modoSelecao = selecionadosValidos.length > 0;
+  const totalSelecionado = useMemo(
+    () => selecionadosValidos.reduce((s, t) => s + saldoAbertoReceber(t), 0),
+    [selecionadosValidos],
+  );
+  const toggleSelecionado = (id: string, checked: boolean) => {
+    setSelecionados((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
   const handleClose = (v: boolean) => {
     if (busy) return;
     onOpenChange(v);
@@ -2633,11 +2654,56 @@ function ReceberClienteModal({
       setValorRecebido("");
       setFormaPagamento("");
       setObservacao("");
+      setSelecionados(new Set());
     }
   };
 
   const handleReceberValor = async () => {
     if (busy) return;
+    if (modoSelecao) {
+      const alvos = [...selecionadosValidos];
+      setBusy(true);
+      const obsPartes = ["Recebimento de títulos selecionados"];
+      if (observacao.trim()) obsPartes.push(observacao.trim());
+      const obs = obsPartes.join(" — ");
+      const forma = formaPagamento || undefined;
+      let executadas = 0;
+      try {
+        for (const t of alvos) {
+          await onLiquidarTitulo(t.id, obs, forma);
+          executadas += 1;
+        }
+        setRecibo({
+          numero: `REC-AV-${Date.now()}`,
+          cliente,
+          total: alvos.reduce((s, t) => s + saldoAbertoReceber(t), 0),
+          formaPagamento: forma,
+          observacao: observacao.trim() || undefined,
+          emitidoEm: new Date().toISOString(),
+          linhas: alvos.map((t) => ({
+            titulo: parseTituloDisplay(t.descricao, t.id).principal,
+            vencimento: formatDateBR(t.venc, "Sem vencimento"),
+            valor: saldoAbertoReceber(t),
+            quitado: true,
+          })),
+        });
+        toast.success("Recebimento registrado com sucesso.");
+        setSelecionados(new Set());
+        setFormaPagamento("");
+        setObservacao("");
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Falha ao registrar recebimento";
+        toast.error(
+          executadas > 0
+            ? `Falha na baixa ${executadas + 1} de ${alvos.length}: ${msg}. As ${executadas} baixas anteriores foram registradas.`
+            : `Falha ao registrar recebimento: ${msg}`,
+        );
+        onReload();
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (titulosDoCliente.length === 0) {
       toast.error("Nenhum título em aberto para este cliente.");
       return;
@@ -2810,9 +2876,9 @@ function ReceberClienteModal({
                         min="0"
                         placeholder="0,00"
                         className="h-10 rounded-lg text-base font-semibold"
-                        value={valorRecebido}
+                        value={modoSelecao ? totalSelecionado.toFixed(2) : valorRecebido}
                         onChange={(e) => setValorRecebido(e.target.value)}
-                        disabled={busy}
+                        disabled={busy || modoSelecao}
                       />
                     </div>
                     <div className="space-y-2">
@@ -2855,16 +2921,26 @@ function ReceberClienteModal({
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-primary/15 bg-primary/5 px-5 py-3">
                     <p className="text-xs text-muted-foreground">
-                      {!valorRecebido.trim()
-                        ? "O valor será distribuído automaticamente nos títulos mais antigos primeiro."
-                        : plano.ok
-                          ? `Esse recebimento quitará ${plano.quitados} título(s) e fará baixa parcial em ${plano.parciais} título(s).`
-                          : plano.erro === "valor_maior_que_saldo"
-                            ? "O valor recebido não pode ser maior que o saldo em aberto do cliente."
-                            : "Informe um valor maior que zero."}
+                      {modoSelecao
+                        ? `${selecionadosValidos.length} título(s) selecionado(s) serão quitados integralmente.`
+                        : !valorRecebido.trim()
+                          ? "O valor será distribuído nos títulos mais antigos primeiro — ou marque abaixo os títulos que deseja receber."
+                          : plano.ok
+                            ? `Esse recebimento quitará ${plano.quitados} título(s) e fará baixa parcial em ${plano.parciais} título(s).`
+                            : plano.erro === "valor_maior_que_saldo"
+                              ? "O valor recebido não pode ser maior que o saldo em aberto do cliente."
+                              : "Informe um valor maior que zero."}
                     </p>
-                    <Button className="h-9 rounded-lg px-6" onClick={handleReceberValor} disabled={busy || !plano.ok}>
-                      {busy ? "Registrando..." : "Receber valor"}
+                    <Button
+                      className="h-9 rounded-lg px-6"
+                      onClick={handleReceberValor}
+                      disabled={busy || (!modoSelecao && !plano.ok)}
+                    >
+                      {busy
+                        ? "Registrando..."
+                        : modoSelecao
+                          ? `Receber selecionados (${fmt(totalSelecionado)})`
+                          : "Receber valor"}
                     </Button>
                   </div>
                 </section>
@@ -2876,12 +2952,22 @@ function ReceberClienteModal({
                       Títulos em aberto
                     </h3>
                     <span className="text-xs text-muted-foreground">
-                      {titulosDoCliente.length} título(s)
+                      {modoSelecao ? (
+                        <>
+                          {selecionadosValidos.length} selecionado(s) ·{" "}
+                          <span className="font-semibold text-primary">{fmt(totalSelecionado)}</span>
+                        </>
+                      ) : (
+                        `${titulosDoCliente.length} título(s)`
+                      )}
                     </span>
                   </div>
                   <Table className="table-fixed">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
+                        <TableHead className="w-10">
+                          <span className="sr-only">Selecionar</span>
+                        </TableHead>
                         <TableHead className="text-[11px] uppercase tracking-wide">Título</TableHead>
                         <TableHead className="w-28 text-[11px] uppercase tracking-wide">Vencimento</TableHead>
                         <TableHead className="w-28 text-right text-[11px] uppercase tracking-wide">Saldo aberto</TableHead>
@@ -2891,18 +2977,34 @@ function ReceberClienteModal({
                     <TableBody>
                       {titulosDoCliente.map((t) => {
                         const { principal, secundaria } = parseTituloDisplay(t.descricao, t.id);
-                        const baixa = valorNum > 0 && plano.ok ? plano.baixas.find((b) => b.id === t.id) : undefined;
-                        const previewLabel = !(valorNum > 0)
-                          ? null
-                          : baixa
-                            ? baixa.total
-                              ? `Quita ${fmt(baixa.valor)}`
-                              : `Parcial ${fmt(baixa.valor)}`
-                            : plano.ok
-                              ? "Não alcançado"
-                              : null;
+                        const selecionado = selecionados.has(t.id);
+                        const baixa =
+                          !modoSelecao && valorNum > 0 && plano.ok
+                            ? plano.baixas.find((b) => b.id === t.id)
+                            : undefined;
+                        const previewLabel = modoSelecao
+                          ? selecionado
+                            ? `Quita ${fmt(saldoAbertoReceber(t))}`
+                            : null
+                          : !(valorNum > 0)
+                            ? null
+                            : baixa
+                              ? baixa.total
+                                ? `Quita ${fmt(baixa.valor)}`
+                                : `Parcial ${fmt(baixa.valor)}`
+                              : plano.ok
+                                ? "Não alcançado"
+                                : null;
                         return (
-                          <TableRow key={t.id}>
+                          <TableRow key={t.id} className={selecionado ? "bg-primary/5" : undefined}>
+                            <TableCell className="w-10">
+                              <Checkbox
+                                checked={selecionado}
+                                onCheckedChange={(v) => toggleSelecionado(t.id, v === true)}
+                                disabled={busy}
+                                aria-label={`Selecionar ${principal}`}
+                              />
+                            </TableCell>
                             <TableCell className="max-w-0">
                               <div className="truncate text-sm font-medium" title={t.descricao || t.id}>
                                 {principal}
@@ -2917,7 +3019,7 @@ function ReceberClienteModal({
                                 {previewLabel ? (
                                   <span
                                     className={
-                                      baixa?.total
+                                      (modoSelecao && selecionado) || baixa?.total
                                         ? "text-[10px] font-medium text-success"
                                         : baixa
                                           ? "text-[10px] font-medium text-warning"
@@ -3833,117 +3935,169 @@ function ReceberContaModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Receber conta — {conta.id}</DialogTitle>
-          <DialogDescription>
-            {conta.cliente} • Valor total {fmt(conta.valor)}
+      <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-2xl">
+        <DialogHeader className="border-b border-border bg-muted/30 px-8 py-5">
+          <DialogTitle className="flex items-center gap-3 text-lg font-semibold tracking-tight">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+              <ArrowDownCircle className="h-5 w-5 text-primary" />
+            </span>
+            Receber conta
+          </DialogTitle>
+          <DialogDescription className="text-xs leading-relaxed">
+            {parseTituloDisplay(conta.descricao, conta.id).principal} · {conta.cliente}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="rounded-lg border border-border bg-muted/40 p-3">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div>
-              <p className="text-[10px] uppercase text-muted-foreground">Total</p>
-              <p className="text-sm font-semibold">{fmt(conta.valor)}</p>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-8 py-6">
+          <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-border">
+            <div className="border-r border-border bg-muted/20 px-4 py-3 text-center">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Total</p>
+              <p className="mt-0.5 text-base font-semibold tracking-tight">{fmt(conta.valor)}</p>
             </div>
-            <div>
-              <p className="text-[10px] uppercase text-muted-foreground">Já recebido</p>
-              <p className="text-sm font-semibold text-primary">{fmt(conta.recebido)}</p>
+            <div className="border-r border-border bg-muted/20 px-4 py-3 text-center">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Já recebido</p>
+              <p className="mt-0.5 text-base font-semibold tracking-tight text-success">{fmt(conta.recebido)}</p>
             </div>
-            <div>
-              <p className="text-[10px] uppercase text-muted-foreground">Pendente</p>
-              <p className="text-sm font-semibold text-destructive">{fmt(restanteAtual)}</p>
+            <div className="bg-muted/20 px-4 py-3 text-center">
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pendente</p>
+              <p className="mt-0.5 text-base font-semibold tracking-tight text-primary">{fmt(restanteAtual)}</p>
             </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 p-3 sm:col-span-2">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 px-5 py-4">
             <div>
               <p className="text-sm font-medium">Baixa parcial</p>
               <p className="text-xs text-muted-foreground">Desligue para quitar totalmente</p>
             </div>
             <Switch checked={parcial} onCheckedChange={setParcial} />
           </div>
-          <div className="space-y-1.5">
-            <Label>Valor recebido agora</Label>
-            <Input
-              type="number"
-              step="0.01"
-              value={valorAgora}
-              disabled={!parcial}
-              onChange={(e) => setValorAgora(Number(e.target.value))}
-            />
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Valor recebido agora
+              </Label>
+              <Input
+                type="number"
+                step="0.01"
+                className="h-10 rounded-lg text-base font-semibold"
+                value={valorAgora}
+                disabled={!parcial}
+                onChange={(e) => setValorAgora(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Desconto
+              </Label>
+              <Input
+                type="number"
+                step="0.01"
+                className="h-10 rounded-lg"
+                value={desconto}
+                onChange={(e) => setDesconto(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Juros
+              </Label>
+              <Input
+                type="number"
+                step="0.01"
+                className="h-10 rounded-lg"
+                value={juros}
+                onChange={(e) => setJuros(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Multa
+              </Label>
+              <Input
+                type="number"
+                step="0.01"
+                className="h-10 rounded-lg"
+                value={multa}
+                onChange={(e) => setMulta(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Forma de recebimento
+              </Label>
+              <Select value={forma} onValueChange={setForma}>
+                <SelectTrigger className="h-10 w-full rounded-lg">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                  <SelectItem value="pix">PIX</SelectItem>
+                  <SelectItem value="credito">Cartão crédito</SelectItem>
+                  <SelectItem value="debito">Cartão débito</SelectItem>
+                  <SelectItem value="boleto">Boleto</SelectItem>
+                  <SelectItem value="transferencia">Transferência</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Carteira destino
+              </Label>
+              <Select value={carteira} onValueChange={setCarteira}>
+                <SelectTrigger className="h-10 w-full rounded-lg">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {listaCarteiras.filter((c) => c.ativo).map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Data do recebimento
+              </Label>
+              <Input type="date" className="h-10 rounded-lg" defaultValue={new Date().toISOString().slice(0, 10)} />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Observações
+              </Label>
+              <Textarea rows={2} className="rounded-lg" placeholder="Notas internas..." />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                Comprovante (opcional)
+              </Label>
+              <Input type="file" className="rounded-lg" />
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Desconto</Label>
-            <Input type="number" step="0.01" value={desconto} onChange={(e) => setDesconto(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Juros</Label>
-            <Input type="number" step="0.01" value={juros} onChange={(e) => setJuros(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Multa</Label>
-            <Input type="number" step="0.01" value={multa} onChange={(e) => setMulta(Number(e.target.value))} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Forma de recebimento</Label>
-            <Select value={forma} onValueChange={setForma}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dinheiro">Dinheiro</SelectItem>
-                <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="credito">Cartão crédito</SelectItem>
-                <SelectItem value="debito">Cartão débito</SelectItem>
-                <SelectItem value="boleto">Boleto</SelectItem>
-                <SelectItem value="transferencia">Transferência</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Carteira destino</Label>
-            <Select value={carteira} onValueChange={setCarteira}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {listaCarteiras.filter((c) => c.ativo).map((c) => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Data do recebimento</Label>
-            <Input type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Observações</Label>
-            <Textarea rows={2} placeholder="Notas internas..." />
-          </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label>Comprovante (opcional)</Label>
-            <Input type="file" />
+
+          <div className="overflow-hidden rounded-xl border border-primary/20">
+            <div className="space-y-1.5 bg-primary/5 px-5 py-4 text-sm">
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Recebendo agora</span>
+                <span className="text-lg font-semibold tracking-tight text-primary">{fmt(totalReceberAgora)}</span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Saldo restante</span>
+                <span className="font-semibold">{fmt(Math.max(0, saldoFinal))}</span>
+              </div>
+              <div className="flex items-baseline justify-between border-t border-primary/15 pt-1.5 text-xs">
+                <span className="text-muted-foreground">Status final</span>
+                <span className="font-medium">{saldoFinal <= 0 ? "Pago" : "Parcial"}</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Recebendo agora</span>
-            <span className="font-semibold text-primary">{fmt(totalReceberAgora)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Saldo restante</span>
-            <span className="font-semibold">{fmt(Math.max(0, saldoFinal))}</span>
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            Status final: {saldoFinal <= 0 ? "Pago" : "Parcial"}
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={() => onConfirm(totalReceberAgora, !parcial || saldoFinal <= 0)}>
+        <DialogFooter className="border-t border-border bg-muted/30 px-8 py-4">
+          <Button variant="outline" className="rounded-lg px-6" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button className="rounded-lg px-6" onClick={() => onConfirm(totalReceberAgora, !parcial || saldoFinal <= 0)}>
             Confirmar recebimento
           </Button>
         </DialogFooter>
