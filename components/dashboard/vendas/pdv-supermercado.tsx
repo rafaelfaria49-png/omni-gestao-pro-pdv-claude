@@ -23,6 +23,7 @@ import {
   Loader2,
   Check,
   RotateCcw,
+  User,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -728,6 +729,7 @@ export function PdvSupermercado({
         e.key !== "F7" &&
         e.key !== "F8" &&
         e.key !== "F9" &&
+        e.key !== "F10" &&
         e.key !== "F12" &&
         e.key !== "Insert"
       )
@@ -747,6 +749,7 @@ export function PdvSupermercado({
         })
         setTrocasOpen(true)
       } else if (e.key === "F9") setRecebimentoOpen(true)
+      else if (e.key === "F10") setAPrazoClientePickerOpen(true)
       else if (e.key === "F2") {
         const r = toPaymentMethodType(formasSupermercado.quick[0]?.id ?? "dinheiro")
         if (r) openPaymentModal(r)
@@ -872,6 +875,32 @@ export function PdvSupermercado({
                       <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                       Trocas <span className="ml-1 text-[9px] font-normal opacity-50">[F8]</span>
                     </Button>
+                  ) : null}
+                  {!isModoRapido ? (
+                    selectedCustomer ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 max-w-[180px] rounded-xl border-primary/30 bg-primary/10 px-3 text-xs font-bold text-primary transition-all hover:bg-primary/20"
+                        onClick={() => setSelectedCustomer(null)}
+                        title="Cliente identificado — clique para remover"
+                      >
+                        <User className="mr-1.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{selectedCustomer.name}</span>
+                        <X className="ml-1.5 h-3 w-3 shrink-0 opacity-60" />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-9 rounded-xl border-border/50 bg-card/50 px-3 text-xs font-bold transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30"
+                        onClick={() => setAPrazoClientePickerOpen(true)}
+                        title="Identificar cliente / CPF (F10)"
+                      >
+                        <User className="mr-1.5 h-3.5 w-3.5" />
+                        Cliente / CPF <span className="ml-1 text-[9px] font-normal opacity-50">[F10]</span>
+                      </Button>
+                    )
                   ) : null}
                   <Button
                     type="button"
