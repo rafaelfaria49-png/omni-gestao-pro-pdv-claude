@@ -2567,8 +2567,8 @@ function ReceberClienteModal({
   onOpenChange: (v: boolean) => void;
   receber: ContaReceber[];
   onSelectTitulo: (conta: ContaReceber) => void;
-  onLiquidarTitulo: (id: string, observacao?: string) => Promise<void>;
-  onReceberParcialTitulo: (id: string, valor: number, observacao?: string) => Promise<void>;
+  onLiquidarTitulo: (id: string, observacao?: string, formaPagamento?: string) => Promise<void>;
+  onReceberParcialTitulo: (id: string, valor: number, observacao?: string, formaPagamento?: string) => Promise<void>;
   onReload: () => void;
 }) {
   const [cliente, setCliente] = useState("");
@@ -2576,6 +2576,7 @@ function ReceberClienteModal({
   const [formaPagamento, setFormaPagamento] = useState("");
   const [observacao, setObservacao] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recibo, setRecibo] = useState<ReciboAvulsoData | null>(null);
 
   const clientesComSaldo = useMemo(
     () =>
@@ -2614,6 +2615,16 @@ function ReceberClienteModal({
     [titulosDoCliente, valorNum],
   );
 
+  const clientesTodos = useMemo(
+    () => new Set(receber.map((r) => r.cliente).filter(Boolean)),
+    [receber],
+  );
+  const sugestoesCliente = useMemo(() => {
+    const q = clienteTrim.toLowerCase();
+    if (!q || clienteReconhecido) return [];
+    return clientesComSaldo.filter((c) => c.toLowerCase().includes(q)).slice(0, 6);
+  }, [clienteTrim, clienteReconhecido, clientesComSaldo]);
+
   const handleClose = (v: boolean) => {
     if (busy) return;
     onOpenChange(v);
@@ -2641,19 +2652,37 @@ function ReceberClienteModal({
     }
     setBusy(true);
     const obsPartes = ["Recebimento avulso por cliente"];
-    if (formaPagamento) obsPartes.push(`forma: ${formaPagamento}`);
     if (observacao.trim()) obsPartes.push(observacao.trim());
     const obs = obsPartes.join(" — ");
+    const forma = formaPagamento || undefined;
+    const tituloPorId = new Map(titulosDoCliente.map((t) => [t.id, t]));
     let executadas = 0;
     try {
       for (const baixa of plano.baixas) {
         if (baixa.total) {
-          await onLiquidarTitulo(baixa.id, obs);
+          await onLiquidarTitulo(baixa.id, obs, forma);
         } else {
-          await onReceberParcialTitulo(baixa.id, baixa.valor, obs);
+          await onReceberParcialTitulo(baixa.id, baixa.valor, obs, forma);
         }
         executadas += 1;
       }
+      setRecibo({
+        numero: `REC-AV-${Date.now()}`,
+        cliente,
+        total: plano.baixas.reduce((s, b) => s + b.valor, 0),
+        formaPagamento: forma,
+        observacao: observacao.trim() || undefined,
+        emitidoEm: new Date().toISOString(),
+        linhas: plano.baixas.map((b) => {
+          const t = tituloPorId.get(b.id);
+          return {
+            titulo: t ? parseTituloDisplay(t.descricao, t.id).principal : b.id,
+            vencimento: t ? formatDateBR(t.venc, "Sem vencimento") : "—",
+            valor: b.valor,
+            quitado: b.total,
+          };
+        }),
+      });
       toast.success("Recebimento registrado com sucesso.");
       setValorRecebido("");
       setFormaPagamento("");
@@ -2672,6 +2701,7 @@ function ReceberClienteModal({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col gap-0 p-0">
         <DialogHeader className="border-b border-border px-6 py-4">
@@ -2708,9 +2738,35 @@ function ReceberClienteModal({
                 Digite ou selecione um cliente para ver os títulos em aberto.
               </p>
             ) : !clienteReconhecido ? (
-              <p className="text-xs text-muted-foreground">
-                Selecione um cliente da lista para ver os títulos em aberto.
-              </p>
+              clientesTodos.has(clienteTrim) ? (
+                <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
+                  Nenhum título em aberto para este cliente.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    {sugestoesCliente.length > 0
+                      ? "Selecione um cliente para continuar:"
+                      : "Nenhum cliente com título em aberto corresponde à busca."}
+                  </p>
+                  {sugestoesCliente.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {sugestoesCliente.map((c) => (
+                        <Button
+                          key={c}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 rounded-full px-3 text-xs"
+                          onClick={() => setCliente(c)}
+                        >
+                          {c}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )
             ) : titulosDoCliente.length === 0 ? (
               <p className="rounded-lg border border-dashed border-border bg-muted/30 px-3 py-6 text-center text-sm text-muted-foreground">
                 Nenhum título em aberto para este cliente.
@@ -2729,7 +2785,7 @@ function ReceberClienteModal({
                   </div>
                   <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div className="space-y-1.5">
-                      <Label htmlFor="receber-cliente-valor">Valor recebido agora (R$)</Label>
+                      <Label htmlFor="receber-cliente-valor">Valor recebido (R$)</Label>
                       <Input
                         id="receber-cliente-valor"
                         type="number"
@@ -2742,9 +2798,9 @@ function ReceberClienteModal({
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <Label>Forma de pagamento</Label>
+                      <Label htmlFor="receber-cliente-forma">Forma de pagamento</Label>
                       <Select value={formaPagamento} onValueChange={setFormaPagamento} disabled={busy}>
-                        <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectTrigger id="receber-cliente-forma"><SelectValue placeholder="Selecione" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Dinheiro">Dinheiro</SelectItem>
                           <SelectItem value="PIX">PIX</SelectItem>
@@ -2863,6 +2919,154 @@ function ReceberClienteModal({
           <Button variant="outline" onClick={() => handleClose(false)} disabled={busy}>
             Fechar
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <ReciboAvulsoModal recibo={recibo} onClose={() => setRecibo(null)} />
+    </>
+  );
+}
+
+type ReciboAvulsoData = {
+  numero: string;
+  cliente: string;
+  total: number;
+  formaPagamento?: string;
+  observacao?: string;
+  emitidoEm: string;
+  linhas: { titulo: string; vencimento: string; valor: number; quitado: boolean }[];
+};
+
+function reciboAvulsoTexto(r: ReciboAvulsoData): string {
+  const linhas = r.linhas
+    .map((l) => `- ${l.titulo} (venc. ${l.vencimento}): ${fmt(l.valor)} ${l.quitado ? "(quitado)" : "(parcial)"}`)
+    .join("\n");
+  return [
+    `Recibo ${r.numero} — OmniGestão Pro`,
+    `Cliente: ${r.cliente}`,
+    `Data: ${new Date(r.emitidoEm).toLocaleString("pt-BR")}`,
+    ...(r.formaPagamento ? [`Forma de pagamento: ${r.formaPagamento}`] : []),
+    ...(r.observacao ? [`Observação: ${r.observacao}`] : []),
+    "",
+    "Títulos baixados (mais antigos primeiro):",
+    linhas,
+    "",
+    `Total recebido: ${fmt(r.total)}`,
+  ].join("\n");
+}
+
+function escapeHtmlRecibo(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Impressão real em janela dedicada (documento de impressão: fora do tema da aplicação). */
+function imprimirReciboAvulso(r: ReciboAvulsoData) {
+  const w = window.open("", "_blank", "width=640,height=760");
+  if (!w) {
+    toast.error("Não foi possível abrir a janela de impressão (pop-up bloqueado).");
+    return;
+  }
+  const linhas = r.linhas
+    .map(
+      (l) =>
+        `<tr><td>${escapeHtmlRecibo(l.titulo)}</td><td>${escapeHtmlRecibo(l.vencimento)}</td><td style="text-align:right">${escapeHtmlRecibo(fmt(l.valor))}</td><td>${l.quitado ? "Quitado" : "Parcial"}</td></tr>`,
+    )
+    .join("");
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtmlRecibo(r.numero)}</title>
+<style>body{font-family:system-ui,sans-serif;font-size:14px;margin:24px}table{border-collapse:collapse;width:100%;margin-top:12px}td,th{border:1px solid #888;padding:6px;text-align:left}h1{font-size:18px}p{margin:4px 0}.total{margin-top:12px;font-weight:700}</style>
+</head><body>
+<h1>Recibo de recebimento — ${escapeHtmlRecibo(r.numero)}</h1>
+<p>Cliente: <strong>${escapeHtmlRecibo(r.cliente)}</strong></p>
+<p>Data: ${escapeHtmlRecibo(new Date(r.emitidoEm).toLocaleString("pt-BR"))}</p>
+${r.formaPagamento ? `<p>Forma de pagamento: ${escapeHtmlRecibo(r.formaPagamento)}</p>` : ""}
+${r.observacao ? `<p>Observação: ${escapeHtmlRecibo(r.observacao)}</p>` : ""}
+<table><thead><tr><th>Título</th><th>Vencimento</th><th>Valor</th><th>Baixa</th></tr></thead><tbody>${linhas}</tbody></table>
+<p class="total">Total recebido: ${escapeHtmlRecibo(fmt(r.total))}</p>
+<p>Recebemos a importância acima descrita.</p>
+</body></html>`);
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
+function ReciboAvulsoModal({ recibo, onClose }: { recibo: ReciboAvulsoData | null; onClose: () => void }) {
+  if (!recibo) return null;
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <FileText className="h-4 w-4 text-primary" /> Recebimento registrado
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Recibo {recibo.numero} — confira e imprima ou copie se o cliente precisar de comprovante.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="rounded-xl border border-border bg-card p-4 text-sm">
+          <div className="space-y-1.5">
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">Cliente</span>
+              <span className="font-medium">{recibo.cliente}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span className="text-muted-foreground">Data</span>
+              <span>{new Date(recibo.emitidoEm).toLocaleString("pt-BR")}</span>
+            </div>
+            {recibo.formaPagamento ? (
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Forma de pagamento</span>
+                <span>{recibo.formaPagamento}</span>
+              </div>
+            ) : null}
+            {recibo.observacao ? (
+              <div className="flex justify-between gap-2">
+                <span className="text-muted-foreground">Observação</span>
+                <span className="text-right">{recibo.observacao}</span>
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-3 border-t border-border pt-2">
+            <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Títulos baixados</p>
+            <div className="space-y-1">
+              {recibo.linhas.map((l, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="min-w-0 truncate" title={l.titulo}>
+                    {l.titulo} · venc. {l.vencimento}
+                  </span>
+                  <span className="shrink-0 font-medium">
+                    {fmt(l.valor)} · {l.quitado ? "quitado" : "parcial"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 flex justify-between border-t border-border pt-2 text-base">
+            <span className="font-medium">Total recebido</span>
+            <span className="font-semibold text-primary">{fmt(recibo.total)}</span>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button
+            variant="outline"
+            className="gap-1"
+            onClick={() => {
+              navigator.clipboard.writeText(reciboAvulsoTexto(recibo)).then(
+                () => toast.success("Recibo copiado."),
+                () => toast.error("Falha ao copiar o recibo."),
+              );
+            }}
+          >
+            <Copy className="h-4 w-4" /> Copiar
+          </Button>
+          <Button variant="outline" className="gap-1" onClick={() => imprimirReciboAvulso(recibo)}>
+            <Printer className="h-4 w-4" /> Imprimir
+          </Button>
+          <Button onClick={onClose}>Fechar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -3825,6 +4029,7 @@ type HistoricoEvento = {
   userLabel?: string;
   valor?: number;
   observacao?: string;
+  formaPagamento?: string;
   [k: string]: unknown;
 };
 
@@ -3911,8 +4116,8 @@ function HistoricoModal({
                     <span className="text-xs text-muted-foreground">{fmtEvtDate(e.at)}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">por {e.userLabel ?? "Sistema"}</p>
-                  {(e.valor != null || e.observacao) && (
-                    <p className="mt-1 text-sm">{e.valor != null ? fmt(e.valor) : ""}{e.observacao ? ` — ${e.observacao}` : ""}</p>
+                  {(e.valor != null || e.observacao || e.formaPagamento) && (
+                    <p className="mt-1 text-sm">{e.valor != null ? fmt(e.valor) : ""}{e.formaPagamento ? ` · ${e.formaPagamento}` : ""}{e.observacao ? ` — ${e.observacao}` : ""}</p>
                   )}
                 </div>
               </div>
@@ -4126,8 +4331,8 @@ function HistoricoPagarModal({
                     <span className="text-xs text-muted-foreground">{fmtEvtDate(e.at)}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">por {e.userLabel ?? "Sistema"}</p>
-                  {(e.valor != null || e.observacao) && (
-                    <p className="mt-1 text-sm">{e.valor != null ? fmt(e.valor) : ""}{e.observacao ? ` — ${e.observacao}` : ""}</p>
+                  {(e.valor != null || e.observacao || e.formaPagamento) && (
+                    <p className="mt-1 text-sm">{e.valor != null ? fmt(e.valor) : ""}{e.formaPagamento ? ` · ${e.formaPagamento}` : ""}{e.observacao ? ` — ${e.observacao}` : ""}</p>
                   )}
                 </div>
               </div>
