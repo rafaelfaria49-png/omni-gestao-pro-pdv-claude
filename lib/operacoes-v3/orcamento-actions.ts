@@ -32,19 +32,28 @@ import {
   statusOSAposEnviarOrcamento,
   type OperacaoStatusV3,
 } from "./status-machine";
-import { gerarOrcamentoDaOS as gerarOrcamentoDaOSImpl } from "@/api/os";
+// Caminho completo (em vez do alias `@/api/os`) para resolver também sob o
+// `vitest.config.ts` (só mapeia `@` → raiz, sem os aliases finos do
+// tsconfig) — mesmo arquivo físico; permite mockar este módulo em teste
+// (mesmo ajuste já aplicado a `cliente-resolver.ts`, GOAL 022).
+import { gerarOrcamentoDaOS as gerarOrcamentoDaOSImpl } from "@/components/operacoes/lovable/api/os";
 import {
   computeTotaisV3,
+  garantiaResultanteAprovacaoV3,
   montarEventoEnvioOrcamentoV3,
+  montarEventoRecusaOrcamentoV3,
   recalcOrcamentoV3,
   validarGruposOrcamentoV3,
+  validarSelecaoCompletaV3,
   VALIDADE_PADRAO_DIAS,
   type CanalEnvioOrcamentoV3,
   type OrcamentoV3,
   type OrcamentoVersaoV3,
+  type RecusarOrcamentoV3Input,
   type SalvarOrcamentoV3Input,
 } from "./orcamento-model";
 import { emitirEventoOperacaoV3 } from "./event-publisher";
+import { salvarGarantiaOSV3 } from "./garantia-actions";
 
 /** Materializa o rascunho a partir dos itens da OS (reuso seguro do @/api/os). */
 export async function gerarOrcamentoDaOS(storeId: string, osId: string): Promise<OrdemServico> {
@@ -165,6 +174,9 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
     pecas: pecasInput,
     desconto: Math.max(0, Number(input.desconto) || 0),
     observacao: input.observacao ?? atual.observacao,
+    // GOAL 026: contrato oficial de grupos — ausente preserva os grupos já
+    // existentes (chamadores que não editam grupos, ex. editor de itens V4).
+    gruposV3: input.gruposV3 ?? atual.gruposV3,
     atualizadoEm: nowIso(),
   });
 
@@ -209,10 +221,25 @@ export async function enviarOrcamentoV3(storeId: string, osId: string): Promise<
   return os;
 }
 
+/**
+ * Aprova o orçamento. GOAL OPS-V4-ORC-APROVACAO-SELECAO-026: quando o
+ * orçamento tem grupos de escolha, EXIGE que toda linha `selecionadaV3`
+ * já tenha sido gravada (via `salvarOrcamentoV3` com `gruposV3` — a seleção
+ * acontece ANTES de aprovar, num passo separado) — se faltar seleção em
+ * qualquer grupo, lança erro e NÃO aprova. Sem grupos, comportamento
+ * idêntico ao anterior (N=0). Ao aprovar: congela um snapshot na mesma
+ * lista de versões que `salvarOrcamentoV3` já usa (`orcamentoVersoesV3`) e,
+ * melhor esforço, aplica a garantia da variante escolhida (a MENOR entre as
+ * selecionadas que informam `garantiaDias` — nenhuma falha aqui desfaz a
+ * aprovação, que já foi gravada).
+ */
 export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise<OrdemServico> {
   const { sid, id, session, payload } = await carregar(storeId, osId);
   const atual = orcamentoEditavel(payload);
   assertStatus(atual, ["rascunho", "enviado"], "aprovar");
+
+  const erroSelecao = validarSelecaoCompletaV3(atual);
+  if (erroSelecao) throw new Error(erroSelecao);
 
   const aprovado = recalcOrcamentoV3({
     ...atual,
@@ -220,11 +247,37 @@ export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise
     respondidoEm: nowIso(),
     atualizadoEm: nowIso(),
   });
+
+  const versoesAtuais = Array.isArray(payload.orcamentoVersoesV3) ? (payload.orcamentoVersoesV3 as OrcamentoVersaoV3[]) : [];
+  const versaoAprovacao: OrcamentoVersaoV3 = {
+    versao: versoesAtuais.length + 1,
+    status: "aprovado",
+    total: aprovado.total,
+    desconto: aprovado.desconto ?? 0,
+    registradoEm: nowIso(),
+    registradoPor: operadorLabel(session),
+    // Snapshot congelado: itens (com a seleção já marcada) + total resolvido.
+    snapshot: aprovado,
+  };
+
   const os = await gravar(sid, id, payload, {
     orcamento: aprovado,
     statusOS: statusOSAposAprovarOrcamento(payload.status),
     eventos: [makeEvento("orcamento_aprovado", operadorLabel(session), "Orçamento aprovado.")],
+    versoes: [...versoesAtuais, versaoAprovacao],
   });
+
+  // Garantia da variante escolhida — melhor esforço (best-effort): se falhar,
+  // a aprovação já gravada NÃO é desfeita (efeito auxiliar, não o núcleo da
+  // decisão comercial). Nenhuma sobrescrita quando nenhuma variante informa garantia.
+  const garantia = garantiaResultanteAprovacaoV3(aprovado);
+  if (garantia) {
+    await salvarGarantiaOSV3(sid, id, {
+      modeloId: "personalizado",
+      prazoDias: garantia.prazoDias,
+      termoCustom: garantia.rotulo ? `Garantia da opção aprovada: ${garantia.rotulo}.` : undefined,
+    }).catch((err) => console.error("[orcamento] aplicar garantia da variante falhou", err));
+  }
 
   // Espinha de eventos (3C.0): aprovação do orçamento.
   emitirEventoOperacaoV3({
@@ -237,7 +290,17 @@ export async function aprovarOrcamentoV3(storeId: string, osId: string): Promise
   return os;
 }
 
-export async function recusarOrcamentoV3(storeId: string, osId: string, motivo?: string): Promise<OrdemServico> {
+/**
+ * Recusa o orçamento. Aceita a entrada estruturada `{motivo, observacao?}`
+ * (GOAL OPS-V4-ORC-APROVACAO-SELECAO-026) OU uma string livre legada —
+ * chamadores antigos (ex. `use-orcamento-v3.ts`, hub V3) continuam
+ * funcionando sem mudança. Transição de status preservada (nenhuma nova).
+ */
+export async function recusarOrcamentoV3(
+  storeId: string,
+  osId: string,
+  motivo?: string | RecusarOrcamentoV3Input,
+): Promise<OrdemServico> {
   const { sid, id, session, payload } = await carregar(storeId, osId);
   const atual = orcamentoEditavel(payload);
   assertStatus(atual, ["rascunho", "enviado"], "recusar");
@@ -248,10 +311,10 @@ export async function recusarOrcamentoV3(storeId: string, osId: string, motivo?:
     respondidoEm: nowIso(),
     atualizadoEm: nowIso(),
   });
-  const motivoLimpo = (motivo ?? "").trim();
+  const evt = montarEventoRecusaOrcamentoV3(motivo);
   return gravar(sid, id, payload, {
     orcamento: recusado,
-    eventos: [makeEvento("orcamento_recusado", operadorLabel(session), motivoLimpo ? `Orçamento recusado: ${motivoLimpo}` : "Orçamento recusado.")],
+    eventos: [makeEvento("orcamento_recusado", operadorLabel(session), evt.conteudo, Object.keys(evt.metadata).length ? evt.metadata : undefined)],
   });
 }
 

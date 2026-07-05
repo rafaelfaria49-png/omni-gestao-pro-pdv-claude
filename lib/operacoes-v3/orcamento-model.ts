@@ -89,6 +89,13 @@ export interface SalvarOrcamentoV3Input {
   pecas: PecaV3[];
   desconto: number;
   observacao?: string;
+  /**
+   * GOAL OPS-V4-ORC-APROVACAO-SELECAO-026: metadados dos grupos de escolha
+   * (id+rótulo+regra). Ausente = preserva os grupos já existentes no
+   * orçamento (compatibilidade com chamadores que não editam grupos, ex.: o
+   * editor de itens da V4). `[]` explícito remove todos os grupos.
+   */
+  gruposV3?: OrcamentoGrupoV3[];
 }
 
 export interface TotaisOrcamentoV3 {
@@ -248,6 +255,105 @@ export function validarGruposOrcamentoV3(orc: Pick<OrcamentoV3, "pecas" | "servi
 export function recalcOrcamentoV3(orc: OrcamentoV3): OrcamentoV3 {
   const { total } = computeTotaisV3(orc);
   return { ...orc, total };
+}
+
+// ----------------------------------------------------------------------------
+// Seleção de variante + garantia resultante (GOAL OPS-V4-ORC-APROVACAO-SELECAO-026)
+// ----------------------------------------------------------------------------
+
+/**
+ * Valida que TODO grupo de escolha do orçamento tem exatamente uma linha
+ * selecionada (`selecionadaV3 === true`). Orçamento sem grupos → `null`
+ * sempre (regressão N=0 — nada a validar). Retorna a 1ª mensagem de erro,
+ * ou `null` quando a seleção está completa.
+ */
+export function validarSelecaoCompletaV3(orc: Pick<OrcamentoV3, "pecas" | "servicos" | "gruposV3">): string | null {
+  const grupos = Array.isArray(orc.gruposV3) ? orc.gruposV3 : [];
+  if (grupos.length === 0) return null;
+
+  const pecas = Array.isArray(orc.pecas) ? orc.pecas : [];
+  const servicos = Array.isArray(orc.servicos) ? orc.servicos : [];
+
+  for (const g of grupos) {
+    const linhasDoGrupo = [
+      ...pecas.filter((p) => (p.grupoId ?? "").trim() === g.id),
+      ...servicos.filter((s) => (s.grupoId ?? "").trim() === g.id),
+    ];
+    const selecionadas = linhasDoGrupo.filter((l) => l.selecionadaV3 === true);
+    if (selecionadas.length !== 1) {
+      return `Selecione uma opção em "${g.rotulo || g.id}" antes de aprovar.`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Garantia resultante da aprovação: entre as linhas SELECIONADAS que
+ * informam `varianteV3.garantiaDias`, usa a MENOR (conservador — a OS não
+ * promete mais do que a peça/variante mais frágil cobre). `null` quando
+ * nenhuma variante selecionada informa garantia (não sobrescreve o que já
+ * houver em `garantiaPrevista`).
+ */
+export function garantiaResultanteAprovacaoV3(
+  orc: Pick<OrcamentoV3, "pecas" | "servicos">,
+): { prazoDias: number; rotulo: string } | null {
+  const pecas = Array.isArray(orc.pecas) ? orc.pecas : [];
+  const servicos = Array.isArray(orc.servicos) ? orc.servicos : [];
+  const candidatas = [...pecas, ...servicos].filter(
+    (l): l is (PecaV3 | ServicoV3) & { varianteV3: VarianteV3 & { garantiaDias: number } } =>
+      l.selecionadaV3 === true && typeof l.varianteV3?.garantiaDias === "number",
+  );
+  if (candidatas.length === 0) return null;
+  const menor = candidatas.reduce((min, l) => (l.varianteV3.garantiaDias < min.varianteV3.garantiaDias ? l : min));
+  return { prazoDias: menor.varianteV3.garantiaDias, rotulo: menor.varianteV3.rotulo || "" };
+}
+
+// ----------------------------------------------------------------------------
+// Recusa estruturada (GOAL OPS-V4-ORC-APROVACAO-SELECAO-026)
+// ----------------------------------------------------------------------------
+
+export type MotivoRecusaOrcamentoV3 = "preco" | "prazo" | "desistiu" | "concorrencia" | "outro";
+
+export const MOTIVO_RECUSA_LABEL_V3: Record<MotivoRecusaOrcamentoV3, string> = {
+  preco: "Preço",
+  prazo: "Prazo",
+  desistiu: "Cliente desistiu",
+  concorrencia: "Concorrência",
+  outro: "Outro",
+};
+
+/** Entrada estruturada de recusa — o texto livre é sempre um COMPLEMENTO do motivo, nunca o único registro. */
+export interface RecusarOrcamentoV3Input {
+  motivo: MotivoRecusaOrcamentoV3;
+  observacao?: string;
+}
+
+export interface EventoRecusaOrcamentoV3 {
+  conteudo: string;
+  metadata: { motivo?: MotivoRecusaOrcamentoV3; observacao?: string };
+}
+
+/**
+ * Monta (puro) o conteúdo/metadata do evento de recusa. Aceita tanto a
+ * entrada estruturada nova quanto uma string livre legada (chamadores
+ * antigos — ex. o hub V3, `use-orcamento-v3.ts` — continuam funcionando
+ * sem mudança; a estrutura {motivo, observacao} é a fonte preferida a
+ * partir deste GOAL).
+ */
+export function montarEventoRecusaOrcamentoV3(motivoOuInput?: string | RecusarOrcamentoV3Input): EventoRecusaOrcamentoV3 {
+  if (motivoOuInput && typeof motivoOuInput === "object") {
+    const label = MOTIVO_RECUSA_LABEL_V3[motivoOuInput.motivo];
+    const observacao = (motivoOuInput.observacao ?? "").trim() || undefined;
+    return {
+      conteudo: `Orçamento recusado: ${label}${observacao ? ` — ${observacao}` : ""}.`,
+      metadata: { motivo: motivoOuInput.motivo, observacao },
+    };
+  }
+  const motivoLivre = (motivoOuInput ?? "").trim();
+  return {
+    conteudo: motivoLivre ? `Orçamento recusado: ${motivoLivre}` : "Orçamento recusado.",
+    metadata: {},
+  };
 }
 
 // ----------------------------------------------------------------------------

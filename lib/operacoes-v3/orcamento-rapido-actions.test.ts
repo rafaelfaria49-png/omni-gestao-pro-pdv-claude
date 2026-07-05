@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { computeTotaisV3, validarGruposOrcamentoV3, type PecaV3, type ServicoV3 } from "./orcamento-model";
+import { computeTotaisV3, validarGruposOrcamentoV3, type OrcamentoGrupoV3, type PecaV3, type ServicoV3 } from "./orcamento-model";
 import { montarServicosOrcamentoRapidoV3, type OrcamentoRapidoInputV3 } from "./orcamento-rapido-model";
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -7,17 +7,6 @@ vi.mock("@/auth", () => ({ auth: vi.fn(async () => ({ user: { id: "u1", name: "O
 vi.mock("@/lib/auth/guard-enterprise", () => ({ requireEnterpriseWith: vi.fn(async () => ({ ok: true })) }));
 
 type AnyFn = (...args: any[]) => any;
-
-const findFirstMock = vi.fn<AnyFn>();
-const updateMock = vi.fn<AnyFn>(async () => ({}));
-vi.mock("@/lib/prisma", () => ({
-  prisma: {
-    ordemServico: {
-      findFirst: (...args: unknown[]) => findFirstMock(...args),
-      update: (...args: unknown[]) => updateMock(...args),
-    },
-  },
-}));
 
 const resolverClienteMock = vi.fn<AnyFn>();
 vi.mock("./cliente-resolver", () => ({ resolverClienteOperacoesV3: (...args: unknown[]) => resolverClienteMock(...args) }));
@@ -30,7 +19,8 @@ const criarOSMock = vi.fn<AnyFn>(async () => {
 vi.mock("./nova-os-actions", () => ({ criarOSEnterpriseV3: (...args: unknown[]) => criarOSMock(...args) }));
 
 const gerarOrcamentoMock = vi.fn<AnyFn>(async () => ({}));
-const salvarOrcamentoMock = vi.fn<AnyFn>(async (_sid: string, _osId: string, input: { servicos: ServicoV3[]; pecas: PecaV3[] }) => {
+type SalvarOrcamentoInputTest = { servicos: ServicoV3[]; pecas: PecaV3[]; gruposV3?: OrcamentoGrupoV3[] };
+const salvarOrcamentoMock = vi.fn<AnyFn>(async (_sid: string, _osId: string, input: SalvarOrcamentoInputTest) => {
   // Espelha o comportamento REAL wired (GOAL 024): valida grupos antes de "gravar".
   const erros = validarGruposOrcamentoV3({ pecas: input.pecas, servicos: input.servicos });
   if (erros.length > 0) throw new Error(erros[0]);
@@ -38,7 +28,7 @@ const salvarOrcamentoMock = vi.fn<AnyFn>(async (_sid: string, _osId: string, inp
 });
 vi.mock("./orcamento-actions", () => ({
   gerarOrcamentoDaOS: (...args: unknown[]) => gerarOrcamentoMock(...args),
-  salvarOrcamentoV3: (...args: [string, string, { servicos: ServicoV3[]; pecas: PecaV3[] }]) => salvarOrcamentoMock(...args),
+  salvarOrcamentoV3: (...args: [string, string, SalvarOrcamentoInputTest]) => salvarOrcamentoMock(...args),
 }));
 
 const aplicarTransicaoMock = vi.fn<AnyFn>(async () => ({}));
@@ -67,14 +57,9 @@ afterEach(() => {
   proximoOsId = 1;
 });
 
-function mockOrcamentoRow(osId: string, servicos: ServicoV3[] = []) {
-  return { id: osId, payload: { id: osId, orcamento: { id: `orc-${osId}`, status: "rascunho", desconto: 0, total: 0, criadoEm: "x", servicos, pecas: [] } } };
-}
-
 describe("criarOrcamentoRapidoV3 — happy path", () => {
-  it("cria a OS e grava o orçamento com grupo (gruposV3 sempre presente)", async () => {
+  it("cria a OS e grava servicos+gruposV3 NUM ÚNICO write (contrato oficial, sem patch cru — GOAL 026)", async () => {
     resolverClienteMock.mockResolvedValue({ id: "c1", nome: "Cliente Teste", telefone: "11999990000" });
-    findFirstMock.mockResolvedValue(mockOrcamentoRow("os-1"));
 
     const res = await criarOrcamentoRapidoV3("loja-x", inputBase());
 
@@ -82,20 +67,18 @@ describe("criarOrcamentoRapidoV3 — happy path", () => {
     expect(criarOSMock).toHaveBeenCalledTimes(1);
     expect(gerarOrcamentoMock).toHaveBeenCalledWith("loja-x", "os-1");
     expect(salvarOrcamentoMock).toHaveBeenCalledTimes(1);
-    const [, , salvarInput] = salvarOrcamentoMock.mock.calls[0]!;
-    expect(salvarInput.servicos.filter((s: ServicoV3) => s.grupoId)).toHaveLength(2);
 
-    // Grava gruposV3 no payload (patch dedicado, único write cru desta action).
-    expect(updateMock).toHaveBeenCalledTimes(1);
-    const dataGravada = updateMock.mock.calls[0]![0] as { data: { payload: { orcamento: { gruposV3: unknown[] } } } };
-    expect(dataGravada.data.payload.orcamento.gruposV3).toEqual([{ id: expect.any(String), rotulo: "Escolha a tela", regra: "escolha_1" }]);
+    const [sidArg, osIdArg, salvarInput] = salvarOrcamentoMock.mock.calls[0]!;
+    expect(sidArg).toBe("loja-x");
+    expect(osIdArg).toBe("os-1");
+    expect(salvarInput.servicos.filter((s: ServicoV3) => s.grupoId)).toHaveLength(2);
+    expect(salvarInput.gruposV3).toEqual([{ id: expect.any(String), rotulo: "Escolha a tela", regra: "escolha_1" }]);
 
     expect(aplicarTransicaoMock).not.toHaveBeenCalled();
   });
 
   it("multi-loja: storeId é repassado com trim a todas as chamadas", async () => {
     resolverClienteMock.mockResolvedValue({ id: "c1", nome: "Cliente Teste" });
-    findFirstMock.mockResolvedValue(mockOrcamentoRow("os-1"));
     await criarOrcamentoRapidoV3("  loja-y  ", inputBase());
     expect(resolverClienteMock.mock.calls[0]![0]).toBe("loja-y");
     expect(criarOSMock.mock.calls[0]![0]).toBe("loja-y");
@@ -110,7 +93,6 @@ describe("criarOrcamentoRapidoV3 — happy path", () => {
 
   it("dois envios sequenciais criam duas OS distintas (sem dedupe no motor — idempotência de UI é responsabilidade da modal)", async () => {
     resolverClienteMock.mockResolvedValue({ id: "c1", nome: "Cliente Teste" });
-    findFirstMock.mockResolvedValueOnce(mockOrcamentoRow("os-1")).mockResolvedValueOnce(mockOrcamentoRow("os-2"));
     const r1 = await criarOrcamentoRapidoV3("loja-x", inputBase());
     const r2 = await criarOrcamentoRapidoV3("loja-x", inputBase());
     expect(r1.osId).not.toBe(r2.osId);
@@ -126,9 +108,8 @@ describe("criarOrcamentoRapidoV3 — compensação (falha pós-criação cancela
     expect(aplicarTransicaoMock).not.toHaveBeenCalled();
   });
 
-  it("falha ao salvar o orçamento cancela a OS pelo caminho seguro (aplicarTransicaoStatusV3) com motivo automático", async () => {
+  it("falha ao salvar o orçamento (servicos+gruposV3) cancela a OS pelo caminho seguro (aplicarTransicaoStatusV3) com motivo automático", async () => {
     resolverClienteMock.mockResolvedValue({ id: "c1", nome: "Cliente Teste" });
-    findFirstMock.mockResolvedValue(mockOrcamentoRow("os-1"));
     salvarOrcamentoMock.mockRejectedValueOnce(new Error("Falha simulada ao gravar."));
 
     await expect(criarOrcamentoRapidoV3("loja-x", inputBase())).rejects.toThrow(/Não foi possível concluir o Orçamento Rápido/);
@@ -139,23 +120,10 @@ describe("criarOrcamentoRapidoV3 — compensação (falha pós-criação cancela
     expect(osIdArg).toBe("os-1");
     expect(toArg).toBe("cancelada");
     expect((optsArg as { motivo: string }).motivo).toContain("Falha simulada ao gravar.");
-    // Nunca grava os grupos depois de uma falha no salvar (nada meio-montado).
-    expect(updateMock).not.toHaveBeenCalled();
-  });
-
-  it("falha ao gravar os grupos (patch cru não encontra a OS) também compensa", async () => {
-    resolverClienteMock.mockResolvedValue({ id: "c1", nome: "Cliente Teste" });
-    // `gravarGruposOrcamentoRapidoV3` é o único ponto que lê via `findFirst` nesta
-    // action (salvarOrcamentoV3 está mockado acima); simula a leitura falhando.
-    findFirstMock.mockResolvedValueOnce(null);
-    await expect(criarOrcamentoRapidoV3("loja-x", inputBase())).rejects.toThrow(/Não foi possível concluir o Orçamento Rápido/);
-    expect(aplicarTransicaoMock).toHaveBeenCalledTimes(1);
-    expect(aplicarTransicaoMock.mock.calls[0]![1]).toBe("os-1");
   });
 
   it("falha na compensação (aplicarTransicaoStatusV3 rejeita) não mascara o erro original", async () => {
     resolverClienteMock.mockResolvedValue({ id: "c1", nome: "Cliente Teste" });
-    findFirstMock.mockResolvedValue(mockOrcamentoRow("os-1"));
     salvarOrcamentoMock.mockRejectedValueOnce(new Error("Falha original."));
     aplicarTransicaoMock.mockRejectedValueOnce(new Error("Compensação também falhou."));
 

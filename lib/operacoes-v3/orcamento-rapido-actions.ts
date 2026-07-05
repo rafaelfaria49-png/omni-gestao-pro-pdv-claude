@@ -14,9 +14,9 @@
 //      estendidos (GOAL 022; a mesma config de Nova OS/Atendimento Rápido).
 //   2. criarOSEnterpriseV3         — OS mínima (Nova OS write-path seguro).
 //   3. gerarOrcamentoDaOS + salvarOrcamentoV3 — materializa e grava itens
-//      fixos + linhas do grupo (exercita o validador de grupos, GOAL 024).
-//   4. patch mínimo de `gruposV3`  — único campo que `salvarOrcamentoV3`
-//      ainda não aceita (fora do escopo deste GOAL alterar seu contrato).
+//      fixos + linhas do grupo + `gruposV3` num ÚNICO write, pelo contrato
+//      OFICIAL de `SalvarOrcamentoV3Input` (GOAL OPS-V4-ORC-APROVACAO-
+//      SELECAO-026 aposentou o patch cru que existia aqui antes).
 //
 // Compensação: qualquer falha DEPOIS da OS criada cancela pelo CAMINHO SEGURO
 // (`aplicarTransicaoStatusV3` → "cancelada", com motivo automático) — nunca
@@ -27,9 +27,7 @@
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
-import type { Prisma } from "@/generated/prisma";
 import type { OrdemServico } from "@/types/os";
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise";
 import { assertActiveStoreId } from "@/lib/operacoes/assert-active-store";
@@ -38,7 +36,6 @@ import { criarOSEnterpriseV3 } from "./nova-os-actions";
 import { gerarOrcamentoDaOS, salvarOrcamentoV3 } from "./orcamento-actions";
 import { aplicarTransicaoStatusV3 } from "./status-actions";
 import { novaOSDraftVazioV3, type NovaOSDraftV3 } from "./nova-os-model";
-import type { OrcamentoGrupoV3, OrcamentoV3 } from "./orcamento-model";
 import {
   montarGrupoMetaOrcamentoRapidoV3,
   montarServicosOrcamentoRapidoV3,
@@ -47,21 +44,6 @@ import {
   type CriarOrcamentoRapidoResultV3,
   type OrcamentoRapidoInputV3,
 } from "./orcamento-rapido-model";
-
-// ----------------------------------------------------------------------------
-// Patch mínimo de `gruposV3` — único campo que `salvarOrcamentoV3` (contrato
-// intocado neste GOAL) ainda não aceita. Lê/grava só o necessário.
-// ----------------------------------------------------------------------------
-
-async function gravarGruposOrcamentoRapidoV3(sid: string, osId: string, grupos: OrcamentoGrupoV3[]): Promise<void> {
-  const row = await prisma.ordemServico.findFirst({ where: { id: osId, storeId: sid }, select: { id: true, payload: true } });
-  if (!row) throw new Error("OS não encontrada ao registrar o grupo do orçamento.");
-  const payload = (row.payload as Record<string, unknown> | null) ?? {};
-  const orc = payload.orcamento as (OrcamentoV3 & Record<string, unknown>) | undefined;
-  if (!orc || typeof orc !== "object") throw new Error("Orçamento não encontrado ao registrar o grupo.");
-  const nextPayload = { ...payload, orcamento: { ...orc, gruposV3: grupos } };
-  await prisma.ordemServico.update({ where: { id: osId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
-}
 
 // ----------------------------------------------------------------------------
 // Orquestração
@@ -107,12 +89,18 @@ export async function criarOrcamentoRapidoV3(storeId: string, input: OrcamentoRa
   const osId = os.id;
 
   // 3. Orçamento multiopção — materializado em rascunho, SEM transição de status.
+  //    `gruposV3` grava no MESMO write de `salvarOrcamentoV3` (contrato oficial,
+  //    GOAL 026) — nenhum patch cru separado.
   try {
     await gerarOrcamentoDaOS(sid, osId);
     const grupoId = novoGrupoIdOrcamentoRapidoV3();
     const servicos = montarServicosOrcamentoRapidoV3(input, grupoId);
-    await salvarOrcamentoV3(sid, osId, { servicos, pecas: [], desconto: 0 });
-    await gravarGruposOrcamentoRapidoV3(sid, osId, [montarGrupoMetaOrcamentoRapidoV3(input, grupoId)]);
+    await salvarOrcamentoV3(sid, osId, {
+      servicos,
+      pecas: [],
+      desconto: 0,
+      gruposV3: [montarGrupoMetaOrcamentoRapidoV3(input, grupoId)],
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await aplicarTransicaoStatusV3(sid, osId, "cancelada", {

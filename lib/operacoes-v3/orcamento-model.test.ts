@@ -5,12 +5,16 @@ import {
   CANAL_ENVIO_LABEL_V3,
   computeTotaisV3,
   contarOrcamentosPorStatusV3,
+  garantiaResultanteAprovacaoV3,
   linhaKind,
   MAX_LINHAS_POR_GRUPO_V3,
   montarEventoEnvioOrcamentoV3,
+  montarEventoRecusaOrcamentoV3,
+  MOTIVO_RECUSA_LABEL_V3,
   recalcOrcamentoV3,
   statusEfetivoOrcamentoV3,
   validarGruposOrcamentoV3,
+  validarSelecaoCompletaV3,
   VALIDADE_PADRAO_DIAS,
   type OrcamentoV3,
   type PecaV3,
@@ -281,5 +285,140 @@ describe("orçamento V3 — GOAL OPS-V4-ORC-RAPIDO-024 — constante única + wi
     expect(src).toContain("VALIDADE_PADRAO_DIAS");
     expect(src).not.toMatch(/const\s+VALIDADE_PADRAO_DIAS\s*=/);
     expect(src).not.toContain("DIAS_VALIDADE_PADRAO_DOC_CLIENTE");
+  });
+});
+
+describe("orçamento V3 — GOAL OPS-V4-ORC-APROVACAO-SELECAO-026 — seleção completa", () => {
+  it("sem grupos: sempre válido (N=0)", () => {
+    expect(validarSelecaoCompletaV3({ pecas: [], servicos: [servico({ descricao: "X", valor: 10 })] })).toBeNull();
+  });
+
+  it("com grupo e nenhuma linha selecionada: erro citando o rótulo do grupo", () => {
+    const orc = {
+      pecas: [],
+      servicos: [
+        servico({ id: "a", descricao: "A", valor: 10, grupoId: "g1" }),
+        servico({ id: "b", descricao: "B", valor: 20, grupoId: "g1" }),
+      ],
+      gruposV3: [{ id: "g1", rotulo: "Escolha a tela", regra: "escolha_1" as const }],
+    };
+    expect(validarSelecaoCompletaV3(orc)).toBe('Selecione uma opção em "Escolha a tela" antes de aprovar.');
+  });
+
+  it("com grupo e exatamente 1 selecionada: válido", () => {
+    const orc = {
+      pecas: [],
+      servicos: [
+        servico({ id: "a", descricao: "A", valor: 10, grupoId: "g1", selecionadaV3: true }),
+        servico({ id: "b", descricao: "B", valor: 20, grupoId: "g1" }),
+      ],
+      gruposV3: [{ id: "g1", rotulo: "G", regra: "escolha_1" as const }],
+    };
+    expect(validarSelecaoCompletaV3(orc)).toBeNull();
+  });
+
+  it("dois grupos, só um resolvido: erro no grupo pendente", () => {
+    const orc = {
+      pecas: [],
+      servicos: [
+        servico({ id: "a", descricao: "A", valor: 10, grupoId: "g1", selecionadaV3: true }),
+        servico({ id: "b", descricao: "B", valor: 20, grupoId: "g1" }),
+        servico({ id: "c", descricao: "C", valor: 30, grupoId: "g2" }),
+        servico({ id: "d", descricao: "D", valor: 40, grupoId: "g2" }),
+      ],
+      gruposV3: [
+        { id: "g1", rotulo: "G1", regra: "escolha_1" as const },
+        { id: "g2", rotulo: "G2", regra: "escolha_1" as const },
+      ],
+    };
+    expect(validarSelecaoCompletaV3(orc)).toBe('Selecione uma opção em "G2" antes de aprovar.');
+  });
+
+  it("combina peça + serviço no mesmo grupo", () => {
+    const orc = {
+      pecas: [peca({ id: "p1", grupoId: "g1", selecionadaV3: true })],
+      servicos: [servico({ id: "s1", descricao: "S", valor: 10, grupoId: "g1" })],
+      gruposV3: [{ id: "g1", rotulo: "G", regra: "escolha_1" as const }],
+    };
+    expect(validarSelecaoCompletaV3(orc)).toBeNull();
+  });
+});
+
+describe("orçamento V3 — GOAL 026 — garantia resultante da aprovação", () => {
+  it("nenhuma variante selecionada informa garantia → null (não sobrescreve)", () => {
+    const orc = { pecas: [], servicos: [servico({ id: "a", descricao: "A", valor: 10, grupoId: "g1", selecionadaV3: true })] };
+    expect(garantiaResultanteAprovacaoV3(orc)).toBeNull();
+  });
+
+  it("uma variante selecionada com garantia → usa ela", () => {
+    const orc = {
+      pecas: [],
+      servicos: [
+        { ...servico({ id: "a", descricao: "A", valor: 10, grupoId: "g1", selecionadaV3: true }), varianteV3: { rotulo: "Original", garantiaDias: 90 } },
+      ],
+    };
+    expect(garantiaResultanteAprovacaoV3(orc)).toEqual({ prazoDias: 90, rotulo: "Original" });
+  });
+
+  it("multi-grupo: usa a MENOR garantia entre as selecionadas (regra conservadora)", () => {
+    const orc = {
+      pecas: [],
+      servicos: [
+        { ...servico({ id: "a", descricao: "A", valor: 10, grupoId: "g1", selecionadaV3: true }), varianteV3: { rotulo: "Tela", garantiaDias: 90 } },
+        { ...servico({ id: "b", descricao: "B", valor: 10, grupoId: "g2", selecionadaV3: true }), varianteV3: { rotulo: "Bateria", garantiaDias: 30 } },
+      ],
+    };
+    expect(garantiaResultanteAprovacaoV3(orc)).toEqual({ prazoDias: 30, rotulo: "Bateria" });
+  });
+
+  it("linhas não-selecionadas com garantia maior nunca vencem a comparação", () => {
+    const orc = {
+      pecas: [],
+      servicos: [
+        { ...servico({ id: "a", descricao: "A", valor: 10, grupoId: "g1", selecionadaV3: true }), varianteV3: { rotulo: "Escolhida", garantiaDias: 30 } },
+        { ...servico({ id: "b", descricao: "B", valor: 10, grupoId: "g1" }), varianteV3: { rotulo: "Não escolhida", garantiaDias: 5 } },
+      ],
+    };
+    expect(garantiaResultanteAprovacaoV3(orc)).toEqual({ prazoDias: 30, rotulo: "Escolhida" });
+  });
+
+  it("combina peça + serviço selecionados", () => {
+    const orc = {
+      pecas: [{ ...peca({ id: "p1", grupoId: "g1", selecionadaV3: true }), varianteV3: { rotulo: "Peça", garantiaDias: 60 } }],
+      servicos: [{ ...servico({ id: "s1", descricao: "S", valor: 10, grupoId: "g2", selecionadaV3: true }), varianteV3: { rotulo: "Serviço", garantiaDias: 15 } }],
+    };
+    expect(garantiaResultanteAprovacaoV3(orc)).toEqual({ prazoDias: 15, rotulo: "Serviço" });
+  });
+});
+
+describe("orçamento V3 — GOAL 026 — recusa estruturada", () => {
+  it("todos os motivos têm rótulo", () => {
+    for (const motivo of ["preco", "prazo", "desistiu", "concorrencia", "outro"] as const) {
+      expect(MOTIVO_RECUSA_LABEL_V3[motivo]).toBeTruthy();
+    }
+  });
+
+  it("entrada estruturada com observação: conteúdo cita rótulo + observação; metadata tem motivo+observacao", () => {
+    const evt = montarEventoRecusaOrcamentoV3({ motivo: "preco", observacao: "Cliente achou caro" });
+    expect(evt.conteudo).toBe("Orçamento recusado: Preço — Cliente achou caro.");
+    expect(evt.metadata).toEqual({ motivo: "preco", observacao: "Cliente achou caro" });
+  });
+
+  it("entrada estruturada sem observação: metadata só com motivo", () => {
+    const evt = montarEventoRecusaOrcamentoV3({ motivo: "desistiu" });
+    expect(evt.conteudo).toBe("Orçamento recusado: Cliente desistiu.");
+    expect(evt.metadata).toEqual({ motivo: "desistiu", observacao: undefined });
+  });
+
+  it("string livre legada (chamador antigo, ex. hub V3): preserva o comportamento de sempre", () => {
+    const evt = montarEventoRecusaOrcamentoV3("cliente não aprovou o valor");
+    expect(evt.conteudo).toBe("Orçamento recusado: cliente não aprovou o valor");
+    expect(evt.metadata).toEqual({});
+  });
+
+  it("sem motivo nenhum: mensagem genérica (comportamento de sempre)", () => {
+    const evt = montarEventoRecusaOrcamentoV3(undefined);
+    expect(evt.conteudo).toBe("Orçamento recusado.");
+    expect(evt.metadata).toEqual({});
   });
 });
