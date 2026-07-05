@@ -22,6 +22,9 @@
  *    `saldoInicial + dinheiro(vendas) + suprimentos + recebimentos CR em dinheiro − sangrias`.
  *  - `recebimento_cr` (CaixaOperacao) **não** entra em vendas nem em `porOrigem`/`porPagamento`
  *    de vendas — evita inflar faturamento. Soma à gaveta conforme forma (dinheiro no físico).
+ *  - `estorno_recebimento_cr` (CaixaOperacao) abate `recebimentosContas`/`recebimentosContasDinheiro`
+ *    (GOAL CAIXA-FIX-ESTORNO-OS-002) — sem isso o saldo esperado ficava inflado após um estorno
+ *    de recebimento de OS/CR na mesma sessão.
  */
 
 import type { SaleRecord } from "@/lib/operations-sale-types"
@@ -129,7 +132,14 @@ function readFormaPagamentoPayload(payload: unknown): string {
   return typeof raw === "string" ? raw.trim().toLowerCase() : ""
 }
 
-/** Agrega sangrias, suprimentos e recebimentos CR a partir das operações da sessão (servidor). */
+/**
+ * Agrega sangrias, suprimentos e recebimentos CR a partir das operações da sessão (servidor).
+ *
+ * `estorno_recebimento_cr` (GOAL CAIXA-FIX-ESTORNO-OS-002) abate o líquido de
+ * `recebimentosContas`/`recebimentosContasDinheiro` — sem isso, um estorno de recebimento
+ * de OS/CR inflava o saldo esperado do caixa. A operação continua íntegra no banco
+ * (auditoria/histórico) — só o AGREGADO do fechamento passa a considerar o abatimento.
+ */
 export function aggregateCaixaOperacoes(operacoes: CaixaOperacaoLinha[]): {
   sangrias: number
   suprimentos: number
@@ -155,14 +165,19 @@ export function aggregateCaixaOperacoes(operacoes: CaixaOperacaoLinha[]): {
       if (readFormaPagamentoPayload(op.payload) === "dinheiro") {
         recebimentosContasDinheiro += v
       }
+    } else if (tipo === "estorno_recebimento_cr") {
+      recebimentosContas -= v
+      if (readFormaPagamentoPayload(op.payload) === "dinheiro") {
+        recebimentosContasDinheiro -= v
+      }
     }
   }
 
   return {
     sangrias: round2(sangrias),
     suprimentos: round2(suprimentos),
-    recebimentosContas: round2(recebimentosContas),
-    recebimentosContasDinheiro: round2(recebimentosContasDinheiro),
+    recebimentosContas: round2(Math.max(0, recebimentosContas)),
+    recebimentosContasDinheiro: round2(Math.max(0, recebimentosContasDinheiro)),
     qtdRecebimentosContas,
   }
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 import type { SaleRecord } from "@/lib/operations-sale-types"
-import { computeFechamentoResumo, receitaTotalDoDia } from "./caixa-fechamento-resumo"
+import {
+  aggregateCaixaOperacoes,
+  computeFechamentoResumo,
+  receitaTotalDoDia,
+  type CaixaOperacaoLinha,
+} from "./caixa-fechamento-resumo"
 
 /** Venda mínima para o agregador (apenas os campos que o helper lê). */
 function venda(opts: {
@@ -127,5 +132,69 @@ describe("creditoVale no fechamento — REGRA OFICIAL ÚNICA (GOAL_FATURAMENTO_V
     const r = computeFechamentoResumo({ ...base, sales: [vendaComVale()] })
     expect(r.totalLiquido).toBe(100)
     expect(r.receitaTotalDia).toBe(100)
+  })
+})
+
+describe("aggregateCaixaOperacoes — estorno_recebimento_cr abate o fechamento (GOAL CAIXA-FIX-ESTORNO-OS-002)", () => {
+  it("recebimento_cr de R$ 100 + estorno_recebimento_cr de R$ 40 = líquido R$ 60", () => {
+    const operacoes: CaixaOperacaoLinha[] = [
+      { tipo: "recebimento_cr", valor: 100, payload: { formaPagamento: "dinheiro" } },
+      { tipo: "estorno_recebimento_cr", valor: 40, payload: { origem: "operacoes-v3-os" } },
+    ]
+    const agg = aggregateCaixaOperacoes(operacoes)
+    expect(agg.recebimentosContas).toBe(60)
+    expect(agg.qtdRecebimentosContas).toBe(1)
+  })
+
+  it("estorno em dinheiro abate também a parcela em dinheiro da gaveta", () => {
+    const operacoes: CaixaOperacaoLinha[] = [
+      { tipo: "recebimento_cr", valor: 100, payload: { formaPagamento: "dinheiro" } },
+      { tipo: "estorno_recebimento_cr", valor: 40, payload: { formaPagamento: "dinheiro" } },
+    ]
+    const agg = aggregateCaixaOperacoes(operacoes)
+    expect(agg.recebimentosContasDinheiro).toBe(60)
+  })
+
+  it("estorno sem formaPagamento no payload NÃO abate a parcela em dinheiro (não sabemos a forma original)", () => {
+    const operacoes: CaixaOperacaoLinha[] = [
+      { tipo: "recebimento_cr", valor: 100, payload: { formaPagamento: "dinheiro" } },
+      { tipo: "estorno_recebimento_cr", valor: 40, payload: { origem: "operacoes-v3-os" } },
+    ]
+    const agg = aggregateCaixaOperacoes(operacoes)
+    expect(agg.recebimentosContas).toBe(60)
+    expect(agg.recebimentosContasDinheiro).toBe(100)
+  })
+
+  it("recebimento_cr continua somando normalmente sem estorno", () => {
+    const operacoes: CaixaOperacaoLinha[] = [
+      { tipo: "recebimento_cr", valor: 150, payload: { formaPagamento: "pix" } },
+    ]
+    const agg = aggregateCaixaOperacoes(operacoes)
+    expect(agg.recebimentosContas).toBe(150)
+    expect(agg.recebimentosContasDinheiro).toBe(0)
+    expect(agg.qtdRecebimentosContas).toBe(1)
+  })
+
+  it("nunca fica negativo mesmo se o estorno exceder o recebido registrado na sessão", () => {
+    const operacoes: CaixaOperacaoLinha[] = [
+      { tipo: "estorno_recebimento_cr", valor: 40, payload: { formaPagamento: "dinheiro" } },
+    ]
+    const agg = aggregateCaixaOperacoes(operacoes)
+    expect(agg.recebimentosContas).toBe(0)
+    expect(agg.recebimentosContasDinheiro).toBe(0)
+  })
+
+  it("sangria e suprimento continuam somando normalmente ao lado do estorno", () => {
+    const operacoes: CaixaOperacaoLinha[] = [
+      { tipo: "sangria", valor: 20 },
+      { tipo: "suprimento", valor: 30 },
+      { tipo: "recebimento_cr", valor: 100, payload: { formaPagamento: "dinheiro" } },
+      { tipo: "estorno_recebimento_cr", valor: 40, payload: { formaPagamento: "dinheiro" } },
+    ]
+    const agg = aggregateCaixaOperacoes(operacoes)
+    expect(agg.sangrias).toBe(20)
+    expect(agg.suprimentos).toBe(30)
+    expect(agg.recebimentosContas).toBe(60)
+    expect(agg.recebimentosContasDinheiro).toBe(60)
   })
 })
