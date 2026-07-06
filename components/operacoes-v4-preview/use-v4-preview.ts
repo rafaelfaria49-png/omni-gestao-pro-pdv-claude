@@ -1,13 +1,15 @@
 /**
- * Operações V4 Preview — estado local + derivação de "vals".
+ * Operações V4 · Beta operacional — estado local + derivação de "vals".
  *
  * Porta o `class Component extends DCLogic` do protótipo Cloud Design para
  * React: o estado vira `useState`, e `buildVals()` espelha o `renderVals()`
- * original (produz o objeto consumido pela UI). Os STAGES leem a OS REAL
- * (somente leitura, via `useOrdensV4`/`useOrdemV4`); o restante (rail,
- * dashboards, Nova OS) segue protótipo. Nenhum handler persiste nada — as
- * ações de escrita apenas pré-visualizam e disparam um toast honesto
- * (`PREVIEW_NOOP`): a Preview NÃO grava no banco.
+ * original (produz o objeto consumido pela UI). Os STAGES leem e ESCREVEM a OS
+ * REAL via actions V3 reusadas (cancelar, diagnóstico, orçamento, execução,
+ * entrega, assinatura, garantia, recebimento — ver blocos "REAL" abaixo). As
+ * telas de rail e o modal Nova OS de fato criam/leem dados reais da loja. Só
+ * os handlers marcados `PREVIEW_NOOP` continuam sem efeito (ex.: imprimir via
+ * interna, etiqueta, portal do cliente) e disparam um toast honesto avisando
+ * que aquela ação específica não foi salva — não é uma garantia geral da tela.
  */
 "use client";
 
@@ -240,16 +242,13 @@ const INITIAL: V4State = {
 type Patch = Partial<V4State> | ((s: V4State) => Partial<V4State>);
 
 /**
- * Mensagem honesta para qualquer ação que NÃO persiste nada nesta Preview (somente leitura).
- * Os botões de escrita do protótipo (avançar status, recibo, WhatsApp, exportar…) apenas
- * pré-visualizam o fluxo — nunca confirmam uma operação real. Trocar OS / Histórico /
- * Configurações também não navegam de verdade na Preview.
- *
- * EXCEÇÃO (OPS-V4-NOVA-OS-REAL-001): a "Nova OS" deixou de ser preview — cria uma OS REAL
- * na loja ativa via `criarOSEnterpriseV3` (o próprio modal faz a chamada; aqui só tratamos
- * o sucesso em `onOSCriada`). As demais ações da V4 seguem em preview.
+ * Mensagem honesta reservada aos handlers residuais que ainda NÃO persistem
+ * (ex.: WhatsApp, exportar histórico, alguns documentos/atalhos). A maioria
+ * das ações de escrita da V4 (cancelar OS, diagnóstico, orçamento, execução,
+ * entrega, assinatura, garantia, recebimento, Nova OS) já é real e persiste
+ * via actions V3 — este toast NÃO se aplica a elas.
  */
-const PREVIEW_NOOP = "Indisponível na Preview — nenhuma alteração foi salva.";
+const PREVIEW_NOOP = "Indisponível nesta versão — nenhuma alteração foi salva.";
 
 /**
  * PDV-SERVICO-OS-RECEBIMENTO-REAL-001: o recebimento passou a ser real (aba
@@ -1035,8 +1034,8 @@ export function buildVals(
 
     // ---- Diagnóstico / Orçamento REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----
     // Handlers de escrita reais (chamam actions da V3 e recarregam lista+detalhe).
-    // Demais stages (Execução/Financeiro/Entrega/Pós-venda/Documentos/WhatsApp/PDV)
-    // permanecem preview/read-only.
+    // Execução/Financeiro/Entrega/Documentos também já são reais (ver blocos acima).
+    // Só Pós-venda/WhatsApp/PDV (fora do recebimento) permanecem read-only.
     salvarDiagnostico: ctx.salvarDiagnostico,
     gerarOrcamento: ctx.gerarOrcamento,
     salvarOrcamento: ctx.salvarOrcamento,

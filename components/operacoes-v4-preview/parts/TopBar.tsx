@@ -36,7 +36,7 @@ export function TopBar({ v }: { v: V4Vals }) {
         </span>
         <span style={{ fontWeight: 600, fontSize: 13, color: C.body }}>OmniGestão</span>
         <span style={{ fontSize: 11.5, color: C.subtle, whiteSpace: "nowrap" }}>
-          Operações <span style={{ color: C.primary, fontWeight: 600 }}>V4</span> · Preview
+          Operações <span style={{ color: C.primary, fontWeight: 600 }}>V4</span> · Beta operacional
         </span>
       </div>
 

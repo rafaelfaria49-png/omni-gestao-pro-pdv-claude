@@ -123,7 +123,7 @@ export function PosVendaStage({ v }: { v: V4Vals }) {
           <Empty>Nenhum retorno registrado.</Empty>
         )}
         <div style={{ fontSize: 10.5, color: C.subtle, lineHeight: 1.5, marginTop: 11 }}>
-          Retornos em garantia são acionamentos registrados na OS. A V4 Preview é somente leitura.
+          Retornos em garantia são acionamentos registrados na OS. Esta aba de Pós-venda é somente leitura nesta versão.
         </div>
       </div>
 

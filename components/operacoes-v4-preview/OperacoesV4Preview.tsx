@@ -1,15 +1,16 @@
 /**
- * Operações V4 Preview — casca raiz (client component).
+ * Operações V4 · Beta operacional — casca raiz (client component).
  *
  * Conversão React do protótipo Cloud Design `design/operacoes-v4`. Isolado da V3
- * (não importa nada dela). Os STAGES leem a OS REAL por Server Actions de leitura
- * (`listOrdens`/`getOrdem` com `readOnly: true`). As telas de rail e o modal Nova OS
- * são protótipo e NÃO exibem dados fabricados (estado vazio honesto; Nova OS não cria
- * OS). O estado é local (`useV4Preview`) e nenhuma ação persiste — a Preview é somente
- * leitura (não grava no banco).
+ * (não importa nada dela). Os STAGES leem a OS REAL e várias ações de escrita
+ * (cancelar, diagnóstico, orçamento, execução, entrega, assinatura, garantia,
+ * recebimento, Nova OS) persistem de verdade via actions V3 reusadas. As telas
+ * de rail seguem somente leitura (identidade própria, sem dados fabricados).
+ * O estado é local (`useV4Preview`); handlers residuais sem persistência
+ * avisam via toast honesto no momento do clique.
  *
- * `height:100%` (e não 100vh) mantém o AppShell como dono do scroll — o Preview
- * só rola internamente no painel de etapa / nas telas de módulo.
+ * `height:100%` (e não 100vh) mantém o AppShell como dono do scroll — este
+ * módulo só rola internamente no painel de etapa / nas telas de módulo.
  */
 "use client";
 
