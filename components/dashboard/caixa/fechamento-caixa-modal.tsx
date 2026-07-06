@@ -25,6 +25,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { ConferenciaCaixa } from "./conferencia-caixa"
 import { useSession } from "next-auth/react"
 import { useCaixa } from "./caixa-provider"
 import { ensureLedger, useOperationsStore } from "@/lib/operations-store"
@@ -73,7 +75,8 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   // Fonte ÚNICA e autoritativa — idêntica à do Resumo do caixa e da barra de status.
   // Reconcilia o status das vendas (cancelamentos da tela Vendas) e exclui canceladas
   // de TODOS os totais. Garante que o fechamento grave os mesmos números exibidos.
-  const { resumo, opsCarregando, saldoEsperado, entradas, saidas } = useCaixaResumo(isOpen)
+  const { resumo, opsCarregando, saldoEsperado, entradas, saidas, sessionSales, operacoesSessao, vendasSessao } =
+    useCaixaResumo(isOpen)
 
   // Operador da sessão para o comprovante — nome LEGÍVEL (fonte única: abertura do
   // caixa → sessão → e-mail; nunca o `cashierId` técnico). O `cashierId` permanece
@@ -392,6 +395,21 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                 <span className="truncate">{`Terminal: ${terminalLabel}`}</span>
               </div>
 
+              <Tabs defaultValue="resumo">
+                <TabsList className="w-full">
+                  <TabsTrigger value="resumo">Resumo</TabsTrigger>
+                  <TabsTrigger value="conferencia">Conferência</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="conferencia" className="pt-3">
+                  <ConferenciaCaixa
+                    vendasSessao={vendasSessao}
+                    sessionSales={sessionSales}
+                    operacoesSessao={operacoesSessao}
+                  />
+                </TabsContent>
+
+                <TabsContent value="resumo" className="space-y-4 pt-3">
               {/* Resumo financeiro — RECEITA TOTAL DO DIA (faturamento, separado da gaveta) */}
               <Card className="border-primary/30 bg-primary/5">
                 <CardContent className="space-y-2 pt-4 pb-4">
@@ -583,7 +601,8 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                   </p>
                 </CardContent>
               </Card>
-
+                </TabsContent>
+              </Tabs>
               {/* Input de Contagem */}
               <div className="space-y-3">
                 <Label className="text-sm font-medium">Dinheiro contado na gaveta</Label>

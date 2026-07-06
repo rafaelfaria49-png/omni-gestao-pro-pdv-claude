@@ -12,9 +12,18 @@ import {
   type FechamentoResumo,
 } from "@/lib/caixa-fechamento-resumo"
 import type { SaleRecord } from "@/lib/operations-sale-types"
+import type { VendaSessaoDetalheItem } from "@/app/api/ops/caixa/sessao-detalhe/route"
 
 function round2(n: number): number {
   return Math.round((Number.isFinite(n) ? n : 0) * 100) / 100
+}
+
+/** Operação de caixa completa (para exibição na Conferência) — superset de `CaixaOperacaoLinha`. */
+export interface CaixaOperacaoDetalhe extends CaixaOperacaoLinha {
+  id: string
+  at: string
+  motivo?: string
+  operador?: string
 }
 
 export interface CaixaResumoView {
@@ -33,6 +42,10 @@ export interface CaixaResumoView {
   /** Saldo movimentado esperado (abertura + recebido + supr. + CR − sangrias). */
   saldoEsperado: number
   opsCarregando: boolean
+  /** Operações de caixa completas da sessão (sangria/suprimento/recebimento_cr/estorno) — para Conferência. */
+  operacoesSessao: CaixaOperacaoDetalhe[]
+  /** Vendas da sessão vindas do servidor (`sessao-detalhe`) — mais ricas que `sessionSales` (numero/origem/cpf). */
+  vendasSessao: VendaSessaoDetalheItem[]
 }
 
 /**
@@ -49,7 +62,8 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
   const { caixa, sessaoId } = useCaixa()
   const { sales, refreshSalesFromServer } = useOperationsStore()
   const { lojaAtivaId } = useLojaAtiva()
-  const [ops, setOps] = useState<CaixaOperacaoLinha[]>([])
+  const [ops, setOps] = useState<CaixaOperacaoDetalhe[]>([])
+  const [vendasSessao, setVendasSessao] = useState<VendaSessaoDetalheItem[]>([])
   const [opsOk, setOpsOk] = useState(false)
   const [opsCarregando, setOpsCarregando] = useState(false)
 
@@ -59,10 +73,11 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
     void refreshSalesFromServer()
   }, [active, refreshKey, refreshSalesFromServer])
 
-  // Operações da sessão no servidor (sangria / suprimento / recebimento_cr).
+  // Operações da sessão no servidor (sangria / suprimento / recebimento_cr / estorno) + vendas.
   useEffect(() => {
     if (!active || !sessaoId?.trim() || !lojaAtivaId) {
       setOps([])
+      setVendasSessao([])
       setOpsOk(false)
       return
     }
@@ -74,15 +89,29 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
       cache: "no-store",
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
-      .then((j: { sessao?: { operacoes?: CaixaOperacaoLinha[] } }) => {
+      .then((j: { sessao?: { operacoes?: CaixaOperacaoDetalhe[] }; vendas?: VendaSessaoDetalheItem[] }) => {
         if (cancelled) return
         const o = j.sessao?.operacoes
-        setOps(Array.isArray(o) ? o.map((x) => ({ tipo: x.tipo, valor: x.valor, payload: x.payload })) : [])
+        setOps(
+          Array.isArray(o)
+            ? o.map((x) => ({
+                id: x.id,
+                tipo: x.tipo,
+                valor: x.valor,
+                payload: x.payload,
+                at: x.at,
+                motivo: x.motivo,
+                operador: x.operador,
+              }))
+            : [],
+        )
+        setVendasSessao(Array.isArray(j.vendas) ? j.vendas : [])
         setOpsOk(true)
       })
       .catch(() => {
         if (cancelled) return
         setOps([])
+        setVendasSessao([])
         setOpsOk(false)
       })
       .finally(() => {
@@ -131,6 +160,8 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
       saidas: resumo.sangrias,
       saldoEsperado: resumo.saldoMovimentadoEsperado,
       opsCarregando,
+      operacoesSessao: ops,
+      vendasSessao,
     }
   }, [
     sales,
@@ -142,5 +173,6 @@ export function useCaixaResumo(active: boolean, refreshKey = 0): CaixaResumoView
     ops,
     opsOk,
     opsCarregando,
+    vendasSessao,
   ])
 }
