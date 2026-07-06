@@ -34,6 +34,7 @@ import {
   selecionarServicoRapidoV4,
   type AtendimentoRapidoFormV4,
 } from "@/lib/operacoes-v4/atendimento-rapido-form";
+import { RealActionNotice } from "./RealActionNotice";
 
 const input: React.CSSProperties = {
   width: "100%",
@@ -116,6 +117,10 @@ function AtendimentoRapidoModalContent({ v }: { v: V4Vals }) {
       setErro(invalido);
       return;
     }
+    const confirmado = window.confirm(
+      "Finalizar atendimento real: o sistema vai criar a OS, registrar o recebimento no caixa e marcar a OS como entregue. Confirmar?"
+    );
+    if (!confirmado) return;
     setBusy(true);
     try {
       const resultado = await finalizarAtendimentoRapidoV3(sid, inputV3);
@@ -191,6 +196,8 @@ function AtendimentoRapidoModalContent({ v }: { v: V4Vals }) {
         </div>
 
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 18 }}>
+          <RealActionNotice kind="atendimentoRapido" tone="warn" />
+
           {caixaAberta === false && (
             <div
               style={{
@@ -507,7 +514,7 @@ function AtendimentoRapidoModalContent({ v }: { v: V4Vals }) {
                 opacity: podeFinalizar ? 1 : 0.6,
               }}
             >
-              {busy ? "Finalizando…" : "Finalizar atendimento"}
+              {busy ? "Finalizando…" : "Finalizar atendimento real"}
             </button>
           </div>
         </div>

@@ -88,7 +88,7 @@ function CancelamentoOSModalContent({ v }: { v: V4Vals }) {
           ) : (
             <>
               <div style={{ fontSize: 11.5, color: C.dangerFg, fontWeight: 500, marginBottom: 14, lineHeight: 1.5, padding: 10, background: C.dangerBg, border: `1px solid ${C.dangerBd}`, borderRadius: 8 }}>
-                Esta ação é sensível e não pode ser desfeita pela Preview. O cancelamento fica registrado na timeline da OS.
+Cancelamento real: esta ação altera o status da OS no sistema e ficará registrada no histórico. Não pode ser desfeita depois de confirmada.
               </div>
 
               {!statusPermite && (
@@ -136,7 +136,7 @@ function CancelamentoOSModalContent({ v }: { v: V4Vals }) {
                     opacity: podeConfirmar ? 1 : 0.6,
                   }}
                 >
-                  {busy ? "Cancelando…" : "Cancelar OS"}
+                  {busy ? "Cancelando…" : "Cancelar OS real"}
                 </button>
                 <button
                   type="button"

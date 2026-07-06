@@ -19,6 +19,7 @@
 import { useState } from "react";
 import { C, fmt } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
+import { RealActionNotice } from "./RealActionNotice";
 import {
   FORMAS_RECEBIMENTO_V3,
   somaSplitV3,
@@ -216,6 +217,7 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
 
   return (
     <div style={box}>
+      <RealActionNotice kind="pagamento" />
       <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 9 }}>Saldo a receber: <b style={{ color: C.warnFg }}>{fmt(pagamento.saldo)}</b></div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
@@ -289,7 +291,7 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
           disabled={!podeConfirmar}
           style={{ ...btnPrimary, flex: 1, cursor: podeConfirmar ? "pointer" : "default", opacity: podeConfirmar ? 1 : 0.6 }}
         >
-          {pdv.recebendo ? "Confirmando…" : "Confirmar recebimento"}
+          {pdv.recebendo ? "Confirmando…" : "Confirmar recebimento real"}
         </button>
         <button type="button" onClick={cancelar} disabled={pdv.recebendo} style={{ ...btnGhost, flex: "none" }}>Cancelar</button>
       </div>

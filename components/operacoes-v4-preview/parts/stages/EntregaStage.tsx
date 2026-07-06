@@ -31,6 +31,7 @@ import type { V4Vals } from "../../use-v4-preview";
 import { SignaturePadV3 } from "@/components/operacoes-v3/components/SignaturePadV3";
 import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { GARANTIA_CATALOGO_V3, prazoPadraoGarantiaV3 } from "@/lib/operacoes-v3/garantia-textos";
+import { RealActionNotice } from "../RealActionNotice";
 
 const col3 = "repeat(auto-fit, minmax(280px, 1fr))";
 const col2 = "minmax(0,1fr) minmax(0,1fr)";
@@ -58,6 +59,10 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
 
   const run = async () => {
     if (busy) return;
+    const confirmado = window.confirm(
+      "Entrega real: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?"
+    );
+    if (!confirmado) return;
     setBusy(true);
     try {
       await v.confirmarEntrega();
@@ -80,13 +85,14 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
   return (
     <div style={card}>
       <div style={{ ...cardTitle, marginBottom: 10 }}>Entrega</div>
+      <RealActionNotice kind="entrega" />
       <button
         type="button"
         disabled={busy}
         onClick={() => void run()}
         style={{ ...btnPrimary, background: C.success, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
       >
-        {busy ? "Confirmando…" : "Confirmar entrega"}
+        {busy ? "Confirmando…" : "Confirmar entrega real"}
       </button>
     </div>
   );

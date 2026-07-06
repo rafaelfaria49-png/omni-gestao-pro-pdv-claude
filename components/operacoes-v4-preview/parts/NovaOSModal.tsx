@@ -162,8 +162,7 @@ function NovaOSModalContent({ v }: { v: V4Vals }) {
             <span style={{ fontSize: 11.5, color: C.infoFg, lineHeight: 1.45 }}>
               <strong>Nova OS real.</strong> A criação será salva na loja ativa. A busca de
               clientes é da base real e, ao confirmar, a Ordem de Serviço é criada de verdade
-              (o pagamento aqui é apenas previsto). As demais ações da Operações V4 ainda podem
-              estar em preview.
+              (o pagamento aqui é apenas previsto).
             </span>
           </div>
 
