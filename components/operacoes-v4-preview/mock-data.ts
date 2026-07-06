@@ -97,16 +97,6 @@ export const STAGE_DEF: Array<[V4Stage, string, V4Status]> = [
   ["posvenda", "Pós-venda", "entregue"],
 ];
 
-export const STEPS_DEF: Array<[string, V4Status]> = [
-  ["Abertura", "aberta"],
-  ["Diagnóstico", "diagnostico"],
-  ["Orçamento", "aguardando_aprovacao"],
-  ["Aprovação", "aprovado"],
-  ["Execução", "em_execucao"],
-  ["Pronta", "pronta"],
-  ["Entrega", "entregue"],
-];
-
 export const HIST_FILTER_DEF: Array<[string, string]> = [
   ["todos", "Tudo"],
   ["status", "Status"],

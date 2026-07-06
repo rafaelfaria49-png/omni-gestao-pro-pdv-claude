@@ -26,7 +26,6 @@ import {
   RESOLVED_RAW,
   STAGE_DEF,
   STATUS_LABEL,
-  STEPS_DEF,
   TONE,
 } from "./mock-data";
 import { C, fmt } from "./tokens";
@@ -508,11 +507,20 @@ export function buildVals(
   });
 
   // ---- atividade (steps) ----
-  // Progressão do pipeline é derivada do status REAL; não inventamos data/responsável
-  // por etapa (sem timeline fake). O histórico real fica na etapa "Histórico".
-  const steps = STEPS_DEF.map(([label, s]) => {
-    const si = ORDER.indexOf(s);
-    const reached = si < curIdx, current = si === curIdx, pending = si > curIdx;
+  // GOAL OPS-V4-PIPELINE-DEDUP-004: antes derivava de `STEPS_DEF`, um SEGUNDO
+  // trilho com nomes/granularidade próprios (Abertura/Aprovação/Pronta) — para a
+  // mesma OS "pronta", a spine marcava "Financeiro" como atual e a Atividade
+  // marcava "Pronta", uma resposta divergente sobre onde a OS está. Agora deriva
+  // do MESMO `STAGE_DEF` da spine (idêntica lógica done/current/pending, mesmo
+  // rótulo) — nunca mais pode haver dois "atual" com nomes diferentes. Não
+  // inventamos data/responsável por etapa (sem timeline fake); o histórico real
+  // fica na etapa "Histórico".
+  const steps = STAGE_DEF.map(([id, label, rep]) => {
+    const ri = ORDER.indexOf(rep);
+    const after = id === "posvenda";
+    const reached = after ? false : ri < curIdx;
+    const current = after ? false : ri === curIdx;
+    const pending = after ? true : ri > curIdx;
     return { label, reached, current, pending, time: "", resp: "", empty: pending };
   });
 

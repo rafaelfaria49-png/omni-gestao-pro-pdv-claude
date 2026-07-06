@@ -36,6 +36,9 @@ export function ActivityColumn({ v }: { v: V4Vals }) {
         <button type="button" onClick={v.toggleRight} title="Recolher" style={{ width: 23, height: 23, border: "none", background: C.muted50, borderRadius: 6, color: C.subtle, cursor: "pointer", fontSize: 13 }}>›</button>
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
+        <div style={{ fontSize: 10.5, color: C.subtle, marginBottom: 9, lineHeight: 1.4 }}>
+          Mesmas etapas do fluxo principal (spine acima).
+        </div>
         <div style={{ marginBottom: 14 }}>
           {v.steps.map((s, i) => (
             <div key={i} style={{ display: "flex", gap: 10 }}>

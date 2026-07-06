@@ -597,6 +597,54 @@ describe("OPS-V4-006 — Financeiro read-only lê o espelho real payload.pagamen
   })
 })
 
+describe("OPS-V4-PIPELINE-DEDUP-004 — spine e Atividade nunca divergem sobre a etapa atual", () => {
+  it("v.steps usa os MESMOS rótulos de v.pipeline (mesma fonte, STAGE_DEF)", () => {
+    const v = buildVals(
+      makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
+      () => {},
+      () => {},
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }) },
+    )
+    // v.pipeline inclui o nó extra "Histórico" (sem equivalente em v.steps).
+    const pipelineLabels = v.pipeline.map((n) => n.label).filter((l) => l !== "Histórico")
+    const stepsLabels = v.steps.map((s) => s.label)
+    expect(stepsLabels).toEqual(pipelineLabels)
+    // Rótulos divergentes do antigo STEPS_DEF nunca podem reaparecer.
+    expect(stepsLabels).not.toContain("Abertura")
+    expect(stepsLabels).not.toContain("Aprovação")
+    expect(stepsLabels).not.toContain("Pronta")
+  })
+
+  it("OS 'pronta' (o caso da auditoria): spine e Atividade concordam em 'Financeiro' como etapa atual — nunca 'Pronta' nem 'Entrega'", () => {
+    const v = buildVals(
+      makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
+      () => {},
+      () => {},
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }) },
+    )
+    const pipelineAtual = v.pipeline.find((n) => n.current)
+    const stepAtual = v.steps.find((s) => s.current)
+    expect(pipelineAtual?.label).toBe("Financeiro")
+    expect(stepAtual?.label).toBe("Financeiro")
+    // Só pode existir UM nó "atual" em cada trilho.
+    expect(v.pipeline.filter((n) => n.current)).toHaveLength(1)
+    expect(v.steps.filter((s) => s.current)).toHaveLength(1)
+  })
+
+  it("abrir a aba Entrega numa OS 'pronta' não marca Entrega como concluída (pending, não done)", () => {
+    const v = buildVals(
+      makeState({ status: "em_execucao", selectedOsId: "os-x", stage: "entrega", novaOS: false }),
+      () => {},
+      () => {},
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }) },
+    )
+    const entregaNode = v.pipeline.find((n) => n.id === "entrega")
+    expect(entregaNode?.selected).toBe(true) // aba aberta
+    expect(entregaNode?.done).toBe(false) // mas NÃO marcada como já realizada
+    expect(entregaNode?.pending).toBe(true)
+  })
+})
+
 describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem drift)", () => {
   it("realOS.status vence o snapshot local st.status", () => {
     const v = buildVals(
