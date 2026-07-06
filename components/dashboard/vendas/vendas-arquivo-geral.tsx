@@ -205,6 +205,14 @@ function fmtDateParts(iso: string): { date: string; time: string } {
   }
 }
 
+/** Data local (yyyy-mm-dd) de N dias atrás — para os chips de período rápido. */
+function isoDia(offsetDias = 0): string {
+  const d = new Date()
+  d.setDate(d.getDate() - offsetDias)
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
 function statusLabel(s: string): string {
   const map: Record<string, string> = {
     concluida: "Concluída",
@@ -448,8 +456,20 @@ export function VendasArquivoGeral() {
     const remoteOnly = new Set<string>()
     const pendingSync = new Set<string>()
 
+    // As linhas extras (remotas/locais) respeitam o período ativo — sem isso o
+    // filtro de datas (chips e De/Até) seria anulado pelo merge, que reinjetaria
+    // todas as vendas fora do intervalo.
+    const dentroDoPeriodo = (at: string) => {
+      if (!fromDate && !toDate) return true
+      const t = new Date(at).getTime()
+      if (Number.isNaN(t)) return true
+      if (fromDate && t < new Date(`${fromDate}T00:00:00`).getTime()) return false
+      if (toDate && t > new Date(`${toDate}T23:59:59.999`).getTime()) return false
+      return true
+    }
+
     const extraRemote = remoteSales
-      .filter((s) => s.id && !historicoIds.has(s.id))
+      .filter((s) => s.id && !historicoIds.has(s.id) && dentroDoPeriodo(s.at))
       .map((s) => {
         remoteOnly.add(s.id)
         return saleRecordToVendaItem(s)
@@ -457,7 +477,7 @@ export function VendasArquivoGeral() {
 
     const knownIds = new Set([...historicoIds, ...remoteOnly])
     const extraLocal = opsSales
-      .filter((s) => s.id && !knownIds.has(s.id))
+      .filter((s) => s.id && !knownIds.has(s.id) && dentroDoPeriodo(s.at))
       .map((s) => {
         if (s.syncPending) pendingSync.add(s.id)
         return saleRecordToVendaItem(s)
@@ -467,7 +487,7 @@ export function VendasArquivoGeral() {
       (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
     )
     return { mergedVendas: merged, remoteOnlyIds: remoteOnly, pendingSyncIds: pendingSync }
-  }, [vendas, remoteSales, opsSales])
+  }, [vendas, remoteSales, opsSales, fromDate, toDate])
 
   const isVendaPendenteSync = useCallback(
     (vendaId: string) => pendingSyncIds.has(vendaId),
@@ -818,6 +838,14 @@ export function VendasArquivoGeral() {
 
   const hasActiveFilters = statusFiltro !== "todos" || pagamentoFiltro !== "todos" || terminalFiltro !== "todos" || busca !== "" || fromDate !== "" || toDate !== "" || operadorFiltro !== ""
 
+  // Períodos rápidos (padrão de mercado): um clique preenche De/Até; clicar de novo limpa.
+  const periodoChips = [
+    { label: "Hoje", from: isoDia(0), to: isoDia(0) },
+    { label: "Ontem", from: isoDia(1), to: isoDia(1) },
+    { label: "7 dias", from: isoDia(6), to: isoDia(0) },
+    { label: "30 dias", from: isoDia(29), to: isoDia(0) },
+  ]
+
   return (
     <TooltipProvider delayDuration={300}>
     <div className="space-y-5 pb-8 min-w-0">
@@ -888,11 +916,11 @@ export function VendasArquivoGeral() {
                 <k.icon className={`h-4 w-4 ${k.tone}`} />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] text-muted-foreground truncate">{k.label}</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground truncate">{k.label}</p>
                 {loading ? (
                   <Skeleton className="mt-1 h-5 w-20" />
                 ) : (
-                  <p className="text-base font-bold text-foreground leading-tight">{k.value}</p>
+                  <p className="text-lg font-bold text-foreground leading-tight tabular-nums">{k.value}</p>
                 )}
               </div>
             </CardContent>
@@ -915,6 +943,34 @@ export function VendasArquivoGeral() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {periodoChips.map((c) => {
+                  const ativo = fromDate === c.from && toDate === c.to
+                  return (
+                    <Button
+                      key={c.label}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        "h-8 rounded-full px-3 text-xs font-medium",
+                        ativo && "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
+                      )}
+                      onClick={() => {
+                        if (ativo) {
+                          setFromDate("")
+                          setToDate("")
+                        } else {
+                          setFromDate(c.from)
+                          setToDate(c.to)
+                        }
+                      }}
+                    >
+                      {c.label}
+                    </Button>
+                  )
+                })}
+              </div>
               <Button
                 variant={showFilters ? "default" : "outline"}
                 size="sm"
@@ -1052,13 +1108,15 @@ export function VendasArquivoGeral() {
                   <TableHead className="min-w-[130px] font-semibold text-foreground">Data / Hora</TableHead>
                   <TableHead className="min-w-[120px] font-semibold text-foreground">Cupom</TableHead>
                   <TableHead className="min-w-[140px] font-semibold text-foreground">Cliente</TableHead>
+                  {/* Total logo após Cliente: nunca fica sob a coluna fixa de Ações
+                      quando a tabela estoura na horizontal (notebook/zoom). */}
+                  <TableHead className="min-w-[110px] font-semibold text-foreground text-right whitespace-nowrap pr-4">Total</TableHead>
                   <TableHead className="min-w-[100px] font-semibold text-foreground hidden md:table-cell">Pagamento</TableHead>
                   <TableHead className="min-w-[80px] font-semibold text-foreground hidden lg:table-cell text-center">Itens</TableHead>
                   <TableHead className="min-w-[90px] font-semibold text-foreground hidden xl:table-cell">Operador</TableHead>
                   <TableHead className="min-w-[90px] font-semibold text-foreground hidden xl:table-cell">Terminal</TableHead>
                   <TableHead className="min-w-[100px] font-semibold text-foreground">Status</TableHead>
-                  <TableHead className="min-w-[140px] font-semibold text-foreground text-right whitespace-nowrap pr-6">Total</TableHead>
-                  <TableHead className="w-[190px] min-w-[180px] font-semibold text-foreground text-right sticky right-0 z-30 bg-card border-l border-border/60 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.12)]">
+                  <TableHead className="w-[130px] min-w-[120px] font-semibold text-foreground text-right sticky right-0 z-30 bg-card border-l border-border/60 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.12)]">
                     Ações
                   </TableHead>
                 </TableRow>
@@ -1075,6 +1133,11 @@ export function VendasArquivoGeral() {
                       </TableCell>
                       <TableCell>
                         <Skeleton className="h-5 w-32" />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end">
+                          <Skeleton className="h-5 w-16" />
+                        </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         <Skeleton className="h-5 w-20" />
@@ -1093,13 +1156,8 @@ export function VendasArquivoGeral() {
                       <TableCell>
                         <Skeleton className="h-5 w-16 rounded-full" />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end">
-                          <Skeleton className="h-5 w-16" />
-                        </div>
-                      </TableCell>
-                      <TableCell className="w-[190px] min-w-[180px] text-right sticky right-0 z-30 bg-card border-l border-border/60 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.10)]">
-                        <div className="flex justify-end gap-2 whitespace-nowrap">
+                      <TableCell className="w-[130px] min-w-[120px] text-right sticky right-0 z-30 bg-card border-l border-border/60 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.10)]">
+                        <div className="flex justify-end gap-1.5 whitespace-nowrap">
                           <Skeleton className="h-7 w-7 rounded-md" />
                           <Skeleton className="h-7 w-7 rounded-md" />
                           <Skeleton className="h-7 w-7 rounded-md" />
@@ -1135,8 +1193,9 @@ export function VendasArquivoGeral() {
                     return (
                       <TableRow
                         key={v.id}
+                        onClick={() => void openDetalhe(v.id)}
                         className={cn(
-                          "group border-border transition-colors",
+                          "group cursor-pointer border-border transition-colors hover:bg-muted/30",
                           v.cancelada && "opacity-80 bg-destructive/[0.02]",
                         )}
                       >
@@ -1160,6 +1219,11 @@ export function VendasArquivoGeral() {
                         <TableCell>
                           <span className="text-sm text-foreground truncate max-w-[160px] inline-block" title={v.cliente}>
                             {v.cliente}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap pr-4">
+                          <span className={cn("font-bold tabular-nums text-foreground", v.cancelada && "line-through text-muted-foreground")}>
+                            {fmtBrl(v.total)}
                           </span>
                         </TableCell>
                         <TableCell className="hidden md:table-cell">
@@ -1188,13 +1252,13 @@ export function VendasArquivoGeral() {
                             {statusLabel(v.status)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="w-[140px] min-w-[120px] text-right whitespace-nowrap pr-6">
-                          <span className={cn("font-bold tabular-nums", v.cancelada && "line-through text-muted-foreground")}>
-                            {fmtBrl(v.total)}
-                          </span>
-                        </TableCell>
-                        <TableCell className="w-[190px] min-w-[180px] text-right sticky right-0 z-30 bg-card border-l border-border/60 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.10)]">
-                          <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                        {/* Ações enxutas: 2 diretas + menu "⋯". stopPropagation impede o
+                            clique nas ações de abrir o detalhe (linha inteira é clicável). */}
+                        <TableCell
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-[130px] min-w-[120px] text-right sticky right-0 z-30 bg-card border-l border-border/60 shadow-[-6px_0_10px_-4px_rgba(0,0,0,0.10)]"
+                        >
+                          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openDetalhe(v.id)}>
@@ -1203,17 +1267,7 @@ export function VendasArquivoGeral() {
                               </TooltipTrigger>
                               <TooltipContent>Detalhes</TooltipContent>
                             </Tooltip>
-                            {!isPendenteSync && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => setWorkspaceVendaId(v.id)}>
-                                    <PanelsTopLeft className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Workspace — ficha completa e correções</TooltipContent>
-                              </Tooltip>
-                            )}
-                            {!isPendenteSync && (
+                            {!isPendenteSync ? (
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => void openCupomFromRow(v.id)}>
@@ -1222,108 +1276,54 @@ export function VendasArquivoGeral() {
                                 </TooltipTrigger>
                                 <TooltipContent>Imprimir</TooltipContent>
                               </Tooltip>
-                            )}
-                            {isPendenteSync && (
-                              <>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-warning hover:text-warning hover:bg-warning/10"
-                                      onClick={() => void handleReenviarSync(v.id)}
-                                      disabled={reenviandoId === v.id}
-                                    >
-                                      {reenviandoId === v.id ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Send className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Reenviar sincronização</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                      onClick={() => setDescartandoLocalId(v.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Descartar venda local (verifica no servidor antes)</TooltipContent>
-                                </Tooltip>
-                              </>
-                            )}
-                            {!v.cancelada && !isPendenteSync && (
-                              <>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => openTroca(v.id)}>
-                                      <RotateCcw className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Troca / Devolução</TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                      onClick={() => startCancel(v.id)}
-                                    >
-                                      <XCircle className="h-4 w-4" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Cancelar venda</TooltipContent>
-                                </Tooltip>
-                              </>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-warning hover:text-warning hover:bg-warning/10"
+                                    onClick={() => void handleReenviarSync(v.id)}
+                                    disabled={reenviandoId === v.id}
+                                  >
+                                    {reenviandoId === v.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Send className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Reenviar sincronização</TooltipContent>
+                              </Tooltip>
                             )}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 md:hidden">
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48">
-                                <DropdownMenuItem onClick={() => void openDetalhe(v.id)}>
-                                  <Eye className="h-4 w-4 mr-2" /> Detalhes
-                                </DropdownMenuItem>
+                              <DropdownMenuContent align="end" className="w-52">
                                 {!isPendenteSync && (
                                   <DropdownMenuItem onClick={() => setWorkspaceVendaId(v.id)}>
                                     <PanelsTopLeft className="h-4 w-4 mr-2" /> Workspace · Corrigir
                                   </DropdownMenuItem>
                                 )}
-                                {!isPendenteSync && (
-                                  <DropdownMenuItem onClick={() => void openCupomFromRow(v.id)}>
-                                    <Printer className="h-4 w-4 mr-2" /> Imprimir
+                                {!v.cancelada && !isPendenteSync && (
+                                  <DropdownMenuItem onClick={() => openTroca(v.id)}>
+                                    <RotateCcw className="h-4 w-4 mr-2" /> Troca / Devolução
                                   </DropdownMenuItem>
                                 )}
                                 {isPendenteSync && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => void handleReenviarSync(v.id)}>
-                                      <Send className="h-4 w-4 mr-2" /> Reenviar sincronização
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      className="text-destructive focus:text-destructive"
-                                      onClick={() => setDescartandoLocalId(v.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" /> Descartar venda local
-                                    </DropdownMenuItem>
-                                  </>
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => setDescartandoLocalId(v.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" /> Descartar venda local
+                                  </DropdownMenuItem>
                                 )}
                                 {!v.cancelada && !isPendenteSync && (
                                   <>
-                                    <DropdownMenuItem onClick={() => openTroca(v.id)}>
-                                      <RotateCcw className="h-4 w-4 mr-2" /> Troca / Devolução
-                                    </DropdownMenuItem>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => startCancel(v.id)}>
                                       <XCircle className="h-4 w-4 mr-2" /> Cancelar venda
@@ -1371,25 +1371,86 @@ export function VendasArquivoGeral() {
           }
         }}
       >
-        <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0 bg-card border-border">
-          <SheetHeader className="shrink-0 px-6 pt-6 pb-4 border-b border-border">
-            <SheetTitle className="text-lg font-bold text-foreground">
-              {detalhePendenteLocal
-                ? `Venda ${detalhePendenteLocal.id}`
-                : detalhe
-                  ? `Venda ${detalhe.id}`
-                  : "Detalhes da Venda"}
-            </SheetTitle>
-            {detalhePendenteLocal ? (
-              <SheetDescription className="text-xs text-muted-foreground">
-                {fmtDate(detalhePendenteLocal.at)} · Pendente de sincronização
-              </SheetDescription>
-            ) : detalhe ? (
-              <SheetDescription className="text-xs text-muted-foreground">
-                {fmtDate(detalhe.at)} · {detalhe.operador ?? "Operador"} · {statusLabel(detalhe.status)}
-              </SheetDescription>
-            ) : null}
+        <SheetContent side="right" className="w-full sm:max-w-xl flex flex-col p-0 bg-card border-border">
+          <SheetHeader className="shrink-0 space-y-0 border-b border-border px-6 pt-5 pb-4">
+            <div className="flex items-start gap-3 pr-8 min-w-0">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
+                <Receipt className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <SheetTitle className="flex flex-wrap items-center gap-2 text-lg font-bold leading-tight text-foreground">
+                  {detalhePendenteLocal
+                    ? `Venda ${detalhePendenteLocal.id}`
+                    : detalhe
+                      ? `Venda ${detalhe.id}`
+                      : "Detalhes da Venda"}
+                  {detalhePendenteLocal ? (
+                    <Badge variant="outline" className="border-warning/30 bg-warning/10 text-[10px] font-semibold text-warning">
+                      Pendente
+                    </Badge>
+                  ) : detalhe ? (
+                    <Badge variant="outline" className={cn("text-[10px] font-semibold", statusBadgeClass(detalhe.status))}>
+                      {statusLabel(detalhe.status)}
+                    </Badge>
+                  ) : null}
+                </SheetTitle>
+                {detalhePendenteLocal ? (
+                  <SheetDescription className="mt-0.5 text-xs text-muted-foreground">
+                    {fmtDate(detalhePendenteLocal.at)} · Pendente de sincronização
+                  </SheetDescription>
+                ) : detalhe ? (
+                  <SheetDescription className="mt-0.5 text-xs text-muted-foreground">
+                    {fmtDate(detalhe.at)} · {detalhe.operador ?? "Operador"}
+                    {detalhe.terminal ? <> · {detalhe.terminal.name || detalhe.terminal.code}</> : null}
+                  </SheetDescription>
+                ) : (
+                  <SheetDescription className="mt-0.5 text-xs text-muted-foreground">Carregando…</SheetDescription>
+                )}
+              </div>
+            </div>
           </SheetHeader>
+
+          {/* Faixa herói — o total é o que o operador procura primeiro. */}
+          {(detalhePendenteLocal || detalhe) && (
+            <div className="shrink-0 border-b border-border bg-muted/30 px-6 py-3">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Total</p>
+                  <p
+                    className={cn(
+                      "text-xl font-bold tabular-nums leading-tight",
+                      detalhe?.status === "cancelada" ? "text-muted-foreground line-through" : "text-primary",
+                    )}
+                  >
+                    {fmtBrl((detalhePendenteLocal ?? detalhe)!.total)}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Itens</p>
+                  <p className="text-xl font-bold tabular-nums leading-tight text-foreground">
+                    {detalhePendenteLocal
+                      ? detalhePendenteLocal.lines.reduce((s, l) => s + l.quantity, 0)
+                      : detalhe!.itens.reduce((s, it) => s + it.quantidade, 0)}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Pagamento</p>
+                  <p
+                    className="mt-1 truncate text-sm font-semibold leading-tight text-foreground"
+                    title={
+                      detalhePendenteLocal
+                        ? paymentBreakdownLabels(detalhePendenteLocal.paymentBreakdown).join(" + ")
+                        : detalhe!.pagamentos.map((pg) => pg.label).join(" + ")
+                    }
+                  >
+                    {(detalhePendenteLocal
+                      ? paymentBreakdownLabels(detalhePendenteLocal.paymentBreakdown).join(" + ")
+                      : detalhe!.pagamentos.map((pg) => pg.label).join(" + ")) || "—"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
             {detalhePendenteLocal ? (
@@ -1578,9 +1639,11 @@ export function VendasArquivoGeral() {
                 )}
 
                 {/* Client + Operator info */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Informações</h3>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                <section className="overflow-hidden rounded-xl border border-border bg-background/40">
+                  <header className="border-b border-border bg-muted/30 px-4 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Informações</p>
+                  </header>
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-4 py-3 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Cliente</p>
                       <p className="font-medium text-foreground">{detalhe.clienteNome ?? "—"}</p>
@@ -1607,75 +1670,76 @@ export function VendasArquivoGeral() {
                       )}
                     </div>
                   </div>
-                </div>
-
-                <Separator className="bg-border" />
+                </section>
 
                 {/* Items */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Itens ({detalhe.itens.length})
-                  </h3>
-                  {detalhe.itens.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nenhum item registrado</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {detalhe.itens.map((it) => (
-                        <div key={it.id} className="flex items-center justify-between text-sm py-1">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-foreground truncate">{it.nome}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {it.quantidade}x {fmtBrl(it.precoUnitario)}
-                            </p>
+                <section className="overflow-hidden rounded-xl border border-border bg-background/40">
+                  <header className="border-b border-border bg-muted/30 px-4 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Itens ({detalhe.itens.length})
+                    </p>
+                  </header>
+                  <div className="px-4 py-1.5">
+                    {detalhe.itens.length === 0 ? (
+                      <p className="py-2 text-sm text-muted-foreground">Nenhum item registrado</p>
+                    ) : (
+                      <div className="divide-y divide-border/60">
+                        {detalhe.itens.map((it) => (
+                          <div key={it.id} className="flex items-center justify-between text-sm py-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-foreground truncate">{it.nome}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {it.quantidade}x {fmtBrl(it.precoUnitario)}
+                              </p>
+                            </div>
+                            <p className="font-semibold text-foreground ml-4 shrink-0 tabular-nums">{fmtBrl(it.lineTotal)}</p>
                           </div>
-                          <p className="font-semibold text-foreground ml-4 shrink-0">{fmtBrl(it.lineTotal)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <Separator className="bg-border" />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </section>
 
                 {/* Payments + Total */}
-                <div className="space-y-2">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pagamento</h3>
-                  {detalhe.pagamentos.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">—</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {detalhe.pagamentos.map((pg, i) => (
+                <section className="overflow-hidden rounded-xl border border-border bg-background/40">
+                  <header className="border-b border-border bg-muted/30 px-4 py-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Pagamento</p>
+                  </header>
+                  <div className="space-y-1 px-4 py-3">
+                    {detalhe.pagamentos.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">—</p>
+                    ) : (
+                      detalhe.pagamentos.map((pg, i) => (
                         <div key={i} className="flex justify-between text-sm">
                           <span className="text-muted-foreground">{pg.label}</span>
-                          <span className="font-medium text-foreground">{fmtBrl(pg.valor)}</span>
+                          <span className="font-medium text-foreground tabular-nums">{fmtBrl(pg.valor)}</span>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                  {detalhe.itens.length > 0 && (
-                    <div className="flex justify-between text-sm text-muted-foreground pt-1">
-                      <span>Subtotal ({detalhe.itens.length} {detalhe.itens.length === 1 ? "item" : "itens"})</span>
-                      <span className="tabular-nums">
-                        {fmtBrl(detalhe.itens.reduce((acc, it) => acc + it.lineTotal, 0))}
-                      </span>
-                    </div>
-                  )}
-                  {(detalhe.desconto ?? 0) > 0 && (
-                    <div className="flex justify-between text-sm text-destructive">
-                      <span>Desconto</span>
-                      <span>-{fmtBrl(detalhe.desconto)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-base text-foreground pt-1 border-t border-border">
-                    <span>Total</span>
-                    <span>{fmtBrl(detalhe.total)}</span>
+                      ))
+                    )}
+                    {detalhe.itens.length > 0 && (
+                      <div className="flex justify-between text-sm text-muted-foreground pt-1">
+                        <span>Subtotal ({detalhe.itens.length} {detalhe.itens.length === 1 ? "item" : "itens"})</span>
+                        <span className="tabular-nums">
+                          {fmtBrl(detalhe.itens.reduce((acc, it) => acc + it.lineTotal, 0))}
+                        </span>
+                      </div>
+                    )}
+                    {(detalhe.desconto ?? 0) > 0 && (
+                      <div className="flex justify-between text-sm text-destructive">
+                        <span>Desconto</span>
+                        <span className="tabular-nums">-{fmtBrl(detalhe.desconto)}</span>
+                      </div>
+                    )}
                   </div>
-                </div>
+                  <div className="flex items-center justify-between border-t border-border bg-muted/30 px-4 py-3">
+                    <span className="text-sm font-semibold text-foreground">Total</span>
+                    <span className="text-lg font-bold tabular-nums text-primary">{fmtBrl(detalhe.total)}</span>
+                  </div>
+                </section>
 
                 {/* Devoluções vinculadas */}
                 {detalhe.devolucoes.length > 0 && (
                   <>
-                    <Separator className="bg-border" />
                     <div className="space-y-2">
                       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                         Devoluções ({detalhe.devolucoes.length})
@@ -1730,7 +1794,6 @@ export function VendasArquivoGeral() {
                 {/* Saldo em haver — mostrado quando há crédito vinculado ao CPF desta venda */}
                 {saldoCredito !== null && detalhe?.clienteCpf && (
                   <>
-                    <Separator className="bg-border" />
                     <div className={`rounded-lg border p-3 text-sm ${
                       saldoCredito > 0
                         ? "border-emerald-500/20 bg-emerald-500/5"
@@ -1751,7 +1814,6 @@ export function VendasArquivoGeral() {
                 {/* Histórico de correções */}
                 {detalhe.correcoes && detalhe.correcoes.length > 0 && (
                   <>
-                    <Separator className="bg-border" />
                     <div className="space-y-2">
                       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                         <ShieldCheck className="h-3 w-3" />
@@ -1796,13 +1858,11 @@ export function VendasArquivoGeral() {
 
           {/* Drawer actions — apenas vendas persistidas no servidor */}
           {detalhe && !detalheLoading && !detalhePendenteLocal && (
-            <div className="shrink-0 border-t border-border px-6 py-4 space-y-2">
+            <div className="shrink-0 border-t border-border bg-muted/30 px-6 py-4 space-y-2">
+              {/* Hierarquia: Imprimir é a ação primária; correção/troca secundárias;
+                  Cancelar destrutivo isolado, sem o mesmo peso das demais. */}
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1 h-10 gap-2 text-sm"
-                  onClick={() => openCupom(detalhe)}
-                >
+                <Button className="flex-1 h-10 gap-2 text-sm" onClick={() => openCupom(detalhe)}>
                   <Printer className="h-4 w-4" />
                   Imprimir recibo
                 </Button>
@@ -1817,21 +1877,21 @@ export function VendasArquivoGeral() {
                   </Button>
                 )}
               </div>
-              <div className="flex gap-2">
-                {detalhe.status !== "cancelada" && detalhe.status !== "devolvida" && (
+              {detalhe.status !== "cancelada" && (
+                <div className="flex items-center gap-2">
+                  {detalhe.status !== "devolvida" && (
+                    <Button
+                      variant="outline"
+                      className="flex-1 h-10 gap-2 text-sm"
+                      onClick={() => openTroca(detalhe.id)}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Trocar / Devolver
+                    </Button>
+                  )}
                   <Button
-                    variant="outline"
-                    className="flex-1 h-10 gap-2 text-sm"
-                    onClick={() => openTroca(detalhe.id)}
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Trocar / Devolver
-                  </Button>
-                )}
-                {detalhe.status !== "cancelada" && (
-                  <Button
-                    variant="outline"
-                    className="flex-1 h-10 gap-2 text-sm text-destructive border-destructive/30 hover:bg-destructive/5"
+                    variant="ghost"
+                    className="h-10 gap-2 px-4 text-sm text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={() => {
                       setCancelandoId(detalhe.id)
                       setCancelMotivo("")
@@ -1841,8 +1901,8 @@ export function VendasArquivoGeral() {
                     <XCircle className="h-4 w-4" />
                     Cancelar
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </SheetContent>

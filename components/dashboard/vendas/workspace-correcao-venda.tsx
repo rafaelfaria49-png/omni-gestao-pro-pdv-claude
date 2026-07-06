@@ -821,7 +821,10 @@ export function WorkspaceCorrecaoVenda({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[96vw] max-w-[1680px] h-[94vh] p-0 gap-0 border-border bg-background flex flex-col overflow-hidden">
+      {/* sm:max-w é obrigatório: o Dialog global aplica sm:max-w-lg (512px) e vence
+          qualquer max-w-* sem variante em telas ≥640px — sem isso o Workspace inteiro
+          renderiza esmagado a 512px. */}
+      <DialogContent className="w-[96vw] max-w-[1680px] sm:max-w-[1680px] h-[94vh] rounded-2xl p-0 gap-0 border-border bg-background flex flex-col overflow-hidden">
         {/* Cabeçalho */}
         <DialogHeader className="shrink-0 border-b border-border px-6 py-4 space-y-0">
           <div className="flex flex-wrap items-center gap-3 min-w-0">
@@ -874,16 +877,30 @@ export function WorkspaceCorrecaoVenda({
           <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col min-h-0">
             <div className="shrink-0 border-b border-border px-4 sm:px-6 overflow-x-auto">
               <TabsList className="h-auto bg-transparent p-0 gap-1 flex-nowrap justify-start">
-                {TABS.map((t) => (
-                  <TabsTrigger
-                    key={t.key}
-                    value={t.key}
-                    className="gap-1.5 rounded-none border-b-2 border-transparent px-4 py-3 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none whitespace-nowrap"
-                  >
-                    <t.icon className="h-4 w-4" />
-                    {t.label}
-                  </TabsTrigger>
-                ))}
+                {TABS.map((t) => {
+                  // Contador por aba: o operador vê onde há conteúdo sem precisar clicar.
+                  const count =
+                    t.key === "produtos" ? venda.itens.length
+                    : t.key === "auditoria" ? venda.correcoes.length
+                    : t.key === "receber" ? venda.titulos.length
+                    : t.key === "financeiro" ? venda.movimentacoesFinanceiras.length
+                    : 0
+                  return (
+                    <TabsTrigger
+                      key={t.key}
+                      value={t.key}
+                      className="gap-1.5 rounded-none border-b-2 border-transparent px-4 py-3 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none whitespace-nowrap"
+                    >
+                      <t.icon className="h-4 w-4" />
+                      {t.label}
+                      {count > 0 && (
+                        <span className="ml-0.5 inline-flex items-center rounded-full border border-border bg-muted/60 px-1.5 py-px text-[10px] font-semibold leading-none tabular-nums text-muted-foreground">
+                          {count}
+                        </span>
+                      )}
+                    </TabsTrigger>
+                  )
+                })}
               </TabsList>
             </div>
 
