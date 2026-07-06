@@ -205,6 +205,42 @@ export function osTotalNumero(os: OrdemServico): number {
   return 0;
 }
 
+export interface V4CobrancaResumo {
+  /** true quando há orçamento aprovado real (não prévia sintetizada), via `lerPagamentoV3`/`totalCobravelV3`. */
+  temCobrancaReal: boolean;
+  /** true quando o único valor disponível vem de um orçamento sintetizado (prévia, `orcamento.sintetizado === true`). */
+  ePrevia: boolean;
+  total: number;
+  /** Saldo aberto real; só significativo quando `temCobrancaReal` é true. */
+  saldo: number;
+  quitado: boolean;
+}
+
+/**
+ * Estado financeiro honesto e ÚNICO da OS para uso em listas/rails (GOAL
+ * OPS-V4-FIN-STATE-RECONCILE-003) — MESMA fonte que `adaptPag`/`adaptFinanceiro`
+ * usam no Workspace: `lerPagamentoV3` (espelho real quando existe; senão deriva
+ * saldo=total via `totalCobravelV3`, idêntico ao fallback do motor real
+ * `lerPagamentoOSV3` quando ainda não há título de recebimento). Distingue a
+ * prévia sintetizada da hidratação (`orcamento.sintetizado === true`) de um
+ * orçamento aprovado de verdade — nunca promete cobrança sobre a prévia.
+ */
+export function resumoCobrancaV4(os: OrdemServico): V4CobrancaResumo {
+  const orc = os.orcamento;
+  const previaSintetizada = !!orc && orc.sintetizado === true;
+  const materializado = !!orc && orc.sintetizado !== true;
+  const pag = lerPagamentoV3(os);
+  const temCobrancaReal = materializado && pag.total > 0;
+  const totalExibivel = temCobrancaReal ? pag.total : osTotalNumero(os);
+  return {
+    temCobrancaReal,
+    ePrevia: !temCobrancaReal && previaSintetizada && totalExibivel > 0,
+    total: totalExibivel,
+    saldo: temCobrancaReal ? pag.saldo : 0,
+    quitado: temCobrancaReal && pag.saldo <= 0,
+  };
+}
+
 export function adaptOsHeader(os: OrdemServico): V4OsView {
   const eq = os.equipamento;
   const acessorios = Array.isArray(eq?.acessorios) ? eq!.acessorios.filter(Boolean) : [];

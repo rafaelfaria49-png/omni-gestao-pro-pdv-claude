@@ -261,6 +261,7 @@ function PdvBody({ v }: { v: V4Vals }) {
               <Pill tone={it.statusTone} texto={it.statusFaturamento} />
             </div>
             <div style={{ fontSize: 12.5, color: C.body, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{it.cliente}</div>
+            {it.saldoLinha && <div style={{ fontSize: 11, color: C.subtle, marginTop: 1 }}>{it.saldoLinha}</div>}
           </div>
           <span style={{ fontSize: 13, fontWeight: 700, color: C.ink, flex: "none" }}>{it.total}</span>
         </button>

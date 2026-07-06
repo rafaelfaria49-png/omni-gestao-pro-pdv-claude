@@ -13,7 +13,7 @@
 import type { OrdemServico } from "@/types/os";
 import type { V4Status, V4Tone } from "./types";
 import { STATUS_LABEL, TONE } from "./mock-data";
-import { aparelhoLabel, fmtData, osTotalNumero, realStatusToV4 } from "./os-adapter";
+import { aparelhoLabel, fmtData, osTotalNumero, realStatusToV4, resumoCobrancaV4, type V4CobrancaResumo } from "./os-adapter";
 import { C, fmt } from "./tokens";
 
 function txt(v: unknown): string {
@@ -168,12 +168,18 @@ export function buildSlaView(ordens: OrdemServico[]): SlaView {
   };
 }
 
-// ---- PDV de serviço --------------------------------------------------------
+// ---- PDV de serviço ---------------------------------------------------------
+// GOAL OPS-V4-FIN-STATE-RECONCILE-003: o badge/saldo exibido aqui usa a MESMA
+// fonte que a aba Financeiro (`resumoCobrancaV4`, via `lerPagamentoV3`/
+// `totalCobravelV3`) — nunca a flag fraca `faturamentoPendente`, que ficava
+// "Sem pendência" mesmo com saldo real aberto (contradizia o Financeiro).
 
-const FATURA_TONE: Record<"pendente" | "cancelado" | "neutro", V4Tone> = {
-  pendente: { bg: C.warnBg, fg: C.warnFg, dot: C.warn },
+const FATURA_TONE: Record<"aReceber" | "quitado" | "previa" | "cancelado" | "semCobranca", V4Tone> = {
+  aReceber: { bg: C.warnBg, fg: C.warnFg, dot: C.warn },
+  quitado: { bg: C.successBg, fg: C.successFg, dot: C.success },
+  previa: { bg: C.infoBg, fg: C.infoFg, dot: C.info },
   cancelado: { bg: C.dangerBg, fg: C.dangerFg, dot: C.danger },
-  neutro: { bg: C.line3, fg: C.bodySoft, dot: C.subtle },
+  semCobranca: { bg: C.line3, fg: C.bodySoft, dot: C.subtle },
 };
 
 export interface PdvRow {
@@ -184,6 +190,8 @@ export interface PdvRow {
   totalNum: number;
   statusFaturamento: string;
   statusTone: V4Tone;
+  /** "Saldo: R$ X" — só quando há cobrança real (aReceber/quitado); "" caso contrário. */
+  saldoLinha: string;
 }
 
 export interface PdvView {
@@ -197,11 +205,36 @@ export interface PdvView {
 function temFinanceiroReal(os: OrdemServico): boolean {
   return (
     osTotalNumero(os) > 0 ||
+    resumoCobrancaV4(os).total > 0 ||
     !!txt(os.faturamentoFormaPagamento) ||
     !!os.faturamentoPendente ||
     os.faturamentoStatus === "cancelado"
   );
 }
+
+type ToneKey = "aReceber" | "quitado" | "previa" | "cancelado" | "semCobranca";
+
+/**
+ * Prioridade do badge: cancelado > saldo REAL do motor V3 (autoritativo,
+ * corrige o P1 da auditoria) > sinal legado (`faturamentoPendente`, só quando
+ * não há orçamento/pagamento V3 nenhum — mesmo sinal que o card Financeiro
+ * mostra como "status do faturamento") > prévia sintetizada > sem cobrança.
+ */
+function toneKeyDaOS(os: OrdemServico, cobranca: V4CobrancaResumo): ToneKey {
+  if (os.faturamentoStatus === "cancelado") return "cancelado";
+  if (cobranca.temCobrancaReal) return cobranca.saldo > 0 ? "aReceber" : "quitado";
+  if (os.faturamentoPendente) return "aReceber";
+  if (cobranca.ePrevia) return "previa";
+  return "semCobranca";
+}
+
+const STATUS_FATURAMENTO_LABEL: Record<ToneKey, string> = {
+  cancelado: "Faturamento cancelado",
+  aReceber: "A receber",
+  quitado: "Quitado",
+  previa: "Prévia sem cobrança",
+  semCobranca: "Sem cobrança",
+};
 
 export function buildPdvView(ordens: OrdemServico[]): PdvView {
   const comFin = ordens.filter(temFinanceiroReal);
@@ -213,27 +246,23 @@ export function buildPdvView(ordens: OrdemServico[]): PdvView {
     .slice()
     .sort((a, b) => osTotalNumero(b) - osTotalNumero(a))
     .map((os) => {
-      const totalNum = osTotalNumero(os);
-      const toneKey: "pendente" | "cancelado" | "neutro" =
-        os.faturamentoStatus === "cancelado" ? "cancelado" : os.faturamentoPendente ? "pendente" : "neutro";
-      const statusFaturamento =
-        toneKey === "cancelado"
-          ? "Faturamento cancelado"
-          : toneKey === "pendente"
-            ? "A receber"
-            : "Sem pendência";
+      const cobranca = resumoCobrancaV4(os);
+      const toneKey = toneKeyDaOS(os, cobranca);
+      const totalNum = cobranca.total;
+      const saldoLinha = toneKey === "aReceber" || toneKey === "quitado" ? `Saldo: ${fmt(cobranca.saldo)}` : "";
       return {
         id: os.id,
         codigo: txt(os.codigo) || "OS",
         cliente: txt(os.cliente?.nome) || "Cliente não informado",
         total: totalNum > 0 ? fmt(totalNum) : "—",
         totalNum,
-        statusFaturamento,
+        statusFaturamento: STATUS_FATURAMENTO_LABEL[toneKey],
         statusTone: FATURA_TONE[toneKey],
+        saldoLinha,
       };
     });
 
   const totalGeral = itens.reduce((acc, it) => acc + it.totalNum, 0);
-  const aReceberCount = comFin.filter((o) => !!o.faturamentoPendente).length;
+  const aReceberCount = comFin.filter((os) => toneKeyDaOS(os, resumoCobrancaV4(os)) === "aReceber").length;
   return { temDados: true, itens, totalGeral: fmt(totalGeral), aReceberCount };
 }

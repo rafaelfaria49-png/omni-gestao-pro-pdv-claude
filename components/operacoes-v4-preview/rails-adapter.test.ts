@@ -117,7 +117,7 @@ describe("rails-adapter — PDV de serviço", () => {
     expect(view.itens).toEqual([]);
   });
 
-  it("lista OS com valor real e conta a receber (faturamento pendente)", () => {
+  it("lista OS com valor real e conta a receber (faturamento pendente, sem orçamento V3 — sinal legado)", () => {
     const view = buildPdvView([
       mkOS({ id: "1", status: "pronta", codigo: "OS-1", faturamentoTotal: 150, faturamentoPendente: true }),
       mkOS({ id: "2", status: "entregue", codigo: "OS-2", faturamentoTotal: 80 }),
@@ -128,5 +128,60 @@ describe("rails-adapter — PDV de serviço", () => {
     expect(view.itens[0]!.id).toBe("1");
     expect(view.aReceberCount).toBe(1);
     expect(view.itens[0]!.statusFaturamento).toBe("A receber");
+  });
+
+  // GOAL OPS-V4-FIN-STATE-RECONCILE-003: o rail não pode mais contradizer a aba
+  // Financeiro (`adaptFinanceiro`/`adaptPag`) — mesma fonte real (`lerPagamentoV3`/
+  // `totalCobravelV3` via `resumoCobrancaV4`), nunca "Sem pendência" com saldo aberto.
+  it("OS com orçamento real e saldo aberto (recebido 0) → 'A receber' com saldo real, igual ao Financeiro", () => {
+    const view = buildPdvView([
+      mkOS({
+        id: "1",
+        status: "pronta",
+        codigo: "OS-1",
+        orcamento: { sintetizado: false },
+        pagamentoV3: { total: 470, recebido: 0 },
+      }),
+    ]);
+    expect(view.itens[0]!.statusFaturamento).toBe("A receber");
+    expect(view.itens[0]!.saldoLinha).toBe("Saldo: R$ 470,00");
+    expect(view.aReceberCount).toBe(1);
+  });
+
+  it("OS com orçamento real e recebido = total → 'Quitado' com saldo zero", () => {
+    const view = buildPdvView([
+      mkOS({
+        id: "1",
+        status: "pronta",
+        codigo: "OS-1",
+        orcamento: { sintetizado: false },
+        pagamentoV3: { total: 470, recebido: 470 },
+      }),
+    ]);
+    expect(view.itens[0]!.statusFaturamento).toBe("Quitado");
+    expect(view.itens[0]!.saldoLinha).toBe("Saldo: R$ 0,00");
+    expect(view.aReceberCount).toBe(0);
+  });
+
+  it("OS sem orçamento aprovado, sem pagamento e sem sinal legado → 'Sem cobrança' (nunca 'Quitado')", () => {
+    const view = buildPdvView([
+      mkOS({ id: "1", status: "aberta", codigo: "OS-1", prismaValorTotal: 200 }),
+    ]);
+    expect(view.itens[0]!.statusFaturamento).toBe("Sem cobrança");
+    expect(view.itens[0]!.statusFaturamento).not.toBe("Quitado");
+    expect(view.aReceberCount).toBe(0);
+  });
+
+  it("OS com prévia sintetizada (orçamento não materializado) → 'Prévia sem cobrança', sem prometer cobrança real", () => {
+    const view = buildPdvView([
+      mkOS({
+        id: "1",
+        status: "aberta",
+        codigo: "OS-1",
+        orcamento: { sintetizado: true, total: 300 },
+      }),
+    ]);
+    expect(view.itens[0]!.statusFaturamento).toBe("Prévia sem cobrança");
+    expect(view.aReceberCount).toBe(0);
   });
 });
