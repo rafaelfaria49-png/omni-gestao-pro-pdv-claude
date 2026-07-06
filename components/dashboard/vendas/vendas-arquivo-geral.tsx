@@ -10,7 +10,6 @@ import {
   Send, Trash2, ListChecks, PanelsTopLeft,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { RoadmapPreviewDialog } from "@/components/ui/roadmap-preview-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -314,7 +313,7 @@ export function VendasArquivoGeral() {
   const [toDate, setToDate] = useState("")
   const [page, setPage] = useState(0)
   const [showFilters, setShowFilters] = useState(false)
-  const [exportRoadmapOpen, setExportRoadmapOpen] = useState(false)
+  const [exportando, setExportando] = useState(false)
 
   // Data
   const [loading, setLoading] = useState(true)
@@ -451,14 +450,19 @@ export function VendasArquivoGeral() {
 
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
-  const { mergedVendas, remoteOnlyIds, pendingSyncIds } = useMemo(() => {
+  const { mergedVendas, pendingSyncIds } = useMemo(() => {
     const historicoIds = new Set(vendas.map((v) => v.id))
-    const remoteOnly = new Set<string>()
-    const pendingSync = new Set<string>()
 
-    // As linhas extras (remotas/locais) respeitam o período ativo — sem isso o
-    // filtro de datas (chips e De/Até) seria anulado pelo merge, que reinjetaria
-    // todas as vendas fora do intervalo.
+    // Ids pendentes SEM filtro: alimentam o botão "Limpar pendentes locais" e os
+    // guards de ação mesmo quando a linha está oculta por algum filtro ativo.
+    const pendingSync = new Set(
+      opsSales.filter((s) => s.id && s.syncPending === true).map((s) => s.id),
+    )
+
+    // Só vendas LOCAIS pendentes entram no merge — elas ainda não existem no
+    // servidor. Vendas persistidas vêm exclusivamente da página filtrada do
+    // /api/vendas/historico: misturar a lista remota inteira (extraRemote antigo)
+    // reinjetava tudo que estava fora da página e anulava paginação e filtros.
     const dentroDoPeriodo = (at: string) => {
       if (!fromDate && !toDate) return true
       const t = new Date(at).getTime()
@@ -467,27 +471,42 @@ export function VendasArquivoGeral() {
       if (toDate && t > new Date(`${toDate}T23:59:59.999`).getTime()) return false
       return true
     }
+    const buscaTrim = busca.trim().toLowerCase()
+    const operadorTrim = operadorFiltro.trim().toLowerCase()
 
-    const extraRemote = remoteSales
-      .filter((s) => s.id && !historicoIds.has(s.id) && dentroDoPeriodo(s.at))
-      .map((s) => {
-        remoteOnly.add(s.id)
-        return saleRecordToVendaItem(s)
-      })
-
-    const knownIds = new Set([...historicoIds, ...remoteOnly])
     const extraLocal = opsSales
-      .filter((s) => s.id && !knownIds.has(s.id) && dentroDoPeriodo(s.at))
-      .map((s) => {
-        if (s.syncPending) pendingSync.add(s.id)
-        return saleRecordToVendaItem(s)
+      .filter((s) => {
+        if (!s.id || s.syncPending !== true || historicoIds.has(s.id)) return false
+        if (!dentroDoPeriodo(s.at)) return false
+        // Pendentes locais são sempre "concluída" na prática — filtros de outro
+        // status as escondem, como aconteceria se estivessem no servidor.
+        if (statusFiltro !== "todos" && statusFiltro !== "concluida") return false
+        if (pagamentoFiltro !== "todos") {
+          const pb = s.paymentBreakdown as unknown as Record<string, number> | undefined
+          if (!((Number(pb?.[pagamentoFiltro]) || 0) > 0)) return false
+        }
+        if (terminalFiltro !== "todos") {
+          if (terminalFiltro === "sem" ? !!s.terminalId : s.terminalId !== terminalFiltro) return false
+        }
+        if (operadorTrim) {
+          const op = (sanitizeOperatorLabel(s.cashierId) || "").toLowerCase()
+          if (!op.includes(operadorTrim)) return false
+        }
+        return true
       })
+      .map(saleRecordToVendaItem)
+      .filter(
+        (v) =>
+          !buscaTrim ||
+          v.id.toLowerCase().includes(buscaTrim) ||
+          v.cliente.toLowerCase().includes(buscaTrim),
+      )
 
-    const merged = [...vendas, ...extraRemote, ...extraLocal].sort(
+    const merged = [...vendas, ...extraLocal].sort(
       (a, b) => new Date(b.at).getTime() - new Date(a.at).getTime(),
     )
-    return { mergedVendas: merged, remoteOnlyIds: remoteOnly, pendingSyncIds: pendingSync }
-  }, [vendas, remoteSales, opsSales, fromDate, toDate])
+    return { mergedVendas: merged, pendingSyncIds: pendingSync }
+  }, [vendas, opsSales, fromDate, toDate, busca, statusFiltro, pagamentoFiltro, terminalFiltro, operadorFiltro])
 
   const isVendaPendenteSync = useCallback(
     (vendaId: string) => pendingSyncIds.has(vendaId),
@@ -803,6 +822,92 @@ export function VendasArquivoGeral() {
     }, 50)
   }, [])
 
+  // ── Exportação CSV ───────────────────────────────────────────────────────────
+  // Exporta as vendas do servidor respeitando os filtros ativos da tela.
+  // Formato para Excel pt-BR: separador ';', decimal com vírgula, BOM UTF-8.
+  const EXPORT_MAX = 5000
+  const handleExportar = useCallback(async () => {
+    setExportando(true)
+    try {
+      const PAGE = 200
+      const linhas: VendaItem[] = []
+      let skip = 0
+      let totalServidor = Infinity
+      while (skip < totalServidor && linhas.length < EXPORT_MAX) {
+        const params = new URLSearchParams({
+          storeId,
+          take: String(PAGE),
+          skip: String(skip),
+          ...(busca ? { q: busca } : {}),
+          ...(statusFiltro !== "todos" ? { status: statusFiltro } : {}),
+          ...(pagamentoFiltro !== "todos" ? { pagamento: pagamentoFiltro } : {}),
+          ...(operadorFiltro.trim() ? { operador: operadorFiltro.trim() } : {}),
+          ...(terminalFiltro !== "todos" ? { terminalId: terminalFiltro } : {}),
+          ...(fromDate ? { from: new Date(fromDate).toISOString() } : {}),
+          ...(toDate ? { to: new Date(toDate + "T23:59:59").toISOString() } : {}),
+        })
+        const res = await fetch(`/api/vendas/historico?${params}`, {
+          credentials: "include",
+          cache: "no-store",
+          headers: { "x-assistec-loja-id": storeId },
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = (await res.json()) as ApiResponse
+        const lote = data.vendas ?? []
+        linhas.push(...lote.map((v) => ({ ...v, operador: sanitizeOperatorLabel(v.operador) || null })))
+        totalServidor = data.total ?? lote.length
+        skip += PAGE
+        if (lote.length === 0) break
+      }
+      if (linhas.length === 0) {
+        toast({ title: "Nada para exportar", description: "Nenhuma venda encontrada com os filtros atuais." })
+        return
+      }
+      const esc = (v: string) => `"${v.replace(/"/g, '""')}"`
+      const num = (n: number) => n.toFixed(2).replace(".", ",")
+      const cabecalho = [
+        "Data", "Hora", "Cupom", "Cliente", "Total (R$)", "Pagamento", "Itens",
+        "Operador", "Terminal", "Status", "Cancelada em", "Motivo cancelamento",
+      ]
+      const csv = [cabecalho.join(";")]
+      for (const v of linhas) {
+        const { date, time } = fmtDateParts(v.at)
+        csv.push([
+          esc(date),
+          esc(time),
+          esc(v.id),
+          esc(v.cliente === "—" ? "" : v.cliente),
+          num(v.total),
+          esc(v.formaPagamento === "—" ? "" : v.formaPagamento),
+          String(v.quantidadeItens),
+          esc(v.operador ?? ""),
+          esc(v.terminalId ? (terminalMap.get(v.terminalId)?.code || "PDV") : ""),
+          esc(statusLabel(v.status)),
+          esc(v.canceladaEm ? fmtDate(v.canceladaEm) : ""),
+          esc(v.motivoCancelamento ?? ""),
+        ].join(";"))
+      }
+      const blob = new Blob(["﻿" + csv.join("\r\n")], { type: "text/csv;charset=utf-8" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `vendas_${isoDia(0)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      const truncado = linhas.length >= EXPORT_MAX && totalServidor > EXPORT_MAX
+      toast({
+        title: "Exportação concluída",
+        description: `${linhas.length.toLocaleString("pt-BR")} venda(s) no arquivo CSV${truncado ? ` — limite de ${EXPORT_MAX.toLocaleString("pt-BR")} atingido, refine os filtros para exportar o restante` : ""}.`,
+      })
+    } catch {
+      toast({ title: "Falha na exportação", description: "Não foi possível gerar o arquivo. Tente novamente.", variant: "destructive" })
+    } finally {
+      setExportando(false)
+    }
+  }, [storeId, busca, statusFiltro, pagamentoFiltro, operadorFiltro, terminalFiltro, fromDate, toDate, terminalMap, toast])
+
   // ── KPI Cards ──────────────────────────────────────────────────────────────
 
   const kpiCards = [
@@ -894,11 +999,11 @@ export function VendasArquivoGeral() {
             variant="outline"
             size="sm"
             className="gap-1.5 hover:bg-muted/40"
-            onClick={() => setExportRoadmapOpen(true)}
+            onClick={() => void handleExportar()}
+            disabled={exportando || loading}
           >
-            <Download className="h-4 w-4" />
-            Exportar
-            <Badge variant="secondary" className="text-[9px] px-1 py-0 font-normal bg-primary/10 border-primary/20 text-primary">Roadmap</Badge>
+            {exportando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            {exportando ? "Exportando…" : "Exportar CSV"}
           </Button>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={load} disabled={loading}>
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
@@ -1210,9 +1315,6 @@ export function VendasArquivoGeral() {
                               <Badge variant="outline" className="border-warning/30 bg-warning/10 text-[9px] px-1 py-0 text-warning">
                                 Pendente
                               </Badge>
-                            )}
-                            {remoteOnlyIds.has(v.id) && !pendingSyncIds.has(v.id) && (
-                              <Badge variant="secondary" className="text-[9px] px-1 py-0">Sync</Badge>
                             )}
                           </div>
                         </TableCell>
@@ -2167,21 +2269,6 @@ export function VendasArquivoGeral() {
         onOpenChange={(o) => { if (!o) setWorkspaceVendaId(null) }}
       />
 
-      <RoadmapPreviewDialog
-        open={exportRoadmapOpen}
-        onOpenChange={setExportRoadmapOpen}
-        title="Exportação de Relatórios de Vendas"
-        description="A exportação avançada de dados de vendas permitirá baixar planilhas em formatos CSV e Excel (XLSX) pré-filtrados, contendo o detalhamento de parcelas, status fiscais e de recebimentos."
-        phase="desenvolvimento"
-        icon={Download}
-        features={[
-          "Exportação completa de vendas em formato CSV/Excel com delimitadores customizáveis",
-          "Inclusão de detalhes de parcelas e conciliação bancária",
-          "Agendamento automático de relatórios por e-mail",
-          "Integração direta com ERPs contábeis e exportação em lote de cupons fiscais"
-        ]}
-        targetRelease="Fase 2 - Dashboard Financeiro"
-      />
     </div>
     </TooltipProvider>
   )

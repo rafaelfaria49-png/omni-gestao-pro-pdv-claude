@@ -792,11 +792,21 @@ export function OperationsProvider({
     }
   }, [ledgerKey, storageKey])
 
+  // Cooldown do re-sync automático por venda: rejeição de REGRA (HTTP 4xx, ex.:
+  // 409 caixa fechado / produto não resolvido) não muda re-POSTando a cada 30s —
+  // só quando o operador age. Segura a re-tentativa automática dessa venda pelo
+  // período abaixo; erros de rede/5xx (transitórios) seguem o ciclo normal e o
+  // reenvio MANUAL (retrySyncSale) ignora o cooldown.
+  const vendaAutoRetryHoldRef = useRef<Map<string, number>>(new Map())
+  const VENDA_AUTO_RETRY_HOLD_MS = 5 * 60_000
+
   const flushPendingSales = useCallback(() => {
     const pending = stateRef.current.sales.filter((s) => s.syncPending === true)
     if (pending.length === 0) return
     const lj = opsLojaIdFromStorageKey(storageKey)
+    const agora = Date.now()
     for (const sale of pending) {
+      if ((vendaAutoRetryHoldRef.current.get(sale.id) ?? 0) > agora) continue
       void fetch(vendaPersistUrl(lj), {
         method: "POST",
         credentials: "include",
@@ -808,11 +818,15 @@ export function OperationsProvider({
       })
         .then(async (res) => {
           if (res.ok) {
+            vendaAutoRetryHoldRef.current.delete(sale.id)
             setState((prev) => ({
               ...prev,
               sales: prev.sales.map((s) => (s.id === sale.id ? { ...s, syncPending: false } : s)),
             }))
           } else {
+            if (res.status >= 400 && res.status < 500) {
+              vendaAutoRetryHoldRef.current.set(sale.id, Date.now() + VENDA_AUTO_RETRY_HOLD_MS)
+            }
             const body = await res.text().catch(() => "")
             const detail = formatVendaPersistErrorBody(body, res.status)
             console.warn("[venda-persist] re-sync HTTP", res.status, sale.id, "lojaId:", lj, "body:", detail)
@@ -868,6 +882,7 @@ export function OperationsProvider({
           body: JSON.stringify({ sale }),
         })
         if (res.ok) {
+          vendaAutoRetryHoldRef.current.delete(saleId)
           setState((prev) => ({
             ...prev,
             sales: prev.sales.map((s) => (s.id === saleId ? { ...s, syncPending: false } : s)),
