@@ -240,11 +240,15 @@ export function PaymentModal({
   const [highlightedFormaId, setHighlightedFormaId] = useState<FormaPagamentoConfigId | null>(null)
   const formaBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const confirmBtnRef = useRef<HTMLButtonElement | null>(null)
+  const finalCancelBtnRef = useRef<HTMLButtonElement | null>(null)
+  const finalConfirmBtnRef = useRef<HTMLButtonElement | null>(null)
+  const finalConfirmBusyRef = useRef(false)
 
   useEffect(() => {
     if (!isOpen) {
       setCpfDraft("")
       setIsConfirming(false)
+      finalConfirmBusyRef.current = false
       return
     }
     setCpfDraft(selectedCustomer?.cpf?.trim() ?? "")
@@ -338,7 +342,38 @@ export function PaymentModal({
     !docInvalidoParaConfirmar &&
     !(descontoManualAtivo && !adminSessionOk)
 
+  const returnFocusToPaymentConfirm = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      confirmBtnRef.current?.focus()
+    })
+  }, [])
+
+  const handleFinalDialogOpenChange = useCallback(
+    (open: boolean) => {
+      setShowFinalConfirm(open)
+      if (!open && !finalConfirmBusyRef.current) {
+        returnFocusToPaymentConfirm()
+      }
+    },
+    [returnFocusToPaymentConfirm],
+  )
+
+  const handleFinalDialogKeyDown = useCallback((e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (isConfirming) return
+    if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault()
+      finalCancelBtnRef.current?.focus()
+      return
+    }
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+      e.preventDefault()
+      finalConfirmBtnRef.current?.focus()
+    }
+  }, [isConfirming])
+
   const handleFinalConfirm = useCallback(() => {
+    if (finalConfirmBusyRef.current || isConfirming) return
+    finalConfirmBusyRef.current = true
     setShowFinalConfirm(false)
     setIsConfirming(true)
     setTimeout(() => {
@@ -353,6 +388,7 @@ export function PaymentModal({
         })
         onClose()
       } catch (err) {
+        finalConfirmBusyRef.current = false
         setIsConfirming(false)
         toast({
           variant: "destructive",
@@ -361,7 +397,7 @@ export function PaymentModal({
         })
       }
     }, 50)
-  }, [payments, total, descontoManualAtivo, authorizedAdmin, onConfirm, cashierId, discountReais, discountPercent, onClose, toast])
+  }, [isConfirming, payments, total, descontoManualAtivo, authorizedAdmin, onConfirm, cashierId, discountReais, discountPercent, onClose, toast])
 
   // ── Computações à prazo ──────────────────────────────────────────────────────
   const aPrazoBundleTotal = Math.min(
@@ -1525,8 +1561,22 @@ export function PaymentModal({
           </div>
         </DialogContent>
       </Dialog>
-      <AlertDialog open={showFinalConfirm} onOpenChange={setShowFinalConfirm}>
-        <AlertDialogContent>
+      <AlertDialog open={showFinalConfirm} onOpenChange={handleFinalDialogOpenChange}>
+        <AlertDialogContent
+          onOpenAutoFocus={(e) => {
+            e.preventDefault()
+            finalConfirmBtnRef.current?.focus()
+          }}
+          onEscapeKeyDown={(e) => {
+            if (isConfirming) {
+              e.preventDefault()
+              return
+            }
+            e.preventDefault()
+            handleFinalDialogOpenChange(false)
+          }}
+          onKeyDown={handleFinalDialogKeyDown}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Finalizar venda?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1534,10 +1584,18 @@ export function PaymentModal({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Não, voltar</AlertDialogCancel>
+            <AlertDialogCancel ref={finalCancelBtnRef} disabled={isConfirming}>Não, voltar</AlertDialogCancel>
             <AlertDialogAction
+              ref={finalConfirmBtnRef}
+              disabled={isConfirming}
               className="bg-emerald-600 text-zinc-950 hover:bg-emerald-500"
-              onClick={handleFinalConfirm}
+              onClick={(e) => {
+                if (finalConfirmBusyRef.current || isConfirming) {
+                  e.preventDefault()
+                  return
+                }
+                handleFinalConfirm()
+              }}
             >
               Sim, finalizar
             </AlertDialogAction>
@@ -2294,8 +2352,22 @@ export function PaymentModal({
         </div>
       </DialogContent>
     </Dialog>
-    <AlertDialog open={showFinalConfirm} onOpenChange={setShowFinalConfirm}>
-      <AlertDialogContent>
+    <AlertDialog open={showFinalConfirm} onOpenChange={handleFinalDialogOpenChange}>
+      <AlertDialogContent
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          finalConfirmBtnRef.current?.focus()
+        }}
+        onEscapeKeyDown={(e) => {
+          if (isConfirming) {
+            e.preventDefault()
+            return
+          }
+          e.preventDefault()
+          handleFinalDialogOpenChange(false)
+        }}
+        onKeyDown={handleFinalDialogKeyDown}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>Finalizar venda?</AlertDialogTitle>
           <AlertDialogDescription>
@@ -2303,10 +2375,18 @@ export function PaymentModal({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Não, voltar</AlertDialogCancel>
+          <AlertDialogCancel ref={finalCancelBtnRef} disabled={isConfirming}>Não, voltar</AlertDialogCancel>
           <AlertDialogAction
+            ref={finalConfirmBtnRef}
+            disabled={isConfirming}
             className="bg-emerald-600 text-zinc-950 hover:bg-emerald-500"
-            onClick={handleFinalConfirm}
+            onClick={(e) => {
+              if (finalConfirmBusyRef.current || isConfirming) {
+                e.preventDefault()
+                return
+              }
+              handleFinalConfirm()
+            }}
           >
             Sim, finalizar
           </AlertDialogAction>
