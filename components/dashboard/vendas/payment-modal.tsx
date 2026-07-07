@@ -161,7 +161,7 @@ interface PaymentModalProps {
   onConfirm?: (
     payments: PaymentMethod[],
     meta?: { cashierId?: string; discountAuthorizedByAdminId?: string; discountReais?: number; discountPercent?: number }
-  ) => void
+  ) => boolean | void | Promise<boolean | void>
   /** Quando definido ao abrir, adiciona automaticamente uma linha quitando o total restante com essa forma (pagamento “full” em um toque). */
   instantPayIntent?: PaymentMethodType | null
   onInstantPayIntentConsumed?: () => void
@@ -435,27 +435,35 @@ export function PaymentModal({
     setShowFinalConfirm(false)
     setIsConfirming(true)
     setTimeout(() => {
-      try {
-        const normalized = normalizePaymentsToMatchTotal(payments, total)
-        const adminIdForAudit = descontoManualAtivo ? (authorizedAdmin?.id || undefined) : undefined
-        onConfirm?.(normalized, {
-          cashierId,
-          discountAuthorizedByAdminId: descontoManualAtivo ? adminIdForAudit : undefined,
-          discountReais: Number(discountReais) || 0,
-          discountPercent: Number(discountPercent) || 0,
-        })
-        onClose()
-      } catch (err) {
-        finalConfirmBusyRef.current = false
-        setIsConfirming(false)
-        toast({
-          variant: "destructive",
-          title: "Erro ao confirmar",
-          description: err instanceof Error ? err.message : "Erro desconhecido",
-        })
-      }
+      void (async () => {
+        try {
+          const normalized = normalizePaymentsToMatchTotal(payments, total)
+          const adminIdForAudit = descontoManualAtivo ? (authorizedAdmin?.id || undefined) : undefined
+          const success = await onConfirm?.(normalized, {
+            cashierId,
+            discountAuthorizedByAdminId: descontoManualAtivo ? adminIdForAudit : undefined,
+            discountReais: Number(discountReais) || 0,
+            discountPercent: Number(discountPercent) || 0,
+          })
+          if (success === false) {
+            finalConfirmBusyRef.current = false
+            setIsConfirming(false)
+            returnFocusToPaymentConfirm()
+            return
+          }
+          onClose()
+        } catch (err) {
+          finalConfirmBusyRef.current = false
+          setIsConfirming(false)
+          toast({
+            variant: "destructive",
+            title: "Erro ao confirmar",
+            description: err instanceof Error ? err.message : "Erro desconhecido",
+          })
+        }
+      })()
     }, 50)
-  }, [isConfirming, payments, total, descontoManualAtivo, authorizedAdmin, onConfirm, cashierId, discountReais, discountPercent, onClose, toast])
+  }, [isConfirming, payments, total, descontoManualAtivo, authorizedAdmin, onConfirm, cashierId, discountReais, discountPercent, onClose, returnFocusToPaymentConfirm, toast])
 
   // ── Computações à prazo ──────────────────────────────────────────────────────
   const aPrazoBundleTotal = Math.min(

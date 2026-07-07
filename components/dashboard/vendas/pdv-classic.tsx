@@ -1721,7 +1721,7 @@ export function PdvClassic({
           })
           if (!result.ok) {
             toast({ title: "Falha transacional", description: result.reason })
-            return
+            return false
           }
           _printInput.numeroVenda = result.saleId
           // Fila "Produtos a cadastrar": registra os itens avulsos vendidos para revisão posterior.
@@ -1808,6 +1808,7 @@ export function PdvClassic({
               window.requestAnimationFrame(() => shellBipeRef.current?.focus())
             }
           })
+          return true
           // Branch legado `uiShell=default` (focar productInputRef em modo rápido)
           // removida no Lote 4 — omni-smart é o único shell.
         }}
