@@ -12,6 +12,20 @@ import {
   Copy,
   Layers,
   Wallet,
+  Banknote,
+  QrCode,
+  CreditCard,
+  Receipt,
+  CalendarClock,
+  Ticket,
+  Hash,
+  User,
+  Monitor,
+  Clock,
+  BarChart3,
+  ClipboardList,
+  Calculator,
+  type LucideIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +50,7 @@ import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { useTerminalAtivo } from "@/lib/pdv-terminal"
 import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
 import {
   filterSalesDaSessao,
@@ -368,11 +383,13 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg border-border bg-card p-0">
+      <DialogContent className="w-[92vw] border-border bg-card p-0 sm:max-w-3xl">
         <div className="flex max-h-[90vh] flex-col overflow-hidden">
           <DialogHeader className="shrink-0 px-6 pb-2 pt-6">
-            <DialogTitle className="flex items-center gap-2 text-xl font-bold text-foreground">
-              <Lock className="h-6 w-6 text-red-500" />
+            <DialogTitle className="flex items-center gap-3 text-xl font-bold tracking-tight text-foreground">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-destructive/20 bg-destructive/10">
+                <Lock className="h-5 w-5 text-destructive" />
+              </span>
               Fechamento de Caixa
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
@@ -382,23 +399,35 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
             <div className="space-y-4 pt-4">
-              {/* Cabeçalho da sessão (operador / sessão / data) */}
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span className="truncate">
-                  {sessaoId ? `Sessão ${sessaoId.slice(0, 12)}…` : "Sessão não registrada"}
-                </span>
-                <span className="truncate">
-                  {operadoresSessao.length
-                    ? `Operador: ${operadoresSessao.join(", ")}`
-                    : "Operador: —"}
-                </span>
-                <span className="truncate">{`Terminal: ${terminalLabel}`}</span>
+              {/* Cabeçalho da sessão (operador / sessão / terminal / abertura) */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <SessaoChip
+                  icon={Hash}
+                  label={sessaoId ? `Sessão ${sessaoId.slice(0, 10)}…` : "Sessão não registrada"}
+                />
+                <SessaoChip
+                  icon={User}
+                  label={operadoresSessao.length ? `Operador: ${operadoresSessao.join(", ")}` : "Operador: —"}
+                />
+                <SessaoChip icon={Monitor} label={`Terminal: ${terminalLabel}`} />
+                {caixa.dataAbertura && (
+                  <SessaoChip
+                    icon={Clock}
+                    label={`Aberto às ${caixa.dataAbertura.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}
+                  />
+                )}
               </div>
 
               <Tabs defaultValue="resumo">
-                <TabsList className="w-full">
-                  <TabsTrigger value="resumo">Resumo</TabsTrigger>
-                  <TabsTrigger value="conferencia">Conferência</TabsTrigger>
+                <TabsList className="grid h-11 w-full grid-cols-2 rounded-xl p-1">
+                  <TabsTrigger value="resumo" className="gap-2 rounded-lg">
+                    <BarChart3 className="h-4 w-4" />
+                    Resumo
+                  </TabsTrigger>
+                  <TabsTrigger value="conferencia" className="gap-2 rounded-lg">
+                    <ClipboardList className="h-4 w-4" />
+                    Conferência
+                  </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="conferencia" className="pt-3">
@@ -411,45 +440,49 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
 
                 <TabsContent value="resumo" className="space-y-4 pt-3">
               {/* Resumo financeiro — RECEITA TOTAL DO DIA (faturamento, separado da gaveta) */}
-              <Card className="border-primary/30 bg-primary/5">
-                <CardContent className="space-y-2 pt-4 pb-4">
-                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                    Resumo financeiro do dia
-                  </h3>
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Vendas de produtos</span>
-                      <span className="font-medium text-foreground">{fmt(resumo.totalLiquido)}</span>
+              <Card className="overflow-hidden border-success/25 bg-gradient-to-br from-success/10 via-success/5 to-transparent shadow-sm">
+                <CardContent className="space-y-3 pt-4 pb-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success/15">
+                      <TrendingUp className="h-4 w-4 text-success" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-foreground">Resumo financeiro do dia</h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        Vendas + serviços recebidos · não inclui abertura nem suprimentos
+                      </p>
                     </div>
-                    <div className="flex items-center justify-between">
+                  </div>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted-foreground">Vendas de produtos</span>
+                      <span className="font-medium tabular-nums text-foreground">{fmt(resumo.totalLiquido)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Serviços recebidos</span>
-                      <span className="font-medium text-foreground">{fmt(resumo.recebimentosContas)}</span>
+                      <span className="font-medium tabular-nums text-foreground">{fmt(resumo.recebimentosContas)}</span>
                     </div>
                     {resumo.outrosRecebimentos > 0 && (
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between gap-3">
                         <span className="text-muted-foreground">Outros recebimentos</span>
-                        <span className="font-medium text-foreground">{fmt(resumo.outrosRecebimentos)}</span>
+                        <span className="font-medium tabular-nums text-foreground">{fmt(resumo.outrosRecebimentos)}</span>
                       </div>
                     )}
                     <Separator className="bg-border" />
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-end justify-between gap-3 pt-0.5">
                       <span className="font-semibold text-foreground">Receita total do dia</span>
-                      <span className="text-xl font-bold text-primary">{fmt(receitaTotalDia)}</span>
+                      <span className="text-3xl font-bold tracking-tight tabular-nums text-success">{fmt(receitaTotalDia)}</span>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Faturamento do dia (vendas + serviços recebidos). Não inclui abertura nem suprimentos.
-                  </p>
                 </CardContent>
               </Card>
 
               {/* KPIs operacionais */}
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <KpiMini label="Vendas" value={String(resumo.qtdVendas)} sub="quantidade" />
-                <KpiMini label="Total líquido" value={fmt(resumo.totalLiquido)} accent="text-primary" />
-                <KpiMini label="Recebido" value={fmt(resumo.totalRecebido)} accent="text-emerald-500" />
-                <KpiMini label="Ticket médio" value={fmt(resumo.ticketMedio)} accent="text-sky-500" />
+                <KpiMini label="Total líquido" value={fmt(resumo.totalLiquido)} />
+                <KpiMini label="Recebido" value={fmt(resumo.totalRecebido)} accent="text-success" />
+                <KpiMini label="Ticket médio" value={fmt(resumo.ticketMedio)} accent="text-info" />
               </div>
 
               {/* Vendas por origem */}
@@ -469,18 +502,18 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                             {o.label}
                             <span className="ml-1 text-xs text-muted-foreground/70">({o.qtdItens})</span>
                           </span>
-                          <span className="font-medium text-foreground">{fmt(o.valorBruto)}</span>
+                          <span className="font-medium tabular-nums text-foreground">{fmt(o.valorBruto)}</span>
                         </div>
                       ))}
                       <Separator className="bg-border" />
                       <div className="flex items-center justify-between text-sm font-semibold">
                         <span>Subtotal bruto</span>
-                        <span className="text-foreground">{fmt(resumo.subtotalBruto)}</span>
+                        <span className="tabular-nums text-foreground">{fmt(resumo.subtotalBruto)}</span>
                       </div>
                       {resumo.descontos > 0 && (
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-amber-500">Descontos</span>
-                          <span className="font-medium text-amber-500">- {fmt(resumo.descontos)}</span>
+                          <span className="text-warning">Descontos</span>
+                          <span className="font-medium tabular-nums text-warning">- {fmt(resumo.descontos)}</span>
                         </div>
                       )}
                     </div>
@@ -493,7 +526,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                 <Card className="bg-secondary border-border">
                   <CardContent className="space-y-2 pt-4 pb-4">
                     <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                      <Wallet className="h-4 w-4 text-violet-500" />
+                      <Wallet className="h-4 w-4 text-info" />
                       Serviços recebidos
                       {opsCarregando ? (
                         <span className="text-xs font-normal text-muted-foreground">(atualizando…)</span>
@@ -504,7 +537,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                         <span className="text-muted-foreground">
                           Títulos recebidos ({resumo.qtdRecebimentosContas})
                         </span>
-                        <span className="font-medium text-violet-600 dark:text-violet-400">
+                        <span className="font-medium tabular-nums text-info">
                           {fmt(resumo.recebimentosContas)}
                         </span>
                       </div>
@@ -512,7 +545,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                         resumo.recebimentosContasDinheiro < resumo.recebimentosContas && (
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground">Em dinheiro (gaveta)</span>
-                            <span className="font-medium text-foreground">
+                            <span className="font-medium tabular-nums text-foreground">
                               {fmt(resumo.recebimentosContasDinheiro)}
                             </span>
                           </div>
@@ -527,24 +560,25 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
 
               {/* Formas de pagamento */}
               <Card className="bg-secondary border-border">
-                <CardContent className="space-y-2 pt-4 pb-4">
+                <CardContent className="space-y-3 pt-4 pb-4">
                   <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
                     <DollarSign className="h-4 w-4 text-primary" />
                     Formas de pagamento
                   </h3>
-                  <div className="grid grid-cols-1 gap-1.5 text-sm sm:grid-cols-2">
-                    <PgtoRow label="Dinheiro" value={resumo.porPagamento.dinheiro} />
-                    <PgtoRow label="Pix" value={resumo.porPagamento.pix} />
-                    <PgtoRow label="Cartão débito" value={resumo.porPagamento.cartaoDebito} />
-                    <PgtoRow label="Cartão crédito" value={resumo.porPagamento.cartaoCredito} />
-                    <PgtoRow label="Carnê" value={resumo.porPagamento.carne} />
-                    <PgtoRow label="A prazo (fiado)" value={resumo.porPagamento.aPrazo} />
-                    <PgtoRow label="Crédito/Vale" value={resumo.porPagamento.creditoVale} />
-                  </div>
-                  <Separator className="bg-border" />
-                  <div className="flex items-center justify-between text-sm font-semibold">
-                    <span>Total das vendas</span>
-                    <span className="text-primary">{fmt(resumo.porPagamento.total)}</span>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <PgtoBox icon={Banknote} label="Dinheiro" value={resumo.porPagamento.dinheiro} total={resumo.porPagamento.total} />
+                    <PgtoBox icon={QrCode} label="Pix" value={resumo.porPagamento.pix} total={resumo.porPagamento.total} />
+                    <PgtoBox icon={CreditCard} label="Cartão débito" value={resumo.porPagamento.cartaoDebito} total={resumo.porPagamento.total} />
+                    <PgtoBox icon={CreditCard} label="Cartão crédito" value={resumo.porPagamento.cartaoCredito} total={resumo.porPagamento.total} />
+                    <PgtoBox icon={Receipt} label="Carnê" value={resumo.porPagamento.carne} total={resumo.porPagamento.total} />
+                    <PgtoBox icon={CalendarClock} label="A prazo (fiado)" value={resumo.porPagamento.aPrazo} total={resumo.porPagamento.total} />
+                    <PgtoBox icon={Ticket} label="Crédito/Vale" value={resumo.porPagamento.creditoVale} total={resumo.porPagamento.total} />
+                    <div className="flex min-w-0 flex-col justify-center gap-1 rounded-xl border border-primary/25 bg-primary/10 p-3">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total das vendas</span>
+                      <span className="text-xl font-bold leading-none tracking-tight tabular-nums text-foreground">
+                        {fmt(resumo.porPagamento.total)}
+                      </span>
+                    </div>
                   </div>
                   {resumo.qtdVendasMultiplas > 0 && (
                     <p className="text-xs text-muted-foreground">
@@ -562,97 +596,106 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                     Caixa (gaveta) — dinheiro físico
                   </h3>
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <span className="text-muted-foreground">Abertura</span>
-                      <span className="font-medium text-foreground">{fmt(resumo.saldoInicial)}</span>
+                      <span className="font-medium tabular-nums text-foreground">{fmt(resumo.saldoInicial)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-emerald-500">+ Dinheiro (vendas)</span>
-                      <span className="font-medium text-emerald-500">+ {fmt(resumo.porPagamento.dinheiro)}</span>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex items-center gap-1.5 text-success">
+                        <Banknote className="h-3.5 w-3.5" />+ Dinheiro (vendas)
+                      </span>
+                      <span className="font-medium tabular-nums text-success">+ {fmt(resumo.porPagamento.dinheiro)}</span>
                     </div>
                     {resumo.recebimentosContasDinheiro > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-violet-600 dark:text-violet-400">+ Serviços recebidos (dinheiro)</span>
-                        <span className="font-medium text-violet-600 dark:text-violet-400">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-info">+ Serviços recebidos (dinheiro)</span>
+                        <span className="font-medium tabular-nums text-info">
                           + {fmt(resumo.recebimentosContasDinheiro)}
                         </span>
                       </div>
                     )}
-                    <div className="flex justify-between">
-                      <span className="text-emerald-500 flex items-center gap-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex items-center gap-1.5 text-success">
                         <TrendingUp className="h-3.5 w-3.5" />+ Suprimentos
                       </span>
-                      <span className="font-medium text-emerald-500">+ {fmt(resumo.suprimentos)}</span>
+                      <span className="font-medium tabular-nums text-success">+ {fmt(resumo.suprimentos)}</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-rose-500 flex items-center gap-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="flex items-center gap-1.5 text-destructive">
                         <TrendingDown className="h-3.5 w-3.5" />- Sangrias
                       </span>
-                      <span className="font-medium text-rose-500">- {fmt(resumo.sangrias)}</span>
+                      <span className="font-medium tabular-nums text-destructive">- {fmt(resumo.sangrias)}</span>
                     </div>
-                    <Separator className="bg-border" />
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-foreground">Saldo esperado em dinheiro</span>
-                      <span className="text-xl font-bold text-primary">{fmt(saldoDinheiroEsperado)}</span>
+                    <div className="mt-1 flex items-center justify-between gap-3 rounded-xl border border-success/30 bg-success/10 px-3 py-2.5">
+                      <span className="text-sm font-semibold text-foreground">Saldo esperado em dinheiro</span>
+                      <span className="text-xl font-bold tracking-tight tabular-nums text-success">{fmt(saldoDinheiroEsperado)}</span>
                     </div>
                   </div>
                   <p className="rounded-md border border-border bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-                    Saldo total movimentado (inclui pix/cartão): {fmt(saldoEsperado)}
+                    Saldo total movimentado (inclui pix/cartão):{" "}
+                    <span className="font-medium tabular-nums text-foreground">{fmt(saldoEsperado)}</span>
                   </p>
                 </CardContent>
               </Card>
                 </TabsContent>
               </Tabs>
-              {/* Input de Contagem */}
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Dinheiro contado na gaveta</Label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">
-                    R$
-                  </span>
-                  <Input
-                    type="number"
-                    placeholder="Digite o dinheiro contado..."
-                    value={valorContado}
-                    onChange={(e) => setValorContado(e.target.value)}
-                    className="pl-12 h-14 text-xl font-bold bg-secondary border-border"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Conferência contra o saldo esperado em dinheiro ({fmt(saldoDinheiroEsperado)}). Pix/cartão não entram na gaveta.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Observação (opcional)</Label>
-                <Input
-                  placeholder="Ex.: Conferido por supervisor, sangria realizada..."
-                  value={observacao}
-                  onChange={(e) => setObservacao(e.target.value)}
-                  className="h-11 bg-secondary border-border"
-                />
-              </div>
+              {/* Contagem da gaveta — input sempre visível, independente da aba ativa */}
+              <Card className="bg-secondary border-border">
+                <CardContent className="space-y-4 pt-4 pb-4">
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Calculator className="h-4 w-4 text-primary" />
+                    Contagem da gaveta
+                  </h3>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Dinheiro contado na gaveta</Label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground text-lg">
+                        R$
+                      </span>
+                      <Input
+                        type="number"
+                        placeholder="Digite o dinheiro contado..."
+                        value={valorContado}
+                        onChange={(e) => setValorContado(e.target.value)}
+                        className="pl-12 h-14 text-xl font-bold tabular-nums bg-background border-border"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Conferência contra o saldo esperado em dinheiro ({fmt(saldoDinheiroEsperado)}). Pix/cartão não entram na gaveta.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Observação (opcional)</Label>
+                    <Input
+                      placeholder="Ex.: Conferido por supervisor, sangria realizada..."
+                      value={observacao}
+                      onChange={(e) => setObservacao(e.target.value)}
+                      className="h-11 bg-background border-border"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
               {/* Status da Conferência */}
               {valorContado !== "" && (
                 <Card
-                  className={`border ${temDiferenca ? "bg-amber-500/10 border-amber-500/30" : "bg-green-500/10 border-green-500/30"}`}
+                  className={`border ${temDiferenca ? "bg-warning/10 border-warning/30" : "bg-success/10 border-success/30"}`}
                 >
                   <CardContent className="pt-4 pb-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         {temDiferenca ? (
-                          <AlertTriangle className="w-5 h-5 text-amber-500" />
+                          <AlertTriangle className="w-5 h-5 text-warning" />
                         ) : (
-                          <CheckCircle className="w-5 h-5 text-green-500" />
+                          <CheckCircle className="w-5 h-5 text-success" />
                         )}
-                        <span className={temDiferenca ? "text-amber-500" : "text-green-500"}>
+                        <span className={`font-medium ${temDiferenca ? "text-warning" : "text-success"}`}>
                           {temDiferenca ? "Diferença Encontrada" : "Conferência OK"}
                         </span>
                       </div>
                       {temDiferenca && (
                         <span
-                          className={`font-bold ${diferenca > 0 ? "text-green-500" : "text-red-500"}`}
+                          className={`font-bold tabular-nums ${diferenca > 0 ? "text-success" : "text-destructive"}`}
                         >
                           {diferenca > 0 ? "+" : ""}
                           {fmt(diferenca)}
@@ -705,7 +748,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                 <Button
                   onClick={handleFecharCaixa}
                   disabled={salvando}
-                  className="h-12 flex-1 bg-red-500 font-semibold hover:bg-red-600"
+                  className="h-12 flex-1 bg-destructive font-semibold text-destructive-foreground hover:bg-destructive/90"
                 >
                   <Lock className="mr-2 h-4 w-4" />
                   {salvando ? "Salvando..." : "Confirmar Fechamento"}
@@ -731,22 +774,78 @@ function KpiMini({
   accent?: string
 }) {
   return (
-    <div className="min-w-0 rounded-lg border border-border bg-card p-3">
-      <p className="truncate text-xs text-muted-foreground">{label}</p>
-      <p className={`mt-1 truncate text-sm font-bold ${accent}`}>{value}</p>
+    <div className="min-w-0 rounded-xl border border-border bg-card p-3 shadow-sm">
+      <p className="truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className={`mt-1 truncate text-base font-bold tabular-nums ${accent}`}>{value}</p>
       {sub && <p className="text-[10px] text-muted-foreground">{sub}</p>}
     </div>
   )
 }
 
-function PgtoRow({ label, value }: { label: string; value: number }) {
-  const fmtRow = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+/**
+ * Box de forma de pagamento — ícone em chip, valor em destaque e barra com a
+ * participação da forma no total. Formas zeradas ficam esmaecidas (mas visíveis,
+ * para o operador confirmar que não houve recebimento naquela forma).
+ */
+function PgtoBox({
+  icon: Icon,
+  label,
+  value,
+  total,
+}: {
+  icon: LucideIcon
+  label: string
+  value: number
+  total: number
+}) {
+  const ativo = value > 0.001
+  const pct = ativo && total > 0.001 ? Math.min(100, Math.round((value / total) * 100)) : 0
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={value > 0 ? "font-medium text-foreground" : "text-muted-foreground/50"}>
-        {fmtRow}
-      </span>
+    <div
+      className={cn(
+        "min-w-0 space-y-1.5 rounded-xl border p-3",
+        ativo ? "border-border bg-background/70 shadow-sm" : "border-border/50 bg-background/30",
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+              ativo ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground/50",
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <span className={cn("truncate text-xs font-medium", ativo ? "text-muted-foreground" : "text-muted-foreground/50")}>
+            {label}
+          </span>
+        </span>
+        {ativo && (
+          <span className="shrink-0 text-[10px] font-semibold tabular-nums text-muted-foreground">{pct}%</span>
+        )}
+      </div>
+      <p
+        className={cn(
+          "truncate text-lg font-bold leading-none tracking-tight tabular-nums",
+          ativo ? "text-foreground" : "text-muted-foreground/40",
+        )}
+      >
+        {fmt(value)}
+      </p>
+      <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+      </div>
     </div>
+  )
+}
+
+/** Chip do cabeçalho da sessão (sessão / operador / terminal / abertura). */
+function SessaoChip({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border bg-secondary/80 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+      <Icon className="h-3 w-3 shrink-0 text-muted-foreground/70" />
+      <span className="truncate">{label}</span>
+    </span>
   )
 }
