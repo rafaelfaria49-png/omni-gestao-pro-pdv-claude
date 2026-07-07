@@ -13,8 +13,8 @@ import { toast } from "sonner"
 
 // ── Shared types (hub + context) ──────────────────────────────────────────────
 
-export type StatusReceber = "pendente" | "atrasado" | "pago" | "parcial"
-export type StatusPagar = "pendente" | "atrasado" | "pago"
+export type StatusReceber = "pendente" | "atrasado" | "pago" | "parcial" | "cancelado"
+export type StatusPagar = "pendente" | "atrasado" | "pago" | "cancelado"
 
 export type ContaReceber = {
   id: string
@@ -487,7 +487,7 @@ function normalizeReceberStatus(s: string): StatusReceber {
   if (l === "parcial") return "parcial"
   if (l === "vencido" || l === "atrasado") return "atrasado"
   if (l === "estornado") return "pendente"
-  if (l === "cancelado") return "pago"
+  if (l === "cancelado") return "cancelado"
   return "pendente"
 }
 
@@ -496,7 +496,7 @@ function normalizePagarStatus(s: string): StatusPagar {
   if (l === "pago") return "pago"
   if (l === "vencido" || l === "atrasado") return "atrasado"
   if (l === "estornado" || l === "parcial") return "pendente"
-  if (l === "cancelado") return "pago"
+  if (l === "cancelado") return "cancelado"
   return "pendente"
 }
 
@@ -518,7 +518,11 @@ function normalizeReceberRows(rows: unknown[], audit: unknown[]): ContaReceber[]
     const auditItem = auditMap.get(id)
     const valor = safeNum(row.valor)
     const status = normalizeReceberStatus(safeStr(row.status))
-    const saldoAberto = auditItem ? safeNum(auditItem.saldoAberto) : status === "pago" ? 0 : valor
+    const saldoAberto = auditItem
+      ? safeNum(auditItem.saldoAberto)
+      : status === "pago" || status === "cancelado"
+        ? 0
+        : valor
     const recebido = Math.max(0, valor - saldoAberto)
     const descricao = safeStr(row.descricao)
     const parcelaRaw = typeof row.parcela === "string" ? row.parcela.trim() : ""

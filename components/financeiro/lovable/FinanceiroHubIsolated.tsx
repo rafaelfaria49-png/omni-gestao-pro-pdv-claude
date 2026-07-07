@@ -147,27 +147,31 @@ export function FinanceiroHubIsolated() {
   const tokenizedVars = useMemo(() => {
     // Conecta o bundle Lovable (que usa var(--color-*)) aos tokens globais do OmniGestão.
     // Mantém escopo local para evitar side-effects globais.
+    // Os tokens globais já são valores completos (hsl()/oklch()) — repassar direto,
+    // sem embrulhar em hsl(), senão o var fica inválido e os gráficos caem no default.
     return {
-      "--color-background": "hsl(var(--background))",
-      "--color-foreground": "hsl(var(--foreground))",
-      "--color-card": "hsl(var(--card))",
-      "--color-card-foreground": "hsl(var(--card-foreground))",
-      "--color-popover": "hsl(var(--popover))",
-      "--color-popover-foreground": "hsl(var(--popover-foreground))",
-      "--color-border": "hsl(var(--border))",
-      "--color-input": "hsl(var(--input))",
-      "--color-muted": "hsl(var(--muted))",
-      "--color-muted-foreground": "hsl(var(--muted-foreground))",
+      "--color-background": "var(--background)",
+      "--color-foreground": "var(--foreground)",
+      "--color-card": "var(--card)",
+      "--color-card-foreground": "var(--card-foreground)",
+      "--color-popover": "var(--popover)",
+      "--color-popover-foreground": "var(--popover-foreground)",
+      "--color-border": "var(--border)",
+      "--color-input": "var(--input)",
+      "--color-muted": "var(--muted)",
+      "--color-muted-foreground": "var(--muted-foreground)",
       "--color-primary": chartPalette.chart1,
-      "--color-primary-foreground": "hsl(var(--primary-foreground))",
-      "--color-ring": "hsl(var(--ring))",
+      "--color-primary-foreground": "var(--primary-foreground)",
+      "--color-ring": "var(--ring)",
       // Charts
       "--color-chart-2": chartPalette.chart2,
       "--color-chart-3": chartPalette.chart3,
       "--color-chart-4": chartPalette.chart4,
       "--color-chart-5": chartPalette.chart5,
-      // Mantém destructive vindo do tema global (alertas/erros), não para série de gráficos.
-      "--color-destructive": "hsl(var(--destructive))",
+      // Semânticos de domínio financeiro: entrada/positivo e saída/negativo.
+      "--color-destructive": "var(--destructive)",
+      "--color-success": "var(--success)",
+      "--color-warning": "var(--warning)",
     } as unknown as CSSProperties;
   }, [chartPalette]);
 

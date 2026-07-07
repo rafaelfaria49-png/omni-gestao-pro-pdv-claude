@@ -116,7 +116,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  LineChart,
   Line,
   PieChart,
   Pie,
@@ -172,16 +171,21 @@ const statusBadge = (s: StatusReceber | StatusPagar) => {
     },
     pago: {
       label: "Pago",
-      cls: "bg-primary/10 text-primary border-primary/30",
+      cls: "bg-success/10 text-success border-success/30",
       icon: CheckCircle2,
     },
     parcial: {
       label: "Parcial",
-      cls: "bg-accent text-accent-foreground border-border",
+      cls: "bg-warning/10 text-warning border-warning/30",
       icon: Clock,
     },
+    cancelado: {
+      label: "Cancelado",
+      cls: "bg-muted text-muted-foreground border-border opacity-70",
+      icon: XCircle,
+    },
   };
-  const it = map[s];
+  const it = map[s] ?? map.pendente;
   const Icon = it.icon;
   return (
     <Badge variant="outline" className={`gap-1 ${it.cls}`}>
@@ -296,6 +300,32 @@ const CHART_COLORS = [
   "var(--color-chart-5)",
 ];
 
+// Cores de domínio financeiro nos gráficos: entrada = success, saída = destructive
+// (tokens do tema — verde/vermelho em todos os temas). Séries neutras seguem a paleta.
+const CHART_POS = "var(--color-success)";
+const CHART_NEG = "var(--color-destructive)";
+
+const CHART_TOOLTIP_STYLE = {
+  background: "var(--color-popover)",
+  border: "1px solid var(--color-border)",
+  borderRadius: 10,
+  color: "var(--color-popover-foreground)",
+  boxShadow: "0 8px 24px -12px rgb(0 0 0 / 0.25)",
+  fontSize: 12,
+} as const;
+
+const compactBRL = (v: number) =>
+  Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k` : String(Math.round(v));
+
+// Tons semânticos dos KPIs: positivo = success (verde), nunca text-primary —
+// no tema padrão o primary é o vermelho da marca e confunde sinal financeiro.
+const STAT_TONES = {
+  positive: { text: "text-success", chip: "bg-success/10 text-success" },
+  negative: { text: "text-destructive", chip: "bg-destructive/10 text-destructive" },
+  warning: { text: "text-warning", chip: "bg-warning/10 text-warning" },
+  default: { text: "text-foreground", chip: "bg-muted text-muted-foreground" },
+} as const;
+
 function StatCard({
   title,
   value,
@@ -309,28 +339,21 @@ function StatCard({
   icon: any;
   tone?: "default" | "positive" | "negative" | "warning";
 }) {
-  const toneCls =
-    tone === "positive"
-      ? "text-primary"
-      : tone === "negative"
-        ? "text-destructive"
-        : tone === "warning"
-          ? "text-destructive"
-          : "text-foreground";
+  const t = STAT_TONES[tone ?? "default"];
   return (
-    <Card className="rounded-xl">
+    <Card className="rounded-xl transition-shadow hover:shadow-md">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
-          <div className="space-y-1">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="min-w-0 space-y-1">
+            <p className="truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {title}
             </p>
-            <p className={`text-2xl font-semibold tracking-tight ${toneCls}`}>
+            <p className={`text-2xl font-semibold tracking-tight tabular-nums ${t.text}`}>
               {value}
             </p>
-            {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+            {hint && <p className="truncate text-xs text-muted-foreground">{hint}</p>}
           </div>
-          <div className="rounded-lg bg-muted p-2 text-muted-foreground">
+          <div className={`shrink-0 rounded-lg p-2 ${t.chip}`}>
             <Icon className="h-4 w-4" />
           </div>
         </div>
@@ -345,7 +368,7 @@ function crescBadge(pct: number) {
   const up = pct >= 0;
   const Icon = up ? TrendingUp : TrendingDown;
   return (
-    <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${up ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>
+    <span className={`inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${up ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
       <Icon className="h-3 w-3" />
       {Math.abs(pct).toFixed(1)}%
     </span>
@@ -367,12 +390,9 @@ function DRECard({
   tone?: "default" | "positive" | "negative" | "warning";
   badge?: React.ReactNode;
 }) {
-  const toneCls =
-    tone === "positive" ? "text-primary" :
-    tone === "negative" ? "text-destructive" :
-    tone === "warning" ? "text-amber-600" : "text-foreground";
+  const t = STAT_TONES[tone ?? "default"];
   return (
-    <Card className="rounded-xl">
+    <Card className="rounded-xl transition-shadow hover:shadow-md">
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1 min-w-0">
@@ -380,10 +400,10 @@ function DRECard({
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground truncate">{title}</p>
               {badge}
             </div>
-            <p className={`text-xl font-semibold tracking-tight ${toneCls}`}>{value}</p>
+            <p className={`text-xl font-semibold tracking-tight tabular-nums ${t.text}`}>{value}</p>
             {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
           </div>
-          <div className="rounded-lg bg-muted p-2 text-muted-foreground shrink-0">
+          <div className={`shrink-0 rounded-lg p-2 ${t.chip}`}>
             <Icon className="h-4 w-4" />
           </div>
         </div>
@@ -474,7 +494,13 @@ function VisaoGeral() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard title="Entradas mês" value={fmtOrDash(entradas, showMoneyKpis)} icon={ArrowDownLeft} tone="positive" />
         <StatCard title="Saídas mês" value={fmtOrDash(saidas, showMoneyKpis)} icon={ArrowUpRight} tone="negative" />
-        <StatCard title="Lucro líquido" value={fmtOrDash(lucro, showMoneyKpis)} hint="Consolidado no período exibido" icon={PiggyBank} tone={lucro >= 0 ? "positive" : "negative"} />
+        <StatCard
+          title="Em atraso"
+          value={fmtOrDash(atrasados, showMoneyKpis)}
+          hint="Vencidos a receber + a pagar"
+          icon={AlertTriangle}
+          tone={atrasados > 0 ? "warning" : "default"}
+        />
       </div>
 
       {/* ── Resultado Gerencial (DRE) ── */}
@@ -566,78 +592,77 @@ function VisaoGeral() {
         </CardContent>
       </Card>
 
-      {/* ── DRE Mensal — últimos 6 meses ── */}
-      {dreHistorico.length > 0 && (
+      {/* ── Gráficos: DRE mensal + evolução entradas/saídas ── */}
+      <div className="grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2">
+        {dreHistorico.length > 0 && (
+          <Card className="rounded-xl">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                <CardTitle className="text-base">Receita · Despesa · Lucro</CardTitle>
+              </div>
+              <CardDescription>Últimos 6 meses (DRE)</CardDescription>
+            </CardHeader>
+            <CardContent className="h-64 min-w-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={dreHistorico} margin={{ top: 5, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                  <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={compactBRL} width={44} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number) => [fmt(value)]} cursor={{ fill: "var(--color-muted)", opacity: 0.4 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
+                  <Bar dataKey="receita" name="Receita" fill={CHART_POS} opacity={0.9} radius={[5, 5, 0, 0]} maxBarSize={28} />
+                  <Bar dataKey="despesa" name="Despesa" fill={CHART_NEG} opacity={0.75} radius={[5, 5, 0, 0]} maxBarSize={28} />
+                  <Line type="monotone" dataKey="lucro" name="Lucro" stroke="var(--color-primary)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  <ReferenceLine y={0} stroke="var(--color-border)" strokeDasharray="4 2" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="rounded-xl">
-          <CardHeader>
+          <CardHeader className="pb-2">
             <div className="flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-primary" />
-              <CardTitle className="text-base">DRE Mensal — Receita · Despesa · Lucro</CardTitle>
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <CardTitle className="text-base">Evolução — entradas vs. saídas</CardTitle>
             </div>
             <CardDescription>Últimos 6 meses</CardDescription>
           </CardHeader>
-          <CardContent className="h-72 min-w-0">
+          <CardContent className="h-64 min-w-0">
+            {fluxoMensal.length === 0 ? (
+              <EmptyState
+                compact
+                dashboardLink={false}
+                title="Sem dados de evolução"
+                description="Não há série mensal de entradas e saídas para exibir. Verifique se há movimentações no período ou se a loja ativa está correta."
+              />
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dreHistorico}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={12} />
-                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--color-popover)",
-                    border: "1px solid var(--color-border)",
-                    borderRadius: 8,
-                    color: "var(--color-popover-foreground)",
-                  }}
-                  formatter={(value: number) => [fmt(value)]}
-                />
-                <Legend />
-                <Bar dataKey="receita" name="Receita" fill="var(--color-primary)" opacity={0.85} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="despesa" name="Despesa" fill="var(--color-chart-3)" opacity={0.75} radius={[4, 4, 0, 0]} />
-                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="var(--color-chart-2)" strokeWidth={2.5} dot={{ r: 4 }} />
-                <ReferenceLine y={0} stroke="var(--color-border)" strokeDasharray="4 2" />
+              <ComposedChart data={fluxoMensal} margin={{ top: 5, right: 8, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="finGradEntrada" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={CHART_POS} stopOpacity={0.35} />
+                    <stop offset="100%" stopColor={CHART_POS} stopOpacity={0.02} />
+                  </linearGradient>
+                  <linearGradient id="finGradSaida" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={CHART_NEG} stopOpacity={0.3} />
+                    <stop offset="100%" stopColor={CHART_NEG} stopOpacity={0.02} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={compactBRL} width={44} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(value: number) => [fmt(value)]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
+                <Area type="monotone" dataKey="entrada" name="Entradas" stroke={CHART_POS} strokeWidth={2.5} fill="url(#finGradEntrada)" dot={false} activeDot={{ r: 4 }} />
+                <Area type="monotone" dataKey="saida" name="Saídas" stroke={CHART_NEG} strokeWidth={2.5} fill="url(#finGradSaida)" dot={false} activeDot={{ r: 4 }} />
               </ComposedChart>
             </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
-      )}
-
-      {/* ── Evolução entradas vs saídas ── */}
-      <Card className="rounded-xl">
-        <CardHeader>
-          <CardTitle className="text-base">Evolução — entradas vs. saídas</CardTitle>
-          <CardDescription>Últimos 6 meses</CardDescription>
-        </CardHeader>
-        <CardContent className="h-72 min-w-0">
-          {fluxoMensal.length === 0 ? (
-            <EmptyState
-              compact
-              dashboardLink={false}
-              title="Sem dados de evolução"
-              description="Não há série mensal de entradas e saídas para exibir. Verifique se há movimentações no período ou se a loja ativa está correta."
-            />
-          ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={fluxoMensal}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-              <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={12} />
-              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
-              <Tooltip
-                contentStyle={{
-                  background: "var(--color-popover)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: 8,
-                  color: "var(--color-popover-foreground)",
-                }}
-              />
-              <Legend />
-              <Line type="monotone" dataKey="entrada" stroke="var(--color-primary)" strokeWidth={2} />
-              <Line type="monotone" dataKey="saida" stroke="var(--color-chart-2)" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+      </div>
 
       {/* ── Fluxo automático ── */}
       <Card className="rounded-xl">
@@ -651,8 +676,8 @@ function VisaoGeral() {
         <CardContent>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
-              { label: "Recebido OS", val: (recebidoOS ?? 0) > 0 ? fmt(recebidoOS as number) : "—", icon: Wrench, tone: (recebidoOS ?? 0) > 0 ? "primary" : "muted" },
-              { label: "Recebido PDV", val: (recebidoPDV ?? 0) > 0 ? fmt(recebidoPDV as number) : "—", icon: ShoppingCart, tone: (recebidoPDV ?? 0) > 0 ? "primary" : "muted" },
+              { label: "Recebido OS", val: (recebidoOS ?? 0) > 0 ? fmt(recebidoOS as number) : "—", icon: Wrench, tone: (recebidoOS ?? 0) > 0 ? "success" : "muted" },
+              { label: "Recebido PDV", val: (recebidoPDV ?? 0) > 0 ? fmt(recebidoPDV as number) : "—", icon: ShoppingCart, tone: (recebidoPDV ?? 0) > 0 ? "success" : "muted" },
               { label: "Despesas em aberto", val: fmtOrDash(totalPagar, showMoneyKpis), icon: Repeat, tone: "muted" },
               {
                 label: "Próx. 7 dias",
@@ -668,19 +693,19 @@ function VisaoGeral() {
                 label: "Entradas hoje",
                 val: fluxoCaixa != null ? fmt(fluxoCaixa.entradasHoje) : "—",
                 icon: Percent,
-                tone: fluxoCaixa != null && fluxoCaixa.entradasHoje > 0 ? "primary" : "muted",
+                tone: fluxoCaixa != null && fluxoCaixa.entradasHoje > 0 ? "success" : "muted",
               },
             ].map((c) => {
               const Icon = c.icon;
               const ring =
-                c.tone === "primary"
-                  ? "border-primary/30 bg-primary/5"
+                c.tone === "success"
+                  ? "border-success/30 bg-success/5"
                   : c.tone === "destructive"
                     ? "border-destructive/30 bg-destructive/5"
                     : "border-border bg-muted/30";
               const text =
-                c.tone === "primary"
-                  ? "text-primary"
+                c.tone === "success"
+                  ? "text-success"
                   : c.tone === "destructive"
                     ? "text-destructive"
                     : "text-foreground";
@@ -708,8 +733,17 @@ function saldoAbertoReceber(c: ContaReceber): number {
   return Math.max(0, c.valor - c.recebido);
 }
 
+const RECEBER_FILTER_CHIPS: { v: string; label: string }[] = [
+  { v: "todos", label: "Todos" },
+  { v: "pendente", label: "Pendentes" },
+  { v: "atrasado", label: "Atrasados" },
+  { v: "parcial", label: "Parciais" },
+  { v: "pago", label: "Recebidos" },
+  { v: "cancelado", label: "Cancelados" },
+];
+
 function ContasReceber() {
-  const { receber, loading, error, reload, liquidarReceber, receberParcial, estornarReceber, criarReceber } = useFinanceiroReal();
+  const { receber, summaryR, loading, error, reload, liquidarReceber, receberParcial, estornarReceber, criarReceber } = useFinanceiroReal();
   const [filter, setFilter] = useState<string>("todos");
   const [openNovo, setOpenNovo] = useState(false);
   const [openReceberCliente, setOpenReceberCliente] = useState(false);
@@ -755,6 +789,17 @@ function ContasReceber() {
     }
   };
 
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { todos: receber.length, pendente: 0, atrasado: 0, parcial: 0, pago: 0, cancelado: 0 };
+    for (const r of receber) c[r.status] = (c[r.status] ?? 0) + 1;
+    return c;
+  }, [receber]);
+
+  const totalRecebido = useMemo(
+    () => receber.reduce((s, r) => s + (r.status === "cancelado" ? 0 : r.recebido), 0),
+    [receber],
+  );
+
   const list = receber.filter((r) => filter === "todos" || r.status === filter);
 
   if (loading) return <LoadingState message="Carregando títulos a receber…" />;
@@ -767,27 +812,23 @@ function ContasReceber() {
 
   return (
     <div className="min-w-0 space-y-4">
+      {/* Resumo — em aberto, vencido e o total já recebido (onde os recebimentos "vão parar") */}
+      <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard title="Em aberto" value={fmt(summaryR?.totalAberto ?? 0)} hint={`${counts.pendente + counts.atrasado + counts.parcial} títulos`} icon={ArrowDownCircle} />
+        <StatCard title="Vencido" value={fmt(summaryR?.totalVencido ?? 0)} hint={`${counts.atrasado} em atraso`} icon={AlertTriangle} tone={(summaryR?.totalVencido ?? 0) > 0 ? "warning" : "default"} />
+        <StatCard title="Recebido" value={fmt(summaryR?.totalPago ?? totalRecebido)} hint={`${counts.pago} quitados — veja o filtro Recebidos`} icon={CheckCircle2} tone="positive" />
+        <StatCard title="Títulos" value={String(summaryR?.quantidade ?? receber.length)} hint="Total nesta unidade" icon={FileText} />
+      </div>
+
       <Card className="rounded-xl">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-base">Contas a Receber</CardTitle>
             <CardDescription>
-              Títulos, clientes, parcelas, baixas e recibos
+              Títulos em aberto, parciais, recebidos e cancelados — baixas, recibos, estornos e histórico
             </CardDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="atrasado">Atrasado</SelectItem>
-                <SelectItem value="parcial">Parcial</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
-              </SelectContent>
-            </Select>
             <Button size="sm" className="gap-1" onClick={() => setOpenReceberCliente(true)}>
               <User className="h-4 w-4" /> Receber de cliente
             </Button>
@@ -797,6 +838,23 @@ function ContasReceber() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            {RECEBER_FILTER_CHIPS.map((f) => (
+              <button
+                key={f.v}
+                type="button"
+                onClick={() => setFilter(f.v)}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  filter === f.v
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/70"
+                }`}
+              >
+                {f.label}
+                <span className="ml-1 opacity-70 tabular-nums">{counts[f.v] ?? 0}</span>
+              </button>
+            ))}
+          </div>
           <div className="min-w-0 overflow-x-auto">
             <Table>
               <TableHeader>
@@ -812,10 +870,22 @@ function ContasReceber() {
                 </TableRow>
               </TableHeader>
               <TableBody>
+                {list.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-10 text-center text-sm text-muted-foreground">
+                      {receber.length === 0
+                        ? "Nenhum título a receber registrado nesta unidade."
+                        : filter === "pago"
+                          ? "Nenhum recebimento registrado ainda — baixas de títulos aparecem aqui."
+                          : "Nenhum título atende ao filtro selecionado."}
+                    </TableCell>
+                  </TableRow>
+                ) : null}
                 {list.map((r) => {
                   const saldoAberto = saldoAbertoReceber(r)
+                  const cancelado = r.status === "cancelado"
                   return (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className={cancelado ? "opacity-60" : undefined}>
                     <TableCell className="max-w-[260px] truncate text-sm" title={r.descricao || r.id}>
                       {r.descricao || <span className="font-mono text-xs text-muted-foreground">{r.id}</span>}
                     </TableCell>
@@ -825,27 +895,31 @@ function ContasReceber() {
                       {formatDateBR(r.venc, "Sem vencimento")}
                     </TableCell>
                     <TableCell>{statusBadge(r.status)}</TableCell>
-                    <TableCell className="text-right font-medium">{fmt(r.valor)}</TableCell>
-                    <TableCell className="text-right text-primary">
-                      {fmt(r.recebido)}
-                      {saldoAberto > 0 && r.recebido > 0 ? (
+                    <TableCell className="text-right font-medium tabular-nums">{fmt(r.valor)}</TableCell>
+                    <TableCell className={`text-right tabular-nums ${!cancelado && r.recebido > 0 ? "text-success" : "text-muted-foreground"}`}>
+                      {cancelado ? "—" : fmt(r.recebido)}
+                      {!cancelado && saldoAberto > 0 && r.recebido > 0 ? (
                         <div className="text-[10px] text-muted-foreground">saldo {fmt(saldoAberto)}</div>
                       ) : null}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" title="Receber" onClick={() => open("receber", r)}>
-                          <CheckCircle2 className="h-4 w-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" title="Emitir recibo" onClick={() => open("recibo", r)}>
-                          <Receipt className="h-4 w-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" title="Renegociar" onClick={() => open("renegociar", r)}>
-                          <FileText className="h-4 w-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" title="Estornar" onClick={() => open("estorno", r)}>
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
+                        {!cancelado && (
+                          <>
+                            <Button size="icon" variant="ghost" title="Receber" onClick={() => open("receber", r)}>
+                              <CheckCircle2 className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" title="Emitir recibo" onClick={() => open("recibo", r)}>
+                              <Receipt className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" title="Renegociar" onClick={() => open("renegociar", r)}>
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" title="Estornar" onClick={() => open("estorno", r)}>
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
                         <Button size="icon" variant="ghost" title="Histórico" onClick={() => open("historico", r)}>
                           <History className="h-4 w-4" />
                         </Button>
@@ -897,8 +971,16 @@ function ContasReceber() {
 
 // ContaPagar type imported from FinanceiroRealContext
 
+const PAGAR_FILTER_CHIPS: { v: string; label: string }[] = [
+  { v: "todos", label: "Todos" },
+  { v: "pendente", label: "Pendentes" },
+  { v: "atrasado", label: "Atrasados" },
+  { v: "pago", label: "Pagos" },
+  { v: "cancelado", label: "Cancelados" },
+];
+
 function ContasPagar() {
-  const { pagar, loading, error, reload, liquidarPagar, pagarParcial, estornarPagar, criarPagar } = useFinanceiroReal();
+  const { pagar, summaryP, loading, error, reload, liquidarPagar, pagarParcial, estornarPagar, criarPagar } = useFinanceiroReal();
   const [filter, setFilter] = useState<string>("todos");
   const [openNovo, setOpenNovo] = useState(false);
   const [selected, setSelected] = useState<ContaPagar | null>(null);
@@ -963,6 +1045,12 @@ function ContasPagar() {
     toast.info("Exclusão não disponível — use estorno para reverter");
   };
 
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { todos: pagar.length, pendente: 0, atrasado: 0, pago: 0, cancelado: 0 };
+    for (const r of pagar) c[r.status] = (c[r.status] ?? 0) + 1;
+    return c;
+  }, [pagar]);
+
   const list = pagar.filter((r) => filter === "todos" || r.status === filter);
 
   if (loading) return <LoadingState message="Carregando títulos a pagar…" />;
@@ -975,6 +1063,14 @@ function ContasPagar() {
 
   return (
     <div className="min-w-0 space-y-4">
+    {/* Resumo — em aberto, vencido e o total já pago */}
+    <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
+      <StatCard title="Em aberto" value={fmt(summaryP?.totalAberto ?? 0)} hint={`${counts.pendente + counts.atrasado} títulos`} icon={ArrowUpCircle} />
+      <StatCard title="Vencido" value={fmt(summaryP?.totalVencido ?? 0)} hint={`${counts.atrasado} em atraso`} icon={AlertTriangle} tone={(summaryP?.totalVencido ?? 0) > 0 ? "warning" : "default"} />
+      <StatCard title="Pago" value={fmt(summaryP?.totalPago ?? 0)} hint={`${counts.pago} quitados — veja o filtro Pagos`} icon={CheckCircle2} tone="positive" />
+      <StatCard title="Títulos" value={String(summaryP?.quantidade ?? pagar.length)} hint="Total nesta unidade" icon={FileText} />
+    </div>
+
     <Card className="rounded-xl">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -982,23 +1078,29 @@ function ContasPagar() {
           <CardDescription>Despesas, fornecedores e vencimentos</CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="pendente">Pendente</SelectItem>
-              <SelectItem value="atrasado">Atrasado</SelectItem>
-              <SelectItem value="pago">Pago</SelectItem>
-            </SelectContent>
-          </Select>
           <Button size="sm" className="gap-1" onClick={() => setOpenNovo(true)}>
             <Plus className="h-4 w-4" /> Nova conta
           </Button>
         </div>
       </CardHeader>
       <CardContent>
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          {PAGAR_FILTER_CHIPS.map((f) => (
+            <button
+              key={f.v}
+              type="button"
+              onClick={() => setFilter(f.v)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                filter === f.v
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground hover:bg-muted/70"
+              }`}
+            >
+              {f.label}
+              <span className="ml-1 opacity-70 tabular-nums">{counts[f.v] ?? 0}</span>
+            </button>
+          ))}
+        </div>
         <div className="min-w-0 overflow-x-auto">
           <Table>
             <TableHeader>
@@ -1026,8 +1128,9 @@ function ContasPagar() {
               ) : null}
               {list.map((p) => {
                 const saldo = Math.max(0, p.valor - p.pago)
+                const cancelado = p.status === "cancelado"
                 return (
-                <TableRow key={p.id}>
+                <TableRow key={p.id} className={cancelado ? "opacity-60" : undefined}>
                   <TableCell className="max-w-[240px] truncate text-sm" title={p.descricao || p.id}>
                     {p.descricao || <span className="font-mono text-xs text-muted-foreground">{p.id}</span>}
                   </TableCell>
@@ -1040,24 +1143,28 @@ function ContasPagar() {
                     {formatDateBR(p.venc, "Sem vencimento")}
                   </TableCell>
                   <TableCell>{statusBadge(p.status)}</TableCell>
-                  <TableCell className="text-right font-medium">{fmt(p.valor)}</TableCell>
-                  <TableCell className="text-right text-primary">
-                    {fmt(p.pago)}
-                    {saldo > 0 && p.pago > 0 ? (
+                  <TableCell className="text-right font-medium tabular-nums">{fmt(p.valor)}</TableCell>
+                  <TableCell className={`text-right tabular-nums ${!cancelado && p.pago > 0 ? "text-success" : "text-muted-foreground"}`}>
+                    {cancelado ? "—" : fmt(p.pago)}
+                    {!cancelado && saldo > 0 && p.pago > 0 ? (
                       <div className="text-[10px] text-muted-foreground">saldo {fmt(saldo)}</div>
                     ) : null}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button size="icon" variant="ghost" title="Pagar" onClick={() => { setSelected(p); setModal("pagar"); }}>
-                        <CheckCircle2 className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" title="Marcar pago" onClick={() => handleMarcarPago(p)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" title="Estornar" onClick={() => { setSelected(p); setModal("estorno"); }}>
-                        <RotateCcw className="h-4 w-4" />
-                      </Button>
+                      {!cancelado && (
+                        <>
+                          <Button size="icon" variant="ghost" title="Pagar" onClick={() => { setSelected(p); setModal("pagar"); }}>
+                            <CheckCircle2 className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" title="Marcar pago" onClick={() => handleMarcarPago(p)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" title="Estornar" onClick={() => { setSelected(p); setModal("estorno"); }}>
+                            <RotateCcw className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
                       <Button size="icon" variant="ghost" title="Histórico" onClick={() => { setSelected(p); setModal("historico"); }}>
                         <History className="h-4 w-4" />
                       </Button>
@@ -1379,20 +1486,18 @@ function FluxoCaixa() {
           ) : (
             <div className="h-72 min-w-0">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                  <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={12} />
-                  <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
+                <BarChart data={chartData} margin={{ top: 5, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+                  <XAxis dataKey="mes" stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={compactBRL} width={44} />
                   <Tooltip
-                    contentStyle={{
-                      background: "var(--color-popover)",
-                      border: "1px solid var(--color-border)",
-                      borderRadius: 8,
-                    }}
+                    contentStyle={CHART_TOOLTIP_STYLE}
+                    formatter={(value: number) => [fmt(value)]}
+                    cursor={{ fill: "var(--color-muted)", opacity: 0.4 }}
                   />
-                  <Legend />
-                  <Bar dataKey="entrada" fill="var(--color-primary)" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="saida" fill="var(--color-chart-2)" radius={[6, 6, 0, 0]} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
+                  <Bar dataKey="entrada" name="Entradas" fill={CHART_POS} radius={[5, 5, 0, 0]} maxBarSize={28} />
+                  <Bar dataKey="saida" name="Saídas" fill={CHART_NEG} opacity={0.8} radius={[5, 5, 0, 0]} maxBarSize={28} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1425,7 +1530,7 @@ function FluxoCaixa() {
                   <div
                     className={`rounded-md p-1.5 shrink-0 ${
                       m.tipo === "entrada"
-                        ? "bg-primary/10 text-primary"
+                        ? "bg-success/10 text-success"
                         : "bg-destructive/10 text-destructive"
                     }`}
                   >
@@ -1441,8 +1546,8 @@ function FluxoCaixa() {
                   </div>
                 </div>
                 <span
-                  className={`text-sm font-semibold shrink-0 ${
-                    m.tipo === "entrada" ? "text-primary" : "text-destructive"
+                  className={`text-sm font-semibold shrink-0 tabular-nums ${
+                    m.tipo === "entrada" ? "text-success" : "text-destructive"
                   }`}
                 >
                   {m.tipo === "entrada" ? "+" : "-"}
@@ -1458,14 +1563,14 @@ function FluxoCaixa() {
 }
 
 function GestaoCarteiras() {
-  const { carteiras, loadingCarteiras, transferirEntreCarteiras, registrarMovimentacaoCarteira } = useFinanceiroReal();
+  const { carteiras, loadingCarteiras, saldoTotalCarteiras, transferirEntreCarteiras, registrarMovimentacaoCarteira } = useFinanceiroReal();
   const [openNova, setOpenNova] = useState(false);
   const [openTransfer, setOpenTransfer] = useState(false);
   const [movModal, setMovModal] = useState<{ tipo: "entrada" | "saida"; carteiraId: string } | null>(null);
 
-  const ativasRef: CarteiraRef[] = carteiras
-    .filter((c) => c.ativo)
-    .map((c) => ({ id: c.id, nome: c.nome }));
+  const ativas = carteiras.filter((c) => c.ativo);
+  const ativasRef: CarteiraRef[] = ativas.map((c) => ({ id: c.id, nome: c.nome }));
+  const negativas = ativas.filter((c) => c.saldoAtual < 0).length;
 
   const handleTransfer = async (origem: string, destino: string, valor: number) => {
     try {
@@ -1479,6 +1584,24 @@ function GestaoCarteiras() {
 
   return (
     <div className="min-w-0 space-y-4">
+      <div className="grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          title="Saldo consolidado"
+          value={fmt(saldoTotalCarteiras)}
+          hint="Soma das carteiras ativas"
+          icon={Wallet}
+          tone={saldoTotalCarteiras >= 0 ? "positive" : "negative"}
+        />
+        <StatCard title="Carteiras ativas" value={String(ativas.length)} icon={Landmark} />
+        <StatCard
+          title="Negativas"
+          value={String(negativas)}
+          icon={AlertTriangle}
+          tone={negativas > 0 ? "warning" : "default"}
+        />
+        <StatCard title="Tipos" value={String(new Set(ativas.map((c) => c.tipo)).size)} hint="Banco, caixa, PIX…" icon={CreditCard} />
+      </div>
+
       <Card className="rounded-xl">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -1514,7 +1637,7 @@ function GestaoCarteiras() {
                 const Icon = tipoToIcon(c.tipo);
                 const negativo = c.saldoAtual < 0;
                 return (
-                  <div key={c.id} className="rounded-xl border border-border bg-card p-4">
+                  <div key={c.id} className="rounded-xl border border-border bg-card p-4 transition-shadow hover:shadow-md">
                     <div className="mb-3 flex items-start justify-between">
                       <div className="flex items-center gap-2">
                         <div
@@ -1532,7 +1655,7 @@ function GestaoCarteiras() {
                         <Badge variant="destructive" className="text-xs">Negativo</Badge>
                       )}
                     </div>
-                    <p className={`text-2xl font-semibold tracking-tight ${negativo ? "text-destructive" : ""}`}>
+                    <p className={`text-2xl font-semibold tracking-tight tabular-nums ${negativo ? "text-destructive" : ""}`}>
                       {fmt(c.saldoAtual)}
                     </p>
                     <div className="mt-3 flex gap-2">
@@ -1667,9 +1790,9 @@ function ExportButton({ tipo, label, filtros }: { tipo: string; label: string; f
 
 function KPICard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-muted/30 p-4">
+    <div className="rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/50">
       <p className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1">{label}</p>
-      <p className={`text-xl font-bold ${color ?? ""}`}>{value}</p>
+      <p className={`text-xl font-bold tabular-nums ${color ?? ""}`}>{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
@@ -1736,11 +1859,11 @@ function Relatorios() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <KPICard label="Receita total" value={hasRelKpiBase ? fmt(receitaBruta) : "—"} color="text-success" sub={ind?.crescimentoMensal !== undefined ? `${pctStr(ind.crescimentoMensal)} vs mês ant.` : undefined} />
             <KPICard label="Despesa total" value={hasRelKpiBase ? fmt(despesas) : "—"} color="text-destructive" />
-            <KPICard label="Lucro líquido" value={hasRelKpiBase ? fmt(lucroLiquido) : "—"} color={lucroLiquido >= 0 ? "text-primary" : "text-destructive"} />
+            <KPICard label="Lucro líquido" value={hasRelKpiBase ? fmt(lucroLiquido) : "—"} color={lucroLiquido >= 0 ? "text-success" : "text-destructive"} />
             <KPICard label="Margem líquida" value={hasRelKpiBase ? `${margem.toFixed(1)}%` : "—"} color={margem >= 20 ? "text-success" : margem >= 0 ? "text-warning" : "text-destructive"} />
             <KPICard label="Ticket médio" value={ind?.ticketMedio != null ? fmt(ind.ticketMedio) : "—"} />
             <KPICard label="Saldo consolidado" value={ind?.saldoConsolidado != null ? fmt(ind.saldoConsolidado) : "—"} />
-            <KPICard label="A receber" value={ind?.receberPendente != null ? fmt(ind.receberPendente) : "—"} color="text-primary" />
+            <KPICard label="A receber" value={ind?.receberPendente != null ? fmt(ind.receberPendente) : "—"} />
             <KPICard label="A pagar" value={ind?.pagarPendente != null ? fmt(ind.pagarPendente) : "—"} color="text-warning" />
           </div>
         )}
@@ -1770,10 +1893,10 @@ function Relatorios() {
                 <XAxis dataKey="mesLabel" stroke="var(--color-muted-foreground)" fontSize={11} />
                 <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip contentStyle={TTSTYLE} formatter={(v: number) => fmt(v)} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="entrada" name="Receita" fill="var(--color-primary)" radius={[4, 4, 0, 0]} opacity={0.85} />
-                <Bar dataKey="saida" name="Despesa" fill="var(--color-destructive)" radius={[4, 4, 0, 0]} opacity={0.85} />
-                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="var(--color-success)" strokeWidth={2} dot={false} />
+                <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
+                <Bar dataKey="entrada" name="Receita" fill={CHART_POS} radius={[4, 4, 0, 0]} opacity={0.9} maxBarSize={26} />
+                <Bar dataKey="saida" name="Despesa" fill={CHART_NEG} radius={[4, 4, 0, 0]} opacity={0.8} maxBarSize={26} />
+                <Line type="monotone" dataKey="lucro" name="Lucro" stroke="var(--color-primary)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
               </ComposedChart>
             </ResponsiveContainer>
           )}
@@ -1794,10 +1917,10 @@ function Relatorios() {
                 <XAxis dataKey="label" stroke="var(--color-muted-foreground)" fontSize={11} />
                 <YAxis stroke="var(--color-muted-foreground)" fontSize={11} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <Tooltip contentStyle={TTSTYLE} formatter={(v: number) => fmt(v)} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="entrada" name="Entradas" fill="var(--color-primary)" radius={[4, 4, 0, 0]} opacity={0.8} />
-                <Bar dataKey="saida" name="Saídas" fill="var(--color-destructive)" radius={[4, 4, 0, 0]} opacity={0.8} />
-                <Line type="monotone" dataKey="acumulado" name="Acumulado" stroke="var(--color-primary)" strokeWidth={2} dot={false} />
+                <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" iconSize={8} />
+                <Bar dataKey="entrada" name="Entradas" fill={CHART_POS} radius={[4, 4, 0, 0]} opacity={0.9} maxBarSize={26} />
+                <Bar dataKey="saida" name="Saídas" fill={CHART_NEG} radius={[4, 4, 0, 0]} opacity={0.8} maxBarSize={26} />
+                <Line type="monotone" dataKey="acumulado" name="Acumulado" stroke="var(--color-primary)" strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
               </ComposedChart>
             </ResponsiveContainer>
           </CardContent>
@@ -1926,8 +2049,8 @@ function Relatorios() {
                     <tr key={c.id} className="border-b border-border/50 hover:bg-muted/30">
                       <td className="py-2 pr-4 font-medium">{c.nome}</td>
                       <td className={`py-2 pr-4 text-right font-semibold ${c.saldoAtual < 0 ? "text-destructive" : ""}`}>{fmt(c.saldoAtual)}</td>
-                      <td className="py-2 pr-4 text-right text-green-600 dark:text-green-400">{fmt(c.totalEntradas)}</td>
-                      <td className="py-2 pr-4 text-right text-red-600 dark:text-red-400">{fmt(c.totalSaidas)}</td>
+                      <td className="py-2 pr-4 text-right text-success">{fmt(c.totalEntradas)}</td>
+                      <td className="py-2 pr-4 text-right text-destructive">{fmt(c.totalSaidas)}</td>
                       <td className="py-2 pr-4 text-right text-muted-foreground">{c.qtdMovimentacoes}</td>
                       <td className="py-2 text-right text-muted-foreground">{c.participacao.toFixed(1)}%</td>
                     </tr>
@@ -2052,7 +2175,7 @@ function FecharModal({
         </div>
         <div className="flex gap-2 justify-end">
           <Button variant="outline" size="sm" onClick={onClose} disabled={loading}>Cancelar</Button>
-          <Button size="sm" onClick={handleConfirm} disabled={loading} className="bg-red-600 hover:bg-red-700 text-white">
+          <Button size="sm" variant="destructive" onClick={handleConfirm} disabled={loading}>
             <Lock className="h-4 w-4 mr-1" />{loading ? "Fechando..." : "Confirmar Fechamento"}
           </Button>
         </div>
@@ -2095,7 +2218,7 @@ function ReopenModal({
         </p>
         <p className="text-xs text-muted-foreground mb-4">Informe o motivo da reabertura para registro de auditoria.</p>
         <div className="mb-4">
-          <label className="text-xs font-medium text-muted-foreground">Motivo <span className="text-red-500">*</span></label>
+          <label className="text-xs font-medium text-muted-foreground">Motivo <span className="text-destructive">*</span></label>
           <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex: Lançamento esquecido, estorno necessário..." className="mt-1" />
         </div>
         <div className="flex gap-2 justify-end">
@@ -2144,7 +2267,7 @@ function ConciliarModal({
         <h3 className="text-lg font-semibold mb-1">Conciliar Carteira</h3>
         <p className="text-sm text-muted-foreground mb-4">Informe o saldo real da carteira para comparação com o sistema.</p>
         <div className="mb-3">
-          <label className="text-xs font-medium text-muted-foreground">Carteira <span className="text-red-500">*</span></label>
+          <label className="text-xs font-medium text-muted-foreground">Carteira <span className="text-destructive">*</span></label>
           <select value={carteiraId} onChange={(e) => setCarteiraId(e.target.value)}
             className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm">
             <option value="">Selecionar...</option>
@@ -2154,7 +2277,7 @@ function ConciliarModal({
           </select>
         </div>
         <div className="mb-3">
-          <label className="text-xs font-medium text-muted-foreground">Saldo Informado (R$) <span className="text-red-500">*</span></label>
+          <label className="text-xs font-medium text-muted-foreground">Saldo Informado (R$) <span className="text-destructive">*</span></label>
           <Input value={saldo} onChange={(e) => setSaldo(e.target.value)} placeholder="0,00" type="number" step="0.01" className="mt-1" />
         </div>
         <div className="mb-4">
@@ -2289,7 +2412,7 @@ function AuditoriaFechamento() {
                       </td>
                       <td className="py-2 pr-4 font-mono text-xs">{f.tipo === "diario" ? f.dataReferencia : `${String(f.mes).padStart(2,"0")}/${f.ano}`}</td>
                       <td className="py-2 pr-4 text-right font-medium">{fmt(f.saldoSistema)}</td>
-                      <td className={`py-2 pr-4 text-right text-xs ${f.diferenca !== 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                      <td className={`py-2 pr-4 text-right text-xs ${f.diferenca !== 0 ? "text-destructive" : "text-success"}`}>
                         {f.diferenca === 0 ? "—" : fmt(f.diferenca)}
                       </td>
                       <td className="py-2 pr-4"><FechamentoBadge status={f.status} /></td>
@@ -2327,10 +2450,10 @@ function AuditoriaFechamento() {
           </div>
           {resumoConciliacao && (
             <div className="flex gap-4 text-xs text-muted-foreground mt-1 flex-wrap">
-              <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-green-500" />{resumoConciliacao.conciliadas} conciliadas</span>
-              <span className="flex items-center gap-1"><AlertCircle className="h-3 w-3 text-red-500" />{resumoConciliacao.divergentes} divergentes</span>
+              <span className="flex items-center gap-1"><CheckCircle2 className="h-3 w-3 text-success" />{resumoConciliacao.conciliadas} conciliadas</span>
+              <span className="flex items-center gap-1"><AlertCircle className="h-3 w-3 text-destructive" />{resumoConciliacao.divergentes} divergentes</span>
               {resumoConciliacao.totalDivergencia > 0 && (
-                <span className="text-red-600 font-medium">Divergência total: {fmt(resumoConciliacao.totalDivergencia)}</span>
+                <span className="text-destructive font-medium">Divergência total: {fmt(resumoConciliacao.totalDivergencia)}</span>
               )}
             </div>
           )}
@@ -2365,7 +2488,7 @@ function AuditoriaFechamento() {
                       <td className="py-2 pr-4 text-xs text-muted-foreground font-mono">{c.dataReferencia}</td>
                       <td className="py-2 pr-4 text-right">{fmt(c.saldoSistema)}</td>
                       <td className="py-2 pr-4 text-right">{fmt(c.saldoInformado)}</td>
-                      <td className={`py-2 pr-4 text-right text-xs font-medium ${c.diferenca !== 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
+                      <td className={`py-2 pr-4 text-right text-xs font-medium ${c.diferenca !== 0 ? "text-destructive" : "text-success"}`}>
                         {c.diferenca === 0 ? "✓" : fmt(c.diferenca)}
                       </td>
                       <td className="py-2"><ConciliacaoBadge status={c.status} /></td>
@@ -2468,13 +2591,13 @@ function FinanceiroHubInner() {
   const tabs = useMemo(
     () =>
       [
-        { v: "visao", label: "Visão geral", icon: LayoutDashboard, comp: <VisaoGeral />, hubBadge: "Preview" as const },
-        { v: "receber", label: "A receber", icon: ArrowDownCircle, comp: <ContasReceber />, hubBadge: "Preview" as const },
-        { v: "pagar", label: "A pagar", icon: ArrowUpCircle, comp: <ContasPagar />, hubBadge: "Preview" as const },
-        { v: "fluxo", label: "Fluxo de caixa", icon: BarChart3, comp: <FluxoCaixa />, hubBadge: "Preview" as const },
-        { v: "carteiras", label: "Carteiras", icon: Wallet, comp: <GestaoCarteiras />, hubBadge: "Preview" as const },
-        { v: "auditoria", label: "Auditoria", icon: ShieldCheck, comp: <AuditoriaFechamento />, hubBadge: "Preview" as const },
-        { v: "relatorios", label: "Relatórios", icon: FileText, comp: <Relatorios />, hubBadge: "Preview" as const },
+        { v: "visao", label: "Visão geral", icon: LayoutDashboard, comp: <VisaoGeral /> },
+        { v: "receber", label: "A receber", icon: ArrowDownCircle, comp: <ContasReceber /> },
+        { v: "pagar", label: "A pagar", icon: ArrowUpCircle, comp: <ContasPagar /> },
+        { v: "fluxo", label: "Fluxo de caixa", icon: BarChart3, comp: <FluxoCaixa /> },
+        { v: "carteiras", label: "Carteiras", icon: Wallet, comp: <GestaoCarteiras /> },
+        { v: "auditoria", label: "Auditoria", icon: ShieldCheck, comp: <AuditoriaFechamento /> },
+        { v: "relatorios", label: "Relatórios", icon: FileText, comp: <Relatorios /> },
         { v: "config", label: "Configurações", icon: Settings, comp: <Configuracoes />, hubBadge: "Em breve" as const },
       ] as const,
     [],
@@ -2482,19 +2605,17 @@ function FinanceiroHubInner() {
 
   return (
     <div className="w-full min-w-0 max-w-full overflow-x-hidden bg-background text-foreground antialiased">
-      <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-6 sm:px-8 sm:py-10">
-        <header className="mb-6 flex min-w-0 flex-col gap-2 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-4 sm:px-8 sm:py-6">
+        <header className="mb-4 flex min-w-0 flex-col gap-2 sm:mb-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
               OmniGestão Pro
             </p>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               Financeiro HUB
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Contas a receber/pagar, fluxo de caixa, carteiras e auditoria usam a loja ativa (cabeçalho{" "}
-              <code className="rounded bg-muted px-1 text-[11px]">x-assistec-loja-id</code>
-              ). Relatórios agregam dados reais da API. A aba Configurações ainda não persiste preferências.
+              Títulos, carteiras, fluxo de caixa, auditoria e relatórios da loja ativa — dados reais.
             </p>
           </div>
           <div className="flex min-w-0 flex-col items-end gap-2">
@@ -2512,14 +2633,14 @@ function FinanceiroHubInner() {
         ) : null}
 
         <Tabs defaultValue="visao" className="w-full min-w-0">
-          <TabsList className="mb-6 grid w-full min-w-0 grid-cols-3 gap-1 sm:grid-cols-7">
+          <TabsList className="mb-5 flex h-auto w-full min-w-0 flex-wrap items-center justify-start gap-1 rounded-xl p-1">
             {tabs.map((t) => {
               const Icon = t.icon;
               const badge = "hubBadge" in t ? t.hubBadge : undefined;
               return (
-                <TabsTrigger key={t.v} value={t.v} className="gap-1.5 text-xs">
+                <TabsTrigger key={t.v} value={t.v} className="shrink-0 gap-1.5 rounded-lg px-3 py-1.5 text-xs">
                   <Icon className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">{t.label}</span>
+                  <span>{t.label}</span>
                   {badge ? (
                     <Badge
                       variant="secondary"
@@ -2858,7 +2979,7 @@ function ReceberClienteModal({
                     </h3>
                     <p className="flex items-baseline gap-2">
                       <span className="text-[11px] uppercase tracking-wide text-muted-foreground">Total em aberto</span>
-                      <span className="text-lg font-semibold tracking-tight text-primary">{fmt(plano.totalAberto)}</span>
+                      <span className="text-lg font-semibold tracking-tight tabular-nums text-foreground">{fmt(plano.totalAberto)}</span>
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-4 bg-card px-5 py-5 sm:grid-cols-[1fr_1fr_1.4fr]">
@@ -2955,7 +3076,7 @@ function ReceberClienteModal({
                       {modoSelecao ? (
                         <>
                           {selecionadosValidos.length} selecionado(s) ·{" "}
-                          <span className="font-semibold text-primary">{fmt(totalSelecionado)}</span>
+                          <span className="font-semibold tabular-nums text-success">{fmt(totalSelecionado)}</span>
                         </>
                       ) : (
                         `${titulosDoCliente.length} título(s)`
@@ -3188,7 +3309,7 @@ function ReciboAvulsoModal({ recibo, onClose }: { recibo: ReciboAvulsoData | nul
           </div>
           <div className="mt-3 flex justify-between border-t border-border pt-2 text-base">
             <span className="font-medium">Total recebido</span>
-            <span className="font-semibold text-primary">{fmt(recibo.total)}</span>
+            <span className="font-semibold tabular-nums text-success">{fmt(recibo.total)}</span>
           </div>
         </div>
         <DialogFooter className="gap-2">
@@ -3960,7 +4081,7 @@ function ReceberContaModal({
             </div>
             <div className="bg-muted/20 px-4 py-3 text-center">
               <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Pendente</p>
-              <p className="mt-0.5 text-base font-semibold tracking-tight text-primary">{fmt(restanteAtual)}</p>
+              <p className="mt-0.5 text-base font-semibold tracking-tight tabular-nums text-warning">{fmt(restanteAtual)}</p>
             </div>
           </div>
 
@@ -4079,7 +4200,7 @@ function ReceberContaModal({
             <div className="space-y-1.5 bg-primary/5 px-5 py-4 text-sm">
               <div className="flex items-baseline justify-between">
                 <span className="text-muted-foreground">Recebendo agora</span>
-                <span className="text-lg font-semibold tracking-tight text-primary">{fmt(totalReceberAgora)}</span>
+                <span className="text-lg font-semibold tracking-tight tabular-nums text-success">{fmt(totalReceberAgora)}</span>
               </div>
               <div className="flex items-baseline justify-between">
                 <span className="text-muted-foreground">Saldo restante</span>
@@ -4139,7 +4260,7 @@ function ReciboModal({
             <div className="flex justify-between"><span className="text-muted-foreground">Carteira</span><span>Banco Inter PJ</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Data</span><span>{new Date().toLocaleDateString("pt-BR")}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">Descrição</span><span>Pagamento ref. {conta.id}</span></div>
-            <div className="flex justify-between border-t border-border pt-2 text-base"><span className="font-medium">Valor recebido</span><span className="font-semibold text-primary">{fmt(conta.recebido || conta.valor)}</span></div>
+            <div className="flex justify-between border-t border-border pt-2 text-base"><span className="font-medium">Valor recebido</span><span className="font-semibold tabular-nums text-success">{fmt(conta.recebido || conta.valor)}</span></div>
           </div>
           <div className="mt-6 border-t border-border pt-3 text-center text-xs text-muted-foreground">
             Recebemos a importância acima descrita, dando plena quitação.
@@ -4391,7 +4512,7 @@ function PagarContaModal({
             </div>
             <div>
               <p className="text-[10px] uppercase text-muted-foreground">Pago</p>
-              <p className="text-sm font-semibold text-primary">{fmt(conta.pago)}</p>
+              <p className="text-sm font-semibold tabular-nums text-success">{fmt(conta.pago)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase text-muted-foreground">Restante</p>
