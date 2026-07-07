@@ -62,6 +62,10 @@ import { podeTransicionarV3 } from "@/lib/operacoes-v3/status-machine";
 // detalhe da OS depois do recebimento (ver `receberPagamentoV4` abaixo).
 import { usePdvServicoV3, type PdvServicoState } from "@/components/operacoes-v3/hooks/use-pdv-servico-v3";
 import type { EstornarRecebimentoInputV3, ReceberOSInputV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
+// GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006: action separada de `receberOSV3` —
+// nunca liquida título, nunca movimenta caixa, nunca exige caixa aberto.
+import { lancarOSAPrazoV3, type LancarAPrazoInputV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
+import { lerAPrazoV3 } from "@/lib/operacoes-v3/payment-model";
 import {
   salvarIdentificacaoV3,
   salvarProvaEntradaV3,
@@ -186,6 +190,10 @@ export interface V4DataCtx {
   // caixa/receber/estornar/recibo) — só o `receber` é envolvido para também
   // recarregar lista+detalhe da V4 depois do sucesso.
   pdvServico: PdvServicoState;
+  // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
+  // Action SEPARADA de `receberOSV3`/`pdvServico.receber` — formaliza o saldo
+  // aberto como Conta a Receber PENDENTE (vencimento), sem receber dinheiro.
+  lancarAPrazo: (input: LancarAPrazoInputV3) => Promise<boolean>;
   // ---- Entrada/Recepção (slice OPS-V4-ENTRADA-RECEPCAO-REAL-003) ----
   salvarIdentificacao: (input: IdentificacaoV3) => Promise<boolean>;
   salvarProvaEntrada: (input: SalvarProvaEntradaInputV3) => Promise<boolean>;
@@ -685,9 +693,17 @@ export function buildVals(
   // isso incluiria o pagamento ainda não carregado, mostrando o aviso de bloqueio
   // sem necessidade). Com `pdvPag` null, as duas ficam false (nada a decidir ainda).
   const saldoPendenteConfirmado = !!pdvPag && pdvPag.saldo > 0;
+  // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
+  // Espelho SEPARADO de `pagamentoV3` — NUNCA altera saldo/recebido. Só formaliza
+  // a autorização de entrega com dívida em aberto. `aPrazoAutorizado` exige o
+  // espelho pendente E o próprio saldo real ainda aberto (se a OS já foi quitada
+  // pelo fluxo normal depois, o saldo cai a 0 e esta exceção deixa de valer sozinha).
+  const aPrazo = realOS ? lerAPrazoV3(realOS) : null;
+  const aPrazoAutorizado = !!aPrazo && aPrazo.autorizadoEntrega && saldoPendenteConfirmado;
   const entregaAcoes = {
-    podeConfirmar: !!realOS && status === "pronta" && semSaldoPendenteEntrega,
-    bloqueadaPorSaldo: !!realOS && status === "pronta" && saldoPendenteConfirmado,
+    podeConfirmar: !!realOS && status === "pronta" && (semSaldoPendenteEntrega || aPrazoAutorizado),
+    bloqueadaPorSaldo: !!realOS && status === "pronta" && saldoPendenteConfirmado && !aPrazoAutorizado,
+    autorizadaAPrazo: !!realOS && status === "pronta" && aPrazoAutorizado,
   };
 
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
@@ -1054,6 +1070,11 @@ export function buildVals(
     pdvServico: ctx.pdvServico,
     recebimento,
     estorno,
+    // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
+    // `aPrazo` é o espelho de leitura (null quando não há autorização pendente);
+    // `lancarAPrazo` chama a action separada (nunca recebe dinheiro/movimenta caixa).
+    aPrazo,
+    lancarAPrazo: ctx.lancarAPrazo,
 
     // ---- Diagnóstico / Orçamento REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----
     // Handlers de escrita reais (chamam actions da V3 e recarregam lista+detalhe).
@@ -1373,6 +1394,17 @@ export function useV4Preview(): V4Vals {
     [runWrite],
   );
 
+  // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006): mesmo wrapper
+  // `runWrite` — reusa `lancarOSAPrazoV3`, uma action SEPARADA do recebimento
+  // imediato (nunca liquida título, nunca movimenta caixa, nunca exige caixa
+  // aberto). Reload de lista+detalhe (via `runWrite`) atualiza `pdvServico` e o
+  // espelho `aPrazoV3` da OS, liberando `entregaAcoes.podeConfirmar` na hora.
+  const lancarAPrazo = useCallback(
+    (input: LancarAPrazoInputV3) =>
+      runWrite((sid, osId) => lancarOSAPrazoV3(sid, osId, input), "Conta a receber criada — entrega autorizada a prazo."),
+    [runWrite],
+  );
+
   // ---- Cancelamento de OS (GOAL OPS-V4-CANCELAR-OS-CONNECT-021): mesmo wrapper
   // `runWrite` (reload + toast honesto; sem mutar status local se a action
   // falhar) — reaproveita `aplicarTransicaoStatusV3` já blindada na V3 (commit
@@ -1477,6 +1509,7 @@ export function useV4Preview(): V4Vals {
       salvarAssinaturaRetirada,
       registrarImpressaoDoc,
       salvarGarantia,
+      lancarAPrazo,
       cancelarOS,
       pdvServico,
       salvarIdentificacao,
@@ -1513,6 +1546,7 @@ export function useV4Preview(): V4Vals {
       salvarAssinaturaRetirada,
       registrarImpressaoDoc,
       salvarGarantia,
+      lancarAPrazo,
       cancelarOS,
       pdvServico,
       salvarIdentificacao,

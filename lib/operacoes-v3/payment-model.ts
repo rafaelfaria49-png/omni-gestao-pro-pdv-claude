@@ -213,6 +213,80 @@ export function montarPagamentoMirrorV3(input: {
 }
 
 // ----------------------------------------------------------------------------
+// GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006 — "a prazo" NÃO é recebimento
+// ----------------------------------------------------------------------------
+// Formaliza o saldo em aberto como dívida (Conta a Receber PENDENTE, vencimento
+// futuro) autorizando a entrega SEM dinheiro entrando agora. Espelho separado de
+// `pagamentoV3` (que representa dinheiro efetivamente recebido) — nunca os dois
+// se misturam: "a prazo" nunca altera `pagamentoV3.recebido`/`saldo`. A baixa real
+// (quando o cliente pagar) segue pelo fluxo normal (`receberOSV3`), sem relação
+// direta com este espelho.
+
+export type APrazoStatusV3 = "pendente" | "cancelado";
+
+/**
+ * Status canônico a gravar no `ContaReceberTitulo` ao lançar "a prazo": preserva
+ * "parcial" quando já havia recebimento anterior (ex.: sinal) — nunca regride um
+ * título parcial para "pendente" (isso apagaria o sinal recebido de qualquer
+ * relatório/tela que leia o status canônico do título, ex. `buildContaReceberSummary`).
+ * Só título sem nenhum recebimento anterior nasce/permanece "pendente".
+ */
+export function statusTituloAPrazoV3(recebido: number): "pendente" | "parcial" {
+  return recebido > 0 ? "parcial" : "pendente";
+}
+
+export interface APrazoV3 {
+  modo: "a_prazo";
+  status: APrazoStatusV3;
+  valor: number;
+  vencimento: string;
+  tituloLocalKey?: string;
+  autorizadoEntrega: boolean;
+  autorizadoEm?: string;
+  autorizadoPor?: string;
+  observacao?: string;
+}
+
+/** Monta o espelho "a prazo" a gravar no payload da OS (sem tocar `pagamentoV3`). */
+export function montarAPrazoMirrorV3(input: {
+  valor: number;
+  vencimento: string;
+  tituloLocalKey?: string;
+  autorizadoPor?: string;
+  observacao?: string;
+  now?: string;
+}): APrazoV3 {
+  return {
+    modo: "a_prazo",
+    status: "pendente",
+    valor: money(input.valor),
+    vencimento: input.vencimento,
+    tituloLocalKey: input.tituloLocalKey,
+    autorizadoEntrega: true,
+    autorizadoEm: input.now ?? new Date().toISOString(),
+    autorizadoPor: input.autorizadoPor,
+    observacao: input.observacao?.trim() || undefined,
+  };
+}
+
+/** Lê o espelho "a prazo" da OS (`payload.aPrazoV3`). Null quando ausente/não pendente. */
+export function lerAPrazoV3(os: OrdemServico | null | undefined): APrazoV3 | null {
+  const mirror = (os as { aPrazoV3?: Partial<APrazoV3> } | null | undefined)?.aPrazoV3;
+  if (!mirror || typeof mirror !== "object" || mirror.modo !== "a_prazo" || mirror.status !== "pendente") return null;
+  return {
+    modo: "a_prazo",
+    status: "pendente",
+    valor: money(mirror.valor ?? 0),
+    vencimento: typeof mirror.vencimento === "string" ? mirror.vencimento : "",
+    tituloLocalKey: typeof mirror.tituloLocalKey === "string" ? mirror.tituloLocalKey : undefined,
+    autorizadoEntrega: mirror.autorizadoEntrega === true,
+    autorizadoEm: typeof mirror.autorizadoEm === "string" ? mirror.autorizadoEm : undefined,
+    autorizadoPor: typeof mirror.autorizadoPor === "string" ? mirror.autorizadoPor : undefined,
+    observacao: typeof mirror.observacao === "string" ? mirror.observacao : undefined,
+  };
+}
+
+// ----------------------------------------------------------------------------
 // Fase 2B — Comprovante de recebimento (modelo puro p/ impressão simples)
 // ----------------------------------------------------------------------------
 // NÃO é a impressão da OS (essa fica intacta). É um recibo do recebimento real.

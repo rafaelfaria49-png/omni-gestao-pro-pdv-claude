@@ -14,6 +14,8 @@ const KIND_TEXT = {
   entrega: "Marca a OS como entregue de verdade no histórico.",
   atendimentoRapido:
     "Ao finalizar, o sistema cria a OS, registra o recebimento no caixa e marca a OS como entregue.",
+  aPrazo:
+    "Formaliza o saldo como conta a receber pendente (com vencimento) e autoriza a entrega. Não entra dinheiro no caixa agora.",
 } as const;
 
 export type RealActionKind = keyof typeof KIND_TEXT;

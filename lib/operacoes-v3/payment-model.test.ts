@@ -4,10 +4,13 @@ import { buildContaReceberLocalKey } from "@/lib/financeiro/contracts/local-key"
 import {
   computeSaldoV3,
   formaSuportadaV3,
+  lerAPrazoV3,
   lerPagamentoV3,
   localKeyContaReceberOSV3,
+  montarAPrazoMirrorV3,
   montarPagamentoMirrorV3,
   somaSplitV3,
+  statusTituloAPrazoV3,
   totalCobravelV3,
   validarRecebimentoV3,
   validarSplitV3,
@@ -106,5 +109,57 @@ describe("pagamento — chave única + espelho (Correção 2A.1)", () => {
   it("monta o espelho com status correto", () => {
     const m = montarPagamentoMirrorV3({ total: 480, recebido: 480, ultimaForma: "pix", tituloLocalKey: "os-faturamento:x:y", now: "2026-06-05T00:00:00Z" });
     expect(m).toMatchObject({ total: 480, recebido: 480, saldo: 0, status: "quitado", ultimaForma: "pix", tituloLocalKey: "os-faturamento:x:y", atualizadoEm: "2026-06-05T00:00:00Z" });
+  });
+});
+
+// GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006 — "a prazo" NÃO é recebimento: espelho
+// separado (`aPrazoV3`), nunca altera `pagamentoV3` (recebido/saldo continuam intactos).
+describe("pagamento — 'a prazo' (espelho separado, sem alterar recebido/saldo)", () => {
+  it("monta o espelho a_prazo pendente, autorizando entrega, sem tocar pagamentoV3", () => {
+    const m = montarAPrazoMirrorV3({ valor: 320, vencimento: "2026-08-01", tituloLocalKey: "os-faturamento:x:y", autorizadoPor: "Ana", observacao: "  combinado  ", now: "2026-06-05T00:00:00Z" });
+    expect(m).toEqual({
+      modo: "a_prazo",
+      status: "pendente",
+      valor: 320,
+      vencimento: "2026-08-01",
+      tituloLocalKey: "os-faturamento:x:y",
+      autorizadoEntrega: true,
+      autorizadoEm: "2026-06-05T00:00:00Z",
+      autorizadoPor: "Ana",
+      observacao: "combinado",
+    });
+  });
+
+  it("lerAPrazoV3: null quando a OS não tem espelho", () => {
+    expect(lerAPrazoV3(os({}))).toBeNull();
+  });
+
+  it("lerAPrazoV3: null quando o espelho não é 'pendente' (ex.: cancelado)", () => {
+    const o = os({ aPrazoV3: { modo: "a_prazo", status: "cancelado", valor: 320, vencimento: "2026-08-01", autorizadoEntrega: true } });
+    expect(lerAPrazoV3(o)).toBeNull();
+  });
+
+  it("lerAPrazoV3: lê o espelho pendente autorizado", () => {
+    const o = os({ aPrazoV3: { modo: "a_prazo", status: "pendente", valor: 320, vencimento: "2026-08-01", autorizadoEntrega: true, tituloLocalKey: "os-faturamento:x:y" } });
+    expect(lerAPrazoV3(o)).toMatchObject({ status: "pendente", valor: 320, vencimento: "2026-08-01", autorizadoEntrega: true });
+  });
+
+  it("'a prazo' nunca altera pagamentoV3 — recebido/saldo continuam os do espelho real (dinheiro)", () => {
+    const o = os({
+      pagamentoV3: { total: 320, recebido: 0 },
+      aPrazoV3: { modo: "a_prazo", status: "pendente", valor: 320, vencimento: "2026-08-01", autorizadoEntrega: true },
+    });
+    // O saldo/recebido REAL (dinheiro) é inteiramente derivado de `pagamentoV3` —
+    // a autorização "a prazo" não soma como recebido nem reduz o saldo.
+    expect(lerPagamentoV3(o)).toMatchObject({ total: 320, recebido: 0, saldo: 320, status: "aberto" });
+  });
+
+  // GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006-FIX-PARCIAL-STATUS: o status do
+  // TÍTULO (Conta a Receber) gravado ao lançar a prazo nunca pode regredir de
+  // "parcial" para "pendente" quando já havia recebimento anterior.
+  it("statusTituloAPrazoV3: preserva 'parcial' com recebimento anterior; 'pendente' só sem recebido nenhum", () => {
+    expect(statusTituloAPrazoV3(100)).toBe("parcial");
+    expect(statusTituloAPrazoV3(0.01)).toBe("parcial");
+    expect(statusTituloAPrazoV3(0)).toBe("pendente");
   });
 });

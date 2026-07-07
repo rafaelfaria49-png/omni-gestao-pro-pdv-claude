@@ -92,7 +92,16 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
   return (
     <div style={card}>
       <div style={{ ...cardTitle, marginBottom: 10 }}>Entrega</div>
-      <RealActionNotice kind="entrega" />
+      {ea.autorizadaAPrazo ? (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 14 }}>
+          <span style={{ fontSize: 13, lineHeight: "16px", flex: "none" }}>ℹ️</span>
+          <span style={{ fontSize: 11.5, color: C.infoFg, lineHeight: 1.45 }}>
+            <strong>Entrega autorizada a prazo.</strong> O cliente possui conta a receber pendente — esta OS não está quitada.
+          </span>
+        </div>
+      ) : (
+        <RealActionNotice kind="entrega" />
+      )}
       <button
         type="button"
         disabled={busy}

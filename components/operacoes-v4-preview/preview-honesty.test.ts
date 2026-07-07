@@ -65,6 +65,7 @@ vi.mock("@/lib/operacoes-v3/pdv-servico-actions", () => ({
   lerPagamentoOSV3: vi.fn(async () => ({ total: 0, recebido: 0, saldo: 0, status: "sem_cobranca", sessao: { aberta: false } })),
   receberOSV3: vi.fn(async () => ({})),
   estornarRecebimentoOSV3: vi.fn(async () => ({})),
+  lancarOSAPrazoV3: vi.fn(async () => ({})),
 }))
 
 import { buildVals, type V4DataCtx } from "./use-v4-preview"
@@ -188,6 +189,7 @@ const ctx: V4DataCtx = {
   salvarAssinaturaRetirada: async () => false,
   registrarImpressaoDoc: () => {},
   salvarGarantia: async () => false,
+  lancarAPrazo: async () => false,
   cancelarOS: async () => false,
   pdvServico: {
     pagamento: null,
@@ -853,29 +855,71 @@ describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — entregaAcoes só habilita co
 
   it("pronta + saldo 0: podeConfirmar true, bloqueadaPorSaldo false", () => {
     const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", { total: 320, recebido: 320, saldo: 0, status: "quitado" }))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: true, bloqueadaPorSaldo: false })
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: true, bloqueadaPorSaldo: false, autorizadaAPrazo: false })
   })
 
   it("pronta + saldo > 0: podeConfirmar false, bloqueadaPorSaldo true (mensagem de bloqueio, não botão)", () => {
     const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", { total: 320, recebido: 0, saldo: 320, status: "aberto" }))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: true })
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: true, autorizadaAPrazo: false })
   })
 
   it("pronta + pagamento não carregado (null): nenhuma ação disponível ainda (nem confirmar nem bloqueio) — evita flicker", () => {
     const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", null))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false })
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false })
   })
 
   it("outros status (em_execucao, entregue, aberta): entregaAcoes sempre desabilitada", () => {
     for (const status of ["em_execucao", "aberta", "entregue", "diagnostico"]) {
       const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega(status, { total: 320, recebido: 320, saldo: 0, status: "quitado" }))
-      expect(v.entregaAcoes, `status ${status}`).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false })
+      expect(v.entregaAcoes, `status ${status}`).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false })
     }
   })
 
   it("sem OS selecionada, entregaAcoes fica desabilitada mesmo com snapshot local 'pronta'", () => {
     const v = buildVals(makeState({ status: "pronta", selectedOsId: null, novaOS: false }), () => {}, () => {}, ctx)
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false })
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false })
+  })
+})
+
+describe("OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006 — entregaAcoes libera entrega quando 'a prazo' foi autorizado", () => {
+  function ctxEntregaAPrazo(status: string, pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null, aPrazoV3: Record<string, unknown> | undefined) {
+    return {
+      ...ctx,
+      realOS: mkOS({ id: "os-ent-aprazo", status, aPrazoV3 }),
+      pdvServico: { ...ctx.pdvServico, pagamento },
+    }
+  }
+
+  it("pronta + saldo > 0 + aPrazoV3 autorizado pendente: podeConfirmar true, bloqueadaPorSaldo false, autorizadaAPrazo true", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-ent-aprazo", novaOS: false }),
+      () => {},
+      () => {},
+      ctxEntregaAPrazo("pronta", { total: 320, recebido: 0, saldo: 320, status: "aberto" }, {
+        modo: "a_prazo",
+        status: "pendente",
+        valor: 320,
+        vencimento: "2026-08-01",
+        autorizadoEntrega: true,
+      }),
+    )
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: true, bloqueadaPorSaldo: false, autorizadaAPrazo: true })
+  })
+
+  it("pronta + saldo > 0 + aPrazoV3 já cancelado (status !== 'pendente'): continua bloqueando normalmente", () => {
+    const v = buildVals(
+      makeState({ selectedOsId: "os-ent-aprazo", novaOS: false }),
+      () => {},
+      () => {},
+      ctxEntregaAPrazo("pronta", { total: 320, recebido: 0, saldo: 320, status: "aberto" }, {
+        modo: "a_prazo",
+        status: "cancelado",
+        valor: 320,
+        vencimento: "2026-08-01",
+        autorizadoEntrega: true,
+      }),
+    )
+    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: true, autorizadaAPrazo: false })
   })
 })
 

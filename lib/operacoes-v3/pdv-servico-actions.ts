@@ -16,6 +16,11 @@
 // Fase 2B: SPLIT (várias formas num recebimento), rótulo sinal/entrada/parcial/
 // quitação, COMPROVANTE de recebimento e ESTORNO auditado (`estornarRecebimentoOSV3`).
 // NÃO baixa estoque, NÃO gera garantia, NÃO mexe na V2.
+//
+// GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006: `lancarOSAPrazoV3` é uma action
+// SEPARADA para "a prazo" — NÃO é recebimento (nunca liquida o título, nunca
+// movimenta caixa, nunca exige caixa aberto); só formaliza o saldo como Conta a
+// Receber PENDENTE com vencimento, autorizando a entrega.
 // ============================================================================
 
 import { revalidatePath } from "next/cache";
@@ -41,12 +46,15 @@ import {
   formaLabelRecebimentoV3,
   formaSuportadaV3,
   localKeyContaReceberOSV3,
+  montarAPrazoMirrorV3,
   montarComprovanteReciboV3,
   montarPagamentoMirrorV3,
   rotuloIntencaoV3,
   somaSplitV3,
+  statusTituloAPrazoV3,
   totalCobravelV3,
   validarSplitV3,
+  type APrazoV3,
   type ComprovanteReciboV3,
   type FormaRecebimentoV3,
   type PagamentoV3,
@@ -424,4 +432,111 @@ export async function estornarRecebimentoOSV3(storeId: string, osId: string, inp
 
   revalidatePath("/dashboard/operacoes-v3");
   return { os: nextPayload as unknown as OrdemServico, pagamento: mirror, estornado };
+}
+
+// ----------------------------------------------------------------------------
+// GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006 — lançamento "a prazo" (NÃO é
+// recebimento)
+// ----------------------------------------------------------------------------
+// Formaliza o saldo em aberto da OS como Conta a Receber pendente/parcial com
+// vencimento futuro, autorizando a entrega sem dinheiro entrar agora. Action
+// SEPARADA de `receberOSV3` — não é um branch dela: nunca chama
+// `liquidarContaReceber`/`registrarPagamentoParcial` (nunca "pago"), nunca cria
+// `caixaOperacao`, nunca chama `createMovimentacaoEntradaFromReceber`, e nunca
+// exige sessão de caixa aberta. O status gravado preserva a classificação real
+// do título: "parcial" quando já havia recebimento anterior (ex.: sinal),
+// "pendente" só quando nunca houve recebimento — nunca regride um título
+// parcial para pendente (isso apagaria o sinal recebido de qualquer relatório
+// que leia o status canônico). O único lançamento no histórico do título é um
+// marcador de auditoria (`tipo: "a_prazo_autorizado"`) — `sumPagamentosFromHistoricoPayload`
+// só soma "pagamento"/"liquidacao"/"estorno_pagamento", então este marcador NUNCA
+// conta como dinheiro recebido. Reusa o MESMO título único da OS (`resolverTituloOS`/
+// `localKeyContaReceberOSV3`) — nunca cria um segundo título. Quando o cliente
+// pagar de verdade, a baixa segue pelo fluxo normal (`receberOSV3`), inalterado.
+
+export interface LancarAPrazoInputV3 {
+  vencimento: string;
+  observacao?: string;
+}
+
+export interface LancarAPrazoResultV3 {
+  os: OrdemServico;
+  aPrazo: APrazoV3;
+  valorFormalizado: number;
+}
+
+export async function lancarOSAPrazoV3(storeId: string, osId: string, input: LancarAPrazoInputV3): Promise<LancarAPrazoResultV3> {
+  const sid = (storeId ?? "").trim();
+  const id = (osId ?? "").trim();
+  assertActiveStoreId(sid, "Operações V3");
+  if (!id) throw new Error("OS não informada.");
+
+  const vencimento = (input.vencimento ?? "").trim();
+  if (!vencimento) throw new Error("Informe o vencimento para lançar a prazo.");
+  if (Number.isNaN(new Date(vencimento).getTime())) throw new Error("Vencimento inválido.");
+
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Faça login para lançar a prazo.");
+  const guard = await requireEnterpriseWith(sid, (p) => p.operacoes.editarOs, "Sem permissão para lançar a prazo nesta OS.");
+  if (!guard.ok) throw new Error(guard.error);
+
+  // Mesmo lock de período financeiro que o recebimento imediato respeita — criar/
+  // atualizar um título em aberto também é uma operação financeira (não precisa de
+  // caixa, mas precisa respeitar o fechamento do período).
+  const lock = await verificarPeriodoFechado(sid, new Date());
+  if (lock.fechado) throw new Error("Período financeiro fechado. Reabra o fechamento para lançar a prazo.");
+
+  const loaded = await carregarOS(sid, id);
+  const { id: osRowId, payload } = loaded;
+  const titulo = await resolverTituloOS(sid, id, loaded, { create: true });
+  if (titulo.saldo <= 0) throw new Error("Esta OS já está quitada — não há saldo para lançar a prazo.");
+
+  const operador = operadorLabel(session);
+  const codigo = (payload as unknown as OrdemServico).codigo ?? id;
+  const obs = (input.observacao ?? "").trim();
+
+  // Preserva a classificação real do título (ver `statusTituloAPrazoV3`, pura em
+  // payment-model.ts) — nunca regride um título "parcial" para "pendente".
+  const statusTituloAPrazo = statusTituloAPrazoV3(titulo.recebido);
+
+  // Só atualiza vencimento/observação/status do MESMO título — NUNCA liquida/paga.
+  await upsertContaReceber({
+    storeId: sid,
+    localKey: titulo.localKey,
+    vencimento,
+    status: statusTituloAPrazo,
+    historicoEntrada: {
+      tipo: "a_prazo_autorizado",
+      valor: titulo.saldo,
+      vencimento,
+      observacao: obs || undefined,
+      userLabel: operador,
+    },
+  });
+
+  const dataHora = nowIso();
+  const aPrazo = montarAPrazoMirrorV3({
+    valor: titulo.saldo,
+    vencimento,
+    tituloLocalKey: titulo.localKey,
+    autorizadoPor: operador,
+    observacao: obs || undefined,
+    now: dataHora,
+  });
+
+  const evento: EventoTimeline = {
+    id: eventId(),
+    tipo: "financeiro_conta_receber_criada",
+    autor: operador,
+    autorTipo: "usuario",
+    conteudo: `Entrega autorizada a prazo (OS ${codigo}): R$ ${titulo.saldo.toFixed(2)} · vencimento ${vencimento}. Nenhum valor recebido — não movimenta caixa.`,
+    metadata: { modo: "a_prazo", valor: titulo.saldo, vencimento, tituloLocalKey: titulo.localKey, autorizadoEntrega: true },
+    criadoEm: dataHora,
+  };
+  const timeline = Array.isArray(payload.timeline) ? (payload.timeline as EventoTimeline[]) : [];
+  const nextPayload: OSPayloadFull = { ...payload, aPrazoV3: aPrazo, timeline: [...timeline, evento], atualizadoEm: dataHora } as OSPayloadFull;
+  await prisma.ordemServico.update({ where: { id: osRowId }, data: { payload: nextPayload as unknown as Prisma.InputJsonValue } });
+
+  revalidatePath("/dashboard/operacoes-v3");
+  return { os: nextPayload as unknown as OrdemServico, aPrazo, valorFormalizado: titulo.saldo };
 }

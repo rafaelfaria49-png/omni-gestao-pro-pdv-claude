@@ -10,9 +10,11 @@
  * pelo contrato real. Sem estoque, sem venda, sem services financeiros
  * diretos — tudo passa por `receberOSV3`.
  *
- * A prazo/parcelado/crediário/carteira ficam fora deste GOAL (próximo trabalho:
- * OS-RECEBIMENTO-A-PRAZO-CONTRATO) — precisam de um contrato próprio (entrada +
- * parcelas + vencimentos + Conta a Receber), não são uma "forma" a mais no split.
+ * As formas ainda não suportadas seguem fora do split imediato (`suportada: false`
+ * em `FORMAS_RECEBIMENTO_V3`, inalterado). GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006
+ * adiciona um caminho SEPARADO — "Lançar a prazo" (`v.lancarAPrazo`) — que NÃO é
+ * recebimento: formaliza o saldo como Conta a Receber pendente (vencimento) e
+ * autoriza a entrega, sem exigir caixa aberto e sem mover dinheiro nenhum.
  */
 "use client";
 
@@ -24,6 +26,7 @@ import {
   FORMAS_RECEBIMENTO_V3,
   somaSplitV3,
   validarSplitV3,
+  type APrazoV3,
   type FormaRecebimentoV3,
   type SplitLinhaV3,
 } from "@/lib/operacoes-v3/payment-model";
@@ -89,11 +92,32 @@ function linhaVazia(valorStr = ""): LinhaDraft {
   return { forma: "pix", valorStr };
 }
 
+function fmtDataBR(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR");
+}
+
+/** Resumo persistente da autorização "a prazo" — nunca mostra como recebido/quitado. */
+function APrazoResumo({ aPrazo }: { aPrazo: APrazoV3 }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3, background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 12 }}>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: C.infoFg }}>Conta a receber criada — lançamento a prazo</span>
+      <span style={{ fontSize: 11, color: C.infoFg }}>Valor: {fmt(aPrazo.valor)} · Vencimento: {fmtDataBR(aPrazo.vencimento)}</span>
+      <span style={{ fontSize: 10.5, color: C.infoFg }}>Esta operação não movimentou caixa.</span>
+    </div>
+  );
+}
+
 export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
   const pdv = v.pdvServico;
   const [open, setOpen] = useState(false);
   const [linhas, setLinhas] = useState<LinhaDraft[]>([{ forma: "dinheiro", valorStr: "" }]);
   const [observacao, setObservacao] = useState("");
+  const [openAPrazo, setOpenAPrazo] = useState(false);
+  const [vencimento, setVencimento] = useState("");
+  const [obsAPrazo, setObsAPrazo] = useState("");
+  const [busyAPrazo, setBusyAPrazo] = useState(false);
+  const [erroAPrazo, setErroAPrazo] = useState<string | null>(null);
 
   if (!v.osSelected) return null;
   if (pdv.loading) {
@@ -111,12 +135,84 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
     setLinhas([{ forma: "dinheiro", valorStr: String(pagamento.saldo) }]);
     setObservacao("");
     setOpen(true);
+    setOpenAPrazo(false);
   };
   const cancelar = () => {
     setOpen(false);
     setLinhas([{ forma: "dinheiro", valorStr: "" }]);
     setObservacao("");
   };
+  const openFormAPrazo = () => {
+    setVencimento("");
+    setObsAPrazo("");
+    setErroAPrazo(null);
+    setOpenAPrazo(true);
+    setOpen(false);
+  };
+  const cancelarAPrazo = () => {
+    setOpenAPrazo(false);
+    setVencimento("");
+    setObsAPrazo("");
+    setErroAPrazo(null);
+  };
+  const lancarAPrazoSubmit = async () => {
+    if (busyAPrazo || !vencimento.trim()) return;
+    setBusyAPrazo(true);
+    setErroAPrazo(null);
+    try {
+      const ok = await v.lancarAPrazo({ vencimento: vencimento.trim(), observacao: obsAPrazo.trim() || undefined });
+      if (ok) cancelarAPrazo();
+      else setErroAPrazo("Não foi possível lançar a prazo.");
+    } finally {
+      setBusyAPrazo(false);
+    }
+  };
+
+  if (openAPrazo) {
+    const podeConfirmarAPrazo = vencimento.trim().length > 0 && !busyAPrazo;
+    return (
+      <div style={box}>
+        <RealActionNotice kind="aPrazo" tone="warn" />
+        <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 9 }}>Valor a lançar: <b style={{ color: C.warnFg }}>{fmt(pagamento.saldo)}</b></div>
+        <div style={{ marginBottom: 9 }}>
+          <div style={{ fontSize: 10, color: C.subtle, marginBottom: 3 }}>Vencimento *</div>
+          <input
+            type="date"
+            value={vencimento}
+            onChange={(e) => setVencimento(e.target.value)}
+            style={{ ...cellInput, width: "100%" }}
+          />
+        </div>
+        <div style={{ marginBottom: 9 }}>
+          <div style={{ fontSize: 10, color: C.subtle, marginBottom: 3 }}>Observação (opcional)</div>
+          <input
+            type="text"
+            value={obsAPrazo}
+            onChange={(e) => setObsAPrazo(e.target.value)}
+            maxLength={200}
+            placeholder="Ex.: cliente combinou pagar dia 10"
+            style={{ ...cellInput, width: "100%" }}
+          />
+        </div>
+        <div style={{ fontSize: 10.5, color: C.subtle, marginBottom: 9, lineHeight: 1.5 }}>
+          Não entra dinheiro no caixa agora. Será criada uma conta a receber para o cliente.
+        </div>
+        {erroAPrazo && <div style={{ fontSize: 11, color: C.dangerFg, marginBottom: 9 }}>{erroAPrazo}</div>}
+        {pdv.error && <div style={{ fontSize: 11, color: C.dangerFg, marginBottom: 9 }}>{pdv.error}</div>}
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            type="button"
+            onClick={() => void lancarAPrazoSubmit()}
+            disabled={!podeConfirmarAPrazo}
+            style={{ ...btnPrimary, flex: 1, cursor: podeConfirmarAPrazo ? "pointer" : "default", opacity: podeConfirmarAPrazo ? 1 : 0.6 }}
+          >
+            {busyAPrazo ? "Lançando…" : "Lançar a prazo e liberar entrega"}
+          </button>
+          <button type="button" onClick={cancelarAPrazo} disabled={busyAPrazo} style={{ ...btnGhost, flex: "none" }}>Cancelar</button>
+        </div>
+      </div>
+    );
+  }
 
   if (semTotal) {
     return (
@@ -157,10 +253,15 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
   if (!caixaAberto) {
     return (
       <div style={box}>
+        {v.aPrazo && <APrazoResumo aPrazo={v.aPrazo} />}
         <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, fontWeight: 500 }}>
           Caixa fechado — abra o caixa no PDV/Caixa antes de receber esta OS.
         </div>
-        <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 5 }}>Saldo a receber: {fmt(pagamento.saldo)}</div>
+        <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 5, marginBottom: 9 }}>Saldo a receber: {fmt(pagamento.saldo)}</div>
+        {/* "A prazo" NÃO exige caixa aberto — não movimenta caixa. */}
+        {!v.aPrazo && (
+          <button type="button" onClick={openFormAPrazo} style={{ ...btnGhost, height: 30, padding: "0 12px", fontSize: 11.5 }}>📄 Lançar a prazo</button>
+        )}
       </div>
     );
   }
@@ -168,9 +269,15 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
   if (!open) {
     return (
       <div style={box}>
+        {v.aPrazo && <APrazoResumo aPrazo={v.aPrazo} />}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11.5, color: C.muted }}>Saldo a receber: <b style={{ color: C.warnFg }}>{fmt(pagamento.saldo)}</b></span>
-          <button type="button" onClick={openForm} style={{ ...btnPrimary, height: 32, padding: "0 14px", fontSize: 12 }}>Receber pagamento</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            {!v.aPrazo && (
+              <button type="button" onClick={openFormAPrazo} style={{ ...btnGhost, height: 32, padding: "0 12px", fontSize: 11.5 }}>Lançar a prazo</button>
+            )}
+            <button type="button" onClick={openForm} style={{ ...btnPrimary, height: 32, padding: "0 14px", fontSize: 12 }}>Receber pagamento</button>
+          </div>
         </div>
       </div>
     );
