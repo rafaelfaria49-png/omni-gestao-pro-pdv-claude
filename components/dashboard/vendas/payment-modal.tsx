@@ -239,6 +239,7 @@ export function PaymentModal({
   const [supervisorErr, setSupervisorErr] = useState<string | null>(null)
   const [highlightedFormaId, setHighlightedFormaId] = useState<FormaPagamentoConfigId | null>(null)
   const formaBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const cancelBtnRef = useRef<HTMLButtonElement | null>(null)
   const confirmBtnRef = useRef<HTMLButtonElement | null>(null)
   const finalCancelBtnRef = useRef<HTMLButtonElement | null>(null)
   const finalConfirmBtnRef = useRef<HTMLButtonElement | null>(null)
@@ -341,6 +342,63 @@ export function PaymentModal({
     faltaPagar <= 0.02 &&
     !docInvalidoParaConfirmar &&
     !(descontoManualAtivo && !adminSessionOk)
+
+  const handlePaymentConfirmIntent = useCallback(() => {
+    if (isConfirming || showFinalConfirm || finalConfirmBusyRef.current) return
+    if (docInvalidoParaConfirmar) {
+      toast({
+        variant: "destructive",
+        title: "CPF/CNPJ obrigatório",
+        description: "Complete e salve o documento do cliente para carnê ou faturamento à prazo.",
+      })
+      return
+    }
+    if (descontoManualAtivo && !adminSessionOk) {
+      toast({
+        variant: "destructive",
+        title: "Supervisor obrigatório",
+        description: "Autorize o desconto manual para confirmar a venda.",
+      })
+      return
+    }
+    setShowFinalConfirm(true)
+  }, [adminSessionOk, descontoManualAtivo, docInvalidoParaConfirmar, isConfirming, showFinalConfirm, toast])
+
+  const handleMainDialogKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (showFinalConfirm || isConfirming) return
+
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      const isTextEntry =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        target?.isContentEditable === true ||
+        target?.getAttribute("role") === "combobox"
+
+      if (e.key === "Enter") {
+        if (isTextEntry) return
+        if (target instanceof HTMLButtonElement && target !== confirmBtnRef.current) return
+        if (!podeConfirmar) return
+        e.preventDefault()
+        handlePaymentConfirmIntent()
+        return
+      }
+
+      if (isTextEntry) return
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return
+      if (tag !== "BUTTON" && target !== confirmBtnRef.current && target !== cancelBtnRef.current) return
+
+      e.preventDefault()
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        cancelBtnRef.current?.focus()
+      } else {
+        confirmBtnRef.current?.focus()
+      }
+    },
+    [handlePaymentConfirmIntent, isConfirming, podeConfirmar, showFinalConfirm],
+  )
 
   const returnFocusToPaymentConfirm = useCallback(() => {
     window.requestAnimationFrame(() => {
@@ -813,10 +871,10 @@ export function PaymentModal({
   // Layout enterprise: quando o total fica quitado, foca "Confirmar" para finalizar com Enter.
   useEffect(() => {
     if (!isOpen || !twoColumn) return
-    if (payments.length === 0 || faltaPagar > 0.02) return
+    if (payments.length === 0 || !podeConfirmar) return
     const t = window.setTimeout(() => confirmBtnRef.current?.focus(), 40)
     return () => window.clearTimeout(t)
-  }, [isOpen, twoColumn, payments.length, faltaPagar])
+  }, [isOpen, twoColumn, payments.length, podeConfirmar])
 
   const getPaymentIcon = (type: string) => {
     switch (type) {
@@ -893,6 +951,7 @@ export function PaymentModal({
               })
             }
           }}
+          onKeyDown={handleMainDialogKeyDown}
           className="w-[94vw] max-w-[1000px] sm:max-w-[1000px] max-h-[95vh] flex flex-col p-0 overflow-hidden bg-card border-border"
         >
           <DialogHeader className="px-5 py-2.5 border-b border-border shrink-0">
@@ -1515,31 +1574,13 @@ export function PaymentModal({
               </p>
             )}
             <div className="flex gap-3">
-              <Button variant="outline" onClick={onClose} className="flex-1 h-11 border-border">
+              <Button ref={cancelBtnRef} type="button" variant="outline" onClick={onClose} className="flex-1 h-11 border-border">
                 Cancelar
               </Button>
               <Button
                 ref={confirmBtnRef}
-                onClick={() => {
-                  if (isConfirming) return
-                  if (docInvalidoParaConfirmar) {
-                    toast({
-                      variant: "destructive",
-                      title: "CPF/CNPJ obrigatório",
-                      description: "Complete e salve o documento do cliente para carnê ou faturamento à prazo.",
-                    })
-                    return
-                  }
-                  if (descontoManualAtivo && !adminSessionOk) {
-                    toast({
-                      variant: "destructive",
-                      title: "Supervisor obrigatório",
-                      description: "Autorize o desconto manual para confirmar a venda.",
-                    })
-                    return
-                  }
-                  setShowFinalConfirm(true)
-                }}
+                type="button"
+                onClick={handlePaymentConfirmIntent}
                 disabled={!podeConfirmar}
                 className={cn(
                   "flex-1 h-11 font-bold transition-colors",
@@ -1614,7 +1655,10 @@ export function PaymentModal({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-card border-border">
+      <DialogContent
+        onKeyDown={handleMainDialogKeyDown}
+        className="max-w-2xl max-h-[90vh] flex flex-col p-0 overflow-hidden bg-card border-border"
+      >
         <DialogHeader className="p-6 pb-2 border-b border-border shrink-0">
           <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
             <Calculator className="w-6 h-6 text-primary" />
@@ -2309,6 +2353,8 @@ export function PaymentModal({
           {/* Botões de Ação */}
           <div className="flex gap-3">
             <Button
+              ref={cancelBtnRef}
+              type="button"
               variant="outline"
               onClick={onClose}
               className="flex-1 h-12 border-border"
@@ -2316,27 +2362,10 @@ export function PaymentModal({
               Cancelar
             </Button>
             <Button
-              onClick={() => {
-                if (isConfirming) return
-                if (docInvalidoParaConfirmar) {
-                  toast({
-                    variant: "destructive",
-                    title: "CPF/CNPJ obrigatório",
-                    description: "Complete e salve o documento do cliente para carnê ou faturamento à prazo.",
-                  })
-                  return
-                }
-                if (descontoManualAtivo && !adminSessionOk) {
-                  toast({
-                    variant: "destructive",
-                    title: "Supervisor obrigatório",
-                    description: "Autorize o desconto manual para confirmar a venda.",
-                  })
-                  return
-                }
-                setShowFinalConfirm(true)
-              }}
-              disabled={isConfirming || faltaPagar > 0.02 || docInvalidoParaConfirmar || (descontoManualAtivo && !adminSessionOk)}
+              ref={confirmBtnRef}
+              type="button"
+              onClick={handlePaymentConfirmIntent}
+              disabled={!podeConfirmar}
               className="flex-1 h-12 bg-emerald-600 font-bold text-zinc-950 hover:bg-emerald-500 disabled:opacity-50"
             >
               {isConfirming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
