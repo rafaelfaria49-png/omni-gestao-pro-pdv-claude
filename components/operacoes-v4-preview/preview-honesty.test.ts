@@ -645,6 +645,74 @@ describe("OPS-V4-PIPELINE-DEDUP-004 — spine e Atividade nunca divergem sobre a
   })
 })
 
+describe("OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005 — abrir do rail PDV com saldo aberto vai direto ao Financeiro", () => {
+  const osComSaldoAberto = mkOS({
+    id: "os-saldo",
+    status: "pronta",
+    orcamento: { sintetizado: false },
+    pagamentoV3: { total: 470, recebido: 0 },
+  })
+  const osQuitada = mkOS({
+    id: "os-quitada",
+    status: "pronta",
+    orcamento: { sintetizado: false },
+    pagamentoV3: { total: 470, recebido: 470 },
+  })
+
+  it("openOSFromRail(id, true) — OS com saldo real aberto abre stage 'financeiro' (não 'entrega')", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(
+      makeState({ selectedOsId: null, novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      () => {},
+      { ...ctx, ordens: [osComSaldoAberto] },
+    )
+    v.openOSFromRail("os-saldo", true)
+    expect(patches.at(-1)).toMatchObject({ selectedOsId: "os-saldo", stage: "financeiro", module: "workspace" })
+  })
+
+  it("openOSFromRail(id, true) — OS quitada mantém o stage normal (stageForStatus → 'entrega' para 'pronta')", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(
+      makeState({ selectedOsId: null, novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      () => {},
+      { ...ctx, ordens: [osQuitada] },
+    )
+    v.openOSFromRail("os-quitada", true)
+    expect(patches.at(-1)).toMatchObject({ selectedOsId: "os-quitada", stage: "entrega", module: "workspace" })
+  })
+
+  it("openOSFromRail(id) sem 'fromPdv' (Fila/Bancada/SLA) NUNCA abre em 'financeiro' — mesmo com saldo aberto", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(
+      makeState({ selectedOsId: null, novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      () => {},
+      { ...ctx, ordens: [osComSaldoAberto] },
+    )
+    v.openOSFromRail("os-saldo") // sem 2º argumento → comportamento anterior preservado
+    expect(patches.at(-1)).toMatchObject({ selectedOsId: "os-saldo", stage: "entrega", module: "workspace" })
+  })
+
+  it("bloqueio de Entrega por saldo expõe v.goFinanceiro — só navega, nunca recebe/entrega/cancela", () => {
+    const patches: Array<Record<string, unknown>> = []
+    const v = buildVals(
+      makeState({ status: "em_execucao", selectedOsId: "os-x", stage: "entrega", novaOS: false }),
+      (p) => patches.push(p as Record<string, unknown>),
+      () => {},
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }), pdvServico: { ...ctx.pdvServico, pagamento: { total: 470, recebido: 0, saldo: 470, status: "aberto" } } },
+    )
+    expect(v.entregaAcoes.bloqueadaPorSaldo).toBe(true)
+    expect(v.entregaAcoes.podeConfirmar).toBe(false)
+    expect(typeof v.goFinanceiro).toBe("function")
+    v.goFinanceiro()
+    expect(patches.at(-1)).toMatchObject({ stage: "financeiro" })
+    // O atalho é navegação pura — nenhuma chamada de recebimento/entrega/cancelamento.
+    expect(patches.every((p) => !("selectedOsId" in p) || p.selectedOsId === "os-x")).toBe(true)
+  })
+})
+
 describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem drift)", () => {
   it("realOS.status vence o snapshot local st.status", () => {
     const v = buildVals(

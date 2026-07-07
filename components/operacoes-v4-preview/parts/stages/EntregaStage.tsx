@@ -75,9 +75,16 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
     return (
       <div style={card}>
         <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
-        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5 }}>
-          Esta OS tem saldo a receber — quite o pagamento na aba Financeiro antes de confirmar a entrega.
+        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 10 }}>
+          Há saldo em aberto. Receba o pagamento na aba Financeiro antes de confirmar a entrega.
         </div>
+        <button
+          type="button"
+          onClick={v.goFinanceiro}
+          style={{ height: 30, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 11.5, fontWeight: 500, cursor: "pointer" }}
+        >
+          Ir para Financeiro →
+        </button>
       </div>
     );
   }

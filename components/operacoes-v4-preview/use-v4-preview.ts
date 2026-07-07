@@ -107,6 +107,7 @@ import {
   EMPTY_SEGURANCA_ENTRADA,
   realPrioridadeToV4,
   realStatusToV4,
+  resumoCobrancaV4,
   stageForStatus,
 } from "./os-adapter";
 import {
@@ -706,22 +707,33 @@ export function buildVals(
 
   // Seleciona a OS REAL (identidade/financeiro reais no workspace). Único caminho de
   // seleção — sempre por clique explícito do operador, nunca por fallback automático.
-  const selectOS = (o: OrdemServico) => {
+  const selectOS = (o: OrdemServico, stageOverride?: V4Stage) => {
     update({
       selectedOsId: o.id,
       status: realStatusToV4(o.status),
       prioridade: realPrioridadeToV4(o.prioridade),
-      stage: stageForStatus(o.status),
+      stage: stageOverride ?? stageForStatus(o.status),
       module: "workspace",
       view: "cockpit",
       menu: null,
     });
     notify("OS " + (o.codigo || "") + " carregada");
   };
-  // Abrir a OS de uma linha de rail (Fila/Bancada/SLA/PDV) → leva ao workspace real.
-  const openOSFromRail = (id: string) => {
+  /**
+   * Abrir a OS de uma linha de rail (Fila/Bancada/SLA/PDV) → leva ao workspace real.
+   *
+   * GOAL OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005: quando a origem é o rail
+   * "PDV de serviço" (`fromPdv`) e a OS tem saldo real aberto — MESMA fonte do
+   * GOAL-003 (`resumoCobrancaV4`, nenhum cálculo novo) — abre direto na aba
+   * Financeiro em vez do `stageForStatus` genérico (que levaria "pronta" para
+   * Entrega, escondendo o recebimento). Quitada/prévia/sem cobrança seguem o
+   * stage normal — só existe atalho quando há saldo de verdade a receber.
+   */
+  const openOSFromRail = (id: string, fromPdv = false) => {
     const o = ctx.ordens.find((x) => x.id === id);
-    if (o) selectOS(o);
+    if (!o) return;
+    const temSaldoAberto = fromPdv && resumoCobrancaV4(o).saldo > 0;
+    selectOS(o, temSaldoAberto ? "financeiro" : undefined);
   };
 
   // Nova OS criada (REAL) pelo modal → fecha o modal, abre a OS recém-criada no workspace
@@ -906,6 +918,9 @@ export function buildVals(
     // GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008: usado pelo aviso "quitada, falta
     // entregar" do FinanceiroStage — só navega (a ação real vive no botão da Entrega).
     goEntrega: () => update({ stage: "entrega", module: "workspace", view: "cockpit", menu: null }),
+    // GOAL OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005: usado pelo bloqueio "saldo em
+    // aberto" da Entrega — só navega (o recebimento real vive no botão do Financeiro).
+    goFinanceiro: () => update({ stage: "financeiro", module: "workspace", view: "cockpit", menu: null }),
     backFromSeguranca: () => update({ stage: "execucao", module: "workspace", view: "cockpit", menu: null }),
 
     menu: st.menu, menuPrint: st.menu === "print", menuMore: st.menu === "more",

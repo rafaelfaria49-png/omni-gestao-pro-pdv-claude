@@ -247,12 +247,12 @@ function PdvBody({ v }: { v: V4Vals }) {
           <span style={{ fontSize: 18, fontWeight: 700, color: p.aReceberCount > 0 ? C.warnFg : C.muted }}>{p.aReceberCount}</span>
         </div>
       </div>
-      <div style={{ fontSize: 11.5, color: C.subtle }}>Somente leitura · clique para abrir a OS no Workspace</div>
+      <div style={{ fontSize: 11.5, color: C.subtle }}>Somente leitura · OS a receber abrem direto no Financeiro</div>
       {p.itens.map((it) => (
         <button
           key={it.id}
           type="button"
-          onClick={() => v.openOSFromRail(it.id)}
+          onClick={() => v.openOSFromRail(it.id, true)}
           style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left", border: `1px solid ${C.line}`, background: C.surface, borderRadius: 10, padding: "10px 12px", cursor: "pointer" }}
         >
           <div style={{ minWidth: 0, flex: 1 }}>
