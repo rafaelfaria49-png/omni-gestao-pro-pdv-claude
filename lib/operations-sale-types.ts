@@ -70,6 +70,11 @@ export interface SaleRecord {
   aPrazoConfig?: APrazoConfig
   /** true = venda gravada localmente mas ainda não confirmada no Prisma. */
   syncPending?: boolean
+  /**
+   * `code` do último erro de sincronização (ex.: `CAIXA_ORIGINAL_FECHADO`) — estado
+   * local puro para a UI decidir como orientar o operador. Limpo em qualquer sucesso.
+   */
+  syncBlockedCode?: string
 }
 
 export interface DevolucaoRecord {

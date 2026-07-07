@@ -21,6 +21,7 @@ import {
   upsertVendaInTransaction,
   UnresolvedProductError,
   CaixaSessaoInvalidaError,
+  CaixaOriginalFechadoError,
   type SalePayload,
 } from "./ops-upsert-venda"
 
@@ -139,7 +140,9 @@ function makeFakeTx(opts?: { products?: FakeProduct[]; sessoes?: FakeSessao[] })
           matches = [...matches].sort((a, b) => b.abertaEm - a.abertaEm)
         }
         const m = matches[0]
-        return m ? { id: m.id } : null
+        // Espelha `select: { id: true, status: true }` do branch com `sessaoId` (produção
+        // precisa do `status` para distinguir sessão FECHADA de sessão inexistente).
+        return m ? { id: m.id, status: m.status } : null
       },
     },
   }
@@ -202,14 +205,17 @@ describe("upsertVendaInTransaction — caixa servidor obrigatório (P1)", () => 
     ).rejects.toBeInstanceOf(CaixaSessaoInvalidaError)
   })
 
-  it("rejeita venda com sessaoId de sessão já fechada", async () => {
-    const { tx } = makeFakeTx({
+  it("rejeita venda com sessaoId de sessão já fechada (código específico CAIXA_ORIGINAL_FECHADO, sem flag)", async () => {
+    // GOAL PDV-VENDA-PENDENTE-SESSAO-FECHADA-RETROATIVA-002: sessão existe e é DESTA loja,
+    // só que fechada — erro específico, distinto de "sessão inexistente/de outra loja".
+    const { tx, getVendaUpserts } = makeFakeTx({
       products: [produto()],
       sessoes: [sessao({ id: "sess-1", status: "FECHADA" })],
     })
     await expect(
       upsertVendaInTransaction(tx, STORE, vendaProduto({ sessaoId: "sess-1" }), undefined, LIVE),
-    ).rejects.toBeInstanceOf(CaixaSessaoInvalidaError)
+    ).rejects.toBeInstanceOf(CaixaOriginalFechadoError)
+    expect(getVendaUpserts()).toBe(0)
   })
 
   it("rejeita venda com sessaoId de OUTRA loja", async () => {

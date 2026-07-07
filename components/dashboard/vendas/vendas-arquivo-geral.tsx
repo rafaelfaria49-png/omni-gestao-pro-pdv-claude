@@ -290,6 +290,7 @@ export function VendasArquivoGeral() {
   const {
     sales: opsSales,
     retrySyncSale,
+    retrySyncSaleRetroactive,
     discardLocalPendingSale,
     bulkDiscardLocalPendingSales,
   } = useOperationsStore()
@@ -336,6 +337,16 @@ export function VendasArquivoGeral() {
   /** Venda apenas no operations-store (syncPending) — detalhe local, sem API. */
   const [detalhePendenteLocal, setDetalhePendenteLocal] = useState<SaleRecord | null>(null)
   const [saldoCredito, setSaldoCredito] = useState<number | null>(null)
+  /**
+   * `detalhePendenteLocal` é uma cópia estática tirada no momento em que o drawer abre;
+   * `syncBlockedCode` muda a cada tentativa de reenvio, então derivamos a versão "viva"
+   * direto de `opsSales` para o banner de sessão fechada refletir o estado atual sem
+   * precisar espelhar manualmente o snapshot do drawer.
+   */
+  const pendenteLocalLive = useMemo(
+    () => (detalhePendenteLocal ? opsSales.find((s) => s.id === detalhePendenteLocal.id) ?? detalhePendenteLocal : null),
+    [detalhePendenteLocal, opsSales],
+  )
 
   // Cupom modal
   const [cupomOpen, setCupomOpen] = useState(false)
@@ -358,6 +369,11 @@ export function VendasArquivoGeral() {
   const [descartandoLocalLoading, setDescartandoLocalLoading] = useState(false)
   const [bulkLimparOpen, setBulkLimparOpen] = useState(false)
   const [bulkLimparLoading, setBulkLimparLoading] = useState(false)
+  // Sync retroativo (venda pendente cuja sessão de caixa original está fechada) — exige
+  // confirmação explícita, nunca automática. `retroativoConfirmId` abre o AlertDialog;
+  // `retroativoLoading` cobre o próprio reenvio.
+  const [retroativoConfirmId, setRetroativoConfirmId] = useState<string | null>(null)
+  const [retroativoLoading, setRetroativoLoading] = useState(false)
 
   // Workspace Enterprise — ficha completa + correções (única via de correção de venda)
   const [workspaceVendaId, setWorkspaceVendaId] = useState<string | null>(null)
@@ -564,6 +580,34 @@ export function VendasArquivoGeral() {
     },
     [retrySyncSale, fetchRemoteSales, load, toast, isVendaPendenteSync],
   )
+
+  /**
+   * Confirmação final de "Sincronizar retroativo" — só chamado depois do AlertDialog.
+   * Envia `allowClosedOriginalSession` para gravar na PRÓPRIA sessão original fechada
+   * (nunca no caixa atual). Nunca usado pelo retry automático nem pelo reenvio normal.
+   */
+  const handleConfirmReenviarRetroativo = useCallback(async () => {
+    if (!retroativoConfirmId) return
+    const vendaId = retroativoConfirmId
+    setRetroativoLoading(true)
+    const res = await retrySyncSaleRetroactive(vendaId)
+    setRetroativoLoading(false)
+    setRetroativoConfirmId(null)
+    if (res.ok) {
+      toast({
+        title: "Venda sincronizada retroativamente",
+        description: `${vendaId} foi gravada na sessão de caixa original.`,
+      })
+      void fetchRemoteSales()
+      load()
+    } else {
+      toast({
+        title: `Falha ao sincronizar ${vendaId}`,
+        description: res.reason.slice(0, 220),
+        variant: "destructive",
+      })
+    }
+  }, [retroativoConfirmId, retrySyncSaleRetroactive, fetchRemoteSales, load, toast])
 
   const handleConfirmDescarteLocal = useCallback(async () => {
     if (!descartandoLocalId) return
@@ -1663,6 +1707,18 @@ export function VendasArquivoGeral() {
                   </div>
                 </div>
 
+                {pendenteLocalLive?.syncBlockedCode === "CAIXA_ORIGINAL_FECHADO" && (
+                  <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5 text-xs text-warning space-y-1">
+                    <p className="font-semibold flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      Venda de caixa já fechado
+                    </p>
+                    <p>Data original: {fmtDate(detalhePendenteLocal.at)}</p>
+                    <p>Esta venda será lançada retroativamente na sessão de caixa original.</p>
+                    <p className="font-medium">Isso pode alterar uma conferência/fechamento antigo.</p>
+                  </div>
+                )}
+
                 <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1">
                   <p className="font-medium text-foreground">Próximos passos</p>
                   <p>
@@ -1692,6 +1748,17 @@ export function VendasArquivoGeral() {
                     )}
                     Reenviar sincronização
                   </Button>
+                  {pendenteLocalLive?.syncBlockedCode === "CAIXA_ORIGINAL_FECHADO" && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 gap-2 text-sm border-warning/40 text-warning hover:bg-warning/10"
+                      onClick={() => setRetroativoConfirmId(detalhePendenteLocal.id)}
+                    >
+                      <Clock className="h-4 w-4" />
+                      Sincronizar retroativo
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
@@ -2150,6 +2217,63 @@ export function VendasArquivoGeral() {
             >
               {descartandoLocalLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {descartandoLocalLoading ? "Verificando…" : "Confirmar descarte local"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Sync retroativo (venda pendente com sessão de caixa original fechada) ── */}
+      <AlertDialog
+        open={!!retroativoConfirmId}
+        onOpenChange={(o) => {
+          if (!o && !retroativoLoading) setRetroativoConfirmId(null)
+        }}
+      >
+        <AlertDialogContent className="border-border bg-card max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-warning/10 text-warning">
+                {retroativoLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <AlertTriangle className="h-5 w-5" />
+                )}
+              </span>
+              <div className="min-w-0 space-y-1">
+                <AlertDialogTitle className="text-foreground text-left">
+                  Confirmar sincronização retroativa
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-muted-foreground text-left">
+                  A venda <span className="font-mono text-xs">{retroativoConfirmId ?? ""}</span> pertence a uma sessão de
+                  caixa já fechada. Ela será gravada na sessão de caixa ORIGINAL (não no caixa de hoje), preservando data e
+                  valores originais. Isso pode alterar uma conferência/fechamento já encerrado daquele dia.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1.5">
+            <p className="font-medium text-foreground flex items-center gap-1.5">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+              Garantias
+            </p>
+            <p>· Nunca sincroniza no caixa atual — mantém a sessão e a data originais.</p>
+            <p>· Não duplica venda, estoque ou movimentação financeira em reenvios repetidos.</p>
+            <p>· Ação manual: só ocorre com esta confirmação explícita.</p>
+          </div>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="border-border" disabled={retroativoLoading}>
+              Voltar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-warning text-warning-foreground hover:bg-warning/90 gap-2"
+              disabled={retroativoLoading}
+              onClick={(e) => {
+                e.preventDefault()
+                void handleConfirmReenviarRetroativo()
+              }}
+            >
+              {retroativoLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {retroativoLoading ? "Sincronizando…" : "Confirmar sincronização retroativa"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

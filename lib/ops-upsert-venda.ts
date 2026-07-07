@@ -48,16 +48,40 @@ export class UnresolvedProductError extends Error {
 
 /**
  * Lançada quando `requireCaixaSession` está ativo e a venda gera entrada no caixa
- * (valorImediato > 0) mas NÃO há `SessaoCaixa` ABERTA válida para a loja (sessão
- * inexistente, fechada, de outra loja, ou nenhuma sessão aberta no terminal). A
- * venda persistida não pode mover dinheiro sem caixa servidor aberto. Nunca abre
- * caixa automaticamente. O caller (`venda-persist`) traduz para HTTP 409.
+ * (valorImediato > 0) mas NÃO há `SessaoCaixa` ABERTA válida para a loja: sessão
+ * inexistente, de OUTRA loja, ou (quando a venda não referencia uma sessão específica)
+ * nenhuma sessão aberta no terminal. Nunca abre caixa automaticamente. O caller
+ * (`venda-persist`) traduz para HTTP 409. Note: quando a venda referencia uma
+ * `sessaoId` que EXISTE e é DESTA loja mas está `FECHADA`, o erro é o mais específico
+ * `CaixaOriginalFechadoError` (ver abaixo) — não este.
  */
 export class CaixaSessaoInvalidaError extends Error {
   readonly code = "CAIXA_FECHADO"
   constructor() {
     super("Caixa fechado ou sessão inválida. Abra o caixa antes de finalizar a venda.")
     this.name = "CaixaSessaoInvalidaError"
+  }
+}
+
+/**
+ * Lançada quando a venda referencia uma `sessaoId` que EXISTE e é DESTA loja, mas já
+ * está `FECHADA` (fechamento diário já rodou) — típico de venda pendente de dia
+ * anterior tentando reenviar depois do fechamento de caixa daquele dia. Diferente de
+ * `CaixaSessaoInvalidaError` (sessão inexistente/de outra loja): aqui a sessão é
+ * legítima, só que encerrada. NUNCA sincroniza automaticamente no caixa atual (a
+ * movimentação usaria `sale.at` original e ficaria fora da janela `abertaEm..fechadaEm`
+ * de qualquer sessão — invisível em toda conferência/fechamento). Só é contornável com
+ * `allowClosedOriginalSession: true` (ação manual explícita do operador/gerente),
+ * gravando na PRÓPRIA sessão original fechada. O caller (`venda-persist`) traduz para
+ * HTTP 409 com `code: "CAIXA_ORIGINAL_FECHADO"`.
+ */
+export class CaixaOriginalFechadoError extends Error {
+  readonly code = "CAIXA_ORIGINAL_FECHADO"
+  constructor() {
+    super(
+      "Esta venda pertence a uma sessão de caixa já fechada. Para sincronizar, confirme o lançamento retroativo na sessão original.",
+    )
+    this.name = "CaixaOriginalFechadoError"
   }
 }
 
@@ -80,6 +104,15 @@ export type UpsertVendaOptions = {
    * `false` (não revalida caixa de vendas históricas). Nunca abre caixa automaticamente.
    */
   requireCaixaSession?: boolean
+  /**
+   * Autoriza explicitamente a sincronização de uma venda cuja `sessaoId` original
+   * existe e é DESTA loja, mas já está `FECHADA` — ação manual do operador/gerente
+   * (nunca ligado por padrão, nunca inferido automaticamente). Quando `true` e esse
+   * for o caso, a venda é gravada normalmente (mesma sessão original, mesma data),
+   * e o payload ganha os metadados de auditoria `retroactiveSync`/`originalSessionClosed`/
+   * `syncedAt`/`reason`. Sem esse flag, o mesmo cenário falha com `CaixaOriginalFechadoError`.
+   */
+  allowClosedOriginalSession?: boolean
 }
 
 export type SalePayload = {
@@ -106,6 +139,15 @@ export type SalePayload = {
   terminalId?: string | null
   /** Formas de pagamento — usado para gerar MovimentacaoFinanceira por forma. */
   paymentBreakdown?: Partial<PaymentBreakdownFull>
+  /**
+   * Metadados de auditoria gravados pelo SERVIDOR (nunca enviados pelo cliente) quando
+   * `allowClosedOriginalSession` é usado para sincronizar uma venda pendente cuja sessão
+   * de caixa original já está fechada — ver `CaixaOriginalFechadoError`.
+   */
+  retroactiveSync?: boolean
+  originalSessionClosed?: boolean
+  syncedAt?: string
+  reason?: string
   /** Configuração de parcelamento para venda à prazo. */
   aPrazoConfig?: {
     parcelas?: number
@@ -209,34 +251,71 @@ export async function upsertVendaInTransaction(
   // `lib/caixa/recebimento-cr-caixa.ts#resolveSessaoCaixaAberta` — duplicada aqui via
   // `tx` para manter este módulo livre de `@/lib/prisma` (testado em ambiente node com
   // TransactionClient fake) e a validação atômica dentro da própria transação da venda.
+  // `true` quando a venda foi liberada via `allowClosedOriginalSession` numa sessão
+  // original EXISTENTE-porém-FECHADA — usado abaixo para carimbar o payload (§1) com
+  // metadados de auditoria. Nunca fica `true` no caminho "sem sessaoId" (sessão atual).
+  let isRetroactiveSync = false
   if (options?.requireCaixaSession === true && valorImediato > 0) {
     const sessaoIdSale =
       typeof sale.sessaoId === "string" && sale.sessaoId.trim() ? sale.sessaoId.trim() : null
-    const sessao = sessaoIdSale
-      ? await tx.sessaoCaixa.findFirst({
-          // Com sessaoId: a sessão precisa existir, estar ABERTA e ser DESTA loja.
-          where: { id: sessaoIdSale, storeId: lojaId, status: "ABERTA" },
-          select: { id: true },
-        })
-      : await tx.sessaoCaixa.findFirst({
-          // Sem sessaoId: aceita a sessão aberta mais recente da loja (do terminal, se houver).
-          where: { storeId: lojaId, status: "ABERTA", ...(terminalId ? { terminalId } : {}) },
-          orderBy: { abertaEm: "desc" },
-          select: { id: true },
-        })
-    if (!sessao) throw new CaixaSessaoInvalidaError()
+    if (sessaoIdSale) {
+      // Com sessaoId: a sessão precisa existir e ser DESTA loja (qualquer status —
+      // o status é avaliado a seguir para distinguir "fechada" de "inexistente").
+      const sessao = await tx.sessaoCaixa.findFirst({
+        where: { id: sessaoIdSale, storeId: lojaId },
+        select: { id: true, status: true },
+      })
+      if (!sessao) {
+        // Sessão inexistente ou de OUTRA loja — nunca aceitar, nunca fallback.
+        throw new CaixaSessaoInvalidaError()
+      }
+      if (sessao.status !== "ABERTA") {
+        // Sessão original existe e é desta loja, mas já foi fechada (fechamento diário
+        // já rodou). Só prossegue com autorização explícita — nunca fallback silencioso
+        // para a sessão atual (a movimentação usaria `sale.at` original e ficaria fora
+        // da janela `abertaEm..fechadaEm` de qualquer sessão, invisível em toda
+        // conferência — ver GOAL PDV-VENDA-PENDENTE-DIA-ANTERIOR-SYNC-AUDIT-001).
+        if (options?.allowClosedOriginalSession !== true) {
+          throw new CaixaOriginalFechadoError()
+        }
+        isRetroactiveSync = true
+      }
+    } else {
+      // Sem sessaoId: aceita a sessão aberta mais recente da loja (do terminal, se houver).
+      const sessao = await tx.sessaoCaixa.findFirst({
+        where: { storeId: lojaId, status: "ABERTA", ...(terminalId ? { terminalId } : {}) },
+        orderBy: { abertaEm: "desc" },
+        select: { id: true },
+      })
+      if (!sessao) throw new CaixaSessaoInvalidaError()
+    }
   }
+
+  // Payload gravado em `Venda.payload`: quando o sync foi retroativo (sessão original
+  // fechada, autorizado explicitamente), carimba metadados de auditoria — nunca enviados
+  // pelo cliente, calculados aqui no servidor no momento da gravação.
+  const salePayloadForStorage: SalePayload = isRetroactiveSync
+    ? {
+        ...sale,
+        retroactiveSync: true,
+        originalSessionClosed: true,
+        syncedAt: new Date().toISOString(),
+        reason: "pending_sale_closed_original_session",
+      }
+    : sale
 
   // ── 1. Upsert Venda ─────────────────────────────────────────────────────────
   // Multi-Terminais Fase 3: também popula a coluna `Venda.terminalId` (além do payload)
   // para permitir filtros SQL por terminal nos relatórios. Tudo nullable —
   // vendas sem terminal selecionado ou anteriores à feature continuam funcionando.
+  // `at` continua sendo a data ORIGINAL da venda (nunca "agora") — inclusive no
+  // caminho retroativo, para preservar a janela de conferência da sessão original.
   const v = await tx.venda.upsert({
     where: { pedidoId },
     create: {
       storeId: lojaId,
       pedidoId,
-      payload: asJsonPayload(sale),
+      payload: asJsonPayload(salePayloadForStorage),
       total,
       at,
       clienteNome,
@@ -246,7 +325,7 @@ export async function upsertVendaInTransaction(
     },
     update: {
       storeId: lojaId,
-      payload: asJsonPayload(sale),
+      payload: asJsonPayload(salePayloadForStorage),
       total,
       at,
       clienteNome,

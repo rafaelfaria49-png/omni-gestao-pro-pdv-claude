@@ -152,6 +152,16 @@ function formatVendaPersistErrorBody(body: string, status: number): string {
   return trimmed || `HTTP ${status}`
 }
 
+/** Extrai só o `code` do corpo de erro de `/api/ops/venda-persist` (ex.: `CAIXA_ORIGINAL_FECHADO`). */
+function extractVendaPersistErrorCode(body: string): string | undefined {
+  try {
+    const j = JSON.parse(body) as { code?: string }
+    return typeof j.code === "string" ? j.code : undefined
+  } catch {
+    return undefined
+  }
+}
+
 function vendaPersistUrl(lojaId: string): string {
   return `/api/ops/venda-persist?storeId=${encodeURIComponent(lojaId)}`
 }
@@ -318,6 +328,14 @@ interface OperationsContextType {
    * limpa `syncPending`. Em erro, mantém o estado pendente e devolve o motivo.
    */
   retrySyncSale: (saleId: string) => Promise<{ ok: true } | { ok: false; reason: string }>
+  /**
+   * Ação manual explícita (nunca automática): reenvia uma venda pendente cuja sessão de
+   * caixa original existe e é desta loja, mas já está `FECHADA`
+   * (`sale.syncBlockedCode === "CAIXA_ORIGINAL_FECHADO"`), autorizando o servidor a
+   * gravá-la retroativamente na PRÓPRIA sessão original (nunca no caixa atual). A UI deve
+   * pedir confirmação antes de chamar.
+   */
+  retrySyncSaleRetroactive: (saleId: string) => Promise<{ ok: true } | { ok: false; reason: string }>
   /**
    * Verifica no servidor se a venda existe antes de descartar localmente.
    * - Se o servidor tem (HTTP 200): NÃO descarta — apenas reconcilia `syncPending=false`.
@@ -796,7 +814,9 @@ export function OperationsProvider({
   // 409 caixa fechado / produto não resolvido) não muda re-POSTando a cada 30s —
   // só quando o operador age. Segura a re-tentativa automática dessa venda pelo
   // período abaixo; erros de rede/5xx (transitórios) seguem o ciclo normal e o
-  // reenvio MANUAL (retrySyncSale) ignora o cooldown.
+  // reenvio MANUAL (retrySyncSale) ignora o cooldown. NUNCA envia
+  // `allowClosedOriginalSession`/`retroactiveClosedSession` — sync retroativo de sessão
+  // original fechada é sempre ação manual e explícita (ver `retrySyncSaleRetroactive`).
   const vendaAutoRetryHoldRef = useRef<Map<string, number>>(new Map())
   const VENDA_AUTO_RETRY_HOLD_MS = 5 * 60_000
 
@@ -821,7 +841,9 @@ export function OperationsProvider({
             vendaAutoRetryHoldRef.current.delete(sale.id)
             setState((prev) => ({
               ...prev,
-              sales: prev.sales.map((s) => (s.id === sale.id ? { ...s, syncPending: false } : s)),
+              sales: prev.sales.map((s) =>
+                s.id === sale.id ? { ...s, syncPending: false, syncBlockedCode: undefined } : s
+              ),
             }))
           } else {
             if (res.status >= 400 && res.status < 500) {
@@ -829,7 +851,14 @@ export function OperationsProvider({
             }
             const body = await res.text().catch(() => "")
             const detail = formatVendaPersistErrorBody(body, res.status)
+            const code = extractVendaPersistErrorCode(body)
             console.warn("[venda-persist] re-sync HTTP", res.status, sale.id, "lojaId:", lj, "body:", detail)
+            if (code) {
+              setState((prev) => ({
+                ...prev,
+                sales: prev.sales.map((s) => (s.id === sale.id ? { ...s, syncBlockedCode: code } : s)),
+              }))
+            }
           }
         })
         .catch((err: unknown) => {
@@ -864,8 +893,13 @@ export function OperationsProvider({
     [storageKey],
   )
 
-  const retrySyncSale = useCallback<OperationsContextType["retrySyncSale"]>(
-    async (saleId) => {
+  /**
+   * Reenvio manual de uma venda pendente. `retroactive: true` acrescenta
+   * `allowClosedOriginalSession` ao corpo — usado SOMENTE pela ação explícita
+   * "Sincronizar retroativo" (nunca pelo retry automático nem pelo reenvio normal).
+   */
+  const doRetrySyncSale = useCallback(
+    async (saleId: string, retroactive: boolean): Promise<{ ok: true } | { ok: false; reason: string }> => {
       const sale = stateRef.current.sales.find((s) => s.id === saleId && s.syncPending === true)
       if (!sale) {
         return { ok: false, reason: "Venda local pendente não encontrada (talvez já tenha sincronizado)." }
@@ -879,19 +913,28 @@ export function OperationsProvider({
             "Content-Type": "application/json",
             [ASSISTEC_LOJA_HEADER]: lj,
           },
-          body: JSON.stringify({ sale }),
+          body: JSON.stringify(retroactive ? { sale, allowClosedOriginalSession: true } : { sale }),
         })
         if (res.ok) {
           vendaAutoRetryHoldRef.current.delete(saleId)
           setState((prev) => ({
             ...prev,
-            sales: prev.sales.map((s) => (s.id === saleId ? { ...s, syncPending: false } : s)),
+            sales: prev.sales.map((s) =>
+              s.id === saleId ? { ...s, syncPending: false, syncBlockedCode: undefined } : s
+            ),
           }))
           return { ok: true }
         }
         const body = await res.text().catch(() => "")
         const detail = formatVendaPersistErrorBody(body, res.status)
+        const code = extractVendaPersistErrorCode(body)
         console.warn("[venda-persist] retry HTTP", res.status, saleId, "lojaId:", lj, "body:", detail)
+        if (code) {
+          setState((prev) => ({
+            ...prev,
+            sales: prev.sales.map((s) => (s.id === saleId ? { ...s, syncBlockedCode: code } : s)),
+          }))
+        }
         return { ok: false, reason: `HTTP ${res.status} — ${detail}` }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
@@ -900,6 +943,22 @@ export function OperationsProvider({
       }
     },
     [storageKey],
+  )
+
+  const retrySyncSale = useCallback<OperationsContextType["retrySyncSale"]>(
+    (saleId) => doRetrySyncSale(saleId, false),
+    [doRetrySyncSale],
+  )
+
+  /**
+   * Ação manual explícita: sincroniza uma venda pendente cuja sessão de caixa original
+   * existe e é desta loja, mas já está `FECHADA` (`syncBlockedCode === "CAIXA_ORIGINAL_FECHADO"`).
+   * A venda é gravada na PRÓPRIA sessão original — nunca no caixa atual. Requer confirmação
+   * explícita na UI antes de chamar (ver `vendas-arquivo-geral.tsx`).
+   */
+  const retrySyncSaleRetroactive = useCallback<OperationsContextType["retrySyncSaleRetroactive"]>(
+    (saleId) => doRetrySyncSale(saleId, true),
+    [doRetrySyncSale],
   )
 
   const discardLocalPendingSale = useCallback<OperationsContextType["discardLocalPendingSale"]>(
@@ -1675,6 +1734,7 @@ export function OperationsProvider({
       registrarOperacaoCaixa,
       refreshSalesFromServer,
       retrySyncSale,
+      retrySyncSaleRetroactive,
       discardLocalPendingSale,
       bulkDiscardLocalPendingSales,
     }),
@@ -1696,6 +1756,7 @@ export function OperationsProvider({
       registrarOperacaoCaixa,
       refreshSalesFromServer,
       retrySyncSale,
+      retrySyncSaleRetroactive,
       discardLocalPendingSale,
       bulkDiscardLocalPendingSales,
     ]

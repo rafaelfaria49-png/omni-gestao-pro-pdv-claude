@@ -9,6 +9,7 @@ import {
   InsufficientStockError,
   UnresolvedProductError,
   CaixaSessaoInvalidaError,
+  CaixaOriginalFechadoError,
   type SalePayload,
 } from "@/lib/ops-upsert-venda"
 
@@ -37,6 +38,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "sale obrigatório" }, { status: 400 })
   }
 
+  // Flag explícito e manual (nunca inferido/automático) para sincronizar uma venda
+  // pendente cuja `sessaoId` original existe e é desta loja, mas já está `FECHADA`
+  // (fechamento diário já rodou). Aceita os dois nomes por compatibilidade com o PDV.
+  // Sem esse flag, esse cenário falha com 409 `CAIXA_ORIGINAL_FECHADO` (ver
+  // `lib/ops-upsert-venda.ts#CaixaOriginalFechadoError`).
+  const bodyObj = body as { allowClosedOriginalSession?: unknown; retroactiveClosedSession?: unknown }
+  const allowClosedOriginalSession =
+    bodyObj.allowClosedOriginalSession === true || bodyObj.retroactiveClosedSession === true
+
   const pedidoId = typeof sale.id === "string" && sale.id.trim() ? sale.id.trim() : ""
   if (!pedidoId) {
     return NextResponse.json({ error: "sale.id inválido" }, { status: 400 })
@@ -60,6 +70,7 @@ export async function POST(req: Request) {
         await upsertVendaInTransaction(tx, lojaId, sale, operadorLabel, {
           enforceStock: true,
           requireCaixaSession: true,
+          allowClosedOriginalSession,
         })
       },
       // `DATABASE_URL` usa `connection_limit=1` (pooler Supabase) — vendas com muitas
@@ -81,6 +92,17 @@ export async function POST(req: Request) {
       console.warn(
         "[ops/venda-persist] caixa-fechado",
         JSON.stringify({ lojaId, pedidoId, sessaoId: sale.sessaoId ?? null, terminalId: sale.terminalId ?? null }),
+      )
+      return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
+    }
+    // Venda pendente antiga cuja sessão de caixa original existe e é desta loja, mas já
+    // foi fechada. Nunca sincroniza sozinha no caixa atual (ver
+    // PDV-VENDA-PENDENTE-DIA-ANTERIOR-SYNC-AUDIT-001) — exige `allowClosedOriginalSession`
+    // explícito (ação manual do operador/gerente confirmando o lançamento retroativo).
+    if (e instanceof CaixaOriginalFechadoError) {
+      console.warn(
+        "[ops/venda-persist] caixa-original-fechado",
+        JSON.stringify({ lojaId, pedidoId, sessaoId: sale.sessaoId ?? null, allowClosedOriginalSession }),
       )
       return NextResponse.json({ error: e.message, code: e.code }, { status: 409 })
     }
