@@ -1056,18 +1056,68 @@ export function PdvClassic({
     queueMicrotask(() => shellBipeRef.current?.focus())
   }, [])
 
+  const validateBeforeOpenPayment = useCallback(() => {
+    const caixaState = caixa as typeof caixa | null | undefined
+
+    if (cart.length === 0) {
+      toast({
+        title: "Carrinho vazio",
+        description: "Adicione produtos ao carrinho antes de finalizar.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    if (!caixaState) {
+      toast({
+        title: "Status do caixa carregando",
+        description: "Aguarde o status do caixa carregar antes de finalizar.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    if (!caixaState.isOpen) {
+      toast({
+        title: "Caixa fechado",
+        description: "Abra o caixa antes de finalizar a venda.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    if (!sessaoId?.trim()) {
+      toast({
+        title: "Sessão de caixa inválida",
+        description: "Sessão de caixa inválida. Abra ou atualize o caixa antes de finalizar.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    return true
+  }, [cart.length, caixa, sessaoId, toast])
+
+  const openPaymentFlow = useCallback(
+    (intent: PaymentMethodType | null, multiple: boolean) => {
+      if (!validateBeforeOpenPayment()) {
+        focusShellBipe()
+        return false
+      }
+      setInstantPayIntent(intent)
+      setMultipayMode(multiple)
+      setIsPaymentModalOpen(true)
+      return true
+    },
+    [focusShellBipe, validateBeforeOpenPayment]
+  )
+
   const openShellShortcut = useCallback(
     (key: string) => {
       const goBipe = () => focusShellBipe()
       switch (key) {
         case "F1":
-          if (cart.length === 0) {
-            toast({ title: "Nenhum item", description: "Adicione produtos antes de finalizar." })
-            goBipe()
-            return
-          }
-          setInstantPayIntent(null)
-          setIsPaymentModalOpen(true)
+          openPaymentFlow(null, false)
           break
         case "End":
           setShowKeyboardHelp(true)
@@ -1124,26 +1174,12 @@ export function PdvClassic({
         case "F10":
           // Desconto: aplicado no modal de pagamento (campos de desconto no topo).
           // Tecla dedicada consistente com o PDV Assistência (F10 = Desconto).
-          if (cart.length === 0) {
-            toast({ title: "Nenhum item", description: "Adicione produtos antes de aplicar desconto." })
-            goBipe()
-            return
-          }
-          setInstantPayIntent(null)
-          setMultipayMode(false)
-          setIsPaymentModalOpen(true)
+          openPaymentFlow(null, false)
           break
         case "F12":
           // Pagamento Múltiplo (convergência operacional com Assistência). Reusa o
           // modal compartilhado em modo split — sem implementação paralela.
-          if (cart.length === 0) {
-            toast({ title: "Nenhum item", description: "Adicione produtos antes de finalizar." })
-            goBipe()
-            return
-          }
-          setInstantPayIntent(null)
-          setMultipayMode(true)
-          setIsPaymentModalOpen(true)
+          openPaymentFlow(null, true)
           break
         case "CTRL":
           setShellAdvancedOpen(true)
@@ -1152,7 +1188,7 @@ export function PdvClassic({
           break
       }
     },
-    [cart.length, focusShellBipe, selectedCartLineId, toast, caixa.isOpen, sessaoId]
+    [cart.length, focusShellBipe, selectedCartLineId, toast, caixa.isOpen, sessaoId, openPaymentFlow]
   )
 
   useEffect(() => {
@@ -1268,20 +1304,12 @@ export function PdvClassic({
   const openPaymentModal = (intent: PaymentMethodType | null) => {
     // À prazo / carnê sem cliente NÃO barram mais: o modal abre e pede o seletor de
     // cliente (com cadastro rápido) via onRequireCustomer, preservando o carrinho.
-    setInstantPayIntent(intent)
-    setMultipayMode(false)
-    setIsPaymentModalOpen(true)
+    openPaymentFlow(intent, false)
   }
 
   /** Pagamento Múltiplo — convergência operacional com o PDV Assistência (F12). */
   const openMultipayModal = () => {
-    if (cart.length === 0) {
-      toast({ title: "Nenhum item", description: "Adicione produtos antes de finalizar." })
-      return
-    }
-    setInstantPayIntent(null)
-    setMultipayMode(true)
-    setIsPaymentModalOpen(true)
+    openPaymentFlow(null, true)
   }
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
