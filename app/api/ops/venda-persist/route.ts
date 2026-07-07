@@ -55,12 +55,21 @@ export async function POST(req: Request) {
 
   try {
     await prismaEnsureConnected()
-    await prisma.$transaction(async (tx) => {
-      await upsertVendaInTransaction(tx, lojaId, sale, operadorLabel, {
-        enforceStock: true,
-        requireCaixaSession: true,
-      })
-    })
+    await prisma.$transaction(
+      async (tx) => {
+        await upsertVendaInTransaction(tx, lojaId, sale, operadorLabel, {
+          enforceStock: true,
+          requireCaixaSession: true,
+        })
+      },
+      // `DATABASE_URL` usa `connection_limit=1` (pooler Supabase) — vendas com muitas
+      // linhas + parcelamento à prazo fazem várias idas ao banco dentro da mesma
+      // transação e podem esperar a única conexão ficar livre. Os defaults do Prisma
+      // (maxWait 2s / timeout 5s) estouravam nesse cenário e o Postgres já tinha
+      // encerrado a transação quando a próxima query rodava, gerando
+      // "Transaction not found... refere-se a uma transação antiga já encerrada".
+      { maxWait: 15_000, timeout: 20_000 },
+    )
 
     return NextResponse.json({ ok: true })
   } catch (e) {
