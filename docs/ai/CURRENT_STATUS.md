@@ -1578,16 +1578,39 @@ antigo precisa ser endurecido (`header:1` + `detectarCabecalho` portado do novo)
 | Removido (teatro) | Card fixo "Memória operacional / timeline IA ainda não ativada" — substituído pela memória real |
 | **Status** | Memória operacional real, sem LLM/embeddings/timeline automática — registro manual estruturado, buscável por termo |
 
+#### Timeline Operacional Real (aba `memory`) — GOAL OMNI-AGENT-HUB-TIMELINE-REAL-001 (08/07/2026)
+
+Sem modelo Prisma novo: é uma **agregação read-only** de fontes já persistidas. Sem IA, sem inferência,
+sem resumo automático — cada evento tem origem e referência rastreáveis (`kind` + `id` da fonte real).
+
+| Origem | Fonte real | Observações |
+|--------|-----------|-------------|
+| `memoria` | `OmniAgentMemory` | 1 evento por registro (ativo ou arquivado); tipo/prioridade derivados do campo `tipo` da memória |
+| `comando` | `OmniAgentCommand` | Sempre loja-wide (o modelo não tem FK de cliente); `clienteId` só é preenchido quando `resultado.clienteId` existe (ex.: `OS_OPEN` executado) |
+| `auditoria` | `logs_auditoria` (`action IN (OMNI_AGENT_CONFIG_SAVE, OMNI_AGENT_CONFIG_RESET)`) | Única contribuição não-duplicada da auditoria — as demais ações Omni (`OMNI_AGENT_LEMBRETE`, `_EXEC_OK`, `_EXEC_ERRO`, `_DESPESA`, `_RECEBIMENTO`, `_MEMORY_*`) já são representadas por `OmniAgentMemory`/`OmniAgentCommand` e foram deliberadamente excluídas para não duplicar o mesmo fato |
+| `ordem_servico` | `OrdemServico.payload.timeline` (`EventoTimeline[]`) | Quando a OS tem timeline rica, cada entrada vira 1 evento; sem timeline (ex.: importação legada), 1 evento de fallback "OS aberta" a partir de `createdAt` |
+| `cliente` | `Cliente.createdAt` | Só aparece com um `clienteId` explícito no filtro (1 evento "Cliente cadastrado"); não lista clientes recentes da loja (fora de escopo, evita duplicar Cadastros HUB) |
+
+| Item | Estado |
+|------|--------|
+| Módulo puro | `lib/omni-agent/timeline.ts` — tipos, mapeadores por origem, `aggregateOmniAgentTimeline` (filtro por cliente/origem/tipo/período/busca + ordenação desc + paginação), 100% testável sem banco |
+| Server action | `app/actions/omni-agent-timeline.ts` — `getOmniAgentTimeline(storeId, filtros)`, gate `workspace.omniAgent`; busca só as origens pedidas (evita consultas desnecessárias); cada fonte com `take` limitado antes de agregar |
+| Isolamento | Toda query filtra por `storeId`; `logs_auditoria` (sem coluna `storeId` própria) é filtrada em memória a partir do `metadata` JSON antes de virar evento |
+| UI | Aba Memória Cliente ganhou card "Timeline operacional": filtro loja/cliente, origem (multi-seleção), período (de/até), busca por termo, paginação "Carregar mais" |
+| **Diferença para a futura Timeline Inteligente (Omni Core)** | Esta é a **Timeline Operacional**: organiza fatos existentes, sem gerar texto novo. A Timeline Inteligente (fase futura do Core) adicionaria resumo por LLM, inferência de padrões e memória semântica — nenhuma dessas capacidades existe aqui |
+| **Status** | Real, somente leitura, sem duplicar dados entre origens |
+
 #### Pendências restantes (próximas fases — não bloqueiam o encerramento acima)
 
-- Migration futura: coluna `storeId` em `logs_auditoria` (hoje `storeId`/`tenantId` só em `metadata` JSON nas escritas Omni).
+- Migration futura: coluna `storeId` em `logs_auditoria` (hoje `storeId`/`tenantId` só em `metadata` JSON nas escritas Omni) — a Timeline já contorna isso filtrando em memória, mas uma coluna real destravaria consultas mais amplas de auditoria.
 - Emissor server-side para evento `conta_receber_vencida` (cron/job financeiro).
 - Executores reais: venda / estoque (além de triagem/lembrete); despesa e recebimento avulso já persistem em `MovimentacaoFinanceira`.
 - WhatsApp bidirecional no Agent (canal persistido; outbound Meta continua no HUB WhatsApp).
 - LLM governado com tools/JSON schema no Omni Agent.
-- Memória operacional unificada (timeline cliente: PDV + OS + WhatsApp + financeiro) — a `OmniAgentMemory` acima é o registro manual estruturado; a consolidação automática de eventos de outros módulos segue futura.
+- Memória operacional unificada (timeline cliente: PDV + OS + WhatsApp + financeiro) — a Timeline Operacional Real acima já unifica memória/comando/config/OS/cadastro; PDV e WhatsApp como origens seguem futuros.
 - Horário de atendimento sem enforcement automático ainda (persistido, sem gate de rotina).
 - `OmniAgentMemory` sem reativação de item arquivado (só arquivar) — avaliar se faz sentido no próximo GOAL.
+- Timeline sem paginação por cursor (usa offset em memória) — trocar por cursor se o volume por loja crescer muito.
 
 #### Referências de auditoria
 

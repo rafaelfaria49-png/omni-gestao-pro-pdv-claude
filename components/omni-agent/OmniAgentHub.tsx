@@ -10,7 +10,7 @@ import {
   Inbox, Search, Command as CmdIcon, Clock, FileText,
   AlertTriangle, UserCog, Maximize2, Minimize2,
   CheckCircle2, XCircle, Loader2, Circle, Cpu, ChevronRight,
-  Archive, Pencil,
+  Archive, Pencil, Terminal, Wrench, User, History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,9 +50,13 @@ import {
   updateOmniAgentMemory,
   archiveOmniAgentMemory,
   listOmniAgentMemoriesByCliente,
-  listRecentOmniAgentMemories,
-  searchOmniAgentMemories,
 } from "@/app/actions/omni-agent-memory";
+import { getOmniAgentTimeline } from "@/app/actions/omni-agent-timeline";
+import {
+  OMNI_TIMELINE_ORIGINS,
+  type OmniTimelineEvent,
+  type OmniTimelineOrigin,
+} from "@/lib/omni-agent/timeline";
 import {
   DEFAULT_OMNI_AGENT_CONFIG,
   OMNI_AGENT_TONES,
@@ -2036,6 +2040,28 @@ const MEMORY_TYPE_LABELS: Record<OmniAgentMemoryType, string> = {
   observacao: "Observação",
 };
 
+const TIMELINE_ORIGIN_LABELS: Record<OmniTimelineOrigin, string> = {
+  memoria: "Memória",
+  comando: "Comando",
+  auditoria: "Configuração",
+  ordem_servico: "Ordem de serviço",
+  cliente: "Cadastro",
+};
+
+const TIMELINE_ICONS: Record<string, any> = {
+  brain: Brain,
+  terminal: Terminal,
+  settings: SettingsIcon,
+  wrench: Wrench,
+  user: User,
+};
+
+function TimelinePriorityBadge({ prioridade }: { prioridade: OmniTimelineEvent["prioridade"] }) {
+  if (prioridade === "alta") return <Badge variant="destructive">Alta</Badge>;
+  if (prioridade === "media") return <Badge variant="secondary">Média</Badge>;
+  return <Badge variant="outline">Baixa</Badge>;
+}
+
 function MemoryItemCard({
   memory,
   onEdit,
@@ -2189,9 +2215,16 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
   const [createOpen, setCreateOpen] = useState(false);
   const [editMemory, setEditMemory] = useState<OmniAgentMemoryDTO | null>(null);
 
-  const [recentSearch, setRecentSearch] = useState("");
-  const [recent, setRecent] = useState<OmniAgentMemoryDTO[]>([]);
-  const [recentLoading, setRecentLoading] = useState(false);
+  const [tlScope, setTlScope] = useState<"cliente" | "loja">("loja");
+  const [tlOrigens, setTlOrigens] = useState<OmniTimelineOrigin[]>([]);
+  const [tlDe, setTlDe] = useState("");
+  const [tlAte, setTlAte] = useState("");
+  const [tlQ, setTlQ] = useState("");
+  const [tlPage, setTlPage] = useState(1);
+  const [tlEvents, setTlEvents] = useState<OmniTimelineEvent[]>([]);
+  const [tlTotal, setTlTotal] = useState(0);
+  const [tlHasMore, setTlHasMore] = useState(false);
+  const [tlLoading, setTlLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -2253,30 +2286,55 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
     void loadMemories();
   }, [loadMemories]);
 
-  const loadRecent = useCallback(
-    async (term: string) => {
-      if (!storeId?.trim()) {
-        setRecent([]);
-        return;
-      }
-      setRecentLoading(true);
-      try {
-        const list = term.trim()
-          ? await searchOmniAgentMemories(storeId, term)
-          : await listRecentOmniAgentMemories(storeId);
-        setRecent(list);
-      } catch {
-        setRecent([]);
-      } finally {
-        setRecentLoading(false);
-      }
-    },
-    [storeId],
-  );
+  const tlClienteId = tlScope === "cliente" ? c?.id ?? null : null;
+
+  const loadTimeline = useCallback(async () => {
+    if (!storeId?.trim()) {
+      setTlEvents([]);
+      setTlTotal(0);
+      setTlHasMore(false);
+      return;
+    }
+    if (tlScope === "cliente" && !tlClienteId) {
+      setTlEvents([]);
+      setTlTotal(0);
+      setTlHasMore(false);
+      return;
+    }
+    setTlLoading(true);
+    try {
+      const result = await getOmniAgentTimeline(storeId, {
+        clienteId: tlClienteId,
+        origens: tlOrigens.length > 0 ? tlOrigens : undefined,
+        de: tlDe ? new Date(tlDe).toISOString() : undefined,
+        ate: tlAte ? new Date(tlAte).toISOString() : undefined,
+        q: tlQ,
+        page: tlPage,
+        pageSize: 20,
+      });
+      setTlEvents((prev) => (tlPage === 1 ? result.events : [...prev, ...result.events]));
+      setTlTotal(result.total);
+      setTlHasMore(result.hasMore);
+    } catch {
+      setTlEvents([]);
+      setTlTotal(0);
+      setTlHasMore(false);
+    } finally {
+      setTlLoading(false);
+    }
+  }, [storeId, tlScope, tlClienteId, tlOrigens, tlDe, tlAte, tlQ, tlPage]);
 
   useEffect(() => {
-    void loadRecent(recentSearch);
-  }, [loadRecent, recentSearch]);
+    setTlPage(1);
+  }, [storeId, tlScope, tlClienteId, tlOrigens, tlDe, tlAte, tlQ]);
+
+  useEffect(() => {
+    void loadTimeline();
+  }, [loadTimeline]);
+
+  function toggleTlOrigem(o: OmniTimelineOrigin) {
+    setTlOrigens((prev) => (prev.includes(o) ? prev.filter((x) => x !== o) : [...prev, o]));
+  }
 
   async function handleArchive(memory: OmniAgentMemoryDTO) {
     try {
@@ -2284,7 +2342,7 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
       logAudit(`Memória arquivada: ${memory.titulo}`);
       toast.success("Memória arquivada");
       void loadMemories();
-      void loadRecent(recentSearch);
+      void loadTimeline();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Falha ao arquivar");
     }
@@ -2373,7 +2431,7 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
                           await submitOmniAgentCommand({ storeId, comandoOriginal: texto, mode: "run" });
                           logAudit(`Lembrete Agent → ${c.nome}`);
                           toast.success("Comando enviado — ver Inbox IA");
-                          void loadRecent(recentSearch);
+                          void loadTimeline();
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : "Falha");
                         }
@@ -2434,37 +2492,104 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
       </div>
 
       <Card>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="text-sm font-semibold">Últimas memórias da loja</div>
-          <Input
-            className="max-w-xs"
-            placeholder="Buscar por termo…"
-            value={recentSearch}
-            onChange={(e) => setRecentSearch(e.target.value)}
-          />
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="text-sm font-semibold">Timeline operacional</div>
+          <Badge variant="secondary">Fatos reais · sem IA</Badge>
+          <History className="h-3.5 w-3.5 text-muted-foreground" />
         </div>
-        {recentLoading ? (
+        <p className="text-xs text-muted-foreground mb-3">
+          Agrega memórias, comandos, configuração, ordens de serviço e cadastro — cada evento tem origem e referência
+          rastreáveis. Sem inferência, sem resumo automático: se não existe fato registrado, não aparece aqui.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <Button size="sm" variant={tlScope === "loja" ? "default" : "outline"} onClick={() => setTlScope("loja")}>
+            Toda a loja
+          </Button>
+          <Button
+            size="sm"
+            variant={tlScope === "cliente" ? "default" : "outline"}
+            disabled={!c}
+            onClick={() => setTlScope("cliente")}
+          >
+            Cliente selecionado
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {OMNI_TIMELINE_ORIGINS.map((o) => (
+            <Button
+              key={o}
+              size="sm"
+              variant={tlOrigens.includes(o) ? "default" : "outline"}
+              onClick={() => toggleTlOrigem(o)}
+            >
+              {TIMELINE_ORIGIN_LABELS[o]}
+            </Button>
+          ))}
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-[1fr_1fr_2fr] mb-3">
+          <div>
+            <Label className="text-[10px]">De</Label>
+            <Input type="date" value={tlDe} onChange={(e) => setTlDe(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-[10px]">Até</Label>
+            <Input type="date" value={tlAte} onChange={(e) => setTlAte(e.target.value)} />
+          </div>
+          <div>
+            <Label className="text-[10px]">Buscar</Label>
+            <Input placeholder="Buscar por termo…" value={tlQ} onChange={(e) => setTlQ(e.target.value)} />
+          </div>
+        </div>
+
+        {tlScope === "cliente" && !c ? (
+          <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-xs text-muted-foreground">
+            Selecione um cliente na lista para ver a timeline dele.
+          </div>
+        ) : tlLoading && tlEvents.length === 0 ? (
           <div className="space-y-2">
-            {[...Array(2)].map((_, i) => (
-              <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-14 rounded-lg bg-muted animate-pulse" />
             ))}
           </div>
-        ) : recent.length === 0 ? (
+        ) : tlEvents.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-xs text-muted-foreground">
-            {recentSearch.trim() ? "Nenhuma memória encontrada para este termo." : "Nenhuma memória registrada nesta loja ainda."}
+            Nenhum evento encontrado para estes filtros.
           </div>
         ) : (
-          <div className="space-y-1.5 max-h-72 overflow-y-auto">
-            {recent.map((m) => (
-              <div key={m.id} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs">
-                <Badge variant="outline" className="shrink-0">{MEMORY_TYPE_LABELS[m.tipo]}</Badge>
-                <span className="font-medium truncate">{m.titulo}</span>
-                <span className="ml-auto shrink-0 text-muted-foreground">
-                  {new Date(m.createdAt).toLocaleDateString("pt-BR")}
-                </span>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="space-y-1.5 max-h-[480px] overflow-y-auto">
+              {tlEvents.map((ev) => {
+                const Icon = TIMELINE_ICONS[ev.icone] ?? Circle;
+                return (
+                  <div key={ev.id} className="flex items-start gap-2.5 rounded-md border border-border px-2.5 py-2 text-xs">
+                    <Icon className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge variant="outline" className="shrink-0">{TIMELINE_ORIGIN_LABELS[ev.origem]}</Badge>
+                        <span className="font-medium truncate">{ev.titulo}</span>
+                        <TimelinePriorityBadge prioridade={ev.prioridade} />
+                      </div>
+                      {ev.descricao && <p className="mt-0.5 text-muted-foreground truncate">{ev.descricao}</p>}
+                      <div className="mt-1 text-[10px] text-muted-foreground">
+                        {ev.responsavel} · {new Date(ev.data).toLocaleString("pt-BR")}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+              <span>{tlEvents.length} de {tlTotal}</span>
+              {tlHasMore && (
+                <Button size="sm" variant="outline" disabled={tlLoading} onClick={() => setTlPage((p) => p + 1)}>
+                  {tlLoading ? "Carregando…" : "Carregar mais"}
+                </Button>
+              )}
+            </div>
+          </>
         )}
       </Card>
 
@@ -2482,7 +2607,7 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
                 toast.success("Memória gravada no servidor");
                 setCreateOpen(false);
                 void loadMemories();
-                void loadRecent(recentSearch);
+                void loadTimeline();
               } catch (e) {
                 toast.error(e instanceof Error ? e.message : "Falha ao gravar memória");
               }
@@ -2507,7 +2632,7 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
                 toast.success("Memória atualizada");
                 setEditMemory(null);
                 void loadMemories();
-                void loadRecent(recentSearch);
+                void loadTimeline();
               } catch (e) {
                 toast.error(e instanceof Error ? e.message : "Falha ao editar memória");
               }
