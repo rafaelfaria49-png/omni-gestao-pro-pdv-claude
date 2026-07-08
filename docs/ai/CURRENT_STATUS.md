@@ -1553,6 +1553,31 @@ antigo precisa ser endurecido (`header:1` + `detectarCabecalho` portado do novo)
 | Auditoria final | Sem P0 operacionais abertos — ver relatório |
 | **Status** | **Piloto enterprise interno** (regex determinístico; sem LLM autónomo nesta fase) |
 
+#### Configurações (aba `settings`) — persistência real (GOAL OMNI-AGENT-HUB-CONFIG-REAL-001, 08/07/2026)
+
+| Item | Estado |
+|------|--------|
+| Modelo `OmniAgentConfig` | Novo, aditivo, 1 linha por loja (`prisma/schema.prisma`); substitui a chave `omni-settings` do `localStorage` |
+| Perfil do agente, canal padrão, horário, autonomia | Persistidos via `getOmniAgentConfig`/`upsertOmniAgentConfig`/`resetOmniAgentConfig` (`app/actions/omni-agent.ts`) |
+| Efeito real no pipeline | `omniAgentNeedsConfirmation` (`lib/omni-agent/config.ts`): autonomia `baixo` e `extraConfirmIntents` forçam confirmação extra em leituras; canal padrão preenche `submitOmniAgentCommand` quando nenhum canal é informado. Escritas continuam exigindo confirmação sempre, sem exceção configurável |
+| Removido (teatro) | Toggle "Aprovação automática" (nunca teve efeito) e painel de "Permissões demo" editável (permissões reais são só papel NextAuth + `INTENT_MODULE`, não editáveis aqui) |
+| Ainda sem efeito automático | Horário de atendimento (persistido, não gate nenhuma rotina ainda); perfil/tom/prompt (sem provider LLM) |
+| **Status** | Configuração real por loja; nenhuma automação/LLM/provider/workspace introduzidos (fora de escopo deste GOAL) |
+
+#### Memória Cliente (aba `memory`) — memória operacional real (GOAL OMNI-AGENT-HUB-MEMORY-REAL-001, 08/07/2026)
+
+| Item | Estado |
+|------|--------|
+| Modelo `OmniAgentMemory` | Novo, aditivo (`prisma/schema.prisma`); `storeId` obrigatório, `clienteId` opcional (`onDelete: SetNull`) |
+| Tipos suportados | `nota`, `decisao`, `lembrete`, `incidente`, `preferencia`, `observacao` (`lib/omni-agent/memory.ts`) |
+| Server actions | `app/actions/omni-agent-memory.ts`: `createOmniAgentMemory`, `updateOmniAgentMemory`, `archiveOmniAgentMemory`, `listOmniAgentMemoriesByCliente`, `listRecentOmniAgentMemories`, `searchOmniAgentMemories` — todas com gate `workspace.omniAgent` + `storeId` |
+| Arquivar ≠ apagar | `status: ativo \| arquivado`; nunca há `delete` físico |
+| Auditoria | `OMNI_AGENT_MEMORY_CREATE` / `_UPDATE` / `_ARCHIVE` em `logs_auditoria` |
+| Integração com comandos | `REMINDER_CREATE` no executor (`lib/omni-agent/executor.ts`) agora também grava uma `OmniAgentMemory` (`tipo: lembrete`, `origem: omni_agent`), além do log de auditoria já existente. Sem nova interpretação em `interpret.ts` |
+| UI | Aba Memória Cliente: lista/cria/edita/arquiva memórias do cliente selecionado; card "Últimas memórias da loja" com busca por termo. `localStorage` (chave `omni-notes`) removido |
+| Removido (teatro) | Card fixo "Memória operacional / timeline IA ainda não ativada" — substituído pela memória real |
+| **Status** | Memória operacional real, sem LLM/embeddings/timeline automática — registro manual estruturado, buscável por termo |
+
 #### Pendências restantes (próximas fases — não bloqueiam o encerramento acima)
 
 - Migration futura: coluna `storeId` em `logs_auditoria` (hoje `storeId`/`tenantId` só em `metadata` JSON nas escritas Omni).
@@ -1560,7 +1585,9 @@ antigo precisa ser endurecido (`header:1` + `detectarCabecalho` portado do novo)
 - Executores reais: venda / estoque (além de triagem/lembrete); despesa e recebimento avulso já persistem em `MovimentacaoFinanceira`.
 - WhatsApp bidirecional no Agent (canal persistido; outbound Meta continua no HUB WhatsApp).
 - LLM governado com tools/JSON schema no Omni Agent.
-- Memória operacional unificada (timeline cliente: PDV + OS + WhatsApp + financeiro).
+- Memória operacional unificada (timeline cliente: PDV + OS + WhatsApp + financeiro) — a `OmniAgentMemory` acima é o registro manual estruturado; a consolidação automática de eventos de outros módulos segue futura.
+- Horário de atendimento sem enforcement automático ainda (persistido, sem gate de rotina).
+- `OmniAgentMemory` sem reativação de item arquivado (só arquivar) — avaliar se faz sentido no próximo GOAL.
 
 #### Referências de auditoria
 

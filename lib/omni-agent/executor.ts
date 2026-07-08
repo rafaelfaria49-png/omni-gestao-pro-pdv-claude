@@ -7,6 +7,7 @@ import {
   createMovimentacaoSaidaFromOmniAgent,
 } from "@/lib/financeiro/services/movimentacoes-service"
 import { omniAgentAuditMetadata } from "@/lib/omni-agent/audit-log"
+import { writeOmniAgentMemory } from "@/lib/omni-agent/memory-writer"
 import type { OmniAgentInterpretacao, OmniAgentExecutorResult } from "./types"
 import type { EventoTimeline, OrdemServico } from "@/types/os"
 import { CHECKLIST_PADRAO } from "@/types/os"
@@ -346,19 +347,26 @@ export async function executeOmniAgentIntent(
       if (!sid) {
         return { ok: false, actionLabel: interp.action, error: "Unidade ativa obrigatória." }
       }
+      const memoria = await writeOmniAgentMemory({
+        storeId: sid,
+        tipo: "lembrete",
+        titulo,
+        conteudo: detalhe,
+        origem: "omni_agent",
+      })
       await prisma.logsAuditoria.create({
         data: {
           action: "OMNI_AGENT_LEMBRETE",
           userLabel: "Omni Agent HUB",
           detail: titulo,
-          metadata: omniAgentAuditMetadata(sid, { detalhe, source: "omni_agent_fase1" }),
+          metadata: omniAgentAuditMetadata(sid, { detalhe, source: "omni_agent_fase1", memoryId: memoria.id }),
           source: "omni_agent",
         },
       })
       return {
         ok: true,
         actionLabel: interp.action,
-        payload: { titulo, registradoEmAuditoria: true },
+        payload: { titulo, registradoEmAuditoria: true, memoryId: memoria.id },
       }
     }
 

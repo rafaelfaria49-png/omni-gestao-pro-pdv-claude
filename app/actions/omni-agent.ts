@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma"
 import type { OmniAgentInterpretacao } from "@/lib/omni-agent/types"
 import { INTENT_MODULE } from "@/lib/omni-agent/types"
-import { interpretOmniAgentCommand, intentRequiresConfirmation } from "@/lib/omni-agent/interpret"
+import { interpretOmniAgentCommand } from "@/lib/omni-agent/interpret"
 import { executeOmniAgentIntent } from "@/lib/omni-agent/executor"
 import { buildFiltroPreset, getResumoExecutivo } from "@/lib/financeiro/services/relatorios-financeiros-service"
 import { requireEnterpriseWith } from "@/lib/auth/guard-enterprise"
@@ -14,6 +14,15 @@ import { normalizeOmniAgentCanal } from "@/lib/omni-agent/canal"
 import { isOmniAgentAutomationTriggerKey, type OmniAgentAutomationTriggerKey } from "@/lib/omni-agent/omni-automation-triggers"
 import type { EnterprisePermissions } from "@/lib/auth/enterprise-permissions"
 import type { OmniAgentCommandStatus } from "@/generated/prisma"
+import {
+  DEFAULT_OMNI_AGENT_CONFIG,
+  omniAgentNeedsConfirmation,
+  sanitizeAutonomyLevel,
+  sanitizeBusinessHoursDays,
+  sanitizeExtraConfirmIntents,
+  sanitizeTone,
+  type OmniAgentConfigDTO,
+} from "@/lib/omni-agent/config"
 
 export type { OmniAgentCanal } from "@/lib/omni-agent/canal"
 import type { OmniAgentCanal } from "@/lib/omni-agent/canal"
@@ -47,6 +56,131 @@ async function logExec(storeId: string, commandId: string, ok: boolean, detail: 
   } catch {
     /* ignore */
   }
+}
+
+function toConfigDto(row: {
+  agentName: string
+  tone: string
+  basePrompt: string
+  autonomyLevel: string
+  defaultChannel: string
+  businessHoursStart: string
+  businessHoursEnd: string
+  businessHoursDays: string[]
+  extraConfirmIntents: string[]
+  updatedAt: Date
+} | null): OmniAgentConfigDTO {
+  if (!row) return DEFAULT_OMNI_AGENT_CONFIG
+  return {
+    agentName: row.agentName,
+    tone: row.tone,
+    basePrompt: row.basePrompt,
+    autonomyLevel: row.autonomyLevel,
+    defaultChannel: normalizeOmniAgentCanal(row.defaultChannel),
+    businessHoursStart: row.businessHoursStart,
+    businessHoursEnd: row.businessHoursEnd,
+    businessHoursDays: row.businessHoursDays,
+    extraConfirmIntents: sanitizeExtraConfirmIntents(row.extraConfirmIntents),
+    updatedAt: row.updatedAt.toISOString(),
+  }
+}
+
+/** Uso interno — sem checagem de permissão própria; chamar apenas após um gate já validado. */
+async function loadOmniAgentConfigInternal(storeId: string): Promise<OmniAgentConfigDTO> {
+  const row = await prisma.omniAgentConfig.findUnique({ where: { storeId } })
+  return toConfigDto(row)
+}
+
+export async function getOmniAgentConfig(storeId: string): Promise<OmniAgentConfigDTO> {
+  const sid = assertStoreId(storeId)
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+  return loadOmniAgentConfigInternal(sid)
+}
+
+export type UpsertOmniAgentConfigInput = {
+  agentName?: string
+  tone?: string
+  basePrompt?: string
+  autonomyLevel?: string
+  defaultChannel?: string
+  businessHoursStart?: string
+  businessHoursEnd?: string
+  businessHoursDays?: string[]
+  extraConfirmIntents?: string[]
+}
+
+export async function upsertOmniAgentConfig(
+  storeId: string,
+  input: UpsertOmniAgentConfigInput,
+): Promise<OmniAgentConfigDTO> {
+  const sid = assertStoreId(storeId)
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+
+  const data = {
+    ...(input.agentName !== undefined
+      ? { agentName: input.agentName.trim().slice(0, 60) || DEFAULT_OMNI_AGENT_CONFIG.agentName }
+      : {}),
+    ...(input.tone !== undefined ? { tone: sanitizeTone(input.tone, DEFAULT_OMNI_AGENT_CONFIG.tone) } : {}),
+    ...(input.basePrompt !== undefined ? { basePrompt: input.basePrompt.trim().slice(0, 2000) } : {}),
+    ...(input.autonomyLevel !== undefined
+      ? { autonomyLevel: sanitizeAutonomyLevel(input.autonomyLevel, DEFAULT_OMNI_AGENT_CONFIG.autonomyLevel) }
+      : {}),
+    ...(input.defaultChannel !== undefined ? { defaultChannel: normalizeOmniAgentCanal(input.defaultChannel) } : {}),
+    ...(input.businessHoursStart !== undefined ? { businessHoursStart: input.businessHoursStart.trim() } : {}),
+    ...(input.businessHoursEnd !== undefined ? { businessHoursEnd: input.businessHoursEnd.trim() } : {}),
+    ...(input.businessHoursDays !== undefined
+      ? { businessHoursDays: sanitizeBusinessHoursDays(input.businessHoursDays) }
+      : {}),
+    ...(input.extraConfirmIntents !== undefined
+      ? { extraConfirmIntents: sanitizeExtraConfirmIntents(input.extraConfirmIntents) }
+      : {}),
+  }
+
+  const row = await prisma.omniAgentConfig.upsert({
+    where: { storeId: sid },
+    create: {
+      storeId: sid,
+      agentName: data.agentName ?? DEFAULT_OMNI_AGENT_CONFIG.agentName,
+      tone: data.tone ?? DEFAULT_OMNI_AGENT_CONFIG.tone,
+      basePrompt: data.basePrompt ?? DEFAULT_OMNI_AGENT_CONFIG.basePrompt,
+      autonomyLevel: data.autonomyLevel ?? DEFAULT_OMNI_AGENT_CONFIG.autonomyLevel,
+      defaultChannel: data.defaultChannel ?? DEFAULT_OMNI_AGENT_CONFIG.defaultChannel,
+      businessHoursStart: data.businessHoursStart ?? DEFAULT_OMNI_AGENT_CONFIG.businessHoursStart,
+      businessHoursEnd: data.businessHoursEnd ?? DEFAULT_OMNI_AGENT_CONFIG.businessHoursEnd,
+      businessHoursDays: data.businessHoursDays ?? DEFAULT_OMNI_AGENT_CONFIG.businessHoursDays,
+      extraConfirmIntents: data.extraConfirmIntents ?? DEFAULT_OMNI_AGENT_CONFIG.extraConfirmIntents,
+    },
+    update: data,
+  })
+  await prisma.logsAuditoria.create({
+    data: {
+      action: "OMNI_AGENT_CONFIG_SAVE",
+      userLabel: "Omni Agent HUB",
+      detail: "Configuração do agente atualizada",
+      metadata: omniAgentAuditMetadata(sid, {}),
+      source: "omni_agent",
+    },
+  }).catch(() => {})
+  return toConfigDto(row)
+}
+
+export async function resetOmniAgentConfig(storeId: string): Promise<OmniAgentConfigDTO> {
+  const sid = assertStoreId(storeId)
+  const g = await requireEnterpriseWith(sid, (p) => p.workspace.omniAgent, "Sem permissão para o Omni Agent HUB.")
+  if (!g.ok) throw new Error(g.error)
+  await prisma.omniAgentConfig.deleteMany({ where: { storeId: sid } })
+  await prisma.logsAuditoria.create({
+    data: {
+      action: "OMNI_AGENT_CONFIG_RESET",
+      userLabel: "Omni Agent HUB",
+      detail: "Configuração do agente restaurada ao padrão",
+      metadata: omniAgentAuditMetadata(sid, {}),
+      source: "omni_agent",
+    },
+  }).catch(() => {})
+  return DEFAULT_OMNI_AGENT_CONFIG
 }
 
 export type OmniAgentCommandDTO = {
@@ -173,7 +307,8 @@ export async function submitOmniAgentCommand(input: SubmitOmniAgentCommandInput)
     return toDto(row)
   }
 
-  const canal = normalizeOmniAgentCanal(input.canal)
+  const config = await loadOmniAgentConfigInternal(storeId)
+  const canal = normalizeOmniAgentCanal(input.canal ?? config.defaultChannel)
   const texto = input.comandoOriginal.trim()
 
   if (input.mode === "inbox") {
@@ -189,7 +324,7 @@ export async function submitOmniAgentCommand(input: SubmitOmniAgentCommandInput)
     return toDto(row)
   }
 
-  const needsConfirm = intentRequiresConfirmation(interp.intent) || interp.requiresConfirmation
+  const needsConfirm = omniAgentNeedsConfirmation(interp, config)
 
   if (needsConfirm) {
     const row = await prisma.omniAgentCommand.create({

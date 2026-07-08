@@ -96,6 +96,8 @@ model Store {
   adminUserStores        AdminUserStore[]
   omniAgentCommands      OmniAgentCommand[]
   omniAgentAutomations   OmniAgentAutomation[]
+  omniAgentConfig        OmniAgentConfig?
+  omniAgentMemories      OmniAgentMemory[]
   marketplaceConnections   MarketplaceConnection[]
   marketplaceSyncLogs      MarketplaceSyncLog[]
   marketplaceProductLinks  MarketplaceProductLink[]
@@ -639,6 +641,7 @@ model Cliente {
   vendas                Venda[]
   whatsappConversations WhatsAppConversation[]
   creditos              ClienteCredito[]
+  omniAgentMemories     OmniAgentMemory[]
 
   @@index([storeId])
   @@map("clientes_importados")
@@ -1998,6 +2001,63 @@ model OmniAgentAutomationRun {
   @@index([storeId, createdAt])
   @@index([automationId, createdAt])
   @@map("omni_agent_automation_runs")
+}
+
+/**
+ * Configuração real do Omni Agent HUB por loja (substitui as preferências que viviam
+ * apenas em localStorage). Sem LLM/provider: campos de perfil/prompt são apenas persistidos,
+ * ainda não interpretados por um modelo. `extraConfirmIntents` tem efeito real no pipeline —
+ * força AGUARDANDO_CONFIRMACAO para intenções de leitura marcadas pelo admin. Escritas
+ * (OS_OPEN, REMINDER_CREATE, EXPENSE_CREATE, RECEIVABLE_CREATE) sempre exigem confirmação,
+ * independentemente desta config.
+ */
+model OmniAgentConfig {
+  id                   String   @id @default(cuid())
+  storeId              String   @unique @map("storeId")
+  store                Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  agentName            String   @default("Omni") @map("agentName")
+  tone                 String   @default("consultivo") @map("tone")
+  basePrompt           String   @default("") @map("basePrompt") @db.Text
+  autonomyLevel        String   @default("medio") @map("autonomyLevel")
+  defaultChannel       String   @default("texto_interno") @map("defaultChannel")
+  businessHoursStart   String   @default("08:00") @map("businessHoursStart")
+  businessHoursEnd     String   @default("18:00") @map("businessHoursEnd")
+  businessHoursDays    String[] @default(["seg", "ter", "qua", "qui", "sex"]) @map("businessHoursDays")
+  /** Intenções de leitura que devem exigir confirmação humana além do padrão (ex.: CASHBOX_QUERY). */
+  extraConfirmIntents  String[] @default([]) @map("extraConfirmIntents")
+  updatedAt            DateTime @updatedAt @map("updatedAt")
+
+  @@map("omni_agent_configs")
+}
+
+/**
+ * Memória operacional real do Omni Agent HUB: registros manuais (nota, decisão, lembrete,
+ * incidente, preferência, observação) vinculados opcionalmente a um cliente. Sem LLM/embeddings —
+ * é um registro estruturado simples, buscável por termo. Arquivar nunca apaga fisicamente
+ * (`status: arquivado`), preservando o histórico.
+ */
+model OmniAgentMemory {
+  id        String   @id @default(cuid())
+  storeId   String   @map("storeId")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  clienteId String?  @map("clienteId")
+  cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  /** nota | decisao | lembrete | incidente | preferencia | observacao */
+  tipo      String   @map("tipo")
+  titulo    String   @map("titulo")
+  conteudo  String   @map("conteudo") @db.Text
+  tags      String[] @default([]) @map("tags")
+  /** manual | omni_agent */
+  origem    String   @default("manual") @map("origem")
+  criadoPor String   @default("") @map("criadoPor")
+  /** ativo | arquivado */
+  status    String   @default("ativo") @map("status")
+  createdAt DateTime @default(now()) @map("createdAt")
+  updatedAt DateTime @updatedAt @map("updatedAt")
+
+  @@index([storeId, clienteId, createdAt])
+  @@index([storeId, status, createdAt])
+  @@map("omni_agent_memories")
 }
 
 // ─── NextAuth / Admin Auth ───────────────────────────────────────────────────

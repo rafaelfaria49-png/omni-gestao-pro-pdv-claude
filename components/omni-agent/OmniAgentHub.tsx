@@ -10,6 +10,7 @@ import {
   Inbox, Search, Command as CmdIcon, Clock, FileText,
   AlertTriangle, UserCog, Maximize2, Minimize2,
   CheckCircle2, XCircle, Loader2, Circle, Cpu, ChevronRight,
+  Archive, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +41,28 @@ import {
   listOmniAgentAutomationRuns,
   type OmniAgentAutomationDTO,
   type OmniAgentAutomationRunDTO,
+  getOmniAgentConfig,
+  upsertOmniAgentConfig,
+  resetOmniAgentConfig,
 } from "@/app/actions/omni-agent";
+import {
+  createOmniAgentMemory,
+  updateOmniAgentMemory,
+  archiveOmniAgentMemory,
+  listOmniAgentMemoriesByCliente,
+  listRecentOmniAgentMemories,
+  searchOmniAgentMemories,
+} from "@/app/actions/omni-agent-memory";
+import {
+  DEFAULT_OMNI_AGENT_CONFIG,
+  OMNI_AGENT_TONES,
+  OMNI_AGENT_AUTONOMY_LEVELS,
+  OMNI_AGENT_WEEK_DAYS,
+  OMNI_AGENT_CONFIRMABLE_READ_INTENTS,
+  type OmniAgentConfigDTO,
+} from "@/lib/omni-agent/config";
+import { OMNI_AGENT_MEMORY_TYPES, type OmniAgentMemoryDTO, type OmniAgentMemoryType } from "@/lib/omni-agent/memory";
+import type { OmniAgentIntentKind } from "@/lib/omni-agent/types";
 import {
   OMNI_AGENT_AUTOMATION_TRIGGERS,
   OMNI_AGENT_TRIGGER_LABELS,
@@ -72,16 +94,6 @@ const RANDOM_CMDS = [
   "qual foi meu faturamento hoje?",
 ];
 
-function uid() { return Math.random().toString(36).slice(2, 9); }
-function nowTime() { return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
-function relTime(ts: number) {
-  const d = Math.floor((Date.now() - ts) / 1000);
-  if (d < 60) return `há ${d}s`;
-  if (d < 3600) return `há ${Math.floor(d / 60)} min`;
-  if (d < 86400) return `há ${Math.floor(d / 3600)}h`;
-  return `há ${Math.floor(d / 86400)}d`;
-}
-
 /* ---------- localStorage helper ---------- */
 function useLS<T>(key: string, def: T): [T, (v: T | ((p: T) => T)) => void] {
   const [v, setV] = useState<T>(() => {
@@ -90,6 +102,16 @@ function useLS<T>(key: string, def: T): [T, (v: T | ((p: T) => T)) => void] {
   });
   useEffect(() => { try { localStorage.setItem(key, JSON.stringify(v)); } catch {} }, [key, v]);
   return [v, setV];
+}
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
+function nowTime() { return new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); }
+function relTime(ts: number) {
+  const d = Math.floor((Date.now() - ts) / 1000);
+  if (d < 60) return `há ${d}s`;
+  if (d < 3600) return `há ${Math.floor(d / 60)} min`;
+  if (d < 86400) return `há ${Math.floor(d / 3600)}h`;
+  return `há ${Math.floor(d / 86400)}d`;
 }
 
 /* simple beep without external file */
@@ -332,7 +354,7 @@ export default function OmniAgentHub() {
               logAudit={logAudit}
             />
           )}
-          {tab === "settings" && <SettingsTab audit={audit} logAudit={logAudit} />}
+          {tab === "settings" && <SettingsTab storeId={storeId} audit={audit} logAudit={logAudit} />}
         </div>
           </>
         )}
@@ -2005,15 +2027,171 @@ function AutomationsTab({
 }
 
 /* ---------- Memory ---------- */
+const MEMORY_TYPE_LABELS: Record<OmniAgentMemoryType, string> = {
+  nota: "Nota",
+  decisao: "Decisão",
+  lembrete: "Lembrete",
+  incidente: "Incidente",
+  preferencia: "Preferência",
+  observacao: "Observação",
+};
+
+function MemoryItemCard({
+  memory,
+  onEdit,
+  onArchive,
+}: {
+  memory: OmniAgentMemoryDTO;
+  onEdit: () => void;
+  onArchive: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-border p-3 space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <Badge variant="outline">{MEMORY_TYPE_LABELS[memory.tipo]}</Badge>
+          {memory.origem === "omni_agent" && <Badge variant="secondary">via Agent</Badge>}
+          <span className="text-sm font-medium truncate">{memory.titulo}</span>
+        </div>
+        <div className="flex gap-1 shrink-0">
+          <Button size="sm" variant="ghost" onClick={onEdit} title="Editar">
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button size="sm" variant="ghost" onClick={onArchive} title="Arquivar">
+            <Archive className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground whitespace-pre-wrap">{memory.conteudo}</p>
+      {memory.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {memory.tags.map((t) => (
+            <Badge key={t} variant="secondary" className="text-[10px]">
+              {t}
+            </Badge>
+          ))}
+        </div>
+      )}
+      <div className="text-[10px] text-muted-foreground">
+        {memory.criadoPor || "—"} · {new Date(memory.createdAt).toLocaleString("pt-BR")}
+      </div>
+    </div>
+  );
+}
+
+function MemoryFormDialog({
+  open,
+  onOpenChange,
+  title,
+  initial,
+  onSubmit,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  title: string;
+  initial: { tipo: OmniAgentMemoryType; titulo: string; conteudo: string; tags: string };
+  onSubmit: (v: { tipo: OmniAgentMemoryType; titulo: string; conteudo: string; tags: string[] }) => Promise<void>;
+}) {
+  const [tipo, setTipo] = useState<OmniAgentMemoryType>(initial.tipo);
+  const [titulo, setTitulo] = useState(initial.titulo);
+  const [conteudo, setConteudo] = useState(initial.conteudo);
+  const [tagsText, setTagsText] = useState(initial.tags);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setTipo(initial.tipo);
+      setTitulo(initial.titulo);
+      setConteudo(initial.conteudo);
+      setTagsText(initial.tags);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          Memória operacional persistida no servidor (registro manual). IA/LLM ainda não ativo para inferências
+          automáticas.
+        </p>
+        <div className="space-y-3">
+          <div>
+            <Label className="mb-2 block">Tipo</Label>
+            <div className="flex flex-wrap gap-2">
+              {OMNI_AGENT_MEMORY_TYPES.map((t) => (
+                <Button key={t} size="sm" variant={tipo === t ? "default" : "outline"} onClick={() => setTipo(t)}>
+                  {MEMORY_TYPE_LABELS[t]}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label>Título</Label>
+            <Input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Ex.: Prefere contato de manhã" />
+          </div>
+          <div>
+            <Label>Conteúdo</Label>
+            <Textarea rows={4} value={conteudo} onChange={(e) => setConteudo(e.target.value)} />
+          </div>
+          <div>
+            <Label>Tags (separadas por vírgula)</Label>
+            <Input value={tagsText} onChange={(e) => setTagsText(e.target.value)} placeholder="Ex.: vip, manhã" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={saving}
+            onClick={async () => {
+              if (!titulo.trim() || !conteudo.trim()) {
+                toast.error("Título e conteúdo são obrigatórios");
+                return;
+              }
+              setSaving(true);
+              try {
+                await onSubmit({
+                  tipo,
+                  titulo,
+                  conteudo,
+                  tags: tagsText
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter(Boolean),
+                });
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            <Save /> {saving ? "Salvando…" : "Salvar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: string) => void }) {
-  const [extraNotes, setExtraNotes] = useLS<Record<string, string[]>>("omni-notes", {});
   const [rows, setRows] = useState<ClienteDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [sel, setSel] = useState<string | null>(null);
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [noteText, setNoteText] = useState("");
   const [summaryOpen, setSummaryOpen] = useState(false);
+
+  const [memories, setMemories] = useState<OmniAgentMemoryDTO[]>([]);
+  const [memoriesLoading, setMemoriesLoading] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editMemory, setEditMemory] = useState<OmniAgentMemoryDTO | null>(null);
+
+  const [recentSearch, setRecentSearch] = useState("");
+  const [recent, setRecent] = useState<OmniAgentMemoryDTO[]>([]);
+  const [recentLoading, setRecentLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -2054,7 +2232,63 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
   }, [rows, q]);
 
   const c = sel ? rows.find((x) => x.id === sel) : undefined;
-  const allNotes = c ? [...(extraNotes[c.id] ?? [])] : [];
+
+  const loadMemories = useCallback(async () => {
+    if (!storeId?.trim() || !c?.id) {
+      setMemories([]);
+      return;
+    }
+    setMemoriesLoading(true);
+    try {
+      const list = await listOmniAgentMemoriesByCliente(storeId, c.id);
+      setMemories(list);
+    } catch {
+      setMemories([]);
+    } finally {
+      setMemoriesLoading(false);
+    }
+  }, [storeId, c?.id]);
+
+  useEffect(() => {
+    void loadMemories();
+  }, [loadMemories]);
+
+  const loadRecent = useCallback(
+    async (term: string) => {
+      if (!storeId?.trim()) {
+        setRecent([]);
+        return;
+      }
+      setRecentLoading(true);
+      try {
+        const list = term.trim()
+          ? await searchOmniAgentMemories(storeId, term)
+          : await listRecentOmniAgentMemories(storeId);
+        setRecent(list);
+      } catch {
+        setRecent([]);
+      } finally {
+        setRecentLoading(false);
+      }
+    },
+    [storeId],
+  );
+
+  useEffect(() => {
+    void loadRecent(recentSearch);
+  }, [loadRecent, recentSearch]);
+
+  async function handleArchive(memory: OmniAgentMemoryDTO) {
+    try {
+      await archiveOmniAgentMemory(storeId, memory.id);
+      logAudit(`Memória arquivada: ${memory.titulo}`);
+      toast.success("Memória arquivada");
+      void loadMemories();
+      void loadRecent(recentSearch);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao arquivar");
+    }
+  }
 
   return (
     <>
@@ -2127,8 +2361,8 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setNoteOpen(true)}>
-                      <Plus /> Nota local
+                    <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+                      <Plus /> Nova memória
                     </Button>
                     <Button
                       size="sm"
@@ -2139,6 +2373,7 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
                           await submitOmniAgentCommand({ storeId, comandoOriginal: texto, mode: "run" });
                           logAudit(`Lembrete Agent → ${c.nome}`);
                           toast.success("Comando enviado — ver Inbox IA");
+                          void loadRecent(recentSearch);
                         } catch (e) {
                           toast.error(e instanceof Error ? e.message : "Falha");
                         }
@@ -2147,7 +2382,7 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
                       <Bell /> Lembrete (Agent)
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => setSummaryOpen(true)}>
-                      <Brain /> Resumo automático
+                      <Brain /> Resumo (dados de cadastro)
                     </Button>
                   </div>
                 </div>
@@ -2159,61 +2394,125 @@ function MemoryTab({ storeId, logAudit }: { storeId: string; logAudit: (m: strin
                 </div>
               </Card>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <ClientList title="Tags (cadastro)" items={c.tags} />
-                <ClientList
-                  title="Notas locais (navegador)"
-                  items={allNotes}
-                  emptyHint="Guardadas só neste dispositivo (chave omni-notes)."
-                />
-              </div>
+              <ClientList title="Tags (cadastro)" items={c.tags} />
 
               <Card>
-                <div className="mb-2 text-sm font-semibold">Memória operacional / timeline IA</div>
-                <p className="text-xs text-muted-foreground mb-3">
-                  Memória operacional ainda não ativada para este cliente — não há timeline unificada gerada pelo Omni Agent.
-                </p>
-                <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-xs text-muted-foreground">
-                  Use Cadastros, Operações e Financeiro para histórico real. Futuras fases consolidarão eventos (PDV, OS, WhatsApp)
-                  neste painel.
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <div className="text-sm font-semibold">Memória operacional</div>
+                  <Badge variant="secondary">Servidor · persistida</Badge>
                 </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Registros manuais e eventos básicos deste cliente. IA/LLM ainda não ativo para inferências
+                  automáticas — sem timeline unificada de PDV/OS/WhatsApp nesta fase.
+                </p>
+                {memoriesLoading ? (
+                  <div className="space-y-2">
+                    {[...Array(2)].map((_, i) => (
+                      <div key={i} className="h-16 rounded-lg bg-muted animate-pulse" />
+                    ))}
+                  </div>
+                ) : memories.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-xs text-muted-foreground">
+                    Nenhuma memória registrada para este cliente ainda.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {memories.map((m) => (
+                      <MemoryItemCard
+                        key={m.id}
+                        memory={m}
+                        onEdit={() => setEditMemory(m)}
+                        onArchive={() => void handleArchive(m)}
+                      />
+                    ))}
+                  </div>
+                )}
               </Card>
             </>
           )}
         </div>
       </div>
 
+      <Card>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-sm font-semibold">Últimas memórias da loja</div>
+          <Input
+            className="max-w-xs"
+            placeholder="Buscar por termo…"
+            value={recentSearch}
+            onChange={(e) => setRecentSearch(e.target.value)}
+          />
+        </div>
+        {recentLoading ? (
+          <div className="space-y-2">
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="h-12 rounded-lg bg-muted animate-pulse" />
+            ))}
+          </div>
+        ) : recent.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border bg-muted/40 p-4 text-xs text-muted-foreground">
+            {recentSearch.trim() ? "Nenhuma memória encontrada para este termo." : "Nenhuma memória registrada nesta loja ainda."}
+          </div>
+        ) : (
+          <div className="space-y-1.5 max-h-72 overflow-y-auto">
+            {recent.map((m) => (
+              <div key={m.id} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-xs">
+                <Badge variant="outline" className="shrink-0">{MEMORY_TYPE_LABELS[m.tipo]}</Badge>
+                <span className="font-medium truncate">{m.titulo}</span>
+                <span className="ml-auto shrink-0 text-muted-foreground">
+                  {new Date(m.createdAt).toLocaleDateString("pt-BR")}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
       {c && (
         <>
-          <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Nota local — {c.nome}</DialogTitle>
-              </DialogHeader>
-              <p className="text-xs text-muted-foreground">Armazenada apenas no navegador (localStorage, chave omni-notes).</p>
-              <Textarea
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                placeholder="Ex.: prefere ser contactado de manhã"
-              />
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setNoteOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (!noteText.trim()) return toast.error("Digite");
-                    setExtraNotes({ ...extraNotes, [c.id]: [...(extraNotes[c.id] ?? []), noteText.trim()] });
-                    setNoteText("");
-                    setNoteOpen(false);
-                    toast.success("Nota guardada neste navegador");
-                  }}
-                >
-                  <Save /> Guardar
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <MemoryFormDialog
+            open={createOpen}
+            onOpenChange={setCreateOpen}
+            title={`Nova memória — ${c.nome}`}
+            initial={{ tipo: "nota", titulo: "", conteudo: "", tags: "" }}
+            onSubmit={async (v) => {
+              try {
+                await createOmniAgentMemory(storeId, { clienteId: c.id, ...v });
+                logAudit(`Memória criada (${v.tipo}): ${v.titulo}`);
+                toast.success("Memória gravada no servidor");
+                setCreateOpen(false);
+                void loadMemories();
+                void loadRecent(recentSearch);
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Falha ao gravar memória");
+              }
+            }}
+          />
+
+          <MemoryFormDialog
+            open={!!editMemory}
+            onOpenChange={(o) => !o && setEditMemory(null)}
+            title={`Editar memória — ${c.nome}`}
+            initial={{
+              tipo: editMemory?.tipo ?? "nota",
+              titulo: editMemory?.titulo ?? "",
+              conteudo: editMemory?.conteudo ?? "",
+              tags: editMemory?.tags.join(", ") ?? "",
+            }}
+            onSubmit={async (v) => {
+              if (!editMemory) return;
+              try {
+                await updateOmniAgentMemory(storeId, editMemory.id, v);
+                logAudit(`Memória editada: ${v.titulo}`);
+                toast.success("Memória atualizada");
+                setEditMemory(null);
+                void loadMemories();
+                void loadRecent(recentSearch);
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Falha ao editar memória");
+              }
+            }}
+          />
 
           <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
             <DialogContent>
@@ -2525,27 +2824,105 @@ function ReportsTab({
 }
 
 /* ---------- Settings ---------- */
-const DEFAULT_SETTINGS = {
-  channel: "whatsapp",
-  autoApprove: false,
-  autonomy: "medio",
-  perms: { financeiro: true, vendas: true, os: true, estoque: true, clientes: true, relatorios: true },
-  agentName: "Omni",
-  tone: "consultivo",
-  prompt: "Responda de forma clara, objetiva e profissional. Sempre confirme antes de executar ações financeiras.",
-  hours: { start: "08:00", end: "18:00", days: ["seg", "ter", "qua", "qui", "sex"] },
-  plan: "Ouro",
+const CONFIRMABLE_INTENT_LABELS: Record<OmniAgentIntentKind, string> = {
+  OS_OPEN: "Abrir OS",
+  CLIENT_SEARCH: "Buscar cliente",
+  PRODUCT_SEARCH: "Buscar produto",
+  REMINDER_CREATE: "Lembrete / triagem",
+  EXPENSE_CREATE: "Registrar despesa",
+  RECEIVABLE_CREATE: "Registrar recebível",
+  CASHBOX_QUERY: "Consultar caixa",
+  FINANCE_SUMMARY: "Resumo financeiro",
+  UNKNOWN: "Não reconhecido",
 };
-function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: string) => void }) {
-  const [s, setS] = useLS("omni-settings", DEFAULT_SETTINGS);
+
+function SettingsTab({
+  storeId,
+  audit,
+  logAudit,
+}: {
+  storeId: string;
+  audit: string[];
+  logAudit: (m: string) => void;
+}) {
+  const [config, setConfig] = useState<OmniAgentConfigDTO>(DEFAULT_OMNI_AGENT_CONFIG);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
-  const allDays = ["seg", "ter", "qua", "qui", "sex", "sáb", "dom"];
+
+  const load = useCallback(async () => {
+    if (!storeId?.trim()) return;
+    setLoading(true);
+    try {
+      const c = await getOmniAgentConfig(storeId);
+      setConfig(c);
+    } catch {
+      setConfig(DEFAULT_OMNI_AGENT_CONFIG);
+    } finally {
+      setLoading(false);
+    }
+  }, [storeId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   function toggleDay(d: string) {
-    const days = s.hours.days.includes(d) ? s.hours.days.filter(x => x !== d) : [...s.hours.days, d];
-    setS({ ...s, hours: { ...s.hours, days } });
+    const days = config.businessHoursDays.includes(d)
+      ? config.businessHoursDays.filter((x) => x !== d)
+      : [...config.businessHoursDays, d];
+    setConfig({ ...config, businessHoursDays: days });
   }
+
+  function toggleExtraConfirm(intent: OmniAgentIntentKind) {
+    const list = config.extraConfirmIntents.includes(intent)
+      ? config.extraConfirmIntents.filter((i) => i !== intent)
+      : [...config.extraConfirmIntents, intent];
+    setConfig({ ...config, extraConfirmIntents: list });
+  }
+
+  async function save() {
+    if (!storeId?.trim()) return;
+    setSaving(true);
+    try {
+      const updated = await upsertOmniAgentConfig(storeId, {
+        agentName: config.agentName,
+        tone: config.tone,
+        basePrompt: config.basePrompt,
+        autonomyLevel: config.autonomyLevel,
+        defaultChannel: config.defaultChannel,
+        businessHoursStart: config.businessHoursStart,
+        businessHoursEnd: config.businessHoursEnd,
+        businessHoursDays: config.businessHoursDays,
+        extraConfirmIntents: config.extraConfirmIntents,
+      });
+      setConfig(updated);
+      logAudit("Configuração do agente: gravada no servidor");
+      toast.success("Configuração gravada no servidor (Prisma, por loja)");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao gravar configuração");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function reset() {
+    if (!storeId?.trim()) return;
+    setSaving(true);
+    try {
+      const def = await resetOmniAgentConfig(storeId);
+      setConfig(def);
+      logAudit("Configuração do agente: restaurada ao padrão");
+      toast("Configuração restaurada ao padrão");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Falha ao restaurar configuração");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const allDays = OMNI_AGENT_WEEK_DAYS as readonly string[];
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -2553,29 +2930,32 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
         <h3 className="mb-2 text-sm font-semibold">O que afeta o pipeline real (servidor)</h3>
         <ul className="list-disc pl-5 text-xs text-muted-foreground space-y-1">
           <li><span className="text-foreground">Inbox IA</span>, botão <span className="text-foreground">Novo</span>, <span className="text-foreground">Simular</span> → Server Actions + Prisma (<span className="font-mono">OmniAgentCommand</span>)</li>
-          <li>Confirmação de OS e triagens → obrigatória no servidor (não depende dos toggles abaixo)</li>
+          <li>Confirmação de escrita (OS, lembrete, despesa, recebível) → sempre obrigatória no servidor, não configurável nesta tela</li>
           <li>Automações ativas → event bus → comando PENDENTE na Inbox (sem execução automática)</li>
-          <li>Permissões efetivas → papel NextAuth + <span className="font-mono">INTENT_MODULE</span></li>
+          <li>Permissões efetivas → papel NextAuth + <span className="font-mono">INTENT_MODULE</span> (não editável aqui)</li>
+          <li>Autonomia <span className="font-mono">baixo</span>, canal padrão e confirmações extra abaixo → gravados no servidor (<span className="font-mono">OmniAgentConfig</span>) e aplicados no próximo comando</li>
         </ul>
       </Card>
       <Card className="lg:col-span-2 border-dashed">
         <div className="flex flex-wrap items-center gap-2 mb-2">
-          <Badge variant="secondary">localStorage</Badge>
-          <span className="text-sm font-medium">Preferências apenas neste navegador</span>
+          <Badge variant="secondary">Servidor · por loja</Badge>
+          <span className="text-sm font-medium">Configuração real (Prisma), sem LLM</span>
         </div>
         <p className="text-xs text-muted-foreground">
-          Canal padrão, autonomia, permissões demo, personalidade e horário gravam em{" "}
-          <span className="font-mono text-foreground">omni-settings</span>. O interruptor{" "}
-          <span className="font-medium text-foreground">Online/Pausar</span> no topo também é local — não suspende comandos no servidor.
+          Canal padrão, autonomia, confirmações extra, horário e perfil do agente gravam em{" "}
+          <span className="font-mono text-foreground">OmniAgentConfig</span> — persistem entre navegadores e dispositivos
+          para esta loja. Nome/tom/prompt ainda não alimentam um modelo de linguagem: são preferências reais, mas sem
+          efeito de interpretação enquanto não existir um provider LLM (fase futura).
         </p>
       </Card>
+
       <Card>
-        <h3 className="mb-3 font-semibold">Canal padrão (demo)</h3>
+        <h3 className="mb-3 font-semibold">Canal padrão</h3>
         <div className="flex flex-wrap gap-2">
           {(
             [
+              ["texto_interno", "Texto"],
               ["whatsapp", "WhatsApp"],
-              ["texto", "Texto"],
               ["voz", "Voz"],
             ] as const
           ).map(([v, l]) =>
@@ -2587,72 +2967,137 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
                 <Badge variant="outline">Em preparação</Badge>
               </span>
             ) : (
-              <Button key={v} type="button" variant={s.channel === v ? "default" : "outline"} size="sm" onClick={() => setS({ ...s, channel: v })}>
+              <Button
+                key={v}
+                type="button"
+                variant={config.defaultChannel === v ? "default" : "outline"}
+                size="sm"
+                onClick={() => setConfig({ ...config, defaultChannel: v })}
+              >
                 {l}
               </Button>
             ),
           )}
         </div>
-        <div className="mt-4 flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <Label>Aprovação automática</Label>
-            <p className="text-[10px] text-muted-foreground">Preferência local — o servidor sempre exige confirmação para OS e triagens.</p>
-          </div>
-          <Switch checked={s.autoApprove} onCheckedChange={(v) => setS({ ...s, autoApprove: v })} />
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          Usado como canal do comando quando nenhum canal é informado explicitamente (ex.: modal Novo).
+        </p>
+
+        <div className="mt-4 rounded-md border border-border p-2.5">
+          <Label className="mb-1 block">Aprovação automática</Label>
+          <p className="text-[10px] text-muted-foreground">
+            Não existe: toda ação com efeito colateral (OS, lembrete, despesa, recebível) exige confirmação humana, por
+            desenho de segurança. Isto nunca pode ser desligado por esta tela.
+          </p>
         </div>
+
         <div className="mt-4">
           <Label className="mb-2 block">Autonomia</Label>
           <div className="flex gap-2">
-            {["baixo", "medio", "alto"].map(a => (
-              <Button key={a} variant={s.autonomy === a ? "default" : "outline"} size="sm" onClick={() => setS({ ...s, autonomy: a })}>{a}</Button>
+            {OMNI_AGENT_AUTONOMY_LEVELS.map((a) => (
+              <Button
+                key={a}
+                variant={config.autonomyLevel === a ? "default" : "outline"}
+                size="sm"
+                onClick={() => setConfig({ ...config, autonomyLevel: a })}
+              >
+                {a}
+              </Button>
             ))}
           </div>
+          <p className="mt-2 text-[10px] text-muted-foreground">
+            <span className="font-medium text-foreground">baixo</span>: toda leitura (busca de cliente/produto, caixa,
+            resumo financeiro) também passa por confirmação. <span className="font-medium text-foreground">medio</span>:
+            padrão (só escritas + confirmações extra abaixo). <span className="font-medium text-foreground">alto</span>:
+            igual a médio nesta fase — não existe execução sem confirmação para escritas, em nenhum nível.
+          </p>
         </div>
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold">Permissões (demo local — não afeta o pipeline)</h3>
+        <h3 className="mb-3 font-semibold">Confirmações extra (leitura)</h3>
         <p className="text-xs text-muted-foreground mb-3">
-          As permissões reais vêm do papel NextAuth e de <span className="font-mono text-foreground">INTENT_MODULE</span> no servidor.
+          Marque para exigir confirmação humana também nestas leituras. Escritas já exigem sempre — não aparecem aqui
+          porque não podem ser desmarcadas.
         </p>
         <div className="space-y-2">
-          {Object.entries(s.perms).map(([k, v]) => (
-            <div key={k} className="flex items-center justify-between rounded-md border border-border p-2">
-              <span className="text-sm capitalize">{k}</span>
-              <Switch checked={v} onCheckedChange={(val) => setS({ ...s, perms: { ...s.perms, [k]: val } })} />
+          {OMNI_AGENT_CONFIRMABLE_READ_INTENTS.map((intent) => (
+            <div key={intent} className="flex items-center justify-between rounded-md border border-border p-2">
+              <span className="text-sm">{CONFIRMABLE_INTENT_LABELS[intent]}</span>
+              <Switch
+                checked={config.extraConfirmIntents.includes(intent)}
+                onCheckedChange={() => toggleExtraConfirm(intent)}
+              />
             </div>
           ))}
         </div>
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold">Personalidade do agente (demo local — sem LLM)</h3>
+        <h3 className="mb-3 font-semibold">Perfil do agente (sem LLM ainda)</h3>
         <div className="space-y-3">
-          <div><Label>Nome</Label><Input value={s.agentName} onChange={(e) => setS({ ...s, agentName: e.target.value })} /></div>
+          <div>
+            <Label>Nome</Label>
+            <Input value={config.agentName} onChange={(e) => setConfig({ ...config, agentName: e.target.value })} />
+          </div>
           <div>
             <Label className="mb-2 block">Tom</Label>
             <div className="flex flex-wrap gap-2">
-              {["formal", "consultivo", "amigável"].map(t => (
-                <Button key={t} size="sm" variant={s.tone === t ? "default" : "outline"} onClick={() => setS({ ...s, tone: t })}>{t}</Button>
+              {OMNI_AGENT_TONES.map((t) => (
+                <Button
+                  key={t}
+                  size="sm"
+                  variant={config.tone === t ? "default" : "outline"}
+                  onClick={() => setConfig({ ...config, tone: t })}
+                >
+                  {t}
+                </Button>
               ))}
             </div>
           </div>
-          <div><Label>Prompt base</Label>
-            <Textarea rows={3} value={s.prompt} onChange={(e) => setS({ ...s, prompt: e.target.value })} /></div>
+          <div>
+            <Label>Prompt base</Label>
+            <Textarea rows={3} value={config.basePrompt} onChange={(e) => setConfig({ ...config, basePrompt: e.target.value })} />
+          </div>
         </div>
       </Card>
 
       <Card>
-        <h3 className="mb-3 font-semibold">Horário de atendimento (demo local)</h3>
+        <h3 className="mb-3 font-semibold">Horário de atendimento</h3>
         <div className="grid gap-3 grid-cols-2">
-          <div><Label>Início</Label><Input type="time" value={s.hours.start} onChange={(e) => setS({ ...s, hours: { ...s.hours, start: e.target.value } })} /></div>
-          <div><Label>Fim</Label><Input type="time" value={s.hours.end} onChange={(e) => setS({ ...s, hours: { ...s.hours, end: e.target.value } })} /></div>
+          <div>
+            <Label>Início</Label>
+            <Input
+              type="time"
+              value={config.businessHoursStart}
+              onChange={(e) => setConfig({ ...config, businessHoursStart: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Fim</Label>
+            <Input
+              type="time"
+              value={config.businessHoursEnd}
+              onChange={(e) => setConfig({ ...config, businessHoursEnd: e.target.value })}
+            />
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-1">
-          {allDays.map(d => (
-            <Button key={d} size="sm" variant={s.hours.days.includes(d) ? "default" : "outline"} onClick={() => toggleDay(d)}>{d}</Button>
+          {allDays.map((d) => (
+            <Button
+              key={d}
+              size="sm"
+              variant={config.businessHoursDays.includes(d) ? "default" : "outline"}
+              onClick={() => toggleDay(d)}
+            >
+              {d}
+            </Button>
           ))}
         </div>
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          Gravado no servidor; ainda não aplicado a nenhuma regra automática (sem execução autônoma fora de horário
+          nesta fase).
+        </p>
 
         <div className="mt-5 rounded-lg border border-border bg-muted/40 p-3 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -2669,24 +3114,10 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold">Auditoria (sessão)</h3>
           <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              onClick={() => {
-                logAudit("Definições locais: utilizador gravou (apenas navegador)");
-                toast.success("Preferências gravadas no navegador (localStorage, chave omni-settings)");
-              }}
-            >
-              <Save /> Salvar
+            <Button size="sm" onClick={() => void save()} disabled={saving || loading}>
+              <Save /> {saving ? "Salvando…" : "Salvar"}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setS(DEFAULT_SETTINGS);
-                logAudit("Definições locais: restauro ao padrão");
-                toast("Preferências repostas ao padrão local");
-              }}
-            >
+            <Button size="sm" variant="outline" onClick={() => void reset()} disabled={saving || loading}>
               <RefreshCw /> Restaurar
             </Button>
             <Button size="sm" variant="outline" onClick={() => setTestOpen(true)}>
@@ -2722,11 +3153,11 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
       <Dialog open={testOpen} onOpenChange={setTestOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Teste de configuração (local)</DialogTitle>
+            <DialogTitle>Teste de configuração</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
             Não há LLM: mostra apenas a classificação determinística de uma frase de exemplo. Nome, tom e prompt acima são
-            preferências guardadas no navegador — não alteram o servidor.
+            preferências gravadas no servidor — ainda não alteram a interpretação.
           </p>
           <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
             <div className="text-xs text-muted-foreground">Texto de exemplo</div>
@@ -2754,18 +3185,19 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
       <Dialog open={exportOpen} onOpenChange={setExportOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Exportar preferências + auditoria</DialogTitle>
+            <DialogTitle>Exportar configuração + auditoria</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground mb-2">
-            JSON inclui definições locais e linhas de auditoria desta sessão. Use «Descarregar» para guardar ficheiro real.
+            JSON inclui a configuração real gravada no servidor e as linhas de auditoria desta sessão. Use «Descarregar»
+            para guardar ficheiro real.
           </p>
-          <pre className="max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify({ settings: s, audit }, null, 2)}</pre>
+          <pre className="max-h-72 overflow-auto rounded-md bg-muted p-3 text-xs">{JSON.stringify({ config, audit }, null, 2)}</pre>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(JSON.stringify({ settings: s, audit }, null, 2));
+                  await navigator.clipboard.writeText(JSON.stringify({ config, audit }, null, 2));
                   toast.success("Copiado para a área de transferência");
                   logAudit("Export: JSON copiado");
                 } catch {
@@ -2778,7 +3210,7 @@ function SettingsTab({ audit, logAudit }: { audit: string[]; logAudit: (m: strin
             <Button
               variant="outline"
               onClick={() => {
-                const body = JSON.stringify({ settings: s, audit }, null, 2);
+                const body = JSON.stringify({ config, audit }, null, 2);
                 const blob = new Blob([body], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
