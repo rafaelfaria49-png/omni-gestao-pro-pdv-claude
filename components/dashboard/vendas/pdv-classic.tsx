@@ -157,6 +157,29 @@ type CartItem = {
 
 type Product = PdvCatalogProduct
 
+const PDV_UNCONTROLLED_STOCK_THRESHOLD = 999
+const PDV_STOCK_EPSILON = 0.0001
+
+function isServiceCategory(category?: string): boolean {
+  return (category ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .startsWith("serv")
+}
+
+function hasControlledPdvStock(stock: number | null | undefined, category?: string): boolean {
+  const n = Number(stock)
+  return Number.isFinite(n) && n < PDV_UNCONTROLLED_STOCK_THRESHOLD && !isServiceCategory(category)
+}
+
+function formatPdvStockQty(qty: number, vendaPorPeso?: boolean): string {
+  return qty.toLocaleString("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: vendaPorPeso ? 3 : 2,
+  })
+}
+
 /** Categorias que não aparecem na grade até o usuário buscar (filtro inteligente do PDV). */
 const PDV_CATEGORIAS_OCULTAS_ATE_BUSCA = new Set(["telas", "baterias", "conectores"])
 
@@ -449,6 +472,72 @@ export function PdvClassic({
     [cart, inventory]
   )
 
+  const getCartStockProduct = useCallback(
+    (item: CartItem) => {
+      if (
+        item.isAvulso ||
+        item.inventoryId.startsWith("comp-") ||
+        isAvulsoSaleLine(item.inventoryId) ||
+        isOsVirtualSaleLine(item.inventoryId)
+      ) {
+        return null
+      }
+      return products.find((p) => p.id === item.inventoryId) ?? null
+    },
+    [products]
+  )
+
+  const showAggregatedStockToast = useCallback(
+    (product: Pick<Product, "name" | "stock" | "vendaPorPeso">, requestedQty: number) => {
+      const unit = product.vendaPorPeso ? "kg" : "unidade(s)"
+      toast({
+        title: "Estoque insuficiente",
+        description: `${product.name} possui ${formatPdvStockQty(requestedQty, product.vendaPorPeso)} ${unit} no carrinho e o estoque disponível é ${formatPdvStockQty(product.stock, product.vendaPorPeso)}.`,
+        variant: "destructive",
+      })
+    },
+    [toast]
+  )
+
+  const validateAggregatedStockForProduct = useCallback(
+    (product: Product, quantityForLine: number, excludeLineId?: string) => {
+      if (!hasControlledPdvStock(product.stock, product.category)) return true
+
+      const alreadyInCart = cart.reduce((sum, item) => {
+        if (item.inventoryId !== product.id || item.lineId === excludeLineId) return sum
+        return sum + item.quantity
+      }, 0)
+      const requestedQty = alreadyInCart + quantityForLine
+      if (requestedQty > product.stock + PDV_STOCK_EPSILON) {
+        showAggregatedStockToast(product, requestedQty)
+        return false
+      }
+      return true
+    },
+    [cart, showAggregatedStockToast]
+  )
+
+  const validateCartAggregatedStock = useCallback(() => {
+    const totals = new Map<string, { product: Product; quantity: number }>()
+    for (const item of cart) {
+      const product = getCartStockProduct(item)
+      if (!product || !hasControlledPdvStock(product.stock, product.category)) continue
+      const prev = totals.get(product.id)
+      totals.set(product.id, {
+        product,
+        quantity: (prev?.quantity ?? 0) + item.quantity,
+      })
+    }
+
+    for (const { product, quantity } of totals.values()) {
+      if (quantity > product.stock + PDV_STOCK_EPSILON) {
+        showAggregatedStockToast(product, quantity)
+        return false
+      }
+    }
+    return true
+  }, [cart, getCartStockProduct, showAggregatedStockToast])
+
   const autoSelectCustomerByPhone = useCallback(
     async (tel: string) => {
       const q = tel.replace(/\D/g, "")
@@ -610,17 +699,21 @@ export function PdvClassic({
 
   const addToCart = (product: Product, presetQty?: number) => {
     const baseQty = presetQty ?? 1
-    if (product.stock <= 0) {
+    const controlledStock = hasControlledPdvStock(product.stock, product.category)
+    if (controlledStock && product.stock <= 0) {
       toast({ title: "Sem estoque", description: `${product.name} está sem saldo no estoque.` })
-      return
+      return false
     }
-    if (!product.vendaPorPeso && baseQty > product.stock) {
+    if (controlledStock && !product.vendaPorPeso && baseQty > product.stock) {
       toast({
         title: "Sem estoque",
         description: `${product.name}: solicitado ${baseQty}, disponível ${product.stock}.`,
         variant: "destructive",
       })
-      return
+      return false
+    }
+    if (!product.vendaPorPeso && !validateAggregatedStockForProduct(product, baseQty)) {
+      return false
     }
     if (product.atributos && product.atributos.length > 0) {
       setAttrProduct(product)
@@ -630,14 +723,14 @@ export function PdvClassic({
       }
       setAttrSelections(init)
       setAttrDialogOpen(true)
-      return
+      return true
     }
     if (product.vendaPorPeso) {
       setAttrSelections({})
       setWeightProduct(product)
       setWeightKgInput("")
       setWeightDialogOpen(true)
-      return
+      return true
     }
     pushCartLine({
       inventoryId: product.id,
@@ -646,6 +739,7 @@ export function PdvClassic({
       quantity: baseQty,
     })
     setSelectedProduct(product)
+    return true
   }
 
   const addQuickItem = (item: Product) => {
@@ -712,7 +806,7 @@ export function PdvClassic({
       const q = Number(shellNextQty.replace(",", ".")) || 1
 
       const commitScan = (product: PdvCatalogProduct) => {
-        addToCart(product, q)
+        if (!addToCart(product, q)) return
         setBipeCode("")
         setShellNextQty("1")
         const _newCount = cart.length + 1
@@ -750,7 +844,7 @@ export function PdvClassic({
   const handleBipeSuggestionSelect = useCallback(
     (product: PdvCatalogProduct) => {
       const q = Number(shellNextQty.replace(",", ".")) || 1
-      addToCart(product, q)
+      if (!addToCart(product, q)) return
       setBipeCode("")
       setShellNextQty("1")
       const _newCount = cart.length + 1
@@ -774,12 +868,18 @@ export function PdvClassic({
   }
 
   const updateQuantity = (lineId: string, delta: number) => {
+    const current = cart.find((item) => item.lineId === lineId)
+    if (!current) return
+    const step = current.vendaPorPeso ? 0.05 : 1
+    const newQty = current.quantity + delta * step
+    if (newQty > 0) {
+      const product = getCartStockProduct(current)
+      if (product && !validateAggregatedStockForProduct(product, newQty, lineId)) return
+    }
     setCart(
       cart
         .map((item) => {
           if (item.lineId !== lineId) return item
-          const step = item.vendaPorPeso ? 0.05 : 1
-          const newQty = item.quantity + delta * step
           return newQty > 0 ? { ...item, quantity: newQty } : item
         })
         .filter((item) => item.quantity > 0)
@@ -794,13 +894,15 @@ export function PdvClassic({
     if (!attrProduct) return
     const parts = attrProduct.atributos?.map((a) => attrSelections[a.id]).filter(Boolean) ?? []
     const label = parts.length ? `${attrProduct.name} (${parts.join(" · ")})` : attrProduct.name
-    setAttrDialogOpen(false)
     if (attrProduct.vendaPorPeso) {
+      setAttrDialogOpen(false)
       setWeightProduct(attrProduct)
       setWeightKgInput("")
       setWeightDialogOpen(true)
       return
     }
+    if (!validateAggregatedStockForProduct(attrProduct, 1)) return
+    setAttrDialogOpen(false)
     pushCartLine({
       inventoryId: attrProduct.id,
       name: label,
@@ -820,10 +922,8 @@ export function PdvClassic({
       return
     }
     const inv = inventory.find((i) => i.id === weightProduct.id)
-    if (inv && kg > inv.stock + 0.0001) {
-      toast({ title: "Estoque", description: "Peso maior que o disponível em estoque.", variant: "destructive" })
-      return
-    }
+    const productForStock = { ...weightProduct, stock: inv?.stock ?? weightProduct.stock }
+    if (!validateAggregatedStockForProduct(productForStock, kg)) return
     const pKg = weightProduct.precoPorKg ?? weightProduct.price
     const parts = weightProduct.atributos?.length ? weightProduct.atributos.map((a) => attrSelections[a.id]).filter(Boolean) : []
     const baseName = parts.length > 0 ? `${weightProduct.name} (${parts.join(" · ")})` : weightProduct.name
@@ -1095,8 +1195,10 @@ export function PdvClassic({
       return false
     }
 
+    if (!validateCartAggregatedStock()) return false
+
     return true
-  }, [cart.length, caixa, sessaoId, toast])
+  }, [cart.length, caixa, sessaoId, toast, validateCartAggregatedStock])
 
   const openPaymentFlow = useCallback(
     (intent: PaymentMethodType | null, multiple: boolean) => {
@@ -1549,6 +1651,10 @@ export function PdvClassic({
                 }
                 const id = selectedCartLineId
                 if (!id) return
+                const item = cart.find((i) => i.lineId === id)
+                if (!item) return
+                const product = getCartStockProduct(item)
+                if (product && !validateAggregatedStockForProduct(product, v, id)) return
                 setCart((prev) => prev.map((i) => (i.lineId === id ? { ...i, quantity: v } : i)))
                 setShellQtyEditOpen(false)
                 setShellInfo("Quantidade atualizada.")
