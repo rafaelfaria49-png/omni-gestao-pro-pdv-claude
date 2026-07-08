@@ -372,6 +372,18 @@ export function receitaTotalDoDia(
 }
 
 /**
+ * Detalhamento opcional da conferência de dinheiro físico por denominação
+ * (calculadora de cédulas/moedas do fechamento de caixa). Só é preenchido quando
+ * o operador usa a calculadora e aplica o total no campo "dinheiro contado" —
+ * metadado auditável, sem participar de nenhuma regra de cálculo do resumo.
+ * `valor`/`subtotal`/`total` em reais; `quantidade` inteiro ≥ 0.
+ */
+export interface DinheiroContadoDetalhado {
+  total: number
+  denominacoes: Array<{ valor: number; quantidade: number; subtotal: number }>
+}
+
+/**
  * Snapshot dos dados já calculados no momento em que o fechamento de caixa é
  * confirmado pelo servidor — fonte única para o diálogo pós-fechamento
  * (GOAL CAIXA-FECHAMENTO-COMPROVANTE-POS-FECHAMENTO-001). Não busca nada novo:
@@ -398,6 +410,8 @@ export interface FechamentoPosSnapshot {
   diferenca: number | null
   observacao: string
   resumo: FechamentoResumo
+  /** Detalhamento por denominação (opcional — só quando a calculadora foi usada). */
+  dinheiroContadoDetalhado?: DinheiroContadoDetalhado | null
 }
 
 function fmtBRL(v: number): string {
@@ -432,6 +446,17 @@ export function buildComprovanteFechamentoHtml(s: FechamentoPosSnapshot): string
 
   const operadoresHtml = s.operadores.length ? escapeHtml(s.operadores.join(", ")) : "—"
 
+  // Bloco opcional: detalhamento da conferência de dinheiro (calculadora de
+  // cédulas/moedas). Só aparece quando o operador usou a calculadora — lista
+  // apenas as denominações com quantidade > 0.
+  const detalhe = s.dinheiroContadoDetalhado
+  const denomsComQtd = detalhe?.denominacoes.filter((d) => d.quantidade > 0) ?? []
+  const conferenciaHtml = denomsComQtd.length
+    ? `<hr><strong>CONFERÊNCIA DE DINHEIRO</strong>${denomsComQtd
+        .map((d) => `<p>${fmtBRL(d.valor)} x ${d.quantidade} = ${fmtBRL(d.subtotal)}</p>`)
+        .join("")}<p>Total contado: ${fmtBRL(detalhe?.total ?? 0)}</p>`
+    : ""
+
   return `
     <div style="text-align:center;font-weight:700">FECHAMENTO DE CAIXA</div>
     <div style="font-size:10px;text-align:center;margin:4px 0">${escapeHtml(s.loja)}</div>
@@ -464,6 +489,7 @@ export function buildComprovanteFechamentoHtml(s: FechamentoPosSnapshot): string
     ${s.saldoMovimentadoEsperado != null ? `<p>Saldo total movimentado: ${fmtBRL(s.saldoMovimentadoEsperado)}</p>` : ""}
     ${s.valorContado != null ? `<p>Dinheiro contado: ${fmtBRL(s.valorContado)}</p>` : ""}
     ${s.diferenca != null ? `<p>Diferença: ${fmtBRL(s.diferenca)}</p>` : ""}
+    ${conferenciaHtml}
     ${s.observacao ? `<p>Obs: ${escapeHtml(s.observacao)}</p>` : ""}
     <hr style="border-top:2px solid #000">
     <div style="text-align:center;font-size:10px;margin-top:6px">Emitido em ${new Date().toLocaleString("pt-BR")}</div>

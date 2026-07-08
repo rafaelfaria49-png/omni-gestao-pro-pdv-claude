@@ -56,9 +56,11 @@ import {
   filterSalesDaSessao,
   receitaTotalDoDia,
   type FechamentoPosSnapshot,
+  type DinheiroContadoDetalhado,
 } from "@/lib/caixa-fechamento-resumo"
 import { useCaixaResumo } from "./use-caixa-resumo"
 import { FechamentoPosFechamentoDialog } from "./fechamento-pos-fechamento-dialog"
+import { CalculadoraDinheiroCaixa } from "./calculadora-dinheiro-caixa"
 
 interface FechamentoCaixaModalProps {
   isOpen: boolean
@@ -83,6 +85,10 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const { toast } = useToast()
 
   const [valorContado, setValorContado] = useState("")
+  // Detalhamento por denominação (calculadora). Só existe quando o total da
+  // calculadora foi aplicado no campo; edição manual do valor o invalida (→ null).
+  const [dinheiroContadoDetalhado, setDinheiroContadoDetalhado] =
+    useState<DinheiroContadoDetalhado | null>(null)
   const [observacao, setObservacao] = useState("")
   const [salvando, setSalvando] = useState(false)
   const [posFechamentoOpen, setPosFechamentoOpen] = useState(false)
@@ -250,6 +256,11 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
               operadores: operadoresSessao,
               terminalId,
               terminalLabel,
+              // Metadado opcional (JSONB aditivo) — só quando a calculadora foi usada
+              // e seu total corresponde ao valor contado aplicado. Sem schema novo.
+              ...(dinheiroContadoDetalhado && valorContado !== ""
+                ? { dinheiroContadoDetalhado }
+                : {}),
             },
           }),
         })
@@ -390,6 +401,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       diferenca: valorContado !== "" && temDiferenca ? diferenca : null,
       observacao: observacao.trim(),
       resumo,
+      dinheiroContadoDetalhado: valorContado !== "" ? dinheiroContadoDetalhado : null,
     }
 
     if (valorContado !== "" && temDiferenca) {
@@ -410,6 +422,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
 
     fecharCaixa()
     setValorContado("")
+    setDinheiroContadoDetalhado(null)
     setObservacao("")
     onClose()
     toast({ title: "Caixa fechado", description: "Sessão encerrada e registrada no servidor." })
@@ -693,7 +706,11 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                         type="number"
                         placeholder="Digite o dinheiro contado..."
                         value={valorContado}
-                        onChange={(e) => setValorContado(e.target.value)}
+                        onChange={(e) => {
+                          setValorContado(e.target.value)
+                          // Edição manual invalida o detalhamento aplicado pela calculadora.
+                          setDinheiroContadoDetalhado(null)
+                        }}
                         className="pl-12 h-14 text-xl font-bold tabular-nums bg-background border-border"
                       />
                     </div>
@@ -701,6 +718,17 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
                       Conferência contra o saldo esperado em dinheiro ({fmt(saldoDinheiroEsperado)}). Pix/cartão não entram na gaveta.
                     </p>
                   </div>
+
+                  {/* Calculadora de conferência de dinheiro físico (cédulas/moedas).
+                      Aplica o total no campo acima por ação explícita do operador. */}
+                  <CalculadoraDinheiroCaixa
+                    saldoDinheiroEsperado={saldoDinheiroEsperado}
+                    onAplicar={(t, detalhe) => {
+                      setValorContado(t.toFixed(2))
+                      setDinheiroContadoDetalhado(detalhe)
+                    }}
+                  />
+
                   <div className="space-y-2">
                     <Label className="text-sm font-medium">Observação (opcional)</Label>
                     <Input

@@ -77,6 +77,8 @@ export function FechamentoPosFechamentoDialog({
   if (!snapshot) return null
 
   const temDiferenca = snapshot.diferenca != null && Math.abs(snapshot.diferenca) > 0.01
+  const denomsContadas =
+    snapshot.dinheiroContadoDetalhado?.denominacoes.filter((d) => d.quantidade > 0) ?? []
 
   return (
     <Dialog
@@ -167,6 +169,25 @@ export function FechamentoPosFechamentoDialog({
                   {snapshot.diferenca > 0 ? "+" : ""}
                   {fmt(snapshot.diferenca)}
                 </span>
+              </div>
+            )}
+
+            {/* Detalhamento opcional da conferência de dinheiro (calculadora). */}
+            {denomsContadas.length > 0 && (
+              <div className="rounded-lg border border-border bg-background/60 p-2.5">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Conferência de dinheiro
+                </p>
+                <div className="space-y-0.5">
+                  {denomsContadas.map((d) => (
+                    <div key={d.valor} className="flex items-center justify-between gap-3 text-xs">
+                      <span className="tabular-nums text-muted-foreground">
+                        {fmt(d.valor)} × {d.quantidade}
+                      </span>
+                      <span className="font-medium tabular-nums text-foreground">{fmt(d.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
