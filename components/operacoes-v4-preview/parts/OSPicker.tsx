@@ -30,7 +30,7 @@ export function OSPicker({ v }: { v: V4Vals }) {
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "flex-start",
-        background: C.appBg,
+        background: "var(--background)",
         padding: 24,
         overflowY: "auto",
       }}

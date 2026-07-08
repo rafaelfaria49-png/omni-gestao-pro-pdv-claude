@@ -14,7 +14,6 @@
  */
 "use client";
 
-import { C } from "./tokens";
 import { useV4Preview } from "./use-v4-preview";
 import { TopBar } from "./parts/TopBar";
 import { IconRail } from "./parts/IconRail";
@@ -41,13 +40,11 @@ export function OperacoesV4Preview() {
         minWidth: 0,
         display: "flex",
         flexDirection: "column",
-        background: C.appBg,
+        background: "var(--background)",
         overflow: "hidden",
         fontSize: 14,
         position: "relative",
-        borderRadius: 12,
-        border: `1px solid ${C.line}`,
-        color: C.body,
+        color: "var(--foreground)",
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
       }}
     >

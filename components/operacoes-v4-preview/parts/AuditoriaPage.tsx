@@ -12,7 +12,7 @@ const h2: React.CSSProperties = {
 
 export function AuditoriaPage({ v }: { v: V4Vals }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, overflowY: "auto", background: C.appBg }}>
+    <div style={{ flex: 1, minWidth: 0, overflowY: "auto", background: "var(--background)" }}>
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "30px 44px 90px" }}>
         <button type="button" onClick={v.goCockpit} style={{ display: "inline-flex", alignItems: "center", gap: 6, height: 32, padding: "0 13px", border: `1px solid ${C.inputBd2}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", marginBottom: 24 }}>← Voltar ao cockpit</button>
         <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: ".08em", color: C.primary, fontWeight: 700, marginBottom: 6 }}>Auditoria · Operações V4 · iteração 3</div>

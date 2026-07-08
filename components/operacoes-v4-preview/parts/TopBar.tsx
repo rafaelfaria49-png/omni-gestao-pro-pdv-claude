@@ -13,8 +13,10 @@ export function TopBar({ v }: { v: V4Vals }) {
         alignItems: "center",
         gap: 12,
         padding: "0 12px",
-        background: C.surface,
-        borderBottom: `1px solid ${C.line}`,
+        background: "var(--card)",
+        borderBottom: "1px solid var(--border)",
+        overflowX: "auto",
+        overflowY: "hidden",
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
@@ -34,8 +36,8 @@ export function TopBar({ v }: { v: V4Vals }) {
         >
           O
         </span>
-        <span style={{ fontWeight: 600, fontSize: 13, color: C.body }}>OmniGestão</span>
-        <span style={{ fontSize: 11.5, color: C.subtle, whiteSpace: "nowrap" }}>
+        <span style={{ fontWeight: 600, fontSize: 13, color: "var(--foreground)" }}>OmniGestão</span>
+        <span style={{ fontSize: 11.5, color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
           Operações <span style={{ color: C.primary, fontWeight: 600 }}>V4</span> · Beta operacional
         </span>
       </div>
@@ -53,10 +55,10 @@ export function TopBar({ v }: { v: V4Vals }) {
           maxWidth: 380,
           height: 28,
           padding: "0 11px",
-          background: C.muted50,
-          border: `1px solid ${C.line}`,
+          background: "var(--muted)",
+          border: "1px solid var(--border)",
           borderRadius: 8,
-          color: C.subtle,
+          color: "var(--muted-foreground)",
           fontSize: 12.5,
           cursor: "pointer",
         }}
@@ -69,11 +71,11 @@ export function TopBar({ v }: { v: V4Vals }) {
           style={{
             marginLeft: "auto",
             fontSize: 10,
-            background: C.surface,
-            border: `1px solid ${C.inputBd}`,
+            background: "var(--card)",
+            border: "1px solid var(--border)",
             borderRadius: 4,
             padding: "1px 5px",
-            color: C.subtle,
+            color: "var(--muted-foreground)",
             flex: "none",
           }}
         >
@@ -90,8 +92,8 @@ export function TopBar({ v }: { v: V4Vals }) {
           gap: 3,
           height: 28,
           padding: 2,
-          background: C.muted100,
-          border: `1px solid ${C.line}`,
+          background: "var(--muted)",
+          border: "1px solid var(--border)",
           borderRadius: 9,
         }}
       >
@@ -135,7 +137,7 @@ export function TopBar({ v }: { v: V4Vals }) {
           height: 28,
           padding: "0 12px",
           border: `1px solid ${v.focusActive ? C.primary : C.primaryBd}`,
-          background: v.focusActive ? C.primary : C.surface,
+          background: v.focusActive ? C.primary : "var(--card)",
           color: v.focusActive ? C.white : C.primary,
           borderRadius: 8,
           fontSize: 12,
@@ -149,7 +151,7 @@ export function TopBar({ v }: { v: V4Vals }) {
       </button>
 
       <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
-        <span style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap" }}>Loja ativa</span>
+        <span style={{ fontSize: 11.5, color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>Loja ativa</span>
         <button
           type="button"
           onClick={v.goAuditoria}
@@ -158,9 +160,9 @@ export function TopBar({ v }: { v: V4Vals }) {
             alignItems: "center",
             height: 28,
             padding: "0 11px",
-            border: `1px solid ${C.inputBd2}`,
-            background: C.surface,
-            color: C.muted,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+            color: "var(--muted-foreground)",
             borderRadius: 8,
             fontSize: 12,
             fontWeight: 500,
@@ -179,7 +181,7 @@ export function TopBar({ v }: { v: V4Vals }) {
             height: 28,
             padding: "0 12px",
             border: `1px solid ${C.primaryBd}`,
-            background: C.surface,
+            background: "var(--card)",
             color: C.primary,
             borderRadius: 8,
             fontSize: 12,
@@ -200,7 +202,7 @@ export function TopBar({ v }: { v: V4Vals }) {
             height: 28,
             padding: "0 12px",
             border: `1px solid ${C.primaryBd}`,
-            background: C.surface,
+            background: "var(--card)",
             color: C.primary,
             borderRadius: 8,
             fontSize: 12,

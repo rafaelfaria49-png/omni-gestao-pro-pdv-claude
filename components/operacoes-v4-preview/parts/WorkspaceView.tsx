@@ -1,5 +1,4 @@
 /** Operações V4 Preview — workspace (cockpit): contexto + superfície central + atividade. */
-import { C } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import { ContextColumn } from "./ContextColumn";
 import { CommandHeader } from "./CommandHeader";
@@ -16,7 +15,7 @@ export function WorkspaceView({ v }: { v: V4Vals }) {
   return (
     <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
       <ContextColumn v={v} />
-      <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", background: C.appBg }}>
+      <section style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", background: "var(--background)" }}>
         <CommandHeader v={v} />
         <PipelineSpine v={v} />
         <StagePanel v={v} />

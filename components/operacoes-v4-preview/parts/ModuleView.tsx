@@ -33,10 +33,10 @@ export function ModuleView({ v }: { v: V4Vals }) {
   const carregandoInicial = v.ordensPrimeiraCarga && v.ordensLoading;
 
   return (
-    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", background: C.appBg }}>
-      <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 12, height: 46, padding: "0 18px", background: C.surface, borderBottom: `1px solid ${C.line}` }}>
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", background: "var(--background)" }}>
+      <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 12, height: 46, padding: "0 18px", background: "var(--card)", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontSize: 18 }}>{v.mod.icon}</span>
-        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.ink }}>{v.mod.title}</h1>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--foreground)" }}>{v.mod.title}</h1>
         <span
           style={{
             display: "inline-flex",
@@ -53,7 +53,7 @@ export function ModuleView({ v }: { v: V4Vals }) {
           {temDados ? "Somente leitura" : "Protótipo"}
         </span>
         <span style={{ flex: 1 }} />
-        <button type="button" onClick={v.railWorkspace} style={{ height: 30, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>Abrir OS Workspace →</button>
+        <button type="button" onClick={v.railWorkspace} style={{ height: 30, padding: "0 12px", border: "1px solid var(--border)", background: "var(--card)", color: "var(--foreground)", borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>Abrir OS Workspace →</button>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "18px" }}>

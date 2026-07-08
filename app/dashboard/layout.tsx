@@ -36,7 +36,9 @@ export default function DashboardSegmentLayout({ children }: { children: React.R
     pathname === "/dashboard/whatsapp" ||
     pathname?.startsWith("/dashboard/whatsapp/") ||
     pathname === "/dashboard/vendas-hub" ||
-    pathname?.startsWith("/dashboard/vendas-hub/")
+    pathname?.startsWith("/dashboard/vendas-hub/") ||
+    pathname === "/dashboard/operacoes-v4-preview" ||
+    pathname?.startsWith("/dashboard/operacoes-v4-preview/")
 
   const shell = (
     // Aviso de atualização (PWA) vai na faixa superior (abaixo da Topbar global),
