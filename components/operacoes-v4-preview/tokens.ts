@@ -16,73 +16,73 @@ import type { CSSProperties } from "react";
 /** Paleta canônica do redesign V4 (HANDOFF §5). */
 export const C = {
   // Texto
-  ink: "#11131a",
-  body: "#1a1d23",
-  muted: "#6b7280",
-  subtle: "#9aa0ab",
-  faint: "#c2c6cd",
-  faint2: "#b9bec7",
-  bodySoft: "#4a4f58",
-  bodySoft2: "#5b616b",
+  ink: "var(--foreground)",
+  body: "var(--foreground)",
+  muted: "var(--muted-foreground)",
+  subtle: "var(--muted-foreground)",
+  faint: "var(--muted-foreground)",
+  faint2: "var(--muted-foreground)",
+  bodySoft: "var(--foreground)",
+  bodySoft2: "var(--foreground)",
 
   // Superfícies
-  surface: "#ffffff",
-  surface2: "#fafbfc",
-  surface3: "#fbfbfc",
-  appBg: "#f5f6f8",
-  appBg2: "#e7e8ec",
-  muted50: "#f4f5f7",
-  muted100: "#f1f2f5",
+  surface: "var(--card)",
+  surface2: "var(--muted)",
+  surface3: "var(--background)",
+  appBg: "var(--background)",
+  appBg2: "var(--muted)",
+  muted50: "var(--muted)",
+  muted100: "var(--muted)",
 
   // Bordas
-  line: "#e9eaee",
-  line2: "#ebedf0",
-  line3: "#f0f1f4",
-  line4: "#f2f3f5",
-  inputBd: "#e2e4e8",
-  inputBd2: "#d9dbe1",
-  hatch: "#cfd2d8",
-  dashed: "#d3d6dc",
+  line: "var(--border)",
+  line2: "var(--border)",
+  line3: "var(--border)",
+  line4: "var(--border)",
+  inputBd: "var(--border)",
+  inputBd2: "var(--border)",
+  hatch: "var(--border)",
+  dashed: "var(--border)",
 
-  // Primary (indigo)
-  primary: "#4f46e5",
-  primaryHover: "#4338ca",
-  primaryBg: "#eef0fe",
-  primaryBd: "#c7ccfa",
-  primarySoft: "#f6f7ff",
-  primaryBd2: "#d8d9f7",
+  // Primary
+  primary: "var(--primary)",
+  primaryHover: "var(--primary)",
+  primaryBg: "color-mix(in srgb, var(--primary) 10%, transparent)",
+  primaryBd: "color-mix(in srgb, var(--primary) 20%, transparent)",
+  primarySoft: "color-mix(in srgb, var(--primary) 5%, transparent)",
+  primaryBd2: "color-mix(in srgb, var(--primary) 20%, transparent)",
 
   // Success
-  success: "#16a34a",
-  successFg: "#15803d",
-  successBg: "#e7f6ec",
-  successBg2: "#f1f6f2",
-  successBd: "#bfe6cc",
+  success: "var(--success)",
+  successFg: "var(--success)",
+  successBg: "color-mix(in srgb, var(--success) 10%, transparent)",
+  successBg2: "color-mix(in srgb, var(--success) 5%, transparent)",
+  successBd: "color-mix(in srgb, var(--success) 20%, transparent)",
 
   // Warning
-  warn: "#d97706",
-  warnFg: "#b45309",
-  warnBg: "#fbf1e3",
-  warnBg2: "#fffaf1",
-  warnBd: "#fbe7c8",
-  warnFg2: "#c08a3e",
+  warn: "var(--warning)",
+  warnFg: "var(--warning)",
+  warnBg: "color-mix(in srgb, var(--warning) 10%, transparent)",
+  warnBg2: "color-mix(in srgb, var(--warning) 5%, transparent)",
+  warnBd: "color-mix(in srgb, var(--warning) 20%, transparent)",
+  warnFg2: "var(--warning)",
 
   // Danger
-  danger: "#dc2626",
-  dangerFg: "#b91c1c",
-  dangerBg: "#fbeaea",
-  dangerBd: "#f3cccc",
-  dangerBd2: "#fbe0e0",
+  danger: "var(--destructive)",
+  dangerFg: "var(--destructive)",
+  dangerBg: "color-mix(in srgb, var(--destructive) 10%, transparent)",
+  dangerBd: "color-mix(in srgb, var(--destructive) 20%, transparent)",
+  dangerBd2: "color-mix(in srgb, var(--destructive) 20%, transparent)",
 
   // Info
-  info: "#2563eb",
-  infoFg: "#1d4ed8",
-  infoBg: "#eaf1fe",
-  infoBd: "#cfe0fb",
+  info: "var(--info)",
+  infoFg: "var(--info)",
+  infoBg: "color-mix(in srgb, var(--info) 10%, transparent)",
+  infoBd: "color-mix(in srgb, var(--info) 20%, transparent)",
 
   // Neutros sólidos
-  black: "#11131a",
-  white: "#ffffff",
+  black: "var(--foreground)",
+  white: "var(--background)",
 } as const;
 
 export const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
@@ -90,7 +90,7 @@ export const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 /** Hachura usada nos placeholders de foto/assinatura. */
 export const HATCH = `repeating-linear-gradient(45deg,${C.muted100},${C.muted100} 5px,${C.line} 5px,${C.line} 10px)`;
 export const HATCH_SOFT =
-  `repeating-linear-gradient(45deg,${C.surface2},${C.surface2} 6px,#f3f4f6 6px,#f3f4f6 12px)`;
+  `repeating-linear-gradient(45deg,${C.surface2},${C.surface2} 6px,${C.line} 6px,${C.line} 12px)`;
 
 /* ---- fragmentos reutilizáveis ---- */
 
