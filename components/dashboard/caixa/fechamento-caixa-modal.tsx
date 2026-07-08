@@ -55,8 +55,10 @@ import { escapeHtml, openThermalHtmlPrint } from "@/lib/thermal-print"
 import {
   filterSalesDaSessao,
   receitaTotalDoDia,
+  type FechamentoPosSnapshot,
 } from "@/lib/caixa-fechamento-resumo"
 import { useCaixaResumo } from "./use-caixa-resumo"
+import { FechamentoPosFechamentoDialog } from "./fechamento-pos-fechamento-dialog"
 
 interface FechamentoCaixaModalProps {
   isOpen: boolean
@@ -83,6 +85,8 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
   const [valorContado, setValorContado] = useState("")
   const [observacao, setObservacao] = useState("")
   const [salvando, setSalvando] = useState(false)
+  const [posFechamentoOpen, setPosFechamentoOpen] = useState(false)
+  const [posFechamentoSnapshot, setPosFechamentoSnapshot] = useState<FechamentoPosSnapshot | null>(null)
 
   const ledger = ensureLedger(dailyLedger)
   const userAudit = (empresaDocumentos.nomeFantasia || "").trim() || "Loja"
@@ -220,7 +224,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     // POST de fechamento (reutilizado na reconciliação). Devolve ok + status + erro.
     const postFechar = async (
       sessaoIdToClose: string,
-    ): Promise<{ ok: boolean; status: number; error?: string }> => {
+    ): Promise<{ ok: boolean; status: number; error?: string; fechadaEm?: string | null }> => {
       try {
         const res = await fetch("/api/ops/caixa/fechar", {
           method: "POST",
@@ -249,7 +253,12 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
             },
           }),
         })
-        if (res.ok) return { ok: true, status: res.status }
+        if (res.ok) {
+          const data = (await res.json().catch(() => null)) as
+            | { sessao?: { fechadaEm?: string | null } }
+            | null
+          return { ok: true, status: res.status, fechadaEm: data?.sessao?.fechadaEm ?? null }
+        }
         const errData = (await res.json().catch(() => null)) as { error?: string } | null
         return { ok: false, status: res.status, error: errData?.error }
       } catch (err: unknown) {
@@ -276,6 +285,7 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     setSalvando(true)
     let persisted = false
     let lastError: { status: number; error?: string } | null = null
+    let fechadaEmResult: string | null = null
     let sid = sessaoId
 
     try {
@@ -330,8 +340,12 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
           }
         }
 
-        if (r.ok) persisted = true
-        else lastError = { status: r.status, error: r.error }
+        if (r.ok) {
+          persisted = true
+          fechadaEmResult = r.fechadaEm ?? null
+        } else {
+          lastError = { status: r.status, error: r.error }
+        }
       } else {
         console.error("[caixa/fechar] nenhuma sessão ABERTA encontrada", { storeId: lojaId, terminalId })
         lastError = { status: 0, error: "Nenhuma sessão de caixa aberta encontrada no servidor." }
@@ -357,7 +371,27 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
       return
     }
 
-    // ── Sucesso confirmado pelo servidor: agora sim, encerra localmente ─────
+    // ── Sucesso confirmado pelo servidor: monta o snapshot ANTES de resetar ──
+    // qualquer estado local (Regra 7 do GOAL) — o diálogo pós-fechamento depende
+    // dele para o comprovante, e não deve inventar/buscar nada novo.
+    const snapshot: FechamentoPosSnapshot = {
+      loja: userAudit,
+      sessaoId: sid,
+      terminalLabel,
+      operadores: operadoresSessao,
+      dataAbertura: caixa.dataAbertura ? caixa.dataAbertura.toISOString() : null,
+      fechadaEm: fechadaEmResult,
+      saldoInicial: caixa.saldoInicial,
+      totalEntradas: entradas,
+      totalSaidas: saidas,
+      saldoDinheiroEsperado,
+      saldoMovimentadoEsperado: saldoEsperado,
+      valorContado: valorContado !== "" ? valorContadoNum : null,
+      diferenca: valorContado !== "" && temDiferenca ? diferenca : null,
+      observacao: observacao.trim(),
+      resumo,
+    }
+
     if (valorContado !== "" && temDiferenca) {
       const pgAudit = resumo.porPagamento
       appendAuditLog({
@@ -379,9 +413,12 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
     setObservacao("")
     onClose()
     toast({ title: "Caixa fechado", description: "Sessão encerrada e registrada no servidor." })
+    setPosFechamentoSnapshot(snapshot)
+    setPosFechamentoOpen(true)
   }
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="w-[92vw] border-border bg-card p-0 sm:max-w-3xl">
         <div className="flex max-h-[90vh] flex-col overflow-hidden">
@@ -759,6 +796,12 @@ export function FechamentoCaixaModal({ isOpen, onClose }: FechamentoCaixaModalPr
         </div>
       </DialogContent>
     </Dialog>
+    <FechamentoPosFechamentoDialog
+      open={posFechamentoOpen}
+      onOpenChange={setPosFechamentoOpen}
+      snapshot={posFechamentoSnapshot}
+    />
+    </>
   )
 }
 

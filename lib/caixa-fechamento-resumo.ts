@@ -29,6 +29,7 @@
 
 import type { SaleRecord } from "@/lib/operations-sale-types"
 import { isAvulsoSaleLine, isOsVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
+import { escapeHtml } from "@/lib/thermal-print"
 
 export type OrigemVendaKey = "pdv" | "avulso" | "os"
 
@@ -368,4 +369,104 @@ export function receitaTotalDoDia(
       (Number(resumo.recebimentosContas) || 0) +
       (Number(resumo.outrosRecebimentos) || 0),
   )
+}
+
+/**
+ * Snapshot dos dados já calculados no momento em que o fechamento de caixa é
+ * confirmado pelo servidor — fonte única para o diálogo pós-fechamento
+ * (GOAL CAIXA-FECHAMENTO-COMPROVANTE-POS-FECHAMENTO-001). Não busca nada novo:
+ * é o mesmo `resumo` que o modal já enviou no payload de `/api/ops/caixa/fechar`,
+ * mais o `fechadaEm` devolvido pelo servidor.
+ *
+ * `totalDevolucoes` fica de fora — não está disponível no payload atual do
+ * fechamento (só existe via `/api/ops/caixa/sessao-detalhe`, fora do escopo
+ * deste GOAL para evitar uma nova chamada de rede logo após o fechamento).
+ */
+export interface FechamentoPosSnapshot {
+  loja: string
+  sessaoId: string | null
+  terminalLabel: string
+  operadores: string[]
+  dataAbertura: string | null
+  fechadaEm: string | null
+  saldoInicial: number
+  totalEntradas: number
+  totalSaidas: number
+  saldoDinheiroEsperado: number
+  saldoMovimentadoEsperado: number | null
+  valorContado: number | null
+  diferenca: number | null
+  observacao: string
+  resumo: FechamentoResumo
+}
+
+function fmtBRL(v: number): string {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+    Number.isFinite(v) ? v : 0,
+  )
+}
+
+function fmtDataHora(iso: string | null): string {
+  if (!iso) return "—"
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString("pt-BR")
+}
+
+/**
+ * Gera o HTML (conteúdo interno, sem `<html>`/`<body>`) do comprovante de
+ * fechamento de caixa — consumido por `openThermalHtmlPrint` (`lib/thermal-print.ts`).
+ * Função pura: não lê DOM, não formata moeda fora de `fmtBRL`, não busca dados.
+ */
+export function buildComprovanteFechamentoHtml(s: FechamentoPosSnapshot): string {
+  const { resumo } = s
+  const pg = resumo.porPagamento
+
+  const origemHtml = resumo.porOrigem.length
+    ? resumo.porOrigem
+        .map(
+          (o) =>
+            `<p>${escapeHtml(o.label)}: ${fmtBRL(o.valorBruto)} (${o.qtdItens} itens)</p>`,
+        )
+        .join("")
+    : "<p>—</p>"
+
+  const operadoresHtml = s.operadores.length ? escapeHtml(s.operadores.join(", ")) : "—"
+
+  return `
+    <div style="text-align:center;font-weight:700">FECHAMENTO DE CAIXA</div>
+    <div style="font-size:10px;text-align:center;margin:4px 0">${escapeHtml(s.loja)}</div>
+    <div style="border-top:1px dashed #000;margin:6px 0"></div>
+    <p>Sessão: ${s.sessaoId ? escapeHtml(s.sessaoId) : "—"}</p>
+    <p>Terminal: ${escapeHtml(s.terminalLabel)}</p>
+    <p>Operador(es): ${operadoresHtml}</p>
+    <p>Abertura: ${fmtDataHora(s.dataAbertura)}</p>
+    <p>Fechamento: ${fmtDataHora(s.fechadaEm)}</p>
+    <hr><strong>VENDAS POR ORIGEM</strong>
+    ${origemHtml}
+    <hr><strong>FORMAS DE PAGAMENTO</strong>
+    <p>Dinheiro: ${fmtBRL(pg.dinheiro)}</p>
+    <p>Pix: ${fmtBRL(pg.pix)}</p>
+    <p>Débito: ${fmtBRL(pg.cartaoDebito)}</p>
+    <p>Crédito: ${fmtBRL(pg.cartaoCredito)}</p>
+    <p>Carnê: ${fmtBRL(pg.carne)}</p>
+    <p>A prazo: ${fmtBRL(pg.aPrazo)}</p>
+    <p>Vale/Crédito: ${fmtBRL(pg.creditoVale)}</p>
+    <hr><strong>CONSOLIDAÇÃO</strong>
+    <p>Vendas (qtd): ${resumo.qtdVendas}</p>
+    <p>Total líquido: ${fmtBRL(resumo.totalLiquido)}</p>
+    <p>Total recebido: ${fmtBRL(resumo.totalRecebido)}</p>
+    ${resumo.qtdRecebimentosContas > 0 ? `<p>Serviços recebidos: ${fmtBRL(resumo.recebimentosContas)} (${resumo.qtdRecebimentosContas})</p>` : ""}
+    <hr><strong>CAIXA (GAVETA)</strong>
+    <p>Abertura: ${fmtBRL(s.saldoInicial)}</p>
+    <p>(+) Suprimentos: ${fmtBRL(resumo.suprimentos)}</p>
+    <p>(-) Sangrias: ${fmtBRL(resumo.sangrias)}</p>
+    <p>Dinheiro esperado: ${fmtBRL(s.saldoDinheiroEsperado)}</p>
+    ${s.saldoMovimentadoEsperado != null ? `<p>Saldo total movimentado: ${fmtBRL(s.saldoMovimentadoEsperado)}</p>` : ""}
+    ${s.valorContado != null ? `<p>Dinheiro contado: ${fmtBRL(s.valorContado)}</p>` : ""}
+    ${s.diferenca != null ? `<p>Diferença: ${fmtBRL(s.diferenca)}</p>` : ""}
+    ${s.observacao ? `<p>Obs: ${escapeHtml(s.observacao)}</p>` : ""}
+    <hr style="border-top:2px solid #000">
+    <div style="text-align:center;font-size:10px;margin-top:6px">Emitido em ${new Date().toLocaleString("pt-BR")}</div>
+    <div style="height:14mm" aria-hidden="true"></div>
+  `
 }
