@@ -258,7 +258,7 @@ export type PdvOmniClassicShellProps = {
   qtyEditOpen: boolean
   onQtyEditOpenChange: (open: boolean) => void
   qtyEditDefault: string
-  onQtyEditConfirm: (raw: string) => void
+  onQtyEditConfirm: (raw: string) => boolean | void
   cancelSaleOpen: boolean
   onCancelSaleOpenChange: (open: boolean) => void
   onConfirmCancelSale: () => void
@@ -277,6 +277,7 @@ export type PdvOmniClassicShellProps = {
 export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
   const isModoRapido = props.isModoRapido === true
   const qtyEditRef = useRef<HTMLInputElement>(null)
+  const qtyEditBusyRef = useRef(false)
   const clientSearchInputRef = useRef<HTMLInputElement>(null)
 
   // Explicit focus when F2 dialog opens (autoFocus unreliable inside Radix Dialog)
@@ -343,12 +344,53 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
 
   useEffect(() => {
     if (!props.qtyEditOpen) return
+    qtyEditBusyRef.current = false
     const id = window.requestAnimationFrame(() => {
       qtyEditRef.current?.focus()
       qtyEditRef.current?.select?.()
     })
     return () => window.cancelAnimationFrame(id)
   }, [props.qtyEditOpen])
+
+  const refocusQtyEdit = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      qtyEditRef.current?.focus()
+      qtyEditRef.current?.select?.()
+    })
+  }, [])
+
+  const handleQtyEditCancel = useCallback(() => {
+    props.onQtyEditOpenChange(false)
+  }, [props])
+
+  const handleQtyEditConfirm = useCallback(() => {
+    if (qtyEditBusyRef.current) return
+    qtyEditBusyRef.current = true
+    const ok = props.onQtyEditConfirm(qtyEditRef.current?.value ?? "1")
+    if (ok === false) {
+      qtyEditBusyRef.current = false
+      refocusQtyEdit()
+      return
+    }
+    window.requestAnimationFrame(() => {
+      qtyEditBusyRef.current = false
+    })
+  }, [props, refocusQtyEdit])
+
+  const handleQtyEditKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault()
+        handleQtyEditConfirm()
+        return
+      }
+      if (e.key === "Escape") {
+        e.preventDefault()
+        handleQtyEditCancel()
+      }
+    },
+    [handleQtyEditCancel, handleQtyEditConfirm]
+  )
 
   const [productDialogQuery, setProductDialogQuery] = useState("")
   const [productActiveIdx, setProductActiveIdx] = useState(0)
@@ -851,7 +893,7 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
       </Dialog>
 
       <Dialog open={props.qtyEditOpen} onOpenChange={props.onQtyEditOpenChange}>
-        <DialogContent className="max-w-sm border-border bg-card text-foreground">
+        <DialogContent className="max-w-sm border-border bg-card text-foreground" onKeyDown={handleQtyEditKeyDown}>
           <DialogHeader>
             <DialogTitle>Alterar Quantidade (F4)</DialogTitle>
             <DialogDescription className="text-muted-foreground/75">Defina a nova quantidade para o item selecionado.</DialogDescription>
@@ -864,13 +906,13 @@ export function PdvOmniClassicShell(props: PdvOmniClassicShellProps) {
             className="tabular-pdv h-11 w-full rounded-lg border border-border bg-background px-3 text-2xl font-semibold outline-none focus:border-[hsl(var(--pos-action))]/60 focus:ring-1 focus:ring-[hsl(var(--pos-action))]/25"
           />
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" className="cursor-pointer" onClick={() => props.onQtyEditOpenChange(false)}>
+            <Button type="button" variant="outline" className="cursor-pointer" onClick={handleQtyEditCancel}>
               Voltar
             </Button>
             <Button
               type="button"
               className="bg-[hsl(var(--pos-action))] text-[hsl(var(--pos-action-foreground))] hover:bg-[hsl(var(--pos-action))]/90 cursor-pointer"
-              onClick={() => props.onQtyEditConfirm(qtyEditRef.current?.value ?? "1")}
+              onClick={handleQtyEditConfirm}
             >
               Aplicar
             </Button>

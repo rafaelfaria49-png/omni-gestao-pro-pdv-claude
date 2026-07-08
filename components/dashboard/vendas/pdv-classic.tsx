@@ -1647,18 +1647,19 @@ export function PdvClassic({
                     description: "Informe um número maior que zero.",
                     variant: "destructive",
                   })
-                  return
+                  return false
                 }
                 const id = selectedCartLineId
-                if (!id) return
+                if (!id) return false
                 const item = cart.find((i) => i.lineId === id)
-                if (!item) return
+                if (!item) return false
                 const product = getCartStockProduct(item)
-                if (product && !validateAggregatedStockForProduct(product, v, id)) return
+                if (product && !validateAggregatedStockForProduct(product, v, id)) return false
                 setCart((prev) => prev.map((i) => (i.lineId === id ? { ...i, quantity: v } : i)))
                 setShellQtyEditOpen(false)
                 setShellInfo("Quantidade atualizada.")
                 focusShellBipe()
+                return true
               }}
               cancelSaleOpen={shellCancelSaleOpen}
               onCancelSaleOpenChange={(open) => {
