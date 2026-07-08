@@ -20,7 +20,8 @@ Navegação principal em `components/dashboard/sidebar.tsx` e `components/dashbo
 | Contas a Pagar | `contas-pagar` | `/?page=contas-pagar` | SPA. |
 | Contas a Receber | `contas-receber` | `/?page=contas-receber` | SPA. |
 | Relatórios Financeiros | `relatorios-financeiros` | `/?page=relatorios-financeiros` | SPA. |
-| Área do Contador | — | `/contador` | Só `externalPath`. |
+| Área do Contador | — | `/contador` | Portal EXTERNO antigo (login PIN, cookie próprio, export CSV/XML). Só `externalPath`. Preservado — não confundir com o Contador HUB interno. |
+| Contador HUB | — | `/dashboard/contador` | Novo HUB INTERNO (lojista/equipe), **preview visual**. Item em `hubsNavItems` (`lib/navigation/dashboard-nav-items.ts`), badge `Preview`. Rota distinta do portal externo `/contador`. |
 | Gestão de Clientes | `clientes-gestao` | `/dashboard/clientes` | `externalPath` tem prioridade; `?page=clientes-gestao` redireciona. |
 | Cadastro de Clientes | `clientes` | `/?page=clientes` | SPA. |
 | Consulta de Crédito | `credito` | `/?page=credito` | Oculto no plano Bronze. |

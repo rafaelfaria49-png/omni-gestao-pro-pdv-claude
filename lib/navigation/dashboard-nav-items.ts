@@ -15,6 +15,7 @@ import {
   History,
   BarChart3,
   ClipboardCheck,
+  Calculator,
   type LucideIcon,
 } from "lucide-react"
 import { financeiroV2Enabled, roadmapHubsEnabled } from "@/lib/feature-flags"
@@ -122,6 +123,16 @@ export const hubsNavItems: DashboardNavItem[] = [
           visible: (p: EnterprisePermissions) => p.hubs.financeiro,
         } satisfies DashboardNavItem,
       ]),
+  {
+    to: "/dashboard/contador",
+    label: "Contador HUB",
+    icon: Calculator,
+    badge: "Preview",
+    // Contador HUB (interno) é finance-adjacent: reusa a permissão de Financeiro
+    // sem tocar no modelo de permissões. Rota nova em /dashboard/contador — NÃO é
+    // o portal externo antigo /contador.
+    visible: (p) => p.hubs.financeiro,
+  },
   {
     to: "/dashboard/relatorios",
     label: "Relatórios",
