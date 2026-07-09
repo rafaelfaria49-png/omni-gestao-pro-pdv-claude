@@ -70,6 +70,17 @@ const nextConfig = {
   /** Next.js 16 usa Turbopack por padrão; o plugin PWA injeta webpack — config vazia evita erro de build. */
   turbopack: {},
   env,
+  /**
+   * CATALOGO-APARELHOS-SEEDS-TRACING-002 — o loader server-only (`lib/catalogo-aparelhos/
+   * catalogo-loader.ts`) lê os CSVs de `docs/catalogo/seeds` via `fs`/`process.cwd()`. Esse
+   * caminho é dinâmico e NÃO é detectável pelo file-tracing do Next, então em produção
+   * serverless (Vercel) os seeds ficariam de fora do bundle e a busca degradaria para vazio.
+   * Incluímos os CSVs manualmente na ÚNICA rota que os lê (a busca de aparelhos). A rota
+   * `produto/[id]` lê do Prisma, não dos CSVs — por isso não precisa do include.
+   */
+  outputFileTracingIncludes: {
+    "/api/catalogo/aparelhos/search": ["./docs/catalogo/seeds/*.csv"],
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
