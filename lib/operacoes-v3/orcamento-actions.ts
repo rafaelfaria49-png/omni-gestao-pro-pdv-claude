@@ -30,6 +30,7 @@ import {
   projetarStatusV2,
   statusOSAposAprovarOrcamento,
   statusOSAposEnviarOrcamento,
+  statusV3FromOS,
   type OperacaoStatusV3,
 } from "./status-machine";
 // Caminho completo (em vez do alias `@/api/os`) para resolver também sob o
@@ -184,6 +185,83 @@ export async function salvarOrcamentoV3(storeId: string, osId: string, input: Sa
     orcamento: editado,
     eventos: [makeEvento("orcamento_atualizado", operadorLabel(session), "Orçamento atualizado.", { versao: versao.versao })],
     versoes: [...versoesAtuais, versao],
+  });
+}
+
+// ----------------------------------------------------------------------------
+// Correção de orçamento em OS avançada (GOAL OPS-V4-ORCAMENTO-REABRIR-MOTOR-003)
+// ----------------------------------------------------------------------------
+// Caminho SEPARADO e explícito para corrigir um orçamento materializado cujo
+// valor ficou vazio/perdido numa OS já avançada (aprovada/em execução/pronta/
+// recebida/entregue). Diferente de `salvarOrcamentoV3` (que só aceita
+// rascunho/enviado), esta action aceita OS avançada: reescreve itens/desconto/
+// observação/grupos, recalcula o total e o `valorTotal` da OS, e NÃO muda o
+// status da OS (preserva "entregue"/"pronta"/... — não regressa a orçamento).
+// Não cria Conta a Receber, não cria venda, não mexe em estoque/caixa — só
+// persiste o orçamento + timeline. Com `valorTotal > 0`, os readers financeiros
+// (`totalCobravelV3`/`lerPagamentoV3`) passam a ver cobrança pendente e a OS
+// fica elegível para recebimento pelos filtros existentes (total > 0).
+//
+// Status do orçamento é PRESERVADO (ex.: continua "aprovado") — a decisão
+// comercial anterior continua de pé; só os itens/valores perdidos são repostos.
+// Evento de timeline `orcamento_aprovado_revisado` (tipo já existente em
+// `@/types/os`, não toca o union protegido) registra total anterior/novo e a
+// origem `operacoes_v4_orcamento_reaberto` para auditoria.
+/** Status da OS que admitem correção avançada do orçamento (pós-aprovação). */
+const STATUS_CORRECAO_AVANCADA_V3: ReadonlySet<OperacaoStatusV3> = new Set([
+  "aprovado",
+  "aguardando_peca",
+  "em_execucao",
+  "pronta",
+  "recebida",
+  "entregue",
+]);
+
+export async function corrigirOrcamentoV3(storeId: string, osId: string, input: SalvarOrcamentoV3Input): Promise<OrdemServico> {
+  const { sid, id, session, payload } = await carregar(storeId, osId);
+  const atual = orcamentoEditavel(payload);
+
+  const statusOS = statusV3FromOS(payload);
+  if (!STATUS_CORRECAO_AVANCADA_V3.has(statusOS)) {
+    throw new Error(
+      statusOS === "cancelada"
+        ? "Não é possível corrigir o orçamento de uma OS cancelada."
+        : "Correção de orçamento avançada só vale para OS já aprovada/em execução/pronta/recebida/entregue.",
+    );
+  }
+
+  const servicosInput = Array.isArray(input.servicos) ? input.servicos : [];
+  const pecasInput = Array.isArray(input.pecas) ? input.pecas : [];
+  const errosGrupos = validarGruposOrcamentoV3({ pecas: pecasInput, servicos: servicosInput });
+  if (errosGrupos.length > 0) throw new Error(errosGrupos[0]);
+
+  const totalAnterior = computeTotaisV3(atual).total;
+
+  // Preserva o status do orçamento (ex.: "aprovado") — a correção só reescreve
+  // itens/desconto/observação/grupos; a decisão comercial anterior continua de pé.
+  const corrigido = recalcOrcamentoV3({
+    ...atual,
+    servicos: servicosInput,
+    pecas: pecasInput,
+    desconto: Math.max(0, Number(input.desconto) || 0),
+    observacao: input.observacao ?? atual.observacao,
+    gruposV3: input.gruposV3 ?? atual.gruposV3,
+    atualizadoEm: nowIso(),
+  });
+
+  const totalNovo = computeTotaisV3(corrigido).total;
+
+  return gravar(sid, id, payload, {
+    orcamento: corrigido,
+    // Sem `statusOS`: o status da OS (entregue/pronta/...) é preservado.
+    eventos: [
+      makeEvento(
+        "orcamento_aprovado_revisado",
+        operadorLabel(session),
+        `Orçamento corrigido manualmente. Total anterior R$ ${totalAnterior.toFixed(2).replace(".", ",")} → novo R$ ${totalNovo.toFixed(2).replace(".", ",")}.`,
+        { origem: "operacoes_v4_orcamento_reaberto", totalAnterior, totalNovo, correcaoAvancada: true },
+      ),
+    ],
   });
 }
 

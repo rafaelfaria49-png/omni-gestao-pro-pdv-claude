@@ -290,7 +290,13 @@ function OrcamentoEditor({ v, revisao, onFecharRevisao }: { v: V4Vals; revisao?:
       return false;
     }
     setErro(null);
-    return v.salvarOrcamento(editor);
+    // GOAL OPS-V4-ORCAMENTO-REABRIR-MOTOR-003: em modo revisão (OS avançada), usa a
+    // action de correção — preserva o status da OS e recalcula o valorTotal (o salvar
+    // comum seria rejeitado pelo motor para orçamento aprovado/entregue). Após sucesso,
+    // fecha o modo edição para mostrar o read-only com o total atualizado.
+    const ok = revisao ? await v.corrigirOrcamento(editor) : await v.salvarOrcamento(editor);
+    if (ok && revisao && onFecharRevisao) onFecharRevisao();
+    return ok;
   };
 
   const addServico = () =>
@@ -318,7 +324,7 @@ function OrcamentoEditor({ v, revisao, onFecharRevisao }: { v: V4Vals; revisao?:
           <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.warnBg, border: `1px solid ${C.warnBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 12 }}>
             <span style={{ fontSize: 13, lineHeight: "16px", flex: "none" }}>⚠️</span>
             <span style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.45 }}>
-              <strong>Revisão de orçamento{v.orcamento.statusLabel ? ` (${v.orcamento.statusLabel})` : ""}.</strong> Este orçamento já foi decidido; alterá-lo pode ser rejeitado pelo sistema — se precisar mudar a cobrança, pode ser necessário um novo orçamento. Nada muda até você salvar.
+              <strong>Correção de orçamento em OS avançada{v.orcamento.statusLabel ? ` (${v.orcamento.statusLabel})` : ""}.</strong> O status da OS será preservado — salvar apenas reescreve os itens/valores e recalcula o total, sem criar cobrança ou venda. Nada muda até você salvar.
             </span>
           </div>
         )}

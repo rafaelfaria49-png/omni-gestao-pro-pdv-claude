@@ -38,6 +38,7 @@ import { salvarDiagnosticoV3, salvarChecklistEntradaV3 } from "@/lib/operacoes-v
 import {
   gerarOrcamentoDaOS,
   salvarOrcamentoV3,
+  corrigirOrcamentoV3,
   aprovarOrcamentoV3,
   recusarOrcamentoV3,
 } from "@/lib/operacoes-v3/orcamento-actions";
@@ -148,6 +149,11 @@ export interface V4DataCtx {
   salvarDiagnostico: (input: DiagnosticoInputV4) => Promise<boolean>;
   gerarOrcamento: () => Promise<boolean>;
   salvarOrcamento: (editor: OrcamentoEditorV4) => Promise<boolean>;
+  // GOAL OPS-V4-ORCAMENTO-REABRIR-MOTOR-003: correção controlada de orçamento em OS
+  // avançada (aprovada/em execução/pronta/recebida/entregue). Action SEPARADA de
+  // `salvarOrcamentoV3` (que só aceita rascunho/enviado) — recalcula valorTotal e
+  // preserva o status da OS. O editor em modo revisão chama isto em vez do salvar comum.
+  corrigirOrcamento: (editor: OrcamentoEditorV4) => Promise<boolean>;
   aprovarOrcamento: () => Promise<boolean>;
   // GOAL 026: motivo estruturado (enum + observação opcional) — substitui o
   // texto livre solto de antes; `recusarOrcamentoV3` (motor) ainda aceita
@@ -1106,6 +1112,10 @@ export function buildVals(
     salvarDiagnostico: ctx.salvarDiagnostico,
     gerarOrcamento: ctx.gerarOrcamento,
     salvarOrcamento: ctx.salvarOrcamento,
+    // GOAL OPS-V4-ORCAMENTO-REABRIR-MOTOR-003: handler de correção avançada — o
+    // OrcamentoStage em modo revisão chama isto (nunca o salvar comum, que o
+    // motor rejeitaria para OS avançada).
+    corrigirOrcamento: ctx.corrigirOrcamento,
     aprovarOrcamento: ctx.aprovarOrcamento,
     recusarOrcamento: ctx.recusarOrcamento,
     orcamentoMaterializado,
@@ -1277,6 +1287,15 @@ export function useV4Preview(): V4Vals {
   const salvarOrcamento = useCallback(
     (editor: OrcamentoEditorV4) =>
       runWrite((sid, osId) => salvarOrcamentoV3(sid, osId, editorToSalvarInputV4(editor)), "Orçamento salvo."),
+    [runWrite],
+  );
+  // GOAL OPS-V4-ORCAMENTO-REABRIR-MOTOR-003: mesmo wrapper `runWrite` (reload + toast
+  // honesto), mas chama a action de correção avançada — aceita OS já aprovada/em
+  // execução/pronta/recebida/entregue, recalcula valorTotal e preserva o status.
+  // Nenhum caixa/CR/venda/estoque envolvido; só persiste orçamento + timeline.
+  const corrigirOrcamento = useCallback(
+    (editor: OrcamentoEditorV4) =>
+      runWrite((sid, osId) => corrigirOrcamentoV3(sid, osId, editorToSalvarInputV4(editor)), "Orçamento corrigido."),
     [runWrite],
   );
   const aprovarOrcamento = useCallback(
@@ -1522,6 +1541,7 @@ export function useV4Preview(): V4Vals {
       salvarDiagnostico,
       gerarOrcamento,
       salvarOrcamento,
+      corrigirOrcamento,
       aprovarOrcamento,
       recusarOrcamento,
       iniciarDiagnostico,
@@ -1559,6 +1579,7 @@ export function useV4Preview(): V4Vals {
       salvarDiagnostico,
       gerarOrcamento,
       salvarOrcamento,
+      corrigirOrcamento,
       aprovarOrcamento,
       recusarOrcamento,
       iniciarDiagnostico,

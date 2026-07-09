@@ -33,6 +33,7 @@ vi.mock("@/lib/operacoes-v3/workspace-actions", () => ({
 vi.mock("@/lib/operacoes-v3/orcamento-actions", () => ({
   gerarOrcamentoDaOS: vi.fn(async () => ({})),
   salvarOrcamentoV3: vi.fn(async () => ({})),
+  corrigirOrcamentoV3: vi.fn(async () => ({})),
   aprovarOrcamentoV3: vi.fn(async () => ({})),
   recusarOrcamentoV3: vi.fn(async () => ({})),
 }))
@@ -179,6 +180,7 @@ const ctx: V4DataCtx = {
   salvarDiagnostico: async () => false,
   gerarOrcamento: async () => false,
   salvarOrcamento: async () => false,
+  corrigirOrcamento: async () => false,
   aprovarOrcamento: async () => false,
   recusarOrcamento: async () => false,
   iniciarDiagnostico: async () => false,
@@ -457,6 +459,7 @@ describe("Operações V4 — Diagnóstico/Orçamento reais reaproveitam só acti
       "salvarDiagnosticoV3",
       "gerarOrcamentoDaOS",
       "salvarOrcamentoV3",
+      "corrigirOrcamentoV3",
       "aprovarOrcamentoV3",
       "recusarOrcamentoV3",
       "aplicarTransicaoStatusV3",
@@ -1213,6 +1216,40 @@ describe("OPS-V4-ORCAMENTO-READBACK-EDIT-002 — Aprovar não ignora o editor lo
 
   it("OrcamentoStage passa o guard (total ao vivo + salvarEditor) ao cluster de decisão", () => {
     expect(orcamentoStage).toMatch(/guard=\{\{ total: totais\.total, salvarEditor \}\}/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-ORCAMENTO-REABRIR-MOTOR-003 — correção de orçamento em OS avançada:
+// o editor em modo revisão chama a action de correção (action SEPARADA do salvar
+// comum, que o motor rejeitaria para orçamento aprovado/entregue), preservando o
+// status da OS; microcopy honesta; fecha a edição ao salvar com sucesso. Sem criar
+// CR/venda/estoque — só payload + timeline + recalcula valorTotal.
+// ---------------------------------------------------------------------------
+describe("OPS-V4-ORCAMENTO-REABRIR-MOTOR-003 — OrcamentoStage em revisão usa corrigirOrcamento (action separada)", () => {
+  const orcamentoStage = readFileSync(join(DIR, "parts", "stages", "OrcamentoStage.tsx"), "utf8")
+  const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+
+  it("o editor em modo revisão chama v.corrigirOrcamento (nunca o salvar comum, rejeitado pelo motor)", () => {
+    expect(orcamentoStage).toMatch(/revisao \? await v\.corrigirOrcamento\(editor\) : await v\.salvarOrcamento\(editor\)/)
+  })
+
+  it("após salvar correção com sucesso, fecha o modo edição (onFecharRevisao) para mostrar o read-only atualizado", () => {
+    expect(orcamentoStage).toMatch(/if \(ok && revisao && onFecharRevisao\) onFecharRevisao\(\)/)
+  })
+
+  it("microcopy honesta: 'Correção de orçamento em OS avançada' + 'O status da OS será preservado'", () => {
+    expect(orcamentoStage).toContain("Correção de orçamento em OS avançada")
+    expect(orcamentoStage).toContain("O status da OS será preservado")
+  })
+
+  it("não promete mais que 'alterá-lo pode ser rejeitado pelo sistema' (texto antigo removido — agora há caminho controlado)", () => {
+    expect(orcamentoStage).not.toContain("pode ser rejeitado pelo sistema")
+  })
+
+  it("orquestrador expõe v.corrigirOrcamento ligado ao ctx e importa a action real corrigirOrcamentoV3", () => {
+    expect(orquestrador).toContain("corrigirOrcamentoV3")
+    expect(orquestrador).toMatch(/corrigirOrcamento: ctx\.corrigirOrcamento/)
   })
 })
 
