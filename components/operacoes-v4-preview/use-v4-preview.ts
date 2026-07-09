@@ -225,13 +225,39 @@ export interface EnviarOrcamentoPorCanalUiResultV4 {
   avisoRegistro?: boolean;
 }
 
+/**
+ * GOAL OPS-V4-RIGHT-RAIL-DEDUP-001: preferência aberto/fechado da lateral
+ * "Atividade", por navegador. Chave isolada da V4 — não colide com nenhuma
+ * outra tela ("1" = aberta, "0" = fechada; ausente = default fechado).
+ */
+export const RIGHT_RAIL_PREF_KEY = "omnigestao:operacoes-v4:right-rail-open";
+
+/**
+ * Grava a preferência SÓ no toggle explícito da coluna (nunca em efeito de
+ * mount — o StrictMode do dev roda efeitos 2× e acabaria gravando o default
+ * sem o usuário ter escolhido nada). Sem storage (SSR, teste em node,
+ * navegação privada), vira no-op e o aberto/fechado segue em memória.
+ */
+function persistRightRailPref(open: boolean) {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(RIGHT_RAIL_PREF_KEY, open ? "1" : "0");
+  } catch {
+    /* storage indisponível — preferência não persiste, UI continua normal */
+  }
+}
+
 const INITIAL: V4State = {
   view: "cockpit",
   module: "workspace",
   stage: "execucao",
   status: "em_execucao",
   left: true,
-  right: true,
+  // GOAL OPS-V4-RIGHT-RAIL-DEDUP-001: a lateral "Atividade" nasce FECHADA para
+  // não espremer o workspace; a preferência do navegador (localStorage) é
+  // reaplicada pós-mount em `useV4Preview` — nunca aqui, para o primeiro render
+  // do cliente bater com o HTML do SSR.
+  right: false,
   menu: null,
   toast: "",
   prioridade: "alta",
@@ -521,23 +547,10 @@ export function buildVals(
     labelColor: histSelected ? C.primaryHover : C.muted,
   });
 
-  // ---- atividade (steps) ----
-  // GOAL OPS-V4-PIPELINE-DEDUP-004: antes derivava de `STEPS_DEF`, um SEGUNDO
-  // trilho com nomes/granularidade próprios (Abertura/Aprovação/Pronta) — para a
-  // mesma OS "pronta", a spine marcava "Financeiro" como atual e a Atividade
-  // marcava "Pronta", uma resposta divergente sobre onde a OS está. Agora deriva
-  // do MESMO `STAGE_DEF` da spine (idêntica lógica done/current/pending, mesmo
-  // rótulo) — nunca mais pode haver dois "atual" com nomes diferentes. Não
-  // inventamos data/responsável por etapa (sem timeline fake); o histórico real
-  // fica na etapa "Histórico".
-  const steps = STAGE_DEF.map(([id, label, rep]) => {
-    const ri = ORDER.indexOf(rep);
-    const after = id === "posvenda";
-    const reached = after ? false : ri < curIdx;
-    const current = after ? false : ri === curIdx;
-    const pending = after ? true : ri > curIdx;
-    return { label, reached, current, pending, time: "", resp: "", empty: pending };
-  });
+  // ---- atividade ----
+  // GOAL OPS-V4-RIGHT-RAIL-DEDUP-001: o trilho `steps` (cópia do STAGE_DEF que a
+  // Atividade renderizava) foi removido — a spine é a única dona das etapas e a
+  // lateral virou painel contextual (comunicação, anexos, observações, histórico).
 
   // ---- histórico real (filtrável) ----
   const hist = st.histFilter === "todos" ? timelineReal : timelineReal.filter((h) => h.type === st.histFilter);
@@ -944,7 +957,14 @@ export function buildVals(
 
     leftOpen: st.left, leftClosed: !st.left, rightOpen: st.right, rightClosed: !st.right,
     toggleLeft: () => update((s) => ({ left: !s.left })),
-    toggleRight: () => update((s) => ({ right: !s.right })),
+    // Toggle explícito da lateral "Atividade" persiste a escolha do usuário
+    // (GOAL OPS-V4-RIGHT-RAIL-DEDUP-001). Fora do updater do setState — ele
+    // precisa ser puro (StrictMode pode executá-lo 2×).
+    toggleRight: () => {
+      const right = !st.right;
+      persistRightRailPref(right);
+      update({ right });
+    },
     // "Trocar OS" (coluna de contexto) usa o fluxo real de busca/seleção.
     onTrocar: goToOSSearch,
     toHistCliente: () => notify(PREVIEW_NOOP),
@@ -978,7 +998,7 @@ export function buildVals(
     onPrimary: () => advance(), showKbd: true,
 
     prio: { label: prioM.label, fg: prioM.fg, dot: prioM.dot },
-    steps, checklist, check, checklistVazio,
+    checklist, check, checklistVazio,
     entradaAcessorios, entradaFotos, entradaSeguranca,
     financeiro: financeiroReal, finHist: finHistReal, posVenda: posVendaReal,
     hist, histCount: hist.length, histFilters, anexos: anexosReais, observacoes: observacoesReais,
@@ -1201,6 +1221,24 @@ export function useV4Preview(): V4Vals {
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
+  }, []);
+
+  // ---- preferência da lateral "Atividade" (GOAL OPS-V4-RIGHT-RAIL-DEDUP-001) ----
+  // Reaplica a escolha salva SÓ pós-mount (nunca no initializer: o HTML do SSR
+  // precisa bater com o primeiro render do cliente). Ler é idempotente — seguro
+  // sob o duplo-mount do StrictMode. A ESCRITA fica no toggle explícito
+  // (`persistRightRailPref`), nunca em efeito. Sem storage (navegação privada/
+  // embed), fica o default fechado — sem quebrar nada.
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(RIGHT_RAIL_PREF_KEY);
+      if (saved === "1" || saved === "0") {
+        const right = saved === "1";
+        setSt((prev) => (prev.right === right ? prev : { ...prev, right }));
+      }
+    } catch {
+      // storage indisponível — mantém o default em memória
+    }
   }, []);
 
   const update = useCallback((p: Patch) => {

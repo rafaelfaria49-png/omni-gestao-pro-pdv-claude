@@ -602,25 +602,11 @@ describe("OPS-V4-006 — Financeiro read-only lê o espelho real payload.pagamen
   })
 })
 
-describe("OPS-V4-PIPELINE-DEDUP-004 — spine e Atividade nunca divergem sobre a etapa atual", () => {
-  it("v.steps usa os MESMOS rótulos de v.pipeline (mesma fonte, STAGE_DEF)", () => {
-    const v = buildVals(
-      makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
-      () => {},
-      () => {},
-      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }) },
-    )
-    // v.pipeline inclui o nó extra "Histórico" (sem equivalente em v.steps).
-    const pipelineLabels = v.pipeline.map((n) => n.label).filter((l) => l !== "Histórico")
-    const stepsLabels = v.steps.map((s) => s.label)
-    expect(stepsLabels).toEqual(pipelineLabels)
-    // Rótulos divergentes do antigo STEPS_DEF nunca podem reaparecer.
-    expect(stepsLabels).not.toContain("Abertura")
-    expect(stepsLabels).not.toContain("Aprovação")
-    expect(stepsLabels).not.toContain("Pronta")
-  })
-
-  it("OS 'pronta' (o caso da auditoria): spine e Atividade concordam em 'Financeiro' como etapa atual — nunca 'Pronta' nem 'Entrega'", () => {
+describe("OPS-V4-PIPELINE-DEDUP-004 — a spine é a única fonte da etapa atual", () => {
+  // O segundo trilho (`v.steps`, renderizado pela Atividade) foi REMOVIDO pelo
+  // GOAL OPS-V4-RIGHT-RAIL-DEDUP-001 — a divergência que este describe caçava
+  // deixou de ser possível por construção. Restam os invariantes da spine.
+  it("OS 'pronta' (o caso da auditoria): a spine marca 'Financeiro' como etapa atual — nunca 'Pronta' nem 'Entrega'", () => {
     const v = buildVals(
       makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
       () => {},
@@ -628,12 +614,9 @@ describe("OPS-V4-PIPELINE-DEDUP-004 — spine e Atividade nunca divergem sobre a
       { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }) },
     )
     const pipelineAtual = v.pipeline.find((n) => n.current)
-    const stepAtual = v.steps.find((s) => s.current)
     expect(pipelineAtual?.label).toBe("Financeiro")
-    expect(stepAtual?.label).toBe("Financeiro")
-    // Só pode existir UM nó "atual" em cada trilho.
+    // Só pode existir UM nó "atual" na spine.
     expect(v.pipeline.filter((n) => n.current)).toHaveLength(1)
-    expect(v.steps.filter((s) => s.current)).toHaveLength(1)
   })
 
   it("abrir a aba Entrega numa OS 'pronta' não marca Entrega como concluída (pending, não done)", () => {
@@ -647,6 +630,43 @@ describe("OPS-V4-PIPELINE-DEDUP-004 — spine e Atividade nunca divergem sobre a
     expect(entregaNode?.selected).toBe(true) // aba aberta
     expect(entregaNode?.done).toBe(false) // mas NÃO marcada como já realizada
     expect(entregaNode?.pending).toBe(true)
+  })
+})
+
+describe("OPS-V4-RIGHT-RAIL-DEDUP-001 — lateral 'Atividade' é painel contextual, não cópia do fluxo", () => {
+  const activitySrc = readFileSync(join(DIR, "parts", "ActivityColumn.tsx"), "utf8")
+  const hookSrc = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
+
+  it("não renderiza o trilho duplicado de etapas nem o texto 'Mesmas etapas do fluxo principal'", () => {
+    expect(activitySrc).not.toContain("Mesmas etapas do fluxo principal")
+    expect(activitySrc).not.toContain("v.steps")
+  })
+
+  it("mantém Comunicação, Anexos, observação e histórico do cliente", () => {
+    expect(activitySrc).toContain("Comunicação")
+    expect(activitySrc).toContain("Anexos")
+    expect(activitySrc).toContain("Nova observação")
+    expect(activitySrc).toContain("Abrir histórico do cliente")
+  })
+
+  it("fecha por padrão e lembra a preferência numa chave localStorage isolada da V4", () => {
+    // default fechado no estado inicial do hook
+    expect(hookSrc).toMatch(/right:\s*false/)
+    // chave própria da V4 — não colide com outras telas
+    expect(hookSrc).toContain("omnigestao:operacoes-v4:right-rail-open")
+    // a chave vive apenas no hook: nenhum outro arquivo da Preview toca localStorage
+    const outros = collectSourceFiles(DIR).filter(
+      (f) => !f.endsWith("use-v4-preview.ts") && readFileSync(f, "utf8").includes("localStorage"),
+    )
+    expect(outros, `localStorage fora do hook: ${outros.join(", ")}`).toEqual([])
+  })
+
+  it("ActivityColumn permanece visual: só importa de dentro da própria Preview", () => {
+    const importPaths = [...activitySrc.matchAll(/from\s+"([^"]+)"/g)].map((m) => m[1])
+    expect(importPaths.length).toBeGreaterThan(0)
+    for (const p of importPaths) {
+      expect(p.startsWith("./") || p.startsWith("../"), `import proibido em ActivityColumn: ${p}`).toBe(true)
+    }
   })
 })
 
