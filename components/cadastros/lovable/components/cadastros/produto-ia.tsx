@@ -14,6 +14,18 @@ import {
   upsertMarca,
   upsertProduto,
 } from "@/app/actions/cadastros";
+// CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reaproveita a seção do Catálogo de Aparelhos
+// (mesma UI/guardrails do /dashboard/estoque) e o contrato de metadata já publicado.
+import {
+  ProdutoCompatibilidadeAparelhos,
+  emptyCompatibilidade,
+  type CompatibilidadeValue,
+} from "@/components/dashboard/estoque/produto-compatibilidade-aparelhos";
+import {
+  sanitizeCatalogoAparelhos,
+  type CatalogoAparelhosMetadata,
+} from "@/lib/catalogo-aparelhos/produto-metadata";
+import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 
 /* ── Combobox com autocomplete + "criar novo" (Categoria/Marca) ── */
 /**
@@ -204,6 +216,15 @@ const STEPS = [
   "Preparando anúncio…",
 ];
 
+/** Model key (`samsung_galaxy_a05`) → rótulo legível (`Samsung Galaxy A05`) para o chip reidratado. */
+function humanizeModelKey(key: string): string {
+  return key
+    .split("_")
+    .filter(Boolean)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
 export function ProductAIModal({
   open,
   onClose,
@@ -260,6 +281,9 @@ export function ProductAIModal({
   const [ncmDisplay, setNcmDisplay] = useState(initial?.ncm ?? "");
   const [cestDisplay, setCestDisplay] = useState(initial?.cest ?? "");
 
+  // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — estado da seção "Compatibilidade com aparelhos".
+  const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade());
+
   // Reseta quando troca de produto em edição (modal reabrindo com outro id).
   useEffect(() => {
     setCategoria(initial?.categoria ?? "");
@@ -267,6 +291,46 @@ export function ProductAIModal({
     setNcmDisplay(initial?.ncm ?? "");
     setCestDisplay(initial?.cest ?? "");
   }, [productId, initial?.categoria, initial?.marca, initial?.ncm, initial?.cest]);
+
+  // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reidrata a compatibilidade ao abrir/editar.
+  // Lê o endpoint read-only já publicado (GET /api/catalogo/aparelhos/produto/[id]). Sempre
+  // parte de vazio; se o fetch falhar, mantém vazio e NÃO envia nada no save (a chave é
+  // omitida), então o metadata salvo é preservado — nunca apaga por rede instável.
+  useEffect(() => {
+    if (!open) return;
+    setCatalogoValue(emptyCompatibilidade());
+    if (!productId) return; // criação: nada a reidratar
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/catalogo/aparelhos/produto/${encodeURIComponent(productId)}`, {
+          credentials: "include",
+          headers: { [ASSISTEC_LOJA_HEADER]: storeId },
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = (await res.json().catch(() => null)) as {
+          catalogoAparelhos?: CatalogoAparelhosMetadata | null;
+        } | null;
+        if (cancelled) return;
+        const c = data?.catalogoAparelhos;
+        if (c && Array.isArray(c.deviceModelKeys) && c.deviceModelKeys.length > 0) {
+          setCatalogoValue({
+            models: c.deviceModelKeys.map((k) => ({ modelKey: k, canonicalName: humanizeModelKey(k), brand: "" })),
+            aliases: Array.isArray(c.deviceAliases) ? c.deviceAliases : [],
+            status: c.compatibilityStatus,
+            types: Array.isArray(c.compatibilityTypes) ? c.compatibilityTypes : [],
+            notes: typeof c.notes === "string" ? c.notes : "",
+          });
+        }
+      } catch {
+        /* rede falhou: mantém vazio (o save omite a chave e preserva o metadata) */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, productId, storeId]);
 
   // Carrega dicionário (CategoriaCadastro/MarcaCadastro) + valores legados em uso ao abrir.
   useEffect(() => {
@@ -457,6 +521,20 @@ export function ProductAIModal({
             <Field label="Fornecedor"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? ""} placeholder="Nome do fornecedor" /></Field>
             <Field label="Estoque atual"><Input ref={estoqueRef} type="number" min={0} step={1} defaultValue={initial?.estoque !== undefined ? String(initial.estoque) : (productId ? "" : "0")} placeholder="0" /></Field>
             <Field label="Garantia (dias)"><Input ref={garantiaRef} defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : ""} placeholder="90" /></Field>
+            {/* CATALOGO-APARELHOS-UI-CADASTROSV2-002 — compatibilidade de aparelhos (reuso). */}
+            <div className="col-span-2">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Compatibilidade com aparelhos</p>
+              <div className="rounded-xl border border-border bg-muted/20 p-4">
+                <p className="mb-4 text-xs text-muted-foreground">
+                  Use para capinhas, películas e acessórios. Não confirma encaixe físico automaticamente.
+                </p>
+                <ProdutoCompatibilidadeAparelhos
+                  value={catalogoValue}
+                  onChange={setCatalogoValue}
+                  lojaHeader={storeId}
+                />
+              </div>
+            </div>
             <div className="col-span-2">
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Precificação</p>
               <div className="grid grid-cols-3 gap-4 rounded-xl border border-border bg-muted/20 p-4">
@@ -573,6 +651,22 @@ export function ProductAIModal({
                     window.alert("Estoque inválido — informe um número inteiro ≥ 0.");
                     return;
                   }
+                  // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — vínculo de aparelhos → metadata.catalogoAparelhos.
+                  // Só grava quando há modelo vinculado; vazio = OMITE a chave. upsertProduto faz shallow
+                  // merge com o metadata atual, então omitir preserva catalogoAparelhos/fiscal já salvos
+                  // (nunca apaga por engano). O saneamento reusa o contrato canônico já publicado.
+                  const catalogoModelKeys = catalogoValue.models.map((m) => m.modelKey);
+                  const catalogoAparelhos =
+                    catalogoModelKeys.length > 0
+                      ? sanitizeCatalogoAparelhos({
+                          deviceModelKeys: catalogoModelKeys,
+                          deviceAliases: catalogoValue.aliases,
+                          compatibilityStatus: catalogoValue.status,
+                          compatibilityTypes: catalogoValue.types,
+                          notes: catalogoValue.notes,
+                          source: "manual",
+                        })
+                      : null;
                   await upsertProduto(storeId, {
                     id: productId,
                     nome: (nomeRef.current?.value ?? "").trim(),
@@ -592,6 +686,7 @@ export function ProductAIModal({
                         savedAt: new Date().toISOString(),
                         source,
                       },
+                      ...(catalogoAparelhos ? { catalogoAparelhos } : {}),
                     },
                   });
                   onSaved?.();
