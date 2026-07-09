@@ -1,0 +1,418 @@
+model_key,brand,commercial_line,canonical_name,short_name,generation,network_variant,year_hint,source_origin,status,confidence,notes
+apple_iphone_11,Apple,iPhone,Apple iPhone 11,11,11,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_11_pro,Apple,iPhone,Apple iPhone 11 Pro,11 Pro,11 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_11_pro_max,Apple,iPhone,Apple iPhone 11 Pro Max,11 Pro Max,11 Pro Max,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_12,Apple,iPhone,Apple iPhone 12,12,12,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_12_mini,Apple,iPhone,Apple iPhone 12 Mini,12 Mini,12 Mini,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_12_pro,Apple,iPhone,Apple iPhone 12 Pro,12 Pro,12 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_12_pro_max,Apple,iPhone,Apple iPhone 12 Pro Max,12 Pro Max,12 Pro Max,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_13,Apple,iPhone,Apple iPhone 13,13,13,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_13_mini,Apple,iPhone,Apple iPhone 13 Mini,13 Mini,13 Mini,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_13_pro,Apple,iPhone,Apple iPhone 13 Pro,13 Pro,13 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_13_pro_max,Apple,iPhone,Apple iPhone 13 Pro Max,13 Pro Max,13 Pro Max,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_14,Apple,iPhone,Apple iPhone 14,14,14,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_14_plus,Apple,iPhone,Apple iPhone 14 Plus,14 Plus,14 Plus,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_14_pro,Apple,iPhone,Apple iPhone 14 Pro,14 Pro,14 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_14_pro_max,Apple,iPhone,Apple iPhone 14 Pro Max,14 Pro Max,14 Pro Max,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_15,Apple,iPhone,Apple iPhone 15,15,15,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_15_plus,Apple,iPhone,Apple iPhone 15 Plus,15 Plus,15 Plus,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_15_pro,Apple,iPhone,Apple iPhone 15 Pro,15 Pro,15 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_15_pro_max,Apple,iPhone,Apple iPhone 15 Pro Max,15 Pro Max,15 Pro Max,,,base_peliculas;planilha_capinhas,ativo,alta,
+apple_iphone_16,Apple,iPhone,Apple iPhone 16,16,16,,,base_peliculas;planilha_capinhas,novo,alta,
+apple_iphone_16_plus,Apple,iPhone,Apple iPhone 16 Plus,16 Plus,16 Plus,,,base_peliculas;planilha_capinhas,novo,alta,
+apple_iphone_16_pro,Apple,iPhone,Apple iPhone 16 Pro,16 Pro,16 Pro,,,base_peliculas;planilha_capinhas,novo,alta,
+apple_iphone_16_pro_max,Apple,iPhone,Apple iPhone 16 Pro Max,16 Pro Max,16 Pro Max,,,base_peliculas;planilha_capinhas,novo,alta,
+apple_iphone_16e,Apple,iPhone,Apple iPhone 16e,16e,16e,,,base_peliculas;planilha_capinhas,novo,alta,
+apple_iphone_17,Apple,iPhone,Apple iPhone 17,17,17,,,base_peliculas;planilha_capinhas,novo,alta,
+apple_iphone_17_air,Apple,iPhone,Apple iPhone 17 Air,17 Air,17 Air,,,base_peliculas;planilha_capinhas,revisar,alta,Nome divergente frente a iPhone Air; revisar nomenclatura antes de importar.
+apple_iphone_17_pro,Apple,iPhone,Apple iPhone 17 Pro,17 Pro,17 Pro,,,base_peliculas;planilha_capinhas,novo,alta,
+apple_iphone_17_pro_max,Apple,iPhone,Apple iPhone 17 Pro Max,17 Pro Max,17 Pro Max,,,base_peliculas;planilha_capinhas,novo,alta,
+apple_iphone_17e,Apple,iPhone,Apple iPhone 17e,17e,17e,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_6_plus,Apple,iPhone,Apple iPhone 6 Plus,6 Plus,6 Plus,,,base_peliculas;planilha_capinhas,legado,alta,
+apple_iphone_7,Apple,iPhone,Apple iPhone 7,7,7,,,base_peliculas;planilha_capinhas,legado,alta,
+apple_iphone_7_branco,Apple,iPhone,Apple iPhone 7 Branco,7 Branco,7 Branco,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #231 iPhone 7/8 Branco.
+apple_iphone_7_plus,Apple,iPhone,Apple iPhone 7 Plus,7 Plus,7 Plus,,,base_peliculas;planilha_capinhas,legado,alta,
+apple_iphone_7_plus_branco,Apple,iPhone,Apple iPhone 7 Plus Branco,7 Plus Branco,7 Plus Branco,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #221 7 / 8 Plus P/B.
+apple_iphone_7_plus_preto,Apple,iPhone,Apple iPhone 7 Plus Preto,7 Plus Preto,7 Plus Preto,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #221 7 / 8 Plus P/B.
+apple_iphone_7_preto,Apple,iPhone,Apple iPhone 7 Preto,7 Preto,7 Preto,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #232 iPhone 7/8 Preto.
+apple_iphone_8,Apple,iPhone,Apple iPhone 8,8,8,,,base_peliculas;planilha_capinhas,legado,alta,
+apple_iphone_8_branco,Apple,iPhone,Apple iPhone 8 Branco,8 Branco,8 Branco,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #231 iPhone 7/8 Branco.
+apple_iphone_8_plus,Apple,iPhone,Apple iPhone 8 Plus,8 Plus,8 Plus,,,base_peliculas;planilha_capinhas,legado,alta,
+apple_iphone_8_plus_branco,Apple,iPhone,Apple iPhone 8 Plus Branco,8 Plus Branco,8 Plus Branco,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #221 7 / 8 Plus P/B.
+apple_iphone_8_plus_preto,Apple,iPhone,Apple iPhone 8 Plus Preto,8 Plus Preto,8 Plus Preto,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #221 7 / 8 Plus P/B.
+apple_iphone_8_preto,Apple,iPhone,Apple iPhone 8 Preto,8 Preto,8 Preto,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #232 iPhone 7/8 Preto.
+apple_iphone_air,Apple,iPhone,Apple iPhone Air,Air,Air,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_se_2020,Apple,iPhone,Apple iPhone SE 2020,SE 2020,SE 2020,,2020,planilha_capinhas,legado,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_se_2022,Apple,iPhone,Apple iPhone SE 2022,SE 2022,SE 2022,,2022,planilha_capinhas,legado,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+apple_iphone_x,Apple,iPhone,Apple iPhone X,X,X,,,base_peliculas;planilha_capinhas,legado,alta,
+apple_iphone_xr,Apple,iPhone,Apple iPhone XR,XR,XR,,,base_peliculas;planilha_capinhas,legado,alta,
+apple_iphone_xs,Apple,iPhone,Apple iPhone XS,XS,XS,,,base_peliculas;planilha_capinhas,legado,alta,
+apple_iphone_xs_max,Apple,iPhone,Apple iPhone XS Max,XS Max,XS Max,,,base_peliculas;planilha_capinhas,legado,alta,
+infinix_hot_play,Infinix,Infinix Hot,Infinix Hot Play,Hot Play,Hot Play,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+infinix_smart_7,Infinix,Infinix Smart,Infinix Smart 7,Smart 7,Smart 7,,,base_peliculas;planilha_capinhas,ativo,alta,
+lg_k10_2017,LG,LG K,LG K10 2017,K10 2017,K10 2017,,2017,base_peliculas;planilha_capinhas,legado,alta,
+lg_k10_power,LG,LG K,LG K10 Power,K10 Power,K10 Power,,,base_peliculas;planilha_capinhas,legado,alta,
+lg_k11,LG,LG K,LG K11,K11,K11,,,base_peliculas;planilha_capinhas,legado,alta,
+lg_k12,LG,LG K,LG K12,K12,K12,,,base_peliculas;planilha_capinhas,legado,alta,
+lg_k12_prime,LG,LG K,LG K12 Prime,K12 Prime,K12 Prime,,,base_peliculas;planilha_capinhas,legado,alta,
+lg_k22,LG,LG K,LG K22,K22,K22,,,base_peliculas;planilha_capinhas,legado,alta,
+lg_k40s,LG,LG K,LG K40S,K40S,K40S,,,base_peliculas;planilha_capinhas,legado,alta,
+lg_k41s,LG,LG K,LG K41S,K41S,K41S,,,base_peliculas;planilha_capinhas,legado,alta,
+lg_k50s,LG,LG K,LG K50S,K50S,K50S,,,planilha_capinhas,legado,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+lg_k51s,LG,LG K,LG K51S,K51S,K51S,,,base_peliculas;planilha_capinhas,legado,alta,
+lg_k9,LG,LG K,LG K9,K9,K9,,,base_peliculas;planilha_capinhas,legado,alta,
+motorola_edge_20,Motorola,Moto Edge,Motorola Edge 20,Edge 20,Edge 20,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_edge_20_lite,Motorola,Moto Edge,Motorola Edge 20 Lite,Edge 20 Lite,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_edge_20_pro,Motorola,Moto Edge,Motorola Edge 20 Pro,Edge 20 Pro,,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_edge_30,Motorola,Moto Edge,Motorola Edge 30,Edge 30,Edge 30,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_edge_30_neo,Motorola,Moto Edge,Motorola Edge 30 Neo,Edge 30 Neo,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_edge_30_pro,Motorola,Moto Edge,Motorola Edge 30 Pro,Edge 30 Pro,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_edge_50_neo,Motorola,Moto Edge,Motorola Edge 50 Neo,Edge 50 Neo,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_edge_60_neo,Motorola,Moto Edge,Motorola Edge 60 Neo,Edge 60 Neo,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_edge_70,Motorola,Moto Edge,Motorola Edge 70,Edge 70,Edge 70,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_edge_s,Motorola,Moto Edge,Motorola Edge S,Edge S,,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e13,Motorola,Moto E,Motorola Moto E13,E13,E13,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_e14,Motorola,Moto E,Motorola Moto E14,E14,E14,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_e15,Motorola,Moto E,Motorola Moto E15,E15,E15,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e20,Motorola,Moto E,Motorola Moto E20,E20,E20,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_e22,Motorola,Moto E,Motorola Moto E22,E22,E22,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_e30,Motorola,Moto E,Motorola Moto E30,E30,E30,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_e32,Motorola,Moto E,Motorola Moto E32,E32,E32,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_e32s,Motorola,Moto E,Motorola Moto E32S,E32S,E32S,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e40,Motorola,Moto E,Motorola Moto E40,E40,E40,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_e6_play,Motorola,Moto E,Motorola Moto E6 Play,E6 Play,,,,planilha_capinhas,legado,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e6_plus,Motorola,Moto E,Motorola Moto E6 Plus,E6 Plus,,,,base_peliculas;planilha_capinhas,legado,alta,
+motorola_moto_e6i,Motorola,Moto E,Motorola Moto E6I,E6I,E6I,,,base_peliculas;planilha_capinhas,legado,alta,
+motorola_moto_e6s,Motorola,Moto E,Motorola Moto E6S,E6S,E6S,,,base_peliculas;planilha_capinhas,legado,alta,
+motorola_moto_e7,Motorola,Moto E,Motorola Moto E7,E7,E7,,,base_peliculas;planilha_capinhas,legado,alta,
+motorola_moto_e7_play,Motorola,Moto E,Motorola Moto E7 Play,E7 Play,,,,planilha_capinhas,legado,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_e7_plus,Motorola,Moto E,Motorola Moto E7 Plus,E7 Plus,,,,base_peliculas;planilha_capinhas,legado,alta,
+motorola_moto_e7_power,Motorola,Moto E,Motorola Moto E7 Power,E7 Power,,,,base_peliculas;planilha_capinhas,legado,alta,
+motorola_moto_g_power,Motorola,Moto G,Motorola Moto G Power,G Power,G Power,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g04,Motorola,Moto G,Motorola Moto G04,G04,G04,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g05,Motorola,Moto G,Motorola Moto G05,G05,G05,,,base_peliculas;planilha_capinhas,novo,alta,
+motorola_moto_g06,Motorola,Moto G,Motorola Moto G06,G06,G06,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g10,Motorola,Moto G,Motorola Moto G10,G10,G10,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g10_play,Motorola,Moto G,Motorola Moto G10 Play,G10 Play,,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g100,Motorola,Moto G,Motorola Moto G100,G100,G100,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g13,Motorola,Moto G,Motorola Moto G13,G13,G13,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g14,Motorola,Moto G,Motorola Moto G14,G14,G14,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g15,Motorola,Moto G,Motorola Moto G15,G15,G15,,,base_peliculas;planilha_capinhas,novo,alta,
+motorola_moto_g17,Motorola,Moto G,Motorola Moto G17,G17,G17,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g20,Motorola,Moto G,Motorola Moto G20,G20,G20,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g22,Motorola,Moto G,Motorola Moto G22,G22,G22,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g23,Motorola,Moto G,Motorola Moto G23,G23,G23,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g24,Motorola,Moto G,Motorola Moto G24,G24,G24,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g24_power,Motorola,Moto G,Motorola Moto G24 Power,G24 Power,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g25,Motorola,Moto G,Motorola Moto G25,G25,G25,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g30,Motorola,Moto G,Motorola Moto G30,G30,G30,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g31,Motorola,Moto G,Motorola Moto G31,G31,G31,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g32,Motorola,Moto G,Motorola Moto G32,G32,G32,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g34,Motorola,Moto G,Motorola Moto G34,G34,G34,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g35,Motorola,Moto G,Motorola Moto G35,G35,G35,,,base_peliculas;planilha_capinhas,novo,alta,
+motorola_moto_g36,Motorola,Moto G,Motorola Moto G36,G36,G36,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g40,Motorola,Moto G,Motorola Moto G40,G40,G40,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #96 G40 / G60.
+motorola_moto_g40_fusion,Motorola,Moto G,Motorola Moto G40 Fusion,G40 Fusion,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g41,Motorola,Moto G,Motorola Moto G41,G41,G41,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g42,Motorola,Moto G,Motorola Moto G42,G42,G42,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g45,Motorola,Moto G,Motorola Moto G45,G45,G45,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g5,Motorola,Moto G,Motorola Moto G5,G5,G5,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g5_plus,Motorola,Moto G,Motorola Moto G5 Plus,G5 Plus,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g50,Motorola,Moto G,Motorola Moto G50,G50,G50,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g51,Motorola,Moto G,Motorola Moto G51,G51,G51,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g52,Motorola,Moto G,Motorola Moto G52,G52,G52,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g53,Motorola,Moto G,Motorola Moto G53,G53,G53,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g54,Motorola,Moto G,Motorola Moto G54,G54,G54,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g55,Motorola,Moto G,Motorola Moto G55,G55,G55,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g56,Motorola,Moto G,Motorola Moto G56,G56,G56,,,base_peliculas;planilha_capinhas,novo,alta,
+motorola_moto_g57,Motorola,Moto G,Motorola Moto G57,G57,G57,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g5s_plus,Motorola,Moto G,Motorola Moto G5S Plus,G5S Plus,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g6_play,Motorola,Moto G,Motorola Moto G6 Play,G6 Play,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g60,Motorola,Moto G,Motorola Moto G60,G60,G60,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g60s,Motorola,Moto G,Motorola Moto G60S,G60S,G60S,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g62,Motorola,Moto G,Motorola Moto G62,G62,G62,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g64,Motorola,Moto G,Motorola Moto G64,G64,G64,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g7,Motorola,Moto G,Motorola Moto G7,G7,G7,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g7_play,Motorola,Moto G,Motorola Moto G7 Play,G7 Play,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g7_plus,Motorola,Moto G,Motorola Moto G7 Plus,G7 Plus,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g7_power,Motorola,Moto G,Motorola Moto G7 Power,G7 Power,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g71,Motorola,Moto G,Motorola Moto G71,G71,G71,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g72,Motorola,Moto G,Motorola Moto G72,G72,G72,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g73,Motorola,Moto G,Motorola Moto G73,G73,G73,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g75,Motorola,Moto G,Motorola Moto G75,G75,G75,,,base_peliculas;planilha_capinhas,novo,alta,
+motorola_moto_g77,Motorola,Moto G,Motorola Moto G77,G77,G77,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g8_play,Motorola,Moto G,Motorola Moto G8 Play,G8 Play,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g8_plus,Motorola,Moto G,Motorola Moto G8 Plus,G8 Plus,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g8_power,Motorola,Moto G,Motorola Moto G8 Power,G8 Power,,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g8_power_lite,Motorola,Moto G,Motorola Moto G8 Power Lite,G8 Power Lite,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g82,Motorola,Moto G,Motorola Moto G82,G82,G82,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g84,Motorola,Moto G,Motorola Moto G84,G84,G84,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g86,Motorola,Moto G,Motorola Moto G86,G86,G86,,,base_peliculas;planilha_capinhas,novo,alta,
+motorola_moto_g86_power,Motorola,Moto G,Motorola Moto G86 Power,G86 Power,,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_moto_g87,Motorola,Moto G,Motorola Moto G87,G87,G87,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g9,Motorola,Moto G,Motorola Moto G9,G9,G9,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g9_play,Motorola,Moto G,Motorola Moto G9 Play,G9 Play,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g9_plus,Motorola,Moto G,Motorola Moto G9 Plus,G9 Plus,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_g9_power,Motorola,Moto G,Motorola Moto G9 Power,G9 Power,,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_moto_one_fusion,Motorola,Motorola One,Motorola Moto One Fusion,One Fusion,One Fusion,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #1 Super grupo A02 / A03 / A12 / A13 / A23 / A70.
+motorola_moto_one_macro,Motorola,Motorola One,Motorola Moto One Macro,One Macro,One Macro,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #5 Super grupo A20 / A30 / A50 / A30S / M31 / Redmi Note 7-8 / Moto G8.
+motorola_moto_one_zoom,Motorola,Motorola One,Motorola Moto One Zoom,One Zoom,One Zoom,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #5 Super grupo A20 / A30 / A50 / A30S / M31 / Redmi Note 7-8 / Moto G8.
+motorola_one_fusion,Motorola,Motorola One,Motorola One Fusion,One Fusion,One Fusion,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_one_fusion_plus,Motorola,Motorola One,Motorola One Fusion Plus,One Fusion Plus,One Fusion Plus,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_one_hyper,Motorola,Motorola One,Motorola One Hyper,One Hyper,One Hyper,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_one_macro,Motorola,Motorola One,Motorola One Macro,One Macro,One Macro,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+motorola_one_vision,Motorola,Motorola One,Motorola One Vision,One Vision,One Vision,,,base_peliculas;planilha_capinhas,ativo,alta,
+motorola_one_zoom,Motorola,Motorola One,Motorola One Zoom,One Zoom,One Zoom,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_c3,POCO,POCO C,POCO C3,C3,C3,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_c40,POCO,POCO C,POCO C40,C40,C40,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_c65,POCO,POCO C,POCO C65,C65,C65,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_c71,POCO,POCO C,POCO C71,C71,C71,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_c75,POCO,POCO C,POCO C75,C75,C75,,,base_peliculas;planilha_capinhas,novo,alta,
+poco_f3,POCO,POCO F,POCO F3,F3,F3,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_f4,POCO,POCO F,POCO F4,F4,F4,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_f4_gt,POCO,POCO F,POCO F4 GT,F4 GT,F4 GT,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_f5,POCO,POCO F,POCO F5,F5,F5,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_f5_pro,POCO,POCO F,POCO F5 Pro,F5 Pro,F5 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_m3,POCO,POCO M,POCO M3,M3,M3,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_m3_pro,POCO,POCO M,POCO M3 Pro,M3 Pro,M3 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_m4,POCO,POCO M,POCO M4,M4,M4,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_m4_pro,POCO,POCO M,POCO M4 Pro,M4 Pro,M4 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_m4_pro_4g,POCO,POCO M,POCO M4 Pro 4G,M4 Pro 4G,M4 Pro 4G,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_m4_pro_5g,POCO,POCO M,POCO M4 Pro 5G,M4 Pro 5G,M4 Pro 5G,5G,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_m5s,POCO,POCO M,POCO M5S,M5S,M5S,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x3,POCO,POCO X,POCO X3,X3,X3,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x3_gt,POCO,POCO X,POCO X3 GT,X3 GT,X3 GT,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_x3_nfc,POCO,POCO X,POCO X3 NFC,X3 NFC,X3 NFC,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_x3_pro,POCO,POCO X,POCO X3 Pro,X3 Pro,X3 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x4,POCO,POCO X,POCO X4,X4,X4,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x4_gt,POCO,POCO X,POCO X4 GT,X4 GT,X4 GT,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x4_pro,POCO,POCO X,POCO X4 Pro,X4 Pro,X4 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x5,POCO,POCO X,POCO X5,X5,X5,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x5_pro,POCO,POCO X,POCO X5 Pro,X5 Pro,X5 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x6,POCO,POCO X,POCO X6,X6,X6,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x6_pro,POCO,POCO X,POCO X6 Pro,X6 Pro,X6 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+poco_x7,POCO,POCO X,POCO X7,X7,X7,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+poco_x7_pro,POCO,POCO X,POCO X7 Pro,X7 Pro,X7 Pro,,,base_peliculas;planilha_capinhas,novo,alta,
+realme_c11,Realme,Realme C,Realme C11,C11,C11,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c21y,Realme,Realme C,Realme C21Y,C21Y,C21Y,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c25,Realme,Realme C,Realme C25,C25,C25,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c30,Realme,Realme C,Realme C30,C30,C30,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c30s,Realme,Realme C,Realme C30S,C30S,C30S,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c33,Realme,Realme C,Realme C33,C33,C33,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c35,Realme,Realme C,Realme C35,C35,C35,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c51,Realme,Realme C,Realme C51,C51,C51,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c53,Realme,Realme C,Realme C53,C53,C53,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c55,Realme,Realme C,Realme C55,C55,C55,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c61,Realme,Realme C,Realme C61,C61,C61,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c63,Realme,Realme C,Realme C63,C63,C63,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c63_5g,Realme,Realme C,Realme C63 5G,C63 5G,C63 5G,5G,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c65,Realme,Realme C,Realme C65,C65,C65,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c67,Realme,Realme C,Realme C67,C67,C67,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c67_5g,Realme,Realme C,Realme C67 5G,C67 5G,C67 5G,5G,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_c71,Realme,Realme C,Realme C71,C71,C71,,,base_peliculas;planilha_capinhas,novo,alta,
+realme_c73,Realme,Realme C,Realme C73,C73,C73,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c75,Realme,Realme C,Realme C75,C75,C75,,,base_peliculas;planilha_capinhas,novo,alta,
+realme_c75_5g,Realme,Realme C,Realme C75 5G,C75 5G,C75 5G,5G,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c75x,Realme,Realme C,Realme C75x,C75x,C75x,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_c85,Realme,Realme C,Realme C85,C85,C85,,,base_peliculas;planilha_capinhas,novo,alta,
+realme_c85_pro,Realme,Realme C,Realme C85 Pro,C85 Pro,C85 Pro,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_note_50,Realme,Realme Note,Realme Note 50,Note 50,Note 50,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_note_60,Realme,Realme Note,Realme Note 60,Note 60,Note 60,,,base_peliculas;planilha_capinhas,ativo,alta,
+realme_note_60x,Realme,Realme Note,Realme Note 60x,Note 60x,Note 60x,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+realme_note_70,Realme,Realme Note,Realme Note 70,Note 70,Note 70,,,base_peliculas;planilha_capinhas,novo,alta,
+redmi_10,Redmi,Redmi,Redmi 10,10,10,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_10_power,Redmi,Redmi,Redmi 10 Power,10 Power,10 Power,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_10a,Redmi,Redmi,Redmi 10A,10A,10A,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_10c,Redmi,Redmi,Redmi 10C,10C,10C,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_11a,Redmi,Redmi,Redmi 11A,11A,11A,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_12,Redmi,Redmi,Redmi 12,12,12,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_12_4g,Redmi,Redmi,Redmi 12 4G,12 4G,12 4G,4G,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #175 Redmi 12 4G / 5G.
+redmi_12_5g,Redmi,Redmi,Redmi 12 5G,12 5G,12 5G,5G,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #175 Redmi 12 4G / 5G.
+redmi_12c,Redmi,Redmi,Redmi 12C,12C,12C,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_13,Redmi,Redmi,Redmi 13,13,13,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_13_4g,Redmi,Redmi,Redmi 13 4G,13 4G,13 4G,4G,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_13c,Redmi,Redmi,Redmi 13C,13C,13C,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_14c,Redmi,Redmi,Redmi 14C,14C,14C,,,base_peliculas;planilha_capinhas,novo,alta,
+redmi_14r,Redmi,Redmi,Redmi 14R,14R,14R,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_15,Redmi,Redmi,Redmi 15,15,15,,,base_peliculas;planilha_capinhas,novo,alta,
+redmi_15c,Redmi,Redmi,Redmi 15C,15C,15C,,,base_peliculas;planilha_capinhas,novo,alta,
+redmi_8,Redmi,Redmi,Redmi 8,8,8,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_8a,Redmi,Redmi,Redmi 8A,8A,8A,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_9,Redmi,Redmi,Redmi 9,9,9,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_9a,Redmi,Redmi,Redmi 9A,9A,9A,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_9a_sport,Redmi,Redmi,Redmi 9A Sport,9A Sport,9A Sport,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #1 Super grupo A02 / A03 / A12 / A13 / A23 / A70.
+redmi_9c,Redmi,Redmi,Redmi 9C,9C,9C,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_9i,Redmi,Redmi,Redmi 9I,9I,9I,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_9i_sport,Redmi,Redmi,Redmi 9I Sport,9I Sport,9I Sport,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_9t,Redmi,Redmi,Redmi 9T,9T,9T,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_a2_plus,Redmi,Redmi,Redmi A2 Plus,A2 Plus,A2 Plus,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_a3,Redmi,Redmi,Redmi A3,A3,A3,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_a4,Redmi,Redmi,Redmi A4,A4,A4,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_a5,Redmi,Redmi,Redmi A5,A5,A5,,,base_peliculas;planilha_capinhas,novo,alta,
+redmi_note_10,Redmi,Redmi Note,Redmi Note 10,Note 10,Note 10,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_10_4g,Redmi,Redmi Note,Redmi Note 10 4G,Note 10 4G,Note 10 4G,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_10_lite,Redmi,Redmi Note,Redmi Note 10 Lite,Note 10 Lite,Note 10 Lite,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_10_pro,Redmi,Redmi Note,Redmi Note 10 Pro,Note 10 Pro,Note 10 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_10s,Redmi,Redmi Note,Redmi Note 10S,Note 10S,Note 10S,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_11,Redmi,Redmi Note,Redmi Note 11,Note 11,Note 11,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_11_4g,Redmi,Redmi Note,Redmi Note 11 4G,Note 11 4G,Note 11 4G,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_11_pro,Redmi,Redmi Note,Redmi Note 11 Pro,Note 11 Pro,Note 11 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_11s,Redmi,Redmi Note,Redmi Note 11S,Note 11S,Note 11S,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_11t_5g,Redmi,Redmi Note,Redmi Note 11T 5G,Note 11T 5G,Note 11T 5G,5G,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_12,Redmi,Redmi Note,Redmi Note 12,Note 12,Note 12,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_12_4g,Redmi,Redmi Note,Redmi Note 12 4G,Note 12 4G,Note 12 4G,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_12_5g,Redmi,Redmi Note,Redmi Note 12 5G,Note 12 5G,Note 12 5G,5G,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_12_pro,Redmi,Redmi Note,Redmi Note 12 Pro,Note 12 Pro,Note 12 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_12_pro_4g,Redmi,Redmi Note,Redmi Note 12 Pro 4G,Note 12 Pro 4G,Note 12 Pro 4G,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_12_pro_5g,Redmi,Redmi Note,Redmi Note 12 Pro 5G,Note 12 Pro 5G,Note 12 Pro 5G,5G,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_12s,Redmi,Redmi Note,Redmi Note 12S,Note 12S,Note 12S,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_13,Redmi,Redmi Note,Redmi Note 13,Note 13,Note 13,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_13_4g,Redmi,Redmi Note,Redmi Note 13 4G,Note 13 4G,Note 13 4G,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_13_pro,Redmi,Redmi Note,Redmi Note 13 Pro,Note 13 Pro,Note 13 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_13_pro_4g,Redmi,Redmi Note,Redmi Note 13 Pro 4G,Note 13 Pro 4G,Note 13 Pro 4G,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_14,Redmi,Redmi Note,Redmi Note 14,Note 14,Note 14,,,base_peliculas;planilha_capinhas,novo,alta,
+redmi_note_14_pro,Redmi,Redmi Note,Redmi Note 14 Pro,Note 14 Pro,Note 14 Pro,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_14_pro_plus,Redmi,Redmi Note,Redmi Note 14 Pro Plus,Note 14 Pro Plus,Note 14 Pro Plus,,,planilha_capinhas,novo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_15_pro,Redmi,Redmi Note,Redmi Note 15 Pro,Note 15 Pro,Note 15 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_7,Redmi,Redmi Note,Redmi Note 7,Note 7,Note 7,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_7s,Redmi,Redmi Note,Redmi Note 7S,Note 7S,Note 7S,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_8,Redmi,Redmi Note,Redmi Note 8,Note 8,Note 8,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_8_pro,Redmi,Redmi Note,Redmi Note 8 Pro,Note 8 Pro,Note 8 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_9,Redmi,Redmi Note,Redmi Note 9,Note 9,Note 9,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_9_4g,Redmi,Redmi Note,Redmi Note 9 4G,Note 9 4G,Note 9 4G,4G,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_9_5g,Redmi,Redmi Note,Redmi Note 9 5G,Note 9 5G,Note 9 5G,5G,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_9_pro,Redmi,Redmi Note,Redmi Note 9 Pro,Note 9 Pro,Note 9 Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_note_9_pro_max,Redmi,Redmi Note,Redmi Note 9 Pro Max,Note 9 Pro Max,Note 9 Pro Max,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+redmi_note_9s,Redmi,Redmi Note,Redmi Note 9S,Note 9S,Note 9S,,,base_peliculas;planilha_capinhas,ativo,alta,
+redmi_x5,Redmi,Redmi,Redmi X5,X5,X5,,,base_peliculas,revisar,baixa,Modelo citado na base de peliculas sem cadastro claro de capinha. Origem: grupo de pelicula #170 X5 / Note 12 5G.
+samsung_galaxy_a01,Samsung,Galaxy A,Samsung Galaxy A01,A01,A01,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a01_core,Samsung,Galaxy A,Samsung Galaxy A01 Core,A01 Core,A01,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a02,Samsung,Galaxy A,Samsung Galaxy A02,A02,A02,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a02s,Samsung,Galaxy A,Samsung Galaxy A02S,A02S,A02S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a03,Samsung,Galaxy A,Samsung Galaxy A03,A03,A03,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a03_core,Samsung,Galaxy A,Samsung Galaxy A03 Core,A03 Core,A03,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a03s,Samsung,Galaxy A,Samsung Galaxy A03S,A03S,A03S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a04,Samsung,Galaxy A,Samsung Galaxy A04,A04,A04,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a04_core,Samsung,Galaxy A,Samsung Galaxy A04 Core,A04 Core,A04,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a04e,Samsung,Galaxy A,Samsung Galaxy A04E,A04E,A04E,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a04s,Samsung,Galaxy A,Samsung Galaxy A04S,A04S,A04S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a05,Samsung,Galaxy A,Samsung Galaxy A05,A05,A05,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a05s,Samsung,Galaxy A,Samsung Galaxy A05S,A05S,A05S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a06,Samsung,Galaxy A,Samsung Galaxy A06,A06,A06,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_a07,Samsung,Galaxy A,Samsung Galaxy A07,A07,A07,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_a10,Samsung,Galaxy A,Samsung Galaxy A10,A10,A10,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a10s,Samsung,Galaxy A,Samsung Galaxy A10S,A10S,A10S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a11,Samsung,Galaxy A,Samsung Galaxy A11,A11,A11,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a12,Samsung,Galaxy A,Samsung Galaxy A12,A12,A12,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a13,Samsung,Galaxy A,Samsung Galaxy A13,A13,A13,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a13_4g,Samsung,Galaxy A,Samsung Galaxy A13 4G,A13 4G,A13,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a13_5g,Samsung,Galaxy A,Samsung Galaxy A13 5G,A13 5G,A13,5G,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a14,Samsung,Galaxy A,Samsung Galaxy A14,A14,A14,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a15,Samsung,Galaxy A,Samsung Galaxy A15,A15,A15,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a16,Samsung,Galaxy A,Samsung Galaxy A16,A16,A16,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_a17,Samsung,Galaxy A,Samsung Galaxy A17,A17,A17,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_a20,Samsung,Galaxy A,Samsung Galaxy A20,A20,A20,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a20s,Samsung,Galaxy A,Samsung Galaxy A20S,A20S,A20S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a21,Samsung,Galaxy A,Samsung Galaxy A21,A21,A21,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a21s,Samsung,Galaxy A,Samsung Galaxy A21S,A21S,A21S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a22_4g,Samsung,Galaxy A,Samsung Galaxy A22 4G,A22 4G,A22,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a22_5g,Samsung,Galaxy A,Samsung Galaxy A22 5G,A22 5G,A22,5G,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a23,Samsung,Galaxy A,Samsung Galaxy A23,A23,A23,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a23_4g,Samsung,Galaxy A,Samsung Galaxy A23 4G,A23 4G,A23,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a23_5g,Samsung,Galaxy A,Samsung Galaxy A23 5G,A23 5G,A23,5G,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a24,Samsung,Galaxy A,Samsung Galaxy A24,A24,A24,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a25,Samsung,Galaxy A,Samsung Galaxy A25,A25,A25,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a26,Samsung,Galaxy A,Samsung Galaxy A26,A26,A26,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_a30,Samsung,Galaxy A,Samsung Galaxy A30,A30,A30,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a30s,Samsung,Galaxy A,Samsung Galaxy A30S,A30S,A30S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a31,Samsung,Galaxy A,Samsung Galaxy A31,A31,A31,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a32_4g,Samsung,Galaxy A,Samsung Galaxy A32 4G,A32 4G,A32,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a32_5g,Samsung,Galaxy A,Samsung Galaxy A32 5G,A32 5G,A32,5G,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a33,Samsung,Galaxy A,Samsung Galaxy A33,A33,A33,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a34,Samsung,Galaxy A,Samsung Galaxy A34,A34,A34,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a35,Samsung,Galaxy A,Samsung Galaxy A35,A35,A35,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a36,Samsung,Galaxy A,Samsung Galaxy A36,A36,A36,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_a37,Samsung,Galaxy A,Samsung Galaxy A37,A37,A37,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_a42,Samsung,Galaxy A,Samsung Galaxy A42,A42,A42,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a50,Samsung,Galaxy A,Samsung Galaxy A50,A50,A50,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a50s,Samsung,Galaxy A,Samsung Galaxy A50S,A50S,A50S,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a51,Samsung,Galaxy A,Samsung Galaxy A51,A51,A51,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a52,Samsung,Galaxy A,Samsung Galaxy A52,A52,A52,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a52_5g,Samsung,Galaxy A,Samsung Galaxy A52 5G,A52 5G,A52,5G,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a52s,Samsung,Galaxy A,Samsung Galaxy A52S,A52S,A52S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a53,Samsung,Galaxy A,Samsung Galaxy A53,A53,A53,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a54,Samsung,Galaxy A,Samsung Galaxy A54,A54,A54,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a55,Samsung,Galaxy A,Samsung Galaxy A55,A55,A55,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a56,Samsung,Galaxy A,Samsung Galaxy A56,A56,A56,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_a57,Samsung,Galaxy A,Samsung Galaxy A57,A57,A57,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_a70,Samsung,Galaxy A,Samsung Galaxy A70,A70,A70,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a71,Samsung,Galaxy A,Samsung Galaxy A71,A71,A71,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a72,Samsung,Galaxy A,Samsung Galaxy A72,A72,A72,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a73_5g,Samsung,Galaxy A,Samsung Galaxy A73 5G,A73 5G,A73,5G,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_a80,Samsung,Galaxy A,Samsung Galaxy A80,A80,A80,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_a81,Samsung,Galaxy A,Samsung Galaxy A81,A81,A81,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_f16,Samsung,Galaxy F,Samsung Galaxy F16,F16,F16,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_f54,Samsung,Galaxy F,Samsung Galaxy F54,F54,F54,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_f62,Samsung,Galaxy F,Samsung Galaxy F62,F62,F62,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_j2_prime,Samsung,Galaxy J,Samsung Galaxy J2 Prime,J2 Prime,J2,,,base_peliculas;planilha_capinhas,legado,alta,
+samsung_galaxy_j4,Samsung,Galaxy J,Samsung Galaxy J4,J4,J4,,,base_peliculas;planilha_capinhas,legado,alta,
+samsung_galaxy_j4_plus,Samsung,Galaxy J,Samsung Galaxy J4 Plus,J4 Plus,J4,,,base_peliculas;planilha_capinhas,legado,alta,
+samsung_galaxy_j5_prime,Samsung,Galaxy J,Samsung Galaxy J5 Prime,J5 Prime,J5,,,planilha_capinhas,legado,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_j5_pro,Samsung,Galaxy J,Samsung Galaxy J5 Pro,J5 Pro,J5,,,base_peliculas;planilha_capinhas,legado,alta,
+samsung_galaxy_j7_prime,Samsung,Galaxy J,Samsung Galaxy J7 Prime,J7 Prime,J7,,,planilha_capinhas,legado,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_j7_pro,Samsung,Galaxy J,Samsung Galaxy J7 Pro,J7 Pro,J7,,,base_peliculas;planilha_capinhas,legado,alta,
+samsung_galaxy_m02s,Samsung,Galaxy M,Samsung Galaxy M02S,M02S,M02S,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m11,Samsung,Galaxy M,Samsung Galaxy M11,M11,M11,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m12,Samsung,Galaxy M,Samsung Galaxy M12,M12,M12,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m13,Samsung,Galaxy M,Samsung Galaxy M13,M13,M13,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m14,Samsung,Galaxy M,Samsung Galaxy M14,M14,M14,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m15,Samsung,Galaxy M,Samsung Galaxy M15,M15,M15,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m16,Samsung,Galaxy M,Samsung Galaxy M16,M16,M16,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_m21,Samsung,Galaxy M,Samsung Galaxy M21,M21,M21,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m21s,Samsung,Galaxy M,Samsung Galaxy M21S,M21S,M21S,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m22,Samsung,Galaxy M,Samsung Galaxy M22,M22,M22,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m23_4g,Samsung,Galaxy M,Samsung Galaxy M23 4G,M23 4G,M23,4G,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m30,Samsung,Galaxy M,Samsung Galaxy M30,M30,M30,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m31,Samsung,Galaxy M,Samsung Galaxy M31,M31,M31,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m32,Samsung,Galaxy M,Samsung Galaxy M32,M32,M32,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m34,Samsung,Galaxy M,Samsung Galaxy M34,M34,M34,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m35,Samsung,Galaxy M,Samsung Galaxy M35,M35,M35,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m51,Samsung,Galaxy M,Samsung Galaxy M51,M51,M51,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m52,Samsung,Galaxy M,Samsung Galaxy M52,M52,M52,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m53,Samsung,Galaxy M,Samsung Galaxy M53,M53,M53,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m54,Samsung,Galaxy M,Samsung Galaxy M54,M54,M54,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m55,Samsung,Galaxy M,Samsung Galaxy M55,M55,M55,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_m56,Samsung,Galaxy M,Samsung Galaxy M56,M56,M56,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_m62,Samsung,Galaxy M,Samsung Galaxy M62,M62,M62,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_note_10,Samsung,Galaxy Note,Samsung Galaxy Note 10,Note 10,Note 10,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_note_10_lite,Samsung,Galaxy Note,Samsung Galaxy Note 10 Lite,Note 10 Lite,Note 10 Lite,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_note_9,Samsung,Galaxy Note,Samsung Galaxy Note 9,Note 9,Note 9,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_s20_fe,Samsung,Galaxy S,Samsung Galaxy S20 FE,S20 FE,S20 FE,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s21,Samsung,Galaxy S,Samsung Galaxy S21,S21,S21,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s21_fe,Samsung,Galaxy S,Samsung Galaxy S21 FE,S21 FE,S21 FE,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s21_plus,Samsung,Galaxy S,Samsung Galaxy S21 Plus,S21 Plus,S21,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s22,Samsung,Galaxy S,Samsung Galaxy S22,S22,S22,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s22_plus,Samsung,Galaxy S,Samsung Galaxy S22 Plus,S22 Plus,S22,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s22_ultra,Samsung,Galaxy S,Samsung Galaxy S22 Ultra,S22 Ultra,S22,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_s23,Samsung,Galaxy S,Samsung Galaxy S23,S23,S23,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s23_fe,Samsung,Galaxy S,Samsung Galaxy S23 FE,S23 FE,S23 FE,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s23_plus,Samsung,Galaxy S,Samsung Galaxy S23 Plus,S23 Plus,S23,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s23_ultra,Samsung,Galaxy S,Samsung Galaxy S23 Ultra,S23 Ultra,S23,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_s24,Samsung,Galaxy S,Samsung Galaxy S24,S24,S24,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s24_fe,Samsung,Galaxy S,Samsung Galaxy S24 FE,S24 FE,S24 FE,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_s24_plus,Samsung,Galaxy S,Samsung Galaxy S24 Plus,S24 Plus,S24,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s24_ultra,Samsung,Galaxy S,Samsung Galaxy S24 Ultra,S24 Ultra,S24,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+samsung_galaxy_s25,Samsung,Galaxy S,Samsung Galaxy S25,S25,S25,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s25_fe,Samsung,Galaxy S,Samsung Galaxy S25 FE,S25 FE,S25 FE,,,base_peliculas;planilha_capinhas,novo,alta,
+samsung_galaxy_s25_plus,Samsung,Galaxy S,Samsung Galaxy S25 Plus,S25 Plus,S25,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s25_ultra,Samsung,Galaxy S,Samsung Galaxy S25 Ultra,S25 Ultra,S25,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s26,Samsung,Galaxy S,Samsung Galaxy S26,S26,S26,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s26_plus,Samsung,Galaxy S,Samsung Galaxy S26 Plus,S26 Plus,S26,,,base_peliculas;planilha_capinhas,ativo,alta,
+samsung_galaxy_s26_ultra,Samsung,Galaxy S,Samsung Galaxy S26 Ultra,S26 Ultra,S26,,,base_peliculas;planilha_capinhas,ativo,alta,
+tecno_spark_20,Tecno,Tecno Spark,Tecno Spark 20,Spark 20,Spark 20,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+tecno_spark_20c,Tecno,Tecno Spark,Tecno Spark 20C,Spark 20C,Spark 20C,,,planilha_capinhas,ativo,media,Modelo da planilha de capinhas sem correspondencia clara na base de peliculas.
+xiaomi_mi_10_lite,Xiaomi,Mi,Xiaomi Mi 10 Lite,10 Lite,Mi 10 Lite,,,base_peliculas;planilha_capinhas,ativo,alta,
+xiaomi_mi_11_lite,Xiaomi,Mi,Xiaomi Mi 11 Lite,11 Lite,Mi 11 Lite,,,base_peliculas;planilha_capinhas,ativo,alta,
+xiaomi_mi_12_lite,Xiaomi,Mi,Xiaomi Mi 12 Lite,12 Lite,Mi 12 Lite,,,base_peliculas;planilha_capinhas,ativo,alta,
+xiaomi_mi_13t,Xiaomi,Mi,Xiaomi Mi 13T,13T,Mi 13T,,,base_peliculas;planilha_capinhas,ativo,alta,
+xiaomi_mi_13t_pro,Xiaomi,Mi,Xiaomi Mi 13T Pro,13T Pro,Mi 13T Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
