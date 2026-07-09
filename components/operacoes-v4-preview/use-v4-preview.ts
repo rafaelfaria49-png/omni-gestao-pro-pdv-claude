@@ -688,7 +688,20 @@ export function buildVals(
   // "pronta" OU "recebida" direto) — usar o grafo genérico bloquearia o botão
   // incorretamente para uma OS "pronta" de verdade. Sem caixa envolvido (a
   // condição é só o saldo, igual à regra pedida — "bloquear se saldo > 0").
+  //
+  // GOAL OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002: `saldo <= 0` sozinho é ambíguo —
+  // casa tanto a OS realmente quitada (total>0) quanto a OS SEM cobrança lançada
+  // (total<=0, ex.: orçamento nunca materializado). Antes as duas caíam em "pode
+  // entregar", deixando uma OS sem cobrança ser entregue em silêncio (o buraco da
+  // auditoria). Agora as três situações são distintas e a entrega sem cobrança exige
+  // confirmação explícita de cortesia (só na UI — nada persiste; ver EntregaStage).
+  // Tudo derivado do MESMO `pdvPag` (sem novo read); com `pdvPag` null nada se decide
+  // (anti-flicker). `semSaldoPendenteEntrega` (quitada OU sem cobrança) segue
+  // alimentando só o CTA global (`prim`), que apenas NAVEGA à aba Entrega — o guard
+  // real mora lá.
   const semSaldoPendenteEntrega = pagamentoSemSaldoPendente(pdvPag);
+  const cobrancaAusente = !!pdvPag && pdvPag.total <= 0;
+  const quitadoComCobranca = !!pdvPag && pdvPag.total > 0 && pdvPag.saldo <= 0;
   // `bloqueadaPorSaldo` exige saldo > 0 CONFIRMADO (não é só "!semSaldoPendente" —
   // isso incluiria o pagamento ainda não carregado, mostrando o aviso de bloqueio
   // sem necessidade). Com `pdvPag` null, as duas ficam false (nada a decidir ainda).
@@ -701,9 +714,16 @@ export function buildVals(
   const aPrazo = realOS ? lerAPrazoV3(realOS) : null;
   const aPrazoAutorizado = !!aPrazo && aPrazo.autorizadoEntrega && saldoPendenteConfirmado;
   const entregaAcoes = {
-    podeConfirmar: !!realOS && status === "pronta" && (semSaldoPendenteEntrega || aPrazoAutorizado),
+    // Confirmação DIRETA (sem passo extra) só na OS quitada de verdade (total>0,
+    // saldo<=0) ou já autorizada a prazo. OS sem cobrança NÃO entra aqui — segue
+    // pelo fluxo de cortesia (`semCobrancaLancada`), que exige "Entregar sem
+    // cobrança" explícito na UI antes de liberar a confirmação real.
+    podeConfirmar: !!realOS && status === "pronta" && (quitadoComCobranca || aPrazoAutorizado),
     bloqueadaPorSaldo: !!realOS && status === "pronta" && saldoPendenteConfirmado && !aPrazoAutorizado,
     autorizadaAPrazo: !!realOS && status === "pronta" && aPrazoAutorizado,
+    // total<=0 (nenhuma cobrança lançada): a entrega só acontece após confirmação
+    // explícita de cortesia na UI — nunca em silêncio.
+    semCobrancaLancada: !!realOS && status === "pronta" && cobrancaAusente,
   };
 
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
@@ -937,6 +957,9 @@ export function buildVals(
     // GOAL OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005: usado pelo bloqueio "saldo em
     // aberto" da Entrega — só navega (o recebimento real vive no botão do Financeiro).
     goFinanceiro: () => update({ stage: "financeiro", module: "workspace", view: "cockpit", menu: null }),
+    // GOAL OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002: usado pelo alerta "OS sem cobrança"
+    // da Entrega — leva o operador a lançar o orçamento antes de entregar (só navega).
+    goOrcamento: () => update({ stage: "orcamento", module: "workspace", view: "cockpit", menu: null }),
     backFromSeguranca: () => update({ stage: "execucao", module: "workspace", view: "cockpit", menu: null }),
 
     menu: st.menu, menuPrint: st.menu === "print", menuMore: st.menu === "more",
