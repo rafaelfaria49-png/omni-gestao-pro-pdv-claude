@@ -786,7 +786,11 @@ export function adaptDiagnostico(os: OrdemServico): V4DiagnosticoView {
 // Custo/lucro só quando `custoUnitario` real existir (Decisão 2) — `Servico`
 // não tem custo, logo só orçamentos 100% de peças com custo exibem o agregado.
 
-export type V4OrcamentoEstado = "persistido" | "previa" | "ausente";
+// "vazio" (GOAL OPS-V4-ORCAMENTO-READBACK-EDIT-002): orçamento REAL materializado
+// (sintetizado !== true) porém sem linhas e total 0 — existe, mas está vazio. NÃO é
+// "ausente": esconder um orçamento materializado-vazio como se não existisse foi o
+// que fez a OS-2026-00014 parecer "sem orçamento" depois de aprovada/entregue.
+export type V4OrcamentoEstado = "persistido" | "previa" | "ausente" | "vazio";
 
 const ORC_STATUS_LABEL: Record<OrcamentoStatus, string> = {
   rascunho: "Rascunho",
@@ -946,9 +950,22 @@ export function adaptOrcamento(os: OrdemServico): V4OrcamentoView {
   const declaredTotal = typeof orc?.total === "number" ? orc!.total : 0;
   const hasLines = servicosRaw.length > 0 || pecasRaw.length > 0;
 
-  // Ausente: nenhum orçamento real nem prévia derivada com conteúdo.
-  if (!orc || (!hasLines && declaredTotal <= 0)) {
+  // Inexistente (estado "ausente"): sem orçamento OU prévia sintetizada sem
+  // conteúdo — nada real para mostrar/editar (CTA "Gerar orçamento").
+  if (!orc || (orc.sintetizado === true && !hasLines && declaredTotal <= 0)) {
     return EMPTY_ORCAMENTO_VIEW;
+  }
+  // Materializado vazio (estado "vazio"): orçamento REAL (não prévia) sem linhas e
+  // total 0 — existe de fato (foi criado/aprovado vazio). Mostrar honestamente com
+  // status/total reais, em vez de fingir "Nenhum orçamento registrado".
+  if (!hasLines && declaredTotal <= 0) {
+    return {
+      ...EMPTY_ORCAMENTO_VIEW,
+      estado: "vazio",
+      statusLabel: ORC_STATUS_LABEL[orc.status] ?? orc.status ?? "",
+      statusTone: ORC_STATUS_TONE[orc.status] ?? "neutro",
+      total: fmt(0),
+    };
   }
 
   const isPrevia = orc.sintetizado === true;

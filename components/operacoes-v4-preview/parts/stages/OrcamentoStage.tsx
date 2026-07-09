@@ -7,7 +7,7 @@
  * `aprovarOrcamentoV3` / `recusarOrcamentoV3`. NÃO baixa/reserva estoque, NÃO
  * toca caixa/financeiro real. Estados aprovado/recusado/prévia/ausente ficam
  * read-only (com CTA "Gerar orçamento" quando aplicável). */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { C, card, cardTitle, upLabel, fmt } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 import { lerOrcKindV4, ORC_KIND_LABEL, type V4OrcItemView, type V4OrcKind } from "../../os-adapter";
@@ -19,6 +19,7 @@ import {
   novoServicoManualV4,
   pecaFromProdutoV4,
   totaisEditorV4,
+  validarEditorParaSalvarV4,
   type OrcamentoEditorV4,
 } from "@/lib/operacoes-v4/orcamento-form";
 import { OrcamentoEnvioCluster } from "./OrcamentoEnvioCluster";
@@ -71,6 +72,14 @@ function KindBadge({ kind }: { kind: V4OrcKind | null }) {
 }
 
 export function OrcamentoStage({ v }: { v: V4Vals }) {
+  // GOAL OPS-V4-ORCAMENTO-READBACK-EDIT-002: reabertura controlada de um orçamento já
+  // materializado (mesmo aprovado/entregue) para revisar/corrigir. Estado LOCAL — nada
+  // persiste até "Salvar"; fecha ao trocar de OS (não vaza entre seleções).
+  const [reaberto, setReaberto] = useState(false);
+  useEffect(() => {
+    setReaberto(false);
+  }, [v.selectedOsId]);
+
   if (!v.osSelected) {
     return (
       <div style={card}>
@@ -79,11 +88,20 @@ export function OrcamentoStage({ v }: { v: V4Vals }) {
       </div>
     );
   }
-  // Editável (materializado + rascunho/enviado) → editor real; senão, read-only.
-  if (v.orcamentoEditavel) {
-    return <OrcamentoEditor key={v.selectedOsId ?? "none"} v={v} />;
+  // Editável (materializado + rascunho/enviado) → editor real. Reaberto (materializado
+  // em qualquer status) → mesmo editor, em modo revisão. Senão, read-only.
+  if (v.orcamentoEditavel || reaberto) {
+    const revisao = reaberto && !v.orcamentoEditavel;
+    return (
+      <OrcamentoEditor
+        key={`${v.selectedOsId ?? "none"}:${revisao ? "revisao" : "auto"}`}
+        v={v}
+        revisao={revisao}
+        onFecharRevisao={() => setReaberto(false)}
+      />
+    );
   }
-  return <OrcamentoReadonly v={v} />;
+  return <OrcamentoReadonly v={v} onReabrir={() => setReaberto(true)} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +144,7 @@ function GerarOrcamentoCTA({ v }: { v: V4Vals }) {
   );
 }
 
-function OrcamentoReadonly({ v }: { v: V4Vals }) {
+function OrcamentoReadonly({ v, onReabrir }: { v: V4Vals; onReabrir: () => void }) {
   const o = v.orcamento;
 
   if (o.estado === "ausente") {
@@ -135,6 +153,41 @@ function OrcamentoReadonly({ v }: { v: V4Vals }) {
         <div style={{ ...cardTitle, marginBottom: 6 }}>🔧 Orçamento</div>
         <div style={{ ...emptyText, marginBottom: 12 }}>Nenhum orçamento registrado para esta Ordem de Serviço.</div>
         <GerarOrcamentoCTA v={v} />
+      </div>
+    );
+  }
+
+  // Materializado vazio: existe orçamento real, mas sem itens/valores. Honesto (não
+  // finge que não existe) e com caminho de correção — "Editar orçamento" reabre o
+  // editor (nunca "Gerar orçamento", que seria no-op sobre um orçamento real vazio).
+  if (o.estado === "vazio") {
+    const badgeV = STATUS_BG[o.statusTone] ?? STATUS_BG.neutro;
+    return (
+      <div style={card}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+          <span style={cardTitle}>🔧 Orçamento</span>
+          {o.statusLabel && (
+            <span style={{ height: 21, padding: "0 9px", display: "inline-flex", alignItems: "center", background: badgeV.bg, color: badgeV.fg, borderRadius: 999, fontSize: 11, fontWeight: 600 }}>{o.statusLabel}</span>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.warnBg, border: `1px solid ${C.warnBd}`, borderRadius: 9, padding: "10px 12px", marginBottom: 12 }}>
+          <span style={{ fontSize: 14, lineHeight: "18px", flex: "none" }}>⚠️</span>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: C.warnFg, marginBottom: 3 }}>Orçamento criado, mas sem itens ou valores.</div>
+            <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5 }}>Adicione serviço, peça ou valor antes de aprovar/avançar.</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "2px 0 12px" }}>
+          <span style={{ color: C.muted }}>Total ao cliente</span>
+          <span style={{ fontWeight: 700, color: C.ink }}>{o.total}</span>
+        </div>
+        <button
+          type="button"
+          onClick={onReabrir}
+          style={{ height: 34, padding: "0 16px", border: "none", background: C.primary, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+        >
+          Editar orçamento
+        </button>
       </div>
     );
   }
@@ -188,7 +241,14 @@ function OrcamentoReadonly({ v }: { v: V4Vals }) {
           </>
         )}
         {!o.isPrevia && (
-          <div style={{ marginTop: 13 }}>
+          <div style={{ marginTop: 13, display: "flex", flexDirection: "column", gap: 8 }}>
+            <button
+              type="button"
+              onClick={onReabrir}
+              style={{ height: 34, padding: "0 16px", border: `1px solid ${C.inputBd2}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
+            >
+              Editar orçamento
+            </button>
             <OrcamentoDuplicarButton v={v} />
           </div>
         )}
@@ -200,10 +260,11 @@ function OrcamentoReadonly({ v }: { v: V4Vals }) {
 // ---------------------------------------------------------------------------
 // Editor real (orçamento materializado em rascunho/enviado).
 // ---------------------------------------------------------------------------
-function OrcamentoEditor({ v }: { v: V4Vals }) {
+function OrcamentoEditor({ v, revisao, onFecharRevisao }: { v: V4Vals; revisao?: boolean; onFecharRevisao?: () => void }) {
   const [editor, setEditor] = useState<OrcamentoEditorV4>(() => v.orcamentoEditorSeed);
   const [lookupOpen, setLookupOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   const totais = totaisEditorV4(editor);
   const margem = margemPercentualV4(totais);
@@ -217,6 +278,19 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
     } finally {
       setBusy(false);
     }
+  };
+
+  // Valida ANTES de persistir e devolve o resultado (para o botão e para o guard de
+  // "Salvar e aprovar"). Bloqueia linha com valor/custo mas sem descrição/nome — nunca
+  // deixa `editorToSalvarInputV4` descartá-la em silêncio, nem o orçamento salvar vazio.
+  const salvarEditor = async (): Promise<boolean> => {
+    const veredito = validarEditorParaSalvarV4(editor);
+    if (!veredito.ok) {
+      setErro(veredito.erro ?? "Complete o orçamento antes de salvar.");
+      return false;
+    }
+    setErro(null);
+    return v.salvarOrcamento(editor);
   };
 
   const addServico = () =>
@@ -239,6 +313,15 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
           <span style={cardTitle}>🔧 Orçamento</span>
           <span style={{ height: 21, padding: "0 9px", display: "inline-flex", alignItems: "center", background: C.infoBg, color: C.infoFg, borderRadius: 999, fontSize: 11, fontWeight: 600 }}>{v.orcamento.statusLabel || "Rascunho"}</span>
         </div>
+
+        {revisao && (
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.warnBg, border: `1px solid ${C.warnBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 12 }}>
+            <span style={{ fontSize: 13, lineHeight: "16px", flex: "none" }}>⚠️</span>
+            <span style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.45 }}>
+              <strong>Revisão de orçamento{v.orcamento.statusLabel ? ` (${v.orcamento.statusLabel})` : ""}.</strong> Este orçamento já foi decidido; alterá-lo pode ser rejeitado pelo sistema — se precisar mudar a cobrança, pode ser necessário um novo orçamento. Nada muda até você salvar.
+            </span>
+          </div>
+        )}
 
         {/* Serviços */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
@@ -341,13 +424,21 @@ function OrcamentoEditor({ v }: { v: V4Vals }) {
 
         <div style={card}>
           <div style={{ ...cardTitle, marginBottom: 10 }}>Ações</div>
-          <button type="button" onClick={() => run(() => v.salvarOrcamento(editor))} disabled={busy} style={{ ...btnPrimary, width: "100%", marginBottom: 8 }}>{busy ? "Processando…" : "Salvar orçamento"}</button>
+          <button type="button" onClick={() => run(salvarEditor)} disabled={busy} style={{ ...btnPrimary, width: "100%", marginBottom: 8 }}>{busy ? "Processando…" : "Salvar orçamento"}</button>
+          {erro && (
+            <div style={{ fontSize: 11, color: C.dangerFg, marginBottom: 8, lineHeight: 1.5 }}>{erro}</div>
+          )}
           <div style={{ marginTop: 2 }}>
             <OrcamentoDuplicarButton v={v} />
           </div>
+          {revisao && onFecharRevisao && (
+            <button type="button" onClick={onFecharRevisao} disabled={busy} style={{ ...btnGhost, width: "100%", marginTop: 8 }}>Cancelar edição</button>
+          )}
         </div>
 
-        {v.orcamentoPodeDecidir && <OrcamentoDecisaoCluster v={v} />}
+        {v.orcamentoPodeDecidir && (
+          <OrcamentoDecisaoCluster v={v} guard={{ total: totais.total, salvarEditor }} />
+        )}
 
         <OrcamentoEnvioCluster v={v} />
       </div>

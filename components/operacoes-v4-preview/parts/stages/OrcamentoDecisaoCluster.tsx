@@ -48,11 +48,24 @@ const btnGhost: React.CSSProperties = {
   cursor: "pointer",
 };
 
-export function OrcamentoDecisaoCluster({ v }: { v: V4Vals }) {
+/**
+ * GOAL OPS-V4-ORCAMENTO-READBACK-EDIT-002: guarda opcional vinda do editor. Quando
+ * presente, "Aprovar" NUNCA aprova o orçamento do servidor ignorando o que o usuário
+ * digitou: primeiro salva o editor (com validação) e só então aprova. Também bloqueia
+ * aprovar um orçamento com total R$ 0. `total` é o total ao vivo do editor.
+ */
+export interface OrcamentoDecisaoGuardV4 {
+  total: number;
+  /** Valida + persiste o editor atual; `false` bloqueia a aprovação (inválido/falhou). */
+  salvarEditor: () => Promise<boolean>;
+}
+
+export function OrcamentoDecisaoCluster({ v, guard }: { v: V4Vals; guard?: OrcamentoDecisaoGuardV4 }) {
   const grupos = v.orcamento.grupos;
   const temGrupos = v.orcamento.temGrupos;
   const todosResolvidos = grupos.every((g) => g.resolvido);
-  const podeAprovar = !temGrupos || todosResolvidos;
+  const totalZero = !!guard && guard.total <= 0;
+  const podeAprovar = (!temGrupos || todosResolvidos) && !totalZero;
 
   const [busySelecao, setBusySelecao] = useState<string | null>(null);
   const [busyDecisao, setBusyDecisao] = useState(false);
@@ -73,6 +86,11 @@ export function OrcamentoDecisaoCluster({ v }: { v: V4Vals }) {
   const aprovar = async () => {
     setBusyDecisao(true);
     try {
+      // Nunca aprova ignorando o editor: salva (com validação) e só então aprova.
+      if (guard) {
+        const ok = await guard.salvarEditor();
+        if (!ok) return;
+      }
       await v.aprovarOrcamento();
     } finally {
       setBusyDecisao(false);
@@ -130,7 +148,12 @@ export function OrcamentoDecisaoCluster({ v }: { v: V4Vals }) {
 
       <div style={{ ...cardTitle, marginTop: temGrupos ? 4 : 0, marginBottom: 10 }}>Decisão</div>
 
-      {!podeAprovar && (
+      {totalZero && (
+        <div style={{ fontSize: 11, color: C.warnFg, marginBottom: 8, lineHeight: 1.5 }}>
+          ⚠️ Orçamento total R$ 0. Lance um valor ou marque como sem cobrança em etapa própria.
+        </div>
+      )}
+      {!totalZero && !podeAprovar && (
         <div style={{ fontSize: 11, color: C.warnFg, marginBottom: 8, lineHeight: 1.5 }}>
           ⚠️ Selecione uma opção em cada grupo antes de aprovar.
         </div>
@@ -142,10 +165,10 @@ export function OrcamentoDecisaoCluster({ v }: { v: V4Vals }) {
             type="button"
             onClick={() => void aprovar()}
             disabled={busyDecisao || !podeAprovar}
-            title={!podeAprovar ? "Selecione uma opção em cada grupo antes de aprovar." : undefined}
+            title={totalZero ? "Orçamento total R$ 0 — lance um valor antes de aprovar." : !podeAprovar ? "Selecione uma opção em cada grupo antes de aprovar." : undefined}
             style={{ height: 34, width: "100%", padding: "0 16px", border: "none", background: C.success, color: C.white, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busyDecisao || !podeAprovar ? "default" : "pointer", opacity: busyDecisao || !podeAprovar ? 0.6 : 1, marginBottom: 8 }}
           >
-            {busyDecisao ? "Processando…" : "Aprovar orçamento"}
+            {busyDecisao ? "Processando…" : guard ? "Salvar e aprovar orçamento" : "Aprovar orçamento"}
           </button>
           <button type="button" onClick={() => setModoRecusa(true)} disabled={busyDecisao} style={{ ...btnGhost, width: "100%", borderColor: C.dangerBd, color: C.dangerFg, marginBottom: 8 }}>
             Recusar orçamento

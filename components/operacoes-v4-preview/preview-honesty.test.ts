@@ -1136,6 +1136,86 @@ describe("OPS-V4-006 — classificação (kindV3) visível no orçamento, read-o
   })
 })
 
+// ---------------------------------------------------------------------------
+// GOAL OPS-V4-ORCAMENTO-READBACK-EDIT-002 — distinguir orçamento inexistente de
+// materializado vazio; readback honesto; reabrir; salvar-antes-de-aprovar; não
+// descartar linha com valor em silêncio; não aprovar total R$ 0 em silêncio.
+// ---------------------------------------------------------------------------
+describe("OPS-V4-ORCAMENTO-READBACK-EDIT-002 — adaptOrcamento distingue ausente × vazio × persistido", () => {
+  it("sem os.orcamento → estado 'ausente'", () => {
+    expect(adaptOrcamento(mkOS({ id: "o-a1" })).estado).toBe("ausente")
+  })
+
+  it("prévia sintetizada vazia (sintetizado true, sem linhas, total 0) → 'ausente' (nada real)", () => {
+    const o = adaptOrcamento(mkOS({ id: "o-a2", orcamento: { status: "rascunho", total: 0, servicos: [], pecas: [], sintetizado: true } }))
+    expect(o.estado).toBe("ausente")
+  })
+
+  it("orçamento REAL materializado vazio (sintetizado false, sem linhas, total 0) → 'vazio', não 'ausente'", () => {
+    const o = adaptOrcamento(mkOS({ id: "o-v1", orcamento: { status: "aprovado", total: 0, servicos: [], pecas: [], sintetizado: false } }))
+    expect(o.estado).toBe("vazio")
+    expect(o.statusLabel).toBe("Aprovado")
+    expect(o.total).toBe(fmt(0))
+  })
+
+  it("orçamento real com item → 'persistido' (readback normal, total real)", () => {
+    const o = adaptOrcamento(mkOS({ id: "o-p1", orcamento: { status: "aprovado", total: 320, servicos: [{ id: "s1", descricao: "Troca de tela", valor: 320 }], pecas: [], sintetizado: false } }))
+    expect(o.estado).toBe("persistido")
+    expect(o.total).toBe(fmt(320))
+  })
+})
+
+describe("OPS-V4-ORCAMENTO-READBACK-EDIT-002 — OrcamentoStage: readback honesto, reabrir e validação", () => {
+  const orcamentoStage = readFileSync(join(DIR, "parts", "stages", "OrcamentoStage.tsx"), "utf8")
+
+  it("estado 'vazio' mostra aviso honesto (não 'Nenhum orçamento registrado') e CTA 'Editar orçamento'", () => {
+    expect(orcamentoStage).toMatch(/estado === "vazio"/)
+    expect(orcamentoStage).toContain("Orçamento criado, mas sem itens ou valores.")
+    expect(orcamentoStage).toContain("Editar orçamento")
+  })
+
+  it("'Nenhum orçamento registrado' fica SÓ no ramo 'ausente' (inexistente)", () => {
+    expect((orcamentoStage.match(/Nenhum orçamento registrado/g) ?? []).length).toBe(1)
+  })
+
+  it("permite reabrir orçamento materializado para revisão controlada (estado local, sem mudar status)", () => {
+    expect(orcamentoStage).toContain("onReabrir")
+    expect(orcamentoStage).toMatch(/revisao = reaberto && !v\.orcamentoEditavel/)
+    expect(orcamentoStage).toContain("Cancelar edição")
+  })
+
+  it("salvar valida antes de persistir (bloqueia linha com valor sem descrição)", () => {
+    expect(orcamentoStage).toContain("validarEditorParaSalvarV4")
+    expect(orcamentoStage).toMatch(/const salvarEditor = async/)
+    expect(orcamentoStage).toContain("run(salvarEditor)")
+  })
+
+  it("o ramo 'vazio' NÃO usa o botão no-op 'Gerar orçamento' — lá é 'Editar orçamento'", () => {
+    const blocoVazio = orcamentoStage.slice(orcamentoStage.indexOf('o.estado === "vazio"'), orcamentoStage.indexOf("const badge = STATUS_BG"))
+    expect(blocoVazio.length).toBeGreaterThan(0)
+    expect(blocoVazio).not.toContain("GerarOrcamentoCTA")
+  })
+})
+
+describe("OPS-V4-ORCAMENTO-READBACK-EDIT-002 — Aprovar não ignora o editor local; total 0 não aprova", () => {
+  const decisaoCluster = readFileSync(join(DIR, "parts", "stages", "OrcamentoDecisaoCluster.tsx"), "utf8")
+  const orcamentoStage = readFileSync(join(DIR, "parts", "stages", "OrcamentoStage.tsx"), "utf8")
+
+  it("Aprovar salva o editor antes de aprovar (guard.salvarEditor) — nunca aprova o servidor ignorando o digitado", () => {
+    expect(decisaoCluster).toContain("guard.salvarEditor()")
+    expect(decisaoCluster).toMatch(/Salvar e aprovar orçamento/)
+  })
+
+  it("bloqueia aprovar quando total R$ 0 (não aprova em silêncio)", () => {
+    expect(decisaoCluster).toMatch(/const totalZero = !!guard && guard\.total <= 0/)
+    expect(decisaoCluster).toContain("Orçamento total R$ 0")
+  })
+
+  it("OrcamentoStage passa o guard (total ao vivo + salvarEditor) ao cluster de decisão", () => {
+    expect(orcamentoStage).toMatch(/guard=\{\{ total: totais\.total, salvarEditor \}\}/)
+  })
+})
+
 describe("OPS-V4-ORC-MULTIOPCAO-MODEL-021 — grupos/variantes/faixa, read-only e honestos", () => {
   it("orçamento sem grupoId: temGrupos=false, faixa NI, itens com grupoId=\"\"/variante=null/selecionada=false", () => {
     const o = adaptOrcamento(

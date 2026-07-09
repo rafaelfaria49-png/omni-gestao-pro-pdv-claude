@@ -12,6 +12,7 @@ import {
   pecaFromProdutoV4,
   seedEditorFromOS,
   totaisEditorV4,
+  validarEditorParaSalvarV4,
   type OrcamentoEditorV4,
 } from "./orcamento-form";
 import type { ProdutoCatalogoV3 } from "@/lib/operacoes-v3/produto-link";
@@ -186,6 +187,41 @@ describe("editorToSalvarInputV4", () => {
     expect(input.servicos[0]!.custoV3).toBe(80);
     expect(input.servicos[1]!.custoV3).toBeUndefined(); // negativo clampado para 0 → omitido
     expect(input.servicos[2]!.custoV3).toBeUndefined(); // nunca informado
+  });
+});
+
+describe("validarEditorParaSalvarV4 (GOAL OPS-V4-ORCAMENTO-READBACK-EDIT-002)", () => {
+  it("serviço com valor e descrição → ok", () => {
+    const editor: OrcamentoEditorV4 = { servicos: [novoServicoManualV4({ descricao: "Troca de tela", valor: 320 })], pecas: [], desconto: 0 };
+    expect(validarEditorParaSalvarV4(editor)).toEqual({ ok: true });
+  });
+
+  it("serviço com valor mas SEM descrição → erro (não descarta em silêncio)", () => {
+    const editor: OrcamentoEditorV4 = { servicos: [novoServicoManualV4({ descricao: "", valor: 320 })], pecas: [], desconto: 0 };
+    const r = validarEditorParaSalvarV4(editor);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toMatch(/descrição do serviço/i);
+  });
+
+  it("serviço com CUSTO mas sem descrição → erro (custo também conta como valor)", () => {
+    const editor: OrcamentoEditorV4 = { servicos: [{ ...novoServicoManualV4({ descricao: "", valor: 0 }), custoV3: 90 }], pecas: [], desconto: 0 };
+    expect(validarEditorParaSalvarV4(editor).ok).toBe(false);
+  });
+
+  it("peça com valor mas SEM nome → erro", () => {
+    const editor: OrcamentoEditorV4 = { servicos: [], pecas: [{ ...pecaFromProdutoV4(PRODUTO, { quantidade: 1 }), nome: "  " }], desconto: 0 };
+    const r = validarEditorParaSalvarV4(editor);
+    expect(r.ok).toBe(false);
+    expect(r.erro).toMatch(/nome da peça/i);
+  });
+
+  it("linha totalmente vazia (sem valor, sem descrição) → ok (ignorável, não é erro)", () => {
+    const editor: OrcamentoEditorV4 = { servicos: [novoServicoManualV4({ descricao: "", valor: 0 })], pecas: [], desconto: 0 };
+    expect(validarEditorParaSalvarV4(editor)).toEqual({ ok: true });
+  });
+
+  it("editor vazio → ok", () => {
+    expect(validarEditorParaSalvarV4(editorVazioV4())).toEqual({ ok: true });
   });
 });
 

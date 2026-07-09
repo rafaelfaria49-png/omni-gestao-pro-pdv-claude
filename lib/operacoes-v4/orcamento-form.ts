@@ -122,6 +122,35 @@ export function itensSemCustoV4(editor: OrcamentoEditorV4): number {
   return servicos + pecas;
 }
 
+export interface EditorValidacaoV4 {
+  ok: boolean;
+  erro?: string;
+}
+
+/**
+ * GOAL OPS-V4-ORCAMENTO-READBACK-EDIT-002: validação PRÉVIA ao salvar. `editorToSalvarInputV4`
+ * DESCARTA em silêncio linhas sem descrição/nome — o que fazia o usuário perder um serviço/peça
+ * que tinha valor/custo digitado (e o orçamento salvar vazio). Aqui bloqueamos ANTES de persistir:
+ * uma linha "preenchida com valor" (valor OU custo informado) mas sem descrição/nome vira erro
+ * explícito, nunca um descarte mudo. Linhas totalmente vazias (rascunho em branco) seguem
+ * ignoráveis — não são erro, só não são persistidas. Puro, sem I/O.
+ */
+export function validarEditorParaSalvarV4(editor: OrcamentoEditorV4): EditorValidacaoV4 {
+  const servicos = Array.isArray(editor.servicos) ? editor.servicos : [];
+  for (const s of servicos) {
+    const semDescricao = (s.descricao ?? "").trim().length === 0;
+    const temValor = nonNeg(s.valor) > 0 || custoInformadoServico(s);
+    if (semDescricao && temValor) return { ok: false, erro: "Informe a descrição do serviço antes de salvar." };
+  }
+  const pecas = Array.isArray(editor.pecas) ? editor.pecas : [];
+  for (const p of pecas) {
+    const semNome = (p.nome ?? "").trim().length === 0;
+    const temValor = nonNeg(p.valorUnitario) > 0 || custoInformadoPeca(p);
+    if (semNome && temValor) return { ok: false, erro: "Informe o nome da peça antes de salvar." };
+  }
+  return { ok: true };
+}
+
 /** Margem estimada (%) = lucro / total ao cliente. `null` quando não há total (sem base de cálculo). */
 export function margemPercentualV4(t: Pick<TotaisOrcamentoV3, "total" | "lucro">): number | null {
   if (!t.total || t.total <= 0) return null;
