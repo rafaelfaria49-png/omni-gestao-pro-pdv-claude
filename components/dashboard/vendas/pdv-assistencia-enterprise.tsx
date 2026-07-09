@@ -8,6 +8,7 @@ import {
   Wrench,
   Plus,
   Minus,
+  Pencil,
   Settings2,
   X,
   RefreshCw,
@@ -299,6 +300,27 @@ function normalizeServicoRow(s: ServicoApiRow): PdvServicoCatalogItem {
     serviceTerms: s.termo ?? "",
     servicoCategoria: s.categoria && s.categoria !== "—" ? s.categoria : "",
   }
+}
+
+/**
+ * Converte um preço digitado no balcão (moeda BR ou número simples) em `number`.
+ * Aceita "80", "80,00", "80.00", "120,50" e ignora "R$"/espaços. Vírgula = decimal;
+ * pontos viram milhar quando há vírgula. Retorna `NaN` para entrada não numérica —
+ * o caller exige `> 0`, então NaN/0/negativo são rejeitados. Arredonda a 2 casas.
+ */
+function parsePrecoManual(raw: string): number {
+  let s = String(raw ?? "").trim().replace(/[^\d.,-]/g, "")
+  if (!s) return NaN
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".")
+  const v = Number(s)
+  if (!Number.isFinite(v)) return NaN
+  return Math.round(v * 100) / 100
+}
+
+/** Formata um preço (>0) para preencher o input de edição no padrão BR ("80,00"). */
+function precoParaInput(price: number): string {
+  if (!(price > 0)) return ""
+  return (Math.round(price * 100) / 100).toFixed(2).replace(".", ",")
 }
 
 // ─── QuickCard ────────────────────────────────────────────────────────────────
@@ -1069,6 +1091,13 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [f4LineId, setF4LineId] = useState<string | null>(null)
   const f4InputRef = useRef<HTMLInputElement>(null)
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null)
+  // Preço manual de serviço real (Fase 2): alvo do modal (add|edit) + valor digitado.
+  const [servicoPrecoTarget, setServicoPrecoTarget] = useState<
+    | { kind: "add"; item: PdvServicoCatalogItem }
+    | { kind: "edit"; lineId: string; title: string }
+    | null
+  >(null)
+  const [servicoPrecoInput, setServicoPrecoInput] = useState("")
 
   // ── Custom atalhos ────────────────────────────────────────────────────────────
   const [localAtalhos, setLocalAtalhos] = useState<AtalhoSaved[]>([])
@@ -1385,7 +1414,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         active instanceof HTMLSelectElement ||
         (active instanceof HTMLElement && active.isContentEditable)
 
-      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen || showItemAvulsoModal
+      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen || showItemAvulsoModal || servicoPrecoTarget !== null
 
       // END — toggle help overlay (always works)
       if (e.key === "End") {
@@ -1562,16 +1591,19 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal])
+  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal, servicoPrecoTarget])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
-  const addItem = (item: PdvCatalogProduct) => {
+  const addItem = (item: PdvCatalogProduct, priceOverride?: number) => {
     const svcMeta = servicoMetaById.get(item.id)
-    // Serviço real sem preço padrão: não inventar valor (Fase 1 não tem override por linha).
-    if (svcMeta && !(item.price > 0)) {
+    // Preço efetivo da linha: override manual (Fase 2, serviços) ou preço do catálogo.
+    const effectivePrice = priceOverride !== undefined ? priceOverride : item.price
+    // Serviço real precisa de preço > 0. Via modal de preço manual isso já foi
+    // validado; guarda defensiva para o caminho direto.
+    if (svcMeta && !(effectivePrice > 0)) {
       toast({
         title: "Serviço sem preço",
-        description: "Este serviço não possui preço padrão. Use item avulso ou cadastre um preço.",
+        description: "Informe um preço de venda para adicionar este serviço.",
         variant: "destructive",
       })
       return
@@ -1591,11 +1623,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     appendAuditLog({
       action: "pdv_item_adicionado",
       userLabel: cashierId.slice(0, 8),
-      detail: `${item.name} — ${brl(item.price)}`,
+      detail: `${item.name} — ${brl(effectivePrice)}`,
     })
     let flashId: string | null = null
     setCart((prev) => {
-      const hit = prev.find((l) => l.inventoryId === item.id && Math.abs(l.price - item.price) < 0.001)
+      const hit = prev.find((l) => l.inventoryId === item.id && Math.abs(l.price - effectivePrice) < 0.001)
       if (hit) {
         flashId = hit.lineId
         return prev.map((l) => (l.lineId === hit.lineId ? { ...l, qty: l.qty + 1 } : l))
@@ -1608,7 +1640,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           lineId: nid,
           inventoryId: item.id,
           title: item.name,
-          price: item.price,
+          price: effectivePrice,
           qty: 1,
           ...(svcMeta
             ? {
@@ -1636,6 +1668,47 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         window.requestAnimationFrame(() => inputRef.current?.focus())
       }
     })
+  }
+
+  // ── Preço manual de serviço real (Fase 2) ───────────────────────────────────
+  // Serviço real abre um modal leve p/ confirmar/editar o preço antes de entrar
+  // no carrinho; e permite ajustar o preço da linha de serviço já adicionada.
+  const openServicoPreco = (item: PdvServicoCatalogItem) => {
+    setServicoPrecoInput(item.price > 0 ? precoParaInput(item.price) : "")
+    setServicoPrecoTarget({ kind: "add", item })
+  }
+  const openServicoPrecoEdit = (l: CartLine) => {
+    setServicoPrecoInput(precoParaInput(l.price))
+    setServicoPrecoTarget({ kind: "edit", lineId: l.lineId, title: l.title })
+  }
+  const closeServicoPreco = () => {
+    setServicoPrecoTarget(null)
+    setServicoPrecoInput("")
+    queueMicrotask(() => inputRef.current?.focus())
+  }
+  const confirmServicoPreco = () => {
+    const target = servicoPrecoTarget
+    if (!target) return
+    const preco = parsePrecoManual(servicoPrecoInput)
+    if (!(preco > 0)) {
+      toast({
+        title: "Preço inválido",
+        description:
+          target.kind === "add"
+            ? "Informe um preço de venda para adicionar este serviço."
+            : "Informe um preço de venda válido para este serviço.",
+        variant: "destructive",
+      })
+      return // mantém o modal aberto para correção
+    }
+    if (target.kind === "add") {
+      // addItem já audita a adição com o preço efetivo (pdv_item_adicionado).
+      addItem(target.item, preco)
+    } else {
+      const lineId = target.lineId
+      setCart((prev) => prev.map((l) => (l.lineId === lineId ? { ...l, price: preco } : l)))
+    }
+    closeServicoPreco()
   }
 
   const changeQty = (id: string, delta: number) => {
@@ -1830,7 +1903,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
-      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen) return
+      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || servicoPrecoTarget !== null) return
       if (cart.length === 0) return
       e.preventDefault()
       e.stopPropagation()
@@ -1842,7 +1915,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, cart.length])
+  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, servicoPrecoTarget, cart.length])
 
   // ─── Venda em espera ────────────────────────────────────────────────────────
 
@@ -2216,7 +2289,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                           <div key={i} className="h-24 animate-pulse rounded-2xl border border-border bg-muted/40" />
                         ))
                       ) : servicosCatalog.length > 0 ? (
-                        servicosCatalog.map((p) => <ServicoCard key={p.id} item={p} onAdd={addItem} />)
+                        servicosCatalog.map((p) => <ServicoCard key={p.id} item={p} onAdd={openServicoPreco} />)
                       ) : (
                         <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
                           <p className="text-sm text-muted-foreground">Nenhum serviço cadastrado. Cadastre serviços no Cadastros HUB.</p>
@@ -2495,6 +2568,19 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       <p className="w-20 shrink-0 text-right text-sm font-bold tabular-nums text-foreground">
                         {brl(l.price * l.qty)}
                       </p>
+
+                      {/* Alterar preço — só para linha de serviço real (Fase 2) */}
+                      {l.serviceId && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); openServicoPrecoEdit(l) }}
+                          aria-label={`Alterar preço de ${l.title}`}
+                          title="Alterar preço do serviço"
+                          className="shrink-0 grid h-7 w-7 place-items-center rounded-xl border border-border bg-background text-muted-foreground transition hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
 
                       {/* Delete — always visible (X) */}
                       <button
@@ -2830,6 +2916,60 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           </Dialog>
         )
       })()}
+
+      {/* Serviço — preço manual por linha (Fase 2): confirmar/editar ao adicionar e editar no carrinho */}
+      <Dialog open={servicoPrecoTarget !== null} onOpenChange={(o) => { if (!o) closeServicoPreco() }}>
+        <DialogContent className="max-w-xs rounded-2xl border-border bg-card p-0 shadow-lg">
+          <DialogHeader className="border-b border-border px-6 py-4">
+            <DialogTitle className="flex items-center gap-2 text-sm font-bold text-foreground">
+              <Wrench className="h-4 w-4 text-primary" />
+              {servicoPrecoTarget?.kind === "edit" ? "Alterar preço do serviço" : "Preço do serviço"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="px-6 py-4">
+            <p className="mb-1 truncate text-xs font-semibold text-foreground">
+              {servicoPrecoTarget?.kind === "add" ? servicoPrecoTarget.item.name : servicoPrecoTarget?.title}
+            </p>
+            {servicoPrecoTarget?.kind === "add" && (
+              <p className="mb-3 text-[10px] text-muted-foreground">
+                {servicoPrecoTarget.item.price > 0
+                  ? `Preço padrão: ${brl(servicoPrecoTarget.item.price)} — mantenha ou altere.`
+                  : "Serviço sem preço padrão — informe o valor de venda."}
+              </p>
+            )}
+            <Label htmlFor="servico-preco-manual" className="text-[10px] text-muted-foreground">
+              Preço de venda (R$)
+            </Label>
+            <Input
+              id="servico-preco-manual"
+              inputMode="decimal"
+              value={servicoPrecoInput}
+              onChange={(e) => setServicoPrecoInput(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); confirmServicoPreco() }
+                if (e.key === "Escape") { e.preventDefault(); closeServicoPreco() }
+              }}
+              autoFocus
+              placeholder="0,00"
+              className="mt-1 h-12 rounded-xl text-center text-xl font-bold tabular-nums"
+            />
+            <p className="mt-2 text-center text-[10px] text-muted-foreground">
+              <kbd className="rounded border border-border bg-muted px-1 font-bold">Enter</kbd> confirmar ·{" "}
+              <kbd className="rounded border border-border bg-muted px-1 font-bold">ESC</kbd> cancelar
+            </p>
+          </div>
+          <DialogFooter className="border-t border-border px-6 py-3">
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={closeServicoPreco}>
+              Cancelar
+            </Button>
+            <Button size="sm" className="rounded-xl" onClick={confirmServicoPreco}>
+              <Check className="mr-1.5 h-3.5 w-3.5" />
+              {servicoPrecoTarget?.kind === "edit" ? "Salvar preço" : "Adicionar serviço"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <PdvClientePicker
         open={clientePickerOpen}
