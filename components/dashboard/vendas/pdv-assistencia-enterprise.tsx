@@ -194,6 +194,14 @@ type CartLine = {
   custoUnitario?: number | null
   /** Código de barras/SKU do item avulso → fila "Produtos a cadastrar". */
   codigoAvulso?: string | null
+  /**
+   * Metadata de Serviço real (model `Servico`), preservada na linha. Fase 1 apenas
+   * carrega/vende o serviço — garantia/termo automáticos são deferidos (Fases 2-4 da
+   * AUDITORIA_PDV_ASSISTENCIA_SERVICOS_RAPIDOS_001). `custoUnitario` já flui para a venda.
+   */
+  serviceId?: string
+  warrantyDays?: number
+  serviceTerms?: string
 }
 
 type PayMethod = "dinheiro" | "pix" | "credito" | "debito" | "a_prazo" | "multiplo"
@@ -239,6 +247,58 @@ function computeMerchandiseDiscount(
 
 function newLineId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+// ─── Serviços reais (model `Servico`) ─────────────────────────────────────────
+
+/** Linha de serviço real vinda de `GET /api/ops/servicos` (shape de `ServicoDTO`). */
+type ServicoApiRow = {
+  id: string
+  nome: string
+  categoria: string
+  custo: number
+  preco: number
+  garantia: number
+  termo: string
+  status: "Ativo" | "Inativo" | "Incompleto"
+}
+
+/** Item de catálogo da aba Serviços: superset de `PdvCatalogProduct` com a origem e metadata do serviço. */
+type PdvServicoCatalogItem = PdvCatalogProduct & {
+  /** `servico` = model `Servico` real; `produto` = Produto legado com category="Servicos" (compat). */
+  catalogSource: "servico" | "produto"
+  serviceId?: string
+  custoServico?: number
+  warrantyDays?: number
+  serviceTerms?: string
+  /** Categoria real do serviço (para exibir como descrição curta). */
+  servicoCategoria?: string
+}
+
+/** Serviço não tem controle de estoque — sentinela alto (≥999) evita qualquer bloqueio por estoque. */
+const SERVICO_STOCK_SENTINEL = 999_999
+
+/**
+ * Normaliza uma linha de `Servico` real para item de catálogo do PDV Assistência.
+ * O `id` é uma linha VIRTUAL (`__avulso__svc-…`) para que a venda finalize sem
+ * exigir produto no estoque e sem tocar `MovimentacaoEstoque` — reaproveitando o
+ * caminho de linha virtual já suportado por `finalizeSaleTransaction`. `category`
+ * fixado em "Servicos" herda o comportamento "sem controle de estoque".
+ */
+function normalizeServicoRow(s: ServicoApiRow): PdvServicoCatalogItem {
+  return {
+    id: avulsoInventoryId(`svc-${s.id}`),
+    name: s.nome,
+    price: Number.isFinite(s.preco) ? s.preco : 0,
+    stock: SERVICO_STOCK_SENTINEL,
+    category: "Servicos",
+    catalogSource: "servico",
+    serviceId: s.id,
+    custoServico: Number.isFinite(s.custo) ? s.custo : 0,
+    warrantyDays: Math.max(0, Math.trunc(s.garantia ?? 0)),
+    serviceTerms: s.termo ?? "",
+    servicoCategoria: s.categoria && s.categoria !== "—" ? s.categoria : "",
+  }
 }
 
 // ─── QuickCard ────────────────────────────────────────────────────────────────
@@ -311,6 +371,64 @@ function QuickCard({
             ? "bg-muted/60 text-muted-foreground/40"
             : "bg-primary/10 text-primary opacity-0 group-hover:opacity-100"
         )}>
+          <Plus className="h-3.5 w-3.5" />
+        </span>
+      </div>
+    </Card>
+  )
+}
+
+// ─── ServicoCard — card da aba Serviços (catálogo real do model `Servico`) ────
+
+function ServicoCard({
+  item,
+  onAdd,
+}: {
+  item: PdvServicoCatalogItem
+  onAdd: (item: PdvServicoCatalogItem) => void
+}) {
+  const semPreco = !(item.price > 0)
+  const descricao = item.servicoCategoria?.trim() || ""
+  const garantia = item.warrantyDays ?? 0
+
+  return (
+    <Card
+      className={cn(
+        "group cursor-pointer rounded-2xl border border-border bg-card p-4 shadow-sm",
+        "transition-all duration-150",
+        "hover:border-primary/30 hover:bg-accent/60 hover:shadow-md",
+        "active:scale-[0.97] active:shadow-sm",
+      )}
+      onClick={() => onAdd(item)}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
+          {descricao && (
+            <p className="mt-0.5 truncate text-[10px] font-medium text-muted-foreground">{descricao}</p>
+          )}
+        </div>
+        <Badge
+          variant="secondary"
+          className="shrink-0 rounded-xl px-2 py-0.5 text-xs font-bold tabular-nums"
+        >
+          {semPreco ? "sem preço" : brl(item.price)}
+        </Badge>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <Badge
+            variant="outline"
+            className="shrink-0 rounded-lg border-primary/30 px-1.5 py-0 text-[9px] font-semibold text-primary"
+          >
+            <Wrench className="mr-1 h-2.5 w-2.5" />
+            Serviço
+          </Badge>
+          {garantia > 0 && (
+            <span className="truncate text-[10px] text-muted-foreground">Garantia padrão: {garantia} dias</span>
+          )}
+        </div>
+        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary opacity-0 transition-all duration-150 group-hover:opacity-100">
           <Plus className="h-3.5 w-3.5" />
         </span>
       </div>
@@ -833,6 +951,41 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       }
     })
   }, [inventory])
+
+  // ── Serviços reais (model `Servico`) — catálogo da aba Serviços ──────────────
+  // Leitura-only via /api/ops/servicos (reaproveita `listServicos`), escopada à
+  // loja ativa. Sem loja ativa não busca (política multi-loja, sem fallback loja-1).
+  const [servicosRows, setServicosRows] = useState<ServicoApiRow[]>([])
+  const [servicosLoaded, setServicosLoaded] = useState(false)
+  useEffect(() => {
+    const lj = storeIdKey
+    if (!lj) {
+      setServicosRows([])
+      setServicosLoaded(true)
+      return
+    }
+    let cancelled = false
+    setServicosLoaded(false)
+    fetch(`/api/ops/servicos?lojaId=${encodeURIComponent(lj)}`, {
+      credentials: "include",
+      headers: { "x-assistec-loja-id": lj },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { items?: ServicoApiRow[] } | null) => {
+        if (cancelled) return
+        setServicosRows(Array.isArray(j?.items) ? j.items : [])
+        setServicosLoaded(true)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setServicosRows([])
+        setServicosLoaded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [storeIdKey])
+
   const inputRef = useRef<HTMLInputElement | null>(null)
   const customerInputRef = useRef<HTMLInputElement | null>(null)
   const { toast } = useToast()
@@ -920,17 +1073,28 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   // ── Custom atalhos ────────────────────────────────────────────────────────────
   const [localAtalhos, setLocalAtalhos] = useState<AtalhoSaved[]>([])
 
-  const quickServices = useMemo(() => {
-    const result: PdvCatalogProduct[] = []
-    for (const a of localAtalhos) {
-      if (a.ativo === false) continue
-      const live = realCatalog.find((p) => p.id === a.id)
-      if (!live) continue
-      const cat = a.categoria ?? live.category ?? "Outros"
-      if (cat === "Servicos") result.push(live)
+  // Aba Serviços: serviços REAIS do model `Servico` (fonte principal) + produtos
+  // legados com category="Servicos", se existirem (compatibilidade). Não depende
+  // mais só de Produto.category — GOAL PDV-ASSISTENCIA-SERVICOS-REAIS-001.
+  const servicosCatalog = useMemo<PdvServicoCatalogItem[]>(() => {
+    const reais = servicosRows
+      .filter((s) => s.status !== "Inativo")
+      .map(normalizeServicoRow)
+    const compat: PdvServicoCatalogItem[] = realCatalog
+      .filter((p) => p.category === "Servicos")
+      .map((p) => ({ ...p, catalogSource: "produto" as const, servicoCategoria: "" }))
+    return [...reais, ...compat]
+  }, [servicosRows, realCatalog])
+
+  // Metadata só dos serviços REAIS (por id virtual) — usada para enriquecer a
+  // linha do carrinho ao adicionar. Produtos-compat seguem o fluxo normal de produto.
+  const servicoMetaById = useMemo(() => {
+    const m = new Map<string, PdvServicoCatalogItem>()
+    for (const it of servicosCatalog) {
+      if (it.catalogSource === "servico") m.set(it.id, it)
     }
-    return result
-  }, [localAtalhos, realCatalog])
+    return m
+  }, [servicosCatalog])
 
   const quickProducts = useMemo(() => {
     const result: PdvCatalogProduct[] = []
@@ -1402,6 +1566,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct) => {
+    const svcMeta = servicoMetaById.get(item.id)
+    // Serviço real sem preço padrão: não inventar valor (Fase 1 não tem override por linha).
+    if (svcMeta && !(item.price > 0)) {
+      toast({
+        title: "Serviço sem preço",
+        description: "Este serviço não possui preço padrão. Use item avulso ou cadastre um preço.",
+        variant: "destructive",
+      })
+      return
+    }
     const isService = item.category === "Servicos"
     if (!isService && item.stock < 999) {
       const reserved = cartQtyByInventoryId[item.id] ?? 0
@@ -1428,7 +1602,25 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
       }
       const nid = newLineId()
       flashId = nid
-      return [...prev, { lineId: nid, inventoryId: item.id, title: item.name, price: item.price, qty: 1 }]
+      return [
+        ...prev,
+        {
+          lineId: nid,
+          inventoryId: item.id,
+          title: item.name,
+          price: item.price,
+          qty: 1,
+          ...(svcMeta
+            ? {
+                // Custo do serviço: preserva quando informado (>0); 0/ausente = desconhecido.
+                custoUnitario: (svcMeta.custoServico ?? 0) > 0 ? svcMeta.custoServico : null,
+                serviceId: svcMeta.serviceId,
+                warrantyDays: svcMeta.warrantyDays,
+                serviceTerms: svcMeta.serviceTerms,
+              }
+            : {}),
+        },
+      ]
     })
     if (isModoRapido && flashId) {
       setRapidoFlashLineId(flashId)
@@ -1982,7 +2174,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
                       value="servicos"
                       className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
                     >
-                      Serviços ({quickServices.length})
+                      Serviços ({servicosCatalog.length})
                     </TabsTrigger>
                     <TabsTrigger
                       value="produtos"
@@ -2019,25 +2211,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
               >
                   <ScrollArea className="min-h-0 flex-1">
                     <div className="grid gap-3 pr-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {!hydratedFromDb ? (
+                      {!servicosLoaded ? (
                         Array.from({ length: 6 }).map((_, i) => (
                           <div key={i} className="h-24 animate-pulse rounded-2xl border border-border bg-muted/40" />
                         ))
-                      ) : quickServices.length > 0 ? (
-                        quickServices.map((p) => <QuickCard key={p.id} item={p} onAdd={addItem} reservedQty={cartQtyByInventoryId[p.id] ?? 0} />)
+                      ) : servicosCatalog.length > 0 ? (
+                        servicosCatalog.map((p) => <ServicoCard key={p.id} item={p} onAdd={addItem} />)
                       ) : (
                         <div className="col-span-full flex flex-col items-center gap-3 py-12 text-center">
-                          <p className="text-sm text-muted-foreground">Nenhum atalho de serviço configurado.</p>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="gap-1.5 rounded-xl"
-                            onClick={() => setEditAtalhosOpen(true)}
-                          >
-                            <Zap className="h-3.5 w-3.5" />
-                            Editar Atalhos
-                          </Button>
+                          <p className="text-sm text-muted-foreground">Nenhum serviço cadastrado. Cadastre serviços no Cadastros HUB.</p>
                         </div>
                       )}
                     </div>
