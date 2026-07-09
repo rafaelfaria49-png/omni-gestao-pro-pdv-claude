@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { fiscalInputFromBody, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
+import { catalogoInputFromBody, mergeCatalogoAparelhosIntoMetadata } from "@/lib/catalogo-aparelhos/produto-metadata"
 import { duplicateProductResponse, PRODUTO_DUP_SELECT } from "@/lib/produtos/duplicate-product"
 
 export const runtime = "nodejs"
@@ -162,6 +163,20 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
         baseMeta = current?.metadata ?? {}
       }
       data.metadata = mergeProdutoFiscalIntoMetadata(baseMeta, fiscalInput) as Prisma.InputJsonValue
+    }
+
+    // Catálogo de Aparelhos (MVP): merge ADITIVO em `metadata.catalogoAparelhos`, reusando o
+    // metadata já resolvido (fiscal) ou buscando o atual. Ausente = preserva; null = limpa.
+    const catalogoInput = catalogoInputFromBody(raw)
+    if (catalogoInput !== undefined) {
+      let baseMeta: unknown = {}
+      if (data.metadata !== undefined && data.metadata !== Prisma.DbNull) {
+        baseMeta = data.metadata
+      } else {
+        const current = await prisma.produto.findFirst({ where: { id, storeId }, select: { metadata: true } })
+        baseMeta = current?.metadata ?? {}
+      }
+      data.metadata = mergeCatalogoAparelhosIntoMetadata(baseMeta, catalogoInput) as Prisma.InputJsonValue
     }
 
     if (Object.keys(data).length === 0) {

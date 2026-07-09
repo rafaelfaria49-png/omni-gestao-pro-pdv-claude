@@ -3,6 +3,7 @@ import { Prisma } from "@/generated/prisma"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { fiscalInputFromBody, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
+import { catalogoInputFromBody, mergeCatalogoAparelhosIntoMetadata } from "@/lib/catalogo-aparelhos/produto-metadata"
 import { duplicateProductResponse, PRODUTO_DUP_SELECT } from "@/lib/produtos/duplicate-product"
 
 export const runtime = "nodejs"
@@ -153,6 +154,14 @@ export async function POST(req: Request) {
     if (fiscalInput) {
       const baseMeta = metadata && metadata !== Prisma.DbNull ? metadata : {}
       metadata = mergeProdutoFiscalIntoMetadata(baseMeta, fiscalInput) as Prisma.InputJsonValue
+    }
+
+    // Catálogo de Aparelhos (MVP): grava `metadata.catalogoAparelhos` de forma ADITIVA,
+    // sem tocar em SKU/EAN/estoque/preço. Ausente = não grava; null = limpa.
+    const catalogoInput = catalogoInputFromBody(raw)
+    if (catalogoInput !== undefined) {
+      const baseMeta = metadata && metadata !== Prisma.DbNull ? metadata : {}
+      metadata = mergeCatalogoAparelhosIntoMetadata(baseMeta, catalogoInput) as Prisma.InputJsonValue
     }
 
     if (!name) return badRequest('Campo "name" é obrigatório')

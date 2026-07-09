@@ -86,6 +86,12 @@ import {
   stripAutoCodigoPrefixes,
   buildProdutoFormCodigos,
 } from "@/lib/produtos/produto-form-codigos"
+import {
+  ProdutoCompatibilidadeAparelhos,
+  emptyCompatibilidade,
+  type CompatibilidadeValue,
+} from "@/components/dashboard/estoque/produto-compatibilidade-aparelhos"
+import type { CatalogoAparelhosMetadata } from "@/lib/catalogo-aparelhos/produto-metadata"
 
 interface Product {
   id: string
@@ -185,6 +191,15 @@ const origensOptions = [
   { value: "8", label: "8 - Nacional (Conteúdo Importação > 70%)" },
 ]
 
+/** Rótulo legível para um model_key salvo (fallback quando não temos o nome canônico). */
+function humanizeModelKey(key: string): string {
+  return key
+    .split("_")
+    .filter(Boolean)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ")
+}
+
 export type VoiceStockHint = {
   key: number
   searchQuery?: string
@@ -234,6 +249,11 @@ export function GestaoProdutos({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [formData, setFormData] = useState<Omit<Product, "id">>(emptyProduct)
+  // CATALOGO-APARELHOS-METADATA-MVP-001 — seção "Compatibilidade com aparelhos".
+  const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade())
+  // true após carregar (ou zerar) o catálogo salvo na edição — evita limpar por engano
+  // quando um fetch falha (só envia `null` de limpeza se de fato carregamos o estado).
+  const catalogoLoadedRef = useRef(false)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [importFeedback, setImportFeedback] = useState<string>("")
   const [chaveAcesso, setChaveAcesso] = useState("")
@@ -522,9 +542,44 @@ export function GestaoProdutos({
     valorEstoque: products.reduce((acc, p) => acc + (p.precoCusto * p.estoqueAtual), 0),
   }
 
+  // Reidrata a seção de compatibilidade a partir do metadata salvo (edição).
+  const loadCatalogoAparelhos = useCallback(
+    async (dbId: string) => {
+      try {
+        const res = await fetch(`/api/catalogo/aparelhos/produto/${encodeURIComponent(dbId)}`, {
+          credentials: "include",
+          headers: { [ASSISTEC_LOJA_HEADER]: lojaHeader },
+          cache: "no-store",
+        })
+        if (!res.ok) return // não marca "carregado": evita limpar por engano ao salvar
+        const data = (await res.json().catch(() => null)) as {
+          catalogoAparelhos?: CatalogoAparelhosMetadata | null
+        } | null
+        const c = data?.catalogoAparelhos
+        if (c && Array.isArray(c.deviceModelKeys) && c.deviceModelKeys.length > 0) {
+          setCatalogoValue({
+            models: c.deviceModelKeys.map((k) => ({ modelKey: k, canonicalName: humanizeModelKey(k), brand: "" })),
+            aliases: Array.isArray(c.deviceAliases) ? c.deviceAliases : [],
+            status: c.compatibilityStatus,
+            types: Array.isArray(c.compatibilityTypes) ? c.compatibilityTypes : [],
+            notes: typeof c.notes === "string" ? c.notes : "",
+          })
+        }
+        catalogoLoadedRef.current = true
+      } catch {
+        /* rede falhou: mantém vazio e NÃO marca carregado (não limpa ao salvar) */
+      }
+    },
+    [lojaHeader],
+  )
+
   const handleOpenModal = (product?: Product) => {
+    setCatalogoValue(emptyCompatibilidade())
+    catalogoLoadedRef.current = false
     if (product) {
       setEditingProduct(product)
+      const dbId = product.dbId || product.id
+      if (dbId) void loadCatalogoAparelhos(dbId)
       setFormData({
         nome: product.nome,
         sku: product.sku ? stripAutoCodigoPrefixes(product.sku) : "",
@@ -601,6 +656,8 @@ export function GestaoProdutos({
       setRelampagoImageDataUrl(null)
       setRelampagoAudioBlob(null)
       setIaSyncLoading(false)
+      setCatalogoValue(emptyCompatibilidade())
+      catalogoLoadedRef.current = false
       setActiveTab("geral")
       setIsModalOpen(true)
   }
@@ -653,6 +710,23 @@ export function GestaoProdutos({
         "Content-Type": "application/json",
         [ASSISTEC_LOJA_HEADER]: lojaHeader,
       }
+      // CATALOGO-APARELHOS-METADATA-MVP-001 — vínculo de aparelhos → metadata.catalogoAparelhos.
+      // Ausente (undefined) = não toca no catálogo salvo; `null` = limpa explicitamente (só
+      // quando de fato carregamos o estado na edição, para não apagar por engano).
+      const catalogoModelKeys = catalogoValue.models.map((m) => m.modelKey)
+      const catalogoAparelhos =
+        catalogoModelKeys.length > 0
+          ? {
+              deviceModelKeys: catalogoModelKeys,
+              deviceAliases: catalogoValue.aliases,
+              compatibilityStatus: catalogoValue.status,
+              compatibilityTypes: catalogoValue.types,
+              notes: catalogoValue.notes,
+              source: "manual" as const,
+            }
+          : editingProduct && catalogoLoadedRef.current
+            ? null
+            : undefined
       const payload = {
         name: nome,
         stock: Math.max(0, Math.floor(Number(formData.estoqueAtual) || 0)),
@@ -668,6 +742,7 @@ export function GestaoProdutos({
         cest: formData.cest?.trim() || "",
         cfop: formData.cfop?.trim() || "",
         origemMercadoria: formData.origemMercadoria?.trim() || "",
+        ...(catalogoAparelhos !== undefined ? { catalogoAparelhos } : {}),
       }
       const res = editingProduct
         ? await fetch(
@@ -1801,11 +1876,21 @@ export function GestaoProdutos({
           )}
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
-            <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsList className="grid w-full grid-cols-4 mb-4">
               <TabsTrigger value="geral">Dados Gerais</TabsTrigger>
+              <TabsTrigger value="compatibilidade">Compatibilidade</TabsTrigger>
               <TabsTrigger value="fiscal">Dados Fiscais</TabsTrigger>
               <TabsTrigger value="controle">Controle</TabsTrigger>
             </TabsList>
+
+            {/* Aba Compatibilidade com aparelhos (CATALOGO-APARELHOS-METADATA-MVP-001) */}
+            <TabsContent value="compatibilidade" className="space-y-6">
+              <ProdutoCompatibilidadeAparelhos
+                value={catalogoValue}
+                onChange={setCatalogoValue}
+                lojaHeader={lojaHeader}
+              />
+            </TabsContent>
 
             {/* Aba Dados Gerais */}
             <TabsContent value="geral" className="space-y-6">
