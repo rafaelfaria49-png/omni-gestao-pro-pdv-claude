@@ -15,6 +15,17 @@ import {
   type ExistingProdutoLite,
 } from "@/lib/produtos/duplicate-product";
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
+import {
+  classificarBarcode,
+  fabricaProvedorPadrao,
+  lerEnvBarcode,
+  memoLookupGlobal,
+  resolverCodigoBarrasCore,
+  type ProdutoNormalizado,
+  type ProvedorId,
+  type ResultadoCadeia,
+  type TentativaLookup,
+} from "@/lib/barcode-lookup";
 
 export type CadastrosKpiIcon =
   | "Users"
@@ -1927,5 +1938,112 @@ export async function listLojasCadastros(): Promise<LojaDTO[]> {
       ativa: true,
     }
   })
+}
+
+// ── Lookup externo por código de barras (GOAL 004A) ───────────────────────────
+// Camada server-side: contrato + orquestrador + adapter Cosmos.
+// Não salva produto, não altera metadata, não altera UI.
+// Código interno 20–29 nunca vai a provedor externo (D08).
+
+export type ResolverCodigoBarrasResult =
+  | { ok: false; status: "INVALID"; message: string }
+  | {
+      ok: true;
+      status: "INTERNO";
+      gtin: string;
+      formato: GtinFormato;
+      mensagem: string;
+      tentativas: TentativaLookup[];
+    }
+  | {
+      ok: true;
+      status: "encontrado";
+      provedor: ProvedorId;
+      dados: ProdutoNormalizado;
+      tentativas: TentativaLookup[];
+    }
+  | { ok: true; status: "nao_encontrado"; tentativas: TentativaLookup[] }
+  | {
+      ok: true;
+      status: "limite_excedido";
+      tentativas: TentativaLookup[];
+      resetEm?: string;
+    }
+  | {
+      ok: true;
+      status: "erro_config";
+      mensagem: string;
+      tentativas: TentativaLookup[];
+    }
+  | { ok: true; status: "erro"; tentativas: TentativaLookup[] };
+
+function mapearResultadoCadeia(resultado: ResultadoCadeia): ResolverCodigoBarrasResult {
+  switch (resultado.status) {
+    case "encontrado":
+      return {
+        ok: true,
+        status: "encontrado",
+        provedor: resultado.provedor,
+        dados: resultado.dados,
+        tentativas: resultado.tentativas,
+      };
+    case "nao_encontrado":
+      return { ok: true, status: "nao_encontrado", tentativas: resultado.tentativas };
+    case "limite_excedido":
+      return {
+        ok: true,
+        status: "limite_excedido",
+        tentativas: resultado.tentativas,
+        resetEm: resultado.resetEm?.toISOString(),
+      };
+    case "erro_config":
+      return {
+        ok: true,
+        status: "erro_config",
+        mensagem: resultado.mensagem,
+        tentativas: resultado.tentativas,
+      };
+    case "erro":
+      return { ok: true, status: "erro", tentativas: resultado.tentativas };
+  }
+}
+
+/**
+ * Resolve um código de barras contra a cadeia de provedores externos (GOAL 004A).
+ *
+ * - Valida GTIN via helper do GOAL 003.
+ * - Recusa código inválido.
+ * - Recusa prefixo interno 20–29 para lookup externo (resposta honesta sem tentativa).
+ * - Chama o orquestrador pluggable; retorna resultado + tentativas.
+ * - Não salva produto; não altera metadata; não altera UI.
+ * - Chaves de API ficam server-side; nunca vão ao client/bundle/logs.
+ */
+export async function resolverCodigoBarras(
+  _storeId: string,
+  rawBarcode: string,
+): Promise<ResolverCodigoBarrasResult> {
+  const classificacao = classificarBarcode(rawBarcode);
+  if (classificacao.tipo === "INVALID") {
+    return { ok: false, status: "INVALID", message: classificacao.message };
+  }
+
+  if (classificacao.tipo === "INTERNO") {
+    return {
+      ok: true,
+      status: "INTERNO",
+      gtin: classificacao.gtin,
+      formato: classificacao.formato,
+      mensagem: classificacao.mensagem,
+      tentativas: [],
+    };
+  }
+
+  const env = lerEnvBarcode();
+  const { resultado } = await resolverCodigoBarrasCore(env, {
+    criarProvedor: fabricaProvedorPadrao,
+    memo: memoLookupGlobal,
+  }, classificacao.gtin);
+
+  return mapearResultadoCadeia(resultado);
 }
 
