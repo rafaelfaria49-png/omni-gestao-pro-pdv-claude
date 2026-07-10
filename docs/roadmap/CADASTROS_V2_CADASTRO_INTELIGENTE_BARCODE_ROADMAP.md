@@ -106,7 +106,7 @@ Regra de merge (D04): dois níveis, aditivo. Nenhum writer substitui namespace a
 | # | GOAL (ID) | Entrega | Gate de entrada | Status |
 |---|---|---|---|---|
 | 1 | CADASTROS-V2-PRODUTO-DUPLICIDADE-E-FISCAL-PARITY-002 (FASE 0) | Auditoria read-only do caminho de escrita | — | ☐ pendente |
-| 2 | CADASTROS-V2-PRODUTO-DUPLICIDADE-E-FISCAL-PARITY-002B | Paridade defensiva + fim dos campos-fantasma | Relatório FASE 0 aprovado por escrito | ☐ pendente |
+| 2 | CADASTROS-V2-PRODUTO-DUPLICIDADE-E-FISCAL-PARITY-002B | Paridade defensiva + fim dos campos-fantasma | Relatório FASE 0 aprovado por escrito | ☑ concluído (2026-07-09) |
 | 3 | CADASTROS-V2-PRODUTO-BARCODE-LOCAL-SCAN-003 | Bipagem real + validação GTIN + busca local | 002B aprovado | ☐ pendente |
 | 4 | CADASTROS-V2-BARCODE-LOOKUP-COSMOS-004A | Contrato + orquestrador + adapter Cosmos | 003 aprovado · conta Cosmos + termos verificados (D19) | ☐ pendente |
 | 5 | CADASTROS-V2-BARCODE-LOOKUP-UPCITEMDB-004B | Adapter UPCitemdb + prova da cadeia | 004A aprovado · termos UPCitemdb verificados (D19) | ☐ pendente |

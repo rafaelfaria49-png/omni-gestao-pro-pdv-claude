@@ -4,6 +4,16 @@ import { Prisma, StatusOrdemServico } from "@/generated/prisma";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { withPrismaSafe } from "@/lib/prisma";
+import {
+  mergeProdutoMetadataTwoLevels,
+  normalizeProdutoIdentifier,
+  produtoStockPatch,
+} from "@/lib/cadastros/produto-upsert-metadata";
+import {
+  duplicateProductDetails,
+  PRODUTO_DUP_SELECT,
+  type ExistingProdutoLite,
+} from "@/lib/produtos/duplicate-product";
 
 export type CadastrosKpiIcon =
   | "Users"
@@ -1457,6 +1467,17 @@ export async function listProdutosPaginado(
   }
 }
 
+export type UpsertProdutoResult =
+  | { ok: true; id: string }
+  | {
+      ok: false;
+      type: "DUPLICATE_PRODUCT";
+      field: "barcode" | "sku";
+      message: string;
+      produto?: ExistingProdutoLite;
+    }
+  | { ok: false; type: "VALIDATION_ERROR" | "NOT_FOUND" | "SAVE_ERROR"; message: string };
+
 export async function upsertProduto(
   storeId: string,
   input: {
@@ -1474,44 +1495,61 @@ export async function upsertProduto(
     active?: boolean;
     metadata?: Record<string, unknown> | null;
   }
-): Promise<{ id: string }> {
+): Promise<UpsertProdutoResult> {
   const nome = input.nome.trim();
-  if (!nome) throw new Error("Nome obrigatório");
+  if (!nome) return { ok: false, type: "VALIDATION_ERROR", message: "Informe o nome do produto." };
 
-  let metadataPart: { metadata?: Prisma.InputJsonValue | typeof Prisma.DbNull } = {};
-  if (input.metadata !== undefined) {
-    if (input.id) {
-      if (input.metadata === null) {
-        metadataPart = { metadata: Prisma.DbNull };
-      } else {
-        const row = await prisma.produto.findFirst({
-          where: { id: input.id, storeId },
-          select: { metadata: true },
-        });
-        const prev = produtoMetadataRecord(row?.metadata) ?? {};
-        metadataPart = {
-          metadata: { ...prev, ...input.metadata } as Prisma.InputJsonValue,
-        };
-      }
-    } else if (input.metadata !== null) {
-      metadataPart = { metadata: input.metadata as Prisma.InputJsonValue };
-    }
+  const sku = normalizeProdutoIdentifier(input.sku);
+  const barcode = normalizeProdutoIdentifier(input.barras);
+  const duplicateContext = input.id ? "update" : "create";
+  const findDuplicate = async (): Promise<ExistingProdutoLite | null> => {
+    const duplicateFields: Prisma.ProdutoWhereInput[] = [];
+    if (sku) duplicateFields.push({ sku });
+    if (barcode) duplicateFields.push({ barcode });
+    if (duplicateFields.length === 0) return null;
+    return prisma.produto.findFirst({
+      where: {
+        storeId,
+        ...(input.id ? { id: { not: input.id } } : {}),
+        OR: duplicateFields,
+      },
+      select: PRODUTO_DUP_SELECT,
+    });
+  };
+
+  let existing: { id: string; metadata: unknown } | null = null;
+  if (input.id) {
+    existing = await prisma.produto.findFirst({
+      where: { id: input.id, storeId },
+      select: { id: true, metadata: true },
+    });
+    if (!existing) return { ok: false, type: "NOT_FOUND", message: "Produto não encontrado." };
   }
+
+  const duplicate = await findDuplicate();
+  if (duplicate) {
+    return { ok: false, ...duplicateProductDetails(duplicate, sku, barcode, { context: duplicateContext }) };
+  }
+
+  // Em edição, null é omissão deliberada: preserva o JSON existente e nunca o apaga.
+  const metadataPart: { metadata?: Prisma.InputJsonValue } = input.id
+    ? input.metadata && existing
+      ? { metadata: mergeProdutoMetadataTwoLevels(existing.metadata, input.metadata) as Prisma.InputJsonValue }
+      : {}
+    : input.metadata
+      ? { metadata: input.metadata as Prisma.InputJsonValue }
+      : {};
 
   // Stock: só inclui no patch quando o caller enviou número inteiro >= 0.
   // `undefined` significa "não tocar" — evita zerar estoque ao editar outros campos.
   // (Bug histórico: `Math.trunc(input.estoque ?? 0)` sobrescrevia stock com 0
   // em qualquer chamada sem estoque, ex.: botão Ativar/Inativar antes do fix.)
-  const stockPatch: { stock?: number } = {};
-  if (input.estoque !== undefined) {
-    const n = Math.trunc(Number(input.estoque));
-    if (Number.isFinite(n) && n >= 0) stockPatch.stock = n;
-  }
+  const stockPatch = produtoStockPatch(input.estoque);
 
   const common = {
     name: nome,
-    sku: (input.sku ?? "").trim() || null,
-    barcode: (input.barras ?? "").trim() || null,
+    sku,
+    barcode,
     category: (input.categoria ?? "").trim() || null,
     brand: (input.marca ?? "").trim(),
     supplierName: (input.fornecedor ?? "").trim(),
@@ -1524,25 +1562,39 @@ export async function upsertProduto(
     ...metadataPart,
   };
 
-  if (input.id) {
-    const existing = await prisma.produto.findFirst({ where: { id: input.id, storeId }, select: { id: true } });
-    if (!existing) throw new Error("Produto não encontrado");
-    const updated = await prisma.produto.update({
-      where: { id: input.id },
-      data: common,
+  try {
+    if (input.id) {
+      const updated = await prisma.produto.update({
+        where: { id: input.id },
+        data: common,
+        select: { id: true },
+      });
+      revalidatePath("/dashboard/cadastros-v2");
+      return { ok: true, id: updated.id };
+    }
+
+    // Create: estoque inicial é o que o caller enviou; quando ausente, default 0.
+    const created = await prisma.produto.create({
+      data: { ...common, storeId, stock: stockPatch.stock ?? 0 },
       select: { id: true },
     });
     revalidatePath("/dashboard/cadastros-v2");
-    return updated;
+    return { ok: true, id: created.id };
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const conflicted = await findDuplicate().catch(() => null);
+      if (conflicted) {
+        return { ok: false, ...duplicateProductDetails(conflicted, sku, barcode, { context: duplicateContext }) };
+      }
+      return {
+        ok: false,
+        type: "DUPLICATE_PRODUCT",
+        field: barcode ? "barcode" : "sku",
+        message: "SKU ou código de barras já pertence a outro produto desta loja.",
+      };
+    }
+    return { ok: false, type: "SAVE_ERROR", message: "Não foi possível salvar o produto. Tente novamente." };
   }
-
-  // Create: estoque inicial é o que o caller enviou; quando ausente, default 0.
-  const created = await prisma.produto.create({
-    data: { ...common, storeId, stock: stockPatch.stock ?? 0 },
-    select: { id: true },
-  });
-  revalidatePath("/dashboard/cadastros-v2");
-  return created;
 }
 
 export type DeleteProdutoResult =

@@ -26,6 +26,14 @@ import {
   type CatalogoAparelhosMetadata,
 } from "@/lib/catalogo-aparelhos/produto-metadata";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
+import { normalizeProdutoTags } from "@/lib/cadastros/produto-upsert-metadata";
+import { toast } from "sonner";
+
+function metadataRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
 
 /* ── Combobox com autocomplete + "criar novo" (Categoria/Marca) ── */
 /**
@@ -252,6 +260,7 @@ export function ProductAIModal({
     ncm?: string;
     /** `Produto.metadata.cest` */
     cest?: string;
+    metadata?: Record<string, unknown> | null;
   }>;
   productId?: string;
 }) {
@@ -264,7 +273,6 @@ export function ProductAIModal({
   const nomeRef = useRef<HTMLInputElement | null>(null);
   const skuRef = useRef<HTMLInputElement | null>(null);
   const barrasRef = useRef<HTMLInputElement | null>(null);
-  const modeloRef = useRef<HTMLInputElement | null>(null);
   const fornecedorRef = useRef<HTMLInputElement | null>(null);
   const estoqueRef = useRef<HTMLInputElement | null>(null);
   const custoRef = useRef<HTMLInputElement | null>(null);
@@ -280,6 +288,10 @@ export function ProductAIModal({
 
   const [ncmDisplay, setNcmDisplay] = useState(initial?.ncm ?? "");
   const [cestDisplay, setCestDisplay] = useState(initial?.cest ?? "");
+  const [modeloCompativel, setModeloCompativel] = useState("");
+  const [tributacao, setTributacao] = useState("");
+  const [tags, setTags] = useState("");
+  const [descricao, setDescricao] = useState("");
 
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — estado da seção "Compatibilidade com aparelhos".
   const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade());
@@ -290,7 +302,14 @@ export function ProductAIModal({
     setMarca(initial?.marca ?? "");
     setNcmDisplay(initial?.ncm ?? "");
     setCestDisplay(initial?.cest ?? "");
-  }, [productId, initial?.categoria, initial?.marca, initial?.ncm, initial?.cest]);
+    const metadata = metadataRecord(initial?.metadata);
+    const atributos = metadataRecord(metadata?.atributos);
+    const fiscal = metadataRecord(metadata?.fiscal);
+    setModeloCompativel(typeof atributos?.modeloCompativel === "string" ? atributos.modeloCompativel : "");
+    setTributacao(typeof fiscal?.tributacao === "string" ? fiscal.tributacao : "");
+    setTags(Array.isArray(atributos?.tags) ? atributos.tags.filter((tag): tag is string => typeof tag === "string").join(", ") : "");
+    setDescricao(typeof atributos?.descricao === "string" ? atributos.descricao : "");
+  }, [productId, initial?.categoria, initial?.marca, initial?.ncm, initial?.cest, initial?.metadata]);
 
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reidrata a compatibilidade ao abrir/editar.
   // Lê o endpoint read-only já publicado (GET /api/catalogo/aparelhos/produto/[id]). Sempre
@@ -517,7 +536,7 @@ export function ProductAIModal({
                 loading={optsLoading}
               />
             </Field>
-            <Field label="Modelo compatível"><Input ref={modeloRef} defaultValue="" placeholder="Ex.: iPhone 11" /></Field>
+            <Field label="Modelo compatível"><Input value={modeloCompativel} onChange={(event) => setModeloCompativel(event.target.value)} placeholder="Ex.: iPhone 11" /></Field>
             <Field label="Fornecedor"><Input ref={fornecedorRef} defaultValue={initial?.fornecedor ?? ""} placeholder="Nome do fornecedor" /></Field>
             <Field label="Estoque atual"><Input ref={estoqueRef} type="number" min={0} step={1} defaultValue={initial?.estoque !== undefined ? String(initial.estoque) : (productId ? "" : "0")} placeholder="0" /></Field>
             <Field label="Garantia (dias)"><Input ref={garantiaRef} defaultValue={initial?.garantia !== undefined ? String(initial.garantia) : ""} placeholder="90" /></Field>
@@ -561,10 +580,10 @@ export function ProductAIModal({
                 title={cestDisplay ? "CEST persistido em metadata" : "Não informado"}
               />
             </Field>
-            <Field label="Tributação"><Select defaultValue=""><option value="">—</option><option>Simples</option><option>Lucro Presumido</option><option>Lucro Real</option></Select></Field>
-            <Field label="Tags" span={2}><Input placeholder="Separadas por vírgula — Ex.: apple, tela, original" /></Field>
+            <Field label="Tributação"><Select value={tributacao} onChange={(event) => setTributacao(event.target.value)}><option value="">—</option><option>Simples</option><option>Lucro Presumido</option><option>Lucro Real</option></Select></Field>
+            <Field label="Tags" span={2}><Input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="Separadas por vírgula — Ex.: apple, tela, original" /></Field>
             <Field label="Descrição" span={2}>
-              <Textarea rows={3} placeholder="Descrição comercial (opcional)" />
+              <Textarea value={descricao} onChange={(event) => setDescricao(event.target.value)} rows={3} placeholder="Descrição comercial (opcional)" />
             </Field>
           </div>
         </div>
@@ -648,7 +667,7 @@ export function ProductAIModal({
                   const estoqueNum = estoqueStr ? parseInt(estoqueStr, 10) : NaN;
                   const estoque = Number.isFinite(estoqueNum) && estoqueNum >= 0 ? estoqueNum : undefined;
                   if (estoqueStr && estoque === undefined) {
-                    window.alert("Estoque inválido — informe um número inteiro ≥ 0.");
+                    toast.error("Estoque inválido — informe um número inteiro ≥ 0.");
                     return;
                   }
                   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — vínculo de aparelhos → metadata.catalogoAparelhos.
@@ -667,7 +686,8 @@ export function ProductAIModal({
                           source: "manual",
                         })
                       : null;
-                  await upsertProduto(storeId, {
+                  const tributacaoNormalizada = tributacao.trim();
+                  const result = await upsertProduto(storeId, {
                     id: productId,
                     nome: (nomeRef.current?.value ?? "").trim(),
                     sku: (skuRef.current?.value ?? "").trim(),
@@ -687,13 +707,31 @@ export function ProductAIModal({
                         source,
                       },
                       ...(catalogoAparelhos ? { catalogoAparelhos } : {}),
+                      atributos: {
+                        descricao: descricao.trim(),
+                        tags: normalizeProdutoTags(tags),
+                        modeloCompativel: modeloCompativel.trim(),
+                      },
+                      ...(tributacaoNormalizada
+                        ? {
+                            fiscal: {
+                              tributacao: tributacaoNormalizada,
+                              tributacaoOrigem: "operador",
+                              tributacaoAtualizadoEm: new Date().toISOString(),
+                            },
+                          }
+                        : {}),
                     },
                   });
+                  if (!result.ok) {
+                    toast.error(result.message);
+                    return;
+                  }
                   onSaved?.();
                   onClose();
-                  window.alert("Salvo com sucesso");
+                  toast.success("Produto salvo com sucesso.");
                 } catch (e) {
-                  window.alert(e instanceof Error ? e.message : "Não foi possível salvar produto");
+                  toast.error("Não foi possível salvar o produto. Tente novamente.");
                 }
               });
             }}

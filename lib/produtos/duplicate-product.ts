@@ -18,8 +18,34 @@ export type ExistingProdutoLite = {
   stock: number
 }
 
+export type DuplicateProductDetails = {
+  type: "DUPLICATE_PRODUCT"
+  field: "barcode" | "sku"
+  message: string
+  produto: ExistingProdutoLite
+}
+
 /** Select Prisma para reconsultar o item já cadastrado (apenas dados mínimos e seguros). */
 export const PRODUTO_DUP_SELECT = { id: true, name: true, sku: true, barcode: true, stock: true } as const
+
+/** Dados estruturados compartilhados por API e Server Action. */
+export function duplicateProductDetails(
+  existing: ExistingProdutoLite,
+  sku?: string | null,
+  barcode?: string | null,
+  opts?: { context?: "create" | "update" },
+): DuplicateProductDetails {
+  const matchedBarcode = !!barcode && !!existing.barcode && existing.barcode === barcode
+  const field = matchedBarcode ? "barcode" : "sku"
+  const codeLabel = matchedBarcode ? "código de barras (EAN)" : "código/SKU"
+  const item = opts?.context === "update" ? "outro item" : "um item"
+  return {
+    type: "DUPLICATE_PRODUCT",
+    field,
+    message: `Produto já cadastrado. Encontramos ${item} com este mesmo ${codeLabel} nesta loja.`,
+    produto: existing,
+  }
+}
 
 /**
  * Resposta 409 estruturada quando o item já existe na loja (mesmo SKU/código ou mesmo
@@ -35,23 +61,11 @@ export function duplicateProductResponse(
   barcode?: string,
   opts?: { context?: "create" | "update" },
 ) {
-  const matchedBarcode = !!barcode && !!existing.barcode && existing.barcode === barcode
-  const field = matchedBarcode ? "barcode" : "sku"
-  const codeLabel = matchedBarcode ? "código de barras (EAN)" : "código/SKU"
-  const item = opts?.context === "update" ? "outro item" : "um item"
+  const duplicate = duplicateProductDetails(existing, sku, barcode, opts)
   return NextResponse.json(
     {
       error: "Produto já cadastrado",
-      type: "DUPLICATE_PRODUCT",
-      field,
-      message: `Produto já cadastrado. Encontramos ${item} com este mesmo ${codeLabel} nesta loja.`,
-      produto: {
-        id: existing.id,
-        name: existing.name,
-        sku: existing.sku,
-        barcode: existing.barcode,
-        stock: existing.stock,
-      },
+      ...duplicate,
     },
     { status: 409 },
   )

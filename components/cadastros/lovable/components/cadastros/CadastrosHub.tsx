@@ -1949,7 +1949,7 @@ function ProdutosPanel({
                           onClick={() => {
                             startSaving(async () => {
                               try {
-                                await upsertProduto(storeId, {
+                                const result = await upsertProduto(storeId, {
                                   id: p.id,
                                   nome: p.nome,
                                   sku: p.sku === "—" ? "" : p.sku,
@@ -1963,9 +1963,14 @@ function ProdutosPanel({
                                   garantia: p.garantia,
                                   active: p.status !== "Ativo",
                                 });
+                                if (!result.ok) {
+                                  toast.error(result.message);
+                                  return;
+                                }
+                                toast.success(p.status === "Ativo" ? "Produto inativado." : "Produto reativado.");
                                 await refresh();
                               } catch (e) {
-                                window.alert(e instanceof Error ? e.message : "Não foi possível atualizar status");
+                                toast.error("Não foi possível atualizar o status do produto.");
                               }
                             });
                           }}
@@ -2215,6 +2220,7 @@ function ProdutosPanel({
                 custo: editing.custo,
                 preco: editing.preco,
                 garantia: editing.garantia,
+                metadata: editing.metadata,
                 ncm:
                   editing.metadata?.ncm != null && String(editing.metadata.ncm).trim()
                     ? String(editing.metadata.ncm).trim()
