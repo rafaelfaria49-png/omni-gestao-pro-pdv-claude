@@ -16,6 +16,7 @@ import {
   BarChart3,
   ClipboardCheck,
   Calculator,
+  ScanSearch,
   type LucideIcon,
 } from "lucide-react"
 import { financeiroV2Enabled, roadmapHubsEnabled } from "@/lib/feature-flags"
@@ -90,6 +91,13 @@ export const hubsNavItems: DashboardNavItem[] = [
     to: "/dashboard/estoque/inventario",
     label: "Inventário Assistido",
     icon: ClipboardCheck,
+    visible: (p) => p.hubs.cadastros,
+  },
+  {
+    to: "/dashboard/catalogo-aparelhos",
+    label: "Catálogo de Aparelhos",
+    icon: ScanSearch,
+    badge: "Consulta",
     visible: (p) => p.hubs.cadastros,
   },
   { to: "/dashboard/vendas-hub", label: "Vendas HUB", icon: ShoppingCart, visible: (p) => p.hubs.vendas },

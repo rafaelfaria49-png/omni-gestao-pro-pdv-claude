@@ -75,11 +75,12 @@ const nextConfig = {
    * catalogo-loader.ts`) lê os CSVs de `docs/catalogo/seeds` via `fs`/`process.cwd()`. Esse
    * caminho é dinâmico e NÃO é detectável pelo file-tracing do Next, então em produção
    * serverless (Vercel) os seeds ficariam de fora do bundle e a busca degradaria para vazio.
-   * Incluímos os CSVs manualmente na ÚNICA rota que os lê (a busca de aparelhos). A rota
-   * `produto/[id]` lê do Prisma, não dos CSVs — por isso não precisa do include.
+   * Incluímos os CSVs manualmente em CADA rota que os lê (busca de aparelhos e busca
+   * de películas). A rota `produto/[id]` lê do Prisma, não dos CSVs — sem include.
    */
   outputFileTracingIncludes: {
     "/api/catalogo/aparelhos/search": ["./docs/catalogo/seeds/*.csv"],
+    "/api/catalogo/peliculas/search": ["./docs/catalogo/seeds/*.csv"],
   },
   typescript: {
     ignoreBuildErrors: true,
