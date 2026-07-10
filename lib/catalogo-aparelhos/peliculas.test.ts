@@ -61,10 +61,17 @@ describe("seeds reais — grupos de película", () => {
     expect(grupos.some((g) => g.members.some((m) => m.modelKey === "apple_iphone_14"))).toBe(true)
   })
 
-  it("modelo sem grupo de película retorna vazio honesto", () => {
-    // iPhone 12 Mini existe no catálogo (planilha de capinhas) mas não tem película.
+  it("iPhone 12 Mini retorna a relação p002 sem promover compatibilidade", () => {
     expect(index.modelByKey.has("apple_iphone_12_mini")).toBe(true)
-    expect(getPeliculasPorModelo(index, "apple_iphone_12_mini")).toEqual([])
+    const grupos = getPeliculasPorModelo(index, "apple_iphone_12_mini")
+    const grupo = grupos.find((g) => g.groupKey === "pelicula_p002")
+
+    expect(grupo).toBeTruthy()
+    expect(grupo!.members.map((m) => m.modelKey)).toContain("apple_iphone_13_mini")
+    expect(grupo!.status).toBe("precisa_testar")
+    expect(grupo!.status).not.toBe("confirmado_fornecedor")
+    expect(grupo!.confidence).toBe("baixa")
+    expect(grupo!.requiresDryTest).toBe(true)
   })
 
   it("modelKey desconhecido/vazio retorna vazio sem lançar", () => {

@@ -1715,3 +1715,38 @@ xiaomi_mi_13t_pro__13tpro,xiaomi_mi_13t_pro,13TPro,13TPRO,common_typo,false,fals
 xiaomi_mi_13t_pro__mi_13t_pro,xiaomi_mi_13t_pro,Mi 13T Pro,MI 13T PRO,marketplace_name,false,false,alta,Variante comercial sem fabricante principal.
 xiaomi_mi_13t_pro__xiaomi_13t_pro,xiaomi_mi_13t_pro,Xiaomi 13T Pro,XIAOMI 13T PRO,brand_short,false,false,alta,Alias informado na planilha de capinhas.
 xiaomi_mi_13t_pro__xiaomi_mi_13t_pro,xiaomi_mi_13t_pro,Xiaomi Mi 13T Pro,XIAOMI MI 13T PRO,canonical,false,false,alta,Nome canonico.
+infinix_hot_10__hot_10,infinix_hot_10,Hot 10,HOT 10,short,false,false,alta,Alias curto da linha Infinix Hot; nao inclui variantes Play/Lite/i.
+infinix_hot_10__hot10,infinix_hot_10,Hot10,HOT10,common_typo,false,false,alta,Forma sem espaco; nao inclui variantes Play/Lite/i.
+infinix_hot_10__infinix_hot_10,infinix_hot_10,Infinix Hot 10,INFINIX HOT 10,canonical,false,false,alta,Nome canonico do modelo base.
+infinix_hot_11__hot_11,infinix_hot_11,Hot 11,HOT 11,short,false,false,alta,Alias curto da linha Infinix Hot; nao inclui variantes Play/S.
+infinix_hot_11__hot11,infinix_hot_11,Hot11,HOT11,common_typo,false,false,alta,Forma sem espaco; nao inclui variantes Play/S.
+infinix_hot_11__infinix_hot_11,infinix_hot_11,Infinix Hot 11,INFINIX HOT 11,canonical,false,false,alta,Nome canonico do modelo base.
+infinix_hot_12__hot_12,infinix_hot_12,Hot 12,HOT 12,short,false,false,alta,Alias curto da linha Infinix Hot; nao inclui variantes Play/i/Pro.
+infinix_hot_12__hot12,infinix_hot_12,Hot12,HOT12,common_typo,false,false,alta,Forma sem espaco; nao inclui variantes Play/i/Pro.
+infinix_hot_12__infinix_hot_12,infinix_hot_12,Infinix Hot 12,INFINIX HOT 12,canonical,false,false,alta,Nome canonico do modelo base.
+infinix_hot_20__hot_20,infinix_hot_20,Hot 20,HOT 20,short,false,false,alta,Alias curto da linha Infinix Hot; nao inclui variantes 5G/i/Play.
+infinix_hot_20__hot20,infinix_hot_20,Hot20,HOT20,common_typo,false,false,alta,Forma sem espaco; nao inclui variantes 5G/i/Play.
+infinix_hot_20__infinix_hot_20,infinix_hot_20,Infinix Hot 20,INFINIX HOT 20,canonical,false,false,alta,Nome canonico do modelo base.
+infinix_hot_30__hot_30,infinix_hot_30,Hot 30,HOT 30,short,false,false,alta,Alias curto da linha Infinix Hot; nao inclui variantes i/Play.
+infinix_hot_30__hot30,infinix_hot_30,Hot30,HOT30,common_typo,false,false,alta,Forma sem espaco; nao inclui variantes i/Play.
+infinix_hot_30__infinix_hot_30,infinix_hot_30,Infinix Hot 30,INFINIX HOT 30,canonical,false,false,alta,Nome canonico do modelo base.
+infinix_hot_40__hot_40,infinix_hot_40,Hot 40,HOT 40,short,false,false,alta,Alias curto da linha Infinix Hot; nao inclui variantes i/Pro.
+infinix_hot_40__hot40,infinix_hot_40,Hot40,HOT40,common_typo,false,false,alta,Forma sem espaco; nao inclui variantes i/Pro.
+infinix_hot_40__infinix_hot_40,infinix_hot_40,Infinix Hot 40,INFINIX HOT 40,canonical,false,false,alta,Nome canonico do modelo base.
+infinix_smart_8__infinix_smart_8,infinix_smart_8,Infinix Smart 8,INFINIX SMART 8,canonical,false,false,alta,Nome canonico do modelo base; Smart 8 HD permanece separado.
+infinix_smart_8__smart_8,infinix_smart_8,Smart 8,SMART 8,short,false,false,alta,Alias curto da linha Infinix Smart; nao inclui Smart 8 HD.
+infinix_smart_8__smart8,infinix_smart_8,Smart8,SMART8,common_typo,false,false,alta,Forma sem espaco; nao inclui Smart 8 HD.
+motorola_edge_40__edge_40,motorola_edge_40,Edge 40,EDGE 40,short,false,false,alta,Variante comercial sem fabricante principal.
+motorola_edge_40__edge40,motorola_edge_40,Edge40,EDGE40,common_typo,false,false,alta,Forma sem espaco informada na proposta revisada.
+motorola_edge_40__moto_edge_40,motorola_edge_40,Moto Edge 40,MOTO EDGE 40,commercial_variant,false,false,alta,Linha Moto + nome curto.
+motorola_edge_40__motorola_edge_40,motorola_edge_40,Motorola Edge 40,MOTOROLA EDGE 40,canonical,false,false,alta,Nome canonico.
+poco_c55__c55,poco_c55,C55,C55,short,true,true,media,Alias curto ambiguo; colide com Realme C55 e exige contexto de marca.
+poco_c55__poco_c55,poco_c55,POCO C55,POCO C55,canonical,false,false,alta,Nome canonico; variante apenas de caixa foi deduplicada pela normalizacao.
+poco_m5__m5,poco_m5,M5,M5,short,true,true,media,Alias curto ambiguo; exige contexto de marca POCO.
+poco_m5__poco_m5,poco_m5,POCO M5,POCO M5,canonical,false,false,alta,Nome canonico; variante apenas de caixa foi deduplicada pela normalizacao.
+realme_c21__c21,realme_c21,C21,C21,short,false,false,alta,Alias curto da linha Realme C.
+realme_c21__realme_c_21,realme_c21,Realme C 21,REALME C 21,common_typo,false,false,alta,Forma com espaco adicional informada na proposta revisada.
+realme_c21__realme_c21,realme_c21,Realme C21,REALME C21,canonical,false,false,alta,Nome canonico.
+tecno_spark_10__spark_10,tecno_spark_10,Spark 10,SPARK 10,short,false,false,alta,Alias curto da linha Tecno Spark; nao inclui variantes Pro/C.
+tecno_spark_10__spark10,tecno_spark_10,Spark10,SPARK10,common_typo,false,false,alta,Forma sem espaco; nao inclui variantes Pro/C.
+tecno_spark_10__tecno_spark_10,tecno_spark_10,Tecno Spark 10,TECNO SPARK 10,canonical,false,false,alta,Nome canonico do modelo base.

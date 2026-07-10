@@ -416,3 +416,15 @@ xiaomi_mi_11_lite,Xiaomi,Mi,Xiaomi Mi 11 Lite,11 Lite,Mi 11 Lite,,,base_pelicula
 xiaomi_mi_12_lite,Xiaomi,Mi,Xiaomi Mi 12 Lite,12 Lite,Mi 12 Lite,,,base_peliculas;planilha_capinhas,ativo,alta,
 xiaomi_mi_13t,Xiaomi,Mi,Xiaomi Mi 13T,13T,Mi 13T,,,base_peliculas;planilha_capinhas,ativo,alta,
 xiaomi_mi_13t_pro,Xiaomi,Mi,Xiaomi Mi 13T Pro,13T Pro,Mi 13T Pro,,,base_peliculas;planilha_capinhas,ativo,alta,
+infinix_hot_10,Infinix,Infinix Hot,Infinix Hot 10,Hot 10,Hot 10,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Modelo base sem grupo; variantes Play/Lite/i possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_11,Infinix,Infinix Hot,Infinix Hot 11,Hot 11,Hot 11,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Modelo base sem grupo; variantes Play/S possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_12,Infinix,Infinix Hot,Infinix Hot 12,Hot 12,Hot 12,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Modelo base sem grupo; variantes Play/i/Pro possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_20,Infinix,Infinix Hot,Infinix Hot 20,Hot 20,Hot 20,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Modelo base sem grupo; variantes 5G/i/Play possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_30,Infinix,Infinix Hot,Infinix Hot 30,Hot 30,Hot 30,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Modelo base sem grupo; variantes i/Play possuem frentes diferentes e devem permanecer explicitas.
+infinix_hot_40,Infinix,Infinix Hot,Infinix Hot 40,Hot 40,Hot 40,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Modelo base sem grupo; variantes i/Pro possuem frentes diferentes e devem permanecer explicitas.
+infinix_smart_8,Infinix,Infinix Smart,Infinix Smart 8,Smart 8,Smart 8,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Modelo base sem grupo; Smart 8 HD permanece separado e sem agrupamento automatico.
+motorola_edge_40,Motorola,Motorola Edge,Motorola Edge 40,Edge 40,Edge 40,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Tela pOLED com curvatura leve; pelicula especifica; nao agrupar automaticamente.
+poco_c55,POCO,POCO C,POCO C55,C55,C55,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Gemeo de projeto do Redmi 12C; alias C55 exige contexto de marca.
+poco_m5,POCO,POCO M,POCO M5,M5,M5,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Familia de tela ainda nao catalogada; pesquisar antes de agrupar; alias M5 exige contexto de marca.
+realme_c21,Realme,Realme C,Realme C21,C21,C21,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Modelo da familia C11/C20/C21; compatibilidade permanece sujeita a teste seco.
+tecno_spark_10,Tecno,Tecno Spark,Tecno Spark 10,Spark 10,Spark 10,,,proposta_expansao_peliculas_fable_001_revisada,novo,media,Modelo base sem grupo; variantes Pro/C possuem frentes diferentes e devem permanecer explicitas.
