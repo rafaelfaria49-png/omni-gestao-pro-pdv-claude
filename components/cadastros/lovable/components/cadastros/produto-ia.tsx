@@ -10,6 +10,7 @@ import {
   listCategorias,
   listCategoriasMarcasUsadasEmProduto,
   listMarcas,
+  lookupProdutoPorBarcodeLocal,
   upsertCategoria,
   upsertMarca,
   upsertProduto,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/catalogo-aparelhos/produto-metadata";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { normalizeProdutoTags } from "@/lib/cadastros/produto-upsert-metadata";
+import { validarGtin } from "@/lib/cadastros/gtin";
 import { toast } from "sonner";
 
 function metadataRecord(value: unknown): Record<string, unknown> | null {
@@ -34,6 +36,11 @@ function metadataRecord(value: unknown): Record<string, unknown> | null {
     ? (value as Record<string, unknown>)
     : null;
 }
+
+type BarcodeFeedback =
+  | { tone: "error"; message: string }
+  | { tone: "found"; message: string }
+  | { tone: "not-found"; message: string };
 
 /* ── Combobox com autocomplete + "criar novo" (Categoria/Marca) ── */
 /**
@@ -269,6 +276,7 @@ export function ProductAIModal({
   const [step, setStep] = useState(0);
   const [filled, setFilled] = useState(false);
   const [saving, startSaving] = useTransition();
+  const [lookingUpBarcode, startBarcodeLookup] = useTransition();
 
   const nomeRef = useRef<HTMLInputElement | null>(null);
   const skuRef = useRef<HTMLInputElement | null>(null);
@@ -278,6 +286,7 @@ export function ProductAIModal({
   const custoRef = useRef<HTMLInputElement | null>(null);
   const precoRef = useRef<HTMLInputElement | null>(null);
   const garantiaRef = useRef<HTMLInputElement | null>(null);
+  const barcodeScannerRef = useRef<HTMLInputElement | null>(null);
 
   // Categoria/Marca: cadastros controlados (dicionário) + texto livre p/ compat.
   const [categoria, setCategoria] = useState<string>(initial?.categoria ?? "");
@@ -292,6 +301,8 @@ export function ProductAIModal({
   const [tributacao, setTributacao] = useState("");
   const [tags, setTags] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [barcodeScan, setBarcodeScan] = useState("");
+  const [barcodeFeedback, setBarcodeFeedback] = useState<BarcodeFeedback | null>(null);
 
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — estado da seção "Compatibilidade com aparelhos".
   const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade());
@@ -310,6 +321,10 @@ export function ProductAIModal({
     setTags(Array.isArray(atributos?.tags) ? atributos.tags.filter((tag): tag is string => typeof tag === "string").join(", ") : "");
     setDescricao(typeof atributos?.descricao === "string" ? atributos.descricao : "");
   }, [productId, initial?.categoria, initial?.marca, initial?.ncm, initial?.cest, initial?.metadata]);
+
+  useEffect(() => {
+    if (open && source === "barcode") barcodeScannerRef.current?.focus();
+  }, [open, source]);
 
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reidrata a compatibilidade ao abrir/editar.
   // Lê o endpoint read-only já publicado (GET /api/catalogo/aparelhos/produto/[id]). Sempre
@@ -433,6 +448,43 @@ export function ProductAIModal({
     }, 450);
   };
 
+  const runBarcodeLocalLookup = () => {
+    const validation = validarGtin(barcodeScan);
+    if (!validation.valid) {
+      setBarcodeFeedback({ tone: "error", message: validation.message });
+      return;
+    }
+
+    // UPC-A fica canonicamente representado como EAN-13 no formulário; a busca também cobre
+    // cadastros legados que ainda guardam os 12 dígitos originais.
+    if (barrasRef.current) barrasRef.current.value = validation.gtin;
+    startBarcodeLookup(async () => {
+      try {
+        const result = await lookupProdutoPorBarcodeLocal(storeId, barcodeScan);
+        if (!result.ok) {
+          setBarcodeFeedback({ tone: "error", message: result.message });
+          return;
+        }
+        if (result.status === "FOUND") {
+          const sku = result.produto.sku ? ` · SKU ${result.produto.sku}` : "";
+          setBarcodeFeedback({
+            tone: "found",
+            message: `Produto já cadastrado nesta loja: ${result.produto.nome}${sku} · estoque ${result.produto.estoque}. O salvamento bloqueará duplicidade.`,
+          });
+          return;
+        }
+        setBarcodeFeedback({
+          tone: "not-found",
+          message: result.interno
+            ? "Código interno consultado somente nesta loja e não encontrado. Nenhuma busca externa será feita."
+            : "Código válido, mas não encontrado nesta loja. Preencha a ficha manualmente; nenhuma busca externa será feita nesta fase.",
+        });
+      } catch {
+        setBarcodeFeedback({ tone: "error", message: "Não foi possível consultar o cadastro local. Tente novamente." });
+      }
+    });
+  };
+
   const title = productId ? "Editar produto" : "Novo produto";
   return (
     <Modal open={open} onClose={onClose} title={title} subtitle="Fase 1: cadastro real no banco — fluxo IA abaixo ainda é simulado (sem OCR/voz)." size="xl">
@@ -471,20 +523,66 @@ export function ProductAIModal({
           <div className="mt-3 grid gap-2 md:grid-cols-[1fr_auto]">
             {source === "manual" && <Input placeholder="Ex.: Tela iPhone 11 Original" />}
             {source === "link" && <Input placeholder="https://produto.mercadolivre.com.br/…" />}
-            {source === "barcode" && <Input placeholder="7891234500011" />}
+            {source === "barcode" && (
+              <Input
+                ref={barcodeScannerRef}
+                value={barcodeScan}
+                onChange={(event) => {
+                  setBarcodeScan(event.target.value);
+                  setBarcodeFeedback(null);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter") return;
+                  event.preventDefault();
+                  runBarcodeLocalLookup();
+                }}
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder="Bipe ou digite EAN/GTIN e pressione Enter"
+                title="Busca somente no cadastro da loja atual"
+              />
+            )}
             {source === "image" && (
               <div className="rounded-lg border border-dashed border-border bg-background p-3 text-center text-xs text-muted-foreground">
                 Solte a imagem do produto aqui
               </div>
             )}
-            <button
-              disabled
-              title="Preenchimento automático por IA — em breve. Preencha os campos manualmente abaixo."
-              className="flex cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-40"
-            >
-              <Wand2 className="h-4 w-4" /> Preencher com IA · Em breve
-            </button>
+            {source === "barcode" ? (
+              <button
+                type="button"
+                onClick={runBarcodeLocalLookup}
+                disabled={lookingUpBarcode}
+                title="Consulta exclusivamente o cadastro local; nenhum provedor externo será chamado"
+                className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+              >
+                {lookingUpBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <Barcode className="h-4 w-4" />}
+                Buscar na loja
+              </button>
+            ) : (
+              <button
+                disabled
+                title="Preenchimento automático por IA — em breve. Preencha os campos manualmente abaixo."
+                className="flex cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground opacity-40"
+              >
+                <Wand2 className="h-4 w-4" /> Preencher com IA · Em breve
+              </button>
+            )}
           </div>
+
+          {source === "barcode" && barcodeFeedback && (
+            <div
+              role="status"
+              className={`mt-3 rounded-lg border p-3 text-xs ${
+                barcodeFeedback.tone === "error"
+                  ? "border-destructive/40 bg-destructive/10 text-destructive"
+                  : barcodeFeedback.tone === "found"
+                    ? "border-amber-500/40 bg-amber-500/10 text-foreground"
+                    : "border-primary/30 bg-background text-muted-foreground"
+              }`}
+            >
+              {barcodeFeedback.message}
+            </div>
+          )}
 
           {(running || filled) && (
             <div className="mt-4 space-y-2 rounded-lg border border-border bg-background p-3">
@@ -671,8 +769,8 @@ export function ProductAIModal({
                     return;
                   }
                   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — vínculo de aparelhos → metadata.catalogoAparelhos.
-                  // Só grava quando há modelo vinculado; vazio = OMITE a chave. upsertProduto faz shallow
-                  // merge com o metadata atual, então omitir preserva catalogoAparelhos/fiscal já salvos
+                  // Só grava quando há modelo vinculado; vazio = OMITE a chave. upsertProduto faz merge
+                  // aditivo em dois níveis, então omitir preserva catalogoAparelhos/fiscal já salvos
                   // (nunca apaga por engano). O saneamento reusa o contrato canônico já publicado.
                   const catalogoModelKeys = catalogoValue.models.map((m) => m.modelKey);
                   const catalogoAparelhos =

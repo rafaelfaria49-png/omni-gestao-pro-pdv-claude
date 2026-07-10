@@ -14,6 +14,7 @@ import {
   PRODUTO_DUP_SELECT,
   type ExistingProdutoLite,
 } from "@/lib/produtos/duplicate-product";
+import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
 
 export type CadastrosKpiIcon =
   | "Users"
@@ -1477,6 +1478,63 @@ export type UpsertProdutoResult =
       produto?: ExistingProdutoLite;
     }
   | { ok: false; type: "VALIDATION_ERROR" | "NOT_FOUND" | "SAVE_ERROR"; message: string };
+
+export type BarcodeLocalLookupResult =
+  | { ok: false; status: "INVALID" | "ERROR"; message: string }
+  | {
+      ok: true;
+      status: "FOUND";
+      gtin: string;
+      formato: GtinFormato;
+      interno: boolean;
+      produto: { id: string; nome: string; sku: string | null; barras: string | null; estoque: number; ativo: boolean };
+    }
+  | { ok: true; status: "NOT_FOUND"; gtin: string; formato: GtinFormato; interno: boolean };
+
+/**
+ * Consulta exclusivamente o cadastro da loja atual. Esta action não chama provedores,
+ * serviços de IA ou qualquer endpoint externo.
+ */
+export async function lookupProdutoPorBarcodeLocal(
+  storeId: string,
+  rawBarcode: string,
+): Promise<BarcodeLocalLookupResult> {
+  const validation = validarGtin(rawBarcode);
+  if (!validation.valid) return { ok: false, status: "INVALID", message: validation.message };
+
+  try {
+    const produto = await prisma.produto.findFirst({
+      where: { storeId, barcode: { in: validation.lookupCandidates } },
+      select: { id: true, name: true, sku: true, barcode: true, stock: true, active: true },
+    });
+    if (!produto) {
+      return {
+        ok: true,
+        status: "NOT_FOUND",
+        gtin: validation.gtin,
+        formato: validation.formato,
+        interno: validation.interno,
+      };
+    }
+    return {
+      ok: true,
+      status: "FOUND",
+      gtin: validation.gtin,
+      formato: validation.formato,
+      interno: validation.interno,
+      produto: {
+        id: produto.id,
+        nome: produto.name,
+        sku: produto.sku,
+        barras: produto.barcode,
+        estoque: produto.stock,
+        ativo: produto.active,
+      },
+    };
+  } catch {
+    return { ok: false, status: "ERROR", message: "Não foi possível consultar o cadastro local. Tente novamente." };
+  }
+}
 
 export async function upsertProduto(
   storeId: string,
