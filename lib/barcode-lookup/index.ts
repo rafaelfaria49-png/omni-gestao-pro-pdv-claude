@@ -20,6 +20,12 @@ export { resolverCadeia } from "./orquestrador"
 export { criarProvedorCosmos, normalizarCosmos } from "./provedores/cosmos"
 export type { CosmosDeps } from "./provedores/cosmos"
 export {
+  criarProvedorUpcItemdb,
+  extrairPrimeiroItemUpcItemdb,
+  normalizarItemUpcItemdb,
+} from "./provedores/upcitemdb"
+export type { UpcItemdbDeps } from "./provedores/upcitemdb"
+export {
   classificarBarcode,
   fabricaProvedorPadrao,
   lerEnvBarcode,

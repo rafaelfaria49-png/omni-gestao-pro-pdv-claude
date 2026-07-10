@@ -160,4 +160,82 @@ describe("resolverCodigoBarrasCore", () => {
     expect(resultado.tentativas).toHaveLength(1)
     expect(resultado.tentativas[0]).toMatchObject({ provedor: "cosmos", status: "encontrado" })
   })
+
+  it("PROVA DA CADEIA: cosmos nao_encontrado => upcitemdb encontrado (fallback)", async () => {
+    // 1ª chamada (cosmos): 404 => nao_encontrado
+    // 2ª chamada (upcitemdb): 200 + items => encontrado
+    fetchSpy
+      .mockResolvedValueOnce(mockResponse(404, { error: "not found" }))
+      .mockResolvedValueOnce(
+        mockResponse(200, {
+          code: "OK",
+          total: 1,
+          items: [{ title: "Produto UPC", brand: "Marca UPC" }],
+        }),
+      )
+
+    const env = { COSMOS_API_KEY: "fake-key", BARCODE_LOOKUP_PROVIDERS: "cosmos,upcitemdb" }
+    const { resultado } = await resolverCodigoBarrasCore(env, {
+      criarProvedor: fabricaProvedorPadrao,
+      memo,
+    }, GTIN_VALIDO) as { resultado: Extract<ResultadoCadeia, { status: "encontrado" }> }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+    expect(resultado.status).toBe("encontrado")
+    expect(resultado.provedor).toBe("upcitemdb")
+    expect(resultado.dados.nome).toBe("Produto UPC")
+    expect(resultado.dados.marca).toBe("Marca UPC")
+    // UPCitemdb jamais traz NCM/CEST (constraint fiscal)
+    expect(resultado.dados).not.toHaveProperty("ncm")
+    expect(resultado.dados).not.toHaveProperty("cest")
+    // Trace tem 2 tentativas: cosmos (nao_encontrado) + upcitemdb (encontrado)
+    expect(resultado.tentativas).toHaveLength(2)
+    expect(resultado.tentativas[0]).toMatchObject({ provedor: "cosmos", status: "nao_encontrado" })
+    expect(resultado.tentativas[1]).toMatchObject({ provedor: "upcitemdb", status: "encontrado" })
+  })
+
+  it("PROVA DA CADEIA: cosmos limite_excedido => upcitemdb encontrado (skip por memo)", async () => {
+    // 1ª chamada (cosmos): 429 => limite_excedido (memo marca cosmos como esgotado)
+    // 2ª chamada (upcitemdb): 200 + items => encontrado
+    fetchSpy
+      .mockResolvedValueOnce(mockResponse(429, { error: "rate limit" }))
+      .mockResolvedValueOnce(
+        mockResponse(200, {
+          code: "OK",
+          total: 1,
+          items: [{ title: "Fallback Product" }],
+        }),
+      )
+
+    const env = { COSMOS_API_KEY: "fake-key", BARCODE_LOOKUP_PROVIDERS: "cosmos,upcitemdb" }
+    const { resultado } = await resolverCodigoBarrasCore(env, {
+      criarProvedor: fabricaProvedorPadrao,
+      memo,
+    }, GTIN_VALIDO) as { resultado: Extract<ResultadoCadeia, { status: "encontrado" }> }
+
+    expect(resultado.status).toBe("encontrado")
+    expect(resultado.provedor).toBe("upcitemdb")
+    expect(resultado.tentativas).toHaveLength(2)
+    expect(resultado.tentativas[0]).toMatchObject({ provedor: "cosmos", status: "limite_excedido" })
+    expect(resultado.tentativas[1]).toMatchObject({ provedor: "upcitemdb", status: "encontrado" })
+  })
+
+  it("upcitemdb sozinho funciona sem COSMOS_API_KEY (FREE sem token)", async () => {
+    fetchSpy.mockResolvedValue(
+      mockResponse(200, {
+        code: "OK",
+        total: 1,
+        items: [{ title: "Produto Free" }],
+      }),
+    )
+    const env = { COSMOS_API_KEY: undefined, BARCODE_LOOKUP_PROVIDERS: "upcitemdb" }
+    const { resultado } = await resolverCodigoBarrasCore(env, {
+      criarProvedor: fabricaProvedorPadrao,
+      memo,
+    }, GTIN_VALIDO) as { resultado: Extract<ResultadoCadeia, { status: "encontrado" }> }
+
+    expect(resultado.status).toBe("encontrado")
+    expect(resultado.provedor).toBe("upcitemdb")
+    expect(resultado.dados.nome).toBe("Produto Free")
+  })
 })

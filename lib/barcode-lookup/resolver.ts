@@ -1,5 +1,6 @@
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin"
 import { criarProvedorCosmos } from "./provedores/cosmos"
+import { criarProvedorUpcItemdb } from "./provedores/upcitemdb"
 import { type MemoLookup } from "./memo"
 import { resolverCadeia } from "./orquestrador"
 import { lerOrdemProvedores, type ResultadoOrdem } from "./registry"
@@ -51,7 +52,8 @@ export function classificarBarcode(rawBarcode: string): BarcodeClassificado {
 /**
  * Fábrica padrão de provedores. Lê a chave de cada provedor da env.
  * - cosmos: requer COSMOS_API_KEY; senão => erro de config (não crash).
- * - upcitemdb / openfoodfacts: ainda não implementados (GOAL 004B/004C).
+ * - upcitemdb: FREE/trial sem chave; sempre disponível.
+ * - openfoodfacts: ainda não implementado (GOAL 004C opcional/futuro).
  */
 export function fabricaProvedorPadrao(
   id: ProvedorId,
@@ -64,7 +66,7 @@ export function fabricaProvedorPadrao(
     return criarProvedorCosmos({ apiKey: key, fetchImpl: opts?.fetchImpl })
   }
   if (id === "upcitemdb") {
-    return { erro: "Provedor upcitemdb ainda não implementado (GOAL 004B)." }
+    return criarProvedorUpcItemdb({ fetchImpl: opts?.fetchImpl })
   }
   if (id === "openfoodfacts") {
     return { erro: "Provedor openfoodfacts ainda não implementado (GOAL 004C)." }
