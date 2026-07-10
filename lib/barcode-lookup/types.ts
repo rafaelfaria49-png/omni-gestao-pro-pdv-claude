@@ -39,12 +39,21 @@ export interface ProvedorLookup {
 /** Status possível de uma tentativa registrada no trace. */
 export type StatusTentativa = "encontrado" | "nao_encontrado" | "limite_excedido" | "erro"
 
+/**
+ * Tipo seguro do erro de uma tentativa. União fechada — nunca carrega token,
+ * header, URL, stack trace ou body do provedor. `config` = fábrica do provedor
+ * falhou (ex.: chave ausente); os demais espelham ResultadoLookup.tipo.
+ */
+export type TipoErroTentativa = "timeout" | "rede" | "auth" | "parse" | "config"
+
 /** Entrada do trace de tentativas da cadeia. */
 export type TentativaLookup = {
   provedor: ProvedorId
   status: StatusTentativa
   /** ISO timestamp do momento da tentativa. */
   em: string
+  /** Presente apenas quando status === "erro". */
+  tipo?: TipoErroTentativa
 }
 
 /** Tipo do erro de configuração retornado por uma fábrica de provedor. */

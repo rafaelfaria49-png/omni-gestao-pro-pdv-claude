@@ -3,8 +3,10 @@ import type { ProdutoNormalizado, ProvedorLookup, ResultadoLookup } from "../typ
 /**
  * Adapter UPCitemdb (GOAL 004B).
  *
- * Endpoint FREE/trial: https://api.upcitemdb.com/prod/trial/lookup?barcode={gtin}
+ * Endpoint FREE/trial: https://api.upcitemdb.com/prod/trial/lookup?upc={gtin}
  * Auth: NENHUMA — FREE/trial não exige cadastro, token ou user_key.
+ * O parâmetro de query é `upc` (documentação oficial); `barcode` não é aceito
+ * pela API e resulta em 400 (GOAL 010).
  *
  * Limites (FREE/trial):
  * - 100 requests combinadas por dia.
@@ -134,7 +136,7 @@ export function criarProvedorUpcItemdb(deps?: UpcItemdbDeps): ProvedorLookup {
   return {
     id: "upcitemdb",
     async consultar(gtin: string, signal: AbortSignal): Promise<ResultadoLookup> {
-      const url = `${baseUrl}/prod/trial/lookup?barcode=${encodeURIComponent(gtin)}`
+      const url = `${baseUrl}/prod/trial/lookup?upc=${encodeURIComponent(gtin)}`
       try {
         const res = await fetchFn(url, {
           method: "GET",

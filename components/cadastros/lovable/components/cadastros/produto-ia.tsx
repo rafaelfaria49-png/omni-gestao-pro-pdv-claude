@@ -60,9 +60,21 @@ function nomeProvedor(provedor: "cosmos" | "upcitemdb" | "openfoodfacts"): strin
   return provedor === "cosmos" ? "Cosmos" : provedor === "upcitemdb" ? "UPCitemdb" : "Open Food Facts";
 }
 
-function resumoTentativas(tentativas: Array<{ provedor: string; status: string }>): string {
+/** União fechada vinda do servidor — nunca exibir texto livre do provedor. */
+const TIPOS_ERRO_SEGUROS = new Set(["timeout", "rede", "auth", "parse", "config"]);
+
+function resumoTentativas(tentativas: Array<{ provedor: string; status: string; tipo?: string }>): string {
   if (tentativas.length === 0) return "Sem tentativas externas registradas.";
-  return tentativas.map((tentativa) => `${nomeProvedor(tentativa.provedor as "cosmos" | "upcitemdb" | "openfoodfacts")}: ${tentativa.status}`).join(" · ");
+  return tentativas
+    .map((tentativa) => {
+      const nome = nomeProvedor(tentativa.provedor as "cosmos" | "upcitemdb" | "openfoodfacts");
+      const rotulo =
+        tentativa.status === "erro" && tentativa.tipo && TIPOS_ERRO_SEGUROS.has(tentativa.tipo)
+          ? `erro(${tentativa.tipo})`
+          : tentativa.status;
+      return `${nome}: ${rotulo}`;
+    })
+    .join(" · ");
 }
 
 function statusLookupAuditavel(result: ExternalBarcodeLookup["result"]): "encontrado" | "nao_encontrado" | "erro" {

@@ -142,6 +142,19 @@ describe("criarProvedorUpcItemdb", () => {
     }
   })
 
+  it("consulta /prod/trial/lookup com query param upc (não barcode)", async () => {
+    const fetchImpl = vi.fn(async () =>
+      mockResponse(200, { code: "OK", total: 1, items: [{ title: "X" }] }),
+    )
+    const provedor = criarProvedorUpcItemdb({ fetchImpl: fetchImpl as unknown as typeof fetch })
+    await provedor.consultar(GTIN, new AbortController().signal)
+    const calls = fetchImpl.mock.calls as unknown as [string, RequestInit][]
+    const url = calls[0][0]
+    expect(url).toBe(`https://api.upcitemdb.com/prod/trial/lookup?upc=${GTIN}`)
+    expect(url).toContain("?upc=")
+    expect(url).not.toContain("barcode=")
+  })
+
   it("não envia header de auth (FREE/trial sem token)", async () => {
     const fetchImpl = vi.fn(async () =>
       mockResponse(200, { code: "OK", total: 1, items: [{ title: "X" }] }),

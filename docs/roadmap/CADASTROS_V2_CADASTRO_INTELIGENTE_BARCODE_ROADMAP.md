@@ -79,7 +79,7 @@ metadata.barcodeLookup = {
   statusLookup: "encontrado" | "parcial" | "nao_encontrado" | "erro",
   sugestoes: { name?, brand?, category?, descricao?, ncm?, cest?, imagemUrl? },
   aplicado: { [campo]: "aceito" | "editado" | "descartado" },   // computado no save
-  tentativas: [{ provedor, status, em }]
+  tentativas: [{ provedor, status, em, tipo? }]   // tipo (GOAL 010): "timeout"|"rede"|"auth"|"parse"|"config", só quando status="erro"
 }
 ```
 
@@ -113,6 +113,7 @@ Regra de merge (D04): dois níveis, aditivo. Nenhum writer substitui namespace a
 | 6 | CADASTROS-V2-BARCODE-LOOKUP-OFF-004C | Adapter Open Food Facts | **OPCIONAL/FUTURO** — gatilho: dados do piloto mostrarem misses de mercearia | ☐ futuro |
 | 7 | CADASTROS-V2-PRODUTO-BARCODE-SUGESTOES-UI-005 | Sugestões revisáveis na UI + metadata auditável | 002B + 003 + 004A + 004B aprovados (004C não bloqueia) | ☑ concluído (2026-07-09) |
 | 8 | CADASTROS-V2-PRODUTO-BARCODE-E2E-DOCS-006 | E2E com hardware + documentação + roadmap atualizado | 005 aprovado | ☐ pendente |
+| 9 | CADASTROS-V2-BARCODE-PROD-LOOKUP-DIAG-FIX-010 | Fix produção: UPCitemdb usa `?upc=` (antes `?barcode=`, que a API rejeita) + tipo seguro de erro nas tentativas exibido na UI | 004B/005 em produção · erro observado na cadeia | ☑ concluído (2026-07-10) |
 
 Atualização de status: Claude Code pode atualizar **apenas esta tabela** ao concluir um GOAL (escrita permitida em todos os GOALs de implementação), mediante registro no relatório final.
 

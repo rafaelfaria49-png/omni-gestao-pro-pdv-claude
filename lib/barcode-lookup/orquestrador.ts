@@ -78,7 +78,7 @@ export async function resolverCadeia(
     // Constrói o provedor; erro de config não crasha.
     const provedorResult = deps.criarProvedor(id)
     if ("erro" in provedorResult) {
-      tentativas.push({ provedor: id, status: "erro", em: agoraIso(agora) })
+      tentativas.push({ provedor: id, status: "erro", em: agoraIso(agora), tipo: "config" })
       configErros.push(`${id}: ${provedorResult.erro}`)
       continue
     }
@@ -94,7 +94,12 @@ export async function resolverCadeia(
       clearTimeout(timeoutId)
     }
 
-    tentativas.push({ provedor: id, status: mapStatus(resultado), em: agoraIso(agora) })
+    tentativas.push({
+      provedor: id,
+      status: mapStatus(resultado),
+      em: agoraIso(agora),
+      ...(resultado.status === "erro" ? { tipo: resultado.tipo } : {}),
+    })
 
     if (resultado.status === "encontrado") {
       const saida: ResultadoCadeia = {
