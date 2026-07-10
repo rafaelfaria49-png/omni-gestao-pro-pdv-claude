@@ -5,7 +5,11 @@ import type { ProdutoNormalizado, ProvedorLookup, ResultadoLookup } from "../typ
  *
  * Endpoint: https://api.cosmos.bluesoft.com.br/gtins/{codigo}.json
  * Auth: header X-Cosmos-Token (chave server-side; nunca logada; nunca no client).
- * Header obrigatório: User-Agent: Cosmos-API-Request.
+ * Headers obrigatórios (doc oficial): User-Agent: Cosmos-API-Request e
+ * Content-Type: application/json.
+ * Token é normalizado com trim() no adapter (GOAL 011) — defesa em profundidade
+ * contra espaço/quebra de linha colado no painel de env; o trim primário e o
+ * erro_config de chave ausente vivem em fabricaProvedorPadrao (resolver.ts).
  *
  * Mapeamento de status:
  * - 200 + payload válido        => encontrado (ProdutoNormalizado)
@@ -150,11 +154,18 @@ function parseResetEm(res: { headers?: { get?: (name: string) => string | null }
 export function criarProvedorCosmos(deps: CosmosDeps): ProvedorLookup {
   const baseUrl = (deps.baseUrl ?? BASE_URL_DEFAULT).replace(/\/$/, "")
   const fetchFn = deps.fetchImpl ?? fetch
-  const apiKey = deps.apiKey
+  const apiKey = deps.apiKey.trim()
 
   return {
     id: "cosmos",
     async consultar(gtin: string, signal: AbortSignal): Promise<ResultadoLookup> {
+      if (!apiKey) {
+        // Chave vazia após trim: falha determinística sem gastar chamada externa.
+        // Chave ausente na env vira erro_config na fábrica (resolver.ts); no
+        // contrato ResultadoLookup deste adapter o caso se expressa como auth.
+        console.warn("[barcode-lookup] cosmos: token vazio após trim; consulta não enviada")
+        return { status: "erro", tipo: "auth" }
+      }
       const url = `${baseUrl}/gtins/${encodeURIComponent(gtin)}.json`
       try {
         const res = await fetchFn(url, {
@@ -162,12 +173,15 @@ export function criarProvedorCosmos(deps: CosmosDeps): ProvedorLookup {
           headers: {
             "X-Cosmos-Token": apiKey,
             "User-Agent": "Cosmos-API-Request",
+            "Content-Type": "application/json",
             Accept: "application/json",
           },
           signal,
         })
 
         if (res.status === 401 || res.status === 403) {
+          // Diagnóstico seguro: só o status HTTP — jamais token, headers ou body.
+          console.warn(`[barcode-lookup] cosmos: auth rejeitada (HTTP ${res.status})`)
           return { status: "erro", tipo: "auth" }
         }
         if (res.status === 429) {

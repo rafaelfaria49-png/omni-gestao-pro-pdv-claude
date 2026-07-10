@@ -114,6 +114,7 @@ Regra de merge (D04): dois níveis, aditivo. Nenhum writer substitui namespace a
 | 7 | CADASTROS-V2-PRODUTO-BARCODE-SUGESTOES-UI-005 | Sugestões revisáveis na UI + metadata auditável | 002B + 003 + 004A + 004B aprovados (004C não bloqueia) | ☑ concluído (2026-07-09) |
 | 8 | CADASTROS-V2-PRODUTO-BARCODE-E2E-DOCS-006 | E2E com hardware + documentação + roadmap atualizado | 005 aprovado | ☐ pendente |
 | 9 | CADASTROS-V2-BARCODE-PROD-LOOKUP-DIAG-FIX-010 | Fix produção: UPCitemdb usa `?upc=` (antes `?barcode=`, que a API rejeita) + tipo seguro de erro nas tentativas exibido na UI | 004B/005 em produção · erro observado na cadeia | ☑ concluído (2026-07-10) |
+| 10 | CADASTROS-V2-COSMOS-AUTH-PROD-DIAG-011 | Hardening Cosmos: trim defensivo do token no adapter, curto-circuito de token vazio, header Content-Type e aviso seguro (só status HTTP) em falha de auth | 010 em produção · `erro(auth)` observado no Cosmos | ☑ concluído (2026-07-10) |
 
 Atualização de status: Claude Code pode atualizar **apenas esta tabela** ao concluir um GOAL (escrita permitida em todos os GOALs de implementação), mediante registro no relatório final.
 

@@ -167,10 +167,48 @@ describe("criarProvedorCosmos", () => {
   })
 
   it("401/403 => status erro tipo auth", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     const fetchImpl = vi.fn(async () => mockResponse(401, { error: "unauthorized" }))
     const provedor = criarProvedorCosmos({ apiKey, fetchImpl })
     const res = await provedor.consultar("7891000053508", new AbortController().signal)
     expect(res).toEqual({ status: "erro", tipo: "auth" })
+    warnSpy.mockRestore()
+  })
+
+  it("normaliza token com espaço/quebra de linha antes de enviar (trim)", async () => {
+    const fetchImpl = vi.fn(async () => mockResponse(200, { description: "X" }))
+    const provedor = criarProvedorCosmos({
+      apiKey: "  token-teste \n",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    await provedor.consultar("7891000053508", new AbortController().signal)
+    const calls = fetchImpl.mock.calls as unknown as [string, RequestInit][]
+    const headers = calls[0][1].headers as Record<string, string>
+    expect(headers["X-Cosmos-Token"]).toBe("token-teste")
+    expect(headers["User-Agent"]).toBe("Cosmos-API-Request")
+    expect(headers["Content-Type"]).toBe("application/json")
+  })
+
+  it("token vazio após trim => erro auth sem chamada externa", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const fetchImpl = vi.fn(async () => mockResponse(200, { description: "X" }))
+    const provedor = criarProvedorCosmos({ apiKey: " \n ", fetchImpl })
+    const res = await provedor.consultar("7891000053508", new AbortController().signal)
+    expect(res).toEqual({ status: "erro", tipo: "auth" })
+    expect(fetchImpl).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it("aviso de auth rejeitada informa o status HTTP e não contém o token", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const fetchImpl = vi.fn(async () => mockResponse(403, { error: "forbidden" }))
+    const provedor = criarProvedorCosmos({ apiKey: "CHAVE-SECRETA-XYZ", fetchImpl })
+    const res = await provedor.consultar("7891000053508", new AbortController().signal)
+    expect(res).toEqual({ status: "erro", tipo: "auth" })
+    const warns = warnSpy.mock.calls.flat().join(" ")
+    expect(warns).toContain("403")
+    expect(warns).not.toContain("CHAVE-SECRETA-XYZ")
+    warnSpy.mockRestore()
   })
 
   it("erro de rede (fetch rejeita sem abort) => status erro tipo rede", async () => {
@@ -185,12 +223,16 @@ describe("criarProvedorCosmos", () => {
   it("nunca loga a chave de API", async () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {})
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     const fetchImpl = vi.fn(async () => mockResponse(500, {}))
     const provedor = criarProvedorCosmos({ apiKey: "CHAVE-SECRETA-XYZ", fetchImpl })
     await provedor.consultar("7891000053508", new AbortController().signal)
-    const allCalls = [...logSpy.mock.calls, ...errorSpy.mock.calls].flat().join(" ")
+    const allCalls = [...logSpy.mock.calls, ...errorSpy.mock.calls, ...warnSpy.mock.calls]
+      .flat()
+      .join(" ")
     expect(allCalls).not.toContain("CHAVE-SECRETA-XYZ")
     logSpy.mockRestore()
     errorSpy.mockRestore()
+    warnSpy.mockRestore()
   })
 })
