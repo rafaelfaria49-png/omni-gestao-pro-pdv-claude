@@ -11,9 +11,11 @@ import {
   listCategoriasMarcasUsadasEmProduto,
   listMarcas,
   lookupProdutoPorBarcodeLocal,
+  resolverCodigoBarras,
   upsertCategoria,
   upsertMarca,
   upsertProduto,
+  type ResolverCodigoBarrasResult,
 } from "@/app/actions/cadastros";
 // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — reaproveita a seção do Catálogo de Aparelhos
 // (mesma UI/guardrails do /dashboard/estoque) e o contrato de metadata já publicado.
@@ -28,7 +30,7 @@ import {
 } from "@/lib/catalogo-aparelhos/produto-metadata";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { normalizeProdutoTags } from "@/lib/cadastros/produto-upsert-metadata";
-import { validarGtin } from "@/lib/cadastros/gtin";
+import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
 import { toast } from "sonner";
 
 function metadataRecord(value: unknown): Record<string, unknown> | null {
@@ -41,6 +43,31 @@ type BarcodeFeedback =
   | { tone: "error"; message: string }
   | { tone: "found"; message: string }
   | { tone: "not-found"; message: string };
+
+type ExternalBarcodeLookup = {
+  gtin: string;
+  formato: GtinFormato;
+  consultadoEm: string;
+  result: Extract<ResolverCodigoBarrasResult, { ok: true }>;
+};
+
+type BarcodeSuggestionApplication = {
+  aplicadoEm: string;
+  camposAplicados: string[];
+};
+
+function nomeProvedor(provedor: "cosmos" | "upcitemdb" | "openfoodfacts"): string {
+  return provedor === "cosmos" ? "Cosmos" : provedor === "upcitemdb" ? "UPCitemdb" : "Open Food Facts";
+}
+
+function resumoTentativas(tentativas: Array<{ provedor: string; status: string }>): string {
+  if (tentativas.length === 0) return "Sem tentativas externas registradas.";
+  return tentativas.map((tentativa) => `${nomeProvedor(tentativa.provedor as "cosmos" | "upcitemdb" | "openfoodfacts")}: ${tentativa.status}`).join(" · ");
+}
+
+function statusLookupAuditavel(result: ExternalBarcodeLookup["result"]): "encontrado" | "nao_encontrado" | "erro" {
+  return result.status === "encontrado" || result.status === "nao_encontrado" ? result.status : "erro";
+}
 
 /* ── Combobox com autocomplete + "criar novo" (Categoria/Marca) ── */
 /**
@@ -277,6 +304,7 @@ export function ProductAIModal({
   const [filled, setFilled] = useState(false);
   const [saving, startSaving] = useTransition();
   const [lookingUpBarcode, startBarcodeLookup] = useTransition();
+  const [lookingUpExternalBarcode, startExternalBarcodeLookup] = useTransition();
 
   const nomeRef = useRef<HTMLInputElement | null>(null);
   const skuRef = useRef<HTMLInputElement | null>(null);
@@ -287,6 +315,7 @@ export function ProductAIModal({
   const precoRef = useRef<HTMLInputElement | null>(null);
   const garantiaRef = useRef<HTMLInputElement | null>(null);
   const barcodeScannerRef = useRef<HTMLInputElement | null>(null);
+  const barcodeLookupRequestRef = useRef(0);
 
   // Categoria/Marca: cadastros controlados (dicionário) + texto livre p/ compat.
   const [categoria, setCategoria] = useState<string>(initial?.categoria ?? "");
@@ -303,6 +332,10 @@ export function ProductAIModal({
   const [descricao, setDescricao] = useState("");
   const [barcodeScan, setBarcodeScan] = useState("");
   const [barcodeFeedback, setBarcodeFeedback] = useState<BarcodeFeedback | null>(null);
+  const [barcodeLocalNotFound, setBarcodeLocalNotFound] = useState<{ gtin: string; formato: GtinFormato } | null>(null);
+  const [externalBarcodeLookup, setExternalBarcodeLookup] = useState<ExternalBarcodeLookup | null>(null);
+  const [barcodeSuggestionApplication, setBarcodeSuggestionApplication] = useState<BarcodeSuggestionApplication | null>(null);
+  const [cosmosFiscalApplied, setCosmosFiscalApplied] = useState<{ ncm?: string; cest?: string } | null>(null);
 
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — estado da seção "Compatibilidade com aparelhos".
   const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade());
@@ -320,6 +353,13 @@ export function ProductAIModal({
     setTributacao(typeof fiscal?.tributacao === "string" ? fiscal.tributacao : "");
     setTags(Array.isArray(atributos?.tags) ? atributos.tags.filter((tag): tag is string => typeof tag === "string").join(", ") : "");
     setDescricao(typeof atributos?.descricao === "string" ? atributos.descricao : "");
+    setBarcodeScan("");
+    setBarcodeFeedback(null);
+    setBarcodeLocalNotFound(null);
+    setExternalBarcodeLookup(null);
+    setBarcodeSuggestionApplication(null);
+    setCosmosFiscalApplied(null);
+    barcodeLookupRequestRef.current += 1;
   }, [productId, initial?.categoria, initial?.marca, initial?.ncm, initial?.cest, initial?.metadata]);
 
   useEffect(() => {
@@ -449,8 +489,14 @@ export function ProductAIModal({
   };
 
   const runBarcodeLocalLookup = () => {
+    const requestId = ++barcodeLookupRequestRef.current;
+    const scannedBarcode = barcodeScan;
     const validation = validarGtin(barcodeScan);
     if (!validation.valid) {
+      setBarcodeLocalNotFound(null);
+      setExternalBarcodeLookup(null);
+      setBarcodeSuggestionApplication(null);
+      setCosmosFiscalApplied(null);
       setBarcodeFeedback({ tone: "error", message: validation.message });
       return;
     }
@@ -460,12 +506,21 @@ export function ProductAIModal({
     if (barrasRef.current) barrasRef.current.value = validation.gtin;
     startBarcodeLookup(async () => {
       try {
-        const result = await lookupProdutoPorBarcodeLocal(storeId, barcodeScan);
+        const result = await lookupProdutoPorBarcodeLocal(storeId, scannedBarcode);
+        if (requestId !== barcodeLookupRequestRef.current) return;
         if (!result.ok) {
+          setBarcodeLocalNotFound(null);
+          setExternalBarcodeLookup(null);
+          setBarcodeSuggestionApplication(null);
+          setCosmosFiscalApplied(null);
           setBarcodeFeedback({ tone: "error", message: result.message });
           return;
         }
         if (result.status === "FOUND") {
+          setBarcodeLocalNotFound(null);
+          setExternalBarcodeLookup(null);
+          setBarcodeSuggestionApplication(null);
+          setCosmosFiscalApplied(null);
           const sku = result.produto.sku ? ` · SKU ${result.produto.sku}` : "";
           setBarcodeFeedback({
             tone: "found",
@@ -473,16 +528,112 @@ export function ProductAIModal({
           });
           return;
         }
+        setExternalBarcodeLookup(null);
+        setBarcodeSuggestionApplication(null);
+        setCosmosFiscalApplied(null);
+        setBarcodeLocalNotFound(result.interno ? null : { gtin: result.gtin, formato: result.formato });
         setBarcodeFeedback({
           tone: "not-found",
           message: result.interno
             ? "Código interno consultado somente nesta loja e não encontrado. Nenhuma busca externa será feita."
-            : "Código válido, mas não encontrado nesta loja. Preencha a ficha manualmente; nenhuma busca externa será feita nesta fase.",
+            : "Código válido, mas não encontrado nesta loja. Você pode preencher manualmente ou buscar sugestões externas.",
         });
       } catch {
+        if (requestId !== barcodeLookupRequestRef.current) return;
+        setBarcodeLocalNotFound(null);
+        setExternalBarcodeLookup(null);
+        setBarcodeSuggestionApplication(null);
+        setCosmosFiscalApplied(null);
         setBarcodeFeedback({ tone: "error", message: "Não foi possível consultar o cadastro local. Tente novamente." });
       }
     });
+  };
+
+  const runExternalBarcodeLookup = () => {
+    if (!barcodeLocalNotFound) return;
+    const requestId = ++barcodeLookupRequestRef.current;
+    const localNotFound = barcodeLocalNotFound;
+    startExternalBarcodeLookup(async () => {
+      try {
+        const result = await resolverCodigoBarras(storeId, localNotFound.gtin);
+        if (requestId !== barcodeLookupRequestRef.current) return;
+        if (!result.ok) {
+          setBarcodeFeedback({ tone: "error", message: result.message });
+          return;
+        }
+        if (result.status === "INTERNO") {
+          setBarcodeFeedback({ tone: "not-found", message: result.mensagem });
+          return;
+        }
+        setBarcodeSuggestionApplication(null);
+        setCosmosFiscalApplied(null);
+        setExternalBarcodeLookup({
+          gtin: localNotFound.gtin,
+          formato: localNotFound.formato,
+          consultadoEm: new Date().toISOString(),
+          result,
+        });
+      } catch {
+        if (requestId !== barcodeLookupRequestRef.current) return;
+        setExternalBarcodeLookup({
+          gtin: localNotFound.gtin,
+          formato: localNotFound.formato,
+          consultadoEm: new Date().toISOString(),
+          result: { ok: true, status: "erro", tentativas: [] },
+        });
+      }
+    });
+  };
+
+  const applyExternalBarcodeSuggestions = () => {
+    if (!externalBarcodeLookup || externalBarcodeLookup.result.status !== "encontrado") return;
+
+    const { dados, provedor } = externalBarcodeLookup.result;
+    const camposAplicados: string[] = [];
+    const nomeAtual = nomeRef.current?.value.trim() ?? "";
+    if (dados.nome.trim() && !nomeAtual && nomeRef.current) {
+      nomeRef.current.value = dados.nome;
+      camposAplicados.push("nome");
+    }
+    if (dados.marca?.trim() && !marca.trim()) {
+      setMarca(dados.marca);
+      camposAplicados.push("marca");
+    }
+    if (dados.categoria?.trim() && !categoria.trim()) {
+      setCategoria(dados.categoria);
+      camposAplicados.push("categoria");
+    }
+    if (dados.descricao?.trim() && !descricao.trim()) {
+      setDescricao(dados.descricao);
+      camposAplicados.push("descricao");
+    }
+
+    const fiscalAplicado: { ncm?: string; cest?: string } = {};
+    if (provedor === "cosmos") {
+      if (dados.ncm?.trim() && !ncmDisplay.trim()) {
+        setNcmDisplay(dados.ncm);
+        fiscalAplicado.ncm = dados.ncm;
+        camposAplicados.push("ncm");
+      }
+      if (dados.cest?.trim() && !cestDisplay.trim()) {
+        setCestDisplay(dados.cest);
+        fiscalAplicado.cest = dados.cest;
+        camposAplicados.push("cest");
+      }
+    }
+
+    const camposAplicadosAntes = barcodeSuggestionApplication?.camposAplicados ?? [];
+    const camposAplicadosTotais = Array.from(new Set([...camposAplicadosAntes, ...camposAplicados]));
+    const aplicadoEm = barcodeSuggestionApplication?.aplicadoEm ?? new Date().toISOString();
+    if (Object.keys(fiscalAplicado).length > 0) {
+      setCosmosFiscalApplied((anterior) => ({ ...(anterior ?? {}), ...fiscalAplicado }));
+    }
+    setBarcodeSuggestionApplication({ aplicadoEm, camposAplicados: camposAplicadosTotais });
+    if (camposAplicados.length > 0) {
+      toast.success(`Sugestões aplicadas em ${camposAplicados.length} campo(s). Revise e salve manualmente.`);
+    } else {
+      toast.message("Os campos sugeridos já estão preenchidos e foram preservados. Nenhum produto foi salvo.");
+    }
   };
 
   const title = productId ? "Editar produto" : "Novo produto";
@@ -528,8 +679,13 @@ export function ProductAIModal({
                 ref={barcodeScannerRef}
                 value={barcodeScan}
                 onChange={(event) => {
+                  barcodeLookupRequestRef.current += 1;
                   setBarcodeScan(event.target.value);
                   setBarcodeFeedback(null);
+                  setBarcodeLocalNotFound(null);
+                  setExternalBarcodeLookup(null);
+                  setBarcodeSuggestionApplication(null);
+                  setCosmosFiscalApplied(null);
                 }}
                 onKeyDown={(event) => {
                   if (event.key !== "Enter") return;
@@ -551,8 +707,8 @@ export function ProductAIModal({
               <button
                 type="button"
                 onClick={runBarcodeLocalLookup}
-                disabled={lookingUpBarcode}
-                title="Consulta exclusivamente o cadastro local; nenhum provedor externo será chamado"
+                disabled={lookingUpBarcode || lookingUpExternalBarcode}
+                title="Consulta exclusivamente o cadastro local; provedores externos só são consultados após uma ação explícita"
                 className="flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
               >
                 {lookingUpBarcode ? <Loader2 className="h-4 w-4 animate-spin" /> : <Barcode className="h-4 w-4" />}
@@ -581,6 +737,66 @@ export function ProductAIModal({
               }`}
             >
               {barcodeFeedback.message}
+            </div>
+          )}
+
+          {source === "barcode" && barcodeLocalNotFound && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-background p-3">
+              <div className="text-xs text-muted-foreground">
+                A consulta externa não é automática e só ocorre após sua confirmação.
+              </div>
+              <button
+                type="button"
+                onClick={runExternalBarcodeLookup}
+                disabled={lookingUpExternalBarcode || lookingUpBarcode}
+                className="flex items-center justify-center gap-2 rounded-lg border border-primary/40 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-60"
+              >
+                {lookingUpExternalBarcode ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                Buscar dados externos
+              </button>
+            </div>
+          )}
+
+          {source === "barcode" && externalBarcodeLookup && (
+            <div role="status" className="mt-3 rounded-lg border border-border bg-background p-3 text-xs text-foreground">
+              {externalBarcodeLookup.result.status === "encontrado" ? (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">Sugestão encontrada em {nomeProvedor(externalBarcodeLookup.result.provedor)}</div>
+                    <Badge tone={externalBarcodeLookup.result.provedor === "cosmos" ? "primary" : "warning"}>{nomeProvedor(externalBarcodeLookup.result.provedor)}</Badge>
+                  </div>
+                  <div className="mt-2 grid gap-1 text-muted-foreground">
+                    <span><strong className="text-foreground">Nome:</strong> {externalBarcodeLookup.result.dados.nome}</span>
+                    {externalBarcodeLookup.result.dados.marca ? <span><strong className="text-foreground">Marca:</strong> {externalBarcodeLookup.result.dados.marca}</span> : null}
+                    {externalBarcodeLookup.result.dados.categoria ? <span><strong className="text-foreground">Categoria:</strong> {externalBarcodeLookup.result.dados.categoria}</span> : null}
+                    {externalBarcodeLookup.result.dados.descricao ? <span><strong className="text-foreground">Descrição:</strong> disponível para aplicação</span> : null}
+                    {externalBarcodeLookup.result.provedor === "cosmos" && (externalBarcodeLookup.result.dados.ncm || externalBarcodeLookup.result.dados.cest) ? (
+                      <span><strong className="text-foreground">Fiscal sugerido:</strong> {[externalBarcodeLookup.result.dados.ncm && `NCM ${externalBarcodeLookup.result.dados.ncm}`, externalBarcodeLookup.result.dados.cest && `CEST ${externalBarcodeLookup.result.dados.cest}`].filter(Boolean).join(" · ")} (revisão do operador)</span>
+                    ) : null}
+                    {externalBarcodeLookup.result.dados.imagemUrl ? <span>Imagem de referência será mantida no metadata ao salvar; nenhum arquivo será baixado.</span> : null}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-muted-foreground">Preenche apenas campos vazios. Custo, preço de venda e estoque continuam manuais.</span>
+                    <button
+                      type="button"
+                      onClick={applyExternalBarcodeSuggestions}
+                      className="rounded-lg bg-primary px-3 py-2 text-xs font-medium text-primary-foreground"
+                    >
+                      Aplicar sugestões
+                    </button>
+                  </div>
+                </>
+              ) : externalBarcodeLookup.result.status === "nao_encontrado" ? (
+                <p>Nenhum dado encontrado nas bases externas configuradas.</p>
+              ) : externalBarcodeLookup.result.status === "limite_excedido" ? (
+                <p>Limite diário do provedor atingido. Você ainda pode cadastrar manualmente.</p>
+              ) : externalBarcodeLookup.result.status === "erro_config" ? (
+                <p>Lookup externo não configurado corretamente. Cadastre manualmente ou revise as variáveis do servidor.</p>
+              ) : (
+                <p>Não foi possível consultar as bases externas agora. Você ainda pode cadastrar manualmente.</p>
+              )}
+              <p className="mt-2 text-[11px] text-muted-foreground">Tentativas: {resumoTentativas(externalBarcodeLookup.result.tentativas)}</p>
+              {barcodeSuggestionApplication ? <p className="mt-1 text-[11px] text-muted-foreground">Sugestões revisadas pelo operador; o produto só será gravado ao clicar em “Salvar produto”.</p> : null}
             </div>
           )}
 
@@ -785,6 +1001,43 @@ export function ProductAIModal({
                         })
                       : null;
                   const tributacaoNormalizada = tributacao.trim();
+                  const fiscalBarcodeSuggestion = cosmosFiscalApplied
+                    ? {
+                        ...cosmosFiscalApplied,
+                        origem: "barcode-lookup:cosmos",
+                        status: "revisado_operador",
+                        revisadoEm: barcodeSuggestionApplication?.aplicadoEm ?? new Date().toISOString(),
+                      }
+                    : null;
+                  const barcodeLookupMetadata = externalBarcodeLookup
+                    ? (() => {
+                        const { result } = externalBarcodeLookup;
+                        const encontrado = result.status === "encontrado";
+                        const aplicacao = barcodeSuggestionApplication;
+                        const camposAplicados = aplicacao?.camposAplicados ?? [];
+                        const ultimoResultado = {
+                          gtin: externalBarcodeLookup.gtin,
+                          formato: externalBarcodeLookup.formato,
+                          consultadoEm: externalBarcodeLookup.consultadoEm,
+                          status: result.status,
+                          tentativas: result.tentativas,
+                          ...(encontrado ? { provedor: result.provedor, sugestoes: result.dados } : {}),
+                        };
+                        return {
+                          ultimoResultado,
+                          gtin: externalBarcodeLookup.gtin,
+                          formato: externalBarcodeLookup.formato,
+                          consultadoEm: externalBarcodeLookup.consultadoEm,
+                          statusLookup: statusLookupAuditavel(result),
+                          tentativas: result.tentativas,
+                          ...(encontrado ? { provedor: result.provedor, sugestoes: result.dados } : {}),
+                          aplicadoPeloOperador: Boolean(aplicacao),
+                          ...(aplicacao ? { aplicadoEm: aplicacao.aplicadoEm } : {}),
+                          camposAplicados,
+                          aplicado: Object.fromEntries(camposAplicados.map((campo) => [campo, "aceito"])),
+                        };
+                      })()
+                    : null;
                   const result = await upsertProduto(storeId, {
                     id: productId,
                     nome: (nomeRef.current?.value ?? "").trim(),
@@ -810,15 +1063,21 @@ export function ProductAIModal({
                         tags: normalizeProdutoTags(tags),
                         modeloCompativel: modeloCompativel.trim(),
                       },
-                      ...(tributacaoNormalizada
+                      ...(tributacaoNormalizada || fiscalBarcodeSuggestion
                         ? {
                             fiscal: {
-                              tributacao: tributacaoNormalizada,
-                              tributacaoOrigem: "operador",
-                              tributacaoAtualizadoEm: new Date().toISOString(),
+                              ...(tributacaoNormalizada
+                                ? {
+                                    tributacao: tributacaoNormalizada,
+                                    tributacaoOrigem: "operador",
+                                    tributacaoAtualizadoEm: new Date().toISOString(),
+                                  }
+                                : {}),
+                              ...(fiscalBarcodeSuggestion ?? {}),
                             },
                           }
                         : {}),
+                      ...(barcodeLookupMetadata ? { barcodeLookup: barcodeLookupMetadata } : {}),
                     },
                   });
                   if (!result.ok) {

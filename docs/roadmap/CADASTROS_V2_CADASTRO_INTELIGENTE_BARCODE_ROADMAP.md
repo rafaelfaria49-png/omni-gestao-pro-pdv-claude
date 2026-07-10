@@ -111,7 +111,7 @@ Regra de merge (D04): dois níveis, aditivo. Nenhum writer substitui namespace a
 | 4 | CADASTROS-V2-BARCODE-LOOKUP-COSMOS-004A | Contrato + orquestrador + adapter Cosmos | 003 aprovado · conta Cosmos + termos verificados (D19) | ☑ concluído (2026-07-09) |
 | 5 | CADASTROS-V2-BARCODE-LOOKUP-UPCITEMDB-004B | Adapter UPCitemdb + prova da cadeia | 004A aprovado · termos UPCitemdb verificados (D19) | ☑ concluído (2026-07-09) |
 | 6 | CADASTROS-V2-BARCODE-LOOKUP-OFF-004C | Adapter Open Food Facts | **OPCIONAL/FUTURO** — gatilho: dados do piloto mostrarem misses de mercearia | ☐ futuro |
-| 7 | CADASTROS-V2-PRODUTO-BARCODE-SUGESTOES-UI-005 | Sugestões revisáveis na UI + metadata auditável | 002B + 003 + 004A + 004B aprovados (004C não bloqueia) | ☐ pendente |
+| 7 | CADASTROS-V2-PRODUTO-BARCODE-SUGESTOES-UI-005 | Sugestões revisáveis na UI + metadata auditável | 002B + 003 + 004A + 004B aprovados (004C não bloqueia) | ☑ concluído (2026-07-09) |
 | 8 | CADASTROS-V2-PRODUTO-BARCODE-E2E-DOCS-006 | E2E com hardware + documentação + roadmap atualizado | 005 aprovado | ☐ pendente |
 
 Atualização de status: Claude Code pode atualizar **apenas esta tabela** ao concluir um GOAL (escrita permitida em todos os GOALs de implementação), mediante registro no relatório final.
