@@ -5,6 +5,8 @@
  * dois níveis: preserva namespaces e chaves não enviados, enquanto valores escalares
  * e arrays recebidos substituem os valores existentes.
  */
+import { mergeProdutoAcessoriosIntoMetadata } from "@/lib/acessorios/metadata"
+
 export type ProdutoMetadata = Record<string, unknown>
 
 export function asProdutoMetadata(value: unknown): ProdutoMetadata | null {
@@ -62,4 +64,23 @@ export function produtoStockPatch(estoque: number | undefined): { stock?: number
   if (estoque === undefined) return {}
   const normalized = Math.trunc(Number(estoque))
   return Number.isFinite(normalized) && normalized >= 0 ? { stock: normalized } : {}
+}
+
+/**
+ * Merge do save de Produto com saneamento canônico do namespace `acessorios`.
+ *
+ * O namespace é um documento versionado, não um acumulador: quando o caller envia a
+ * chave `acessorios`, o valor saneado SUBSTITUI o anterior por inteiro (nunca herda
+ * chaves antigas como `coresPermitidas` de uma configuração passada); config nula ou
+ * inválida remove o namespace e o produto volta a ser comum. Chave ausente = omissão
+ * (preserva o que está salvo). Os demais namespaces (fiscal, catalogoAparelhos,
+ * atributos, barcodeLookup…) seguem o merge aditivo de dois níveis.
+ */
+export function mergeProdutoMetadataComAcessorios(
+  current: unknown,
+  incoming: ProdutoMetadata | null | undefined,
+): ProdutoMetadata {
+  const merged = mergeProdutoMetadataTwoLevels(current, incoming)
+  if (!incoming || !Object.prototype.hasOwnProperty.call(incoming, "acessorios")) return merged
+  return { ...mergeProdutoAcessoriosIntoMetadata(merged, incoming.acessorios) }
 }

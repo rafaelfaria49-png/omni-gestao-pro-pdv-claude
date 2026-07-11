@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { withPrismaSafe } from "@/lib/prisma";
 import {
-  mergeProdutoMetadataTwoLevels,
+  mergeProdutoMetadataComAcessorios,
   normalizeProdutoIdentifier,
   produtoStockPatch,
 } from "@/lib/cadastros/produto-upsert-metadata";
@@ -1601,12 +1601,14 @@ export async function upsertProduto(
   }
 
   // Em edição, null é omissão deliberada: preserva o JSON existente e nunca o apaga.
+  // O namespace `acessorios` é saneado pelo contrato canônico (lib/acessorios) nos dois
+  // caminhos — config inválida nunca chega ao banco e `acessorios: null` desativa sem wipe.
   const metadataPart: { metadata?: Prisma.InputJsonValue } = input.id
     ? input.metadata && existing
-      ? { metadata: mergeProdutoMetadataTwoLevels(existing.metadata, input.metadata) as Prisma.InputJsonValue }
+      ? { metadata: mergeProdutoMetadataComAcessorios(existing.metadata, input.metadata) as Prisma.InputJsonValue }
       : {}
     : input.metadata
-      ? { metadata: input.metadata as Prisma.InputJsonValue }
+      ? { metadata: mergeProdutoMetadataComAcessorios(null, input.metadata) as Prisma.InputJsonValue }
       : {};
 
   // Stock: só inclui no patch quando o caller enviou número inteiro >= 0.

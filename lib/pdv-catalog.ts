@@ -1,4 +1,5 @@
 import type { InventoryItem, ProdutoAtributoDef } from "@/lib/operations-store"
+import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
 
 export type PdvCatalogProduct = {
   id: string
@@ -17,6 +18,11 @@ export type PdvCatalogProduct = {
   precoPorKg?: number
   atributos?: ProdutoAtributoDef[]
   complementos?: { id: string; name: string; price: number }[]
+  /**
+   * Configuração de venda do acessório (modelo/cor), saneada pelo servidor.
+   * Ausente = produto comum; o servidor é a fonte da verdade (ver `InventoryItem`).
+   */
+  accessoryConfig?: ProdutoAcessoriosMetadataV1
 }
 
 /**
@@ -50,6 +56,8 @@ export function mergePdvCatalogWithInventory(
       sku: inv.sku ?? p.sku,
       codigo: inv.codigo ?? inv.sku ?? p.codigo,
       codigoBarras: inv.codigoBarras ?? inv.barcode ?? p.codigoBarras,
+      // Servidor é a fonte da verdade: ausente no inventário = produto voltou a ser comum.
+      accessoryConfig: inv.accessoryConfig,
     }
   })
 
@@ -71,6 +79,7 @@ export function mergePdvCatalogWithInventory(
       vendaPorPeso: inv.vendaPorPeso,
       precoPorKg: inv.precoPorKg,
       atributos: inv.atributos,
+      accessoryConfig: inv.accessoryConfig,
     })
   }
 

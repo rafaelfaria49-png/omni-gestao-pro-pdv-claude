@@ -4,11 +4,10 @@ import { Prisma } from "@/generated/prisma"
 import { getVerifiedSubscriptionFromCookies } from "@/lib/api-auth"
 import { isVencimentoExpired } from "@/lib/subscription-seal"
 import { getTrustedTimeMs } from "@/lib/trusted-time"
-import type { Produto } from "@/generated/prisma"
 import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
 import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
-import { getProdutoFiscal, isProdutoFiscalVazio, type ProdutoFiscal } from "@/lib/produto-fiscal"
+import { rowToItem } from "@/lib/ops-inventory-item"
 // (sem normalizeNameForMatch — tabela `product` é minimalista)
 
 export const runtime = "nodejs"
@@ -52,53 +51,9 @@ async function withDbRetry<T>(label: string, fn: () => Promise<T>, attempts = 6)
   throw last
 }
 
-type InvPayload = {
-  id: string
-  name: string
-  barcode?: string
-  sku?: string
-  dbId?: string
-  codigo?: string
-  codigoBarras?: string
-  stock: number
-  cost: number
-  price: number
-  category?: string
-  vendaPorPeso?: boolean
-  precoPorKg?: number
-  atributos?: unknown[]
-  /**
-   * Identidade fiscal do produto (GOAL_004) — campo ADITIVO e somente-leitura.
-   * Presente apenas quando há algum dado fiscal. O PDV ignora; o Cadastro usa na edição.
-   */
-  fiscal?: ProdutoFiscal
-}
-
-function rowToItem(row: Produto): InvPayload {
-  const sku = typeof (row as unknown as { sku?: unknown }).sku === "string" ? String((row as unknown as { sku: string }).sku) : ""
-  const barcode =
-    typeof (row as unknown as { barcode?: unknown }).barcode === "string"
-      ? String((row as unknown as { barcode: string }).barcode)
-      : ""
-  const skuTrim = sku.trim()
-  const bcTrim = barcode.trim()
-  const opId = skuTrim || row.id
-  const fiscal = getProdutoFiscal(row)
-  return {
-    id: opId,
-    name: row.name,
-    barcode: bcTrim || undefined,
-    sku: skuTrim || undefined,
-    dbId: row.id,
-    codigo: skuTrim || undefined,
-    codigoBarras: bcTrim || undefined,
-    stock: row.stock,
-    cost: row.precoCusto,
-    price: row.price,
-    category: typeof (row as unknown as { category?: unknown }).category === "string" ? (row as unknown as { category: string }).category : "",
-    ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
-  }
-}
+// Projeção Produto → item do catálogo: `rowToItem` vive em `lib/ops-inventory-item.ts`
+// (extraída para teste puro; mesmo comportamento externo, incluindo `fiscal` aditivo e
+// agora `accessoryConfig` saneado — PDV-ACESSORIOS-CADASTRO-PROJECAO-002).
 
 async function requireSubscription() {
   const sub = await getVerifiedSubscriptionFromCookies()

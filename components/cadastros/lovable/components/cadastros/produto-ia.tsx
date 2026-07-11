@@ -30,6 +30,9 @@ import {
 } from "@/lib/catalogo-aparelhos/produto-metadata";
 import { ASSISTEC_LOJA_HEADER } from "@/lib/assistec-headers";
 import { normalizeProdutoTags } from "@/lib/cadastros/produto-upsert-metadata";
+// PDV-ACESSORIOS-CADASTRO-PROJECAO-002 — contrato canônico de acessórios (fonte da verdade).
+import { getProdutoAcessoriosMetadata } from "@/lib/acessorios/metadata";
+import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types";
 import { validarGtin, type GtinFormato } from "@/lib/cadastros/gtin";
 import { toast } from "sonner";
 
@@ -37,6 +40,51 @@ function metadataRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+/**
+ * Modo da seção "Configuração de venda do acessório". Capinha e Película são presets
+ * fixos do contrato; "configuravel" persiste `tipo: "acessorio_generico"` com as
+ * exigências escolhidas; "comum" envia `acessorios: null` (remove sem apagar o resto
+ * do metadata — o merge do upsert trata null como desativação do namespace).
+ */
+type AcessorioVendaMode = "comum" | "capinha" | "pelicula" | "configuravel";
+
+function acessoriosConfigFromMode(
+  mode: AcessorioVendaMode,
+  exigeModelo: boolean,
+  exigeCor: boolean,
+): ProdutoAcessoriosMetadataV1 | null {
+  if (mode === "capinha") {
+    return { version: 1, tipo: "capinha", exigeModelo: true, exigeCor: true, usaCoresPadrao: true };
+  }
+  if (mode === "pelicula") {
+    return { version: 1, tipo: "pelicula", exigeModelo: true, exigeCor: false, usaCoresPadrao: false };
+  }
+  if (mode === "configuravel") {
+    // MVP: cor exigida sempre usa a lista padrão global (lib/acessorios/cores.ts).
+    return {
+      version: 1,
+      tipo: "acessorio_generico",
+      exigeModelo,
+      exigeCor,
+      usaCoresPadrao: exigeCor,
+    };
+  }
+  return null;
+}
+
+function acessorioVendaHint(config: ProdutoAcessoriosMetadataV1 | null): string {
+  if (!config || (!config.exigeModelo && !config.exigeCor)) {
+    return "Sem seleção adicional na venda — o PDV adiciona o item direto ao carrinho.";
+  }
+  if (config.exigeModelo && config.exigeCor) {
+    return "Na venda, o operador escolherá o modelo do aparelho e uma cor da lista padrão. O estoque continua único no produto.";
+  }
+  if (config.exigeModelo) {
+    return "Na venda, o operador escolherá o modelo do aparelho. O estoque continua único no produto.";
+  }
+  return "Na venda, o operador escolherá uma cor da lista padrão. O estoque continua único no produto.";
 }
 
 type BarcodeFeedback =
@@ -352,6 +400,11 @@ export function ProductAIModal({
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — estado da seção "Compatibilidade com aparelhos".
   const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade());
 
+  // PDV-ACESSORIOS-CADASTRO-PROJECAO-002 — estado da seção "Configuração de venda do acessório".
+  const [acessorioVendaMode, setAcessorioVendaMode] = useState<AcessorioVendaMode>("comum");
+  const [acessorioExigeModelo, setAcessorioExigeModelo] = useState(false);
+  const [acessorioExigeCor, setAcessorioExigeCor] = useState(false);
+
   // Reseta quando troca de produto em edição (modal reabrindo com outro id).
   useEffect(() => {
     setCategoria(initial?.categoria ?? "");
@@ -365,6 +418,23 @@ export function ProductAIModal({
     setTributacao(typeof fiscal?.tributacao === "string" ? fiscal.tributacao : "");
     setTags(Array.isArray(atributos?.tags) ? atributos.tags.filter((tag): tag is string => typeof tag === "string").join(", ") : "");
     setDescricao(typeof atributos?.descricao === "string" ? atributos.descricao : "");
+    // PDV-ACESSORIOS-CADASTRO-PROJECAO-002 — read-back da configuração de acessório.
+    // Produto sem namespace (ou inválido) abre como comum; capinha/película voltam ao
+    // preset do tipo; acessorio_generico reflete as exigências persistidas.
+    const acessorios = getProdutoAcessoriosMetadata(metadata);
+    if (!acessorios) {
+      setAcessorioVendaMode("comum");
+      setAcessorioExigeModelo(false);
+      setAcessorioExigeCor(false);
+    } else if (acessorios.tipo === "capinha" || acessorios.tipo === "pelicula") {
+      setAcessorioVendaMode(acessorios.tipo);
+      setAcessorioExigeModelo(acessorios.exigeModelo);
+      setAcessorioExigeCor(acessorios.exigeCor);
+    } else {
+      setAcessorioVendaMode("configuravel");
+      setAcessorioExigeModelo(acessorios.exigeModelo);
+      setAcessorioExigeCor(acessorios.exigeCor);
+    }
     setBarcodeScan("");
     setBarcodeFeedback(null);
     setBarcodeLocalNotFound(null);
@@ -880,6 +950,46 @@ export function ProductAIModal({
                 />
               </div>
             </div>
+            {/* PDV-ACESSORIOS-CADASTRO-PROJECAO-002 — configuração de venda do acessório. */}
+            <div className="col-span-2">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Configuração de venda do acessório</p>
+              <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4">
+                <Field label="Tipo de venda">
+                  <Select
+                    value={acessorioVendaMode}
+                    onChange={(event) => setAcessorioVendaMode(event.target.value as AcessorioVendaMode)}
+                  >
+                    <option value="comum">Produto comum</option>
+                    <option value="capinha">Capinha</option>
+                    <option value="pelicula">Película</option>
+                    <option value="configuravel">Acessório configurável</option>
+                  </Select>
+                </Field>
+                {acessorioVendaMode === "configuravel" && (
+                  <div className="flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={acessorioExigeModelo}
+                        onChange={(event) => setAcessorioExigeModelo(event.target.checked)}
+                      />
+                      Exige modelo do aparelho
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={acessorioExigeCor}
+                        onChange={(event) => setAcessorioExigeCor(event.target.checked)}
+                      />
+                      Exige cor (lista padrão)
+                    </label>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {acessorioVendaHint(acessoriosConfigFromMode(acessorioVendaMode, acessorioExigeModelo, acessorioExigeCor))}
+                </p>
+              </div>
+            </div>
             <div className="col-span-2">
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Precificação</p>
               <div className="grid grid-cols-3 gap-4 rounded-xl border border-border bg-muted/20 p-4">
@@ -1012,6 +1122,14 @@ export function ProductAIModal({
                           source: "manual",
                         })
                       : null;
+                  // PDV-ACESSORIOS-CADASTRO-PROJECAO-002 — a chave `acessorios` é SEMPRE
+                  // enviada: config quando o produto exige seleção, null quando é comum
+                  // (o merge do upsert remove o namespace sem tocar fiscal/catálogo/etc.).
+                  const acessorios = acessoriosConfigFromMode(
+                    acessorioVendaMode,
+                    acessorioExigeModelo,
+                    acessorioExigeCor,
+                  );
                   const tributacaoNormalizada = tributacao.trim();
                   const fiscalBarcodeSuggestion = cosmosFiscalApplied
                     ? {
@@ -1070,6 +1188,7 @@ export function ProductAIModal({
                         source,
                       },
                       ...(catalogoAparelhos ? { catalogoAparelhos } : {}),
+                      acessorios,
                       atributos: {
                         descricao: descricao.trim(),
                         tags: normalizeProdutoTags(tags),
