@@ -9,6 +9,7 @@ import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite }
 import { auth } from "@/auth"
 import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import { getProdutoFiscal, isProdutoFiscalVazio, type ProdutoFiscal } from "@/lib/produto-fiscal"
+import { projectProdutoAccessoryConfig, type ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios"
 // (sem normalizeNameForMatch — tabela `product` é minimalista)
 
 export const runtime = "nodejs"
@@ -72,6 +73,8 @@ type InvPayload = {
    * Presente apenas quando há algum dado fiscal. O PDV ignora; o Cadastro usa na edição.
    */
   fiscal?: ProdutoFiscal
+  /** Configuração saneada de acessórios; metadata bruto nunca é exposto ao PDV. */
+  accessoryConfig?: ProdutoAcessoriosMetadataV1
 }
 
 function rowToItem(row: Produto): InvPayload {
@@ -84,6 +87,7 @@ function rowToItem(row: Produto): InvPayload {
   const bcTrim = barcode.trim()
   const opId = skuTrim || row.id
   const fiscal = getProdutoFiscal(row)
+  const accessoryConfig = projectProdutoAccessoryConfig(row)
   return {
     id: opId,
     name: row.name,
@@ -97,6 +101,7 @@ function rowToItem(row: Produto): InvPayload {
     price: row.price,
     category: typeof (row as unknown as { category?: unknown }).category === "string" ? (row as unknown as { category: string }).category : "",
     ...(isProdutoFiscalVazio(fiscal) ? {} : { fiscal }),
+    ...(accessoryConfig ? { accessoryConfig } : {}),
   }
 }
 

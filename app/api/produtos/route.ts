@@ -5,6 +5,10 @@ import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { fiscalInputFromBody, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
 import { catalogoInputFromBody, mergeCatalogoAparelhosIntoMetadata } from "@/lib/catalogo-aparelhos/produto-metadata"
 import { duplicateProductResponse, PRODUTO_DUP_SELECT } from "@/lib/produtos/duplicate-product"
+import {
+  mergeProdutoAcessoriosIntoMetadata,
+  produtoAcessoriosInputFromBody,
+} from "@/lib/acessorios/metadata"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -122,6 +126,7 @@ export async function POST(req: Request) {
 
   try {
     const raw = (await req.json()) as Record<string, unknown>
+    const accessoryInput = produtoAcessoriosInputFromBody(raw)
     const body = raw as { name?: unknown; stock?: unknown; price?: unknown }
 
     const name = typeof body.name === "string" ? body.name.trim() : ""
@@ -162,6 +167,13 @@ export async function POST(req: Request) {
     if (catalogoInput !== undefined) {
       const baseMeta = metadata && metadata !== Prisma.DbNull ? metadata : {}
       metadata = mergeCatalogoAparelhosIntoMetadata(baseMeta, catalogoInput) as Prisma.InputJsonValue
+    }
+
+    // Configuração de acessórios: aceita o payload específico e callers legados, mas
+    // nunca persiste metadata.acessorios sem passar pelo contrato canônico.
+    if (accessoryInput.provided) {
+      const baseMeta = metadata && metadata !== Prisma.DbNull ? metadata : {}
+      metadata = mergeProdutoAcessoriosIntoMetadata(baseMeta, accessoryInput.value) as Prisma.InputJsonValue
     }
 
     if (!name) return badRequest('Campo "name" é obrigatório')

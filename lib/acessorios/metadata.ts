@@ -69,6 +69,28 @@ export function getProdutoAcessoriosMetadata(source: unknown): ProdutoAcessorios
   return sanitizeProdutoAcessoriosMetadata(metadata.acessorios)
 }
 
+export type ProdutoAcessoriosInput = Readonly<{
+  provided: boolean
+  value?: unknown
+}>
+
+/**
+ * Lê o payload específico novo e mantém compatibilidade com callers que ainda enviam
+ * `metadata.acessorios`. O valor continua desconhecido até passar pelo saneamento.
+ */
+export function produtoAcessoriosInputFromBody(body: unknown): ProdutoAcessoriosInput {
+  const root = asRecord(body)
+  if (!root) return { provided: false }
+  if (Object.prototype.hasOwnProperty.call(root, "accessoryConfig")) {
+    return { provided: true, value: root.accessoryConfig }
+  }
+  const metadata = asRecord(root.metadata)
+  if (metadata && Object.prototype.hasOwnProperty.call(metadata, "acessorios")) {
+    return { provided: true, value: metadata.acessorios }
+  }
+  return { provided: false }
+}
+
 export function mergeProdutoAcessoriosIntoMetadata(
   metadataBase: unknown,
   config: unknown,

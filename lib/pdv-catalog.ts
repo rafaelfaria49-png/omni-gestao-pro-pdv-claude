@@ -1,4 +1,5 @@
 import type { InventoryItem, ProdutoAtributoDef } from "@/lib/operations-store"
+import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
 
 export type PdvCatalogProduct = {
   id: string
@@ -17,6 +18,7 @@ export type PdvCatalogProduct = {
   precoPorKg?: number
   atributos?: ProdutoAtributoDef[]
   complementos?: { id: string; name: string; price: number }[]
+  accessoryConfig?: ProdutoAcessoriosMetadataV1
 }
 
 /**
@@ -38,7 +40,7 @@ export function mergePdvCatalogWithInventory(
     const inv = safeInventory.find((i) => i.id === p.id)
     if (!inv) return p
     const unit = inv.vendaPorPeso ? (inv.precoPorKg ?? inv.price) : inv.price
-    return {
+    const next: PdvCatalogProduct = {
       ...p,
       stock: inv.stock,
       price: unit,
@@ -51,6 +53,9 @@ export function mergePdvCatalogWithInventory(
       codigo: inv.codigo ?? inv.sku ?? p.codigo,
       codigoBarras: inv.codigoBarras ?? inv.barcode ?? p.codigoBarras,
     }
+    if (inv.accessoryConfig) next.accessoryConfig = inv.accessoryConfig
+    else delete next.accessoryConfig
+    return next
   })
 
   // 2. Append inventory items NOT present in base (e.g., products added via Estoque panel)
@@ -71,6 +76,7 @@ export function mergePdvCatalogWithInventory(
       vendaPorPeso: inv.vendaPorPeso,
       precoPorKg: inv.precoPorKg,
       atributos: inv.atributos,
+      ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
     })
   }
 

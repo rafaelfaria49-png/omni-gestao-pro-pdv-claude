@@ -5,6 +5,11 @@ import { requireCadastrosHubApi } from "@/lib/cadastros/hub-api-gate"
 import { fiscalInputFromBody, mergeProdutoFiscalIntoMetadata } from "@/lib/produto-fiscal"
 import { catalogoInputFromBody, mergeCatalogoAparelhosIntoMetadata } from "@/lib/catalogo-aparelhos/produto-metadata"
 import { duplicateProductResponse, PRODUTO_DUP_SELECT } from "@/lib/produtos/duplicate-product"
+import { mergeProdutoMetadataTwoLevels } from "@/lib/cadastros/produto-upsert-metadata"
+import {
+  mergeProdutoAcessoriosIntoMetadata,
+  produtoAcessoriosInputFromBody,
+} from "@/lib/acessorios/metadata"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -68,8 +73,10 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
   try {
     const raw = (await req.json()) as Record<string, unknown>
+    const accessoryInput = produtoAcessoriosInputFromBody(raw)
 
     const data: Prisma.ProdutoUpdateManyMutationInput = {}
+    let incomingMetadata: Record<string, unknown> | undefined
 
     if (typeof raw.name === "string") data.name = raw.name.trim()
     if (raw.stock !== undefined) {
@@ -143,7 +150,7 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
       if (raw.metadata === null) {
         data.metadata = Prisma.DbNull
       } else if (typeof raw.metadata === "object" && !Array.isArray(raw.metadata)) {
-        data.metadata = raw.metadata as Prisma.InputJsonValue
+        incomingMetadata = raw.metadata as Record<string, unknown>
       } else {
         return badRequest("metadata deve ser objeto JSON ou null")
       }
@@ -151,17 +158,36 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
 
     await prismaEnsureConnected()
 
+    let currentMetadataLoaded = false
+    let currentMetadata: unknown = {}
+    const loadCurrentMetadata = async () => {
+      if (!currentMetadataLoaded) {
+        const current = await prisma.produto.findFirst({ where: { id, storeId }, select: { metadata: true } })
+        currentMetadata = current?.metadata ?? {}
+        currentMetadataLoaded = true
+      }
+      return currentMetadata
+    }
+    const metadataBaseForNamespace = async () => {
+      if (data.metadata === Prisma.DbNull) return {}
+      if (data.metadata !== undefined) return data.metadata
+      return loadCurrentMetadata()
+    }
+
+    // Um PATCH parcial de metadata é aditivo em dois níveis. Isso preserva acessórios,
+    // fiscal, catálogo de aparelhos e namespaces desconhecidos de callers antigos.
+    if (incomingMetadata) {
+      data.metadata = mergeProdutoMetadataTwoLevels(
+        await loadCurrentMetadata(),
+        incomingMetadata,
+      ) as Prisma.InputJsonValue
+    }
+
     // Identidade fiscal (GOAL_004): persiste canonicamente em `metadata.fiscal`, fazendo
     // MERGE não-destrutivo no metadata atual do produto (nunca apaga outras chaves).
     const fiscalInput = fiscalInputFromBody(raw)
     if (fiscalInput) {
-      let baseMeta: unknown = {}
-      if (data.metadata !== undefined && data.metadata !== Prisma.DbNull) {
-        baseMeta = data.metadata
-      } else {
-        const current = await prisma.produto.findFirst({ where: { id, storeId }, select: { metadata: true } })
-        baseMeta = current?.metadata ?? {}
-      }
+      const baseMeta = await metadataBaseForNamespace()
       data.metadata = mergeProdutoFiscalIntoMetadata(baseMeta, fiscalInput) as Prisma.InputJsonValue
     }
 
@@ -169,14 +195,13 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
     // metadata já resolvido (fiscal) ou buscando o atual. Ausente = preserva; null = limpa.
     const catalogoInput = catalogoInputFromBody(raw)
     if (catalogoInput !== undefined) {
-      let baseMeta: unknown = {}
-      if (data.metadata !== undefined && data.metadata !== Prisma.DbNull) {
-        baseMeta = data.metadata
-      } else {
-        const current = await prisma.produto.findFirst({ where: { id, storeId }, select: { metadata: true } })
-        baseMeta = current?.metadata ?? {}
-      }
+      const baseMeta = await metadataBaseForNamespace()
       data.metadata = mergeCatalogoAparelhosIntoMetadata(baseMeta, catalogoInput) as Prisma.InputJsonValue
+    }
+
+    if (accessoryInput.provided) {
+      const baseMeta = await metadataBaseForNamespace()
+      data.metadata = mergeProdutoAcessoriosIntoMetadata(baseMeta, accessoryInput.value) as Prisma.InputJsonValue
     }
 
     if (Object.keys(data).length === 0) {

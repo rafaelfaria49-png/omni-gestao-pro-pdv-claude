@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   getProdutoAcessoriosMetadata,
   mergeProdutoAcessoriosIntoMetadata,
+  produtoAcessoriosInputFromBody,
   sanitizeProdutoAcessoriosMetadata,
 } from "./metadata"
 
@@ -137,5 +138,22 @@ describe("leitura e merge de metadata", () => {
 
   it("base não-objeto vira metadata novo", () => {
     expect(mergeProdutoAcessoriosIntoMetadata("inválido", validConfig)).toHaveProperty("acessorios")
+  })
+
+  it("prioriza o payload específico sem confiar em metadata.acessorios bruto", () => {
+    const input = produtoAcessoriosInputFromBody({
+      accessoryConfig: validConfig,
+      metadata: { acessorios: { version: 99 } },
+    })
+    expect(input).toEqual({ provided: true, value: validConfig })
+  })
+
+  it("mantém compatibilidade com metadata.acessorios e distingue ausência de remoção", () => {
+    expect(produtoAcessoriosInputFromBody({ metadata: { acessorios: validConfig } }))
+      .toEqual({ provided: true, value: validConfig })
+    expect(produtoAcessoriosInputFromBody({ accessoryConfig: null }))
+      .toEqual({ provided: true, value: null })
+    expect(produtoAcessoriosInputFromBody({ metadata: { fiscal: {} } }))
+      .toEqual({ provided: false })
   })
 })

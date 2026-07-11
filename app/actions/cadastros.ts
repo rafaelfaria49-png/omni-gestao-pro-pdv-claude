@@ -10,6 +10,10 @@ import {
   produtoStockPatch,
 } from "@/lib/cadastros/produto-upsert-metadata";
 import {
+  mergeProdutoAcessoriosIntoMetadata,
+  produtoAcessoriosInputFromBody,
+} from "@/lib/acessorios/metadata";
+import {
   duplicateProductDetails,
   PRODUTO_DUP_SELECT,
   type ExistingProdutoLite,
@@ -1563,6 +1567,7 @@ export async function upsertProduto(
     garantia?: number;
     active?: boolean;
     metadata?: Record<string, unknown> | null;
+    accessoryConfig?: unknown;
   }
 ): Promise<UpsertProdutoResult> {
   const nome = input.nome.trim();
@@ -1601,13 +1606,19 @@ export async function upsertProduto(
   }
 
   // Em edição, null é omissão deliberada: preserva o JSON existente e nunca o apaga.
-  const metadataPart: { metadata?: Prisma.InputJsonValue } = input.id
-    ? input.metadata && existing
-      ? { metadata: mergeProdutoMetadataTwoLevels(existing.metadata, input.metadata) as Prisma.InputJsonValue }
-      : {}
-    : input.metadata
-      ? { metadata: input.metadata as Prisma.InputJsonValue }
-      : {};
+  // A configuração específica é sempre saneada no servidor e substitui/remove somente
+  // metadata.acessorios, inclusive para callers legados que ainda mandam o namespace bruto.
+  const accessoryInput = produtoAcessoriosInputFromBody(input);
+  const shouldWriteMetadata = Boolean(input.metadata) || accessoryInput.provided;
+  let nextMetadata: unknown = input.id
+    ? mergeProdutoMetadataTwoLevels(existing?.metadata, input.metadata)
+    : { ...(input.metadata ?? {}) };
+  if (accessoryInput.provided) {
+    nextMetadata = mergeProdutoAcessoriosIntoMetadata(nextMetadata, accessoryInput.value);
+  }
+  const metadataPart: { metadata?: Prisma.InputJsonValue } = shouldWriteMetadata
+    ? { metadata: nextMetadata as Prisma.InputJsonValue }
+    : {};
 
   // Stock: só inclui no patch quando o caller enviou número inteiro >= 0.
   // `undefined` significa "não tocar" — evita zerar estoque ao editar outros campos.

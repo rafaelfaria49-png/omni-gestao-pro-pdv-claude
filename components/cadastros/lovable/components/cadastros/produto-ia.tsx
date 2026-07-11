@@ -24,6 +24,12 @@ import {
   emptyCompatibilidade,
   type CompatibilidadeValue,
 } from "@/components/dashboard/estoque/produto-compatibilidade-aparelhos";
+import { ProdutoAcessoriosConfig } from "@/components/dashboard/estoque/produto-acessorios-config";
+import {
+  produtoAcessoriosFormFromMetadata,
+  produtoAcessoriosMetadataFromForm,
+  type ProdutoAcessoriosFormValue,
+} from "@/lib/acessorios/form";
 import {
   sanitizeCatalogoAparelhos,
   type CatalogoAparelhosMetadata,
@@ -351,6 +357,9 @@ export function ProductAIModal({
 
   // CATALOGO-APARELHOS-UI-CADASTROSV2-002 — estado da seção "Compatibilidade com aparelhos".
   const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade());
+  const [acessoriosValue, setAcessoriosValue] = useState<ProdutoAcessoriosFormValue>(() =>
+    produtoAcessoriosFormFromMetadata(initial?.metadata),
+  );
 
   // Reseta quando troca de produto em edição (modal reabrindo com outro id).
   useEffect(() => {
@@ -359,6 +368,7 @@ export function ProductAIModal({
     setNcmDisplay(initial?.ncm ?? "");
     setCestDisplay(initial?.cest ?? "");
     const metadata = metadataRecord(initial?.metadata);
+    setAcessoriosValue(produtoAcessoriosFormFromMetadata(metadata));
     const atributos = metadataRecord(metadata?.atributos);
     const fiscal = metadataRecord(metadata?.fiscal);
     setModeloCompativel(typeof atributos?.modeloCompativel === "string" ? atributos.modeloCompativel : "");
@@ -881,6 +891,9 @@ export function ProductAIModal({
               </div>
             </div>
             <div className="col-span-2">
+              <ProdutoAcessoriosConfig value={acessoriosValue} onChange={setAcessoriosValue} />
+            </div>
+            <div className="col-span-2">
               <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Precificação</p>
               <div className="grid grid-cols-3 gap-4 rounded-xl border border-border bg-muted/20 p-4">
                 <Field label="Custo (R$)"><Input ref={custoRef} defaultValue={initial?.custo !== undefined ? String(initial.custo) : ""} placeholder="0,00" /></Field>
@@ -1063,6 +1076,7 @@ export function ProductAIModal({
                     preco: Number.isFinite(preco) ? preco : 0,
                     garantia: Number.isFinite(garantia) ? garantia : 0,
                     active: true,
+                    accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue),
                     metadata: {
                       cadastroIa: {
                         phase: "fase1-stub",

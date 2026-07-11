@@ -91,6 +91,15 @@ import {
   emptyCompatibilidade,
   type CompatibilidadeValue,
 } from "@/components/dashboard/estoque/produto-compatibilidade-aparelhos"
+import { ProdutoAcessoriosConfig } from "@/components/dashboard/estoque/produto-acessorios-config"
+import {
+  emptyProdutoAcessoriosForm,
+  produtoAcessoriosFormFromMetadata,
+  produtoAcessoriosMetadataFromForm,
+  type ProdutoAcessoriosFormValue,
+} from "@/lib/acessorios/form"
+import { sanitizeProdutoAcessoriosMetadata } from "@/lib/acessorios/metadata"
+import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
 import type { CatalogoAparelhosMetadata } from "@/lib/catalogo-aparelhos/produto-metadata"
 
 interface Product {
@@ -124,6 +133,7 @@ interface Product {
   diasGarantia?: number
   /** Texto de vitrine / anúncio (ex.: preenchido pela IA Vision). */
   descricaoVenda?: string
+  accessoryConfig?: ProdutoAcessoriosMetadataV1
 }
 
 type NFeItem = {
@@ -251,6 +261,9 @@ export function GestaoProdutos({
   const [formData, setFormData] = useState<Omit<Product, "id">>(emptyProduct)
   // CATALOGO-APARELHOS-METADATA-MVP-001 — seção "Compatibilidade com aparelhos".
   const [catalogoValue, setCatalogoValue] = useState<CompatibilidadeValue>(() => emptyCompatibilidade())
+  const [acessoriosValue, setAcessoriosValue] = useState<ProdutoAcessoriosFormValue>(() =>
+    emptyProdutoAcessoriosForm(),
+  )
   // true após carregar (ou zerar) o catálogo salvo na edição — evita limpar por engano
   // quando um fetch falha (só envia `null` de limpeza se de fato carregamos o estado).
   const catalogoLoadedRef = useRef(false)
@@ -380,6 +393,7 @@ export function GestaoProdutos({
           // Identidade fiscal (GOAL_004): a API expõe `fiscal` (read-only) — usada na edição.
           const fiscal = (row.fiscal && typeof row.fiscal === "object" ? row.fiscal : {}) as Record<string, unknown>
           const fiscalStr = (k: string) => (typeof fiscal[k] === "string" ? (fiscal[k] as string) : "")
+          const accessoryConfig = sanitizeProdutoAcessoriosMetadata(row.accessoryConfig) ?? undefined
           return {
             id: String(it.id ?? ""),
             dbId: dbId || undefined,
@@ -397,6 +411,7 @@ export function GestaoProdutos({
             cest: fiscalStr("cest"),
             cfop: fiscalStr("cfop"),
             origemMercadoria: fiscalStr("origemMercadoria"),
+            ...(accessoryConfig ? { accessoryConfig } : {}),
           }
         })
       )
@@ -578,6 +593,7 @@ export function GestaoProdutos({
     catalogoLoadedRef.current = false
     if (product) {
       setEditingProduct(product)
+      setAcessoriosValue(produtoAcessoriosFormFromMetadata({ acessorios: product.accessoryConfig }))
       const dbId = product.dbId || product.id
       if (dbId) void loadCatalogoAparelhos(dbId)
       setFormData({
@@ -606,6 +622,7 @@ export function GestaoProdutos({
     } else {
       setEditingProduct(null)
       setFormData(emptyProduct)
+      setAcessoriosValue(emptyProdutoAcessoriosForm())
       setPreviewImage(null)
     }
     setActiveTab("geral")
@@ -652,6 +669,7 @@ export function GestaoProdutos({
     if (voiceStockHint.openNovo) {
     setEditingProduct(null)
     setFormData(emptyProduct)
+    setAcessoriosValue(emptyProdutoAcessoriosForm())
     setPreviewImage(null)
       setRelampagoImageDataUrl(null)
       setRelampagoAudioBlob(null)
@@ -742,6 +760,7 @@ export function GestaoProdutos({
         cest: formData.cest?.trim() || "",
         cfop: formData.cfop?.trim() || "",
         origemMercadoria: formData.origemMercadoria?.trim() || "",
+        accessoryConfig: produtoAcessoriosMetadataFromForm(acessoriosValue),
         ...(catalogoAparelhos !== undefined ? { catalogoAparelhos } : {}),
       }
       const res = editingProduct
@@ -1796,6 +1815,7 @@ export function GestaoProdutos({
           if (!open) {
             setEditingProduct(null)
             setFormData(emptyProduct)
+            setAcessoriosValue(emptyProdutoAcessoriosForm())
             setPreviewImage(null)
             setIaSyncLoading(false)
             setVisionQuickScanLoading(false)
@@ -2195,6 +2215,10 @@ export function GestaoProdutos({
                     className="resize-y min-h-[88px] bg-secondary border-border text-sm"
                     disabled={iaSyncLoading}
                   />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <ProdutoAcessoriosConfig value={acessoriosValue} onChange={setAcessoriosValue} />
                 </div>
 
                 <div className="space-y-2">

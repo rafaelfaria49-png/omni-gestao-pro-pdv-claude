@@ -16,6 +16,7 @@ import { emitEvent } from "@/lib/events/event-bus"
 import { initAutomationEngineClient } from "@/lib/automation/automation-engine"
 import { registrarOperacaoCaixaServer } from "@/lib/pdv-caixa-operacao"
 import { toast } from "@/components/ui/use-toast"
+import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
 
 export type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
@@ -48,6 +49,8 @@ export interface InventoryItem {
   /** Quando `vendaPorPeso`, deve refletir o mesmo que `price` (R$/kg). */
   precoPorKg?: number
   atributos?: ProdutoAtributoDef[]
+  /** Configuração saneada e opcional projetada por `/api/ops/inventory`. */
+  accessoryConfig?: ProdutoAcessoriosMetadataV1
 }
 
 export interface CaixaState {
