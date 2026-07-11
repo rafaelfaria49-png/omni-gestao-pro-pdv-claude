@@ -91,6 +91,13 @@ import { PdvOmniClassicShell, type PdvOmniCartRow } from "./pdv-omni-classic-she
 import { useStudioTheme } from "@/components/theme/ThemeProvider"
 import { PDV_IMPORT_COMANDA_KEY, type PdvImportComandaPayload } from "@/lib/pdv-comanda-bridge"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
+import { SelecionarAcessorioDialog } from "./acessorios/selecionar-acessorio-dialog"
+import {
+  accessoryConfigRequiresSelection,
+  sameAccessoryCartLine,
+  type AccessoryCartLineSnapshot,
+  type AccessorySelectionV1,
+} from "@/lib/acessorios/cart-line"
 import {
   isWebSerialSupported,
   openScalePort,
@@ -153,6 +160,10 @@ type CartItem = {
   custoUnitario?: number | null
   /** Código de barras/SKU do item avulso → fila "Produtos a cadastrar". */
   codigoAvulso?: string | null
+  /** Snapshot da seleção de acessório (modelo/cor). NÃO é variação de estoque. */
+  accessorySelection?: AccessorySelectionV1
+  /** Chave determinística produto+modelo+cor para agrupar linhas iguais. */
+  cartLineKey?: string
 }
 
 type Product = PdvCatalogProduct
@@ -260,6 +271,9 @@ export function PdvClassic({
   const [attrDialogOpen, setAttrDialogOpen] = useState(false)
   const [attrProduct, setAttrProduct] = useState<Product | null>(null)
   const [attrSelections, setAttrSelections] = useState<Record<string, string>>({})
+  // Acessório com modelo/cor: produto aguardando seleção no modal compartilhado.
+  const [accessoryProduct, setAccessoryProduct] = useState<Product | null>(null)
+  const accessoryQtyRef = useRef(1)
   const [fechamentoCaixaSignal, setFechamentoCaixaSignal] = useState(0)
   const [showDevolucaoModal, setShowDevolucaoModal] = useState(false)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
@@ -657,6 +671,8 @@ export function PdvClassic({
     vendaPorPeso?: boolean
     atributosLabel?: string
     lineDetail?: string
+    accessorySelection?: AccessorySelectionV1
+    cartLineKey?: string
   }) => {
     const lineId = newPdvLineId(params.inventoryId)
     setCart((prev) => [
@@ -671,6 +687,8 @@ export function PdvClassic({
         vendaPorPeso: params.vendaPorPeso,
         atributosLabel: params.atributosLabel,
         lineDetail: params.lineDetail,
+        accessorySelection: params.accessorySelection,
+        cartLineKey: params.cartLineKey,
       },
     ])
     setSelectedCartLineId(lineId)
@@ -715,6 +733,15 @@ export function PdvClassic({
     if (!product.vendaPorPeso && !validateAggregatedStockForProduct(product, baseQty)) {
       return false
     }
+    // Acessório configurado (modelo/cor): intercepta ANTES da mutação do carrinho.
+    // Atalhos/entradas sem `accessoryConfig` resolvem a config pelo catálogo real.
+    const accessoryConfig =
+      product.accessoryConfig ?? products.find((p) => p.id === product.id)?.accessoryConfig
+    if (!product.vendaPorPeso && accessoryConfigRequiresSelection(accessoryConfig)) {
+      accessoryQtyRef.current = baseQty
+      setAccessoryProduct({ ...product, accessoryConfig })
+      return true
+    }
     if (product.atributos && product.atributos.length > 0) {
       setAttrProduct(product)
       const init: Record<string, string> = {}
@@ -744,6 +771,54 @@ export function PdvClassic({
 
   const addQuickItem = (item: Product) => {
     addToCart(item)
+  }
+
+  /**
+   * Confirmação do modal "Configurar acessório": mesma combinação
+   * produto+modelo+cor incrementa a linha existente; combinação nova vira linha
+   * separada. O estoque segue agregado pelo produto real (`inventoryId`).
+   * Retorna `false` para manter o modal aberto quando a inclusão falha.
+   */
+  const confirmAccessorySelection = (line: AccessoryCartLineSnapshot): boolean => {
+    const product = accessoryProduct
+    if (!product) return false
+    const qty = accessoryQtyRef.current
+    if (!validateAggregatedStockForProduct(product, qty)) return false
+    const existing = cart.find((i) => sameAccessoryCartLine(i.cartLineKey, line.cartLineKey))
+    if (existing) {
+      setCart((prev) =>
+        prev.map((i) =>
+          i.lineId === existing.lineId ? { ...i, quantity: i.quantity + qty } : i,
+        ),
+      )
+      setSelectedCartLineId(existing.lineId)
+      if (isModoRapido) {
+        setRapidoFlashLineId(existing.lineId)
+        window.setTimeout(() => {
+          setRapidoFlashLineId((h) => (h === existing.lineId ? null : h))
+        }, 150)
+        setSearchTerm("")
+        setBipeCode("")
+        playPdvRapidoItemBeepIfEnabled()
+      }
+      setShellHighlightLineId(existing.lineId)
+      window.setTimeout(() => {
+        setShellHighlightLineId((h) => (h === existing.lineId ? null : h))
+      }, 1400)
+      queueMicrotask(() => shellBipeRef.current?.focus())
+    } else {
+      pushCartLine({
+        inventoryId: product.id,
+        name: line.lineDescription,
+        price: product.price,
+        quantity: qty,
+        accessorySelection: line.selection,
+        cartLineKey: line.cartLineKey,
+      })
+    }
+    setSelectedProduct(product)
+    setAccessoryProduct(null)
+    return true
   }
 
   /**
@@ -1111,6 +1186,7 @@ export function PdvClassic({
     shellReceivablesOpen ||
     attrDialogOpen ||
     weightDialogOpen ||
+    accessoryProduct !== null ||
     showKeyboardHelp ||
     showOperationsMenu ||
     postSalePrintOpen
@@ -1433,6 +1509,8 @@ export function PdvClassic({
         vendaPorPeso: i.vendaPorPeso,
         custoUnitario: i.custoUnitario,
         codigoAvulso: i.codigoAvulso,
+        accessorySelection: i.accessorySelection,
+        cartLineKey: i.cartLineKey,
       })),
       customer: selectedCustomer
         ? { id: selectedCustomer.id, name: selectedCustomer.name, cpf: selectedCustomer.cpf, phone: selectedCustomer.phone }
@@ -1462,6 +1540,8 @@ export function PdvClassic({
         vendaPorPeso: i.vendaPorPeso,
         custoUnitario: i.custoUnitario,
         codigoAvulso: i.codigoAvulso,
+        accessorySelection: i.accessorySelection,
+        cartLineKey: i.cartLineKey,
       })),
     )
     if (sale.customer) {
@@ -2011,6 +2091,13 @@ export function PdvClassic({
         onConfirm={confirmWeightDialog}
         onReadScale={handleLerBalança}
         scaleBusy={scaleBusy}
+      />
+
+      <SelecionarAcessorioDialog
+        open={accessoryProduct !== null}
+        product={accessoryProduct}
+        onCancel={() => setAccessoryProduct(null)}
+        onConfirm={confirmAccessorySelection}
       />
 
       <Dialog open={showDevolucaoModal} onOpenChange={setShowDevolucaoModal}>

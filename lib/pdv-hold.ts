@@ -5,6 +5,8 @@
  * Não toca em estoque, financeiro nem caixa.
  */
 
+import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
+
 const HOLDS_KEY_PREFIX = "@omnigestao:pdv-holds:"
 
 export type HeldCartItem = {
@@ -28,6 +30,10 @@ export type HeldCartItem = {
     garantiaDias?: number
     observacao?: string
   }
+  /** Snapshot da seleção de acessório (modelo/cor) da linha. Opcional/aditivo. */
+  accessorySelection?: AccessorySelectionV1
+  /** Chave determinística produto+modelo+cor para agrupar linhas iguais. */
+  cartLineKey?: string
 }
 
 export type HeldSaleCustomer = {

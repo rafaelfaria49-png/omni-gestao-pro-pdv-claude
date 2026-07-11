@@ -54,6 +54,14 @@ import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
 import { AttrProductDialog, WeightProductDialog } from "./pdv-product-dialogs"
+import { SelecionarAcessorioDialog } from "./acessorios/selecionar-acessorio-dialog"
+import {
+  accessoryConfigRequiresSelection,
+  sameAccessoryCartLine,
+  sumCartQuantityByInventoryId,
+  type AccessoryCartLineSnapshot,
+  type AccessorySelectionV1,
+} from "@/lib/acessorios/cart-line"
 import {
   isWebSerialSupported,
   openScalePort,
@@ -132,6 +140,7 @@ function inventoryItemToPdvProduct(inv: InventoryItem): PdvCatalogProduct {
     vendaPorPeso: inv.vendaPorPeso,
     precoPorKg: inv.precoPorKg,
     atributos: inv.atributos,
+    ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
   }
 }
 
@@ -151,6 +160,10 @@ type CartItem = {
   custoUnitario?: number | null
   /** Código de barras/SKU do item avulso → fila "Produtos a cadastrar". */
   codigoAvulso?: string | null
+  /** Snapshot da seleção de acessório (modelo/cor). NÃO é variação de estoque. */
+  accessorySelection?: AccessorySelectionV1
+  /** Chave determinística produto+modelo+cor para agrupar linhas iguais. */
+  cartLineKey?: string
 }
 
 export function PdvSupermercado({
@@ -214,6 +227,9 @@ export function PdvSupermercado({
   const [attrDialogOpen, setAttrDialogOpen] = useState(false)
   const [attrProduct, setAttrProduct] = useState<Product | null>(null)
   const [attrSelections, setAttrSelections] = useState<Record<string, string>>({})
+  // Acessório com modelo/cor: produto aguardando seleção no modal compartilhado.
+  const [accessoryProduct, setAccessoryProduct] = useState<Product | null>(null)
+  const accessoryQtyRef = useRef(1)
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
   const [recebimentoOpen, setRecebimentoOpen] = useState(false)
@@ -249,7 +265,7 @@ export function PdvSupermercado({
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
-      if (isPaymentModalOpen || supervisorDialogOpen || weightDialogOpen || attrDialogOpen || postSalePrintOpen) return
+      if (isPaymentModalOpen || supervisorDialogOpen || weightDialogOpen || attrDialogOpen || accessoryProduct !== null || postSalePrintOpen) return
       if (cart.length === 0) return
       e.preventDefault()
       setCart((prev) => prev.slice(0, -1))
@@ -257,7 +273,7 @@ export function PdvSupermercado({
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, isPaymentModalOpen, supervisorDialogOpen, weightDialogOpen, attrDialogOpen, cart.length, hardFocusSearch])
+  }, [isModoRapido, isPaymentModalOpen, supervisorDialogOpen, weightDialogOpen, attrDialogOpen, accessoryProduct, cart.length, hardFocusSearch])
 
   useEffect(() => {
     let cancelled = false
@@ -347,7 +363,7 @@ export function PdvSupermercado({
   }, [activeSuggestionIndex, filteredProducts])
 
   const pushCartLine = useCallback(
-    (params: { inventoryId: string; name: string; price: number; quantity: number; vendaPorPeso?: boolean; atributosLabel?: string }) => {
+    (params: { inventoryId: string; name: string; price: number; quantity: number; vendaPorPeso?: boolean; atributosLabel?: string; accessorySelection?: AccessorySelectionV1; cartLineKey?: string }) => {
       const lineId = newPdvLineId(params.inventoryId)
       setCart((prev) => [
         ...prev,
@@ -359,6 +375,8 @@ export function PdvSupermercado({
           quantity: params.quantity,
           vendaPorPeso: params.vendaPorPeso,
           atributosLabel: params.atributosLabel,
+          accessorySelection: params.accessorySelection,
+          cartLineKey: params.cartLineKey,
         },
       ])
       if (isModoRapido) {
@@ -390,6 +408,12 @@ export function PdvSupermercado({
         toast({ title: "Estoque insuficiente", description: `Disponível: ${product.stock} · solicitado: ${nq}.` })
         return
       }
+      // Acessório configurado (modelo/cor): intercepta ANTES da mutação do carrinho.
+      if (!product.vendaPorPeso && accessoryConfigRequiresSelection(product.accessoryConfig)) {
+        accessoryQtyRef.current = nq
+        setAccessoryProduct(product)
+        return
+      }
       if (product.atributos && product.atributos.length > 0) {
         pendingSearchQtyRef.current = nq
         setAttrProduct(product)
@@ -412,6 +436,54 @@ export function PdvSupermercado({
     },
     [pushCartLine, toast]
   )
+
+  /**
+   * Confirmação do modal "Configurar acessório": mesma combinação
+   * produto+modelo+cor incrementa a linha; combinação nova vira linha separada.
+   * Anti-oversell agregado: soma TODAS as linhas do mesmo produto real antes de
+   * comparar com o estoque. Retorna `false` para manter o modal aberto.
+   */
+  const confirmAccessorySelection = (line: AccessoryCartLineSnapshot): boolean => {
+    const product = accessoryProduct
+    if (!product) return false
+    const qty = accessoryQtyRef.current
+    const reserved = sumCartQuantityByInventoryId(cart, product.id)
+    if (product.stock < reserved + qty) {
+      toast({
+        title: "Estoque insuficiente",
+        description: `${product.name}: ${reserved + qty} no carrinho e disponível ${product.stock}.`,
+        variant: "destructive",
+      })
+      return false
+    }
+    const existing = cart.find((i) => sameAccessoryCartLine(i.cartLineKey, line.cartLineKey))
+    if (existing) {
+      setCart((prev) =>
+        prev.map((i) =>
+          i.lineId === existing.lineId ? { ...i, quantity: i.quantity + qty } : i,
+        ),
+      )
+      if (isModoRapido) {
+        setRapidoFlashLineId(existing.lineId)
+        window.setTimeout(() => setRapidoFlashLineId((h) => (h === existing.lineId ? null : h)), 150)
+        playPdvRapidoItemBeepIfEnabled()
+      }
+      setSearchTerm("")
+      queueMicrotask(hardFocusSearch)
+    } else {
+      pushCartLine({
+        inventoryId: product.id,
+        name: line.lineDescription,
+        price: product.price,
+        quantity: qty,
+        accessorySelection: line.selection,
+        cartLineKey: line.cartLineKey,
+      })
+    }
+    setSelectedProduct(product)
+    setAccessoryProduct(null)
+    return true
+  }
 
   const removeFromCart = useCallback(
     (lineId: string) => {
@@ -735,7 +807,7 @@ export function PdvSupermercado({
       )
         return
       // Quando modal aberto, não interceptar (deixa o modal controlar o teclado)
-      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || showItemAvulsoModal || vendaEsperaOpen || recebimentoOpen || trocasOpen) return
+      if (isPaymentModalOpen || attrDialogOpen || weightDialogOpen || accessoryProduct !== null || showItemAvulsoModal || vendaEsperaOpen || recebimentoOpen || trocasOpen) return
 
       e.preventDefault()
       e.stopPropagation()
@@ -763,7 +835,7 @@ export function PdvSupermercado({
     }
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as any)
-  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado])
+  }, [isPaymentModalOpen, attrDialogOpen, weightDialogOpen, accessoryProduct, showItemAvulsoModal, vendaEsperaOpen, recebimentoOpen, trocasOpen, cashierId, openPaymentModal, openMultipayModal, formasSupermercado])
 
   const terminalIdForHold = readSelectedTerminal(lojaKey)?.id ?? "default"
   const heldSales = getHeldSales(lojaKey, terminalIdForHold)
@@ -782,6 +854,8 @@ export function PdvSupermercado({
         isAvulso: i.isAvulso,
         custoUnitario: i.custoUnitario,
         codigoAvulso: i.codigoAvulso,
+        accessorySelection: i.accessorySelection,
+        cartLineKey: i.cartLineKey,
       })),
       customer: null,
       discountReais,
@@ -806,6 +880,8 @@ export function PdvSupermercado({
         isAvulso: i.isAvulso,
         custoUnitario: i.custoUnitario,
         codigoAvulso: i.codigoAvulso,
+        accessorySelection: i.accessorySelection,
+        cartLineKey: i.cartLineKey,
       })),
     )
     setDiscountReais(sale.discountReais ?? 0)
@@ -1535,6 +1611,13 @@ export function PdvSupermercado({
         onConfirm={confirmWeightDialog}
         onReadScale={handleLerBalança}
         scaleBusy={scaleBusy}
+      />
+
+      <SelecionarAcessorioDialog
+        open={accessoryProduct !== null}
+        product={accessoryProduct}
+        onCancel={() => setAccessoryProduct(null)}
+        onConfirm={confirmAccessorySelection}
       />
 
       <EditarAtalhosModal

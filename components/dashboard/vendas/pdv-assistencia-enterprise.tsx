@@ -61,6 +61,13 @@ import { useSession } from "next-auth/react"
 import { operatorDisplayName } from "@/lib/pdv-operator-label"
 import { usePdvOperadorNome } from "@/lib/pdv-operador-nome"
 import { type PdvCatalogProduct } from "@/lib/pdv-catalog"
+import { SelecionarAcessorioDialog } from "./acessorios/selecionar-acessorio-dialog"
+import {
+  accessoryConfigRequiresSelection,
+  sameAccessoryCartLine,
+  type AccessoryCartLineSnapshot,
+  type AccessorySelectionV1,
+} from "@/lib/acessorios/cart-line"
 import { findPdvProductByScan } from "@/lib/pdv-scan-product"
 import { lookupPdvScanRemote } from "@/lib/pdv-scan-lookup"
 import { filterPdvCatalogBySearch } from "@/lib/pdv-product-search"
@@ -203,6 +210,10 @@ type CartLine = {
   serviceId?: string
   warrantyDays?: number
   serviceTerms?: string
+  /** Snapshot da seleção de acessório (modelo/cor). NÃO é variação de estoque. */
+  accessorySelection?: AccessorySelectionV1
+  /** Chave determinística produto+modelo+cor para agrupar linhas iguais. */
+  cartLineKey?: string
 }
 
 type PayMethod = "dinheiro" | "pix" | "credito" | "debito" | "a_prazo" | "multiplo"
@@ -970,6 +981,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         vendaPorPeso: inv.vendaPorPeso,
         precoPorKg: inv.precoPorKg,
         atributos: inv.atributos,
+        ...(inv.accessoryConfig ? { accessoryConfig: inv.accessoryConfig } : {}),
       }
     })
   }, [inventory])
@@ -1040,6 +1052,11 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
   const [showItemAvulsoModal, setShowItemAvulsoModal] = useState(false)
   const [recebimentoOpen, setRecebimentoOpen] = useState(false)
   const [vendaEsperaOpen, setVendaEsperaOpen] = useState(false)
+  // Acessório com modelo/cor: produto aguardando seleção no modal compartilhado.
+  const [accessoryTarget, setAccessoryTarget] = useState<{
+    item: PdvCatalogProduct
+    priceOverride?: number
+  } | null>(null)
 
   // ── Customer ──────────────────────────────────────────────────────────────────
   const [customerName, setCustomerName] = useState("")
@@ -1414,7 +1431,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         active instanceof HTMLSelectElement ||
         (active instanceof HTMLElement && active.isContentEditable)
 
-      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen || showItemAvulsoModal || servicoPrecoTarget !== null
+      const anyModalOpen = paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || vendaEsperaOpen || recebimentoOpen || postSalePrintOpen || showItemAvulsoModal || servicoPrecoTarget !== null || accessoryTarget !== null
 
       // END — toggle help overlay (always works)
       if (e.key === "End") {
@@ -1591,7 +1608,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     window.addEventListener("keydown", onKeyDown, { capture: true })
     return () => window.removeEventListener("keydown", onKeyDown, { capture: true } as EventListenerOptions)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal, servicoPrecoTarget])
+  }, [cart, selectedLineId, isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, recebimentoOpen, vendaEsperaOpen, postSalePrintOpen, showItemAvulsoModal, servicoPrecoTarget, accessoryTarget])
 
   // ── Cart actions ────────────────────────────────────────────────────────────────
   const addItem = (item: PdvCatalogProduct, priceOverride?: number) => {
@@ -1620,6 +1637,15 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         return
       }
     }
+    // Acessório configurado (modelo/cor): intercepta ANTES da mutação do carrinho.
+    // Serviços e itens virtuais nunca abrem o modal.
+    if (!svcMeta && !isService && accessoryConfigRequiresSelection(item.accessoryConfig)) {
+      setAccessoryTarget({
+        item,
+        ...(priceOverride !== undefined ? { priceOverride } : {}),
+      })
+      return
+    }
     appendAuditLog({
       action: "pdv_item_adicionado",
       userLabel: cashierId.slice(0, 8),
@@ -1627,7 +1653,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     })
     let flashId: string | null = null
     setCart((prev) => {
-      const hit = prev.find((l) => l.inventoryId === item.id && Math.abs(l.price - effectivePrice) < 0.001)
+      // `!l.cartLineKey`: linha de acessório (modelo/cor) nunca é alvo do merge legado.
+      const hit = prev.find((l) => l.inventoryId === item.id && Math.abs(l.price - effectivePrice) < 0.001 && !l.cartLineKey)
       if (hit) {
         flashId = hit.lineId
         return prev.map((l) => (l.lineId === hit.lineId ? { ...l, qty: l.qty + 1 } : l))
@@ -1668,6 +1695,71 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         window.requestAnimationFrame(() => inputRef.current?.focus())
       }
     })
+  }
+
+  /**
+   * Confirmação do modal "Configurar acessório": mesma combinação
+   * produto+modelo+cor (e mesmo preço) incrementa a linha; combinação nova vira
+   * linha separada. O estoque segue agregado pelo produto real (`inventoryId`),
+   * somando todas as linhas/seleções. Retorna `false` para manter o modal aberto.
+   */
+  const confirmAccessorySelection = (line: AccessoryCartLineSnapshot): boolean => {
+    const target = accessoryTarget
+    if (!target) return false
+    const { item } = target
+    const effectivePrice = target.priceOverride !== undefined ? target.priceOverride : item.price
+    if (item.stock < 999) {
+      const reserved = cartQtyByInventoryId[item.id] ?? 0
+      if (reserved >= item.stock) {
+        toast({
+          title: "Estoque insuficiente",
+          description: `"${item.name}" não tem mais unidades disponíveis (${item.stock} em estoque, ${reserved} no carrinho).`,
+          variant: "destructive",
+        })
+        return false
+      }
+    }
+    appendAuditLog({
+      action: "pdv_item_adicionado",
+      userLabel: cashierId.slice(0, 8),
+      detail: `${line.lineDescription} — ${brl(effectivePrice)}`,
+    })
+    let flashId: string | null = null
+    setCart((prev) => {
+      const hit = prev.find(
+        (l) =>
+          l.inventoryId === item.id &&
+          Math.abs(l.price - effectivePrice) < 0.001 &&
+          sameAccessoryCartLine(l.cartLineKey, line.cartLineKey),
+      )
+      if (hit) {
+        flashId = hit.lineId
+        return prev.map((l) => (l.lineId === hit.lineId ? { ...l, qty: l.qty + 1 } : l))
+      }
+      const nid = newLineId()
+      flashId = nid
+      return [
+        ...prev,
+        {
+          lineId: nid,
+          inventoryId: item.id,
+          title: line.lineDescription,
+          price: effectivePrice,
+          qty: 1,
+          accessorySelection: line.selection,
+          cartLineKey: line.cartLineKey,
+        },
+      ]
+    })
+    if (isModoRapido && flashId) {
+      setRapidoFlashLineId(flashId)
+      window.setTimeout(() => setRapidoFlashLineId((h) => (h === flashId ? null : h)), 150)
+      playPdvRapidoItemBeepIfEnabled()
+    }
+    setSearch("")
+    setAccessoryTarget(null)
+    queueMicrotask(() => inputRef.current?.focus())
+    return true
   }
 
   // ── Preço manual de serviço real (Fase 2) ───────────────────────────────────
@@ -1903,7 +1995,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     if (!isModoRapido) return
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return
-      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || servicoPrecoTarget !== null) return
+      if (paymentOpen || clearConfirmOpen || trocasOpen || editAtalhosOpen || helpOpen || clientePickerOpen || f4QtdOpen || servicoPrecoTarget !== null || accessoryTarget !== null) return
       if (cart.length === 0) return
       e.preventDefault()
       e.stopPropagation()
@@ -1915,7 +2007,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
     }
     window.addEventListener("keydown", onKey, true)
     return () => window.removeEventListener("keydown", onKey, true)
-  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, servicoPrecoTarget, cart.length])
+  }, [isModoRapido, paymentOpen, clearConfirmOpen, trocasOpen, editAtalhosOpen, helpOpen, clientePickerOpen, f4QtdOpen, servicoPrecoTarget, accessoryTarget, cart.length])
 
   // ─── Venda em espera ────────────────────────────────────────────────────────
 
@@ -1935,6 +2027,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         price: l.price,
         quantity: l.qty,
         isAvulso: l.isAvulso,
+        accessorySelection: l.accessorySelection,
+        cartLineKey: l.cartLineKey,
       })),
       customer: selectedClienteId
         ? { id: selectedClienteId, name: customerName, cpf: selectedClienteDoc ?? undefined }
@@ -1963,6 +2057,8 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         price: i.price,
         qty: i.quantity,
         isAvulso: i.isAvulso,
+        accessorySelection: i.accessorySelection,
+        cartLineKey: i.cartLineKey,
       })),
     )
     if (sale.customer) {
@@ -2788,6 +2884,16 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
           })
           queueMicrotask(() => inputRef.current?.focus())
         }}
+      />
+
+      <SelecionarAcessorioDialog
+        open={accessoryTarget !== null}
+        product={accessoryTarget?.item ?? null}
+        onCancel={() => {
+          setAccessoryTarget(null)
+          queueMicrotask(() => inputRef.current?.focus())
+        }}
+        onConfirm={confirmAccessorySelection}
       />
 
       <VendaEsperaModal
