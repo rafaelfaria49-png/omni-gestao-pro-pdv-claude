@@ -49,6 +49,8 @@ export interface CorrecaoLineResolved {
   isAvulso: boolean
   /** true quando a linha NÃO toca estoque (avulso ou OS). */
   virtual: boolean
+  /** Índice da ItemVenda/payload.lines de origem; interno e nunca persistido. */
+  sourceIndex?: number
 }
 
 export interface StockDelta {
@@ -121,6 +123,31 @@ function lineSignature(l: CorrecaoLineResolved): string {
   return `${l.inventoryId}|${l.quantidade}|${l.precoUnitario}|${l.desconto}|${l.nome}`
 }
 
+/**
+ * Primeiro casa produto + nome para tolerar reorder de linhas distintas; depois
+ * usa o mesmo produto como fallback para uma alteração legítima de nome. Para
+ * duplicatas canônicas exatas, a fila segue a ordem do Workspace (sem reorder).
+ * sourceIndex é interno ao plano e nunca é persistido no payload.
+ */
+function assignSourceIndexes(oldLines: CorrecaoLineResolved[], newLines: CorrecaoLineResolved[]) {
+  const used = new Set<number>()
+  const take = (predicate: (line: CorrecaoLineResolved) => boolean) => {
+    const source = oldLines.find((line) => line.sourceIndex !== undefined && !used.has(line.sourceIndex) && predicate(line))
+    if (source?.sourceIndex !== undefined) used.add(source.sourceIndex)
+    return source?.sourceIndex
+  }
+
+  for (const line of newLines) {
+    const sourceIndex = take((old) => old.inventoryId === line.inventoryId && old.nome === line.nome)
+    if (sourceIndex !== undefined) line.sourceIndex = sourceIndex
+  }
+  for (const line of newLines) {
+    if (line.sourceIndex !== undefined) continue
+    const sourceIndex = take((old) => old.inventoryId === line.inventoryId)
+    if (sourceIndex !== undefined) line.sourceIndex = sourceIndex
+  }
+}
+
 export function computeCorrecaoItensPlan(input: {
   oldLines: CorrecaoLineInput[]
   newLines: CorrecaoLineInput[]
@@ -129,9 +156,9 @@ export function computeCorrecaoItensPlan(input: {
 }): CorrecaoItensPlan {
   const oldBreakdown = normalizeBreakdown(input.oldBreakdown)
   const oldResolved: CorrecaoLineResolved[] = []
-  for (const l of input.oldLines ?? []) {
+  for (const [sourceIndex, l] of (input.oldLines ?? []).entries()) {
     const r = resolveLine(l)
-    if (r) oldResolved.push(r)
+    if (r) oldResolved.push({ ...r, sourceIndex })
   }
 
   const newResolved: CorrecaoLineResolved[] = []
@@ -157,6 +184,8 @@ export function computeCorrecaoItensPlan(input: {
   if (oldSig === newSig) {
     return baseFail("no_change", "Nenhuma alteração nos itens.", oldTotal, oldBreakdown, oldResolved)
   }
+
+  assignSourceIndexes(oldResolved, newResolved)
 
   // Fronteira F2: só à vista pura.
   if (oldBreakdown.aPrazo > EPS || oldBreakdown.creditoVale > EPS) {

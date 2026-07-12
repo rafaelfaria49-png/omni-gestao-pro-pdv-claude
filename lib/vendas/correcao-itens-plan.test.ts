@@ -195,3 +195,49 @@ describe("computeCorrecaoItensPlan — guardas", () => {
     expect(p.newTotal).toBe(120)
   })
 })
+
+describe("computeCorrecaoItensPlan — sourceIndex interno", () => {
+  it("mantém duplicatas exatas em filas de ocorrência distintas", () => {
+    const p = computeCorrecaoItensPlan({
+      oldLines: [prod("p1", "Telefone", 1, 10), prod("p1", "Telefone", 1, 10)],
+      newLines: [prod("p1", "Telefone", 2, 10), prod("p1", "Telefone", 3, 10)],
+      oldTotal: 20,
+      oldBreakdown: { dinheiro: 20 },
+    })
+
+    expect(p.newLines.map((line) => line.sourceIndex)).toEqual([0, 1])
+  })
+
+  it("associa pelo produto quando o name canônico muda", () => {
+    const p = computeCorrecaoItensPlan({
+      oldLines: [prod("p1", "Nome antigo", 1, 10)],
+      newLines: [prod("p1", "Nome recalculado", 2, 10)],
+      oldTotal: 10,
+      oldBreakdown: { dinheiro: 10 },
+    })
+
+    expect(p.newLines[0].sourceIndex).toBe(0)
+  })
+
+  it("tolera reorder de linhas distintas sem trocar sourceIndex", () => {
+    const p = computeCorrecaoItensPlan({
+      oldLines: [prod("p1", "Capinha — Preto", 1, 10), prod("p1", "Capinha — Azul", 1, 10)],
+      newLines: [prod("p1", "Capinha — Azul", 2, 10), prod("p1", "Capinha — Preto", 2, 10)],
+      oldTotal: 20,
+      oldBreakdown: { dinheiro: 20 },
+    })
+
+    expect(p.newLines.map((line) => line.sourceIndex)).toEqual([1, 0])
+  })
+
+  it("não dá sourceIndex a produto substituído ou linha nova", () => {
+    const p = computeCorrecaoItensPlan({
+      oldLines: [prod("p1", "Produto antigo", 1, 10)],
+      newLines: [prod("p2", "Produto novo", 1, 10), prod("p3", "Linha nova", 1, 10)],
+      oldTotal: 10,
+      oldBreakdown: { dinheiro: 10 },
+    })
+
+    expect(p.newLines.map((line) => line.sourceIndex)).toEqual([undefined, undefined])
+  })
+})

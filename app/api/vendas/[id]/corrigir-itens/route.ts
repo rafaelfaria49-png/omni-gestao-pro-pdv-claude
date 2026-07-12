@@ -32,6 +32,7 @@ import {
   round2,
   type CorrecaoLineInput,
 } from "@/lib/vendas/correcao-itens-plan"
+import { composeCorrectedSalePayloadLines } from "@/lib/vendas/preserve-sale-line-payload"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -301,15 +302,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const newPbStored = compactBreakdown(plan.newBreakdown)
       const newPayload: Record<string, unknown> = { ...payload }
       newPayload.paymentBreakdown = newPbStored
-      newPayload.lines = plan.newLines.map((l) => ({
-        inventoryId: l.inventoryId,
-        name: l.nome,
-        quantity: l.quantidade,
-        unitPrice: l.precoUnitario,
-        lineTotal: l.lineTotal,
-        ...(l.desconto > 0 ? { desconto: l.desconto } : {}),
-        ...(l.isAvulso ? { isAvulso: true } : {}),
-      }))
+      newPayload.lines = composeCorrectedSalePayloadLines({
+        existingPayloadLines: payload.lines,
+        correctedLines: plan.newLines.map((l) => ({
+          inventoryId: l.inventoryId,
+          name: l.nome,
+          quantity: l.quantidade,
+          unitPrice: l.precoUnitario,
+          lineTotal: l.lineTotal,
+          desconto: l.desconto,
+          isAvulso: l.isAvulso,
+          sourceIndex: l.sourceIndex,
+        })),
+      })
 
       const correcao = {
         at: now.toISOString(),
