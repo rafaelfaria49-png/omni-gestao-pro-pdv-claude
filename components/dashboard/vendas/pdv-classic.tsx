@@ -1871,6 +1871,7 @@ export function PdvClassic({
               name: item.name,
               ...(item.isAvulso ? { isAvulso: true as const } : {}),
               ...(item.custoUnitario !== undefined ? { custoUnitario: item.custoUnitario } : {}),
+              ...(item.accessorySelection ? { accessorySelection: item.accessorySelection } : {}),
             }))
           // Capturar dados de impressão ANTES de limpar o cart
           const _rp = buildReceiptPrintPayload()

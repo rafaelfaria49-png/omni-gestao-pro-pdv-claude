@@ -1394,6 +1394,7 @@ export function PdvSupermercado({
               name: item.name,
               ...(item.isAvulso ? { isAvulso: true as const } : {}),
               ...(item.custoUnitario !== undefined ? { custoUnitario: item.custoUnitario } : {}),
+              ...(item.accessorySelection ? { accessorySelection: item.accessorySelection } : {}),
             }))
 
           let dinheiro = 0

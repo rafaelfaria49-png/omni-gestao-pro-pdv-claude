@@ -2,6 +2,8 @@ import type { Prisma } from "@/generated/prisma"
 import { isVirtualSaleLine } from "@/lib/os-pdv-virtual-lines"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { valorAVistaVenda } from "@/lib/financeiro/correcao-pagamento-plan"
+import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
+import { sanitizeSaleLinesPayload } from "@/lib/vendas/sanitize-sale-line-payload"
 
 /**
  * Lançada pela baixa de estoque do PDV quando `enforceStock` está ativo e o saldo
@@ -167,8 +169,17 @@ export type SalePayload = {
     isAvulso?: boolean
     /** Custo unitário opcional informado no balcão para relatórios de margem. */
     custoUnitario?: number | null
+    /**
+     * Seleção de modelo/cor do acessório (PDV-ACESSORIOS-SELETOR-MODELO-COR-003).
+     * Dado passivo/complementar — nunca participa de resolução de produto, baixa de
+     * estoque, financeiro ou fiscal. Sempre resaneada por `sanitizeSaleLinesPayload`
+     * (via `sanitizeAccessorySelection`) antes de ser gravada em `Venda.payload`.
+     */
+    accessorySelection?: AccessorySelectionV1
   }>
 }
+
+type SalePayloadLine = NonNullable<SalePayload["lines"]>[number]
 
 function asJsonPayload(sale: SalePayload): Prisma.InputJsonValue {
   return sale as unknown as Prisma.InputJsonValue
@@ -235,7 +246,17 @@ export async function upsertVendaInTransaction(
   const terminalId =
     typeof sale.terminalId === "string" && sale.terminalId.trim() ? sale.terminalId.trim() : null
 
-  const lines = Array.isArray(sale.lines) ? sale.lines : []
+  // Saneamento server-side (004B): nunca confiar em `accessorySelection` bruta do
+  // client (sempre resaneada) nem persistir `cartLineKey` (derivável, só serve ao
+  // carrinho). Seleção inválida é descartada com warning — nunca bloqueia a venda.
+  const { lines: sanitizedLines, warnings: accessoryWarnings } = sanitizeSaleLinesPayload(sale.lines)
+  for (const warning of accessoryWarnings) {
+    console.warn(
+      "[upsert-venda] accessory-selection-invalida",
+      JSON.stringify({ code: warning.code, pedidoId, lojaId, index: warning.index }),
+    )
+  }
+  const lines = sanitizedLines as SalePayloadLine[]
 
   // REGRA OFICIAL ÚNICA (GOAL_FATURAMENTO_VALE_ALINHAMENTO): receita à vista =
   // total − aPrazo − creditoVale (ver `valorAVistaVenda`). > 0 ⇒ a venda move a
@@ -294,15 +315,18 @@ export async function upsertVendaInTransaction(
   // Payload gravado em `Venda.payload`: quando o sync foi retroativo (sessão original
   // fechada, autorizado explicitamente), carimba metadados de auditoria — nunca enviados
   // pelo cliente, calculados aqui no servidor no momento da gravação.
-  const salePayloadForStorage: SalePayload = isRetroactiveSync
-    ? {
-        ...sale,
-        retroactiveSync: true,
-        originalSessionClosed: true,
-        syncedAt: new Date().toISOString(),
-        reason: "pending_sale_closed_original_session",
-      }
-    : sale
+  const salePayloadForStorage: SalePayload = {
+    ...sale,
+    lines,
+    ...(isRetroactiveSync
+      ? {
+          retroactiveSync: true,
+          originalSessionClosed: true,
+          syncedAt: new Date().toISOString(),
+          reason: "pending_sale_closed_original_session",
+        }
+      : {}),
+  }
 
   // ── 1. Upsert Venda ─────────────────────────────────────────────────────────
   // Multi-Terminais Fase 3: também popula a coluna `Venda.terminalId` (além do payload)

@@ -1,5 +1,7 @@
 /** Tipos compartilhados entre PDV (client) e rotas `/api/ops/vendas-*` (server). */
 
+import type { AccessorySelectionV1 } from "@/lib/acessorios/types"
+
 export interface APrazoConfig {
   parcelas: number           // 1-24, default 1
   primeiroVencimento: string // DD/MM/YYYY
@@ -38,6 +40,13 @@ export interface SaleLineRecord {
    * Não há coluna `custoUnitario` em `ItemVenda` — o valor vive em `Venda.payload`.
    */
   custoUnitario?: number | null
+  /**
+   * Seleção de modelo/cor do acessório (PDV-ACESSORIOS-SELETOR-MODELO-COR-003).
+   * Dado passivo/complementar: nunca participa de resolução de produto, estoque,
+   * fiscal ou financeiro. Não há coluna dedicada em `ItemVenda` — persiste saneada
+   * em `Venda.payload.lines[]`, mesmo padrão do `custoUnitario` acima.
+   */
+  accessorySelection?: AccessorySelectionV1
 }
 
 export interface SaleRecord {

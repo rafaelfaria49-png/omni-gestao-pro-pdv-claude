@@ -1894,6 +1894,7 @@ export function PdvAssistenciaEnterprise({ isModoRapido = false }: { isModoRapid
         unitPrice: l.price,
         ...(l.isAvulso ? { isAvulso: true as const } : {}),
         ...(l.custoUnitario !== undefined ? { custoUnitario: l.custoUnitario } : {}),
+        ...(l.accessorySelection ? { accessorySelection: l.accessorySelection } : {}),
       })),
       total,
       paymentBreakdown: {

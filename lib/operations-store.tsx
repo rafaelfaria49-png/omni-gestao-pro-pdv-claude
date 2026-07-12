@@ -16,7 +16,7 @@ import { emitEvent } from "@/lib/events/event-bus"
 import { initAutomationEngineClient } from "@/lib/automation/automation-engine"
 import { registrarOperacaoCaixaServer } from "@/lib/pdv-caixa-operacao"
 import { toast } from "@/components/ui/use-toast"
-import type { ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
+import type { AccessorySelectionV1, ProdutoAcessoriosMetadataV1 } from "@/lib/acessorios/types"
 
 export type { APrazoConfig, CaixaOperacaoRecord, DevolucaoRecord, PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
@@ -281,6 +281,8 @@ interface OperationsContextType {
         isAvulso?: boolean
         /** Custo unitário opcional informado pelo operador no balcão. `null`/ausente = desconhecido. */
         custoUnitario?: number | null
+        /** Seleção de modelo/cor do acessório (dado passivo, ver SaleLineRecord). */
+        accessorySelection?: AccessorySelectionV1
       }
     >
     total: number
@@ -1406,6 +1408,7 @@ export function OperationsProvider({
             qtyReturned: 0,
             ...(avulso ? { isAvulso: true } : {}),
             ...(custoUnitario !== undefined ? { custoUnitario } : {}),
+            ...(ln.accessorySelection ? { accessorySelection: ln.accessorySelection } : {}),
           }
         }
         const item = next.inventory.find((i) => i.id === ln.inventoryId)!
@@ -1417,6 +1420,7 @@ export function OperationsProvider({
           unitPrice: unit,
           lineTotal: Math.round(unit * ln.quantity * 100) / 100,
           qtyReturned: 0,
+          ...(ln.accessorySelection ? { accessorySelection: ln.accessorySelection } : {}),
         }
       })
       next.sales.push({
