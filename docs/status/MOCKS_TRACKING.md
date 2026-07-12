@@ -2,7 +2,7 @@
 title: Mocks Tracking — onde ainda há mock no projeto
 status: vivo
 owner: produto + Sonnet
-last_update: 2026-05-30
+last_update: 2026-07-12
 ---
 
 # 🎭 Mocks Tracking
@@ -43,6 +43,7 @@ last_update: 2026-05-30
 | MOCK-06 | `/dashboard/cadastros-v2` dados de demo | Seed-mock | 🟢 | ⏳ | CRM | Substituídos quando há dados reais |
 | MOCK-07 | Marketplace (HUB inteiro) | Hub-mock | 🟢 | ⏳ | Marketplace | Greenfield — não há código, nem mock |
 | MOCK-08 | Marketing IA (campanha, atribuição, ROI) | Hub-mock | 🟡 | ⏳ | Marketing IA | Existe gerador de imagens real, mas orquestrador inexistente |
+| MOCK-09 | `/dashboard/contador` (HUB inteiro) | Hub-mock | 🟡 | ⏳ | Contador | Preview visual (commit `9023e7b`): `components/dashboard/contador/contador-hub-preview.tsx` com dados fixos em `contador-preview-data.ts`; 16 ações no-op com toast honesto; badge "Preview" no menu. Registrado 2026-07-12 (GOAL CONTADOR-HUB-STATUS-RECONCILE-001) |
 
 ---
 
