@@ -156,7 +156,14 @@ type VendaDetalhe = {
     supervisorNome?: string
   }>
   pagamentos: Array<{ label: string; valor: number }>
-  itens: Array<{ id: string; nome: string; quantidade: number; precoUnitario: number; lineTotal: number }>
+  itens: Array<{
+    id: string
+    nome: string
+    quantidade: number
+    precoUnitario: number
+    lineTotal: number
+    acessorio?: { modelLabel?: string; colorLabel?: string }
+  }>
   devolucoes: Array<{
     id: string
     localId: string
@@ -1860,6 +1867,13 @@ export function VendasArquivoGeral() {
                               <p className="text-xs text-muted-foreground">
                                 {it.quantidade}x {fmtBrl(it.precoUnitario)}
                               </p>
+                              {it.acessorio && (it.acessorio.modelLabel || it.acessorio.colorLabel) && (
+                                <p className="text-xs text-muted-foreground/80 mt-0.5 break-words">
+                                  Modelo: {it.acessorio.modelLabel ?? "Não informado"}
+                                  {" · "}
+                                  Cor: {it.acessorio.colorLabel ?? "Não informado"}
+                                </p>
+                              )}
                             </div>
                             <p className="font-semibold text-foreground ml-4 shrink-0 tabular-nums">{fmtBrl(it.lineTotal)}</p>
                           </div>
