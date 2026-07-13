@@ -12,7 +12,7 @@
  * retorna `true`); cancelar nunca altera carrinho nem estoque.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Dialog,
   DialogContent,
@@ -56,6 +56,39 @@ type ModeloSelecionado = {
   name: string
 }
 
+export function completeAccessoryDialogConfirmation<T>(
+  line: T,
+  onConfirm: (confirmedLine: T) => boolean,
+  onClose: () => void,
+): boolean {
+  const confirmed = onConfirm(line)
+  if (confirmed) onClose()
+  return confirmed
+}
+
+export function shouldCloseAccessoryDialog(nextOpen: boolean, busy: boolean): boolean {
+  return !nextOpen && !busy
+}
+
+export function createEmptyAccessoryDialogState() {
+  return {
+    query: "",
+    results: [] as DeviceSearchResult[],
+    searching: false,
+    searchError: null as string | null,
+    modelo: null as ModeloSelecionado | null,
+    colorKey: null as AcessorioColorKey | null,
+    customColor: "",
+    confirmErrors: [] as string[],
+    busy: false,
+  }
+}
+
+export function closeAccessoryDialog(reset: () => void, onCancel: () => void): void {
+  reset()
+  onCancel()
+}
+
 export function SelecionarAcessorioDialog({
   open,
   product,
@@ -88,19 +121,27 @@ export function SelecionarAcessorioDialog({
   const [busy, setBusy] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
-  // Estado temporário zera a cada abertura/produto (cancelar não deixa resíduo).
+  const resetTemporaryState = useCallback(() => {
+    const empty = createEmptyAccessoryDialogState()
+    setQuery(empty.query)
+    setResults(empty.results)
+    setSearching(empty.searching)
+    setSearchError(empty.searchError)
+    setModelo(empty.modelo)
+    setColorKey(empty.colorKey)
+    setCustomColor(empty.customColor)
+    setConfirmErrors(empty.confirmErrors)
+    setBusy(empty.busy)
+  }, [])
+
+  const closeAndReset = useCallback(() => {
+    closeAccessoryDialog(resetTemporaryState, onCancel)
+  }, [onCancel, resetTemporaryState])
+
+  // Estado temporário zera tanto ao fechar quanto a cada abertura/produto.
   useEffect(() => {
-    if (!open) return
-    setQuery("")
-    setResults([])
-    setSearching(false)
-    setSearchError(null)
-    setModelo(null)
-    setColorKey(null)
-    setCustomColor("")
-    setConfirmErrors([])
-    setBusy(false)
-  }, [open, product?.id])
+    resetTemporaryState()
+  }, [open, product?.id, resetTemporaryState])
 
   // Busca na base única com debounce + cancelamento da requisição anterior:
   // resposta antiga abortada nunca sobrescreve o resultado da busca mais nova.
@@ -196,9 +237,10 @@ export function SelecionarAcessorioDialog({
         return
       }
       setConfirmErrors([])
-      // O caller decide: `true` = incluiu no carrinho (e fecha o modal);
-      // `false` = falhou (ex.: estoque agregado) — modal permanece aberto.
-      onConfirm(built.line)
+      // `true` fecha explicitamente depois da inclusão; `false` mantém aberto
+      // (ex.: estoque agregado). O fechamento não depende do evento do Radix,
+      // que pode ocorrer enquanto o busy-lock da confirmação ainda está ativo.
+      completeAccessoryDialogConfirmation(built.line, onConfirm, closeAndReset)
     } finally {
       setBusy(false)
     }
@@ -208,7 +250,7 @@ export function SelecionarAcessorioDialog({
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next && !busy) onCancel()
+        if (shouldCloseAccessoryDialog(next, busy)) closeAndReset()
       }}
     >
       <DialogContent className="sm:max-w-lg">
@@ -375,7 +417,7 @@ export function SelecionarAcessorioDialog({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+          <Button type="button" variant="outline" onClick={closeAndReset} disabled={busy}>
             Cancelar
           </Button>
           <Button type="button" onClick={handleConfirm} disabled={!canConfirm}>
