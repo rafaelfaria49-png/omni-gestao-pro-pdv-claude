@@ -108,6 +108,12 @@ function PreviewPill({ children = "preview" }: { children?: React.ReactNode }) {
   )
 }
 
+/**
+ * GOAL CONTADOR-HUB-HONESTY-ROUTE-SAFETY-002 — texto único reaproveitado em todo
+ * CTA sem efeito real, para manter a mensagem consistente e fácil de auditar.
+ */
+const CTA_INDISPONIVEL_TITLE = "Disponível na fase de dados reais — pré-visualização, sem efeito real."
+
 const ORIGEM_META: Record<DossieOrigem, { label: string; icon: LucideIcon; className: string }> = {
   sistema: { label: "OmniGestão", icon: Sparkles, className: "border-primary/25 bg-primary/10 text-primary" },
   anexar: { label: "anexar", icon: Upload, className: "border-sky-500/25 bg-sky-500/10 text-sky-500" },
@@ -240,7 +246,7 @@ function PacoteCard({
           </div>
         ))}
       </div>
-      <Btn variant="primary" className="w-full" onClick={onDownload}>
+      <Btn variant="primary" className="w-full" disabled title={CTA_INDISPONIVEL_TITLE} onClick={onDownload}>
         <Download className="h-4 w-4" />
         Baixar pacote · preview
       </Btn>
@@ -317,8 +323,12 @@ export function ContadorHubPreview() {
           </>
         }
       />
+      <PreviewBanner
+        title="Preview — dados ilustrativos."
+        text="Pendências, KPIs, progresso do fechamento e alertas desta visão geral são fixos e exemplificam o layout. Nenhum valor aqui reflete seu Financeiro, Fiscal ou Caixa reais."
+      />
 
-      <div className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-4 mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {VISAO_KPIS.map((k) => {
           const Icon = k.icon
           return (
@@ -470,12 +480,16 @@ export function ContadorHubPreview() {
           </>
         }
         actions={
-          <Btn disabled={modo} onClick={() => noop("Fechar competência")}>
+          <Btn disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Fechar competência")}>
             Fechar competência · preview
           </Btn>
         }
       />
-      <Card>
+      <PreviewBanner
+        title="Preview — o fechamento não é executado pelo sistema."
+        text="O progresso (3 de 9) e o checklist abaixo são ilustrativos. Fechar a competência de verdade continua sendo feito com o seu contador — nenhuma trava real é aplicada aqui."
+      />
+      <Card className="mt-4">
         <div className="flex flex-wrap items-center gap-4 border-b border-border/60 p-4">
           <ProgressRing pct={35} />
           <div className="min-w-[160px] flex-1">
@@ -555,14 +569,18 @@ export function ContadorHubPreview() {
                 </button>
               ))}
             </div>
-            <Btn variant="primary" onClick={() => noop("Anexar documento")}>
+            <Btn variant="primary" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Anexar documento")}>
               <Plus className="h-4 w-4" />
               Anexar documento
             </Btn>
           </>
         }
       />
-      <Card className="overflow-hidden">
+      <PreviewBanner
+        title="Preview — documentos e valores ilustrativos."
+        text="Nomes, números de nota e valores desta lista são fictícios, para exemplificar o layout. Nenhum arquivo é enviado, recebido ou armazenado nesta fase."
+      />
+      <Card className="mt-4 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] border-collapse text-[13px]">
             <thead>
@@ -590,12 +608,12 @@ export function ContadorHubPreview() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     {d.kind === "recv" ? (
-                      <Btn size="sm" onClick={() => noop("Baixar documento")}>
+                      <Btn size="sm" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Baixar documento")}>
                         Baixar
                       </Btn>
                     ) : (
                       <Btn size="sm" onClick={() => openDrawer("doc", d.name)}>
-                        Ver
+                        Ver exemplo
                       </Btn>
                     )}
                   </td>
@@ -646,10 +664,10 @@ export function ContadorHubPreview() {
                   <td className="px-4 py-3 text-right">
                     {o.kind === "guia" ? (
                       <Btn size="sm" onClick={() => openDrawer("guia", o.name)}>
-                        Ver
+                        Ver exemplo
                       </Btn>
                     ) : (
-                      <Btn size="sm" onClick={() => noop("Anexar comprovante")}>
+                      <Btn size="sm" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Anexar comprovante")}>
                         Anexar
                       </Btn>
                     )}
@@ -697,7 +715,13 @@ export function ContadorHubPreview() {
                   <div className="text-xs text-muted-foreground">{r.sub}</div>
                 </div>
                 {r.formats.map((f) => (
-                  <Btn key={f} size="sm" onClick={() => noop(`Exportar ${r.title} (${f})`)}>
+                  <Btn
+                    key={f}
+                    size="sm"
+                    disabled
+                    title={CTA_INDISPONIVEL_TITLE}
+                    onClick={() => noop(`Exportar ${r.title} (${f})`)}
+                  >
                     {f}
                   </Btn>
                 ))}
@@ -809,10 +833,10 @@ export function ContadorHubPreview() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Btn size="sm" onClick={() => noop("Montar dossiê")}>
+                    <Btn size="sm" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Montar dossiê")}>
                       Montar dossiê · preview
                     </Btn>
-                    <Btn size="sm" onClick={() => noop("Baixar pacote do dossiê")}>
+                    <Btn size="sm" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Baixar pacote do dossiê")}>
                       Baixar pacote
                     </Btn>
                   </div>
@@ -846,7 +870,12 @@ export function ContadorHubPreview() {
                             </Chip>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <Btn size="sm" onClick={() => noop(ORIGEM_ACAO[row.origem])}>
+                            <Btn
+                              size="sm"
+                              disabled
+                              title={CTA_INDISPONIVEL_TITLE}
+                              onClick={() => noop(ORIGEM_ACAO[row.origem])}
+                            >
                               {ORIGEM_ACAO_LABEL[row.origem]}
                             </Btn>
                           </td>
@@ -878,7 +907,7 @@ export function ContadorHubPreview() {
         <CardHead
           title="Funcionários"
           right={
-            <Btn size="sm" disabled={modo} onClick={() => noop("Adicionar funcionário")}>
+            <Btn size="sm" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Adicionar funcionário")}>
               Adicionar
             </Btn>
           }
@@ -905,7 +934,7 @@ export function ContadorHubPreview() {
                     <Chip variant={f.docs.variant}>{f.docs.label}</Chip>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Btn size="sm" onClick={() => noop("Ver holerite")}>
+                    <Btn size="sm" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Ver holerite")}>
                       Ver · preview
                     </Btn>
                   </td>
@@ -1006,7 +1035,7 @@ export function ContadorHubPreview() {
               className="w-full rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-[13px] text-foreground outline-none focus:border-primary focus:bg-card"
             />
           </div>
-          <Btn variant="primary" className="w-full" disabled={modo} onClick={() => noop("Enviar convite")}>
+          <Btn variant="primary" className="w-full" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Enviar convite")}>
             Enviar convite · preview
           </Btn>
           <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-foreground">
@@ -1026,7 +1055,7 @@ export function ContadorHubPreview() {
                   <b className="text-[13.5px] font-semibold text-foreground">{p.label}</b>
                   <small className="block text-[11.5px] text-muted-foreground">{p.sub}</small>
                 </div>
-                <Switch defaultChecked={p.on} disabled={modo} aria-label={p.label} />
+                <Switch defaultChecked={p.on} disabled title={CTA_INDISPONIVEL_TITLE} aria-label={p.label} />
               </div>
             ))}
           </div>
@@ -1082,7 +1111,14 @@ export function ContadorHubPreview() {
               placeholder="Escrever uma observação…"
               className="mt-3 w-full resize-y rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-[13px] text-foreground outline-none focus:border-primary focus:bg-card"
             />
-            <Btn variant="primary" size="sm" className="mt-2" onClick={() => noop("Enviar observação")}>
+            <Btn
+              variant="primary"
+              size="sm"
+              className="mt-2"
+              disabled
+              title={CTA_INDISPONIVEL_TITLE}
+              onClick={() => noop("Enviar observação")}
+            >
               Enviar observação
             </Btn>
           </div>
@@ -1127,16 +1163,16 @@ export function ContadorHubPreview() {
               <b className="text-[13.5px] font-semibold text-foreground">Avisar vencimentos</b>
               <small className="block text-[11.5px] text-muted-foreground">badges no painel · preview</small>
             </div>
-            <Switch defaultChecked disabled={modo} aria-label="Avisar vencimentos" />
+            <Switch defaultChecked disabled title={CTA_INDISPONIVEL_TITLE} aria-label="Avisar vencimentos" />
           </div>
           <div className="flex items-center justify-between gap-3.5 py-3">
             <div>
               <b className="text-[13.5px] font-semibold text-foreground">Lembrar de fechar o mês</b>
               <small className="block text-[11.5px] text-muted-foreground">alerta de fechamento</small>
             </div>
-            <Switch defaultChecked disabled={modo} aria-label="Lembrar de fechar o mês" />
+            <Switch defaultChecked disabled title={CTA_INDISPONIVEL_TITLE} aria-label="Lembrar de fechar o mês" />
           </div>
-          <Btn className="mt-3.5" disabled={modo} onClick={() => noop("Salvar configurações")}>
+          <Btn className="mt-3.5" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Salvar configurações")}>
             Salvar · preview
           </Btn>
         </Card>
@@ -1228,12 +1264,20 @@ export function ContadorHubPreview() {
             <Switch checked={modo} onCheckedChange={handleModo} aria-label="Modo contador" />
           </label>
 
-          <Btn variant="primary" onClick={() => noop("Gerar pacote do contador")}>
+          <Btn
+            variant="primary"
+            disabled
+            title={CTA_INDISPONIVEL_TITLE}
+            onClick={() => noop("Gerar pacote do contador")}
+          >
             <Sparkles className="h-4 w-4" />
             Gerar pacote · preview
           </Btn>
         </div>
       </div>
+
+      {/* aviso global e persistente — visível em todas as seções, ver GlobalPreviewNotice */}
+      <GlobalPreviewNotice />
 
       {/* corpo: nav interna + conteúdo */}
       <div className="flex flex-col lg:flex-row">
@@ -1340,6 +1384,26 @@ function PreviewBanner({ title, text }: { title: string; text: string }) {
         <b className="text-amber-600 dark:text-amber-400">{title}</b>
         <p className="mt-0.5 text-[12.5px] text-foreground/80">{text}</p>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Aviso global e persistente (GOAL CONTADOR-HUB-HONESTY-ROUTE-SAFETY-002).
+ * Renderizado uma única vez, fora do conteúdo trocado por seção — por isso continua
+ * visível em todas as 11 áreas e ao trocar de aba/competência, sem depender de
+ * hover/tooltip/clique. Tom informativo (primary), não de erro/alerta.
+ */
+function GlobalPreviewNotice() {
+  return (
+    <div className="flex flex-wrap items-start gap-2.5 border-b border-primary/20 bg-primary/[0.06] px-4 py-2.5 sm:px-6">
+      <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+      <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-foreground/85">
+        <b className="font-semibold text-foreground">Pré-visualização — dados ilustrativos, sem efeito real.</b>{" "}
+        Este ambiente apresenta exemplos visuais. Nenhum envio, fechamento, guia ou documento é processado nesta
+        fase, e a implementação real chega em fases futuras. A competência selecionada acima não altera os dados
+        ilustrativos exibidos.
+      </p>
     </div>
   )
 }
@@ -1476,10 +1540,12 @@ function DetailDrawer({
                 Nenhum comprovante anexado
               </div>
               <div className="mt-3 flex flex-wrap gap-2.5 border-t border-border pt-3.5">
-                <Btn variant="primary" onClick={() => onNoop("Anexar comprovante")}>
+                <Btn variant="primary" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => onNoop("Anexar comprovante")}>
                   Anexar comprovante
                 </Btn>
-                <Btn onClick={() => onNoop("Marcar como pago")}>Marcar como pago</Btn>
+                <Btn disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => onNoop("Marcar como pago")}>
+                  Marcar como pago
+                </Btn>
               </div>
             </>
           ) : (
@@ -1508,10 +1574,12 @@ function DetailDrawer({
                 Preciso deste documento para fechar a competência.
               </div>
               <div className="mt-3 flex flex-wrap gap-2.5 border-t border-border pt-3.5">
-                <Btn variant="primary" onClick={() => onNoop("Enviar ao contador")}>
+                <Btn variant="primary" disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => onNoop("Enviar ao contador")}>
                   Enviar ao contador
                 </Btn>
-                <Btn onClick={() => onNoop("Baixar documento")}>Baixar</Btn>
+                <Btn disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => onNoop("Baixar documento")}>
+                  Baixar
+                </Btn>
               </div>
             </>
           )}

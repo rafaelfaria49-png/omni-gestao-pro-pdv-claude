@@ -190,8 +190,8 @@ export type DocumentoRow = {
 export const DOCUMENTOS_ROWS: DocumentoRow[] = [
   { name: "Extrato bancário", sub: "Banco principal · PDF", tipo: "A enviar", seg: "send", status: { label: "pendente", variant: "pend" }, kind: "doc" },
   { name: "Folha do mês", sub: "manual · sem cálculo", tipo: "A enviar", seg: "send", status: { label: "pendente", variant: "pend" }, preview: true, kind: "doc" },
-  { name: "NF-e de venda 001234", sub: "XML · R$ 1.240,00", tipo: "Nota fiscal", seg: "send", status: { label: "enviado", variant: "env" }, kind: "doc" },
-  { name: "NF-e de compra 5678", sub: "XML · entrada", tipo: "Nota fiscal", seg: "send", status: { label: "conferido", variant: "conf" }, kind: "doc" },
+  { name: "NF-e de venda 001234", sub: "XML · R$ 1.240,00", tipo: "Nota fiscal", seg: "send", status: { label: "enviado", variant: "env" }, preview: true, kind: "doc" },
+  { name: "NF-e de compra 5678", sub: "XML · entrada", tipo: "Nota fiscal", seg: "send", status: { label: "conferido", variant: "conf" }, preview: true, kind: "doc" },
   { name: "Balancete de Maio/2026", sub: "recebido do contador · PDF", tipo: "Recebido", seg: "recv", status: { label: "resolvido", variant: "res" }, kind: "recv" },
 ]
 
@@ -212,7 +212,7 @@ export const OBRIGACOES_ROWS: ObrigacaoRow[] = [
   { name: "FGTS Digital", comp: "06/2026", venc: "20/07/2026", valor: null, status: { label: "pendente", variant: "pend" }, preview: true, kind: "guia" },
   { name: "INSS / Pró-labore", comp: "06/2026", venc: "20/07/2026", valor: null, status: { label: "pendente", variant: "pend" }, preview: true, kind: "guia" },
   { name: "ISS retido", comp: "05/2026", venc: "10/06/2026", valor: null, status: { label: "vencido", variant: "venc" }, preview: true, kind: "guia" },
-  { name: "Honorários do contador", comp: "06/2026", venc: "10/07/2026", valor: "R$ 480,00", status: { label: "pendente", variant: "pend" }, kind: "acao" },
+  { name: "Honorários do contador", comp: "06/2026", venc: "10/07/2026", valor: "R$ 480,00", status: { label: "pendente", variant: "pend" }, preview: true, kind: "acao" },
 ]
 
 /* ─────────────────────────── RELATÓRIOS ─────────────────────────── */
