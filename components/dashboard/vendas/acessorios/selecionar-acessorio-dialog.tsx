@@ -70,6 +70,13 @@ export function shouldCloseAccessoryDialog(nextOpen: boolean, busy: boolean): bo
   return !nextOpen && !busy
 }
 
+export function shouldRenderAccessoryDialog(
+  open: boolean,
+  product: SelecionarAcessorioProduto | null,
+): boolean {
+  return open && product !== null
+}
+
 export function createEmptyAccessoryDialogState() {
   return {
     query: "",
@@ -214,6 +221,13 @@ export function SelecionarAcessorioDialog({
     ? buildAccessoryLineDescription(product.name, selectionCandidate)
     : ""
 
+  // O Radix mantem o portal durante a animacao de saida. No PDV Rapido/Grade,
+  // a atualizacao mais pesada do carrinho deixava esse portal fechado, ja sem
+  // produto/estado temporario, perceptivel como um shell vazio. Remover a arvore
+  // do Dialog no mesmo render em que o caller fecha evita depender da Presence
+  // ou de timers, sem alterar as animacoes dos demais dialogs do sistema.
+  const renderDialog = shouldRenderAccessoryDialog(open, product)
+
   const handleSelectModelo = (r: DeviceSearchResult) => {
     setModelo({ modelKey: r.modelKey, brand: r.brand, name: r.canonicalName || r.modelKey })
     setQuery("")
@@ -245,6 +259,8 @@ export function SelecionarAcessorioDialog({
       setBusy(false)
     }
   }
+
+  if (!renderDialog) return null
 
   return (
     <Dialog

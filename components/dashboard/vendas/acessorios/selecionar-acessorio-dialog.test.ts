@@ -4,6 +4,7 @@ import {
   completeAccessoryDialogConfirmation,
   createEmptyAccessoryDialogState,
   shouldCloseAccessoryDialog,
+  shouldRenderAccessoryDialog,
 } from "./selecionar-acessorio-dialog"
 
 describe("SelecionarAcessorioDialog — ciclo de fechamento", () => {
@@ -29,6 +30,41 @@ describe("SelecionarAcessorioDialog — ciclo de fechamento", () => {
     const close = vi.fn()
 
     expect(completeAccessoryDialogConfirmation({}, () => false, close)).toBe(false)
+    expect(close).not.toHaveBeenCalled()
+  })
+
+  it("Rápido/Grade desmonta o shell no mesmo ciclo do sucesso, sem timer", () => {
+    vi.useFakeTimers()
+    const product = { id: "produto-1", name: "Capinha" }
+    let open = true
+    let pendingProduct: typeof product | null = product
+    const events: string[] = []
+
+    expect(shouldRenderAccessoryDialog(open, pendingProduct)).toBe(true)
+
+    completeAccessoryDialogConfirmation(
+      {},
+      () => {
+        events.push("adicionou")
+        open = false
+        pendingProduct = null
+        return true
+      },
+      () => events.push("fechou"),
+    )
+
+    expect(events).toEqual(["adicionou", "fechou"])
+    expect(shouldRenderAccessoryDialog(open, pendingProduct)).toBe(false)
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+  })
+
+  it("Rápido/Grade mantém o shell e a seleção quando a inclusão falha", () => {
+    const product = { id: "produto-1", name: "Capinha" }
+    const close = vi.fn()
+
+    expect(completeAccessoryDialogConfirmation({}, () => false, close)).toBe(false)
+    expect(shouldRenderAccessoryDialog(true, product)).toBe(true)
     expect(close).not.toHaveBeenCalled()
   })
 
