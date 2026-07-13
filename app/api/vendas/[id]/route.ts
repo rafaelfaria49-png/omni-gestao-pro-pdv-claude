@@ -12,6 +12,7 @@ import { prisma, prismaEnsureConnected, withPrismaSafe } from "@/lib/prisma"
 import { opsLojaIdFromRequest } from "@/lib/ops-api-gate"
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import { computeVendaStatusFinanceiro, sumPagamentosHistorico } from "@/lib/vendas/venda-financeiro-resumo"
+import { readAccessorySelectionForDisplay } from "@/lib/vendas/accessory-selection-readback"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -264,6 +265,9 @@ export async function GET(
             : undefined
           const line = Array.isArray(pl) && pl[i] && typeof pl[i] === "object" ? (pl[i] as Record<string, unknown>) : null
           const metadata = line && line.metadata && typeof line.metadata === "object" ? line.metadata : null
+          // Read-back de accessorySelection (004C): mesmo casamento por posição
+          // já usado para `metadata` (F4) — payload.lines[i] ↔ ItemVenda[i].
+          const acessorio = readAccessorySelectionForDisplay(line)
           return {
             id: it.id,
             inventoryId: it.inventoryId,
@@ -272,6 +276,9 @@ export async function GET(
             precoUnitario: it.precoUnitario,
             lineTotal: it.lineTotal,
             metadata,
+            ...(acessorio.hasSelection
+              ? { acessorio: { modelLabel: acessorio.modelLabel, colorLabel: acessorio.colorLabel } }
+              : {}),
           }
         }),
         devolucoes: devolucoes.map((d) => {
