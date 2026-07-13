@@ -8,6 +8,13 @@ schema_version: v1
 
 # 📜 Execution Log
 
+> [!WARNING]
+> Este arquivo é um histórico operacional append-only. Ele **não é fonte factual suficiente**, não
+> comprova o estado atual do repositório e não deve ser usado sozinho para afirmar que uma fase
+> fiscal está concluída. Toda alegação atual deve ser verificada contra código, Git, testes, schema,
+> banco e, quando aplicável, evidência de autoridade externa. Para o estado fiscal reconciliado,
+> consulte `docs/fiscal/FISCAL_RECONCILE_REPORT_001.md`.
+
 > **Append-only.** Entradas existentes nunca são editadas. Correção = nova entrada.
 > **Schema v1 congelado em 2026-05-27.** Mudança exige ADR.
 > Engine grava aqui na **Fase 16** do pipeline ([`EXECUTION_ENGINE.md §2`](../execution/EXECUTION_ENGINE.md)).

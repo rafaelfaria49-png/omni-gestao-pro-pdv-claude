@@ -33,28 +33,33 @@ de NFC-e em produção**, sem quebrar uma única venda real no caminho.
 
 ---
 
-## 2. Estado atual (re-baseline da Fase 0)
+## 2. Estado atual (reconciliação de 2026-07-13)
 
-A frente **não começa do zero**. Mapa do roadmap oficial × realidade (evidência na
-auditoria de readiness):
+> **Nota de reconciliação:** esta seção foi atualizada por extensão pelo
+> `FISCAL-STATUS-RECONCILE-001`. Arquitetura, decisões, sequência, gates, princípios e histórico das
+> demais seções permanecem vigentes. Fonte detalhada:
+> `docs/fiscal/FISCAL_RECONCILE_REPORT_001.md`.
 
-| # | Etapa do roadmap | GOAL | Estado | Commit |
-|---|---|---|---|---|
-| 1 | Plano Mestre Fiscal | — | 🟢 **Esta Fase 0** | (este doc) |
-| 2 | Fiscal Schema Foundation | 001B | ✅ Entregue (dormente) | `32ae9c8` |
-| 3 | Fiscal Identity por loja | 002 | ✅ Entregue (admin-only) | `549513d` |
-| 4 | Venda State Machine | 003 | ✅ Entregue (no-op) | `ca681ed` |
-| 5 | Produto Fiscal Persist | 004 | ✅ Entregue (em uso) | `04ce54d` |
-| 6 | Venda Fiscal Snapshot | 005 | ✅ Entregue (sem chamador) | `b5177cf` |
-| 7 | Fiscal Provider Abstraction | 006 | ✅ Entregue (só STUB) | `a206dce` |
-| 8 | NFC-e Emission Pipeline | 007+008 | ⚠️ **Parcial** — orquestração+numeração prontas (simuladas); falta XML/assinatura/SEFAZ/QR | `cd565c8`, `2b88411` |
-| 9 | DANFE Unificado | — | ❌ Não iniciado | — |
-| 10 | Fiscal Events | — | ⚠️ Schema+stub; falta serviço | — |
-| 11 | Homologação | — | ❌ Não iniciado (só simulado) | — |
-| 12 | Produção | — | ❌ Não iniciado | — |
+| Fase | Estado factual | Evidência / bloqueio |
+|---|---|---|
+| F0 | governança vigente e reconciliada | plano, roadmap, ADR-0008 e relatório |
+| F1 | decisão aceita; implementação interna parcial N3 | ADR-0009 + EnvVault; KMS ausente |
+| F2 | código/testes N3, sem caller | `ba0cc12`; sem ST/CSOSN 500 |
+| F3 | código/testes N3, sem caller | `ba0cc12`; validação XSD é placeholder |
+| F4 | código/testes N3, sem caller | `ba0cc12`; C14N com desvios documentados |
+| F5 | contrato/stub N1 | provider real ausente; G-F5 aberto |
+| F6 | N0 | QR-Code/CSC operacional ausente |
+| F7 | contrato de fila N1; guards em seis rotas | 0 jobs; sem produtor/worker; G-F7 aberto |
+| F8 | N0 | DANFCE ausente |
+| F9 | schema/stub N1 | 0 eventos; serviço real ausente |
+| F10 | N0 | contingência ausente |
+| F11 | N0 | zero prova SEFAZ em homologação |
+| F12 | N0 | zero produção; G-F12 aberto |
 
-> **Regra de ouro:** **não reimplementar** as etapas 2–7. A Fase de implementação ataca a
-> etapa 8 (parte real) em diante.
+Banco read-only: oito tabelas fiscais presentes, todas vazias; 721 vendas e zero com estado fiscal;
+diff schema versus banco vazio. O dry-run existente permanece N3, não N4, porque XSD e C14N ainda
+não produzem prova independente. **Não reimplementar F2–F4 do zero:** fechar as lacunas internas,
+reconstruir o gate auferível e somente então avançar para F5.
 
 ---
 
