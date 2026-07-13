@@ -179,6 +179,9 @@ export function AreaContadorPro() {
             className="w-full sm:w-36 bg-secondary border-border"
           />
           <p className="text-xs text-muted-foreground">Base para estimativa sobre o faturamento bruto (ex.: Simples).</p>
+          <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+            Estimativa manual — não é apuração tributária.
+          </p>
         </div>
       </div>
 
@@ -264,15 +267,21 @@ export function AreaContadorPro() {
               CSV (Excel) ou XML com: data, tipo, valor total, custo da peça e forma de pagamento.
             </CardDescription>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={exportarCsv} className="gap-2">
-              <FileSpreadsheet className="w-4 h-4" />
-              Exportar CSV
-            </Button>
-            <Button type="button" variant="outline" onClick={exportarXml} className="gap-2">
-              <FileCode2 className="w-4 h-4" />
-              Exportar XML
-            </Button>
+          <div className="flex flex-wrap gap-3">
+            <div className="flex flex-col items-start gap-1">
+              <Button type="button" onClick={exportarCsv} className="gap-2">
+                <FileSpreadsheet className="w-4 h-4" />
+                Exportar CSV
+              </Button>
+              <span className="text-[11px] text-muted-foreground">CSV de agregados operacionais</span>
+            </div>
+            <div className="flex flex-col items-start gap-1">
+              <Button type="button" variant="outline" onClick={exportarXml} className="gap-2">
+                <FileCode2 className="w-4 h-4" />
+                Exportar XML
+              </Button>
+              <span className="text-[11px] text-muted-foreground">XML de movimentos — formato próprio, não é XML fiscal</span>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground flex items-start gap-2">
