@@ -5,6 +5,29 @@
 
 ---
 
+## Fiscal — reconciliação F0–F12 · 13/07/2026
+
+> Fonte factual: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md).
+> O antigo ponteiro `CURRENT_STATUS.md:2934` estava incorreto. A ocorrência “NF-e — mock” abaixo
+> pertence ao preview PDV Next e não descreve o estado global da frente fiscal.
+
+- **Código:** F2–F4 existem desde `ba0cc12` e têm testes internos; isso é N3, não homologação.
+- **Runtime:** seis rotas de correção/cancelamento usam guards fiscais. Snapshot, emissão, pipeline,
+  tax-engine, XML, assinatura, vault e numeração não têm caller no fluxo de venda.
+- **Banco:** oito tabelas fiscais presentes, sem drift; 0 configurações, certificados, séries, notas,
+  eventos, jobs e logs. 721 vendas, 0 com estado fiscal.
+- **Dry-run:** existe, mas XSD placeholder e C14N irregular impedem classificá-lo como N4.
+- **Homologação:** nenhuma evidência SEFAZ; N6=0.
+- **Produção:** nenhuma emissão; N7=0; `fiscalEnabled` sem caminho de ativação.
+- **Bloqueios:** paridade fiscal do `upsertProduto`, ST/CSOSN 500, XSD oficial, C14N interoperável,
+  provider real, estado incerto, eventos/fila e gates G-F5/G-F7/G-F12.
+- **Próximo GOAL:** GOAL 002 — paridade fiscal do `upsertProduto` do Cadastros V2.
+- **Documentos:** [roadmap](../roadmaps/ROADMAP_FISCAL.md) ·
+  [plano mestre](../governance/MASTER_FISCAL_EXECUTION_PLAN.md) ·
+  [continuação](../fiscal/FISCAL_CONTINUATION_IMPLEMENTATION_GOALS_001.md).
+
+---
+
 ## Operações V4 (Preview) — Orçamento: custo interno e margem (slice `OPS-V4-ORCAMENTO-CUSTO-MARGEM-004D`) · 01/07/2026
 
 > Slice de UX sobre o Orçamento V4 (rascunho/enviado, editor real). Objetivo: dar controle de
