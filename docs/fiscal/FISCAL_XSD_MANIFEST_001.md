@@ -15,7 +15,7 @@
 | Tamanho do ZIP | 41.335 bytes |
 | SHA-256 do ZIP | `d44ae5aa6a0d1cabf6235d2d2d47b75be5dd87bc6b90a7ec3dcec99c3d41bda1` |
 
-O download foi feito diretamente do domínio oficial, validado como ZIP pelo tipo de conteúdo e pela assinatura `PK`, e extraído somente em diretório temporário. Nenhum executável foi baixado e nenhum arquivo do pacote foi instalado ou incorporado ao repositório neste ciclo.
+O download foi feito diretamente do domínio oficial, validado como ZIP pelo tipo de conteúdo e pela assinatura `PK`, e extraído somente em diretório temporário. No spike posterior autorizado, os cinco XSDs necessários foram copiados byte a byte para `lib/fiscal/xsd/schemas/PL_010e_v1.02/NFe/` e conferidos contra este manifesto. Nenhum executável desconhecido foi baixado.
 
 ## 2. Arquivos necessários e hashes
 
@@ -30,6 +30,8 @@ Todos os arquivos estão sob `PL_010e_v1.02/NFe/` dentro do ZIP oficial.
 | `xmldsig-core-schema_v1.01.xsd` | 3.747 bytes | `f56744a5f51c03f027de13f39f869307091781a9ef1d91b1ebe14719ce28e1ac` | schema da assinatura XML DSig |
 
 Os cinco arquivos são necessários. O validador não deve buscar uma cópia externa de `xmldsig-core-schema_v1.01.xsd`, mesmo que reconheça seu namespace; deve usar exclusivamente o arquivo hasheado do pacote.
+
+Os hashes da tabela usam os bytes brutos oficiais. O ZIP mistura finais de linha: `nfe_v4.00.xsd` e `xmldsig-core-schema_v1.01.xsd` usam CRLF, enquanto os demais usam LF. Como o Git pode normalizar XML textual por plataforma, o spike primeiro aceita o hash bruto e, como único fallback, canonicaliza `CRLF` para `LF`. Os hashes LF dos dois arquivos originalmente CRLF são, respectivamente, `920fd7c04a35b49d0b7f56792e650e63cef76cf1b23f10995b1bbec1f0202774` e `78f924e7c9cbeb1e4be900b3b1e7faf2d901972635842980fd43dabb533c512b`. Qualquer outra diferença continua falhando fechado; os bytes entregues ao parser não são reescritos.
 
 ## 3. Grafo de imports/includes
 
@@ -72,7 +74,7 @@ Procedimento reproduzível de atualização futura, ainda não executado no repo
 7. extrair imports/includes e comprovar que o grafo fecha localmente;
 8. compilar o entrypoint com rede bloqueada;
 9. revisar a diferença contra o pacote versionado anterior;
-10. só então, mediante aprovação e ADR aplicável, versionar os arquivos e atualizar este manifesto.
+10. só então, mediante aprovação aplicável, versionar os arquivos e atualizar este manifesto.
 
 Uma mudança de bytes com o mesmo nome de pacote deve ser tratada como incidente de proveniência, não como atualização automática.
 
@@ -81,6 +83,8 @@ Uma mudança de bytes com o mesmo nome de pacote deve ser tratada como incidente
 - Manifesto documental criado: sim.
 - Pacote identificado e hasheado: sim.
 - Grafo fechado e compilado localmente: sim.
-- Arquivos XSD copiados para o repositório: não.
-- Dependência de runtime adicionada: não.
-- Validador implementado: não.
+- Arquivos XSD copiados para o repositório: sim, no diretório versionado indicado acima.
+- Dependência de spike adicionada: sim, `xmllint-wasm@5.2.0`, versão exata.
+- Validador de produção implementado: não; existe apenas uma camada experimental isolada.
+- Integridade local dos cinco arquivos: aprovada.
+- Integração com `validarXsd` ou emissão: não.

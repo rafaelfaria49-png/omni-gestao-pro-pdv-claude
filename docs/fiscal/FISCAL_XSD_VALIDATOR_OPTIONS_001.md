@@ -166,3 +166,16 @@ Se qualquer critério eliminatório de Vercel falhar, usar B como referência/va
 ## 8. Checkpoint
 
 Decisão necessária de Rafael: autorizar a opção A e o spike da próxima fase, ou escolher B/C e aceitar seus impactos de infraestrutura. Até essa decisão, não instalar pacote, não versionar XSD e não implementar `validarXsd`.
+
+## 9. Resultado do spike autorizado
+
+O checkpoint acima foi atendido e o spike da opção A foi executado em `fiscal/goal-002-xsd-wasm-spike`. O resultado completo está em `FISCAL_XSD_WASM_SPIKE_001.md`, `FISCAL_XSD_SECURITY_REVIEW_001.md` e `FISCAL_XSD_PACKAGING_REPORT_001.md`.
+
+- Funcionalidade XSD 1.0/imports/includes/offline: aprovada.
+- Contrato de erro, integridade e bloqueio de DTD/ENTITY: aprovado no spike.
+- Windows, Node 20 e build Next/webpack: aprovados.
+- Tracing de worker, WASM e XSDs: aprovado localmente.
+- Linux/CI remoto e deploy Vercel: não comprovados.
+- Segurança do motor: reprovada, pois `xmllint-wasm@5.2.0` embute libxml2 2.13.8 afetado por vulnerabilidades aplicáveis.
+
+Portanto, a recomendação original fica **substituída**: a opção A na versão avaliada está **REJEITADA** para produção. Reavaliar somente com libxml2 corrigido e nova execução do spike; caso contrário, realizar o spike da opção B em infraestrutura controlada. Nenhuma integração com `validarXsd` está autorizada por este resultado.
