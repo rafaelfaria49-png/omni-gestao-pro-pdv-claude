@@ -18,10 +18,15 @@ services:
     environment:
       FISCAL_XSD_HOST: 0.0.0.0
       FISCAL_XSD_PORT: "8080"
-    ports:
-      - "127.0.0.1:18080:8080"
+    # Sem `ports`: a rede é `internal`, que bloqueia o egress por DROP e, pelo mesmo mecanismo, não
+    # entrega porta publicada ao host. Alcance o worker de dentro da rede, pelo alias — que é também
+    # o único host (fora loopback) aceito pela allowlist anti-SSRF do cliente. Ex.:
+    #   docker compose -f docker-compose.fiscal-xsd.yml run --rm \
+    #     --entrypoint sh fiscal-xsd-worker -c 'wget -qO- http://worker.internal:8080/ready'
     networks:
-      - fiscal_xsd_internal
+      fiscal_xsd_internal:
+        aliases:
+          - worker.internal
     restart: "no"
 
 networks:

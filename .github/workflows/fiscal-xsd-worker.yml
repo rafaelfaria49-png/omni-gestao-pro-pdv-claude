@@ -73,7 +73,14 @@ jobs:
     timeout-minutes: 40
     env:
       IMAGE: omni-fiscal-xsd-worker:${{ github.sha }}
-      FISCAL_XSD_WORKER_URL: http://127.0.0.1:18080
+      # Mesma imagem-base pinada por digest do Dockerfile. Serve de runner dos testes DENTRO da
+      # rede sem egress — rede `--internal` do Docker não entrega porta publicada ao host.
+      NODE_IMAGE: node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+      # Só resolve de dentro de `fiscal-xsd-internal`. O sufixo `.internal` é o único host (além de
+      # loopback) que a allowlist anti-SSRF de `createXsdWorkerHttpClient` aceita.
+      WORKER_URL: http://worker.internal:8080
+      # FISCAL_XSD_WORKER_URL NÃO é definida no job: sem ela, as suítes de container caem no
+      # `describe.skip` durante o `npm test` do host, e só rodam no container que alcança o worker.
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -88,9 +95,11 @@ jobs:
       - name: Criar rede sem egress e executar com limites externos
         run: |
           docker network create --internal fiscal-xsd-internal
+          # Sem `--publish`: rede `--internal` bloqueia o egress por DROP e, pelo mesmo mecanismo,
+          # não entrega porta publicada ao host. O acesso legítimo é de dentro da rede, via alias.
           docker run --detach --name fiscal-xsd-worker \
             --network fiscal-xsd-internal \
-            --publish 127.0.0.1:18080:8080 \
+            --network-alias worker.internal \
             --read-only \
             --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=10001,gid=10001 \
             --memory 768m --cpus 1 --pids-limit 64 \
@@ -99,12 +108,17 @@ jobs:
       - name: Readiness com integridade
         run: |
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:18080/ready > ready.json; then break; fi
+            if docker exec fiscal-xsd-worker node -e "fetch('http://127.0.0.1:8080/ready').then(r=>r.ok?r.text():Promise.reject(new Error(String(r.status)))).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))" > ready.json; then break; fi
             sleep 1
           done
           cat ready.json
           grep --fixed-strings '"libxml2Version":"2.15.3"' ready.json
           grep --fixed-strings '"schemaManifestHash":"fc42d03e1c4a676d5ea5fe813cd2941672caa18540856cac5208ccdff049cae1"' ready.json
+      - name: Provar o transporte dos testes (alias interno resolve entre containers)
+        run: >-
+          docker run --rm --network fiscal-xsd-internal "$NODE_IMAGE"
+          node -e "fetch('${WORKER_URL}/ready').then(r=>{if(!r.ok)throw new Error(String(r.status));return r.text()})
+          .then(t=>console.log(t)).catch(e=>{console.error('worker.internal inalcancavel:',e.message);process.exit(1)})"
       - name: Provar isolamento e limites do container
         run: |
           test "$(docker inspect --format '{{.Config.User}}' fiscal-xsd-worker)" = "10001:10001"
@@ -113,10 +127,17 @@ jobs:
           test "$(docker inspect --format '{{.HostConfig.PidsLimit}}' fiscal-xsd-worker)" = "64"
           test "$(docker inspect --format '{{.HostConfig.NanoCpus}}' fiscal-xsd-worker)" = "1000000000"
           test "$(docker inspect --format '{{.HostConfig.SecurityOpt}}' fiscal-xsd-worker)" = "[no-new-privileges:true]"
-      - name: Testes no container real
+      - name: Testes no container real (executados dentro da rede sem egress)
         run: |
-          npm run test:fiscal-xsd:integration
-          npm run test:fiscal-xsd:security
+          docker run --rm \
+            --network fiscal-xsd-internal \
+            --volume "$PWD":/workspace \
+            --workdir /workspace \
+            --user "$(id -u):$(id -g)" \
+            --env HOME=/tmp \
+            --env FISCAL_XSD_WORKER_URL="$WORKER_URL" \
+            "$NODE_IMAGE" \
+            sh -c 'npm run test:fiscal-xsd:integration && npm run test:fiscal-xsd:security'
           docker exec fiscal-xsd-worker test ! -e /tmp/xsd-injection-probe
       - name: Prova automatizada de zero egress
         run: >-
@@ -131,7 +152,9 @@ jobs:
         run: |
           docker image inspect "$IMAGE" --format '{{.Id}}' | tee image-digest.txt
           docker exec fiscal-xsd-worker sha256sum /opt/fiscal-xsd/bin/xmllint | tee binary-sha256.txt
-          docker exec fiscal-xsd-worker sha256sum --check /opt/fiscal-xsd/manifest/binary.sha256
+          # binary.sha256 registra o nome relativo `xmllint`; conferir a partir do diretório do binário.
+          docker exec --workdir /opt/fiscal-xsd/bin fiscal-xsd-worker \
+            sha256sum --check /opt/fiscal-xsd/manifest/binary.sha256
       - name: Gerar SBOM SPDX
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
