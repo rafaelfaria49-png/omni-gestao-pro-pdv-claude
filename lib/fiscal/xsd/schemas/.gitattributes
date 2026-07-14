@@ -1,0 +1,2 @@
+# Preserve os bytes oficiais; conversão CRLF/LF invalidaria os hashes regulatórios.
+*.xsd -text

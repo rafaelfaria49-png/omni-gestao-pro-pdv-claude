@@ -1,0 +1,170 @@
+name: Fiscal XSD Worker B2
+
+on:
+  push:
+    branches:
+      - fiscal/goal-002-xsd-worker-implementation
+    paths:
+      - "workers/fiscal-xsd/**"
+      - "lib/fiscal/xsd/**"
+      - "lib/fiscal/xsd-worker/**"
+      - "lib/fiscal/dry-run/**"
+      - "lib/fiscal/pipeline/**"
+      - "lib/fiscal/xml/**"
+      - "scripts/fiscal/**"
+      - "docker-compose.fiscal-xsd.yml"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/fiscal-xsd-worker.yml"
+  pull_request:
+    paths:
+      - "workers/fiscal-xsd/**"
+      - "lib/fiscal/xsd/**"
+      - "lib/fiscal/xsd-worker/**"
+      - "lib/fiscal/dry-run/**"
+      - "lib/fiscal/pipeline/**"
+      - "lib/fiscal/xml/**"
+      - "scripts/fiscal/**"
+      - "docker-compose.fiscal-xsd.yml"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/fiscal-xsd-worker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiscal-xsd-worker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit and contract (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.20.2
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - run: npm run fiscal:xsd:verify-hashes
+      - run: npm run test:fiscal-xsd:unit
+      - run: npx tsc --noEmit --incremental false
+      - name: ESLint fiscal focado
+        run: >-
+          npx eslint lib/fiscal/xsd lib/fiscal/xsd-worker
+          lib/fiscal/dry-run/dry-run-validation.ts lib/fiscal/dry-run/dry-run-pipeline.ts
+          lib/fiscal/dry-run/dry-run.test.ts lib/fiscal/pipeline/fiscal-pipeline.ts
+          lib/fiscal/pipeline/fiscal-pipeline.test.ts lib/fiscal/xml/nfce-xml.types.ts
+          lib/fiscal/xml/nfce-xml-builder.test.ts workers/fiscal-xsd scripts/fiscal
+
+  container:
+    name: Container, offline integration and supply chain
+    runs-on: ubuntu-24.04
+    needs: unit
+    timeout-minutes: 40
+    env:
+      IMAGE: omni-fiscal-xsd-worker:${{ github.sha }}
+      FISCAL_XSD_WORKER_URL: http://127.0.0.1:18080
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.20.2
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx prisma generate
+      - run: npm run fiscal:xsd:verify-hashes
+      - name: Build imutável do worker
+        run: docker build --pull --file workers/fiscal-xsd/Dockerfile --tag "$IMAGE" .
+      - name: Criar rede sem egress e executar com limites externos
+        run: |
+          docker network create --internal fiscal-xsd-internal
+          docker run --detach --name fiscal-xsd-worker \
+            --network fiscal-xsd-internal \
+            --publish 127.0.0.1:18080:8080 \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=10001,gid=10001 \
+            --memory 768m --cpus 1 --pids-limit 64 \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            "$IMAGE"
+      - name: Readiness com integridade
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18080/ready > ready.json; then break; fi
+            sleep 1
+          done
+          cat ready.json
+          grep --fixed-strings '"libxml2Version":"2.15.3"' ready.json
+          grep --fixed-strings '"schemaManifestHash":"fc42d03e1c4a676d5ea5fe813cd2941672caa18540856cac5208ccdff049cae1"' ready.json
+      - name: Provar isolamento e limites do container
+        run: |
+          test "$(docker inspect --format '{{.Config.User}}' fiscal-xsd-worker)" = "10001:10001"
+          test "$(docker inspect --format '{{.HostConfig.ReadonlyRootfs}}' fiscal-xsd-worker)" = "true"
+          test "$(docker inspect --format '{{.HostConfig.Memory}}' fiscal-xsd-worker)" = "805306368"
+          test "$(docker inspect --format '{{.HostConfig.PidsLimit}}' fiscal-xsd-worker)" = "64"
+          test "$(docker inspect --format '{{.HostConfig.NanoCpus}}' fiscal-xsd-worker)" = "1000000000"
+          test "$(docker inspect --format '{{.HostConfig.SecurityOpt}}' fiscal-xsd-worker)" = "[no-new-privileges:true]"
+      - name: Testes no container real
+        run: |
+          npm run test:fiscal-xsd:integration
+          npm run test:fiscal-xsd:security
+          docker exec fiscal-xsd-worker test ! -e /tmp/xsd-injection-probe
+      - name: Prova automatizada de zero egress
+        run: >-
+          docker exec fiscal-xsd-worker node -e
+          "fetch('https://www.nfe.fazenda.gov.br',{signal:AbortSignal.timeout(3000)})
+          .then(()=>process.exit(1)).catch(()=>process.exit(0))"
+      - name: Suíte completa e build Next
+        run: |
+          npm test
+          npm run build
+      - name: Registrar hashes da imagem e binário
+        run: |
+          docker image inspect "$IMAGE" --format '{{.Id}}' | tee image-digest.txt
+          docker exec fiscal-xsd-worker sha256sum /opt/fiscal-xsd/bin/xmllint | tee binary-sha256.txt
+          docker exec fiscal-xsd-worker sha256sum --check /opt/fiscal-xsd/manifest/binary.sha256
+      - name: Gerar SBOM SPDX
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: ${{ env.IMAGE }}
+          format: spdx-json
+          output-file: fiscal-xsd-worker.spdx.json
+          upload-artifact: false
+      - name: Scanner Trivy (bloqueio CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL
+      - name: Arquivar evidências
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fiscal-xsd-worker-evidence-${{ github.sha }}
+          path: |
+            ready.json
+            image-digest.txt
+            binary-sha256.txt
+            fiscal-xsd-worker.spdx.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Diagnóstico em falha
+        if: failure()
+        run: docker logs fiscal-xsd-worker
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm --force fiscal-xsd-worker || true
+          docker network rm fiscal-xsd-internal || true

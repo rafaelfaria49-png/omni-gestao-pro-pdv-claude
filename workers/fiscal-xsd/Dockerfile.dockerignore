@@ -1,0 +1,5 @@
+**
+!workers/fiscal-xsd/src/**
+!lib/fiscal/xsd/manifest.json
+!lib/fiscal/xsd/manifest.sha256
+!lib/fiscal/xsd/schemas/PL_010e_v1.02/NFe/**

@@ -2,7 +2,7 @@
  * Dry-Run fiscal da NFC-e (BL-FISCAL-006 · FISCAL_DRY_RUN.md) — ponto único de import. DORMENTE.
  *
  * Esteira A SECO que exercita snapshot → tributação(congelada) → XML → assinatura de TESTE →
- * verificação → validação estrutural → XSD(placeholder) → relatório, DESCARTANDO o XML. Não
+ * validação XSD oficial → assinatura → verificação estrutural → relatório, DESCARTANDO o XML. Não
  * transmite à SEFAZ, não usa certificado real, não gera DANFE, não persiste nada. Sem chamador
  * produtivo. Serve como gate técnico entre F4 (assinatura) e F5 (transmissão) e em CI.
  */

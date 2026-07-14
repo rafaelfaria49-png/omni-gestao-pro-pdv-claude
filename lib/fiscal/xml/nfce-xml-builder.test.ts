@@ -18,7 +18,7 @@ import {
 import { sanitizeProdutoFiscal, PRODUTO_FISCAL_VAZIO } from "@/lib/produto-fiscal"
 import { buildNfceXml, buildNfceXmlResult } from "./nfce-xml-builder"
 import { validateNfceSnapshot } from "./nfce-xml-validation"
-import { NfceXmlError } from "./nfce-xml.types"
+import { NFCE_VER_PROC, NfceXmlError } from "./nfce-xml.types"
 
 const LOJA_OK: SnapshotLojaInput = {
   cnpj: "11.222.333/0001-81",
@@ -97,6 +97,8 @@ describe("buildNfceXml · venda simples (Simples Nacional, sem destaque)", () =>
     expect(xml).toContain("<tpAmb>2</tpAmb>") // homologação
     expect(xml).toContain("<tpImp>4</tpImp>")
     expect(xml).toContain("<indFinal>1</indFinal>")
+    expect(NFCE_VER_PROC).toHaveLength(20)
+    expect(xml).toContain(`<verProc>${NFCE_VER_PROC}</verProc>`)
     // emit
     expect(xml).toContain("<CNPJ>11222333000181</CNPJ>")
     expect(xml).toContain("<CRT>1</CRT>")
