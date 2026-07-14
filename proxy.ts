@@ -15,6 +15,11 @@ import {
   CRITICAL_LEGACY_PAGES,
   resolveLegacyPageRedirect,
 } from "@/lib/navigation/legacy-routes"
+import {
+  CONTADOR_COOKIE,
+  resolveLegacyPortalEnabled,
+  verifyContadorSessionToken,
+} from "@/lib/contador/auth/legacy-session"
 
 const { auth } = NextAuth(authConfig)
 
@@ -22,7 +27,6 @@ const SUBSCRIPTION_SECRET =
   process.env.ASSISTEC_SUBSCRIPTION_SECRET || "assistec-dev-secret-change-in-production"
 
 const ADMIN_COOKIE = "assistec_admin_session"
-const CONTADOR_COOKIE = "assistec_contador_session"
 
 function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith("/_next")) return true
@@ -146,13 +150,18 @@ export const proxy = auth(async (req) => {
   }
 
   if (pathname === "/contador" || pathname.startsWith("/contador/")) {
-    const contador = req.cookies.get(CONTADOR_COOKIE)?.value
-    if (contador !== "1") {
+    const redirectToLogin = () => {
       const u = req.nextUrl.clone()
       u.pathname = "/login-contador"
       u.searchParams.set("next", pathname)
       return NextResponse.redirect(u)
     }
+    if (!resolveLegacyPortalEnabled()) return redirectToLogin()
+    const secret = process.env.CONTADOR_SESSION_SECRET?.trim()
+    if (!secret) return redirectToLogin()
+    const token = req.cookies.get(CONTADOR_COOKIE)?.value
+    const result = await verifyContadorSessionToken(token, secret)
+    if (!result.ok) return redirectToLogin()
   }
 
   return NextResponse.next()
