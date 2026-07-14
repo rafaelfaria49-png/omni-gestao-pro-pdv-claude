@@ -1,0 +1,141 @@
+name: Fiscal XSD native xmllint spike
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fiscal/goal-002-xmllint-native-spike
+
+permissions:
+  contents: read
+
+env:
+  LIBXML2_VERSION: 2.15.3
+  LIBXML2_SOURCE_SHA256: 78262a6e7ac170d6528ebfe2efccdf220191a5af6a6cd61ea4a9a9a5042c7a07
+  LIBXML2_SOURCE_URL: https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.3.tar.xz
+
+jobs:
+  windows-x64:
+    name: Windows x64 · source oficial
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: npm
+
+      - name: Instalar dependências JS sem scripts
+        run: npm ci --ignore-scripts
+
+      - name: Registrar ausência ou presença de B1 no host
+        shell: pwsh
+        run: |
+          $candidate = Get-Command xmllint -ErrorAction SilentlyContinue
+          if ($candidate) {
+            & $candidate.Source --version
+          } else {
+            Write-Output "B1_WINDOWS_HOST=absent"
+          }
+
+      - name: Baixar, verificar e compilar libxml2 oficial
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $archive = Join-Path $env:RUNNER_TEMP "libxml2-$env:LIBXML2_VERSION.tar.xz"
+          Invoke-WebRequest -Uri $env:LIBXML2_SOURCE_URL -OutFile $archive
+          $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          if ($sourceHash -ne $env:LIBXML2_SOURCE_SHA256) { throw "source SHA-256 mismatch" }
+          cmake -E tar xf $archive
+          $source = Join-Path $PWD "libxml2-$env:LIBXML2_VERSION"
+          $build = Join-Path $env:RUNNER_TEMP "libxml2-build-windows-x64"
+          cmake -S $source -B $build -A x64 -D BUILD_SHARED_LIBS=OFF -D LIBXML2_WITH_ICONV=OFF -D LIBXML2_WITH_ZLIB=OFF -D LIBXML2_WITH_TESTS=OFF -D LIBXML2_WITH_PYTHON=OFF
+          cmake --build $build --config Release --target xmllint
+          $binary = Join-Path $build "Release\xmllint.exe"
+          if (-not (Test-Path -LiteralPath $binary)) { throw "xmllint.exe not produced" }
+          $binaryHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $binary).Hash.ToLowerInvariant()
+          & $binary --version
+          Get-Item -LiteralPath $binary | Select-Object FullName,Length
+          Write-Output "XMLLINT_SHA256=$binaryHash"
+          "FISCAL_XMLLINT_PATH=$binary" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "FISCAL_XMLLINT_SHA256=$binaryHash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Testes reais e métricas Windows
+        run: >-
+          npx vitest run
+          lib/fiscal/xsd-native/xmllint-native-spike.test.ts
+          lib/fiscal/xsd-native/xmllint-native-spike.integration.test.ts
+          scripts/fiscal/xsd-native-spike-metrics.test.ts
+
+      - name: Publicar binário somente como artefato efêmero do spike
+        uses: actions/upload-artifact@v4
+        with:
+          name: xmllint-2.15.3-windows-x64-spike
+          path: ${{ runner.temp }}\libxml2-build-windows-x64\Release\xmllint.exe
+          retention-days: 7
+          if-no-files-found: error
+
+  linux-x64:
+    name: Linux x64 · source oficial
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+          cache: npm
+
+      - name: Instalar dependências JS sem scripts
+        run: npm ci --ignore-scripts
+
+      - name: Avaliar B1 do Ubuntu
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libxml2-utils
+          /usr/bin/xmllint --version
+          dpkg-query --show --showformat='B1_PACKAGE=${Package}\nB1_VERSION=${Version}\n' libxml2-utils libxml2
+          sha256sum /usr/bin/xmllint
+
+      - name: Baixar, verificar e compilar libxml2 oficial
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/libxml2-$LIBXML2_VERSION.tar.xz"
+          curl --fail --location --proto '=https' --tlsv1.2 --output "$archive" "$LIBXML2_SOURCE_URL"
+          echo "$LIBXML2_SOURCE_SHA256  $archive" | sha256sum --check --strict
+          tar -xf "$archive"
+          source="$PWD/libxml2-$LIBXML2_VERSION"
+          build="$RUNNER_TEMP/libxml2-build-linux-x64"
+          cmake -S "$source" -B "$build" -D CMAKE_BUILD_TYPE=Release -D BUILD_SHARED_LIBS=OFF -D LIBXML2_WITH_ICONV=OFF -D LIBXML2_WITH_ZLIB=OFF -D LIBXML2_WITH_TESTS=OFF -D LIBXML2_WITH_PYTHON=OFF
+          cmake --build "$build" --config Release --target xmllint --parallel 2
+          binary="$(realpath "$build/xmllint")"
+          chmod 0755 "$binary"
+          binary_hash="$(sha256sum "$binary" | cut -d' ' -f1)"
+          "$binary" --version
+          file "$binary"
+          ldd "$binary"
+          stat --format='XMLLINT_BYTES=%s' "$binary"
+          echo "XMLLINT_SHA256=$binary_hash"
+          echo "FISCAL_XMLLINT_PATH=$binary" >> "$GITHUB_ENV"
+          echo "FISCAL_XMLLINT_SHA256=$binary_hash" >> "$GITHUB_ENV"
+
+      - name: Testes reais e métricas Linux
+        run: >-
+          npx vitest run
+          lib/fiscal/xsd-native/xmllint-native-spike.test.ts
+          lib/fiscal/xsd-native/xmllint-native-spike.integration.test.ts
+          scripts/fiscal/xsd-native-spike-metrics.test.ts
+
+      - name: Publicar binário somente como artefato efêmero do spike
+        uses: actions/upload-artifact@v4
+        with:
+          name: xmllint-2.15.3-linux-x64-spike
+          path: ${{ runner.temp }}/libxml2-build-linux-x64/xmllint
+          retention-days: 7
+          if-no-files-found: error
