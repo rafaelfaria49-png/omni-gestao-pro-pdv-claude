@@ -115,8 +115,8 @@ function LoginContadorForm() {
             </span>
             <span className="block text-xs text-muted-foreground">
               Equipe da loja (dono, gerente ou vendedor) entra pela{" "}
-              <Link href="/" className="underline underline-offset-4">
-                página inicial
+              <Link href="/login" className="underline underline-offset-4">
+                tela de login
               </Link>
               .
             </span>
