@@ -15,6 +15,7 @@ env:
   LIBXML2_SOURCE_URL: https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.3.tar.xz
   LIBXML2_MAXMEM_PATCH_SHA256: ab319bb46b2aeb5f4311a12676b6b3eed1d18fb47721ae6274a849d31b96fb7c
   LIBXML2_MAXMEM_PATCH_URL: https://github.com/GNOME/libxml2/commit/d3352554e4c1f052b914cda7b415d06b7eab5dfa.patch
+  FISCAL_XMLLINT_MAX_MEMORY_BYTES: 0
 
 jobs:
   windows-x64:

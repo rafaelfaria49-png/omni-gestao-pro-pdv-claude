@@ -21,6 +21,7 @@ function realOptions(): NativeXmllintSpikeOptions {
     executablePath,
     trust: { mode: "provisioned", expectedSha256: executableSha256 },
     timeoutMs: 5_000,
+    maxMemoryBytes: Number(process.env.FISCAL_XMLLINT_MAX_MEMORY_BYTES ?? 512 * 1024 * 1024),
   }
 }
 

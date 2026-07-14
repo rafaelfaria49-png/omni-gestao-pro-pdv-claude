@@ -186,6 +186,16 @@ describe("spike xmllint nativo · contrato e isolamento", () => {
     }
   })
 
+  it("permite delegar o limite rígido de memória ao container", async () => {
+    const calls: Array<{ args: readonly string[]; request: NativeProcessRequest }> = []
+    const result = await validateXmlWithNativeXmllintSpike(VALID_NFCE_XML_VERPROC_20, {
+      ...options(fakeRunner(VALID_RESULT, calls)),
+      maxMemoryBytes: 0,
+    })
+    expect(result.valid).toBe(true)
+    expect(calls[1]?.args).not.toContain("--maxmem")
+  })
+
   it("interpreta XML malformado como entrada inválida, não falha de infraestrutura", async () => {
     const malformed = {
       ...VALID_RESULT,

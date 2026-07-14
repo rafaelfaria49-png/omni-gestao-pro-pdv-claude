@@ -528,14 +528,15 @@ export async function validateXmlWithNativeXmllintSpike(
       temporaryDirectory,
     )
     const runner = options.runner ?? runNativeProcessForSpike
+    const maxMemoryBytes = options.maxMemoryBytes ?? NATIVE_SPIKE_DEFAULT_MAX_MEMORY_BYTES
+    const memoryArguments = maxMemoryBytes > 0 ? ["--maxmem", String(maxMemoryBytes)] : []
     const result = await runner(
       inspection.resolvedExecutablePath,
       [
         "--noout",
         "--nonet",
         "--nocatalogs",
-        "--maxmem",
-        String(options.maxMemoryBytes ?? NATIVE_SPIKE_DEFAULT_MAX_MEMORY_BYTES),
+        ...memoryArguments,
         "--schema",
         ENTRYPOINT.name,
         "-",
