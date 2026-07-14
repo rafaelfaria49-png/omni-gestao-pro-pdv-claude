@@ -23,7 +23,22 @@ describe("dry-run com gate XSD real", () => {
     })
   }
 
-  it("falha XSD interrompe antes da assinatura", async () => {
+  it("o XSD recebe o XML ASSINADO — o schema exige <Signature>", async () => {
+    let recebido = ""
+    await runFiscalDryRun(dryRunSnapshot("simples"), {
+      contexto: CTX,
+      xsdAdapter: {
+        async validate(request) {
+          recebido = request.xmlPayload
+          return { valid: true as const, outcome: "VALIDACAO_APROVADA" as const, issues: [], engine: TEST_ENGINE, durationMs: 1 }
+        },
+      },
+    })
+    expect(recebido).toContain("<Signature")
+    expect(recebido).toContain("<X509Certificate>")
+  })
+
+  it("XSD reprova o dry-run mesmo com a assinatura íntegra", async () => {
     const result = await runFiscalDryRunDetailed(dryRunSnapshot("simples"), {
       contexto: CTX,
       xsdAdapter: { async validate() {
@@ -32,8 +47,11 @@ describe("dry-run com gate XSD real", () => {
     })
     expect(result.report.status).toBe("erro")
     expect(result.report.xsd.status).toBe("xsd_invalido")
-    expect(result.report.etapas.find((step) => step.nome === "assinatura")?.status).toBe("pulada")
-    expect(result.xmlAssinado).toBeNull()
+    // Assina-se antes de validar (o schema exige <Signature>); a reprovação do XSD não some por isso.
+    expect(result.report.etapas.find((step) => step.nome === "assinatura")?.status).toBe("ok")
+    expect(result.xmlAssinado).not.toBeNull()
+    expect(result.report.assinaturaValida).toBe(true)
+    expect(result.report.prontoParaEmissao).toBe(false)
   })
 
   it("worker indisponível falha fechado", async () => {

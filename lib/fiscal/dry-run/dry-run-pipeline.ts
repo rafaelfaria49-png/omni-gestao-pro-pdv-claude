@@ -152,33 +152,20 @@ export async function runFiscalDryRunDetailed(
   }
 
   // 3) Assinatura com certificado de TESTE (simulada — nunca A1 real, nunca transmite).
-  const xsd = await validarXsd(xml, {
-    adapter: options.xsdAdapter,
-    storeId: snapshot.storeId,
-    correlationId: `dry-run:${snapshot.storeId}:${sha256Hex(xml).slice(0, 16)}`,
-  })
-  etapas.push(etapa("xsd", xsdEtapaStatus(xsd), xsd.mensagem))
-  if (xsd.status !== "xsd_ok") erros.push(xsd.mensagem, ...xsd.violacoes)
-
-  if (xsd.status === "xsd_ok") {
-    const cert = options.certificado ?? DRY_RUN_TEST_CERT
-    try {
-      const signed = signNfceXmlDetailed(xml, cert, options.senha ?? "", {
-        ignorarValidade: options.validarCertificado !== true,
-        agora: options.agora,
-      })
-      xmlAssinado = signed.xml
-      referenciaId = signed.referenciaId
+  const cert = options.certificado ?? DRY_RUN_TEST_CERT
+  try {
+    const signed = signNfceXmlDetailed(xml, cert, options.senha ?? "", {
+      ignorarValidade: options.validarCertificado !== true,
+      agora: options.agora,
+    })
+    xmlAssinado = signed.xml
+    referenciaId = signed.referenciaId
     etapas.push(etapa("assinatura", "ok", "XML assinado com certificado de teste (descartável)."))
-    } catch (e) {
-      const msg = e instanceof NfceSignError ? `${e.code}: ${e.message}` : "Falha ao assinar."
-      etapas.push(etapa("assinatura", "erro", msg))
-      etapas.push(etapa("verificacao_assinatura", "pulada", "Pulada (assinatura falhou)."))
-      erros.push(msg)
-    }
-  } else {
-    etapas.push(etapa("assinatura", "pulada", "Pulada (gate XSD não aprovado)."))
-    etapas.push(etapa("verificacao_assinatura", "pulada", "Pulada (sem assinatura)."))
+  } catch (e) {
+    const msg = e instanceof NfceSignError ? `${e.code}: ${e.message}` : "Falha ao assinar."
+    etapas.push(etapa("assinatura", "erro", msg))
+    etapas.push(etapa("verificacao_assinatura", "pulada", "Pulada (assinatura falhou)."))
+    erros.push(msg)
   }
 
   // 4) Verificação da assinatura.
@@ -203,7 +190,26 @@ export async function runFiscalDryRunDetailed(
   }
   warnings.push(...validacaoEstrutural.pendencias)
 
-  // 6) XSD (placeholder seguro — sem rede/disco).
+  // 6) XSD oficial. Valida o XML **assinado**: o schema da NF-e exige <Signature>
+  //    (leiauteNFe_v4.00.xsd — `<xs:element ref="ds:Signature"/>`, sem minOccurs="0"), logo XML
+  //    não assinado é inválido por definição, e é o assinado que a SEFAZ recebe. Sem assinatura,
+  //    falha fechada — nunca aprovado por omissão.
+  const xsd: DryRunXsd = xmlAssinado
+    ? await validarXsd(xmlAssinado, {
+        adapter: options.xsdAdapter,
+        storeId: snapshot.storeId,
+        correlationId: `dry-run:${snapshot.storeId}:${sha256Hex(xml).slice(0, 16)}`,
+      })
+    : {
+        status: "xsd_falha_infraestrutura",
+        outcome: "FALHA_PERMANENTE",
+        engine: null,
+        mensagem: "Não executado (sem XML assinado).",
+        violacoes: [],
+      }
+  etapas.push(etapa("xsd", xmlAssinado ? xsdEtapaStatus(xsd) : "pulada", xsd.mensagem))
+  if (xsd.status !== "xsd_ok") erros.push(xsd.mensagem, ...xsd.violacoes)
+
   // 7) Relatório (descarta XML — só hashes/status). Nada persistido.
   const report = buildDryRunReport({
     etapas,
