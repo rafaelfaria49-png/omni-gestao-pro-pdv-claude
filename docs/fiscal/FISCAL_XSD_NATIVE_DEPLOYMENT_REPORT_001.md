@@ -29,6 +29,8 @@ Linux B2: ELF x86-64 PIE, dinamicamente ligado apenas a `libc.so.6` e loader, 1.
 
 Windows B2: PE x64 Release, 1.083.392 bytes, SHA-256 `cb10993e92f93f51112f09b64a011ab8a1bed3124763aaff80af4a4f5ef23d70`.
 
+Dependências importadas pelo PE Windows: `bcrypt.dll`, `KERNEL32.dll`, `VCRUNTIME140.dll` e APIs UCRT de runtime, stdio, conversão, ambiente, tempo, string, heap, filesystem, utility, math e locale. O ZIP do artefato foi baixado em temporário, conferido contra o digest GitHub e o executável repetiu o hash e tamanho registrados no job.
+
 ## 3. Métricas
 
 | Métrica | Linux x64 | Windows x64 |
