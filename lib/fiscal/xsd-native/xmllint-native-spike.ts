@@ -116,6 +116,7 @@ type OfficialXsdFile = {
   readonly name: string
   readonly sha256: string
   readonly canonicalLfSha256?: string
+  readonly checkoutCrLfSha256?: string
   readonly entrypoint?: true
 }
 
@@ -132,14 +133,17 @@ export const NATIVE_SPIKE_XSD_PACKAGE = {
     {
       name: "leiauteNFe_v4.00.xsd",
       sha256: "598c71780cbc6b54f170464bd6d5538c2d01a99d987a1666b662d4e166b84bf7",
+      checkoutCrLfSha256: "75eef473f31f722395c43e89422bde3bf6f0b88392d4d60c2c2bfaa8198ddd94",
     },
     {
       name: "tiposBasico_v4.00.xsd",
       sha256: "772619c85723e598840667ca66e7298a250442df47eeb94b397d2a333ce62047",
+      checkoutCrLfSha256: "4698a43d3d607b4457d0416dd672e5d1fd649d5e8f523f87212ecf36156750ba",
     },
     {
       name: "DFeTiposBasicos_v1.00.xsd",
       sha256: "7fe1dbd89a1dd80826c5134c2406b7eb5df4fa7a9177c5aa6e72319caba7c6d2",
+      checkoutCrLfSha256: "2502d4f701eddecb4804267155134a800309573128041c9c8ed126a6bd707dfe",
     },
     {
       name: "xmldsig-core-schema_v1.01.xsd",
@@ -153,7 +157,7 @@ export const NATIVE_SPIKE_MINIMUM_LIBXML_VERSION = "2.15.3"
 export const NATIVE_SPIKE_BLOCKED_VERSIONS = ["2.13.8"] as const
 export const NATIVE_SPIKE_DEFAULT_MAX_XML_BYTES = 2 * 1024 * 1024
 export const NATIVE_SPIKE_DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024
-export const NATIVE_SPIKE_DEFAULT_MAX_MEMORY_BYTES = 128 * 1024 * 1024
+export const NATIVE_SPIKE_DEFAULT_MAX_MEMORY_BYTES = 512 * 1024 * 1024
 export const NATIVE_SPIKE_DEFAULT_TIMEOUT_MS = 3_000
 
 const DEFAULT_SCHEMA_DIRECTORY = join(
@@ -419,7 +423,9 @@ async function materializeVerifiedSchemas(schemaDirectory: string, temporaryDire
     }
 
     const rawHash = sha256(contents)
-    const acceptedHashes = new Set([file.sha256, file.canonicalLfSha256].filter(Boolean))
+    const acceptedHashes = new Set(
+      [file.sha256, file.canonicalLfSha256, file.checkoutCrLfSha256].filter(Boolean),
+    )
     if (!acceptedHashes.has(rawHash)) {
       throw nativeError(
         "native_schema_integrity_failed",

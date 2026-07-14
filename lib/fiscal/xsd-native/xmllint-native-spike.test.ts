@@ -155,7 +155,7 @@ describe("spike xmllint nativo · contrato e isolamento", () => {
       "--nonet",
       "--nocatalogs",
       "--maxmem",
-      String(128 * 1024 * 1024),
+      String(512 * 1024 * 1024),
       "--schema",
       "nfe_v4.00.xsd",
       "-",
@@ -291,6 +291,36 @@ describe("spike xmllint nativo · contrato e isolamento", () => {
         await writeFile(
           join(target, file.name),
           Buffer.from(contents.toString("utf8").replaceAll("\r\n", "\n")),
+        )
+      }),
+    )
+
+    await expect(
+      validateXmlWithNativeXmllintSpike(VALID_NFCE_XML_VERPROC_20, {
+        ...options(fakeRunner()),
+        schemaDirectory: target,
+      }),
+    ).resolves.toMatchObject({ valid: true })
+  })
+
+  it("aceita somente a variante CRLF exata produzida pelo checkout Windows", async () => {
+    const source = join(
+      process.cwd(),
+      "lib",
+      "fiscal",
+      "xsd-native",
+      "schemas",
+      NATIVE_SPIKE_XSD_PACKAGE.name,
+      "NFe",
+    )
+    const target = await mkdtemp(join(tmpdir(), "xsd-native-crlf-"))
+    temporaryDirectories.push(target)
+    await Promise.all(
+      NATIVE_SPIKE_XSD_PACKAGE.files.map(async (file) => {
+        const contents = await readFile(join(source, file.name))
+        await writeFile(
+          join(target, file.name),
+          Buffer.from(contents.toString("utf8").replace(/\r?\n/g, "\r\n")),
         )
       }),
     )
