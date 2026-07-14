@@ -28,6 +28,29 @@
 | 021 | Observabilidade e bateria ampla por UF/cenário | prontidão para G-F7, sem ativar |
 | 022 | Construir ativação auditada por loja-piloto | **somente HOMOLOGACAO**, exige G-F7 |
 
+## Checkpoint da trilha XSD — 14/07/2026
+
+O identificador nomeado `FISCAL-XSD-OFFICIAL-VALIDATION-002` é uma trilha de execução específica e
+não renumera a tabela histórica acima. Seu escopo corresponde principalmente aos GOALs 005
+(pacote/proveniência XSD) e 006 (validador real/fail-closed).
+
+Decisão humana formalizada na ADR-0010:
+
+- Opção A `xmllint-wasm@5.2.0`: rejeitada na versão avaliada por segurança; versão futura corrigida
+  pode ser reavaliada em GOAL próprio;
+- B1 `xmllint` do host/PATH: rejeitada por origem e versão imprevisíveis;
+- B2: aprovada com condições, exclusivamente como `xmllint` provisionado em worker fiscal
+  containerizado;
+- Opção C Java/Xerces: não selecionada; contingência arquitetural.
+
+O próximo ciclo desta trilha deve implementar B2 a partir da `origin/main`, reescrevendo os
+artefatos definitivos conforme a ADR-0010 e o contrato do worker. Deve manter imagem imutável,
+source/patch/XSDs por hash, SBOM, scan de vulnerabilidade, egress bloqueado, limites externos,
+concorrência inicial 1, fila persistente, idempotência, retry seguro e observabilidade.
+
+**Estado do GOAL XSD:** continua aberto. A decisão não substitui `validarXsd`, não conecta o
+pipeline, não conclui os GOALs 005/006 e não destrava homologação ou produção.
+
 ## Próximo GOAL oficial
 
 `GOAL 002 — FISCAL-PRODUTO-UPSERT-PARITY-002`.

@@ -64,3 +64,22 @@ git push -u origin fiscal/goal-001-status-reconcile
 
 Proibidos: `git add .`, `git add -A`, `git commit -a`, reset, stash, rebase, merge, force-push e push
 para `main`.
+
+## Nota reconciliada — decisão XSD ADR-0010
+
+Em 14/07/2026, a decisão do checkpoint `FISCAL-XSD-ADR-P01-DECISION-002A` foi documentada em
+worktree própria, baseada na `origin/main`, usando as branches de pesquisa/WASM/nativa apenas como
+fontes read-only. Não fazer merge, rebase, cherry-pick ou cópia integral dos spikes.
+
+Para a implementação futura de B2:
+
+```text
+git fetch origin --prune
+git worktree add <worktree-isolada> -b <branch-propria> origin/main
+git rev-parse origin/fiscal/goal-002-xsd-official
+git rev-parse origin/fiscal/goal-002-xsd-wasm-spike
+git rev-parse origin/fiscal/goal-002-xmllint-native-spike
+```
+
+Antes de criar outra ADR, repetir a busca global de número em `origin/main` e branches remotas. A
+ADR-0010 está aceita; mudanças de direção exigem nova ADR, não edição silenciosa da decisão.
