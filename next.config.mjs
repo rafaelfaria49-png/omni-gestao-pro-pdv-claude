@@ -81,6 +81,18 @@ const nextConfig = {
   outputFileTracingIncludes: {
     "/api/catalogo/aparelhos/search": ["./docs/catalogo/seeds/*.csv"],
     "/api/catalogo/peliculas/search": ["./docs/catalogo/seeds/*.csv"],
+    /**
+     * GOAL-002 spike — sentinela de empacotamento, sem import/execução na rota.
+     * O build de controle provou que o Next não rastreia assets do spike dormente.
+     * Na implementação real, mover este include para a função fiscal consumidora.
+     */
+    "/api/version": [
+      "./lib/fiscal/xsd/schemas/PL_010e_v1.02/NFe/*.xsd",
+      "./node_modules/xmllint-wasm/index-node.js",
+      "./node_modules/xmllint-wasm/xmllint-node.js",
+      "./node_modules/xmllint-wasm/xmllint.wasm",
+      "./node_modules/xmllint-wasm/package.json",
+    ],
   },
   typescript: {
     ignoreBuildErrors: true,
