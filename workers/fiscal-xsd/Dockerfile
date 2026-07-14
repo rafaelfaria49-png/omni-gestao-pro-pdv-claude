@@ -44,8 +44,10 @@ ENV NODE_ENV=production \
     HOME=/tmp \
     TMPDIR=/tmp \
     PATH=/usr/local/bin:/usr/bin:/bin
-RUN groupadd --gid 10001 fiscal-xsd \
-  && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin fiscal-xsd \
+# O PATH endurecido acima omite /usr/sbin — groupadd/useradd exigem caminho absoluto
+# (ADR-0010: nenhuma dependência de binário implícito no PATH).
+RUN /usr/sbin/groupadd --gid 10001 fiscal-xsd \
+  && /usr/sbin/useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin fiscal-xsd \
   && mkdir --parents /opt/fiscal-xsd/bin /opt/fiscal-xsd/manifest /opt/fiscal-xsd/schemas/PL_010e_v1.02/NFe \
   && chown --recursive 10001:10001 /opt/fiscal-xsd
 COPY --from=libxml2-builder --chown=10001:10001 /opt/libxml2/bin/xmllint /opt/fiscal-xsd/bin/xmllint
