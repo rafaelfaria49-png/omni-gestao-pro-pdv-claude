@@ -153,7 +153,7 @@ export const NATIVE_SPIKE_MINIMUM_LIBXML_VERSION = "2.15.3"
 export const NATIVE_SPIKE_BLOCKED_VERSIONS = ["2.13.8"] as const
 export const NATIVE_SPIKE_DEFAULT_MAX_XML_BYTES = 2 * 1024 * 1024
 export const NATIVE_SPIKE_DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024
-export const NATIVE_SPIKE_DEFAULT_MAX_MEMORY_BYTES = 32 * 1024 * 1024
+export const NATIVE_SPIKE_DEFAULT_MAX_MEMORY_BYTES = 128 * 1024 * 1024
 export const NATIVE_SPIKE_DEFAULT_TIMEOUT_MS = 3_000
 
 const DEFAULT_SCHEMA_DIRECTORY = join(
@@ -427,7 +427,10 @@ async function materializeVerifiedSchemas(schemaDirectory: string, temporaryDire
     const canonicalHash = sha256(canonicalLf(contents))
     const canonicalExpected = file.canonicalLfSha256 ?? file.sha256
     if (rawHash !== file.sha256 && canonicalHash !== canonicalExpected) {
-      throw nativeError("native_schema_integrity_failed", "Integridade do pacote XSD divergente.")
+      throw nativeError(
+        "native_schema_integrity_failed",
+        `Integridade do pacote XSD divergente: ${file.name}; raw=${rawHash}; lf=${canonicalHash}.`,
+      )
     }
     assertSchemaDependencyGraph(contents)
     await copyFile(sourcePath, join(temporaryDirectory, file.name))

@@ -62,6 +62,13 @@ jobs:
           "FISCAL_XMLLINT_PATH=$binary" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "FISCAL_XMLLINT_SHA256=$binaryHash" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      - name: Registrar hashes dos XSDs no checkout Windows
+        shell: pwsh
+        run: |
+          Get-ChildItem "lib/fiscal/xsd-native/schemas/PL_010e_v1.02/NFe/*.xsd" |
+            Get-FileHash -Algorithm SHA256 |
+            Select-Object Path, Hash
+
       - name: Testes reais e métricas Windows
         run: >-
           npx vitest run
@@ -124,6 +131,10 @@ jobs:
           echo "XMLLINT_SHA256=$binary_hash"
           echo "FISCAL_XMLLINT_PATH=$binary" >> "$GITHUB_ENV"
           echo "FISCAL_XMLLINT_SHA256=$binary_hash" >> "$GITHUB_ENV"
+
+      - name: Registrar hashes dos XSDs no checkout Linux
+        shell: bash
+        run: sha256sum lib/fiscal/xsd-native/schemas/PL_010e_v1.02/NFe/*.xsd
 
       - name: Testes reais e métricas Linux
         run: >-

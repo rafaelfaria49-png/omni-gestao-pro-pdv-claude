@@ -155,7 +155,7 @@ describe("spike xmllint nativo · contrato e isolamento", () => {
       "--nonet",
       "--nocatalogs",
       "--maxmem",
-      String(32 * 1024 * 1024),
+      String(128 * 1024 * 1024),
       "--schema",
       "nfe_v4.00.xsd",
       "-",
