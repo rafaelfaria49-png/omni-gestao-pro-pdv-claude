@@ -13,6 +13,8 @@ env:
   LIBXML2_VERSION: 2.15.3
   LIBXML2_SOURCE_SHA256: 78262a6e7ac170d6528ebfe2efccdf220191a5af6a6cd61ea4a9a9a5042c7a07
   LIBXML2_SOURCE_URL: https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.3.tar.xz
+  LIBXML2_MAXMEM_PATCH_SHA256: ab319bb46b2aeb5f4311a12676b6b3eed1d18fb47721ae6274a849d31b96fb7c
+  LIBXML2_MAXMEM_PATCH_URL: https://github.com/GNOME/libxml2/commit/d3352554e4c1f052b914cda7b415d06b7eab5dfa.patch
 
 jobs:
   windows-x64:
@@ -50,6 +52,12 @@ jobs:
           if ($sourceHash -ne $env:LIBXML2_SOURCE_SHA256) { throw "source SHA-256 mismatch" }
           cmake -E tar xf $archive
           $source = Join-Path $PWD "libxml2-$env:LIBXML2_VERSION"
+          $maxmemPatch = Join-Path $env:RUNNER_TEMP "libxml2-maxmem-d335255.patch"
+          Invoke-WebRequest -Uri $env:LIBXML2_MAXMEM_PATCH_URL -OutFile $maxmemPatch
+          $patchHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $maxmemPatch).Hash.ToLowerInvariant()
+          if ($patchHash -ne $env:LIBXML2_MAXMEM_PATCH_SHA256) { throw "patch SHA-256 mismatch" }
+          git -C $source apply --check $maxmemPatch
+          git -C $source apply $maxmemPatch
           $build = Join-Path $env:RUNNER_TEMP "libxml2-build-windows-x64"
           cmake -S $source -B $build -A x64 -D BUILD_SHARED_LIBS=OFF -D LIBXML2_WITH_ICONV=OFF -D LIBXML2_WITH_ZLIB=OFF -D LIBXML2_WITH_TESTS=OFF -D LIBXML2_WITH_PYTHON=OFF
           cmake --build $build --config Release --target xmllint
@@ -114,10 +122,15 @@ jobs:
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/libxml2-$LIBXML2_VERSION.tar.xz"
+          maxmem_patch="$RUNNER_TEMP/libxml2-maxmem-d335255.patch"
           curl --fail --location --proto '=https' --tlsv1.2 --output "$archive" "$LIBXML2_SOURCE_URL"
           echo "$LIBXML2_SOURCE_SHA256  $archive" | sha256sum --check --strict
           tar -xf "$archive"
           source="$PWD/libxml2-$LIBXML2_VERSION"
+          curl --fail --location --proto '=https' --tlsv1.2 --output "$maxmem_patch" "$LIBXML2_MAXMEM_PATCH_URL"
+          echo "$LIBXML2_MAXMEM_PATCH_SHA256  $maxmem_patch" | sha256sum --check --strict
+          git -C "$source" apply --check "$maxmem_patch"
+          git -C "$source" apply "$maxmem_patch"
           build="$RUNNER_TEMP/libxml2-build-linux-x64"
           cmake -S "$source" -B "$build" -D CMAKE_BUILD_TYPE=Release -D BUILD_SHARED_LIBS=OFF -D LIBXML2_WITH_ICONV=OFF -D LIBXML2_WITH_ZLIB=OFF -D LIBXML2_WITH_TESTS=OFF -D LIBXML2_WITH_PYTHON=OFF
           cmake --build "$build" --config Release --target xmllint --parallel 2

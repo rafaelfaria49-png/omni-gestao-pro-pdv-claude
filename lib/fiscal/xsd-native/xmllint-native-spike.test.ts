@@ -273,6 +273,36 @@ describe("spike xmllint nativo · contrato e isolamento", () => {
     ).rejects.toMatchObject({ code: "native_schema_integrity_failed" })
   })
 
+  it("aceita somente a variante LF exata produzida pelo checkout Linux", async () => {
+    const source = join(
+      process.cwd(),
+      "lib",
+      "fiscal",
+      "xsd-native",
+      "schemas",
+      NATIVE_SPIKE_XSD_PACKAGE.name,
+      "NFe",
+    )
+    const target = await mkdtemp(join(tmpdir(), "xsd-native-lf-"))
+    temporaryDirectories.push(target)
+    await Promise.all(
+      NATIVE_SPIKE_XSD_PACKAGE.files.map(async (file) => {
+        const contents = await readFile(join(source, file.name))
+        await writeFile(
+          join(target, file.name),
+          Buffer.from(contents.toString("utf8").replaceAll("\r\n", "\n")),
+        )
+      }),
+    )
+
+    await expect(
+      validateXmlWithNativeXmllintSpike(VALID_NFCE_XML_VERPROC_20, {
+        ...options(fakeRunner()),
+        schemaDirectory: target,
+      }),
+    ).resolves.toMatchObject({ valid: true })
+  })
+
   it("remove o diretório temporário em finally", async () => {
     let validationCwd = ""
     const runner: NativeProcessRunner = async (_path, args, request) => {

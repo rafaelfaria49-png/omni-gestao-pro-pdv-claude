@@ -176,11 +176,6 @@ function sha256(contents: Uint8Array): string {
   return createHash("sha256").update(contents).digest("hex")
 }
 
-function canonicalLf(contents: Uint8Array): Uint8Array {
-  const text = new TextDecoder("utf-8", { fatal: true }).decode(contents)
-  return new TextEncoder().encode(text.replaceAll("\r\n", "\n"))
-}
-
 function compareVersions(left: string, right: string): number {
   const a = left.split(".").map(Number)
   const b = right.split(".").map(Number)
@@ -424,12 +419,11 @@ async function materializeVerifiedSchemas(schemaDirectory: string, temporaryDire
     }
 
     const rawHash = sha256(contents)
-    const canonicalHash = sha256(canonicalLf(contents))
-    const canonicalExpected = file.canonicalLfSha256 ?? file.sha256
-    if (rawHash !== file.sha256 && canonicalHash !== canonicalExpected) {
+    const acceptedHashes = new Set([file.sha256, file.canonicalLfSha256].filter(Boolean))
+    if (!acceptedHashes.has(rawHash)) {
       throw nativeError(
         "native_schema_integrity_failed",
-        `Integridade do pacote XSD divergente: ${file.name}; raw=${rawHash}; lf=${canonicalHash}.`,
+        `Integridade do pacote XSD divergente: ${file.name}; sha256=${rawHash}.`,
       )
     }
     assertSchemaDependencyGraph(contents)
