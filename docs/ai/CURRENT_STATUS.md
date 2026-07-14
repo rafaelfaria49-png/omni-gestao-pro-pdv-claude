@@ -5,7 +5,7 @@
 
 ---
 
-## Fiscal — reconciliação F0–F12 · 13/07/2026
+## Fiscal — reconciliação F0–F12 · checkpoint XSD em 14/07/2026
 
 > Fonte factual: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md).
 > O antigo ponteiro `CURRENT_STATUS.md:2934` estava incorreto. A ocorrência “NF-e — mock” abaixo
@@ -16,15 +16,26 @@
   tax-engine, XML, assinatura, vault e numeração não têm caller no fluxo de venda.
 - **Banco:** oito tabelas fiscais presentes, sem drift; 0 configurações, certificados, séries, notas,
   eventos, jobs e logs. 721 vendas, 0 com estado fiscal.
-- **Dry-run:** existe, mas XSD placeholder e C14N irregular impedem classificá-lo como N4.
+- **Dry-run:** existe, mas `validarXsd` continua no-op e C14N permanece irregular; portanto segue
+  N3, não N4.
+- **Decisão XSD (ADR-0010):** Opção A `xmllint-wasm@5.2.0` rejeitada na versão avaliada; B1 do
+  host/PATH rejeitada; B2 aprovada com condições exclusivamente como `xmllint` provisionado em
+  worker fiscal containerizado. Java/Xerces permanece alternativa de contingência.
+- **GOAL XSD:** `FISCAL-XSD-OFFICIAL-VALIDATION-002` continua aberto. Nenhum worker foi
+  implementado, nenhuma fila/pipeline foi conectada e nenhuma dependência foi instalada.
 - **Homologação:** nenhuma evidência SEFAZ; N6=0.
 - **Produção:** nenhuma emissão; N7=0; `fiscalEnabled` sem caminho de ativação.
 - **Bloqueios:** paridade fiscal do `upsertProduto`, ST/CSOSN 500, XSD oficial, C14N interoperável,
   provider real, estado incerto, eventos/fila e gates G-F5/G-F7/G-F12.
-- **Próximo GOAL:** GOAL 002 — paridade fiscal do `upsertProduto` do Cadastros V2.
+- **Próximo passo XSD:** implementar o worker/validador B2 sob a ADR-0010, com imagem imutável,
+  hashes, SBOM/scan, egress bloqueado, limites externos, fila e revisão humana antes de habilitar.
+- **Próximo GOAL da sequência histórica:** GOAL 002 — paridade fiscal do `upsertProduto` do
+  Cadastros V2; essa numeração é distinta do identificador nomeado da trilha XSD.
 - **Documentos:** [roadmap](../roadmaps/ROADMAP_FISCAL.md) ·
   [plano mestre](../governance/MASTER_FISCAL_EXECUTION_PLAN.md) ·
-  [continuação](../fiscal/FISCAL_CONTINUATION_IMPLEMENTATION_GOALS_001.md).
+  [continuação](../fiscal/FISCAL_CONTINUATION_IMPLEMENTATION_GOALS_001.md) ·
+  [ADR-0010](../decisions/ADR-0010-validacao-xsd-worker-containerizado-xmllint-provisionado.md) ·
+  [contrato do worker](../fiscal/FISCAL_XSD_WORKER_ARCHITECTURE_CONTRACT_001.md).
 
 ---
 
