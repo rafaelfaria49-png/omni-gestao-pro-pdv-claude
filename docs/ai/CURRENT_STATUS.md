@@ -8,6 +8,10 @@
 ## Fiscal — reconciliação F0–F12 · checkpoint XSD em 14/07/2026
 
 > Fonte factual: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md).
+> Atualização da branch fiscal em 14/07/2026: worker B2, pacote oficial e `validarXsd` real foram
+> implementados em `fiscal/goal-002-xsd-worker-implementation`. O GOAL segue aberto até CI Linux,
+> integração na `main` e prova final; sem homologação externa (N6=0), produção (N7=0), emissão ou
+> SEFAZ. GOAL-003 não foi iniciado.
 > O antigo ponteiro `CURRENT_STATUS.md:2934` estava incorreto. A ocorrência “NF-e — mock” abaixo
 > pertence ao preview PDV Next e não descreve o estado global da frente fiscal.
 
