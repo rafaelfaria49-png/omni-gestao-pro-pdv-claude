@@ -107,7 +107,9 @@ export function AreaContadorPro() {
 
   const sair = useCallback(async () => {
     await fetch("/api/auth/contador", { method: "DELETE" })
-    router.push("/")
+    // Logout devolve à entrada operacional (login canônico), não à landing comercial.
+    // `replace` impede que o "voltar" do navegador reabra a área já deslogada.
+    router.replace("/login")
     router.refresh()
   }, [router])
 
@@ -143,7 +145,7 @@ export function AreaContadorPro() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link href="/">
+            <Link href="/dashboard">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Painel principal
             </Link>

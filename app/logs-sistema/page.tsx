@@ -125,7 +125,7 @@ export default function LogsSistemaPage() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" asChild>
-              <Link href="/">
+              <Link href="/dashboard">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Voltar ao sistema
               </Link>
@@ -134,7 +134,8 @@ export default function LogsSistemaPage() {
               variant="secondary"
               onClick={async () => {
                 await fetch("/api/auth/admin", { method: "DELETE" })
-                window.location.href = "/login-admin"
+                // Entrada operacional canônica — não a landing comercial.
+                window.location.href = "/login"
               }}
             >
               Sair

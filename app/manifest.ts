@@ -3,12 +3,16 @@ import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    // `id` e `scope` permanecem "/" de propósito: `id` é a identidade do app já
+    // instalado (mudar cria uma instalação nova) e `scope` precisa cobrir a app
+    // inteira. Só o `start_url` muda — a landing "/" é comercial, não é a entrada
+    // operacional; o app instalado abre no login canônico.
     id: "/",
     name: APP_DISPLAY_NAME,
     short_name: APP_DISPLAY_NAME,
     description:
       "ERP completo para varejo, supermercados, lojas de variedades e gestão empresarial.",
-    start_url: "/",
+    start_url: "/login",
     scope: "/",
     display: "standalone",
     orientation: "any",

@@ -142,8 +142,12 @@ export const proxy = auth(async (req) => {
   if (pathname === "/logs-sistema" || pathname.startsWith("/logs-sistema/")) {
     const admin = String(req.cookies.get(ADMIN_COOKIE)?.value || "").trim()
     if (!admin) {
+      // Rota privada sem sessão vai ao login canônico — nunca à landing comercial.
+      // Sem `callbackUrl`: o login NextAuth não emite `assistec_admin_session` (só o
+      // PIN de supervisor emite), então voltar para cá após o login reabriria este
+      // mesmo redirect em loop.
       const u = req.nextUrl.clone()
-      u.pathname = "/"
+      u.pathname = "/login"
       u.search = ""
       return NextResponse.redirect(u)
     }
