@@ -3,12 +3,18 @@ import { Suspense } from "react"
 import { ContadorHubPreview } from "@/components/dashboard/contador/contador-hub-preview"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 import { resolveCompetenciaFromSearchParam } from "@/lib/contador/competencia"
+import { resolverEscopoContador } from "@/lib/contador/scope"
+import { construirDadosContador } from "@/lib/contador/readers"
+import type { ContadorDadosReais } from "@/lib/contador/readers/tipos"
 
 export const metadata: Metadata = {
   title: `Contador HUB · ${APP_DISPLAY_NAME}`,
   description:
-    "Contador HUB interno — organize documentos, pendências e o fechamento do mês com seu contador (preview visual).",
+    "Contador HUB interno — Visão Geral e relatórios básicos com dados reais da loja ativa por competência (leitura).",
 }
+
+export const dynamic = "force-dynamic"
+export const revalidate = 0
 
 type ContadorHubPageProps = {
   /**
@@ -18,22 +24,41 @@ type ContadorHubPageProps = {
   searchParams: Promise<{ c?: string | string[] }>
 }
 
+const MOTIVO_MSG: Record<string, string> = {
+  nao_autenticado: "Sessão não encontrada. Faça login para ver os dados reais da competência.",
+  sem_loja: "Nenhuma loja ativa selecionada. Escolha uma unidade para carregar os dados reais.",
+  sem_acesso: "Sua conta não tem acesso à loja ativa selecionada.",
+}
+
 /**
- * Contador HUB interno (lojista/equipe) · GOAL CONTADOR-HUB-VISUAL-PREVIEW-ONLY-001
- * + competência por URL (GOAL CONTADOR-HUB-COMPETENCIA-CONTRATOS-005).
+ * Contador HUB interno (lojista/equipe) · GOAL CONTADOR-HUB-DADOS-REAIS-READONLY-006.
  *
- * Casca VISUAL/preview: nenhum dado real, backend, API, upload/download ou emissão
- * fiscal. Os botões sem efeito real disparam toast honesto. Não confundir com o
- * portal EXTERNO antigo do contador em `/contador` (login por PIN, exportações),
- * que permanece intacto. `min-w-0` evita overflow; o AppShell segue dono do scroll.
+ * A Visão Geral e os relatórios básicos leem DADOS REAIS (read-only) da loja ativa na
+ * competência `?c=AAAA-MM`. Escopo por sessão NextAuth + cookie de loja + ACL multi-loja
+ * (`resolverEscopoContador`). Fonte fiscal permanece indisponível nesta fase; as demais
+ * seções seguem em preview visual honesto. Não confundir com o portal EXTERNO `/contador`.
  *
  * Fonte da competência: `searchParams.c` (AAAA-MM). Inválido/ausente → mês atual
- * em America/Sao_Paulo. Valores ilustrativos do preview ainda não variam por
- * competência (honestidade visual mantida).
+ * em America/Sao_Paulo. Falha de escopo/leitura vira estado honesto (`realErro`), nunca zero.
  */
 export default async function ContadorHubPage({ searchParams }: ContadorHubPageProps) {
   const params = await searchParams
   const competencia = resolveCompetenciaFromSearchParam(params.c)
+
+  let realData: ContadorDadosReais | null = null
+  let realErro: string | null = null
+
+  const escopo = await resolverEscopoContador()
+  if (!escopo.ok) {
+    realErro = MOTIVO_MSG[escopo.motivo] ?? "Dados reais indisponíveis nesta fase."
+  } else {
+    try {
+      realData = await construirDadosContador(escopo.storeId, competencia)
+    } catch (e) {
+      console.error("[contador/dados-reais]", e instanceof Error ? e.message : String(e))
+      realErro = "Não foi possível carregar os dados reais desta competência agora. Tente novamente em instantes."
+    }
+  }
 
   return (
     <div className="w-full min-w-0">
@@ -45,7 +70,7 @@ export default async function ContadorHubPage({ searchParams }: ContadorHubPageP
           </div>
         }
       >
-        <ContadorHubPreview competencia={competencia} />
+        <ContadorHubPreview competencia={competencia} realData={realData} realErro={realErro} />
       </Suspense>
     </div>
   )
