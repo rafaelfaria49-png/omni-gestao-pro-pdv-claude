@@ -6,6 +6,7 @@
  * segredo em logs. Mais validações (TAREFA 5): sem/já assinado, certificado/senha inválidos,
  * digest/signature inválidos, campos obrigatórios. Usa o XML real de BL-FISCAL-004.
  */
+import { createHash } from "node:crypto"
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { buildVendaFiscalSnapshot, type BuildSnapshotInput, type SnapshotLojaInput } from "../venda-fiscal-snapshot"
 import { sanitizeProdutoFiscal } from "@/lib/produto-fiscal"
@@ -104,6 +105,48 @@ describe("signNfceXml · assinatura válida (chave em claro)", () => {
   it("aceita chave cifrada com a senha correta", () => {
     const signed = signNfceXml(nfceXml(), CERT_ENC, TEST_CERT_PASSPHRASE, OPTS)
     expect(verifyNfceSignature(signed).valido).toBe(true)
+  })
+})
+
+/**
+ * Os algoritmos NÃO são preferência nossa: `xmldsig-core-schema_v1.01.xsd` (pacote oficial
+ * PL_010e_v1.02, sha256 f56744a5…e1ac) declara `Algorithm` como `fixed` — CanonicalizationMethod
+ * (L29), SignatureMethod (L34) e DigestMethod (L52) — e `Transform` com minOccurs=maxOccurs=2 (L69).
+ * Qualquer outro valor é XSD-inválido e a SEFAZ rejeita. Ver ADR-0011.
+ */
+describe("signNfceXml · algoritmos fixados pelo schema oficial (ADR-0011)", () => {
+  it("emite exatamente os 4 algoritmos que o schema fixa", () => {
+    const signed = signNfceXml(nfceXml(), CERT_PLAIN, "", OPTS)
+    expect(signed).toContain('<CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315">')
+    expect(signed).toContain('<SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1">')
+    expect(signed).toContain('<DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1">')
+    expect(signed).toContain('<Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature">')
+    expect(signed).toContain('<Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315">')
+    // O schema exige EXATAMENTE dois Transform (minOccurs=2 maxOccurs=2).
+    expect(signed.match(/<Transform Algorithm=/g)).toHaveLength(2)
+  })
+
+  it("o DigestValue é SHA-1 de fato (20 bytes), não SHA-256 (32)", () => {
+    const signed = signNfceXml(nfceXml(), CERT_PLAIN, "", OPTS)
+    const digest = signed.match(/<DigestValue>([^<]+)<\/DigestValue>/)?.[1] ?? ""
+    expect(Buffer.from(digest, "base64")).toHaveLength(20)
+    expect(verifyNfceSignature(signed).digestConfere).toBe(true)
+  })
+
+  it("NEGATIVO: não emite os URIs de SHA-256 (o schema os proíbe)", () => {
+    const signed = signNfceXml(nfceXml(), CERT_PLAIN, "", OPTS)
+    expect(signed).not.toContain("http://www.w3.org/2001/04/xmldsig-more#rsa-sha256")
+    expect(signed).not.toContain("http://www.w3.org/2001/04/xmlenc#sha256")
+  })
+
+  it("NEGATIVO: digest trocado por SHA-256 do mesmo conteúdo não confere", () => {
+    const signed = signNfceXml(nfceXml(), CERT_PLAIN, "", OPTS)
+    const sha1Digest = signed.match(/<DigestValue>([^<]+)<\/DigestValue>/)?.[1] ?? ""
+    const sha256Digest = createHash("sha256").update(Buffer.from(sha1Digest, "base64")).digest("base64")
+    const adulterado = signed.replace(`<DigestValue>${sha1Digest}</DigestValue>`, `<DigestValue>${sha256Digest}</DigestValue>`)
+    const v = verifyNfceSignature(adulterado)
+    expect(v.digestConfere).toBe(false)
+    expect(v.valido).toBe(false)
   })
 })
 

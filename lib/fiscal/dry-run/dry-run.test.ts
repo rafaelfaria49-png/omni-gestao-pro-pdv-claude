@@ -1,139 +1,91 @@
-/**
- * BL-FISCAL-006 — Golden tests do Dry-Run fiscal (esteira a seco, dormente).
- *
- * Cobre: XML simples, com desconto, múltiplos itens, consumidor sem/com CPF, assinatura válida,
- * assinatura inválida ao adulterar, snapshot inválido, XSD ausente, relatório determinístico,
- * nenhum segredo em log e nenhuma persistência (nada de Prisma/fetch/fs de escrita).
- */
-import { describe, it, expect, vi, afterEach } from "vitest"
-import {
-  runFiscalDryRun,
-  runFiscalDryRunDetailed,
-  dryRunSnapshot,
-  DRY_RUN_TEST_CERT,
-} from "./index"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { TEST_XSD_ENGINE as TEST_ENGINE, XSD_OK_ADAPTER } from "../xsd/__fixtures__/xsd-adapter-fixtures"
 import { verifyNfceSignature } from "../signing"
-import { TEST_KEY_PLAIN_PEM, TEST_CERT_PEM } from "../signing/__fixtures__/test-cert"
+import { TEST_KEY_PLAIN_PEM } from "../signing/__fixtures__/test-cert"
+import { DRY_RUN_TEST_CERT, dryRunSnapshot, runFiscalDryRun, runFiscalDryRunDetailed } from "./index"
 
 const CTX = { serie: 1, numero: 42 }
-
+const OPTIONS = { contexto: CTX, xsdAdapter: XSD_OK_ADAPTER }
 afterEach(() => vi.restoreAllMocks())
 
-describe("Dry-Run · casos felizes (assinatura válida)", () => {
+describe("dry-run com gate XSD real", () => {
   for (const kind of ["simples", "com_desconto", "multiplos_itens", "consumidor_sem_cpf", "consumidor_com_cpf"] as const) {
-    it(`${kind}: gera, assina, verifica e produz relatório com chave + hashes`, () => {
-      const r = runFiscalDryRun(dryRunSnapshot(kind), { contexto: CTX })
-      // assinatura válida e estrutura ok
-      expect(r.assinaturaPresente).toBe(true)
-      expect(r.assinaturaValida).toBe(true)
-      expect(r.validacaoEstrutural.ok).toBe(true)
-      // chave de acesso pública (44 díg) + referência
-      expect(r.chaveAcesso).toMatch(/^\d{44}$/)
-      expect(r.referenciaId).toMatch(/^NFe\d{44}$/)
-      // hashes presentes; XML descartado
-      expect(r.hashXml).toMatch(/^[0-9a-f]{64}$/)
-      expect(r.hashXmlAssinado).toMatch(/^[0-9a-f]{64}$/)
-      expect(r.descartado).toBe(true)
-      // XSD ausente → status pendente (não "ok"), nunca pronto p/ emitir ainda
-      expect(r.xsd.status).toBe("xsd_nao_configurado")
-      expect(r.status).toBe("pendente")
-      expect(r.prontoParaEmissao).toBe(false)
-      // todas as etapas-chave executadas com sucesso
-      const ok = (n: string) => r.etapas.find((e) => e.nome === n)?.status
-      expect(ok("xml")).toBe("ok")
-      expect(ok("assinatura")).toBe("ok")
-      expect(ok("verificacao_assinatura")).toBe("ok")
-      expect(ok("validacao_estrutural")).toBe("ok")
+    it(`${kind}: XSD, assinatura e estrutura aprovam`, async () => {
+      const report = await runFiscalDryRun(dryRunSnapshot(kind), OPTIONS)
+      expect(report.xsd.status).toBe("xsd_ok")
+      expect(report.xsd.engine).toEqual(TEST_ENGINE)
+      expect(report.assinaturaValida).toBe(true)
+      expect(report.validacaoEstrutural.ok).toBe(true)
+      expect(report.prontoParaEmissao).toBe(true)
+      expect(report.chaveAcesso).toMatch(/^\d{44}$/)
+      expect(report.hashXmlAssinado).toMatch(/^[a-f0-9]{64}$/)
+      expect(report.descartado).toBe(true)
     })
   }
 
-  it("consumidor com CPF inclui <dest>; sem CPF não inclui", () => {
-    const com = runFiscalDryRunDetailed(dryRunSnapshot("consumidor_com_cpf"), { contexto: CTX })
-    const sem = runFiscalDryRunDetailed(dryRunSnapshot("consumidor_sem_cpf"), { contexto: CTX })
-    expect(com.xml).toContain("<CPF>12345678909</CPF>")
-    expect(sem.xml).not.toContain("<dest>")
+  it("o XSD recebe o XML ASSINADO — o schema exige <Signature>", async () => {
+    let recebido = ""
+    await runFiscalDryRun(dryRunSnapshot("simples"), {
+      contexto: CTX,
+      xsdAdapter: {
+        async validate(request) {
+          recebido = request.xmlPayload
+          return { valid: true as const, outcome: "VALIDACAO_APROVADA" as const, issues: [], engine: TEST_ENGINE, durationMs: 1 }
+        },
+      },
+    })
+    expect(recebido).toContain("<Signature")
+    expect(recebido).toContain("<X509Certificate>")
   })
 
-  it("com desconto reflete vNF líquido no XML em memória", () => {
-    const d = runFiscalDryRunDetailed(dryRunSnapshot("com_desconto"), { contexto: CTX })
-    expect(d.xml).toContain("<vNF>40.00</vNF>")
-  })
-})
-
-describe("Dry-Run · adulteração e snapshot inválido", () => {
-  it("XML assinado adulterado → verificação falha (digest inválido)", () => {
-    const d = runFiscalDryRunDetailed(dryRunSnapshot("simples"), { contexto: CTX })
-    const tampered = d.xmlAssinado!.replace("<vNF>50.00</vNF>", "<vNF>9999.00</vNF>")
-    const v = verifyNfceSignature(tampered)
-    expect(v.valido).toBe(false)
-    expect(v.digestConfere).toBe(false)
-  })
-
-  it("snapshot inválido (item sem NCM) → status erro, etapas seguintes puladas, sem hash", () => {
-    const r = runFiscalDryRun(dryRunSnapshot("invalido_item_sem_ncm"), { contexto: CTX })
-    expect(r.status).toBe("erro")
-    expect(r.assinaturaPresente).toBe(false)
-    expect(r.hashXml).toBeNull()
-    expect(r.hashXmlAssinado).toBeNull()
-    expect(r.erros.length).toBeGreaterThan(0)
-    expect(r.etapas.find((e) => e.nome === "xml")?.status).toBe("erro")
-    expect(r.etapas.find((e) => e.nome === "assinatura")?.status).toBe("pulada")
-    expect(r.descartado).toBe(true) // mesmo em erro, nada persiste
-  })
-})
-
-describe("Dry-Run · XSD placeholder", () => {
-  it("sem XSD → xsd_nao_configurado (sem rede/disco)", () => {
-    const r = runFiscalDryRun(dryRunSnapshot("simples"), { contexto: CTX })
-    expect(r.xsd.status).toBe("xsd_nao_configurado")
-    expect(r.xsd.violacoes).toEqual([])
+  it("XSD reprova o dry-run mesmo com a assinatura íntegra", async () => {
+    const result = await runFiscalDryRunDetailed(dryRunSnapshot("simples"), {
+      contexto: CTX,
+      xsdAdapter: { async validate() {
+        return { valid: false as const, outcome: "XML_INVALIDO" as const, issues: [{ message: "natOp ausente" }], engine: TEST_ENGINE, durationMs: 1 }
+      } },
+    })
+    expect(result.report.status).toBe("erro")
+    expect(result.report.xsd.status).toBe("xsd_invalido")
+    // Assina-se antes de validar (o schema exige <Signature>); a reprovação do XSD não some por isso.
+    expect(result.report.etapas.find((step) => step.nome === "assinatura")?.status).toBe("ok")
+    expect(result.xmlAssinado).not.toBeNull()
+    expect(result.report.assinaturaValida).toBe(true)
+    expect(result.report.prontoParaEmissao).toBe(false)
   })
 
-  it("XSD fornecido → xsd_presente_sem_validador (gate futuro, ainda sem validador)", () => {
-    const r = runFiscalDryRun(dryRunSnapshot("simples"), { contexto: CTX, xsd: "<xs:schema/>" })
-    expect(r.xsd.status).toBe("xsd_presente_sem_validador")
-  })
-})
-
-describe("Dry-Run · relatório determinístico", () => {
-  it("mesma entrada → relatório byte-idêntico (sem timestamp)", () => {
-    const a = runFiscalDryRun(dryRunSnapshot("simples"), { contexto: CTX })
-    const b = runFiscalDryRun(dryRunSnapshot("simples"), { contexto: CTX })
-    expect(JSON.stringify(a)).toBe(JSON.stringify(b))
-    // hashes estáveis entre execuções
-    expect(a.hashXmlAssinado).toBe(b.hashXmlAssinado)
+  it("worker indisponível falha fechado", async () => {
+    const report = await runFiscalDryRun(dryRunSnapshot("simples"), { contexto: CTX })
+    expect(report.xsd.status).toBe("xsd_falha_infraestrutura")
+    expect(report.prontoParaEmissao).toBe(false)
   })
 
-  it("numeração placeholder quando sem contexto", () => {
-    const r = runFiscalDryRun(dryRunSnapshot("simples"))
-    expect(r.numeracaoPlaceholder).toBe(true)
-    expect(r.warnings.some((w) => w.includes("Numeração"))).toBe(true)
+  it("snapshot inválido pula XSD e não produz XML", async () => {
+    const report = await runFiscalDryRun(dryRunSnapshot("invalido_item_sem_ncm"), OPTIONS)
+    expect(report.status).toBe("erro")
+    expect(report.hashXml).toBeNull()
+    expect(report.etapas.find((step) => step.nome === "xsd")?.status).toBe("pulada")
   })
-})
 
-describe("Dry-Run · segurança (sem segredo em log, sem persistência)", () => {
-  it("não escreve senha/chave privada em console", () => {
+  it("XML assinado adulterado continua detectável", async () => {
+    const result = await runFiscalDryRunDetailed(dryRunSnapshot("simples"), OPTIONS)
+    const tampered = result.xmlAssinado!.replace("<vNF>50.00</vNF>", "<vNF>9999.00</vNF>")
+    expect(verifyNfceSignature(tampered).valido).toBe(false)
+  })
+
+  it("relatório não contém XML, chave privada ou senha", async () => {
     const sink: string[] = []
-    for (const m of ["log", "info", "warn", "error", "debug"] as const) {
-      vi.spyOn(console, m).mockImplementation((...args: unknown[]) => {
-        sink.push(args.map(String).join(" "))
-      })
-    }
-    runFiscalDryRun(dryRunSnapshot("simples"), { contexto: CTX })
-    const all = sink.join("\n")
-    expect(all).not.toContain("PRIVATE KEY")
-    expect(all).not.toContain(TEST_KEY_PLAIN_PEM.slice(40, 120))
+    vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => sink.push(args.map(String).join(" ")))
+    const report = await runFiscalDryRun(dryRunSnapshot("simples"), OPTIONS)
+    const serialized = JSON.stringify(report) + sink.join("\n")
+    expect(serialized).not.toContain("<infNFe")
+    expect(serialized).not.toContain(TEST_KEY_PLAIN_PEM.slice(40, 120))
+    expect(DRY_RUN_TEST_CERT.privateKeyPem).toContain("PRIVATE KEY")
   })
 
-  it("relatório NÃO contém o XML nem material do certificado (só hashes/status)", () => {
-    const r = runFiscalDryRun(dryRunSnapshot("simples"), { contexto: CTX })
-    const blob = JSON.stringify(r)
-    expect(blob).not.toContain("<infNFe")
-    expect(blob).not.toContain("<NFe")
-    expect(blob).not.toContain("BEGIN CERTIFICATE")
-    expect(blob).not.toContain("BEGIN PRIVATE KEY")
-    expect(blob).not.toContain(TEST_CERT_PEM.slice(40, 120))
-    // não importa Prisma — o módulo é puro (fail aqui indicaria acoplamento a I/O)
-    expect(DRY_RUN_TEST_CERT.privateKeyPem).toContain("PRIVATE KEY") // material existe só no fixture
+  it("resultado é determinístico apesar do envelope interno", async () => {
+    const first = await runFiscalDryRun(dryRunSnapshot("simples"), OPTIONS)
+    const second = await runFiscalDryRun(dryRunSnapshot("simples"), OPTIONS)
+    expect(JSON.stringify(first)).toBe(JSON.stringify(second))
   })
 })

@@ -83,7 +83,7 @@ export async function runFiscalPipelineDetailed(
   const providerRespostas: FiscalProviderResponse[] = []
 
   // 1) Dry-Run (snapshot → XML → assinatura de teste → verificação → estrutural → XSD).
-  const dry = runFiscalDryRunDetailed(snapshot, options)
+  const dry = await runFiscalDryRunDetailed(snapshot, options)
   const dryReport = dry.report
   warnings.push(...dryReport.warnings)
   if (dryReport.status === "erro") {
@@ -94,7 +94,11 @@ export async function runFiscalPipelineDetailed(
   }
 
   // Provider só roda se há XML assinado verificável (sem isso, nada a "enviar").
-  const podeProvider = Boolean(dry.xmlAssinado) && dryReport.assinaturaValida && dryReport.validacaoEstrutural.ok
+  const podeProvider =
+    Boolean(dry.xmlAssinado) &&
+    dryReport.assinaturaValida &&
+    dryReport.validacaoEstrutural.ok &&
+    dryReport.xsd.status === "xsd_ok"
 
   let provider: FiscalPipelineProvider | null = null
 
@@ -162,6 +166,7 @@ export async function runFiscalPipelineDetailed(
   const prontoParaHomologacao =
     dryReport.assinaturaValida &&
     dryReport.validacaoEstrutural.ok &&
+    dryReport.xsd.status === "xsd_ok" &&
     provider?.emissao?.ok === true &&
     erros.length === 0
 

@@ -1,0 +1,34 @@
+services:
+  fiscal-xsd-worker:
+    build:
+      context: .
+      dockerfile: workers/fiscal-xsd/Dockerfile
+    image: omni-fiscal-xsd-worker:local
+    read_only: true
+    user: "10001:10001"
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,mode=0700,uid=10001,gid=10001
+    mem_limit: 768m
+    cpus: 1.0
+    pids_limit: 64
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      FISCAL_XSD_HOST: 0.0.0.0
+      FISCAL_XSD_PORT: "8080"
+    # Sem `ports`: a rede é `internal`, que bloqueia o egress por DROP e, pelo mesmo mecanismo, não
+    # entrega porta publicada ao host. Alcance o worker de dentro da rede, pelo alias — que é também
+    # o único host (fora loopback) aceito pela allowlist anti-SSRF do cliente. Ex.:
+    #   docker compose -f docker-compose.fiscal-xsd.yml run --rm \
+    #     --entrypoint sh fiscal-xsd-worker -c 'wget -qO- http://worker.internal:8080/ready'
+    networks:
+      fiscal_xsd_internal:
+        aliases:
+          - worker.internal
+    restart: "no"
+
+networks:
+  fiscal_xsd_internal:
+    internal: true

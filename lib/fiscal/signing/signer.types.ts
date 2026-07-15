@@ -6,12 +6,17 @@
  * orquestração via `FiscalSecretVault` (ADR-0009) — aqui só consumimos o material já em memória.
  */
 
-/** Algoritmos do XMLDSig usados (NFC-e 4.00, com digest/assinatura em SHA-256). */
+/**
+ * Algoritmos do XMLDSig da NFC-e 4.00. Os valores NÃO são escolha nossa: o schema oficial
+ * `xmldsig-core-schema_v1.01.xsd` os declara `fixed` (SignatureMethod L34, DigestMethod L52,
+ * CanonicalizationMethod L29), logo qualquer outro algoritmo é XSD-inválido e a SEFAZ rejeita.
+ * Ver ADR-0011. SHA-1 vale SOMENTE aqui — nunca para senhas, tokens ou hashes internos.
+ */
 export const DSIG_NS = "http://www.w3.org/2000/09/xmldsig#"
 export const ALG_C14N = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
 export const ALG_ENVELOPED = "http://www.w3.org/2000/09/xmldsig#enveloped-signature"
-export const ALG_SIGNATURE_RSA_SHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
-export const ALG_DIGEST_SHA256 = "http://www.w3.org/2001/04/xmlenc#sha256"
+export const ALG_SIGNATURE_RSA_SHA1 = "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
+export const ALG_DIGEST_SHA1 = "http://www.w3.org/2000/09/xmldsig#sha1"
 
 /**
  * Material do certificado A1 já extraído para PEM (chave privada + certificado X.509).
@@ -68,9 +73,9 @@ export type SignNfceResult = {
   xml: string
   /** Id do `infNFe` referenciado (ex.: `NFe35...`). */
   referenciaId: string
-  /** Digest SHA-256 (base64) do `infNFe` canonicalizado. */
+  /** Digest SHA-1 (base64) do `infNFe` canonicalizado. */
   digestValue: string
-  /** SignatureValue (base64) — assinatura RSA-SHA256 do SignedInfo canonicalizado. */
+  /** SignatureValue (base64) — assinatura RSA-SHA1 do SignedInfo canonicalizado. */
   signatureValue: string
   /** Certificado (DER base64) embutido em X509Data. */
   certificadoBase64: string

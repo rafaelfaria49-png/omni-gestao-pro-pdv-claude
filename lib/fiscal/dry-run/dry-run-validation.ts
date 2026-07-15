@@ -1,89 +1,118 @@
-/**
- * Validações do Dry-Run (BL-FISCAL-006 · TAREFA 3) — PURAS, sem rede/fs por padrão.
- *
- *  - `validarEstruturaNfce`: confere a presença/ordem mínima dos grupos obrigatórios do `infNFe`
- *    4.00 no XML ASSINADO (ide/emit/det/total/transp/pag + Signature). Não substitui o XSD.
- *  - `validarXsd`: placeholder SEGURO. NÃO baixa nada, NÃO usa rede. Sem XSD oficial fornecido,
- *    retorna `xsd_nao_configurado` (deixando claro que a validação XSD real é gate futuro).
- */
-
+/** Validações estruturais e XSD do dry-run fiscal. */
+import { createHash, randomUUID } from "node:crypto"
 import { findFirst, parseXml, attrOf, type C14nElement } from "../signing"
+import { createConfiguredXsdWorkerClient } from "../xsd-worker"
+import {
+  XSD_CONTRACT_VERSION,
+  XSD_DEFAULT_TIMEOUT_MS,
+  XSD_MAX_PAYLOAD_BYTES,
+  XSD_SCHEMA_PACKAGE,
+  type XsdValidationAdapter,
+  type XsdValidationOutcome,
+  type XsdValidationRequest,
+  type XsdValidationResult,
+} from "../xsd"
+import { OFFICIAL_XSD_MANIFEST_SHA256 } from "../xsd/official-package"
 import type { DryRunValidacaoEstrutural, DryRunXsd } from "./dry-run.types"
 
-/** Grupos obrigatórios mínimos do `infNFe` 4.00 (NFC-e) que devem existir no XML. */
 const GRUPOS_OBRIGATORIOS = ["ide", "emit", "det", "total", "transp", "pag"] as const
 
 export type ValidarXsdOptions = {
-  /**
-   * Conteúdo do XSD oficial (quando o operador o fornecer no futuro). NÃO é lido de disco/rede
-   * aqui — injeção explícita mantém o Dry-Run puro e offline.
-   */
-  xsd?: string | null
+  adapter?: XsdValidationAdapter
+  storeId?: string
+  correlationId?: string
+  jobId?: string
+  timeoutMs?: number
 }
 
-/** Validação estrutural do XML assinado (presença dos grupos e da assinatura). */
 export function validarEstruturaNfce(xmlAssinado: string | null): DryRunValidacaoEstrutural {
   const erros: string[] = []
   const pendencias: string[] = []
-
-  if (!xmlAssinado || xmlAssinado.trim() === "") {
-    return { ok: false, erros: ["XML ausente para validação estrutural."], pendencias }
-  }
-
+  if (!xmlAssinado?.trim()) return { ok: false, erros: ["XML ausente para validação estrutural."], pendencias }
   let root: C14nElement
   try {
     root = parseXml(xmlAssinado)
   } catch {
-    return { ok: false, erros: ["XML mal-formado (não parseável)."], pendencias }
+    return { ok: false, erros: ["XML malformado (não parseável)."], pendencias }
   }
-
   if (root.name !== "NFe" && !findFirst(root, "NFe")) erros.push("Elemento <NFe> ausente.")
-
   const infNFe = findFirst(root, "infNFe")
   if (!infNFe) {
     erros.push("Elemento <infNFe> ausente.")
   } else {
     if (!attrOf(infNFe, "Id")) erros.push("<infNFe> sem atributo Id.")
     if (attrOf(infNFe, "versao") !== "4.00") pendencias.push("Versão do layout diferente de 4.00.")
-    for (const g of GRUPOS_OBRIGATORIOS) {
-      if (!findFirst(infNFe, g)) erros.push(`Grupo obrigatório <${g}> ausente no infNFe.`)
+    for (const group of GRUPOS_OBRIGATORIOS) {
+      if (!findFirst(infNFe, group)) erros.push(`Grupo obrigatório <${group}> ausente no infNFe.`)
     }
     if (!findFirst(infNFe, "detPag")) erros.push("Grupo <pag> sem <detPag>.")
   }
-
-  // Assinatura presente e completa.
-  const sig = findFirst(root, "Signature")
-  if (!sig) {
+  const signature = findFirst(root, "Signature")
+  if (!signature) {
     erros.push("Assinatura <Signature> ausente.")
   } else {
-    if (!findFirst(sig, "SignedInfo")) erros.push("<SignedInfo> ausente.")
-    if (!findFirst(sig, "SignatureValue")) erros.push("<SignatureValue> ausente.")
-    if (!findFirst(sig, "X509Certificate")) erros.push("<X509Certificate> ausente.")
+    if (!findFirst(signature, "SignedInfo")) erros.push("<SignedInfo> ausente.")
+    if (!findFirst(signature, "SignatureValue")) erros.push("<SignatureValue> ausente.")
+    if (!findFirst(signature, "X509Certificate")) erros.push("<X509Certificate> ausente.")
   }
-
   return { ok: erros.length === 0, erros, pendencias }
 }
 
-/**
- * Validação XSD — placeholder seguro (TAREFA 3). Sem XSD oficial no repo, NÃO valida e NÃO acessa
- * rede/disco: retorna `xsd_nao_configurado`. A validação XSD real (com XSD oficial + validador) é
- * um GATE FUTURO antes da transmissão à SEFAZ (FISCAL_DRY_RUN §3.5 / NFCE_ARCHITECTURE Etapa 5).
- */
-export function validarXsd(_xmlAssinado: string | null, options: ValidarXsdOptions = {}): DryRunXsd {
-  const xsd = (options.xsd ?? "").trim()
-  if (!xsd) {
-    return {
-      status: "xsd_nao_configurado",
-      mensagem:
-        "XSD oficial não configurado no repositório. Validação XSD é gate futuro (sem rede/sem download).",
-      violacoes: [],
-    }
+function statusFor(outcome: XsdValidationOutcome): DryRunXsd["status"] {
+  if (outcome === "VALIDACAO_APROVADA") return "xsd_ok"
+  if (outcome === "XML_INVALIDO" || outcome === "XML_MALFORMADO") return "xsd_invalido"
+  if (outcome === "POLITICA_REJEITADA") return "xsd_politica_rejeitada"
+  return "xsd_falha_infraestrutura"
+}
+
+function summaryFor(result: XsdValidationResult): string {
+  if (result.valid) return "XML aprovado pelo pacote XSD oficial PL_010e_v1.02."
+  if (result.outcome === "XML_INVALIDO" || result.outcome === "XML_MALFORMADO") {
+    return "XML rejeitado pelo pacote XSD oficial PL_010e_v1.02."
   }
-  // XSD fornecido, mas o validador real (libxml/XSD) não é implementado nesta fase — sem rede.
+  if (result.outcome === "POLITICA_REJEITADA") return "XML rejeitado pela política segura do worker XSD."
+  return `Validação XSD falhou fechada (${result.outcome}).`
+}
+
+function sanitizeIssue(message: string): string {
+  return String(message)
+    .replace(/[A-Za-z]:[\\/][^\s:]+/g, "[caminho-local]")
+    .replace(/\/(?:[^\s/:]+\/){2,}[^\s:]+/g, "[caminho-local]")
+    .replace(/<[^>]{0,500}>/g, "[xml-omitido]")
+    .replace(/\b\d{11,44}\b/g, "[identificador-omitido]")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, 500)
+}
+
+/** Invoca o worker B2 real. Worker ausente, timeout ou resposta incerta sempre falham fechados. */
+export async function validarXsd(xml: string | null, options: ValidarXsdOptions = {}): Promise<DryRunXsd> {
+  const payload = xml ?? ""
+  const now = new Date()
+  const timeoutMs = Math.min(Math.max(100, options.timeoutMs ?? XSD_DEFAULT_TIMEOUT_MS), XSD_DEFAULT_TIMEOUT_MS)
+  const xmlSha256 = createHash("sha256").update(payload, "utf8").digest("hex")
+  const request: XsdValidationRequest = {
+    jobId: options.jobId ?? `dry-run-${xmlSha256.slice(0, 32)}`,
+    storeId: options.storeId ?? "dry-run-local",
+    correlationId: options.correlationId ?? randomUUID(),
+    contractVersion: XSD_CONTRACT_VERSION,
+    schemaVersion: XSD_SCHEMA_PACKAGE,
+    schemaManifestHash: OFFICIAL_XSD_MANIFEST_SHA256,
+    xmlSha256,
+    xmlPayload: payload,
+    payloadBytes: Buffer.byteLength(payload, "utf8"),
+    maxPayloadBytes: XSD_MAX_PAYLOAD_BYTES,
+    attempt: 1,
+    requestedAt: now.toISOString(),
+    deadline: new Date(now.getTime() + timeoutMs).toISOString(),
+  }
+  const result = await (options.adapter ?? createConfiguredXsdWorkerClient()).validate(request)
   return {
-    status: "xsd_presente_sem_validador",
-    mensagem:
-      "XSD fornecido, porém o validador XSD ainda não está implementado (gate futuro). Nenhuma rede foi usada.",
-    violacoes: [],
+    status: statusFor(result.outcome),
+    outcome: result.outcome,
+    engine: result.engine,
+    mensagem: summaryFor(result),
+    violacoes: result.issues.map((issue) => sanitizeIssue(issue.message)),
   }
 }

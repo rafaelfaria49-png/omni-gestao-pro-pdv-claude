@@ -12,7 +12,7 @@ export const NFCE_XML_VERSAO = "4.00"
 export const NFCE_MODELO = "65"
 export const NFCE_XMLNS = "http://www.portalfiscal.inf.br/nfe"
 /** Identificação do aplicativo emissor (verProc). */
-export const NFCE_VER_PROC = "OmniGestao-Fiscal/1.0"
+export const NFCE_VER_PROC = "OmniGestao-Fiscal1.0"
 
 /** Contexto de emissão NÃO presente no snapshot (numeração + parâmetros do documento). */
 export type NfceXmlContext = {

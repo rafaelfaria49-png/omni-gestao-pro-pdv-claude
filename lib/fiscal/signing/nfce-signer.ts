@@ -2,7 +2,8 @@
  * Assinador XMLDSig da NFC-e (BL-FISCAL-005 · TAREFA 4/5) — PURO e DORMENTE.
  *
  * `signNfceXml(xml, certificado, senha?)` assina o XML produzido em BL-FISCAL-004 (envelopada,
- * Reference ao `infNFe`, digest SHA-256, RSA-SHA256). NÃO transmite, NÃO chama SEFAZ, NÃO integra
+ * Reference ao `infNFe`, digest SHA-1, RSA-SHA1 — `fixed` no schema oficial, ver ADR-0011). NÃO
+ * transmite, NÃO chama SEFAZ, NÃO integra
  * provider, NÃO gera DANFE, NÃO toca PDV/Venda/Caixa/Financeiro. Usa apenas `node:crypto` + o
  * canonicalizador local — sem banco/Prisma/fetch/Next.
  *
@@ -27,7 +28,7 @@ import {
   insertSignatureIntoNFe,
   locateInfNFe,
   nfeDefaultNs,
-  sha256Base64,
+  sha1Base64,
 } from "./xmldsig-builder"
 import {
   DSIG_NS,
@@ -157,10 +158,10 @@ export function signNfceXmlDetailed(
   // 2) SignedInfo + canonicalização.
   const signedInfoXml = buildSignedInfoXml(located.id, digestValue)
   const signedInfoCanon = canonicalizeSignedInfo(signedInfoXml, DSIG_NS)
-  // 3) Assinatura RSA-SHA256 (PKCS#1 v1.5 — determinística) do SignedInfo canonicalizado.
+  // 3) Assinatura RSA-SHA1 (PKCS#1 v1.5 — determinística) do SignedInfo canonicalizado.
   let signatureValue: string
   try {
-    signatureValue = cryptoSign("sha256", Buffer.from(signedInfoCanon, "utf8"), privateKey).toString("base64")
+    signatureValue = cryptoSign("sha1", Buffer.from(signedInfoCanon, "utf8"), privateKey).toString("base64")
   } catch {
     throw new NfceSignError("chave_privada_invalida", "Falha ao assinar com a chave privada.")
   }
@@ -186,7 +187,7 @@ export function signNfceXml(
 
 /**
  * Verifica a assinatura de um XML NFC-e assinado: recomputa o digest do `infNFe` e confere o
- * `SignatureValue` (RSA-SHA256) contra a chave pública do `X509Certificate` embutido.
+ * `SignatureValue` (RSA-SHA1) contra a chave pública do `X509Certificate` embutido.
  * Não valida cadeia ICP/SEFAZ (fora de escopo): apenas integridade/autoconsistência do XMLDSig.
  */
 export function verifyNfceSignature(xml: string): VerifyNfceResult {
@@ -218,7 +219,7 @@ export function verifyNfceSignature(xml: string): VerifyNfceResult {
   let digestConfere = false
   const infNFe = findFirst(root, "infNFe")
   if (infNFe) {
-    const recomputed = sha256Base64(canonicalizeElement(infNFe, nfeDefaultNs(root)))
+    const recomputed = sha1Base64(canonicalizeElement(infNFe, nfeDefaultNs(root)))
     digestConfere = recomputed === digestValue
   }
   if (!digestConfere) problemas.push("digest_invalido")
@@ -229,7 +230,7 @@ export function verifyNfceSignature(xml: string): VerifyNfceResult {
     const inheritedNs = attrOf(signature, "xmlns") || DSIG_NS
     const canon = canonicalizeElement(signedInfo, inheritedNs)
     const pub = new X509Certificate(certPemFromBase64(certB64)).publicKey
-    assinaturaConfere = cryptoVerify("sha256", Buffer.from(canon, "utf8"), pub, Buffer.from(signatureValue, "base64"))
+    assinaturaConfere = cryptoVerify("sha1", Buffer.from(canon, "utf8"), pub, Buffer.from(signatureValue, "base64"))
   } catch {
     assinaturaConfere = false
   }

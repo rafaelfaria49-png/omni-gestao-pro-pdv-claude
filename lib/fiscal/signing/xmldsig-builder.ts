@@ -1,7 +1,7 @@
 /**
  * Construtor de elementos XMLDSig da NFC-e (BL-FISCAL-005 · TAREFA 1).
  *
- * PURO: monta `SignedInfo`/`Signature` como strings XML e calcula o digest SHA-256 do `infNFe`
+ * PURO: monta `SignedInfo`/`Signature` como strings XML e calcula o digest SHA-1 do `infNFe`
  * canonicalizado. Não assina (RSA fica no assinador, que tem a chave privada) e não acessa
  * banco/Prisma/fetch/Next. Usa apenas `node:crypto` (hash) e o canonicalizador local.
  */
@@ -16,15 +16,18 @@ import {
 } from "./c14n"
 import {
   ALG_C14N,
-  ALG_DIGEST_SHA256,
+  ALG_DIGEST_SHA1,
   ALG_ENVELOPED,
-  ALG_SIGNATURE_RSA_SHA256,
+  ALG_SIGNATURE_RSA_SHA1,
   DSIG_NS,
 } from "./signer.types"
 
-/** Hash SHA-256 → base64. */
-export function sha256Base64(data: string): string {
-  return createHash("sha256").update(Buffer.from(data, "utf8")).digest("base64")
+/**
+ * Hash SHA-1 → base64. Imposto pelo schema oficial (DigestMethod `fixed` em SHA-1) — ver ADR-0011.
+ * Restrito ao digest XMLDSig fiscal. Para qualquer outro uso, SHA-256.
+ */
+export function sha1Base64(data: string): string {
+  return createHash("sha1").update(Buffer.from(data, "utf8")).digest("base64")
 }
 
 /** Namespace default em vigor para o `infNFe` (= xmlns do `<NFe>` raiz). */
@@ -39,10 +42,10 @@ export function locateInfNFe(root: C14nElement): { el: C14nElement; id: string }
   return { el, id: attrOf(el, "Id") }
 }
 
-/** Digest (base64 SHA-256) do `infNFe` canonicalizado (C14N de subset, ns default herdado). */
+/** Digest (base64 SHA-1) do `infNFe` canonicalizado (C14N de subset, ns default herdado). */
 export function digestInfNFe(root: C14nElement, infNFe: C14nElement): string {
   const canon = canonicalizeElement(infNFe, nfeDefaultNs(root))
-  return sha256Base64(canon)
+  return sha1Base64(canon)
 }
 
 /**
@@ -54,13 +57,13 @@ export function buildSignedInfoXml(referenceId: string, digestValue: string): st
   return (
     `<SignedInfo>` +
     `<CanonicalizationMethod Algorithm="${ALG_C14N}"></CanonicalizationMethod>` +
-    `<SignatureMethod Algorithm="${ALG_SIGNATURE_RSA_SHA256}"></SignatureMethod>` +
+    `<SignatureMethod Algorithm="${ALG_SIGNATURE_RSA_SHA1}"></SignatureMethod>` +
     `<Reference URI="${uri}">` +
     `<Transforms>` +
     `<Transform Algorithm="${ALG_ENVELOPED}"></Transform>` +
     `<Transform Algorithm="${ALG_C14N}"></Transform>` +
     `</Transforms>` +
-    `<DigestMethod Algorithm="${ALG_DIGEST_SHA256}"></DigestMethod>` +
+    `<DigestMethod Algorithm="${ALG_DIGEST_SHA1}"></DigestMethod>` +
     `<DigestValue>${digestValue}</DigestValue>` +
     `</Reference>` +
     `</SignedInfo>`

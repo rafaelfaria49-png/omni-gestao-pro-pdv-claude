@@ -88,6 +88,8 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 | 0007 | Modelo de Depósitos (multi-depósito por loja) — fundação de saldo segmentado | estoque / multi_loja | ✅ Aceita | 2026-06-01 | [`ADR-0007-modelo-depositos.md`](./ADR-0007-modelo-depositos.md) |
 | 0008 | Arquitetura oficial do módulo Fiscal (satélite pós-commit · snapshot imutável · provider-agnóstico) | cross / fiscal | ✅ Aceita | 2026-06-24 | [`ADR-0008-fiscal-architecture.md`](./ADR-0008-fiscal-architecture.md) |
 | 0009 | Cofre de segredos fiscais (A1/senha/CSC por referência · EnvVault piloto → KmsStorageVault produção) | cross / fiscal | ✅ Aceita | 2026-06-24 | [`ADR-0009-fiscal-secret-vault.md`](./ADR-0009-fiscal-secret-vault.md) |
+| 0010 | Validação XSD fiscal em worker containerizado com `xmllint` provisionado (opção B2) | cross / fiscal | ✅ Aceita | 2026-07-14 | [`ADR-0010-validacao-xsd-worker-containerizado-xmllint-provisionado.md`](./ADR-0010-validacao-xsd-worker-containerizado-xmllint-provisionado.md) |
+| 0011 | Assinatura XMLDSig da NFC-e em RSA-SHA1/SHA-1 — **imposta** pelo schema oficial (`fixed`), confinada à assinatura fiscal | cross / fiscal | ✅ Aceita | 2026-07-14 | [`ADR-0011-assinatura-xmldsig-nfce-rsa-sha1-imposta-pelo-schema.md`](./ADR-0011-assinatura-xmldsig-nfce-rsa-sha1-imposta-pelo-schema.md) |
 
 > **Nota sobre o ADR legado:** `OS_ROUTE_OFICIAL.md` foi escrito antes desta convenção e não segue o template/naming atual. Mantido como histórico. Quando precisar ser referenciado, citar como **ADR-0001 (legado)**. Migração para o naming `ADR-0001-os-route-oficial.md` é uma tarefa **opcional** e exige autorização (renomear histórico pode quebrar links externos).
 
@@ -126,7 +128,7 @@ cp docs/decisions/TEMPLATE_ADR.md docs/decisions/ADR-<NNNN>-<slug>.md
 - **Omni Agent:** —
 - **BI:** —
 - **Multi-loja:** ADR-0003 (eliminar fallback `loja-1`) · ADR-0006 (router WhatsApp — aceita) · ADR-0007 (modelo de depósitos — aceita)
-- **Fiscal:** ADR-0008 (arquitetura oficial do módulo Fiscal — aceita) · ADR-0009 (cofre de segredos fiscais — aceita)
+- **Fiscal:** ADR-0008 (arquitetura oficial do módulo Fiscal — aceita) · ADR-0009 (cofre de segredos fiscais — aceita) · ADR-0010 (validação XSD em worker containerizado — aceita) · ADR-0011 (assinatura XMLDSig em RSA-SHA1/SHA-1, imposta pelo schema — aceita)
 - **Governança:** ADR-0002 (congelamento Skill Front Matter v1) · ADR-0004 (SAFE-lite modo padrão)
 
 ---
