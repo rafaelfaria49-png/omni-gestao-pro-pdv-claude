@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma"
 import type { Prisma } from "@/generated/prisma"
 import { StatusOrdemServico } from "@/generated/prisma"
 import { storeIdFromAssistecRequestForRead, storeIdFromAssistecRequestForWrite } from "@/lib/store-id-from-request"
+import { auth } from "@/auth"
+import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import {
   apiGuardOperacoesEditEnterpriseOrLegacySubAdmin,
   apiGuardOperacoesHubOrLegacy,
@@ -13,8 +15,15 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 export async function GET(req: Request) {
+  // Autorização de loja (padrão da rota irmã `/api/ops/inventory`): sessão NextAuth →
+  // resolução da loja → ACL da loja. Fecha o caminho legado em que assinatura/cookie sozinhos
+  // autorizavam loja arbitrária. `apiGuardOperacoesHubOrLegacy` continua garantindo a permissão
+  // de módulo (`hubs.operacoes`) para a sessão autenticada.
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
   const storeId = storeIdFromAssistecRequestForRead(req)
   if (!storeId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
+  if (!canAccessStore(session, storeId)) return NextResponse.json({ error: "Sem acesso à loja" }, { status: 403 })
   const denied = await apiGuardOperacoesHubOrLegacy(storeId)
   if (denied) return denied
   try {
