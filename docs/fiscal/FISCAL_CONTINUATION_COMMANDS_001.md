@@ -83,3 +83,18 @@ git rev-parse origin/fiscal/goal-002-xmllint-native-spike
 
 Antes de criar outra ADR, repetir a busca global de número em `origin/main` e branches remotas. A
 ADR-0010 está aceita; mudanças de direção exigem nova ADR, não edição silenciosa da decisão.
+
+## Nota reconciliada — execução GOAL-002 XSD (B2) + G-C2
+
+Em 15/07/2026, o GOAL nomeado `FISCAL-XSD-OFFICIAL-VALIDATION-002` foi **implementado, integrado e
+fechado documentalmente**:
+
+- PR #4 mergeado por **merge commit** `82c219c4e241b145109a697aa3eb0e5d26a24d93`
+  (parents `50c1db8…` + `d497775e…`);
+- worker B2 + `validarXsd` real + pacote `PL_010e_v1.02` na `main`;
+- gate **G-C2 fechado** (N4 no eixo XSD; N6=0; N7=0; sem SEFAZ; sem emissão);
+- relatório: `docs/fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`;
+- branch documental de fechamento: `fiscal/goal-002-xsd-close` (somente docs da allowlist).
+
+Esta nota **não reescreve** o comando histórico acima; apenas reconcilia o estado pós-merge.
+Próximo GOAL técnico: `FISCAL-XML-C14N-EXTERNAL-PROOF-003` — **não iniciado** aqui.

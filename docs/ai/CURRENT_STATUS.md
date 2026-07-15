@@ -5,41 +5,41 @@
 
 ---
 
-## Fiscal — reconciliação F0–F12 · checkpoint XSD em 14/07/2026
+## Fiscal — reconciliação F0–F12 · GOAL-002 XSD fechado em 15/07/2026
 
-> Fonte factual: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md).
-> Atualização da branch fiscal em 14/07/2026: worker B2, pacote oficial e `validarXsd` real foram
-> implementados em `fiscal/goal-002-xsd-worker-implementation`. O GOAL segue aberto até CI Linux,
-> integração na `main` e prova final; sem homologação externa (N6=0), produção (N7=0), emissão ou
-> SEFAZ. GOAL-003 não foi iniciado.
-> O antigo ponteiro `CURRENT_STATUS.md:2934` estava incorreto. A ocorrência “NF-e — mock” abaixo
-> pertence ao preview PDV Next e não descreve o estado global da frente fiscal.
+> Fontes: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
+> [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md).
+> Merge PR #4: `82c219c4e241b145109a697aa3eb0e5d26a24d93` (HEAD fiscal
+> `d497775e9dd1021d9a54ba6cf8f7b8c0b739f436`). **G-C2 fechado.** Sem homologação SEFAZ (N6=0),
+> sem produção (N7=0), sem emissão ativada. GOAL-003 **não** iniciado.
+> A ocorrência “NF-e — mock” em seções de preview PDV **não** descreve o estado global da frente
+> fiscal.
 
-- **Código:** F2–F4 existem desde `ba0cc12` e têm testes internos; isso é N3, não homologação.
-- **Runtime:** seis rotas de correção/cancelamento usam guards fiscais. Snapshot, emissão, pipeline,
-  tax-engine, XML, assinatura, vault e numeração não têm caller no fluxo de venda.
-- **Banco:** oito tabelas fiscais presentes, sem drift; 0 configurações, certificados, séries, notas,
-  eventos, jobs e logs. 721 vendas, 0 com estado fiscal.
-- **Dry-run:** existe, mas `validarXsd` continua no-op e C14N permanece irregular; portanto segue
-  N3, não N4.
-- **Decisão XSD (ADR-0010):** Opção A `xmllint-wasm@5.2.0` rejeitada na versão avaliada; B1 do
-  host/PATH rejeitada; B2 aprovada com condições exclusivamente como `xmllint` provisionado em
-  worker fiscal containerizado. Java/Xerces permanece alternativa de contingência.
-- **GOAL XSD:** `FISCAL-XSD-OFFICIAL-VALIDATION-002` continua aberto. Nenhum worker foi
-  implementado, nenhuma fila/pipeline foi conectada e nenhuma dependência foi instalada.
-- **Homologação:** nenhuma evidência SEFAZ; N6=0.
-- **Produção:** nenhuma emissão; N7=0; `fiscalEnabled` sem caminho de ativação.
-- **Bloqueios:** paridade fiscal do `upsertProduto`, ST/CSOSN 500, XSD oficial, C14N interoperável,
-  provider real, estado incerto, eventos/fila e gates G-F5/G-F7/G-F12.
-- **Próximo passo XSD:** implementar o worker/validador B2 sob a ADR-0010, com imagem imutável,
-  hashes, SBOM/scan, egress bloqueado, limites externos, fila e revisão humana antes de habilitar.
-- **Próximo GOAL da sequência histórica:** GOAL 002 — paridade fiscal do `upsertProduto` do
-  Cadastros V2; essa numeração é distinta do identificador nomeado da trilha XSD.
+- **Worker XSD:** B2 integrado (`workers/fiscal-xsd`); non-root 10001:10001; read-only; tmpfs;
+  zero-egress; libxml2/xmllint 2.15.3; SBOM SPDX; Trivy **0 CRITICAL** (HIGH = follow-up separado).
+- **`validarXsd`:** **real e fail-closed** (no-op removido); adapter HTTP interno; pipeline exige
+  aprovação XSD antes de avançar no dry-run.
+- **XSD:** pacote oficial `PL_010e_v1.02` versionado + manifesto/hashes; schema oficial, validação
+  real; **sem** transmissão SEFAZ.
+- **Assinatura:** RSA-SHA1/SHA-1 conforme schema (ADR-0011); XML assinado valida no XSD oficial.
+- **ADRs:** ADR-0010 (worker B2) e ADR-0011 (assinatura) **aceitas e implementadas**.
+- **Gate G-C2:** **FECHADO** (20/20 critérios do fechamento documental).
+- **Nível N:** **N4 no eixo XSD**; dry-run completo ainda bloqueado por **C14N**; motor de emissão
+  sem caller de venda.
+- **Código base:** F2–F4 desde `ba0cc12` + XSD B2 em `82c219c`; testes internos e CI do PR #4 verdes.
+- **Runtime:** seis guards em rotas de correção/cancelamento. Snapshot, emissão, tax-engine, vault e
+  numeração **sem** caller no fluxo de venda.
+- **Homologação / produção:** N6=0 · N7=0 · `fiscalEnabled` inalcançável · SEFAZ **não** chamada.
+- **Riscos remanescentes:** C14N irregular; dry-run não é gate F4→F5 completo; Trivy HIGH fora do
+  gate; paridade `upsertProduto`; ST/CSOSN 500; provider real; fila/eventos; G-F5/G-F7/G-F12.
+- **Próximo GOAL:** `FISCAL-XML-C14N-EXTERNAL-PROOF-003` (checkpoint: merge readiness documental
+  deste fechamento). Backlog histórico de paridade `upsertProduto` permanece distinto.
 - **Documentos:** [roadmap](../roadmaps/ROADMAP_FISCAL.md) ·
   [plano mestre](../governance/MASTER_FISCAL_EXECUTION_PLAN.md) ·
   [continuação](../fiscal/FISCAL_CONTINUATION_IMPLEMENTATION_GOALS_001.md) ·
+  [fechamento GOAL-002](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
   [ADR-0010](../decisions/ADR-0010-validacao-xsd-worker-containerizado-xmllint-provisionado.md) ·
-  [contrato do worker](../fiscal/FISCAL_XSD_WORKER_ARCHITECTURE_CONTRACT_001.md).
+  [ADR-0011](../decisions/ADR-0011-assinatura-xmldsig-nfce-rsa-sha1-imposta-pelo-schema.md).
 
 ---
 

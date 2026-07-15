@@ -319,3 +319,43 @@ autoridade tributária/ST, XSD e C14N. A frente permanece com teto N3 no motor i
 O commit e o push são executados após revisão literal da allowlist; os hashes e o estado final da
 worktree são informados no handoff pós-push, evitando uma autorreferência impossível do commit que
 contém este próprio arquivo.
+
+---
+
+## 16. Atualização pós-reconciliação — GOAL-002 XSD integrado (15/07/2026)
+
+| Campo | Valor |
+|---|---|
+| Evento | Integração + fechamento documental do GOAL `FISCAL-XSD-OFFICIAL-VALIDATION-002` |
+| Merge commit | `82c219c4e241b145109a697aa3eb0e5d26a24d93` |
+| HEAD fiscal | `d497775e9dd1021d9a54ba6cf8f7b8c0b739f436` |
+| Gate | **G-C2 = FECHADO** (G-C1 permanece o da reconciliação GOAL-001) |
+| Classificação XSD | no-op **removido**; validação real fail-closed |
+| Nível N (eixo XSD) | **N4** (auferível em CI/container; **não** N6/N7) |
+| SEFAZ | **nenhuma** chamada · N6=0 |
+| Produção / emissão | **não** · N7=0 · `fiscalEnabled` inalcançável |
+
+### O que mudou vs. §8/§9 originais
+
+| Achado GOAL-001 | Estado em 15/07/2026 |
+|---|---|
+| F3 · XSD placeholder (P-06 aberto) | **XSD oficial integrado** · worker B2 · `validarXsd` real |
+| Dry-run N3 por XSD no-op | XSD **auferível**; dry-run **completo** ainda bloqueado por **C14N** (P-05) |
+| GOALs 005–006 abertos na trilha XSD | **cumpridos no eixo XSD** (GOAL nomeado 002 fechado) |
+| Homologação / produção | **inalteradas** (N6=0, N7=0) |
+
+### Gates atualizados
+
+- **G-C1:** fechado (GOAL-001) — inalterado.
+- **G-C2:** **fechado** pela prova XSD B2 + merge + fechamento documental.
+- G-F5 / G-F7 / G-F12: **abertos**.
+- Homologação SEFAZ e produção: **proibidas** de serem presumidas.
+
+### O que permanece aberto
+
+- C14N interoperável (próximo: `FISCAL-XML-C14N-EXTERNAL-PROOF-003`);
+- paridade `upsertProduto`, ST/CSOSN 500, provider real, fila, DANFCE, QR-Code;
+- política Trivy **HIGH** como follow-up separado (gate atual = CRITICAL only);
+- qualquer transmissão SEFAZ.
+
+Fonte detalhada: [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](./FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md).

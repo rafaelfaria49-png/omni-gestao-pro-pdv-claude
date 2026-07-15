@@ -3,8 +3,8 @@ title: Roadmap Fiscal (NFC-e/SAT/NF-e) — OmniGestão Pro
 hub: fiscal
 status: vivo
 owner: produto/arquitetura
-last_update: 2026-07-13
-sprint_atual: GOAL 001 reconciliado; próxima: GOAL 002 — paridade fiscal do upsertProduto
+last_update: 2026-07-15
+sprint_atual: GOAL-002 XSD fechado (G-C2); próximo técnico: FISCAL-XML-C14N-EXTERNAL-PROOF-003
 ---
 
 # 🧾 Roadmap Fiscal — OmniGestão Pro
@@ -18,20 +18,20 @@ sprint_atual: GOAL 001 reconciliado; próxima: GOAL 002 — paridade fiscal do u
 > `docs/audits/AUDITORIA_FISCAL_GAPS_v01.md`. **Governa:**
 > `docs/governance/MASTER_FISCAL_EXECUTION_PLAN.md`.
 
-## 0. Reconciliação vigente — 2026-07-13
+## 0. Reconciliação vigente — 2026-07-15
 
-> **Fonte factual atual:** [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md).
-> O commit `ba0cc12` colocou F2–F4 e o dry-run no código depois da última atualização deste roadmap.
-> Código existente e teste interno não significam runtime ativo, prova externa, homologação ou
-> produção.
+> **Fonte factual:** [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
+> fechamento XSD [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md).
+> O commit `ba0cc12` colocou F2–F4 e o dry-run no código. O merge `82c219c` (PR #4) integrou o
+> worker XSD B2 e `validarXsd` real. **Implementação ≠ homologação ≠ produção.**
 
 | Fase | Código/teste | Runtime/banco | Evidência externa | Estado reconciliado |
 |---|---|---|---|---|
 | F0 | plano e arquitetura existentes | n/a | não aplicável | governança reconciliada |
 | F1 | ADR-0009 + EnvVault testado | sem caller; 0 certificados | nenhuma | N3 interno |
 | F2 | tax-engine testado | sem caller | sem contador; sem ST | N3, lacuna CSOSN 500 |
-| F3 | XML/chave testados | sem caller | XSD oficial não validado | N3, gate bloqueado |
-| F4 | signer/C14N testados | sem caller | interoperabilidade não provada | N3, gate bloqueado |
+| F3 | XML/chave + **XSD oficial B2** | worker XSD sob demanda; sem caller de venda | schema oficial versionado; **sem SEFAZ** | **N4 no eixo XSD**; G-C2 **fechado** |
+| F4 | signer (RSA-SHA1) + C14N | sem caller | C14N interoperável **ainda não** | N3; próximo GOAL C14N |
 | F5 | contrato + stub | 0 notas; sem provider real | nenhuma SEFAZ | N1 |
 | F6 | ausente | ausente | nenhuma | N0 |
 | F7 | tabela da fila + guards | 0 jobs; sem produtor/worker | nenhuma | N1; ativação proibida |
@@ -41,9 +41,10 @@ sprint_atual: GOAL 001 reconciliado; próxima: GOAL 002 — paridade fiscal do u
 | F11 | ausente | zero evidência | nenhuma | N0; não homologado |
 | F12 | ausente | zero evidência | nenhuma | N0; não produtivo |
 
-Banco read-only: oito tabelas fiscais presentes, todas vazias; 721 vendas, zero com estado fiscal;
-diff schema versus banco vazio. Próximo GOAL oficial: **GOAL 002 — paridade fiscal do
-`upsertProduto` do Cadastros V2**. Somente o GOAL 022 poderá construir ativação, restrita a
+**Gates:** G-C1 fechado (GOAL-001) · **G-C2 fechado** (XSD B2) · G-F5/G-F7/G-F12 abertos.
+
+Próximo GOAL técnico: **`FISCAL-XML-C14N-EXTERNAL-PROOF-003`**. Backlog de cadastro (paridade
+`upsertProduto`) permanece distinto. Somente o GOAL 022 poderá construir ativação, restrita a
 `HOMOLOGACAO` e sujeita a G-F7.
 
 ---
@@ -88,8 +89,8 @@ EnvVault e dry-run. Os guards da state machine têm seis callers reais; o restan
 sem caller no fluxo de venda e o banco fiscal está vazio.
 
 **Falta (o trabalho real):**
-- P0: paridade fiscal do `upsertProduto` · ST/CSOSN 500 · XSD oficial · C14N interoperável · gate
-  de dry-run auferível.
+- P0: paridade fiscal do `upsertProduto` · ST/CSOSN 500 · ~~XSD oficial~~ (**feito, G-C2**) ·
+  C14N interoperável · gate de dry-run auferível (ainda bloqueado por C14N).
 - P1: provider/transmissão em homologação · QR-Code/CSC · estado incerto · fila · DANFCE · eventos ·
   contingência · observabilidade. Ativação somente no GOAL 022 e mediante gate.
 - Doc: o ponteiro histórico `CURRENT_STATUS.md:2934` estava errado. O caminho real é
@@ -112,8 +113,9 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
 
 - [x] ADR: cofre de segredo do certificado A1 (Vault × KMS × env por loja) → **ADR-0009** (aceito).
 - [x] `lib/fiscal/tax-engine/*`: motor Simples Nacional existente e testado (`ba0cc12`), **sem ST/CSOSN 500**.
-- [x] `lib/fiscal/xml/*`: builder `infNFe` 4.00 + chave existentes (`ba0cc12`), **sem validação XSD real**.
-- [x] `lib/fiscal/signing/*`: XMLDSig existente (`ba0cc12`), **C14N ainda não interoperável**.
+- [x] `lib/fiscal/xml/*`: builder `infNFe` 4.00 + chave existentes (`ba0cc12`).
+- [x] Worker XSD B2 + `validarXsd` real + pacote `PL_010e_v1.02` (merge `82c219c`, G-C2).
+- [x] `lib/fiscal/signing/*`: XMLDSig com RSA-SHA1/SHA-1 (ADR-0011); **C14N ainda não interoperável**.
 - [ ] `lib/fiscal/provider/<impl>`: provider real (homologação) registrado no resolver.
 - [ ] `lib/fiscal/qrcode/*`: QR-Code NFC-e + URL consulta por UF/CSC.
 - [ ] Produtor pós-commit (enfileira `FiscalEmissaoJob`) + worker idempotente.
@@ -169,17 +171,19 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
 
 ## 11. Sprint atual
 
-**GOAL 001 reconciliado em 2026-07-13.** Próxima sprint oficial: **GOAL 002 — paridade fiscal do
-`upsertProduto`**. F1 já foi resolvida pela ADR-0009; F2–F4 possuem código N3 com lacunas e não
-devem ser replanejadas do zero.
+**GOAL-002 XSD (`FISCAL-XSD-OFFICIAL-VALIDATION-002`) fechado em 15/07/2026** — merge `82c219c`,
+gate **G-C2**. Próxima sprint técnica: **`FISCAL-XML-C14N-EXTERNAL-PROOF-003`**. F1 resolvida pela
+ADR-0009; F3 tem validação XSD real (N4 no eixo); F2/F4 ainda com lacunas (ST, C14N) e **sem**
+replanejar do zero. Homologação e produção **não** foram abertas.
 
 ## 12. Status atual (1 parágrafo)
 
-A frente fiscal tem fundação dormente: schema aplicado sem drift, identidade, guards, snapshot,
-tax-engine, XML, assinatura, vault, provider stub, pipeline e numeração. Seis guards estão em rotas
-reais, mas o motor de emissão não tem caller; banco fiscal está vazio e `fiscalEnabled` é
-inalcançável pelo runtime atual. F2–F4 têm teste interno N3, com lacunas de ST, XSD e C14N. Não há
-N6 nem N7. A sequência oficial está no pacote de continuação em `docs/fiscal/`.
+A frente fiscal tem fundação dormente com **validação XSD oficial real** (worker B2, fail-closed,
+pacote `PL_010e_v1.02`, CI verde, G-C2 fechado). Schema, identidade, guards, snapshot, tax-engine,
+XML, assinatura (RSA-SHA1), vault, provider stub, pipeline e numeração existem; seis guards estão em
+rotas reais, mas o motor de emissão **não tem caller**; banco fiscal vazio; `fiscalEnabled`
+inalcançável. Dry-run ainda **não** é gate F4→F5 completo (C14N irregular). **N6=0 e N7=0.**
+Sequência oficial em `docs/fiscal/`.
 
 ## 13. Métricas de sucesso
 

@@ -28,7 +28,7 @@
 | 021 | Observabilidade e bateria ampla por UF/cenário | prontidão para G-F7, sem ativar |
 | 022 | Construir ativação auditada por loja-piloto | **somente HOMOLOGACAO**, exige G-F7 |
 
-## Checkpoint da trilha XSD — 14/07/2026
+## Checkpoint da trilha XSD — 14/07/2026 (decisão)
 
 O identificador nomeado `FISCAL-XSD-OFFICIAL-VALIDATION-002` é uma trilha de execução específica e
 não renumera a tabela histórica acima. Seu escopo corresponde principalmente aos GOALs 005
@@ -43,21 +43,44 @@ Decisão humana formalizada na ADR-0010:
   containerizado;
 - Opção C Java/Xerces: não selecionada; contingência arquitetural.
 
-O próximo ciclo desta trilha deve implementar B2 a partir da `origin/main`, reescrevendo os
-artefatos definitivos conforme a ADR-0010 e o contrato do worker. Deve manter imagem imutável,
-source/patch/XSDs por hash, SBOM, scan de vulnerabilidade, egress bloqueado, limites externos,
-concorrência inicial 1, fila persistente, idempotência, retry seguro e observabilidade.
+## Fechamento GOAL-002 XSD — 15/07/2026
 
-**Estado do GOAL XSD:** continua aberto. A decisão não substitui `validarXsd`, não conecta o
-pipeline, não conclui os GOALs 005/006 e não destrava homologação ou produção.
+| Campo | Valor |
+|---|---|
+| GOAL nomeado | `FISCAL-XSD-OFFICIAL-VALIDATION-002` |
+| Estado | **FECHADO** (implementação + integração + fechamento documental) |
+| PR | #4 |
+| Merge commit | `82c219c4e241b145109a697aa3eb0e5d26a24d93` |
+| HEAD fiscal integrado | `d497775e9dd1021d9a54ba6cf8f7b8c0b739f436` |
+| Gate | **G-C2 = FECHADO** |
+| Nível N (eixo XSD) | **N4** (validação real auferível; **não** N6/N7) |
+| Homologação SEFAZ | **não** |
+| Produção / emissão | **não** |
 
-## Próximo GOAL oficial
+Evidências integradas na `main`:
 
-`GOAL 002 — FISCAL-PRODUTO-UPSERT-PARITY-002`.
+- worker XSD B2 containerizado (`workers/fiscal-xsd`);
+- `validarXsd` real e fail-closed (no-op removido);
+- pacote oficial `PL_010e_v1.02` + manifesto/hashes;
+- libxml2/xmllint 2.15.3; XML assinado validando no XSD;
+- ADR-0010 e ADR-0011 (RSA-SHA1/SHA-1 imposto pelo schema);
+- CI do HEAD fiscal verde (unit ubuntu/windows + container/supply chain + Vercel);
+- Trivy 0 CRITICAL; SBOM SPDX; non-root 10001:10001; read-only; tmpfs; zero-egress;
+- testes de integração e segurança no container; suíte e build Next verdes na esteira do PR.
 
-Motivo: o caminho principal Cadastros V2 ainda aceita metadata genérica sem normalizar a identidade
-fiscal. Fechar essa lacuna é independente de provider/certificado, não requer banco ou schema e
-remove um bloqueio direto à futura homologação com mix real.
+Relatório de fechamento:
+[`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](./FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md).
+
+Os itens 005/006 da tabela histórica acima ficam **cumpridos no eixo XSD**. Isso **não** fecha
+homologação, produção, C14N, paridade de produto, ST, provider real nem G-F5/G-F7/G-F12.
+
+## Próximo GOAL oficial (trilha técnica)
+
+`FISCAL-XML-C14N-EXTERNAL-PROOF-003` — prova externa / interoperável de C14N (sequência histórica
+próxima ao GOAL 007). **Não iniciado** neste fechamento.
+
+A sequência histórica **GOAL 002 — paridade fiscal do `upsertProduto`** permanece backlog de
+produto/cadastro, **distinta** do identificador nomeado da trilha XSD já fechada.
 
 ## Limites permanentes
 
