@@ -1269,7 +1269,7 @@ export function ContadorHubPreview({ competencia, realData, realErro }: Contador
         </div>
         <span className="ml-auto hidden items-center gap-2 font-mono text-[11px] text-muted-foreground sm:flex">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.18)]" />
-          protótipo visual · sem efeito real
+          experiência híbrida · leitura real + preview
         </span>
       </div>
 
@@ -1281,7 +1281,7 @@ export function ContadorHubPreview({ competencia, realData, realErro }: Contador
           </span>
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-[23px] font-bold tracking-tight text-foreground">Contador HUB</h1>
-            <HStatus />
+            <HybridStatus />
             <Chip variant="env">Fechamento · 35%</Chip>
           </div>
           <span className="text-[12.5px] text-muted-foreground">
@@ -1425,6 +1425,15 @@ function HStatus() {
   )
 }
 
+function HybridStatus() {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 font-mono text-[11px] font-semibold tracking-wide text-primary">
+      <span className="h-1.5 w-1.5 rounded-full bg-primary ring-2 ring-primary/20" />
+      Híbrido
+    </span>
+  )
+}
+
 function ProgressRing({ pct }: { pct: number }) {
   return (
     <div
@@ -1461,10 +1470,11 @@ function GlobalPreviewNotice() {
     <div className="flex flex-wrap items-start gap-2.5 border-b border-primary/20 bg-primary/[0.06] px-4 py-2.5 sm:px-6">
       <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
       <p className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-foreground/85">
-        <b className="font-semibold text-foreground">Pré-visualização — dados ilustrativos, sem efeito real.</b>{" "}
-        Este ambiente apresenta exemplos visuais. Nenhum envio, fechamento, guia ou documento é processado nesta
-        fase, e a implementação real chega em fases futuras. A competência selecionada acima não altera os dados
-        ilustrativos exibidos.
+        <b className="font-semibold text-foreground">Experiência híbrida — blocos reais identificados + preview.</b>{" "}
+        Na Visão Geral e em Relatórios, os blocos com selo verde leem a loja e a competência quando disponíveis;
+        indisponibilidade é mostrada sem presumir zero.{" "}
+        Os demais cartões e seções continuam ilustrativos. Nenhum envio, fechamento, guia ou documento é processado;
+        a competência selecionada altera somente os blocos reais.
       </p>
     </div>
   )

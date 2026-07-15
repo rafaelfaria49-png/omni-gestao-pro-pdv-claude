@@ -88,6 +88,18 @@ function GerencialNota() {
   )
 }
 
+function DadosReaisHeader({ titulo }: { titulo: string }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.07] px-3 py-2.5">
+      <span className="text-[13px] font-semibold text-foreground">{titulo}</span>
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+        Dados reais · somente leitura
+      </span>
+    </div>
+  )
+}
+
 /** Estado de erro/indisponibilidade quando o escopo não resolve ou a leitura falha. */
 export function ContadorRealIndisponivel({ motivo }: { motivo: string }) {
   return (
@@ -107,6 +119,7 @@ export function VisaoGeralReal({ dados }: { dados: ContadorDadosReais }) {
   const { vendas, devolucoes, financeiro, caixa, liquidoCompetencia, alertas } = dados
   return (
     <div className="mb-4 grid gap-4">
+      <DadosReaisHeader titulo="Resumo real da competência" />
       <GerencialNota />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Vendas (qtd)" value={fmtNum(vendas.quantidade)} disponibilidade={vendas.quantidade.disponibilidade} />
@@ -218,6 +231,9 @@ export function RelatoriosReal({ dados }: { dados: ContadorDadosReais }) {
   const { vendas, devolucoes, financeiro, caixa, liquidoCompetencia } = dados
   return (
     <div className="mb-4 grid gap-4 lg:grid-cols-2">
+      <div className="lg:col-span-2">
+        <DadosReaisHeader titulo="Relatórios básicos reais da competência" />
+      </div>
       <Bloco title="Vendas por período">
         <LinhaKv label="Quantidade" value={fmtNum(vendas.quantidade)} disp={vendas.quantidade.disponibilidade} />
         <LinhaKv label="Total (bruto)" value={fmtMoney(vendas.total)} disp={vendas.total.disponibilidade} />

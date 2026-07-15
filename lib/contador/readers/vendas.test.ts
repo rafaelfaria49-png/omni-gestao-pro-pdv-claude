@@ -68,4 +68,29 @@ describe("agregarVendas", () => {
     expect(nenhuma.descontoTotal.disponibilidade).toBe("indisponivel")
     expect(nenhuma.descontoTotal.valor).toBeNull()
   })
+
+  it("forma futura desconhecida vira residual não identificado e nunca mantém disponibilidade real", () => {
+    const r = agregarVendas([
+      { total: 100, status: "concluida", payload: pb({ dinheiro: 80, boleto: 20 }) },
+      { total: 50, status: "concluida", payload: pb({ voucherParceiro: 50 }) },
+    ])
+    expect(r.formaPagamentoDisponibilidade).toBe("parcial")
+    expect(r.formasPagamento.find((f) => f.chave === "dinheiro")?.valor).toBe(80)
+    expect(r.naoIdentificadoQuantidade.valor).toBe(2)
+    expect(r.naoIdentificadoValor.valor).toBe(70)
+  })
+
+  it("breakdown conhecido que não reconcilia com Venda.total expõe o residual", () => {
+    const r = agregarVendas([{ total: 100, status: "concluida", payload: pb({ pix: 60 }) }])
+    expect(r.formaPagamentoDisponibilidade).toBe("parcial")
+    expect(r.naoIdentificadoQuantidade.valor).toBe(1)
+    expect(r.naoIdentificadoValor.valor).toBe(40)
+  })
+
+  it("reconhece o formato histórico cartao como débito sem perder disponibilidade", () => {
+    const r = agregarVendas([{ total: 75, status: "concluida", payload: pb({ cartao: 75 }) }])
+    expect(r.formaPagamentoDisponibilidade).toBe("real")
+    expect(r.formasPagamento.find((f) => f.chave === "cartaoDebito")?.valor).toBe(75)
+    expect(r.naoIdentificadoQuantidade.valor).toBe(0)
+  })
 })
