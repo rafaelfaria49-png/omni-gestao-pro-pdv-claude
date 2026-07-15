@@ -16,6 +16,8 @@
     "test:fiscal-xsd:unit": "vitest run workers/fiscal-xsd/test/validator.test.ts lib/fiscal/xsd-worker/client.test.ts lib/fiscal/dry-run/dry-run.test.ts lib/fiscal/pipeline/fiscal-pipeline.test.ts lib/fiscal/xml/nfce-xml-builder.test.ts",
     "test:fiscal-xsd:integration": "vitest run workers/fiscal-xsd/test/container.integration.test.ts",
     "test:fiscal-xsd:security": "vitest run workers/fiscal-xsd/test/container.security.test.ts",
+    "test:fiscal-c14n:external": "node scripts/fiscal/run-c14n-external-proof.mjs",
+    "fiscal:c14n:proof": "npm run test:fiscal-c14n:external",
     "fiscal:xsd:verify-hashes": "node scripts/fiscal/verify-xsd-artifacts.mjs",
     "test:e2e": "node scripts/run-playwright-e2e.mjs test",
     "test:e2e:ui": "node scripts/run-playwright-e2e.mjs test --ui",
@@ -72,6 +74,7 @@
     "@tanstack/react-router": "^1.169.1",
     "@types/react-router-dom": "^5.3.3",
     "@vercel/analytics": "1.6.1",
+    "@xmldom/xmldom": "0.8.13",
     "adm-zip": "^0.5.17",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "^3.0.3",
@@ -101,6 +104,7 @@
     "tailwind-merge": "^3.5.0",
     "vaul": "^1.1.2",
     "xlsx": "^0.18.5",
+    "xml-crypto": "6.1.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {

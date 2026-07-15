@@ -10,7 +10,7 @@ import { createHash } from "node:crypto"
 import {
   attrOf,
   canonicalizeElement,
-  findFirst,
+  childElements,
   parseXml,
   type C14nElement,
 } from "./c14n"
@@ -32,12 +32,15 @@ export function sha1Base64(data: string): string {
 
 /** Namespace default em vigor para o `infNFe` (= xmlns do `<NFe>` raiz). */
 export function nfeDefaultNs(root: C14nElement): string | null {
-  return attrOf(root, "xmlns") || null
+  return root.namespaceUri || attrOf(root, "xmlns") || null
 }
 
 /** Localiza o `infNFe` e seu `Id`. Lança nada — devolve null quando ausente. */
 export function locateInfNFe(root: C14nElement): { el: C14nElement; id: string } | null {
-  const el = findFirst(root, "infNFe")
+  const namespaceUri = nfeDefaultNs(root)
+  const candidates = namespaceUri ? childElements(root, "infNFe", namespaceUri) : []
+  if (candidates.length !== 1) return null
+  const [el] = candidates
   if (!el) return null
   return { el, id: attrOf(el, "Id") }
 }
@@ -53,7 +56,7 @@ export function digestInfNFe(root: C14nElement, infNFe: C14nElement): string {
  * CanonicalizationMethod, SignatureMethod, Reference(Transforms → DigestMethod → DigestValue).
  */
 export function buildSignedInfoXml(referenceId: string, digestValue: string): string {
-  const uri = referenceId ? `#${referenceId}` : ""
+  const uri = referenceId ? `#${referenceId.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")}` : ""
   return (
     `<SignedInfo>` +
     `<CanonicalizationMethod Algorithm="${ALG_C14N}"></CanonicalizationMethod>` +
@@ -70,10 +73,27 @@ export function buildSignedInfoXml(referenceId: string, digestValue: string): st
   )
 }
 
-/** Canonicaliza um `SignedInfo` (string) com o ns default da Signature (DSIG). */
-export function canonicalizeSignedInfo(signedInfoXml: string, inheritedNs: string = DSIG_NS): string {
-  const el = parseXml(signedInfoXml)
-  return canonicalizeElement(el, inheritedNs)
+/**
+ * Canonicaliza `SignedInfo` no contexto inclusivo real. Quando o XML da NFe e informado, namespaces
+ * ancestrais da raiz tambem entram nos bytes C14N, como exige Canonical XML 1.0.
+ */
+export function canonicalizeSignedInfo(
+  signedInfoXml: string,
+  inheritedNs: string = DSIG_NS,
+  enclosingNfeXml?: string,
+): string {
+  const signatureXml = `<Signature xmlns="${inheritedNs}">${signedInfoXml}</Signature>`
+  const contextualXml = enclosingNfeXml
+    ? insertSignatureIntoNFe(enclosingNfeXml, signatureXml)
+    : signatureXml
+  const documentRoot = parseXml(contextualXml)
+  const signature = enclosingNfeXml
+    ? childElements(documentRoot, "Signature", inheritedNs)[0]
+    : documentRoot
+  if (!signature) throw new Error("Signature ausente para canonicalizacao de SignedInfo.")
+  const [signedInfo] = childElements(signature, "SignedInfo", inheritedNs)
+  if (!signedInfo) throw new Error("SignedInfo ausente para canonicalizacao.")
+  return canonicalizeElement(signedInfo)
 }
 
 /**
@@ -100,7 +120,10 @@ export function buildSignatureXml(args: {
 
 /** Insere o `<Signature>` como último filho de `<NFe>` (envelopada). */
 export function insertSignatureIntoNFe(xml: string, signatureXml: string): string {
-  const idx = xml.lastIndexOf("</NFe>")
-  if (idx < 0) throw new Error("Documento sem </NFe> para envelopar a assinatura.")
+  const root = parseXml(xml)
+  if (root.name !== "NFe") throw new Error("Documento sem raiz NFe para envelopar a assinatura.")
+  const closingTag = `</${root.qualifiedName}>`
+  const idx = xml.lastIndexOf(closingTag)
+  if (idx < 0) throw new Error(`Documento sem ${closingTag} para envelopar a assinatura.`)
   return xml.slice(0, idx) + signatureXml + xml.slice(idx)
 }

@@ -1,0 +1,93 @@
+name: Fiscal C14N External Proof
+
+on:
+  push:
+    branches:
+      - fiscal/goal-003-c14n-external-proof
+    paths:
+      - "lib/fiscal/signing/**"
+      - "tools/fiscal-c14n-proof/**"
+      - "scripts/fiscal/run-c14n-external-proof.mjs"
+      - "docs/fiscal/FISCAL_XML_C14N_EXTERNAL_PROOF_003.md"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/fiscal-c14n-external-proof.yml"
+  pull_request:
+    paths:
+      - "lib/fiscal/signing/**"
+      - "tools/fiscal-c14n-proof/**"
+      - "scripts/fiscal/run-c14n-external-proof.mjs"
+      - "docs/fiscal/FISCAL_XML_C14N_EXTERNAL_PROOF_003.md"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/fiscal-c14n-external-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiscal-c14n-external-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  external-proof:
+    name: Java JSR 105, offline and independent
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PROOF_IMAGE: omni-fiscal-c14n-proof:${{ github.sha }}
+      EVIDENCE_DIR: artifacts/fiscal-c14n-external-proof
+      JAVA_IMAGE: eclipse-temurin:17.0.13_11-jdk-jammy@sha256:292214e32a0a3032e7f1af0e22491e02452c1f5473ec1d96486958dd4b3a772a
+      NODE_IMAGE: node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.20.2
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Build do runner com imagens fixadas por digest
+        run: >-
+          docker build --pull
+          --build-arg JAVA_IMAGE="$JAVA_IMAGE"
+          --build-arg NODE_IMAGE="$NODE_IMAGE"
+          --file tools/fiscal-c14n-proof/Dockerfile
+          --tag "$PROOF_IMAGE" .
+      - name: Prova externa sem rede, segredo ou filesystem gravavel
+        run: |
+          mkdir -p "$EVIDENCE_DIR"
+          docker image inspect "$PROOF_IMAGE" --format 'entrypoint={{json .Config.Entrypoint}} cmd={{json .Config.Cmd}}'
+          docker run --rm \
+            --network none \
+            --read-only \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777 \
+            --memory 1g --cpus 2 --pids-limit 128 \
+            --cap-drop ALL --security-opt no-new-privileges:true \
+            --entrypoint /usr/local/bin/node \
+            --user "$(id -u):$(id -g)" \
+            --volume "$PWD":/workspace:ro \
+            --volume "$PWD/$EVIDENCE_DIR":/evidence:rw \
+            --workdir /workspace \
+            --env HOME=/tmp \
+            --env FISCAL_C14N_EVIDENCE_DIR=/evidence \
+            --env FISCAL_C14N_EXPECT_JAVA_VERSION=17.0.13+11 \
+            "$PROOF_IMAGE" \
+            scripts/fiscal/run-c14n-external-proof.mjs
+          test -s "$EVIDENCE_DIR/report.json"
+          test -s "$EVIDENCE_DIR/mutations.json"
+          test -s "$EVIDENCE_DIR/hashes.sha256"
+      - name: Validar relatorio e matriz negativa
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('$EVIDENCE_DIR/report.json'));if(!p.valid||!p.digestMatches||!p.signatureValueValid)process.exit(1)"
+          node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('$EVIDENCE_DIR/mutations.json'));if(m.length!==11||m.some(x=>x.expected!==x.actual))process.exit(1)"
+          cd "$EVIDENCE_DIR"
+          sha256sum --check hashes.sha256
+      - name: Arquivar relatorio, hashes e bytes canonicos sinteticos
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fiscal-c14n-external-proof-${{ github.sha }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30

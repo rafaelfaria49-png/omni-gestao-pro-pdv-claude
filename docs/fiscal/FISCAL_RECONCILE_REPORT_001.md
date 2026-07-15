@@ -359,3 +359,29 @@ contém este próprio arquivo.
 - qualquer transmissão SEFAZ.
 
 Fonte detalhada: [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](./FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md).
+
+---
+
+## 17. Atualização pós-reconciliação — GOAL-003 C14N/XMLDSig (15/07/2026)
+
+| Campo | Valor |
+|---|---|
+| Evento | conclusão técnica de `FISCAL-XML-C14N-EXTERNAL-PROOF-003` |
+| Base auditada | `origin/main` contém `0b0d374521fca96f99f980bafabc226fa5784c56` |
+| Prova independente | Java 17 / JSR 105; implementação separada do signer TypeScript |
+| Positivos | C14N de `infNFe`, `DigestValue`, C14N de `SignedInfo` e assinatura verificados |
+| Negativos | 11/11 mutações rejeitadas, incluindo conteúdo, namespace, algoritmo, referência e DTD/XXE |
+| P-05 | **fechado no eixo técnico C14N/XMLDSig**; GOALs históricos 007–008 cumpridos |
+| Nível N | **N4 no eixo C14N/XMLDSig**; N6=0 e N7=0 |
+| Gate técnico F4→F5 | critério C14N/XMLDSig fechado; **gate global ainda aberto** por lacunas não pertencentes ao GOAL-003 |
+
+A prova usa somente XML e certificado explicitamente sintéticos, não consulta banco, não chama a
+SEFAZ, não usa certificado fiscal real e não ativa emissão. Não foi criado um gate nomeado novo:
+G-C1/G-C2 permanecem como registrados, e G-F5/G-F7/G-F12 permanecem abertos.
+
+O risco P-05 deixa de bloquear o gate por canonicalização/interoperabilidade. Permanecem, entre
+outros, paridade de produto, ST/CSOSN 500, casos-alvo integrais do dry-run, provider real, fila e
+estado incerto. O próximo passo é a merge readiness do GOAL-003; o GOAL-004 não foi iniciado.
+
+Fonte detalhada:
+[`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](./FISCAL_XML_C14N_EXTERNAL_PROOF_003.md).

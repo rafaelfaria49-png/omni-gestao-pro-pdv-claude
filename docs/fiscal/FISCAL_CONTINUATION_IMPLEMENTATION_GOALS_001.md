@@ -11,8 +11,8 @@
 | 004 | Implementar ST mínima do mix piloto, incluindo CSOSN 500 | testes internos + casos aprovados |
 | 005 | Versionar o pacote XSD oficial e sua proveniência | artefatos oficiais verificáveis |
 | 006 | Trocar o placeholder por validação XSD real e fail-closed | XML inválido reprova |
-| 007 | Substituir o canonicalizador irregular por C14N conforme | vetores independentes verdes |
-| 008 | Endurecer XMLDSig com certificado exclusivamente de teste | verificação independente verde |
+| 007 | Substituir o canonicalizador irregular por C14N conforme | **cumprido no GOAL nomeado 003**; vetores independentes verdes |
+| 008 | Endurecer XMLDSig com certificado exclusivamente de teste | **cumprido no GOAL nomeado 003**; verificação independente verde |
 | 009 | Tornar o dry-run auferível, sem stub indulgente | gate técnico real F4→F5 |
 | 010 | Validar retenção, idempotência e imutabilidade de XML/snapshot | P3/P4 comprovados internamente |
 | 011 | Preparar decisão comparativa SEFAZ direto × gateway | recomendação para G-F5 |
@@ -74,10 +74,25 @@ Relatório de fechamento:
 Os itens 005/006 da tabela histórica acima ficam **cumpridos no eixo XSD**. Isso **não** fecha
 homologação, produção, C14N, paridade de produto, ST, provider real nem G-F5/G-F7/G-F12.
 
-## Próximo GOAL oficial (trilha técnica)
+## Fechamento técnico GOAL-003 C14N/XMLDSig — 15/07/2026
 
-`FISCAL-XML-C14N-EXTERNAL-PROOF-003` — prova externa / interoperável de C14N (sequência histórica
-próxima ao GOAL 007). **Não iniciado** neste fechamento.
+| Campo | Valor |
+|---|---|
+| GOAL nomeado | `FISCAL-XML-C14N-EXTERNAL-PROOF-003` |
+| Estado técnico | **CONCLUÍDO**; aguardando apenas merge readiness desta branch |
+| Escopo histórico | GOALs 007–008, eixo C14N/XMLDSig |
+| Prova independente | Java 17 / JSR 105, sem importar o signer TypeScript |
+| Resultado local | 16/16 testes; 11/11 mutações negativas rejeitadas |
+| Nível N (eixo C14N/XMLDSig) | **N4**; não implica N6/N7 |
+| Gate | critério C14N/XMLDSig do gate técnico F4→F5 fechado; gate global permanece aberto |
+| Homologação SEFAZ | **não** · N6=0 |
+| Produção / emissão | **não** · N7=0 |
+
+Relatório técnico:
+[`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](./FISCAL_XML_C14N_EXTERNAL_PROOF_003.md).
+
+O próximo passo é a **merge readiness documental e de CI do próprio GOAL-003**. O GOAL nomeado
+004 **não foi iniciado** e não é autorizado por este fechamento.
 
 A sequência histórica **GOAL 002 — paridade fiscal do `upsertProduto`** permanece backlog de
 produto/cadastro, **distinta** do identificador nomeado da trilha XSD já fechada.

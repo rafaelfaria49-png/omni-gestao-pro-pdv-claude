@@ -1,21 +1,18 @@
 /**
- * Assinador XMLDSig da NFC-e (BL-FISCAL-005 · TAREFA 4/5) — PURO e DORMENTE.
+ * Assinador XMLDSig da NFC-e — puro e dormente.
  *
- * `signNfceXml(xml, certificado, senha?)` assina o XML produzido em BL-FISCAL-004 (envelopada,
- * Reference ao `infNFe`, digest SHA-1, RSA-SHA1 — `fixed` no schema oficial, ver ADR-0011). NÃO
- * transmite, NÃO chama SEFAZ, NÃO integra
- * provider, NÃO gera DANFE, NÃO toca PDV/Venda/Caixa/Financeiro. Usa apenas `node:crypto` + o
- * canonicalizador local — sem banco/Prisma/fetch/Next.
- *
- * Segredo: a chave privada/senha entram por parâmetro (a orquestração as resolve via
- * `FiscalSecretVault`/ADR-0009). NUNCA são logados nem aparecem em mensagens de erro.
+ * Assina somente `infNFe` por Reference local e valida de forma fail-closed a estrutura, os
+ * algoritmos fixados pelo schema, a unicidade do Id, o digest e o SignatureValue. Nao transmite,
+ * nao chama SEFAZ, nao acessa banco e nunca registra chave ou senha.
  */
 
 import { X509Certificate, createPrivateKey, sign as cryptoSign, verify as cryptoVerify } from "node:crypto"
 import {
   attrOf,
   canonicalizeElement,
-  findFirst,
+  childElements,
+  findAll,
+  findAllById,
   parseXml,
   textOf,
   type C14nElement,
@@ -27,10 +24,13 @@ import {
   digestInfNFe,
   insertSignatureIntoNFe,
   locateInfNFe,
-  nfeDefaultNs,
   sha1Base64,
 } from "./xmldsig-builder"
 import {
+  ALG_C14N,
+  ALG_DIGEST_SHA1,
+  ALG_ENVELOPED,
+  ALG_SIGNATURE_RSA_SHA1,
   DSIG_NS,
   NfceSignError,
   type FiscalCertificateMaterial,
@@ -39,24 +39,24 @@ import {
   type VerifyNfceResult,
 } from "./signer.types"
 
+const NFE_NS = "http://www.portalfiscal.inf.br/nfe"
+
 type LoadedMaterial = {
   privateKey: ReturnType<typeof createPrivateKey>
   certificate: X509Certificate
   certBase64: string
 }
 
-/** Quebra base64 em linhas de 64 chars (reconstrução de PEM a partir do X509Data). */
-function wrap64(b64: string): string {
-  return b64.replace(/\s+/g, "").replace(/(.{64})/g, "$1\n").trim()
+function wrap64(base64: string): string {
+  return base64.replace(/\s+/g, "").replace(/(.{64})/g, "$1\n").trim()
 }
 
-function certPemFromBase64(b64: string): string {
-  return `-----BEGIN CERTIFICATE-----\n${wrap64(b64)}\n-----END CERTIFICATE-----\n`
+function certPemFromBase64(base64: string): string {
+  return `-----BEGIN CERTIFICATE-----\n${wrap64(base64)}\n-----END CERTIFICATE-----\n`
 }
 
-/** Carrega chave privada + certificado do material PEM, mapeando falhas (sem expor segredo). */
 function loadMaterial(material: FiscalCertificateMaterial | null | undefined, senha: string): LoadedMaterial {
-  if (!material || !material.privateKeyPem?.trim() || !material.certificatePem?.trim()) {
+  if (!material?.privateKeyPem?.trim() || !material.certificatePem?.trim()) {
     throw new NfceSignError("material_ausente", "Material do certificado ausente (chave privada/certificado).")
   }
 
@@ -64,7 +64,7 @@ function loadMaterial(material: FiscalCertificateMaterial | null | undefined, se
   try {
     certificate = new X509Certificate(material.certificatePem)
   } catch {
-    throw new NfceSignError("certificado_invalido", "Certificado X.509 inválido ou ilegível.")
+    throw new NfceSignError("certificado_invalido", "Certificado X.509 invalido ou ilegivel.")
   }
 
   const encrypted = /ENCRYPTED/i.test(material.privateKeyPem)
@@ -74,53 +74,61 @@ function loadMaterial(material: FiscalCertificateMaterial | null | undefined, se
       ? createPrivateKey({ key: material.privateKeyPem, passphrase: senha })
       : createPrivateKey({ key: material.privateKeyPem })
   } catch {
-    // Em chave cifrada, a causa mais comum é senha incorreta/ausente.
     if (encrypted) throw new NfceSignError("senha_invalida", "Senha do certificado incorreta ou ausente.")
-    throw new NfceSignError("chave_privada_invalida", "Chave privada inválida ou ilegível.")
+    throw new NfceSignError("chave_privada_invalida", "Chave privada invalida ou ilegivel.")
+  }
+
+  const publicKey = certificate.publicKey
+  if (
+    publicKey.asymmetricKeyType !== "rsa" ||
+    (publicKey.asymmetricKeyDetails?.modulusLength ?? 0) < 2048 ||
+    privateKey.asymmetricKeyType !== "rsa"
+  ) {
+    throw new NfceSignError(
+      "certificado_invalido",
+      "XMLDSig fiscal exige certificado e chave RSA de no minimo 2048 bits.",
+    )
   }
 
   return { privateKey, certificate, certBase64: Buffer.from(certificate.raw).toString("base64") }
 }
 
-function assertValidade(cert: X509Certificate, agora: Date): void {
-  const de = new Date(cert.validFrom)
-  const ate = new Date(cert.validTo)
-  if (Number.isFinite(de.getTime()) && agora.getTime() < de.getTime()) {
-    throw new NfceSignError("certificado_expirado", "Certificado ainda não é válido (validFrom no futuro).")
+function assertValidade(certificado: X509Certificate, agora: Date): void {
+  const inicio = new Date(certificado.validFrom)
+  const fim = new Date(certificado.validTo)
+  if (Number.isFinite(inicio.getTime()) && agora.getTime() < inicio.getTime()) {
+    throw new NfceSignError("certificado_expirado", "Certificado expirado ou ainda nao valido (validFrom no futuro).")
   }
-  if (Number.isFinite(ate.getTime()) && agora.getTime() > ate.getTime()) {
+  if (Number.isFinite(fim.getTime()) && agora.getTime() > fim.getTime()) {
     throw new NfceSignError("certificado_expirado", "Certificado expirado (validTo no passado).")
   }
 }
 
-/** Remove um `<Signature>...</Signature>` existente (para reassinatura). */
+/** Remove a assinatura sem prefixo produzida por este signer para reassinatura explicita. */
 function stripSignature(xml: string): string {
   const start = xml.indexOf("<Signature")
   const endTag = "</Signature>"
-  const end = xml.indexOf(endTag)
+  const end = xml.indexOf(endTag, start)
   if (start < 0 || end < 0) return xml
   return xml.slice(0, start) + xml.slice(end + endTag.length)
 }
 
-/** Detecta se o XML já contém uma assinatura. */
 export function isNfceSigned(xml: string): boolean {
   try {
-    const root = parseXml(xml)
-    return findFirst(root, "Signature") !== null
+    return findAll(parseXml(xml), "Signature").some((element) => element.namespaceUri === DSIG_NS)
   } catch {
     return false
   }
 }
 
-/** Assina e devolve o resultado detalhado (XML + digest + signatureValue + certificado). */
 export function signNfceXmlDetailed(
   xml: string,
   certificado: FiscalCertificateMaterial,
   senha = "",
   options: SignNfceOptions = {},
 ): SignNfceResult {
-  if (typeof xml !== "string" || xml.trim() === "") {
-    throw new NfceSignError("xml_invalido", "XML vazio ou inválido.")
+  if (typeof xml !== "string" || !xml.trim()) {
+    throw new NfceSignError("xml_invalido", "XML vazio ou invalido.")
   }
 
   let working = xml
@@ -128,54 +136,72 @@ export function signNfceXmlDetailed(
   try {
     root = parseXml(working)
   } catch {
-    throw new NfceSignError("xml_invalido", "XML mal-formado.")
+    throw new NfceSignError("xml_invalido", "XML malformado ou recusado pela politica segura.")
   }
 
-  if (findFirst(root, "Signature")) {
+  const existingSignatures = findAll(root, "Signature")
+  if (existingSignatures.length > 0) {
+    const generatedSignatureIsDirect =
+      existingSignatures.length === 1 &&
+      existingSignatures[0]!.namespaceUri === DSIG_NS &&
+      existingSignatures[0]!.qualifiedName === "Signature" &&
+      childElements(root, "Signature", DSIG_NS).length === 1
+    if (!generatedSignatureIsDirect) {
+      throw new NfceSignError(
+        "estrutura_assinatura_invalida",
+        "Documento contem Signature fora da estrutura produzida por este signer.",
+      )
+    }
     if (!options.permitirReassinatura) {
-      throw new NfceSignError("ja_assinado", "XML já contém assinatura (use permitirReassinatura para reassinar).")
+      throw new NfceSignError("ja_assinado", "XML ja contem assinatura (use permitirReassinatura para reassinar).")
     }
     working = stripSignature(working)
+    if (working === xml) {
+      throw new NfceSignError("ja_assinado", "Reassinatura aceita somente para assinatura gerada por este signer.")
+    }
     root = parseXml(working)
   }
 
-  if (findFirst(root, "NFe") == null && root.name !== "NFe") {
-    throw new NfceSignError("xml_invalido", "Documento não é uma NFe (elemento <NFe> ausente).")
+  if (root.name !== "NFe" || root.namespaceUri !== NFE_NS) {
+    throw new NfceSignError("xml_invalido", "Documento nao e uma NFe no namespace fiscal esperado.")
   }
 
+  const infNFeCandidates = findAll(root, "infNFe").filter((element) => element.namespaceUri === NFE_NS)
+  if (infNFeCandidates.length > 1) {
+    throw new NfceSignError("referencia_ambigua", "Documento contem mais de um <infNFe> fiscal.")
+  }
   const located = locateInfNFe(root)
-  if (!located) throw new NfceSignError("sem_infnfe", "Elemento <infNFe> não encontrado.")
-  if (!located.id) throw new NfceSignError("infnfe_sem_id", "<infNFe> sem atributo Id (Id=\"NFe...\").")
+  if (!located) throw new NfceSignError("sem_infnfe", "Elemento <infNFe> nao encontrado.")
+  if (!located.id) throw new NfceSignError("infnfe_sem_id", "<infNFe> sem atributo Id.")
+  if (!/^[A-Za-z_][A-Za-z0-9._:-]*$/.test(located.id)) {
+    throw new NfceSignError("referencia_invalida", "O Id de <infNFe> nao e uma referencia XML local segura.")
+  }
+  if (findAllById(root, located.id).length !== 1) {
+    throw new NfceSignError("referencia_ambigua", "O Id referenciado nao e unico no documento.")
+  }
 
   const { privateKey, certificate, certBase64 } = loadMaterial(certificado, senha)
   if (!options.ignorarValidade) assertValidade(certificate, options.agora ?? new Date())
   if (!certificate.checkPrivateKey(privateKey)) {
-    throw new NfceSignError("chave_incompativel", "A chave privada não corresponde ao certificado informado.")
+    throw new NfceSignError("chave_incompativel", "A chave privada nao corresponde ao certificado informado.")
   }
 
-  // 1) Digest do infNFe canonicalizado.
   const digestValue = digestInfNFe(root, located.el)
-  // 2) SignedInfo + canonicalização.
   const signedInfoXml = buildSignedInfoXml(located.id, digestValue)
-  const signedInfoCanon = canonicalizeSignedInfo(signedInfoXml, DSIG_NS)
-  // 3) Assinatura RSA-SHA1 (PKCS#1 v1.5 — determinística) do SignedInfo canonicalizado.
+  const signedInfoCanon = canonicalizeSignedInfo(signedInfoXml, DSIG_NS, working)
+
   let signatureValue: string
   try {
     signatureValue = cryptoSign("sha1", Buffer.from(signedInfoCanon, "utf8"), privateKey).toString("base64")
   } catch {
     throw new NfceSignError("chave_privada_invalida", "Falha ao assinar com a chave privada.")
   }
-  // 4) Signature + envelopamento.
+
   const signatureXml = buildSignatureXml({ signedInfoXml, signatureValue, certificadoBase64: certBase64 })
   const signedXml = insertSignatureIntoNFe(working, signatureXml)
-
   return { xml: signedXml, referenciaId: located.id, digestValue, signatureValue, certificadoBase64: certBase64 }
 }
 
-/**
- * Assina o XML da NFC-e e devolve o XML ASSINADO (string). Pura: mesmos
- * (xml, certificado, senha) ⇒ mesma saída (RSA PKCS#1 v1.5 é determinístico).
- */
 export function signNfceXml(
   xml: string,
   certificado: FiscalCertificateMaterial,
@@ -185,57 +211,166 @@ export function signNfceXml(
   return signNfceXmlDetailed(xml, certificado, senha, options).xml
 }
 
+function failedVerification(
+  assinado: boolean,
+  referenciaId: string | null,
+  problemas: string[],
+): VerifyNfceResult {
+  return {
+    valido: false,
+    assinado,
+    digestConfere: false,
+    assinaturaConfere: false,
+    referenciaId,
+    problemas,
+  }
+}
+
+function hasExactChildren(element: C14nElement, names: string[]): boolean {
+  const children = childElements(element)
+  return children.length === names.length && children.every((child, index) => child.name === names[index])
+}
+
+function oneChild(element: C14nElement, name: string, namespaceUri: string): C14nElement | null {
+  const matches = childElements(element, name, namespaceUri)
+  return matches.length === 1 ? matches[0]! : null
+}
+
 /**
- * Verifica a assinatura de um XML NFC-e assinado: recomputa o digest do `infNFe` e confere o
- * `SignatureValue` (RSA-SHA1) contra a chave pública do `X509Certificate` embutido.
- * Não valida cadeia ICP/SEFAZ (fora de escopo): apenas integridade/autoconsistência do XMLDSig.
+ * Verifica integridade XMLDSig. Nao valida cadeia ICP-Brasil, politica de confianca ou SEFAZ;
+ * somente estrutura estrita, Reference local unica, digest e assinatura com o X509 embutido.
  */
 export function verifyNfceSignature(xml: string): VerifyNfceResult {
-  const problemas: string[] = []
   let root: C14nElement
   try {
     root = parseXml(xml)
   } catch {
-    return { valido: false, assinado: false, digestConfere: false, assinaturaConfere: false, referenciaId: null, problemas: ["xml_invalido"] }
+    return failedVerification(false, null, ["xml_invalido"])
   }
 
-  const signature = findFirst(root, "Signature")
-  if (!signature) {
-    return { valido: false, assinado: false, digestConfere: false, assinaturaConfere: false, referenciaId: null, problemas: ["nao_assinado"] }
+  const allSignatures = findAll(root, "Signature")
+  if (allSignatures.length === 0) return failedVerification(false, null, ["nao_assinado"])
+  if (root.name !== "NFe" || root.namespaceUri !== NFE_NS) {
+    return failedVerification(true, null, ["xml_invalido"])
+  }
+  const fiscalInfNFe = findAll(root, "infNFe").filter((element) => element.namespaceUri === NFE_NS)
+  const directFiscalInfNFe = childElements(root, "infNFe", NFE_NS)
+  if (fiscalInfNFe.length !== 1 || directFiscalInfNFe.length !== 1 || fiscalInfNFe[0] !== directFiscalInfNFe[0]) {
+    return failedVerification(true, null, [fiscalInfNFe.length > 1 ? "referencia_ambigua" : "referencia_invalida"])
   }
 
-  const signedInfo = findFirst(signature, "SignedInfo")
-  const reference = signedInfo ? findFirst(signedInfo, "Reference") : null
-  const digestValue = textOf(signedInfo ? findFirst(signedInfo, "DigestValue") : null)
-  const signatureValue = textOf(findFirst(signature, "SignatureValue"))
-  const certB64 = textOf(findFirst(signature, "X509Certificate"))
-  const referenciaId = (attrOf(reference, "URI") || "").replace(/^#/, "") || null
-
-  if (!signedInfo || !digestValue || !signatureValue || !certB64) {
-    return { valido: false, assinado: true, digestConfere: false, assinaturaConfere: false, referenciaId, problemas: ["assinatura_incompleta"] }
+  const directSignatures = childElements(root, "Signature", DSIG_NS)
+  if (allSignatures.length !== 1 || directSignatures.length !== 1) {
+    return failedVerification(true, null, ["estrutura_assinatura_invalida"])
+  }
+  const signature = directSignatures[0]!
+  if (!hasExactChildren(signature, ["SignedInfo", "SignatureValue", "KeyInfo"])) {
+    return failedVerification(true, null, ["estrutura_assinatura_invalida"])
   }
 
-  // 1) Digest do infNFe.
+  const signedInfo = oneChild(signature, "SignedInfo", DSIG_NS)
+  const signatureValueElement = oneChild(signature, "SignatureValue", DSIG_NS)
+  const keyInfo = oneChild(signature, "KeyInfo", DSIG_NS)
+  if (!signedInfo || !signatureValueElement || !keyInfo) {
+    return failedVerification(true, null, ["assinatura_incompleta"])
+  }
+  if (!hasExactChildren(signedInfo, ["CanonicalizationMethod", "SignatureMethod", "Reference"])) {
+    return failedVerification(true, null, ["estrutura_assinatura_invalida"])
+  }
+
+  const canonicalizationMethod = oneChild(signedInfo, "CanonicalizationMethod", DSIG_NS)
+  const signatureMethod = oneChild(signedInfo, "SignatureMethod", DSIG_NS)
+  const reference = oneChild(signedInfo, "Reference", DSIG_NS)
+  if (!canonicalizationMethod || !signatureMethod || !reference) {
+    return failedVerification(true, null, ["assinatura_incompleta"])
+  }
+  if (!hasExactChildren(reference, ["Transforms", "DigestMethod", "DigestValue"])) {
+    return failedVerification(true, null, ["estrutura_assinatura_invalida"])
+  }
+
+  const transforms = oneChild(reference, "Transforms", DSIG_NS)
+  const digestMethod = oneChild(reference, "DigestMethod", DSIG_NS)
+  const digestValueElement = oneChild(reference, "DigestValue", DSIG_NS)
+  const transformList = transforms ? childElements(transforms, "Transform", DSIG_NS) : []
+  if (
+    !transforms ||
+    !digestMethod ||
+    !digestValueElement ||
+    transformList.length !== 2
+  ) {
+    return failedVerification(true, null, ["assinatura_incompleta"])
+  }
+  if (!hasExactChildren(transforms, ["Transform", "Transform"])) {
+    return failedVerification(true, null, ["estrutura_assinatura_invalida"])
+  }
+
+  const algorithmsAreExact =
+    attrOf(canonicalizationMethod, "Algorithm") === ALG_C14N &&
+    attrOf(signatureMethod, "Algorithm") === ALG_SIGNATURE_RSA_SHA1 &&
+    attrOf(digestMethod, "Algorithm") === ALG_DIGEST_SHA1 &&
+    attrOf(transformList[0]!, "Algorithm") === ALG_ENVELOPED &&
+    attrOf(transformList[1]!, "Algorithm") === ALG_C14N
+  if (!algorithmsAreExact) {
+    return failedVerification(true, null, ["algoritmo_nao_permitido"])
+  }
+
+  const uri = attrOf(reference, "URI")
+  const referenciaId = /^#[^#\s]+$/.test(uri) ? uri.slice(1) : null
+  if (!referenciaId) return failedVerification(true, null, ["referencia_invalida"])
+  const referenced = findAllById(root, referenciaId)
+  if (referenced.length === 0) return failedVerification(true, referenciaId, ["referencia_invalida"])
+  if (referenced.length !== 1) return failedVerification(true, referenciaId, ["referencia_ambigua"])
+  const target = referenced[0]!
+  if (target !== fiscalInfNFe[0] || target.name !== "infNFe" || target.namespaceUri !== NFE_NS) {
+    return failedVerification(true, referenciaId, ["referencia_invalida"])
+  }
+
+  const x509Data = oneChild(keyInfo, "X509Data", DSIG_NS)
+  const x509Certificate = x509Data ? oneChild(x509Data, "X509Certificate", DSIG_NS) : null
+  const digestValue = textOf(digestValueElement)
+  const signatureValue = textOf(signatureValueElement)
+  const certBase64 = textOf(x509Certificate)
+  if (!x509Data || !x509Certificate || !digestValue || !signatureValue || !certBase64) {
+    return failedVerification(true, referenciaId, ["assinatura_incompleta"])
+  }
+  if (
+    !hasExactChildren(keyInfo, ["X509Data"]) ||
+    !hasExactChildren(x509Data, ["X509Certificate"]) ||
+    childElements(x509Certificate).length !== 0
+  ) {
+    return failedVerification(true, referenciaId, ["estrutura_assinatura_invalida"])
+  }
+
   let digestConfere = false
-  const infNFe = findFirst(root, "infNFe")
-  if (infNFe) {
-    const recomputed = sha1Base64(canonicalizeElement(infNFe, nfeDefaultNs(root)))
-    digestConfere = recomputed === digestValue
+  try {
+    digestConfere = sha1Base64(canonicalizeElement(target)) === digestValue
+  } catch {
+    digestConfere = false
   }
-  if (!digestConfere) problemas.push("digest_invalido")
 
-  // 2) SignatureValue sobre o SignedInfo canonicalizado.
   let assinaturaConfere = false
   try {
-    const inheritedNs = attrOf(signature, "xmlns") || DSIG_NS
-    const canon = canonicalizeElement(signedInfo, inheritedNs)
-    const pub = new X509Certificate(certPemFromBase64(certB64)).publicKey
-    assinaturaConfere = cryptoVerify("sha1", Buffer.from(canon, "utf8"), pub, Buffer.from(signatureValue, "base64"))
+    const canonicalSignedInfo = canonicalizeElement(signedInfo)
+    const publicKey = new X509Certificate(certPemFromBase64(certBase64)).publicKey
+    if (
+      publicKey.asymmetricKeyType !== "rsa" ||
+      (publicKey.asymmetricKeyDetails?.modulusLength ?? 0) < 2048
+    ) {
+      throw new Error("Certificado XMLDSig nao possui chave RSA de no minimo 2048 bits.")
+    }
+    assinaturaConfere = cryptoVerify(
+      "sha1",
+      Buffer.from(canonicalSignedInfo, "utf8"),
+      publicKey,
+      Buffer.from(signatureValue, "base64"),
+    )
   } catch {
     assinaturaConfere = false
   }
-  if (!assinaturaConfere) problemas.push("assinatura_invalida")
 
+  const problemas: string[] = []
+  if (!digestConfere) problemas.push("digest_invalido")
+  if (!assinaturaConfere) problemas.push("assinatura_invalida")
   return {
     valido: digestConfere && assinaturaConfere,
     assinado: true,
@@ -246,7 +381,9 @@ export function verifyNfceSignature(xml: string): VerifyNfceResult {
   }
 }
 
-/** Carrega material a partir de PEMs (conveniência pura — sem I/O). */
-export function loadCertificateMaterialFromPem(privateKeyPem: string, certificatePem: string): FiscalCertificateMaterial {
+export function loadCertificateMaterialFromPem(
+  privateKeyPem: string,
+  certificatePem: string,
+): FiscalCertificateMaterial {
   return { privateKeyPem, certificatePem }
 }
