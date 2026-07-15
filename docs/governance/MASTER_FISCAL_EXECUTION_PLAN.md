@@ -33,20 +33,22 @@ de NFC-e em produção**, sem quebrar uma única venda real no caminho.
 
 ---
 
-## 2. Estado atual (reconciliação de 2026-07-13)
+## 2. Estado atual (reconciliação de 2026-07-15)
 
-> **Nota de reconciliação:** esta seção foi atualizada por extensão pelo
-> `FISCAL-STATUS-RECONCILE-001`. Arquitetura, decisões, sequência, gates, princípios e histórico das
-> demais seções permanecem vigentes. Fonte detalhada:
-> `docs/fiscal/FISCAL_RECONCILE_REPORT_001.md`.
+> **Nota de reconciliação:** seção de status atualizada por extensão pelo
+> `FISCAL-STATUS-RECONCILE-001` e, em 15/07/2026, pelo fechamento documental do
+> `FISCAL-XSD-OFFICIAL-VALIDATION-002` (G-C2). **Arquitetura, decisões, sequência, princípios e
+> histórico das demais seções permanecem vigentes** — alteração somente de status. Fontes:
+> `docs/fiscal/FISCAL_RECONCILE_REPORT_001.md` ·
+> `docs/fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`.
 
 | Fase | Estado factual | Evidência / bloqueio |
 |---|---|---|
 | F0 | governança vigente e reconciliada | plano, roadmap, ADR-0008 e relatório |
 | F1 | decisão aceita; implementação interna parcial N3 | ADR-0009 + EnvVault; KMS ausente |
 | F2 | código/testes N3, sem caller | `ba0cc12`; sem ST/CSOSN 500 |
-| F3 | código/testes N3, sem caller | `ba0cc12`; validação XSD é placeholder |
-| F4 | código/testes N3, sem caller | `ba0cc12`; C14N com desvios documentados |
+| F3 | XML + **XSD oficial real (N4 no eixo)**; sem caller de venda | merge `82c219c` · worker B2 · G-C2 **fechado** · sem SEFAZ |
+| F4 | código/testes N3, sem caller; signer RSA-SHA1 (ADR-0011) | C14N com desvios; próximo GOAL-003 |
 | F5 | contrato/stub N1 | provider real ausente; G-F5 aberto |
 | F6 | N0 | QR-Code/CSC operacional ausente |
 | F7 | contrato de fila N1; guards em seis rotas | 0 jobs; sem produtor/worker; G-F7 aberto |
@@ -56,10 +58,10 @@ de NFC-e em produção**, sem quebrar uma única venda real no caminho.
 | F11 | N0 | zero prova SEFAZ em homologação |
 | F12 | N0 | zero produção; G-F12 aberto |
 
-Banco read-only: oito tabelas fiscais presentes, todas vazias; 721 vendas e zero com estado fiscal;
-diff schema versus banco vazio. O dry-run existente permanece N3, não N4, porque XSD e C14N ainda
-não produzem prova independente. **Não reimplementar F2–F4 do zero:** fechar as lacunas internas,
-reconstruir o gate auferível e somente então avançar para F5.
+XSD: no-op removido; validação real fail-closed; pacote `PL_010e_v1.02`; CI do PR #4 verde.
+Dry-run **completo** ainda não é N4 pleno — **C14N** permanece irregular. N6=0 e N7=0.
+**Não reimplementar F2–F4 do zero:** fechar C14N e demais lacunas internas, tornar o dry-run
+auferível de ponta a ponta e somente então avançar para F5.
 
 ---
 
