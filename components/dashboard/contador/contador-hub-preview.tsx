@@ -12,8 +12,12 @@
  * fiscal ou motor de imposto. Todos os dados são estáticos (contador-preview-data.ts)
  * e todos os botões sem efeito real disparam um toast honesto. O AppShell continua
  * dono único do scroll — este componente flui, não cria scroll de página.
+ *
+ * Competência (GOAL 005): prop `competencia` vem da URL (`?c=AAAA-MM`) via page.tsx.
+ * Navegação anterior/próxima usa router.replace — sem useState de mês/ano.
  */
-import { useState } from "react"
+import { useCallback, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
   Check,
@@ -35,14 +39,21 @@ import {
 import { cn } from "@/lib/utils"
 import { Switch } from "@/components/ui/switch"
 import {
+  competenciaAnterior,
+  competenciaProxima,
+  formatCompetencia,
+  formatCompetenciaMmYyyy,
+  labelCompetencia,
+  labelCompetenciaCurta,
+  type Competencia,
+} from "@/lib/contador/competencia"
+import {
   CONTADOR_SECTIONS,
-  COMPETENCIA_INICIAL,
   DOCUMENTOS_ROWS,
   DOSSIES,
   DOSSIE_FILTERS,
   FECHAMENTO_CHECKLIST,
   FOLHA_FUNCIONARIOS,
-  MESES,
   OBRIGACOES_ROWS,
   PACOTE_ITEMS_RELATORIOS,
   PACOTE_ITEMS_VISAO,
@@ -256,9 +267,19 @@ function PacoteCard({
 
 /* ───────────────────────── componente principal ───────────────────────── */
 
-export function ContadorHubPreview() {
-  const [mesIdx, setMesIdx] = useState(COMPETENCIA_INICIAL.mesIdx)
-  const [ano, setAno] = useState(COMPETENCIA_INICIAL.ano)
+export type ContadorHubPreviewProps = {
+  /**
+   * Competência canônica resolvida na page (searchParams.c → lib/contador/competencia).
+   * Fonte da verdade da competência — sem useState espelhado.
+   */
+  competencia: Competencia
+}
+
+export function ContadorHubPreview({ competencia }: ContadorHubPreviewProps) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
   const [active, setActive] = useState<ContadorSectionId>("visao")
   const [modo, setModo] = useState(false)
   const [dossieFilter, setDossieFilter] = useState<DossieFilter>("all")
@@ -266,23 +287,29 @@ export function ContadorHubPreview() {
   const [toast, setToast] = useState<string | null>(null)
   const [drawer, setDrawer] = useState<{ kind: "doc" | "guia"; title: string } | null>(null)
 
-  const pad = (n: number) => String(n).padStart(2, "0")
-  const compName = `${MESES[mesIdx]} / ${ano}`
-  const compCode = `${pad(mesIdx + 1)}/${ano}`
-  const compShort = `${MESES[mesIdx]}/${ano}`
+  const compName = labelCompetencia(competencia)
+  const compCode = formatCompetenciaMmYyyy(competencia)
+  const compShort = labelCompetenciaCurta(competencia)
+
+  /**
+   * Navega a competência via URL (?c=AAAA-MM), preservando demais query params.
+   * router.replace + scroll:false evita empilhar histórico e não re-rola a página.
+   * Sem estado local de competência → sem loop de sync URL↔state.
+   */
+  const navigateCompetencia = useCallback(
+    (next: Competencia) => {
+      const params = new URLSearchParams(searchParams.toString())
+      const nextCode = formatCompetencia(next)
+      if (params.get("c") === nextCode) return
+      params.set("c", nextCode)
+      const qs = params.toString()
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+    },
+    [pathname, router, searchParams],
+  )
 
   const stepComp = (d: number) => {
-    let m = mesIdx + d
-    let y = ano
-    if (m < 0) {
-      m = 11
-      y -= 1
-    } else if (m > 11) {
-      m = 0
-      y += 1
-    }
-    setMesIdx(m)
-    setAno(y)
+    navigateCompetencia(d < 0 ? competenciaAnterior(competencia) : competenciaProxima(competencia))
   }
 
   const goSection = (id: ContadorSectionId) => {
