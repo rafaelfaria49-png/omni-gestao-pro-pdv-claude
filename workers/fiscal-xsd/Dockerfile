@@ -44,6 +44,13 @@ ENV NODE_ENV=production \
     HOME=/tmp \
     TMPDIR=/tmp \
     PATH=/usr/local/bin:/usr/bin:/bin
+# Correção de supply chain (Trivy CRITICAL): CVE-2026-33845 e CVE-2026-42010.
+# Atualiza EXCLUSIVAMENTE libgnutls30 para a versão oficial corrigida do Debian
+# Bookworm (fonte gnutls28 3.7.9-2+deb12u7, via bookworm-security). Versão pinada,
+# sem dist-upgrade e sem tocar outros pacotes; índices apt removidos no mesmo layer.
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends --only-upgrade libgnutls30=3.7.9-2+deb12u7 \
+  && rm -rf /var/lib/apt/lists/*
 # O PATH endurecido acima omite /usr/sbin — groupadd/useradd exigem caminho absoluto
 # (ADR-0010: nenhuma dependência de binário implícito no PATH).
 RUN /usr/sbin/groupadd --gid 10001 fiscal-xsd \
