@@ -79,7 +79,8 @@ import { salvarDadosBasicosOSV3 } from "@/lib/operacoes-v3/dados-basicos-actions
 import type { SalvarDadosBasicosInputV3 } from "@/lib/operacoes-v3/dados-basicos-model";
 // Assinatura de retirada real (SPRINT_3E.2) e auditoria de impressão (Fase 1E) —
 // reuso direto das actions V3 (GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012).
-import { salvarAssinaturaRetiradaV3 } from "@/lib/operacoes-v3/entrega-actions";
+import { registrarEntregaV3, salvarAssinaturaRetiradaV3 } from "@/lib/operacoes-v3/entrega-actions";
+import type { EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
 import { registrarImpressaoDocumentoV3, salvarGarantiaOSV3 } from "@/lib/operacoes-v3/garantia-actions";
 import type { DocumentoTipoV3 } from "@/lib/operacoes-v3/documentos";
 import { editorToSalvarInputV4, seedEditorFromOS, type OrcamentoEditorV4 } from "@/lib/operacoes-v4/orcamento-form";
@@ -171,9 +172,9 @@ export interface V4DataCtx {
   marcarAguardandoPeca: () => Promise<boolean>;
   marcarPronta: () => Promise<boolean>;
   // ---- Entrega (slice OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
-  // Confirma a entrega via `aplicarTransicaoStatusV3(sid, osId, "entregue")` (mesmo
-  // reuso dos handlers acima). Só deve ser chamada quando `entregaAcoes.podeConfirmar`.
-  confirmarEntrega: () => Promise<boolean>;
+  // Confirma pela action canônica `registrarEntregaV3`; o servidor sempre revalida
+  // financeiro, mesmo quando o cliente chama fora do gate visual.
+  confirmarEntrega: (semCobranca?: EntregaSemCobrancaSolicitacaoV3) => Promise<boolean>;
   // ---- Assinatura de retirada + auditoria de impressão (GOAL OPS-V4-DOCS-
   // ASSINATURA-TERMOS-ANEXOS-012) ----
   /** Persiste a assinatura de retirada (reuso de `salvarAssinaturaRetiradaV3`). */
@@ -713,7 +714,8 @@ export function buildVals(
   // (total<=0, ex.: orçamento nunca materializado). Antes as duas caíam em "pode
   // entregar", deixando uma OS sem cobrança ser entregue em silêncio (o buraco da
   // auditoria). Agora as três situações são distintas e a entrega sem cobrança exige
-  // confirmação explícita de cortesia (só na UI — nada persiste; ver EntregaStage).
+  // classificação + justificativa enviadas à action canônica, que deriva ator/horário,
+  // persiste a autorização e decide novamente no servidor.
   // Tudo derivado do MESMO `pdvPag` (sem novo read); com `pdvPag` null nada se decide
   // (anti-flicker). `semSaldoPendenteEntrega` (quitada OU sem cobrança) segue
   // alimentando só o CTA global (`prim`), que apenas NAVEGA à aba Entrega — o guard
@@ -732,6 +734,8 @@ export function buildVals(
   // pelo fluxo normal depois, o saldo cai a 0 e esta exceção deixa de valer sozinha).
   const aPrazo = realOS ? lerAPrazoV3(realOS) : null;
   const aPrazoAutorizado = !!aPrazo && aPrazo.autorizadoEntrega && saldoPendenteConfirmado;
+  const leituraFinanceiraBloqueada =
+    !!realOS && status === "pronta" && (ctx.pdvServico.loading || !!ctx.pdvServico.error || !pdvPag);
   const entregaAcoes = {
     // Confirmação DIRETA (sem passo extra) só na OS quitada de verdade (total>0,
     // saldo<=0) ou já autorizada a prazo. OS sem cobrança NÃO entra aqui — segue
@@ -743,6 +747,9 @@ export function buildVals(
     // total<=0 (nenhuma cobrança lançada): a entrega só acontece após confirmação
     // explícita de cortesia na UI — nunca em silêncio.
     semCobrancaLancada: !!realOS && status === "pronta" && cobrancaAusente,
+    leituraFinanceiraBloqueada,
+    financeiroCarregando: leituraFinanceiraBloqueada && ctx.pdvServico.loading,
+    financeiroErro: leituraFinanceiraBloqueada ? ctx.pdvServico.error : null,
   };
 
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
@@ -1428,14 +1435,12 @@ export function useV4Preview(): V4Vals {
 
   // ---- Entrega (GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008): mesmo wrapper
   // `runWrite` (reload + toast honesto; sem mutar status local se a action falhar).
-  // `aplicarTransicaoStatusV3` trata "entregue" como caso especial e delega a
-  // `registrarEntregaV3` (idempotente, com guard próprio de permissão/estado —
-  // ver Fase 0 do GOAL). O gate de saldo (`entregaAcoes.podeConfirmar`) é decidido
-  // no cliente antes de chamar; a action em si não verifica saldo/financeiro.
+  // `registrarEntregaV3` é o caminho canônico e agora sempre refaz a decisão
+  // financeira no servidor. O gate cliente serve apenas para orientar a UX.
   const confirmarEntrega = useCallback(
-    () =>
+    (semCobranca?: EntregaSemCobrancaSolicitacaoV3) =>
       runWrite(
-        (sid, osId) => aplicarTransicaoStatusV3(sid, osId, "entregue"),
+        (sid, osId) => registrarEntregaV3(sid, osId, semCobranca ? { semCobranca } : {}),
         "Entrega confirmada.",
         () => update({ status: "entregue", stage: "entrega" }),
       ),

@@ -878,29 +878,30 @@ describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — entregaAcoes só habilita co
 
   it("pronta + saldo 0: podeConfirmar true, bloqueadaPorSaldo false", () => {
     const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", { total: 320, recebido: 320, saldo: 0, status: "quitado" }))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: true, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: true, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
   })
 
   it("pronta + saldo > 0: podeConfirmar false, bloqueadaPorSaldo true (mensagem de bloqueio, não botão)", () => {
     const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", { total: 320, recebido: 0, saldo: 320, status: "aberto" }))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: true, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: false, bloqueadaPorSaldo: true, autorizadaAPrazo: false, semCobrancaLancada: false })
   })
 
   it("pronta + pagamento não carregado (null): nenhuma ação disponível ainda (nem confirmar nem bloqueio) — evita flicker", () => {
     const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", null))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes.leituraFinanceiraBloqueada).toBe(true)
   })
 
   it("outros status (em_execucao, entregue, aberta): entregaAcoes sempre desabilitada", () => {
     for (const status of ["em_execucao", "aberta", "entregue", "diagnostico"]) {
       const v = buildVals(makeState({ selectedOsId: "os-ent", novaOS: false }), () => {}, () => {}, ctxEntrega(status, { total: 320, recebido: 320, saldo: 0, status: "quitado" }))
-      expect(v.entregaAcoes, `status ${status}`).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
+      expect(v.entregaAcoes, `status ${status}`).toMatchObject({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
     }
   })
 
   it("sem OS selecionada, entregaAcoes fica desabilitada mesmo com snapshot local 'pronta'", () => {
     const v = buildVals(makeState({ status: "pronta", selectedOsId: null, novaOS: false }), () => {}, () => {}, ctx)
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
   })
 })
 
@@ -926,7 +927,7 @@ describe("OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006 — entregaAcoes libera entrega 
         autorizadoEntrega: true,
       }),
     )
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: true, bloqueadaPorSaldo: false, autorizadaAPrazo: true, semCobrancaLancada: false })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: true, bloqueadaPorSaldo: false, autorizadaAPrazo: true, semCobrancaLancada: false })
   })
 
   it("pronta + saldo > 0 + aPrazoV3 já cancelado (status !== 'pendente'): continua bloqueando normalmente", () => {
@@ -942,14 +943,14 @@ describe("OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006 — entregaAcoes libera entrega 
         autorizadoEntrega: true,
       }),
     )
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: true, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: false, bloqueadaPorSaldo: true, autorizadaAPrazo: false, semCobrancaLancada: false })
   })
 })
 
 // ---------------------------------------------------------------------------
 // GOAL OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002 — a entrega distingue quitada,
 // saldo pendente e SEM cobrança lançada (total R$ 0). A OS sem cobrança nunca é
-// entregue em silêncio: exige confirmação explícita de cortesia (só na UI).
+// entregue em silêncio: exige categoria + motivo e decisão server-side persistida.
 // ---------------------------------------------------------------------------
 describe("OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002 — entregaAcoes separa quitado, saldo pendente e sem cobrança", () => {
   function ctxEntrega(status: string, pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null) {
@@ -962,22 +963,23 @@ describe("OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002 — entregaAcoes separa quitado,
 
   it("pronta + total 0 (sem cobrança lançada): semCobrancaLancada true, podeConfirmar false, bloqueadaPorSaldo false", () => {
     const v = buildVals(makeState({ selectedOsId: "os-guard", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", { total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: true })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: true })
   })
 
   it("pronta + total > 0 e saldo 0 (quitada de verdade): podeConfirmar true, semCobrancaLancada false", () => {
     const v = buildVals(makeState({ selectedOsId: "os-guard", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", { total: 320, recebido: 320, saldo: 0, status: "quitado" }))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: true, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: true, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
   })
 
   it("pronta + total > 0 e saldo > 0 (saldo pendente): bloqueadaPorSaldo true, semCobrancaLancada false", () => {
     const v = buildVals(makeState({ selectedOsId: "os-guard", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", { total: 320, recebido: 0, saldo: 320, status: "aberto" }))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: true, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: false, bloqueadaPorSaldo: true, autorizadaAPrazo: false, semCobrancaLancada: false })
   })
 
   it("pronta + pagamento não carregado (null): nada se decide ainda (anti-flicker) — nem sem cobrança nem confirmar", () => {
     const v = buildVals(makeState({ selectedOsId: "os-guard", novaOS: false }), () => {}, () => {}, ctxEntrega("pronta", null))
-    expect(v.entregaAcoes).toEqual({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes).toMatchObject({ podeConfirmar: false, bloqueadaPorSaldo: false, autorizadaAPrazo: false, semCobrancaLancada: false })
+    expect(v.entregaAcoes.leituraFinanceiraBloqueada).toBe(true)
   })
 
   it("total 0 mas status != pronta (em_execucao): semCobrancaLancada false (o guard só vale na etapa de entrega)", () => {
@@ -995,7 +997,7 @@ describe("OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002 — entregaAcoes separa quitado,
   })
 })
 
-describe("OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002 — EntregaStage exige confirmação explícita de cortesia", () => {
+describe("OPS-V4-DELIVERY-FINANCIAL-GUARD-SERVER-001 — EntregaStage coleta autorização persistível", () => {
   const entregaStageSrc = readFileSync(join(DIR, "parts", "stages", "EntregaStage.tsx"), "utf8")
 
   it("mostra o alerta forte 'OS sem cobrança lançada' com os dois caminhos (Orçamento / sem cobrança)", () => {
@@ -1005,26 +1007,27 @@ describe("OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002 — EntregaStage exige confirma�
     expect(entregaStageSrc).toMatch(/cortesia, garantia ou serviço realmente sem valor/)
   })
 
-  it("a entrega sem cobrança só libera após 'sim' explícito (estado local confirmarSemCobranca) — nunca em silêncio", () => {
-    expect(entregaStageSrc).toMatch(/ea\.semCobrancaLancada && !confirmarSemCobranca/)
-    expect(entregaStageSrc).toContain("setConfirmarSemCobranca(true)")
-    // O botão real muda de rótulo para deixar claro que é entrega sem cobrança.
+  it("exige categoria e motivo e envia apenas a solicitação para decisão server-side", () => {
+    expect(entregaStageSrc).toMatch(/ea\.semCobrancaLancada && !formSemCobrancaAberto/)
+    expect(entregaStageSrc).toContain("setFormSemCobrancaAberto(true)")
+    expect(entregaStageSrc).toContain("Categoria obrigatória")
+    expect(entregaStageSrc).toContain("Motivo obrigatório")
+    expect(entregaStageSrc).toContain("v.confirmarEntrega(semCobranca)")
     expect(entregaStageSrc).toContain("Confirmar entrega sem cobrança")
-    // Reseta o consentimento ao trocar de OS (não vaza de uma OS para outra).
-    expect(entregaStageSrc).toMatch(/useEffect\(\(\) => \{\s*setConfirmarSemCobranca\(false\)/)
+    expect(entregaStageSrc).toMatch(/useEffect\(\(\) => \{\s*setFormSemCobrancaAberto\(false\);\s*setCategoria\(""\);\s*setMotivo\(""\)/)
   })
 })
 
-describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — confirmarEntrega reusa aplicarTransicaoStatusV3 via runWrite", () => {
+describe("OPS-V4-DELIVERY-FINANCIAL-GUARD-SERVER-001 — confirmarEntrega usa a action canônica protegida", () => {
   const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
   const entregaStage = readFileSync(join(DIR, "parts", "stages", "EntregaStage.tsx"), "utf8")
 
-  it("chama aplicarTransicaoStatusV3(sid, osId, \"entregue\") — mesmo contrato V3 usado pelas outras transições", () => {
-    expect(orquestrador).toContain('aplicarTransicaoStatusV3(sid, osId, "entregue")')
+  it("chama registrarEntregaV3 com a solicitação opcional de não cobrança", () => {
+    expect(orquestrador).toContain("registrarEntregaV3(sid, osId, semCobranca ? { semCobranca } : {})")
   })
 
   it("passa pelo wrapper runWrite (fonte única de reload/patch-em-sucesso) — falha não muta status", () => {
-    expect(orquestrador).toMatch(/const confirmarEntrega = useCallback\(\s*\(\)\s*=>\s*runWrite\(/)
+    expect(orquestrador).toMatch(/const confirmarEntrega = useCallback\(\s*\(semCobranca\?: EntregaSemCobrancaSolicitacaoV3\)\s*=>\s*runWrite\(/)
     // runWrite continua definido uma única vez — confirmarEntrega reaproveita, não duplica.
     expect(orquestrador.match(/const runWrite = useCallback/g)?.length).toBe(1)
   })
@@ -1034,8 +1037,9 @@ describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — confirmarEntrega reusa aplic
     expect(entregaStage).not.toContain("PREVIEW_NOOP")
   })
 
-  it("EntregaAcaoCard só renderiza quando há algo a decidir (podeConfirmar, bloqueadaPorSaldo ou semCobrancaLancada) — sem botão sempre ligado", () => {
-    expect(entregaStage).toMatch(/if \(!ea\.podeConfirmar && !ea\.bloqueadaPorSaldo && !ea\.semCobrancaLancada\) return null/)
+  it("EntregaAcaoCard também bloqueia visualmente enquanto a leitura financeira está indisponível", () => {
+    expect(entregaStage).toMatch(/if \(!ea\.podeConfirmar && !ea\.bloqueadaPorSaldo && !ea\.semCobrancaLancada && !ea\.leituraFinanceiraBloqueada\) return null/)
+    expect(entregaStage).toContain("Confirmando a situação financeira desta OS")
   })
 
   it("botão de confirmar tem busy-lock (evita duplo clique)", () => {

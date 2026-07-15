@@ -7,9 +7,9 @@
  * dado fabricado: onde não houver fonte, mostra empty state honesto.
  *
  * GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008: a etapa ganha UMA ação real —
- * "Confirmar entrega" (`v.confirmarEntrega`, reuso de `aplicarTransicaoStatusV3`
- * via `use-v4-preview`) — habilitada só quando `v.entregaAcoes.podeConfirmar`
- * (status "pronta" e saldo confirmado <= 0). O restante da etapa segue
+ * "Confirmar entrega" (`v.confirmarEntrega` → `registrarEntregaV3`) — o cliente
+ * orienta a UX, mas a decisão financeira final é sempre refeita no servidor.
+ * O restante da etapa segue
  * read-only (checklist final de entrega continua sem action V3 segura).
  *
  * GOAL OPS-V4-DOCS-ASSINATURA-TERMOS-ANEXOS-012: a assinatura de retirada passa
@@ -31,6 +31,7 @@ import type { V4Vals } from "../../use-v4-preview";
 import { SignaturePadV3 } from "@/components/operacoes-v3/components/SignaturePadV3";
 import { lerGarantiaV3 } from "@/lib/operacoes-v3/pos-venda-model";
 import { GARANTIA_CATALOGO_V3, prazoPadraoGarantiaV3 } from "@/lib/operacoes-v3/garantia-textos";
+import type { EntregaSemCobrancaCategoriaV3, EntregaSemCobrancaSolicitacaoV3 } from "@/lib/operacoes-v3/delivery-financial-guard";
 import { RealActionNotice } from "../RealActionNotice";
 
 const col3 = "repeat(auto-fit, minmax(280px, 1fr))";
@@ -55,39 +56,52 @@ const btnPrimary: React.CSSProperties = {
  * GOAL OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002: uma OS com total R$ 0 (sem cobrança
  * lançada) NÃO pode ser entregue em silêncio. Nesse caso o card mostra um alerta
  * forte e dois caminhos explícitos — "Ir para Orçamento" (lançar a cobrança) ou
- * "Entregar sem cobrança" (assumir cortesia). Só depois do "sim" explícito de
- * cortesia (`confirmarSemCobranca`, estado LOCAL desta interação — nada persiste)
- * é que o botão real de confirmação aparece.
+ * "Entregar sem cobrança". Esse caminho coleta categoria + motivo e os envia à
+ * action canônica; ator, loja, horário, persistência e decisão final são server-side.
  */
 function EntregaAcaoCard({ v }: { v: V4Vals }) {
   const [busy, setBusy] = useState(false);
-  // Confirmação de cortesia (só nesta interação; nada é salvo). Enquanto false, a
-  // OS sem cobrança lançada NÃO pode ser entregue.
-  const [confirmarSemCobranca, setConfirmarSemCobranca] = useState(false);
+  const [formSemCobrancaAberto, setFormSemCobrancaAberto] = useState(false);
+  const [categoria, setCategoria] = useState<EntregaSemCobrancaCategoriaV3 | "">("");
+  const [motivo, setMotivo] = useState("");
   const ea = v.entregaAcoes;
-  // Reseta o "sim" de cortesia ao trocar de OS ou quando a OS deixa de estar sem
-  // cobrança (ex.: orçamento lançado depois) — nunca herda o consentimento de uma
-  // OS para outra (o componente é reaproveitado entre seleções, sem remount).
   const osKey = v.realOS?.id ?? "";
   useEffect(() => {
-    setConfirmarSemCobranca(false);
+    setFormSemCobrancaAberto(false);
+    setCategoria("");
+    setMotivo("");
   }, [osKey, ea.semCobrancaLancada]);
 
-  if (!ea.podeConfirmar && !ea.bloqueadaPorSaldo && !ea.semCobrancaLancada) return null;
+  if (!ea.podeConfirmar && !ea.bloqueadaPorSaldo && !ea.semCobrancaLancada && !ea.leituraFinanceiraBloqueada) return null;
 
-  const run = async () => {
+  const run = async (semCobranca?: EntregaSemCobrancaSolicitacaoV3) => {
     if (busy) return;
     const confirmado = window.confirm(
-      "Entrega real: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?"
+      semCobranca
+        ? "A entrega será registrada sem cobrança, com categoria, motivo e responsável na auditoria. Confirmar?"
+        : "Entrega real: ao confirmar, a OS será marcada como entregue no histórico. Confirmar?"
     );
     if (!confirmado) return;
     setBusy(true);
     try {
-      await v.confirmarEntrega();
+      await v.confirmarEntrega(semCobranca);
     } finally {
       setBusy(false);
     }
   };
+
+  if (ea.leituraFinanceiraBloqueada) {
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Entrega</div>
+        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5 }}>
+          {ea.financeiroCarregando
+            ? "Confirmando a situação financeira desta OS…"
+            : "Não foi possível confirmar a situação financeira desta OS. Revise a cobrança antes de entregar."}
+        </div>
+      </div>
+    );
+  }
 
   if (ea.bloqueadaPorSaldo) {
     return (
@@ -107,9 +121,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
     );
   }
 
-  // OS sem cobrança lançada (total R$ 0): não pode ser entregue em silêncio.
-  // Alerta forte + escolha explícita (lançar cobrança OU assumir cortesia).
-  if (ea.semCobrancaLancada && !confirmarSemCobranca) {
+  if (ea.semCobrancaLancada && !formSemCobrancaAberto) {
     return (
       <div style={card}>
         <div style={{ ...cardTitle, marginBottom: 8 }}>Entrega</div>
@@ -132,7 +144,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
           </button>
           <button
             type="button"
-            onClick={() => setConfirmarSemCobranca(true)}
+            onClick={() => setFormSemCobrancaAberto(true)}
             style={{ height: 34, padding: "0 14px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}
           >
             Entregar sem cobrança
@@ -145,19 +157,62 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
     );
   }
 
-  // Caminho de confirmação real: quitada de verdade / autorizada a prazo / cortesia
-  // já assumida explicitamente acima.
+  if (ea.semCobrancaLancada) {
+    const podeEnviar = !!categoria && motivo.trim().length > 0 && !busy;
+    return (
+      <div style={card}>
+        <div style={{ ...cardTitle, marginBottom: 8 }}>Entrega sem cobrança</div>
+        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, marginBottom: 12 }}>
+          A classificação e a justificativa serão validadas e auditadas pelo servidor antes da entrega.
+        </div>
+        <label style={{ display: "grid", gap: 5, marginBottom: 10 }}>
+          <span style={upLabel}>Categoria obrigatória</span>
+          <select
+            value={categoria}
+            onChange={(event) => setCategoria(event.target.value as EntregaSemCobrancaCategoriaV3 | "")}
+            style={{ ...inputBase, height: 36 }}
+          >
+            <option value="">Selecione</option>
+            <option value="cortesia">Cortesia</option>
+            <option value="garantia">Garantia</option>
+            <option value="sem_valor">Serviço sem valor</option>
+          </select>
+        </label>
+        <label style={{ display: "grid", gap: 5, marginBottom: 12 }}>
+          <span style={upLabel}>Motivo obrigatório</span>
+          <textarea
+            value={motivo}
+            onChange={(event) => setMotivo(event.target.value)}
+            placeholder="Explique por que esta OS será entregue sem cobrança"
+            style={{ ...inputBase, minHeight: 76, paddingTop: 9, resize: "vertical" }}
+          />
+        </label>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button
+            type="button"
+            disabled={!podeEnviar}
+            onClick={() => void run({ categoria: categoria as EntregaSemCobrancaCategoriaV3, motivo })}
+            style={{ ...btnPrimary, background: C.success, cursor: podeEnviar ? "pointer" : "default", opacity: podeEnviar ? 1 : 0.6 }}
+          >
+            {busy ? "Confirmando…" : "Confirmar entrega sem cobrança"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setFormSemCobrancaAberto(false)}
+            style={{ height: 34, padding: "0 14px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer" }}
+          >
+            Voltar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={card}>
       <div style={{ ...cardTitle, marginBottom: 10 }}>Entrega</div>
-      {ea.semCobrancaLancada ? (
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.warnBg, border: `1px solid ${C.warnBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 14 }}>
-          <span style={{ fontSize: 13, lineHeight: "16px", flex: "none" }}>⚠️</span>
-          <span style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.45 }}>
-            <strong>Entrega sem cobrança (cortesia).</strong> Esta OS será entregue com total R$ 0 — nenhum valor será cobrado.
-          </span>
-        </div>
-      ) : ea.autorizadaAPrazo ? (
+      {ea.autorizadaAPrazo ? (
         <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 14 }}>
           <span style={{ fontSize: 13, lineHeight: "16px", flex: "none" }}>ℹ️</span>
           <span style={{ fontSize: 11.5, color: C.infoFg, lineHeight: 1.45 }}>
@@ -173,7 +228,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
         onClick={() => void run()}
         style={{ ...btnPrimary, background: C.success, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1 }}
       >
-        {busy ? "Confirmando…" : ea.semCobrancaLancada ? "Confirmar entrega sem cobrança" : "Confirmar entrega real"}
+        {busy ? "Confirmando…" : "Confirmar entrega real"}
       </button>
     </div>
   );
