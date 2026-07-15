@@ -11,4 +11,4 @@ ENV PATH="/opt/java/openjdk/bin:${PATH}"
 WORKDIR /workspace
 USER node
 
-CMD ["npm", "run", "test:fiscal-c14n:external"]
+CMD ["node", "scripts/fiscal/run-c14n-external-proof.mjs"]

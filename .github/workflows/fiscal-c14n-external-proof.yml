@@ -57,14 +57,14 @@ jobs:
       - name: Prova externa sem rede, segredo ou filesystem gravavel
         run: |
           mkdir -p "$EVIDENCE_DIR"
-          test "$(docker image inspect "$PROOF_IMAGE" --format '{{json .Config.Cmd}}')" = '["npm","run","test:fiscal-c14n:external"]'
+          docker image inspect "$PROOF_IMAGE" --format 'entrypoint={{json .Config.Entrypoint}} cmd={{json .Config.Cmd}}'
           docker run --rm \
             --network none \
             --read-only \
             --tmpfs /tmp:rw,noexec,nosuid,nodev,size=128m,mode=1777 \
             --memory 1g --cpus 2 --pids-limit 128 \
             --cap-drop ALL --security-opt no-new-privileges:true \
-            --entrypoint /usr/local/bin/npm \
+            --entrypoint /usr/local/bin/node \
             --user "$(id -u):$(id -g)" \
             --volume "$PWD":/workspace:ro \
             --volume "$PWD/$EVIDENCE_DIR":/evidence:rw \
@@ -73,7 +73,7 @@ jobs:
             --env FISCAL_C14N_EVIDENCE_DIR=/evidence \
             --env FISCAL_C14N_EXPECT_JAVA_VERSION=17.0.13+11 \
             "$PROOF_IMAGE" \
-            npm run test:fiscal-c14n:external
+            scripts/fiscal/run-c14n-external-proof.mjs
           test -s "$EVIDENCE_DIR/report.json"
           test -s "$EVIDENCE_DIR/mutations.json"
           test -s "$EVIDENCE_DIR/hashes.sha256"
