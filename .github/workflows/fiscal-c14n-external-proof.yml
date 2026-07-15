@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 20
     env:
       PROOF_IMAGE: omni-fiscal-c14n-proof:${{ github.sha }}
-      EVIDENCE_DIR: .artifacts/fiscal-c14n-external-proof
+      EVIDENCE_DIR: artifacts/fiscal-c14n-external-proof
       JAVA_IMAGE: eclipse-temurin:17.0.13_11-jdk-jammy@sha256:292214e32a0a3032e7f1af0e22491e02452c1f5473ec1d96486958dd4b3a772a
       NODE_IMAGE: node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
     steps:
@@ -70,7 +70,11 @@ jobs:
             --env HOME=/tmp \
             --env FISCAL_C14N_EVIDENCE_DIR=/evidence \
             --env FISCAL_C14N_EXPECT_JAVA_VERSION=17.0.13+11 \
-            "$PROOF_IMAGE"
+            "$PROOF_IMAGE" \
+            npm run test:fiscal-c14n:external
+          test -s "$EVIDENCE_DIR/report.json"
+          test -s "$EVIDENCE_DIR/mutations.json"
+          test -s "$EVIDENCE_DIR/hashes.sha256"
       - name: Validar relatorio e matriz negativa
         run: |
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('$EVIDENCE_DIR/report.json'));if(!p.valid||!p.digestMatches||!p.signatureValueValid)process.exit(1)"
