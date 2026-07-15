@@ -12,10 +12,10 @@ import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
 import { avaliarEscopoContador, type EscopoContador } from "./scope-core"
 
 export { avaliarEscopoContador } from "./scope-core"
-export type { EscopoContador } from "./scope-core"
+export type { ContadorScopeInterno, EscopoContador } from "./scope-core"
 
 /** Resolve o escopo real (sessão NextAuth + cookie de loja ativa + ACL). */
-export async function resolverEscopoContador(): Promise<EscopoContador> {
+export async function requireContadorScope(): Promise<EscopoContador> {
   const session = await auth()
   const store = (await cookies()).get(ASSISTEC_ACTIVE_STORE_COOKIE)?.value ?? null
   return avaliarEscopoContador(session, store)

@@ -28,9 +28,9 @@ const norm = (s: string) => s.replace(/\s+/g, " ").trim()
 const JSX_TAG = /<(?:Btn|Switch)\b[\s\S]*?(?<!=)>/g
 
 describe("Contador HUB — banner global e persistente (Passo 1)", () => {
-  it("existe um componente GlobalPreviewNotice com o texto exato exigido", () => {
+  it("existe um GlobalPreviewNotice com o contrato híbrido explícito", () => {
     expect(hubSrc).toContain("function GlobalPreviewNotice()")
-    expect(hubSrc).toContain("Pré-visualização — dados ilustrativos, sem efeito real.")
+    expect(hubSrc).toContain("Experiência híbrida — blocos reais identificados + preview.")
   })
 
   it("GlobalPreviewNotice é renderizado fora da troca de seção (fora de SECTION_RENDERERS/active)", () => {
@@ -54,9 +54,9 @@ describe("Contador HUB — banner global e persistente (Passo 1)", () => {
   })
 })
 
-describe("Contador HUB — seletor de competência avisa que os dados não mudam (Passo 3)", () => {
-  it("o aviso global menciona explicitamente a competência selecionada", () => {
-    expect(norm(hubSrc)).toContain("A competência selecionada acima não altera os dados ilustrativos exibidos.")
+describe("Contador HUB — competência em experiência híbrida (GOAL 006B)", () => {
+  it("o aviso limita o efeito da competência aos blocos reais", () => {
+    expect(norm(hubSrc)).toContain("a competência selecionada altera somente os blocos reais.")
   })
 })
 
@@ -148,6 +148,14 @@ describe("Contador HUB — navegação não afirma ações reais sobre dados est
     expect(fnStart).toBeGreaterThan(-1)
     expect(fnEnd).toBeGreaterThan(fnStart)
     expect(hubSrc.slice(fnStart, fnEnd)).toContain("Preview")
+  })
+
+  it("o header principal usa badge híbrido sem reclassificar seções puramente preview", () => {
+    expect(hubSrc).toContain("<HybridStatus />")
+    const fnStart = hubSrc.indexOf("function HybridStatus()")
+    const fnEnd = hubSrc.indexOf("\nfunction ", fnStart + 1)
+    expect(fnStart).toBeGreaterThan(-1)
+    expect(hubSrc.slice(fnStart, fnEnd)).toContain("Híbrido")
   })
 
   it("'3 de 9 itens concluídos' (Visão/Fechamento) agora vem sempre acompanhado de um PreviewBanner local", () => {

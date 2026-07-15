@@ -3,7 +3,7 @@ import { Suspense } from "react"
 import { ContadorHubPreview } from "@/components/dashboard/contador/contador-hub-preview"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 import { resolveCompetenciaFromSearchParam } from "@/lib/contador/competencia"
-import { resolverEscopoContador } from "@/lib/contador/scope"
+import { requireContadorScope } from "@/lib/contador/scope"
 import { construirDadosContador } from "@/lib/contador/readers"
 import type { ContadorDadosReais } from "@/lib/contador/readers/tipos"
 
@@ -26,8 +26,9 @@ type ContadorHubPageProps = {
 
 const MOTIVO_MSG: Record<string, string> = {
   nao_autenticado: "Sessão não encontrada. Faça login para ver os dados reais da competência.",
-  sem_loja: "Nenhuma loja ativa selecionada. Escolha uma unidade para carregar os dados reais.",
-  sem_acesso: "Sua conta não tem acesso à loja ativa selecionada.",
+  loja_ausente: "Nenhuma loja ativa selecionada. Escolha uma unidade para carregar os dados reais.",
+  sem_acesso_loja: "Dados reais indisponíveis para a unidade ativa.",
+  sem_permissao: "Sua conta não tem permissão para acessar os dados financeiros do Contador HUB.",
 }
 
 /**
@@ -35,7 +36,7 @@ const MOTIVO_MSG: Record<string, string> = {
  *
  * A Visão Geral e os relatórios básicos leem DADOS REAIS (read-only) da loja ativa na
  * competência `?c=AAAA-MM`. Escopo por sessão NextAuth + cookie de loja + ACL multi-loja
- * (`resolverEscopoContador`). Fonte fiscal permanece indisponível nesta fase; as demais
+ * (`requireContadorScope`). Fonte fiscal permanece indisponível nesta fase; as demais
  * seções seguem em preview visual honesto. Não confundir com o portal EXTERNO `/contador`.
  *
  * Fonte da competência: `searchParams.c` (AAAA-MM). Inválido/ausente → mês atual
@@ -48,12 +49,12 @@ export default async function ContadorHubPage({ searchParams }: ContadorHubPageP
   let realData: ContadorDadosReais | null = null
   let realErro: string | null = null
 
-  const escopo = await resolverEscopoContador()
+  const escopo = await requireContadorScope()
   if (!escopo.ok) {
     realErro = MOTIVO_MSG[escopo.motivo] ?? "Dados reais indisponíveis nesta fase."
   } else {
     try {
-      realData = await construirDadosContador(escopo.storeId, competencia)
+      realData = await construirDadosContador(escopo, competencia)
     } catch (e) {
       console.error("[contador/dados-reais]", e instanceof Error ? e.message : String(e))
       realErro = "Não foi possível carregar os dados reais desta competência agora. Tente novamente em instantes."

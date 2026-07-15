@@ -1,19 +1,20 @@
 /**
- * Contador HUB · reader financeiro (read-only). GOAL 006.
+ * Contador HUB · agregação financeira read-only.
  *
- * DECISÃO 2 (realizados x títulos):
- * - Entradas/saídas REALIZADAS vêm de `MovimentacaoFinanceira` (não de títulos pagos).
- * - Títulos EM ABERTO vêm de `ContaReceberTitulo` / `ContaPagarTitulo` — relatório separado.
- * - Transferências entre carteiras NÃO são receita nem despesa (excluídas).
- * - Estornos são classificados à parte (não entram em entradas/saídas).
- * - Posição de títulos = títulos abertos com VENCIMENTO na competência (semântica de data-parede;
- *   `vencimento` é String, comparado por ano/mês — não usa o período UTC de vendas).
+ * Realizados vêm de MovimentacaoFinanceira; títulos abertos são uma posição separada.
+ * Transferências são neutras e toda reversão conhecida fica em `estornos`, nunca como
+ * entrada/saída operacional normal.
  */
 import {
-  monetarioReal,
+  isOrigemDevolucaoPdv,
+  isOrigemEstorno,
+  isOrigemTransferenciaInterna,
+} from "@/lib/financeiro/services/movimentacao-financeira-classify"
+import {
   monetarioParcial,
-  numericoReal,
+  monetarioReal,
   numericoParcial,
+  numericoReal,
   type FinanceiroContador,
 } from "./tipos"
 
@@ -21,12 +22,6 @@ const FONTE_MOV = "MovimentacaoFinanceira"
 const FONTE_CR = "ContaReceberTitulo"
 const FONTE_CP = "ContaPagarTitulo"
 
-/** `origem` de transferência entre carteiras — nunca é receita/despesa. */
-const ORIGENS_TRANSFERENCIA = new Set(["transferencia", "transfer", "transferencia_carteira"])
-/** `origem` de estorno — classificado à parte. */
-const ORIGENS_ESTORNO = new Set(["estorno", "estorno_venda", "estorno_recebimento"])
-
-/** Status que fecham um título (não conta como "em aberto"). */
 const STATUS_TITULO_FECHADO = new Set([
   "pago",
   "paga",
@@ -49,35 +44,61 @@ function numeroFinito(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0
 }
 
-/** Parse defensivo de vencimento (`YYYY-MM-DD` ou `DD/MM/YYYY`) → {ano, mes} | null. */
+function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
+  if (!Number.isInteger(ano) || ano < 1 || ano > 9999) return false
+  if (!Number.isInteger(mes) || mes < 1 || mes > 12) return false
+  if (!Number.isInteger(dia) || dia < 1) return false
+  return dia <= new Date(Date.UTC(ano, mes, 0)).getUTCDate()
+}
+
+/** Parse estrito de vencimento real (`YYYY-MM-DD` ou `DD/MM/YYYY`). */
 export function parseVencimento(venc: string): { ano: number; mes: number } | null {
   if (typeof venc !== "string") return null
-  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(venc.trim())
+  const valor = venc.trim()
+
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor)
   if (iso) {
     const ano = Number(iso[1])
     const mes = Number(iso[2])
-    if (mes >= 1 && mes <= 12) return { ano, mes }
-    return null
+    const dia = Number(iso[3])
+    return dataCalendarioValida(ano, mes, dia) ? { ano, mes } : null
   }
-  const br = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(venc.trim())
+
+  const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(valor)
   if (br) {
+    const dia = Number(br[1])
     const mes = Number(br[2])
     const ano = Number(br[3])
-    if (mes >= 1 && mes <= 12) return { ano, mes }
-    return null
+    return dataCalendarioValida(ano, mes, dia) ? { ano, mes } : null
   }
+
   return null
+}
+
+function isOrigemReversao(origem: string): boolean {
+  const normalizada = origem.toLowerCase().trim()
+  return (
+    isOrigemEstorno(normalizada) ||
+    normalizada === "estorno" ||
+    normalizada.startsWith("estorno_") ||
+    isOrigemDevolucaoPdv(normalizada) ||
+    normalizada === "cancelamento_pdv"
+  )
 }
 
 function agregarTitulos(
   rows: readonly TituloRow[],
   competencia: { ano: number; mes: number },
   fonte: string,
-): { total: FinanceiroContador["titulosReceberAberto"]; quantidade: FinanceiroContador["titulosReceberQuantidade"] } {
+): {
+  total: FinanceiroContador["titulosReceberAberto"]
+  quantidade: FinanceiroContador["titulosReceberQuantidade"]
+} {
   const abertos = rows.filter((r) => !STATUS_TITULO_FECHADO.has((r.status ?? "").toLowerCase().trim()))
   let soma = 0
   let qtd = 0
   let semVencimento = 0
+
   for (const r of abertos) {
     const p = parseVencimento(r.vencimento)
     if (!p) {
@@ -89,6 +110,7 @@ function agregarTitulos(
       qtd += 1
     }
   }
+
   const obs = "Posição atual: títulos em aberto com vencimento na competência."
   if (semVencimento > 0) {
     const nota = `${obs} ${semVencimento} título(s) aberto(s) sem vencimento reconhecível ficaram fora.`
@@ -112,23 +134,24 @@ export function agregarFinanceiro(input: {
   let entradas = 0
   let saidas = 0
   let estornos = 0
+
   for (const m of input.movimentacoes) {
     const origem = (m.origem ?? "").toLowerCase().trim()
     const tipo = (m.tipo ?? "").toLowerCase().trim()
     const valor = numeroFinito(m.valor)
-    if (ORIGENS_ESTORNO.has(origem)) {
+    if (isOrigemReversao(origem)) {
       estornos += valor
       continue
     }
-    if (ORIGENS_TRANSFERENCIA.has(origem)) continue
+    if (isOrigemTransferenciaInterna(origem)) continue
     if (tipo === "entrada") entradas += valor
     else if (tipo === "saida") saidas += valor
   }
 
   const cr = agregarTitulos(input.receber, input.competencia, FONTE_CR)
   const cp = agregarTitulos(input.pagar, input.competencia, FONTE_CP)
+  const obsMov = "Realizados via movimentações; exclui transferências e reversões."
 
-  const obsMov = "Realizados via movimentações; exclui transferências e estornos."
   return Object.freeze({
     entradasRealizadas: monetarioReal(entradas, FONTE_MOV, obsMov),
     saidasRealizadas: monetarioReal(saidas, FONTE_MOV, obsMov),

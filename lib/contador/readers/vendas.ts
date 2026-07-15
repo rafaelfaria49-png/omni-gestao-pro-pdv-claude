@@ -1,31 +1,20 @@
-/**
- * Contador HUB · reader de vendas (read-only). GOAL 006.
- *
- * Fonte canônica: `Venda` (nunca soma OS; OS que gera Venda já é representada pela Venda).
- * - Total de vendas = Σ `Venda.total` das vendas NÃO canceladas na competência.
- * - Cancelamentos são informativos (já excluídos do total).
- * - Forma de pagamento e desconto vêm do `payload` (parser defensivo; payload inválido
- *   nunca derruba o reader — vira "não identificado" / cobertura parcial).
- * - Devoluções são tratadas em `devolucoes.ts` (reduzem a competência da devolução).
- */
-import type { PeriodoUtc } from "@/lib/contador/competencia"
+/** Agregação read-only de Venda para o Contador HUB. */
 import type { PaymentBreakdownFull } from "@/lib/operations-sale-types"
 import {
-  numericoReal,
-  monetarioReal,
-  monetarioParcial,
-  monetarioIndisponivel,
-  numericoParcial,
   arred,
-  type VendasContador,
-  type FormaPagamentoLinha,
+  monetarioIndisponivel,
+  monetarioParcial,
+  monetarioReal,
+  numericoParcial,
+  numericoReal,
   type DisponibilidadeDado,
+  type FormaPagamentoLinha,
+  type VendasContador,
 } from "./tipos"
 
 const FONTE = "Venda (PDV)"
-
-/** Status que NÃO conta como faturamento. `null`/desconhecido = concluída (legado). */
 const STATUS_CANCELADA = "cancelada"
+const TOLERANCIA_CENTAVO = 0.01
 
 const FORMAS: readonly { chave: keyof PaymentBreakdownFull; label: string }[] = [
   { chave: "dinheiro", label: "Dinheiro" },
@@ -37,31 +26,72 @@ const FORMAS: readonly { chave: keyof PaymentBreakdownFull; label: string }[] = 
   { chave: "creditoVale", label: "Crédito/vale" },
 ]
 
+const CHAVES_CONHECIDAS = new Set<string>([...FORMAS.map((f) => f.chave), "cartao"])
+
 export type VendaRow = {
   total: number
   status: string | null
   payload: unknown
 }
 
+type BreakdownLido = {
+  conhecidos: Partial<PaymentBreakdownFull>
+  somaConhecida: number
+  somaDesconhecida: number
+  temChaveDesconhecida: boolean
+  temValorInvalido: boolean
+}
+
 function numeroFinito(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null
 }
 
-/** Extrai um paymentBreakdown válido do payload, ou `null` se ausente/inválido. */
-function lerBreakdown(payload: unknown): Partial<PaymentBreakdownFull> | null {
+function lerBreakdown(payload: unknown): BreakdownLido | null {
   if (!payload || typeof payload !== "object") return null
   const pb = (payload as { paymentBreakdown?: unknown }).paymentBreakdown
-  if (!pb || typeof pb !== "object") return null
-  const out: Partial<PaymentBreakdownFull> = {}
-  for (const { chave } of FORMAS) {
-    const n = numeroFinito((pb as Record<string, unknown>)[chave])
-    if (n !== null) out[chave] = n
+  if (!pb || typeof pb !== "object" || Array.isArray(pb)) return null
+
+  const entrada = pb as Record<string, unknown>
+  const conhecidos: Partial<PaymentBreakdownFull> = {}
+  let somaConhecida = 0
+  let somaDesconhecida = 0
+  let temChaveDesconhecida = false
+  let temValorInvalido = false
+
+  // Formato histórico real da plataforma: `cartao` era normalizado como débito
+  // quando `cartaoDebito` ainda não existia no payload.
+  if (!("cartaoDebito" in entrada) && "cartao" in entrada) {
+    const legado = numeroFinito(entrada.cartao)
+    if (legado === null || legado < 0) temValorInvalido = true
+    else {
+      conhecidos.cartaoDebito = legado
+      somaConhecida += legado
+    }
   }
-  // Só é um breakdown válido se ao menos uma forma conhecida veio como número.
-  return Object.keys(out).length > 0 ? out : null
+
+  for (const { chave } of FORMAS) {
+    if (!(chave in entrada)) continue
+    const n = numeroFinito(entrada[chave])
+    if (n === null || n < 0) {
+      temValorInvalido = true
+      continue
+    }
+    conhecidos[chave] = n
+    somaConhecida += n
+  }
+
+  for (const [chave, bruto] of Object.entries(entrada)) {
+    if (CHAVES_CONHECIDAS.has(chave)) continue
+    temChaveDesconhecida = true
+    const n = numeroFinito(bruto)
+    if (n !== null && n > 0) somaDesconhecida += n
+    else if (n === null) temValorInvalido = true
+  }
+
+  if (Object.keys(entrada).length === 0) return null
+  return { conhecidos, somaConhecida, somaDesconhecida, temChaveDesconhecida, temValorInvalido }
 }
 
-/** Lê `payload.discountTotal` quando for número finito ≥ 0. */
 function lerDiscountTotal(payload: unknown): number | null {
   if (!payload || typeof payload !== "object") return null
   const d = numeroFinito((payload as { discountTotal?: unknown }).discountTotal)
@@ -71,37 +101,54 @@ function lerDiscountTotal(payload: unknown): number | null {
 export function agregarVendas(rows: readonly VendaRow[]): VendasContador {
   const validas = rows.filter((r) => r.status !== STATUS_CANCELADA)
   const canceladas = rows.filter((r) => r.status === STATUS_CANCELADA)
-
   const total = validas.reduce((s, r) => s + (numeroFinito(r.total) ?? 0), 0)
   const canceladasTotal = canceladas.reduce((s, r) => s + (numeroFinito(r.total) ?? 0), 0)
 
-  // Forma de pagamento (payload-derivada).
   const somaForma = new Map<string, number>()
-  let classificadas = 0
+  let comAlgumaCobertura = 0
   let naoIdentificadasQtd = 0
   let naoIdentificadoValor = 0
+
   for (const r of validas) {
+    const totalVenda = Math.max(0, numeroFinito(r.total) ?? 0)
     const pb = lerBreakdown(r.payload)
     if (!pb) {
       naoIdentificadasQtd += 1
-      naoIdentificadoValor += numeroFinito(r.total) ?? 0
+      naoIdentificadoValor += totalVenda
       continue
     }
-    classificadas += 1
+
+    comAlgumaCobertura += 1
     for (const { chave } of FORMAS) {
-      const v = pb[chave]
-      if (typeof v === "number" && v !== 0) {
-        somaForma.set(chave, (somaForma.get(chave) ?? 0) + v)
+      const valor = pb.conhecidos[chave]
+      if (typeof valor === "number" && valor !== 0) {
+        somaForma.set(chave, (somaForma.get(chave) ?? 0) + valor)
       }
     }
+
+    const residual = Math.max(0, totalVenda - pb.somaConhecida)
+    const reconciliado = Math.abs(totalVenda - pb.somaConhecida) <= TOLERANCIA_CENTAVO
+    const incompleto =
+      pb.temChaveDesconhecida || pb.temValorInvalido || !reconciliado || Object.keys(pb.conhecidos).length === 0
+
+    if (incompleto) {
+      naoIdentificadasQtd += 1
+      // O residual reconcilia a quebra com Venda.total; a soma desconhecida impede
+      // que uma forma nova desapareça quando ela representa esse residual.
+      naoIdentificadoValor += Math.min(totalVenda, Math.max(residual, pb.somaDesconhecida))
+    }
   }
+
   const formasPagamento: FormaPagamentoLinha[] = FORMAS.filter(({ chave }) => somaForma.has(chave)).map(
     ({ chave, label }) => ({ chave, label, valor: arred(somaForma.get(chave) ?? 0) }),
   )
   const formaPagamentoDisponibilidade: DisponibilidadeDado =
-    classificadas === 0 ? "indisponivel" : naoIdentificadasQtd === 0 ? "real" : "parcial"
+    validas.length === 0 || comAlgumaCobertura === 0
+      ? "indisponivel"
+      : naoIdentificadasQtd === 0
+        ? "real"
+        : "parcial"
 
-  // Desconto (informativo; nunca subtrai de total).
   let descontoCobertoQtd = 0
   let descontoSoma = 0
   for (const r of validas) {
@@ -113,6 +160,7 @@ export function agregarVendas(rows: readonly VendaRow[]): VendasContador {
   }
 
   const obsFonte = "Total autoritativo em Venda.total; canceladas excluídas."
+  const obsNaoIdentificado = "Vendas sem paymentBreakdown completo e reconciliado com Venda.total."
   return Object.freeze({
     quantidade: numericoReal(validas.length, FONTE, obsFonte),
     total: monetarioReal(total, FONTE, obsFonte),
@@ -146,16 +194,12 @@ export function agregarVendas(rows: readonly VendaRow[]): VendasContador {
     formasPagamento,
     formaPagamentoDisponibilidade,
     naoIdentificadoQuantidade:
-      formaPagamentoDisponibilidade === "real"
+      naoIdentificadasQtd === 0
         ? numericoReal(0, FONTE)
-        : numericoParcial(naoIdentificadasQtd, FONTE, "Vendas sem paymentBreakdown válido no payload."),
+        : numericoParcial(naoIdentificadasQtd, FONTE, obsNaoIdentificado),
     naoIdentificadoValor:
       naoIdentificadasQtd === 0
         ? monetarioReal(0, FONTE)
-        : monetarioParcial(
-            naoIdentificadoValor,
-            FONTE,
-            `${naoIdentificadasQtd} venda(s) sem forma de pagamento identificada.`,
-          ),
+        : monetarioParcial(naoIdentificadoValor, FONTE, obsNaoIdentificado),
   })
 }
