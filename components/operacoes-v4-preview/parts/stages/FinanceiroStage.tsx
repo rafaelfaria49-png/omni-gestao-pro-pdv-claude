@@ -1,141 +1,114 @@
-/** Operações V4 Preview — etapa Financeiro (faturamento REAL da OS).
- *
- * GOAL OPS-V4-P0-008 + OPS-V4-FINANCEIRO-READONLY-HIGIENE-006: nenhum valor
- * fabricado. Exibe o que a OS carrega de fato: total, status do faturamento,
- * forma/modo de cobrança, plano de parcelas, histórico financeiro real (timeline)
- * e — quando o PDV de Serviço V3 já registrou baixas — recebido/saldo/status do
- * espelho real `payload.pagamentoV3` (leitura pura).
- *
- * PDV-SERVICO-OS-RECEBIMENTO-REAL-001: o recebimento deixou de ser preview —
- * `ReceberPagamentoV4` chama o motor único da V3 (`receberOSV3`, via
- * `v.pdvServico`), exige caixa aberto e recarrega a lista/detalhe no sucesso.
- * Ainda sem estorno (follow-up) e sem parcelamento novo (só valor <= saldo). */
-import { C, card, cardTitle, upLabel } from "../../tokens";
+/** Operações V4 — leitura financeira única, projetada e reconciliada no servidor. */
+import { C, card, cardTitle, fmt, upLabel } from "../../tokens";
 import type { V4Vals } from "../../use-v4-preview";
 import { ReceberPagamentoV4 } from "../ReceberPagamentoV4";
 
 const col3 = "repeat(auto-fit, minmax(270px, 1fr))";
 const emptyText = { fontSize: 12, color: C.subtle, padding: "8px 2px", lineHeight: 1.5 } as const;
 
-export function FinanceiroStage({ v }: { v: V4Vals }) {
-  const f = v.financeiro;
+function amount(value: number | null): string {
+  return value == null ? "Indisponível" : fmt(value);
+}
 
-  if (!f.temDados && v.finHist.length === 0) {
+function dateTime(value: string | null): string {
+  if (!value) return "Data não registrada";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("pt-BR");
+}
+
+export function FinanceiroStage({ v }: { v: V4Vals }) {
+  const financial = v.financial;
+  const projection = financial.projection;
+
+  if (financial.loading) {
+    return <div style={card}><div style={{ ...cardTitle, marginBottom: 6 }}>Financeiro</div><div style={emptyText}>Carregando a projeção financeira desta OS…</div></div>;
+  }
+  if (financial.error || !projection) {
     return (
       <div style={card}>
-        <div style={{ ...cardTitle, marginBottom: 6 }}>Financeiro</div>
-        <div style={emptyText}>Nenhuma informação financeira disponível para esta OS.</div>
+        <div style={{ ...cardTitle, marginBottom: 6 }}>Financeiro indisponível</div>
+        <div style={{ ...emptyText, color: C.dangerFg }}>{financial.error ?? "Não foi possível determinar a situação financeira desta OS."}</div>
+        <button type="button" onClick={financial.reload} style={{ height: 32, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, cursor: "pointer" }}>Tentar novamente</button>
       </div>
     );
   }
 
-  const statusBadge =
-    f.statusTone === "cancelado"
-      ? { bg: C.dangerBg, fg: C.dangerFg }
+  const inconsistent = projection.consistencyStatus === "INCONSISTENT" || projection.consistencyStatus === "UNKNOWN";
+  const statusColors = inconsistent
+    ? { bg: C.dangerBg, fg: C.dangerFg }
+    : projection.financialStatus === "PAID" || projection.canDeliver
+      ? { bg: C.successBg, fg: C.successFg }
       : { bg: C.warnBg, fg: C.warnFg };
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: col3, gap: 12, alignItems: "start" }}>
-      {/* Faturamento da OS */}
       <div style={card}>
-        <div style={{ ...cardTitle, marginBottom: 11 }}>Faturamento da OS</div>
-        <div style={{ ...upLabel, fontSize: 10.5, display: "flex", alignItems: "center", gap: 6 }}>
-          <span>Total da OS</span>
-          {f.temTotal && !v.orcamentoMaterializado && (
-            <span style={{ height: 15, padding: "0 6px", display: "inline-flex", alignItems: "center", background: C.infoBg, color: C.infoFg, borderRadius: 999, fontSize: 9, fontWeight: 700, textTransform: "none" }}>Prévia</span>
-          )}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", marginBottom: 12 }}>
+          <div style={cardTitle}>Faturamento da OS</div>
+          <span style={{ height: 22, padding: "0 9px", display: "inline-flex", alignItems: "center", background: statusColors.bg, color: statusColors.fg, borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{financial.statusLabel}</span>
         </div>
-        <div style={{ fontSize: 21, fontWeight: 700, color: f.temTotal ? C.ink : C.subtle, marginTop: 3, marginBottom: f.temTotal && !v.orcamentoMaterializado ? 4 : 11 }}>{f.total}</div>
-        {f.temTotal && !v.orcamentoMaterializado && (
-          <div style={{ fontSize: 10, color: C.subtle, marginBottom: 11, lineHeight: 1.4 }}>Prévia derivada dos itens da OS — ainda não é um orçamento aprovado.</div>
-        )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-          {f.statusTone !== "neutro" && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12.5 }}>
-              <span style={{ color: C.subtle }}>Status</span>
-              <span style={{ height: 21, padding: "0 9px", display: "inline-flex", alignItems: "center", background: statusBadge.bg, color: statusBadge.fg, borderRadius: 999, fontSize: 11, fontWeight: 600 }}>{f.statusFaturamento}</span>
-            </div>
-          )}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span style={{ color: C.subtle }}>Forma de pagamento</span><span style={{ color: C.body, fontWeight: 500 }}>{f.formaPagamento}</span></div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span style={{ color: C.subtle }}>Cobrança</span><span style={{ color: C.body, fontWeight: 500 }}>{f.modoCobranca}</span></div>
-        </div>
-        {f.temPagamento ? (
-          <div style={{ marginTop: 12, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 9, background: C.surface2 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-              <span style={{ ...upLabel, fontSize: 10.5 }}>Pagamento (espelho real)</span>
-              <span style={{ height: 21, padding: "0 9px", display: "inline-flex", alignItems: "center", background: f.pagamentoStatusTone === "success" ? C.successBg : C.infoBg, color: f.pagamentoStatusTone === "success" ? C.successFg : C.infoFg, borderRadius: 999, fontSize: 11, fontWeight: 600 }}>{f.pagamentoStatusLabel}</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span style={{ color: C.subtle }}>Recebido</span><span style={{ color: C.successFg, fontWeight: 600 }}>{f.recebido}</span></div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}><span style={{ color: C.subtle }}>Saldo a receber</span><span style={{ color: f.temSaldo ? C.warnFg : C.body, fontWeight: 600 }}>{f.saldo}</span></div>
-            </div>
-            <div style={{ fontSize: 10.5, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>Baixas registradas no <b>PDV de Serviço</b> (Conta a Receber + caixa do dia). O detalhe de cada recebimento está no Histórico financeiro ao lado.</div>
-            <div style={{ display: "flex", gap: 7, marginTop: 9, alignItems: "center", flexWrap: "wrap" }}>
-              <button type="button" onClick={v.openRecibo} style={{ flex: "none", height: 34, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>🧾 Recibo</button>
-              {v.estorno.temRecebido && (
-                <button
-                  type="button"
-                  onClick={v.openEstornoRecebimento}
-                  disabled={!v.estorno.podeEstornar}
-                  title={!v.estorno.caixaAberto ? "Caixa fechado — abra o caixa para estornar." : undefined}
-                  style={{ flex: "none", height: 34, padding: "0 12px", border: `1px solid ${C.dangerBd}`, background: C.surface, color: C.dangerFg, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: v.estorno.podeEstornar ? "pointer" : "default", opacity: v.estorno.podeEstornar ? 1 : 0.55 }}
-                >
-                  ↩ Estornar
-                </button>
-              )}
-            </div>
-            {v.estorno.temRecebido && !v.estorno.caixaAberto && (
-              <div style={{ fontSize: 10.5, color: C.warnFg, marginTop: 7, lineHeight: 1.5 }}>Caixa fechado — abra o caixa para estornar o recebimento.</div>
-            )}
+
+        {projection.consistencyIssues.length > 0 && (
+          <div style={{ padding: 10, marginBottom: 12, border: `1px solid ${inconsistent ? C.dangerBd : C.warnBd}`, borderRadius: 9, background: inconsistent ? C.dangerBg : C.warnBg, color: inconsistent ? C.dangerFg : C.warnFg, fontSize: 11.5, lineHeight: 1.45 }}>
+            {projection.consistencyIssues.join(" ")}
           </div>
-        ) : (
-          <div style={{ marginTop: 12, padding: 11, border: `1px dashed ${C.inputBd}`, borderRadius: 9, background: C.surface2 }}>
-            <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.5, marginBottom: 9 }}>Nenhum pagamento registrado nesta OS. A baixa do recebimento acontece no <b>PDV de Serviço</b> (Conta a Receber + caixa do dia), com caixa aberto.</div>
-            <div style={{ display: "flex", gap: 7 }}>
-              <button type="button" onClick={v.openRecibo} style={{ flex: "none", height: 34, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>🧾 Recibo</button>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 8, marginBottom: 12 }}>
+          {[
+            ["Total esperado", amount(projection.expectedTotal)],
+            ["Recebido", amount(projection.receivedTotal)],
+            ["Saldo", amount(projection.balance)],
+          ].map(([label, value]) => (
+            <div key={label} style={{ padding: 9, border: `1px solid ${C.line2}`, borderRadius: 8, background: C.surface2 }}>
+              <div style={{ ...upLabel, marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: value === "Indisponível" ? C.dangerFg : C.ink }}>{value}</div>
             </div>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gap: 7, fontSize: 12.5 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><span style={{ color: C.subtle }}>Conta a Receber</span><span style={{ color: C.body, fontWeight: 600 }}>{projection.receivableFound ? projection.receivableStatus ?? "Encontrada" : "Não criada"}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><span style={{ color: C.subtle }}>Forma de pagamento</span><span style={{ color: C.body, fontWeight: 600, textAlign: "right" }}>{financial.paymentMethodSummary}</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><span style={{ color: C.subtle }}>Cobrança</span><span style={{ color: C.body, fontWeight: 600 }}>{projection.collectionMode ?? "Não registrada"}</span></div>
+          {projection.authorizedNoCharge && <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><span style={{ color: C.subtle }}>Sem cobrança</span><span style={{ color: C.body, fontWeight: 600 }}>{projection.noChargeCategory ?? "Autorizada"}</span></div>}
+        </div>
+
+        {projection.receivedTotal != null && projection.receivedTotal > 0 && (
+          <div style={{ display: "flex", gap: 7, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <button type="button" onClick={v.openRecibo} style={{ height: 34, padding: "0 12px", border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 8, fontSize: 12, cursor: "pointer" }}>🧾 Recibo</button>
+            <button type="button" onClick={v.openEstornoRecebimento} disabled={!v.estorno.podeEstornar} style={{ height: 34, padding: "0 12px", border: `1px solid ${C.dangerBd}`, background: C.surface, color: C.dangerFg, borderRadius: 8, fontSize: 12, cursor: v.estorno.podeEstornar ? "pointer" : "default", opacity: v.estorno.podeEstornar ? 1 : 0.55 }}>↩ Estornar</button>
           </div>
         )}
         <ReceberPagamentoV4 v={v} />
       </div>
 
-      {/* Plano de parcelas */}
       <div style={card}>
         <div style={{ ...cardTitle, marginBottom: 10 }}>Plano de parcelas</div>
-        {f.parcelas.length === 0 ? (
-          <div style={emptyText}>Nenhuma parcela registrada.</div>
-        ) : (
+        {projection.installments.length === 0 ? <div style={emptyText}>Nenhuma parcela registrada.</div> : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {f.parcelas.map((p, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${C.line2}`, borderRadius: 8, padding: "7px 9px" }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.ink, width: 34, flex: "none" }}>{p.numero}</span>
-                <span style={{ flex: 1, fontSize: 11.5, color: C.subtle, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>vence {p.vencimento}</span>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: C.ink, flex: "none" }}>{p.valor}</span>
+            {projection.installments.map((installment, index) => (
+              <div key={`${installment.number}:${index}`} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${C.line2}`, borderRadius: 8, padding: "7px 9px" }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: C.ink, width: 34 }}>{installment.number}</span>
+                <span style={{ flex: 1, fontSize: 11.5, color: C.subtle }}>{installment.dueAt ?? "sem vencimento"}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: C.ink }}>{amount(installment.amount)}</span>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Histórico financeiro (real, derivado da timeline) */}
       <div style={card}>
         <div style={{ ...cardTitle, marginBottom: 11 }}>Histórico financeiro</div>
-        {v.finHist.length === 0 ? (
-          <div style={emptyText}>Nenhum evento financeiro registrado.</div>
-        ) : (
-          v.finHist.map((h) => (
-            <div key={h.id} style={{ display: "flex", gap: 10, paddingBottom: 11 }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: h.dot, flex: "none", marginTop: 3 }} />
-                <span style={{ flex: 1, width: 2, background: C.line2, marginTop: 3 }} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, color: C.body }}>{h.text}</div>
-                <div style={{ fontSize: 10.5, color: C.subtle }}>{h.meta}</div>
-              </div>
+        {projection.financialEvents.length === 0 ? <div style={emptyText}>Nenhum evento financeiro registrado.</div> : projection.financialEvents.map((event) => (
+          <div key={event.eventId} style={{ display: "flex", gap: 10, paddingBottom: 11 }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: event.type.includes("estorno") ? C.danger : C.success, flex: "none", marginTop: 4 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: C.body }}>{event.description}{event.amount != null ? ` · ${fmt(event.amount)}` : ""}</div>
+              <div style={{ fontSize: 10.5, color: C.subtle }}>{dateTime(event.occurredAt)} · origem {event.source === "RECEIVABLE" ? "Conta a Receber" : "OS"}{event.paymentMethod ? ` · ${event.paymentMethod}` : ""}</div>
             </div>
-          ))
-        )}
+          </div>
+        ))}
       </div>
     </div>
   );

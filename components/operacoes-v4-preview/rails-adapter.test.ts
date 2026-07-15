@@ -14,6 +14,7 @@ import {
   buildSlaView,
 } from "./rails-adapter";
 import type { OrdemServico } from "@/types/os";
+import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes-v4/financial-projection";
 
 function mkOS(p: Record<string, unknown> & { id: string }): OrdemServico {
   return p as unknown as OrdemServico;
@@ -111,17 +112,40 @@ describe("rails-adapter — SLA", () => {
 });
 
 describe("rails-adapter — PDV de serviço", () => {
+  function projection(id: string, financialStatus: FinancialStatusV4, total: number | null, balance: number | null): FinancialProjectionOSV4 {
+    return {
+      version: 1, storeId: "store-a", osId: id, osCode: `OS-${id}`, operationalStatus: "pronta",
+      expectedTotal: total, expectedTotalSource: ["orcamento_aprovado"], approvedBudgetTotal: total,
+      osColumnTotal: total, legacyTotal: null, billingSnapshotTotal: null,
+      receivableFound: balance != null, receivableId: balance != null ? `cr-${id}` : null,
+      receivableTotal: total, receivableStatus: balance === 0 ? "pago" : balance != null ? "pendente" : null,
+      receivedTotal: total != null && balance != null ? total - balance : null, reversedTotal: 0, balance,
+      financialStatus, consistencyStatus: financialStatus === "INCONSISTENT" ? "INCONSISTENT" : "CONSISTENT",
+      consistencyIssues: [], paymentMethods: [], collectionMode: null, installments: [],
+      authorizedCredit: financialStatus === "AUTHORIZED_CREDIT", authorizedNoCharge: financialStatus === "AUTHORIZED_NO_CHARGE",
+      noChargeCategory: null, noChargeReason: null, financialEvents: [], canReceive: financialStatus === "OPEN" || financialStatus === "PARTIAL",
+      canDeliver: financialStatus === "PAID" || financialStatus === "AUTHORIZED_CREDIT" || financialStatus === "AUTHORIZED_NO_CHARGE",
+      deliveryDecision: financialStatus === "PAID" ? "ALLOW_PAID" : "BLOCK_PENDING_BALANCE",
+      loadedAt: "2026-07-15T12:00:00.000Z", errorCode: null,
+    };
+  }
+
+  function projections(...items: FinancialProjectionOSV4[]): Map<string, FinancialProjectionOSV4> {
+    return new Map(items.map((item) => [item.osId, item]));
+  }
+
   it("sem valor/faturamento → temDados false (empty honesto)", () => {
-    const view = buildPdvView([mkOS({ id: "1", status: "em_execucao" })]);
+    const view = buildPdvView([mkOS({ id: "1", status: "em_execucao" })], new Map());
     expect(view.temDados).toBe(false);
     expect(view.itens).toEqual([]);
   });
 
-  it("lista OS com valor real e conta a receber (faturamento pendente, sem orçamento V3 — sinal legado)", () => {
-    const view = buildPdvView([
+  it("lista somente a projeção server-side e conta saldos abertos", () => {
+    const ordens = [
       mkOS({ id: "1", status: "pronta", codigo: "OS-1", faturamentoTotal: 150, faturamentoPendente: true }),
       mkOS({ id: "2", status: "entregue", codigo: "OS-2", faturamentoTotal: 80 }),
-    ]);
+    ];
+    const view = buildPdvView(ordens, projections(projection("1", "OPEN", 150, 150), projection("2", "PAID", 80, 0)));
     expect(view.temDados).toBe(true);
     expect(view.itens).toHaveLength(2);
     // ordena por total desc
@@ -130,58 +154,41 @@ describe("rails-adapter — PDV de serviço", () => {
     expect(view.itens[0]!.statusFaturamento).toBe("A receber");
   });
 
-  // GOAL OPS-V4-FIN-STATE-RECONCILE-003: o rail não pode mais contradizer a aba
-  // Financeiro (`adaptFinanceiro`/`adaptPag`) — mesma fonte real (`lerPagamentoV3`/
-  // `totalCobravelV3` via `resumoCobrancaV4`), nunca "Sem pendência" com saldo aberto.
-  it("OS com orçamento real e saldo aberto (recebido 0) → 'A receber' com saldo real, igual ao Financeiro", () => {
-    const view = buildPdvView([
-      mkOS({
-        id: "1",
-        status: "pronta",
-        codigo: "OS-1",
-        orcamento: { sintetizado: false },
-        pagamentoV3: { total: 470, recebido: 0 },
-      }),
-    ]);
+  it("saldo aberto vem da projeção, mesmo quando o pagamentoV3 da OS está antigo", () => {
+    const os = mkOS({ id: "1", status: "pronta", codigo: "OS-1", pagamentoV3: { total: 470, recebido: 470 } });
+    const view = buildPdvView([os], projections(projection("1", "OPEN", 470, 470)));
     expect(view.itens[0]!.statusFaturamento).toBe("A receber");
     expect(view.itens[0]!.saldoLinha).toBe("Saldo: R$ 470,00");
     expect(view.aReceberCount).toBe(1);
   });
 
   it("OS com orçamento real e recebido = total → 'Quitado' com saldo zero", () => {
-    const view = buildPdvView([
-      mkOS({
-        id: "1",
-        status: "pronta",
-        codigo: "OS-1",
-        orcamento: { sintetizado: false },
-        pagamentoV3: { total: 470, recebido: 470 },
-      }),
-    ]);
+    const view = buildPdvView(
+      [mkOS({ id: "1", status: "pronta", codigo: "OS-1" })],
+      projections(projection("1", "PAID", 470, 0)),
+    );
     expect(view.itens[0]!.statusFaturamento).toBe("Quitado");
     expect(view.itens[0]!.saldoLinha).toBe("Saldo: R$ 0,00");
     expect(view.aReceberCount).toBe(0);
   });
 
-  it("OS sem orçamento aprovado, sem pagamento e sem sinal legado → 'Sem cobrança' (nunca 'Quitado')", () => {
-    const view = buildPdvView([
-      mkOS({ id: "1", status: "aberta", codigo: "OS-1", prismaValorTotal: 200 }),
-    ]);
+  it("autorização sem cobrança é explícita e nunca vira quitada", () => {
+    const view = buildPdvView(
+      [mkOS({ id: "1", status: "aberta", codigo: "OS-1" })],
+      projections(projection("1", "AUTHORIZED_NO_CHARGE", 0, null)),
+    );
     expect(view.itens[0]!.statusFaturamento).toBe("Sem cobrança");
     expect(view.itens[0]!.statusFaturamento).not.toBe("Quitado");
     expect(view.aReceberCount).toBe(0);
   });
 
-  it("OS com prévia sintetizada (orçamento não materializado) → 'Prévia sem cobrança', sem prometer cobrança real", () => {
-    const view = buildPdvView([
-      mkOS({
-        id: "1",
-        status: "aberta",
-        codigo: "OS-1",
-        orcamento: { sintetizado: true, total: 300 },
-      }),
-    ]);
-    expect(view.itens[0]!.statusFaturamento).toBe("Prévia sem cobrança");
+  it("cobrança ausente/inconsistente direciona para revisão, sem fallback zero", () => {
+    const view = buildPdvView(
+      [mkOS({ id: "1", status: "aberta", codigo: "OS-1" })],
+      projections(projection("1", "CHARGE_NOT_CREATED", 300, null)),
+    );
+    expect(view.itens[0]!.statusFaturamento).toBe("Revisar cobrança");
+    expect(view.itens[0]!.total).toBe("R$ 300,00");
     expect(view.aReceberCount).toBe(0);
   });
 });

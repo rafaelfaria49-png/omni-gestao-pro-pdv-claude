@@ -1,8 +1,8 @@
 /** Operações V4 Preview — modal de confirmação do estorno de recebimento.
  *
  * GOAL OPS-V4-RECEBIMENTO-ESTORNO-016: UI fina sobre o motor único da V3 —
- * lê/escreve por `v.pdvServico` (`usePdvServicoV3` → `estornarRecebimentoOSV3`,
- * sem motor novo). Exige sessão de caixa ABERTA (nunca abre caixa por aqui) e
+ * lê recebido/saldo pela projeção V4 e escreve por `v.pdvServico`
+ * (`usePdvServicoV3` → `estornarRecebimentoOSV3`, sem motor novo). Exige sessão de caixa ABERTA e
  * motivo obrigatório (mín. caracteres — `validarMotivoEstornoV4`, mais estrito
  * que a V3, que aceita motivo opcional). Reverte sempre o ÚLTIMO recebimento
  * registrado na OS (é o que a V3 suporta — não há escolha de qual recebimento
@@ -54,10 +54,14 @@ function EstornoRecebimentoModalContent({ v }: { v: V4Vals }) {
     v.closeEstornoRecebimento();
   };
 
-  const pagamento = pdv.pagamento;
-  const semRecebimento = !pagamento || !v.estorno.temRecebido;
+  const projection = v.financial.projection;
+  const resumo = projection?.receivedTotal != null && projection.balance != null
+    ? { recebido: projection.receivedTotal, saldo: projection.balance }
+    : null;
+  const leituraIndisponivel = v.financial.loading || !!v.financial.error || !resumo;
+  const semRecebimento = !!resumo && !v.estorno.temRecebido;
   const veredito = validarMotivoEstornoV4(motivo);
-  const podeConfirmar = v.estorno.podeEstornar && veredito.ok && !pdv.estornando;
+  const podeConfirmar = !!resumo && v.estorno.podeEstornar && veredito.ok && !pdv.estornando;
 
   const onConfirmar = async () => {
     if (!podeConfirmar || !pdv.sessao?.sessaoId) return;
@@ -75,7 +79,11 @@ function EstornoRecebimentoModalContent({ v }: { v: V4Vals }) {
         </div>
 
         <div style={{ padding: 22 }}>
-          {semRecebimento ? (
+          {leituraIndisponivel ? (
+            <div style={{ textAlign: "center", color: C.dangerFg, fontSize: 12.5, lineHeight: 1.6, padding: "10px 4px 6px" }}>
+              Situação financeira indisponível. Recarregue a projeção antes de estornar.
+            </div>
+          ) : semRecebimento ? (
             <div style={{ textAlign: "center", color: C.subtle, fontSize: 12.5, lineHeight: 1.6, padding: "10px 4px 6px" }}>
               Não há recebimento para estornar nesta OS.
             </div>
@@ -84,11 +92,11 @@ function EstornoRecebimentoModalContent({ v }: { v: V4Vals }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 9, background: C.surface2 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                   <span style={{ color: C.subtle }}>Recebido atual</span>
-                  <span style={{ color: C.successFg, fontWeight: 600 }}>{fmt(pagamento.recebido)}</span>
+                  <span style={{ color: C.successFg, fontWeight: 600 }}>{fmt(resumo.recebido)}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                   <span style={{ color: C.subtle }}>Saldo atual</span>
-                  <span style={{ color: pagamento.saldo > 0 ? C.warnFg : C.body, fontWeight: 600 }}>{fmt(pagamento.saldo)}</span>
+                  <span style={{ color: resumo.saldo > 0 ? C.warnFg : C.body, fontWeight: 600 }}>{fmt(resumo.saldo)}</span>
                 </div>
               </div>
               <div style={{ fontSize: 10.5, color: C.muted, marginBottom: 12, lineHeight: 1.5 }}>
@@ -147,7 +155,7 @@ function EstornoRecebimentoModalContent({ v }: { v: V4Vals }) {
               </div>
             </>
           )}
-          {semRecebimento && (
+          {(leituraIndisponivel || semRecebimento) && (
             <button type="button" onClick={fechar} style={{ width: "100%", height: 34, marginTop: 14, border: `1px solid ${C.inputBd}`, background: C.surface, color: C.body, borderRadius: 9, fontSize: 12.5, fontWeight: 500, cursor: "pointer" }}>
               Fechar
             </button>

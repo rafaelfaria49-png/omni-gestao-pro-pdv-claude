@@ -97,7 +97,7 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
         <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5 }}>
           {ea.financeiroCarregando
             ? "Confirmando a situação financeira desta OS…"
-            : "Não foi possível confirmar a situação financeira desta OS. Revise a cobrança antes de entregar."}
+            : ea.financeiroMotivo ?? "Não foi possível confirmar a situação financeira desta OS. Revise a cobrança antes de entregar."}
         </div>
       </div>
     );
@@ -218,6 +218,10 @@ function EntregaAcaoCard({ v }: { v: V4Vals }) {
           <span style={{ fontSize: 11.5, color: C.infoFg, lineHeight: 1.45 }}>
             <strong>Entrega autorizada a prazo.</strong> O cliente possui conta a receber pendente — esta OS não está quitada.
           </span>
+        </div>
+      ) : ea.autorizadaSemCobranca ? (
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 14 }}>
+          <span style={{ fontSize: 11.5, color: C.infoFg, lineHeight: 1.45 }}><strong>Entrega sem cobrança autorizada.</strong> A classificação persistida será revalidada pelo servidor.</span>
         </div>
       ) : (
         <RealActionNotice kind="entrega" />

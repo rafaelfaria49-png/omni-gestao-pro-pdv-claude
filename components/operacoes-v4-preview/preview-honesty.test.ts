@@ -68,6 +68,10 @@ vi.mock("@/lib/operacoes-v3/pdv-servico-actions", () => ({
   estornarRecebimentoOSV3: vi.fn(async () => ({})),
   lancarOSAPrazoV3: vi.fn(async () => ({})),
 }))
+vi.mock("@/lib/operacoes-v4/financial-projection-actions", () => ({
+  lerProjecaoFinanceiraOSV4: vi.fn(),
+  lerProjecoesFinanceirasOSV4: vi.fn(),
+}))
 
 import { buildVals, type V4DataCtx } from "./use-v4-preview"
 import { adaptPag, adaptFinanceiro, adaptOrcamento, maskSenhaV4, NI } from "./os-adapter"
@@ -75,6 +79,7 @@ import { fmt } from "./tokens"
 import type { V4State } from "./types"
 import type { OrdemServico } from "@/types/os"
 import type { PagamentoV3 } from "@/lib/operacoes-v3/payment-model"
+import type { FinancialProjectionOSV4 } from "@/lib/operacoes-v4/financial-projection"
 
 const DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -177,6 +182,10 @@ const ctx: V4DataCtx = {
   reloadDetail: () => {},
   realOS: null,
   detailLoading: false,
+  financialProjection: { projection: null, loading: false, error: null, reload: () => {} },
+  financialProjectionsByOsId: new Map(),
+  financialRailLoading: false,
+  financialRailError: null,
   salvarDiagnostico: async () => false,
   gerarOrcamento: async () => false,
   salvarOrcamento: async () => false,
@@ -256,6 +265,34 @@ describe("Operações V4 — Nova OS real (cria OS e abre no workspace)", () => 
 
 function mkOS(p: Record<string, unknown> & { id: string }): OrdemServico {
   return p as unknown as OrdemServico
+}
+
+function financialStateFromPayment(
+  pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null,
+  financialStatusOverride?: FinancialProjectionOSV4["financialStatus"],
+): V4DataCtx["financialProjection"] {
+  if (!pagamento) return { projection: null, loading: true, error: null, reload: () => {} }
+  const financialStatus = financialStatusOverride ?? (
+    pagamento.total <= 0 ? "NO_PRICE" : pagamento.saldo <= 0 ? "PAID" : pagamento.recebido > 0 ? "PARTIAL" : "OPEN"
+  )
+  const canDeliver = financialStatus === "PAID" || financialStatus === "AUTHORIZED_CREDIT" || financialStatus === "AUTHORIZED_NO_CHARGE"
+  const projection: FinancialProjectionOSV4 = {
+    version: 1, storeId: "store-a", osId: "os-test", osCode: "OS-TEST", operationalStatus: "pronta",
+    expectedTotal: pagamento.total, expectedTotalSource: ["test"], approvedBudgetTotal: pagamento.total,
+    osColumnTotal: pagamento.total, legacyTotal: null, billingSnapshotTotal: null,
+    receivableFound: pagamento.total > 0, receivableId: pagamento.total > 0 ? "cr-test" : null,
+    receivableTotal: pagamento.total > 0 ? pagamento.total : null, receivableStatus: pagamento.status,
+    receivedTotal: pagamento.recebido, reversedTotal: 0, balance: pagamento.saldo,
+    financialStatus, consistencyStatus: "CONSISTENT", consistencyIssues: [], paymentMethods: [], collectionMode: null, installments: [],
+    authorizedCredit: financialStatus === "AUTHORIZED_CREDIT", authorizedNoCharge: financialStatus === "AUTHORIZED_NO_CHARGE",
+    noChargeCategory: null, noChargeReason: null, financialEvents: [],
+    canReceive: financialStatus === "OPEN" || financialStatus === "PARTIAL", canDeliver,
+    deliveryDecision: canDeliver
+      ? financialStatus === "AUTHORIZED_CREDIT" ? "ALLOW_AUTHORIZED_CREDIT" : financialStatus === "AUTHORIZED_NO_CHARGE" ? "ALLOW_AUTHORIZED_NO_CHARGE" : "ALLOW_PAID"
+      : financialStatus === "NO_PRICE" ? "BLOCK_NO_CHARGE_AUTH_REQUIRED" : "BLOCK_PENDING_BALANCE",
+    loadedAt: "2026-07-15T12:00:00.000Z", errorCode: null,
+  }
+  return { projection, loading: false, error: null, reload: () => {} }
 }
 
 describe("Operações V4 Preview — telas de rail com identidade real (read-only)", () => {
@@ -552,11 +589,10 @@ describe("Operações V4 — Padrão 3×3 (PatternPadV4) na Entrada, sem tocar a
 })
 
 // ---------------------------------------------------------------------------
-// OPS-V4-FINANCEIRO-READONLY-HIGIENE-006 — leitura pura do espelho de pagamento,
-// status sem drift, CTA honesta, senha mascarada, kind do orçamento e guards.
-// Nenhum recebimento real: só leitura de payload já persistido pela V3.
+// OPS-V4-FINANCEIRO-READONLY-HIGIENE-006 — adapters legados mantidos apenas como
+// compatibilidade isolada; as superfícies runtime usam a projeção server-side.
 // ---------------------------------------------------------------------------
-describe("OPS-V4-006 — Financeiro read-only lê o espelho real payload.pagamentoV3", () => {
+describe("OPS-V4-006 — compatibilidade dos adapters legados fora das superfícies runtime", () => {
   const osComPagamento = mkOS({
     id: "os-pag",
     status: "pronta",
@@ -595,10 +631,11 @@ describe("OPS-V4-006 — Financeiro read-only lê o espelho real payload.pagamen
     expect(quitado.pagamentoStatusTone).toBe("success")
   })
 
-  it("FinanceiroStage só diz 'Nenhum pagamento registrado' no ramo SEM pagamento real", () => {
+  it("FinanceiroStage consome a projeção única e não depende do espelho da OS", () => {
     const src = readFileSync(join(DIR, "parts", "stages", "FinanceiroStage.tsx"), "utf8")
-    expect(src, "bloco de pagamento deve ser condicional em temPagamento").toMatch(/f\.temPagamento\s*\?/)
-    expect((src.match(/Nenhum pagamento registrado/g) ?? []).length, "copy de vazio deve existir apenas no ramo sem pagamento").toBe(1)
+    expect(src).toContain("v.financial")
+    expect(src).toContain("projection.receivedTotal")
+    expect(src).not.toContain("f.temDados")
   })
 })
 
@@ -690,7 +727,7 @@ describe("OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005 — abrir do rail PDV com s
       makeState({ selectedOsId: null, novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
       () => {},
-      { ...ctx, ordens: [osComSaldoAberto] },
+      { ...ctx, ordens: [osComSaldoAberto], financialProjectionsByOsId: new Map([["os-saldo", financialStateFromPayment({ total: 470, recebido: 0, saldo: 470, status: "aberto" }).projection!]]) },
     )
     v.openOSFromRail("os-saldo", true)
     expect(patches.at(-1)).toMatchObject({ selectedOsId: "os-saldo", stage: "financeiro", module: "workspace" })
@@ -702,7 +739,7 @@ describe("OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005 — abrir do rail PDV com s
       makeState({ selectedOsId: null, novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
       () => {},
-      { ...ctx, ordens: [osQuitada] },
+      { ...ctx, ordens: [osQuitada], financialProjectionsByOsId: new Map([["os-quitada", financialStateFromPayment({ total: 470, recebido: 470, saldo: 0, status: "quitado" }).projection!]]) },
     )
     v.openOSFromRail("os-quitada", true)
     expect(patches.at(-1)).toMatchObject({ selectedOsId: "os-quitada", stage: "entrega", module: "workspace" })
@@ -726,7 +763,7 @@ describe("OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005 — abrir do rail PDV com s
       makeState({ status: "em_execucao", selectedOsId: "os-x", stage: "entrega", novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
       () => {},
-      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }), pdvServico: { ...ctx.pdvServico, pagamento: { total: 470, recebido: 0, saldo: 470, status: "aberto" } } },
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }), financialProjection: financialStateFromPayment({ total: 470, recebido: 0, saldo: 470, status: "aberto" }), pdvServico: { ...ctx.pdvServico, pagamento: { total: 470, recebido: 0, saldo: 470, status: "aberto" } } },
     )
     expect(v.entregaAcoes.bloqueadaPorSaldo).toBe(true)
     expect(v.entregaAcoes.podeConfirmar).toBe(false)
@@ -744,7 +781,7 @@ describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem dri
       makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
       () => {},
       () => {},
-      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }) },
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }), financialProjection: financialStateFromPayment({ total: 100, recebido: 0, saldo: 100, status: "aberto" }) },
     )
     expect(v.statusLabel).toBe("Pronta")
     expect(v.primaryLabel).toBe("Receber pagamento")
@@ -762,7 +799,7 @@ describe("OPS-V4-006 — status exibido prioriza o da OS real carregada (sem dri
       makeState({ status: "em_execucao", selectedOsId: "os-x", novaOS: false }),
       (p) => patches.push(p as Record<string, unknown>),
       (m) => msgs.push(m),
-      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }) },
+      { ...ctx, realOS: mkOS({ id: "os-x", status: "pronta" }), financialProjection: financialStateFromPayment({ total: 100, recebido: 0, saldo: 100, status: "aberto" }) },
     )
     v.onPrimary()
     expect(patches.at(-1)).toMatchObject({ stage: "financeiro" })
@@ -798,6 +835,7 @@ describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — CTA global reflete o saldo r
     return {
       ...ctx,
       realOS: mkOS({ id: "os-x", status: "pronta" }),
+      financialProjection: financialStateFromPayment(pagamento),
       pdvServico: { ...ctx.pdvServico, pagamento },
     }
   }
@@ -835,24 +873,24 @@ describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — CTA global reflete o saldo r
     expect(msgs.some((m) => /entrega/i.test(m))).toBe(true)
   })
 
-  it("pronta sem cobrança nenhuma (total=0): trata como sem saldo pendente — CTA 'Entregar OS'", () => {
+  it("pronta sem cobrança autorizada (total=0): CTA exige revisão, nunca entrega implícita", () => {
     const v = buildVals(
       makeState({ selectedOsId: "os-x", novaOS: false }),
       () => {},
       () => {},
       ctxProntaComPagamento({ total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }),
     )
-    expect(v.primaryLabel).toBe("Entregar OS")
+    expect(v.primaryLabel).toBe("Revisar cobrança")
   })
 
-  it("pronta + pagamento ainda não carregado (null): mantém o default seguro 'Receber pagamento'", () => {
+  it("pronta + projeção ainda não carregada: mantém o default seguro de revisão", () => {
     const v = buildVals(
       makeState({ selectedOsId: "os-x", novaOS: false }),
       () => {},
       () => {},
       ctxProntaComPagamento(null),
     )
-    expect(v.primaryLabel).toBe("Receber pagamento")
+    expect(v.primaryLabel).toBe("Revisar cobrança")
   })
 
   it("entregue: sem CTA de receber — mostra estado final honesto ('Fluxo concluído')", () => {
@@ -872,6 +910,7 @@ describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — entregaAcoes só habilita co
     return {
       ...ctx,
       realOS: mkOS({ id: "os-ent", status }),
+      financialProjection: financialStateFromPayment(pagamento),
       pdvServico: { ...ctx.pdvServico, pagamento },
     }
   }
@@ -910,6 +949,10 @@ describe("OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006 — entregaAcoes libera entrega 
     return {
       ...ctx,
       realOS: mkOS({ id: "os-ent-aprazo", status, aPrazoV3 }),
+      financialProjection: financialStateFromPayment(
+        pagamento,
+        aPrazoV3?.status === "pendente" && aPrazoV3?.autorizadoEntrega === true ? "AUTHORIZED_CREDIT" : undefined,
+      ),
       pdvServico: { ...ctx.pdvServico, pagamento },
     }
   }
@@ -957,6 +1000,7 @@ describe("OPS-V4-ENTREGA-GUARD-SEM-COBRANCA-002 — entregaAcoes separa quitado,
     return {
       ...ctx,
       realOS: mkOS({ id: "os-guard", status }),
+      financialProjection: financialStateFromPayment(pagamento),
       pdvServico: { ...ctx.pdvServico, pagamento },
     }
   }
@@ -1079,6 +1123,7 @@ describe("OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008 — Financeiro sinaliza 'falta e
         status: entregue ? "entregue" : "pronta",
         ...(entregue ? { retirada: { confirmado: true, retiradoPor: "Cliente" }, entregueEm: "2026-07-01T10:00:00.000Z" } : {}),
       }),
+      financialProjection: financialStateFromPayment({ total: 320, recebido: 320, saldo: 0, status: "quitado" }),
       pdvServico: { ...ctx.pdvServico, pagamento: { total: 320, recebido: 320, saldo: 0, status: "quitado" as const } },
     }
   }
@@ -1620,6 +1665,7 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — v.recebimento só habilita com
   function ctxComPdv(pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null, sessaoAberta: boolean) {
     return {
       ...ctx,
+      financialProjection: financialStateFromPayment(pagamento),
       pdvServico: {
         ...ctx.pdvServico,
         pagamento,
@@ -1630,7 +1676,7 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — v.recebimento só habilita com
 
   it("total>0, saldo>0, caixa aberto: podeReceber true", () => {
     const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv({ total: 200, recebido: 0, saldo: 200, status: "aberto" }, true))
-    expect(v.recebimento).toEqual({ semTotal: false, previaNaoMaterializada: false, quitado: false, caixaAberto: true, podeReceber: true })
+    expect(v.recebimento).toMatchObject({ semTotal: false, previaNaoMaterializada: false, quitado: false, caixaAberto: true, podeReceber: true })
   })
 
   it("caixa fechado: podeReceber false mesmo com saldo aberto", () => {
@@ -1656,7 +1702,7 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — v.recebimento só habilita com
 
   it("pagamento ainda não carregado (null): tudo honesto/false, sem crash", () => {
     const v = buildVals(makeState({ novaOS: false }), () => {}, () => {}, ctxComPdv(null, true))
-    expect(v.recebimento).toEqual({ semTotal: false, previaNaoMaterializada: false, quitado: false, caixaAberto: true, podeReceber: false })
+    expect(v.recebimento).toMatchObject({ semTotal: false, previaNaoMaterializada: false, quitado: false, caixaAberto: true, podeReceber: false })
   })
 
   it("parcial (recebido parcial > 0, saldo > 0): continua podeReceber true", () => {
@@ -1667,9 +1713,8 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — v.recebimento só habilita com
 
 // ---------------------------------------------------------------------------
 // OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002 — a tela não pode contradizer a si mesma:
-// "Total da OS" (osTotalNumero/adaptFinanceiro, aceita orçamento sintetizado pela
-// hidratação) e o total cobrável do motor V3 (totalCobravelV3, rejeita sintetizado)
-// podem divergir. O motor continua rejeitando prévia (nenhuma mudança de gate) —
+// "Total da OS" e o total cobrável materializado podem divergir quando existe
+// apenas uma prévia sintetizada. A projeção continua rejeitando prévia —
 // só a mensagem passa a explicar a causa real em vez de dizer "sem valor".
 // ---------------------------------------------------------------------------
 describe("OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002 — total visível (prévia) vs total cobrável real (motor V3)", () => {
@@ -1710,6 +1755,10 @@ describe("OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002 — total visível (prévia) vs 
     return {
       ...ctx,
       realOS,
+      financialProjection: financialStateFromPayment(
+        pagamento,
+        realOS === osPrevia ? "PRICE_DEFINED" : undefined,
+      ),
       pdvServico: {
         ...ctx.pdvServico,
         pagamento,
@@ -1725,7 +1774,7 @@ describe("OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002 — total visível (prévia) vs 
       () => {},
       ctxCom(osPrevia, { total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }, true),
     )
-    expect(v.financeiro.temTotal).toBe(true) // "Total da OS" aparece na tela
+    expect(v.financial.projection?.expectedTotal).toBe(0)
     expect(v.orcamentoMaterializado).toBe(false)
     expect(v.recebimento.semTotal).toBe(true)
     expect(v.recebimento.previaNaoMaterializada).toBe(true)
@@ -1752,7 +1801,7 @@ describe("OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002 — total visível (prévia) vs 
       () => {},
       ctxCom(osVazia, { total: 0, recebido: 0, saldo: 0, status: "sem_cobranca" }, true),
     )
-    expect(v.financeiro.temTotal).toBe(false)
+    expect(v.financial.projection?.expectedTotal).toBe(0)
     expect(v.recebimento.semTotal).toBe(true)
     expect(v.recebimento.previaNaoMaterializada).toBe(false)
   })
@@ -1771,16 +1820,16 @@ describe("OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002 — total visível (prévia) vs 
     expect(card).not.toContain("totalCobravelV3")
   })
 
-  it("FinanceiroStage sinaliza 'Total da OS' como prévia reaproveitando orcamentoMaterializado (sem lógica nova de sintetizado)", () => {
+  it("FinanceiroStage mostra o estado server-side sem reclassificar orçamento no cliente", () => {
     const financeiroStage = readFileSync(join(DIR, "parts", "stages", "FinanceiroStage.tsx"), "utf8")
-    expect(financeiroStage).toContain("v.orcamentoMaterializado")
+    expect(financeiroStage).toContain("projection.financialStatus")
     expect(financeiroStage).not.toContain(".sintetizado")
   })
 
-  it("previaNaoMaterializada é derivada só de valores já existentes (orcamentoMaterializado + financeiroReal), sem recalcular o motor V3 no cliente", () => {
+  it("previaNaoMaterializada traduz PRICE_DEFINED da projeção, sem recalcular o motor no cliente", () => {
     const orquestrador = readFileSync(join(DIR, "use-v4-preview.ts"), "utf8")
     expect(orquestrador).toContain("previaNaoMaterializada")
-    expect(orquestrador).toMatch(/previaNaoMaterializada\s*=\s*semTotal\s*&&\s*!orcamentoMaterializado\s*&&\s*financeiroReal\.temTotal/)
+    expect(orquestrador).toMatch(/previaNaoMaterializada\s*=\s*financialProjection\?\.financialStatus\s*===\s*"PRICE_DEFINED"/)
     // `totalCobravelV3` é o cálculo AUTORITATIVO do motor V3 (servidor) — a V4 nunca
     // o reimplementa/importa no cliente para decidir a prévia.
     expect(orquestrador).not.toContain("totalCobravelV3")
@@ -1798,7 +1847,7 @@ describe("PDV-SERVICO-OS-RECEBIMENTO-REAL-001 — receberPagamentoV4 só recarre
 
   it("o wrapper só chama reloadOrdens/reloadDetail dentro do if (ok) — nunca incondicional", () => {
     expect(orquestrador).toMatch(/const receberPagamentoV4 = useCallback\(/)
-    expect(orquestrador).toMatch(/if \(ok\) \{\s*reloadOrdens\(\);\s*reloadDetail\(\);\s*\}/)
+    expect(orquestrador).toMatch(/if \(ok\) \{\s*reloadOrdens\(\);\s*reloadDetail\(\);\s*reloadFinancial\(\);\s*\}/)
   })
 })
 
@@ -2600,6 +2649,7 @@ describe("GOAL OPS-V4-RECEBIMENTO-ESTORNO-016 — estorno de recebimento conecta
   function ctxComPdvEstorno(pagamento: Pick<PagamentoV3, "total" | "recebido" | "saldo" | "status"> | null, sessaoAberta: boolean): V4DataCtx {
     return {
       ...ctx,
+      financialProjection: financialStateFromPayment(pagamento),
       pdvServico: {
         ...ctx.pdvServico,
         pagamento,
@@ -2642,7 +2692,7 @@ describe("GOAL OPS-V4-RECEBIMENTO-ESTORNO-016 — estorno de recebimento conecta
 
   it("estornarRecebimentoV4 envolve o estornar do hook (mesmo padrão do receberPagamentoV4) e só recarrega lista+detalhe no sucesso", () => {
     expect(orquestrador).toMatch(/const estornarRecebimentoV4 = useCallback\(/)
-    expect(orquestrador).toContain("pdvServicoV3.estornar(input)")
+    expect(orquestrador).toContain("estornarPdvV3(input)")
     expect(orquestrador).toContain("estornar: estornarRecebimentoV4")
   })
 
@@ -2693,7 +2743,7 @@ describe("GOAL OPS-V4-RECEBIMENTO-ESTORNO-016 — estorno de recebimento conecta
 
   it("botão 'Estornar' no FinanceiroStage chama v.openEstornoRecebimento, só aparece quando há recebimento e respeita o gating", () => {
     expect(financeiroStage).toContain("v.openEstornoRecebimento")
-    expect(financeiroStage).toContain("v.estorno.temRecebido")
+    expect(financeiroStage).toContain("projection.receivedTotal")
     expect(financeiroStage).toMatch(/disabled=\{!v\.estorno\.podeEstornar\}/)
   })
 
@@ -2733,6 +2783,7 @@ describe("GOAL OPS-V4-CANCELAR-OS-CONNECT-021 — cancelamento de OS conecta ao 
     return {
       ...ctx,
       realOS: mkOS({ id: "os-cancel", status: realOSStatus }),
+      financialProjection: financialStateFromPayment(pagamento),
       pdvServico: { ...ctx.pdvServico, pagamento },
     }
   }
@@ -2805,15 +2856,15 @@ describe("GOAL OPS-V4-CANCELAR-OS-CONNECT-021 — cancelamento de OS conecta ao 
     expect(v.cancelamento.podeCancelar).toBe(true)
   })
 
-  it("pagamento ainda não carregado (null): não bloqueia por pagamento (mesma regra honesta de recebimento/estorno)", () => {
+  it("projeção ainda não carregada: cancelamento dependente de financeiro falha fechado", () => {
     const v = buildVals(
       makeState({ selectedOsId: "os-cancel", novaOS: false, status: "aberta" }),
       () => {},
       () => {},
       ctxComCancelamento("aberta", null),
     )
-    expect(v.cancelamento.semPagamento).toBe(true)
-    expect(v.cancelamento.podeCancelar).toBe(true)
+    expect(v.cancelamento.semPagamento).toBe(false)
+    expect(v.cancelamento.podeCancelar).toBe(false)
   })
 
   it("a ação chama aplicarTransicaoStatusV3 com storeId, osId, cancelada e motivo — mesmo wrapper runWrite dos demais handlers", () => {

@@ -1,10 +1,13 @@
 /** Operações V4 Preview — header de comando: status, total, ação primária, menus. */
-import { C } from "../tokens";
+import { C, fmt } from "../tokens";
 import type { V4Vals } from "../use-v4-preview";
 import { NI } from "../os-adapter";
 import styles from "../operacoes-v4-preview.module.css";
 
 export function CommandHeader({ v }: { v: V4Vals }) {
+  const financial = v.financial;
+  const projection = financial.projection;
+  const financialWarning = projection?.consistencyStatus === "INCONSISTENT" || projection?.consistencyStatus === "UNKNOWN";
   return (
     <div
       style={{
@@ -25,8 +28,10 @@ export function CommandHeader({ v }: { v: V4Vals }) {
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, height: 22, padding: "0 9px", background: v.tone.bg, color: v.tone.fg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>
           <span style={{ width: 6, height: 6, borderRadius: "50%", background: v.tone.dot, flex: "none" }} />{v.statusLabel}
         </span>
-        {v.pag.statusPagamento !== NI && (
-          <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 9px", background: C.warnBg, color: C.warnFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>{v.pag.statusPagamento}</span>
+        {v.osSelected && (
+          <span style={{ display: "inline-flex", alignItems: "center", height: 22, padding: "0 9px", background: financialWarning || financial.error ? C.dangerBg : projection?.financialStatus === "PAID" ? C.successBg : C.warnBg, color: financialWarning || financial.error ? C.dangerFg : projection?.financialStatus === "PAID" ? C.successFg : C.warnFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>
+            {financial.error ? "Financeiro indisponível" : financial.statusLabel}
+          </span>
         )}
         {v.os.sla !== NI && (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4, height: 22, padding: "0 9px", background: C.successBg, color: C.successFg, borderRadius: 999, fontSize: 11.5, fontWeight: 600, flex: "none", whiteSpace: "nowrap" }}>⏱ SLA {v.os.sla}</span>
@@ -35,11 +40,22 @@ export function CommandHeader({ v }: { v: V4Vals }) {
 
       {/* Grupo direito: financeiro + ações */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "none" }}>
-        {(v.pag.total !== NI || v.pag.saldo !== NI) && (
+        {(financial.loading || financial.error || projection) && (
           <>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" }}>
-              {v.pag.total !== NI && <span style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>{v.pag.total}</span>}
-              {v.pag.saldo !== NI && <span style={{ fontSize: 10.5, color: C.warnFg }}>saldo {v.pag.saldo}</span>}
+              {financial.loading ? (
+                <span style={{ fontSize: 11.5, color: C.subtle }}>Carregando financeiro…</span>
+              ) : financial.error || !projection ? (
+                <span style={{ fontSize: 11.5, color: C.dangerFg }}>Valores indisponíveis</span>
+              ) : (
+                <>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: C.ink }}>
+                    {projection.expectedTotal == null ? "Total indisponível" : fmt(projection.expectedTotal)}
+                  </span>
+                  {projection.receivedTotal != null && <span style={{ fontSize: 10.5, color: C.successFg }}>recebido {fmt(projection.receivedTotal)}</span>}
+                  {projection.balance != null && <span style={{ fontSize: 10.5, color: projection.balance > 0 ? C.warnFg : C.subtle }}>saldo {fmt(projection.balance)}</span>}
+                </>
+              )}
             </div>
             <span style={{ width: 1, height: 26, background: C.line2, flex: "none" }} />
           </>

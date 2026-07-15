@@ -3,8 +3,8 @@
  * GOAL OPS-V4-RECEBER-SPLIT-PARIDADE-002: paridade com o split imediato que a V3
  * já expõe — múltiplas formas (dinheiro/PIX/débito/crédito) num único recebimento.
  *
- * UI fina sobre o motor único da V3: lê/escreve por `v.pdvServico`
- * (`usePdvServicoV3` → `receberOSV3`/`lerPagamentoOSV3`, sem motor novo). Exige
+ * UI fina sobre o motor único da V3: lê total/saldo/estado pela projeção V4 e
+ * escreve por `v.pdvServico` (`usePdvServicoV3` → `receberOSV3`, sem motor novo). Exige
  * sessão de caixa ABERTA (nunca abre caixa por aqui); permite valor parcial
  * (validado pelo mesmo `validarSplitV3` da V3); só usa formas já suportadas
  * pelo contrato real. Sem estoque, sem venda, sem services financeiros
@@ -26,7 +26,6 @@ import {
   FORMAS_RECEBIMENTO_V3,
   somaSplitV3,
   validarSplitV3,
-  type APrazoV3,
   type FormaRecebimentoV3,
   type SplitLinhaV3,
 } from "@/lib/operacoes-v3/payment-model";
@@ -98,11 +97,11 @@ function fmtDataBR(iso: string): string {
 }
 
 /** Resumo persistente da autorização "a prazo" — nunca mostra como recebido/quitado. */
-function APrazoResumo({ aPrazo }: { aPrazo: APrazoV3 }) {
+function APrazoResumo({ amount, dueAt }: { amount: number; dueAt: string | null }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 3, background: C.infoBg, border: `1px solid ${C.infoBd}`, borderRadius: 9, padding: "9px 11px", marginBottom: 12 }}>
       <span style={{ fontSize: 11.5, fontWeight: 600, color: C.infoFg }}>Conta a receber criada — lançamento a prazo</span>
-      <span style={{ fontSize: 11, color: C.infoFg }}>Valor: {fmt(aPrazo.valor)} · Vencimento: {fmtDataBR(aPrazo.vencimento)}</span>
+      <span style={{ fontSize: 11, color: C.infoFg }}>Valor: {fmt(amount)} · Vencimento: {dueAt ? fmtDataBR(dueAt) : "Não registrado"}</span>
       <span style={{ fontSize: 10.5, color: C.infoFg }}>Esta operação não movimentou caixa.</span>
     </div>
   );
@@ -120,12 +119,20 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
   const [erroAPrazo, setErroAPrazo] = useState<string | null>(null);
 
   if (!v.osSelected) return null;
-  if (pdv.loading) {
-    return <div style={box}><div style={{ fontSize: 11.5, color: C.subtle }}>Carregando pagamento…</div></div>;
+  if (v.financial.loading) {
+    return <div style={box}><div style={{ fontSize: 11.5, color: C.subtle }}>Carregando projeção financeira…</div></div>;
   }
-
-  const pagamento = pdv.pagamento;
-  if (!pagamento) return null;
+  const projection = v.financial.projection;
+  if (v.financial.error || !projection || projection.expectedTotal == null || projection.receivedTotal == null || projection.balance == null) {
+    return <div style={box}><div style={{ fontSize: 11.5, color: C.dangerFg, lineHeight: 1.5 }}>Recebimento bloqueado: situação financeira indisponível ou incompleta.</div></div>;
+  }
+  const pagamento = {
+    total: projection.expectedTotal,
+    recebido: projection.receivedTotal,
+    saldo: projection.balance,
+  };
+  const authorizedCredit = projection.financialStatus === "AUTHORIZED_CREDIT";
+  const creditInstallment = authorizedCredit ? projection.installments[0] ?? null : null;
 
   // Gating vem pré-computado de `buildVals` (mesma regra do servidor — ver
   // `v.recebimento` em use-v4-preview.ts) para ficar testável sem renderizar React.
@@ -250,16 +257,30 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
     );
   }
 
+  if (!projection.canReceive) {
+    return (
+      <div style={box}>
+        <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5 }}>
+          Recebimento bloqueado: {projection.consistencyIssues[0] ?? "revise a cobrança desta OS."}
+        </div>
+      </div>
+    );
+  }
+
+  if (pdv.loading) {
+    return <div style={box}><div style={{ fontSize: 11.5, color: C.subtle }}>Carregando sessão de caixa…</div></div>;
+  }
+
   if (!caixaAberto) {
     return (
       <div style={box}>
-        {v.aPrazo && <APrazoResumo aPrazo={v.aPrazo} />}
+        {authorizedCredit && <APrazoResumo amount={creditInstallment?.amount ?? pagamento.saldo} dueAt={creditInstallment?.dueAt ?? null} />}
         <div style={{ fontSize: 11.5, color: C.warnFg, lineHeight: 1.5, fontWeight: 500 }}>
           Caixa fechado — abra o caixa no PDV/Caixa antes de receber esta OS.
         </div>
         <div style={{ fontSize: 10.5, color: C.subtle, marginTop: 5, marginBottom: 9 }}>Saldo a receber: {fmt(pagamento.saldo)}</div>
         {/* "A prazo" NÃO exige caixa aberto — não movimenta caixa. */}
-        {!v.aPrazo && (
+        {!authorizedCredit && (
           <button type="button" onClick={openFormAPrazo} style={{ ...btnGhost, height: 30, padding: "0 12px", fontSize: 11.5 }}>📄 Lançar a prazo</button>
         )}
       </div>
@@ -269,11 +290,11 @@ export function ReceberPagamentoV4({ v }: { v: V4Vals }) {
   if (!open) {
     return (
       <div style={box}>
-        {v.aPrazo && <APrazoResumo aPrazo={v.aPrazo} />}
+        {authorizedCredit && <APrazoResumo amount={creditInstallment?.amount ?? pagamento.saldo} dueAt={creditInstallment?.dueAt ?? null} />}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11.5, color: C.muted }}>Saldo a receber: <b style={{ color: C.warnFg }}>{fmt(pagamento.saldo)}</b></span>
           <div style={{ display: "flex", gap: 8 }}>
-            {!v.aPrazo && (
+            {!authorizedCredit && (
               <button type="button" onClick={openFormAPrazo} style={{ ...btnGhost, height: 32, padding: "0 12px", fontSize: 11.5 }}>Lançar a prazo</button>
             )}
             <button type="button" onClick={openForm} style={{ ...btnPrimary, height: 32, padding: "0 14px", fontSize: 12 }}>Receber pagamento</button>

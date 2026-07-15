@@ -30,6 +30,7 @@ import {
 } from "./mock-data";
 import { C, fmt } from "./tokens";
 import type { V4State, V4Stage } from "./types";
+import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes-v4/financial-projection";
 import { useLojaAtiva } from "@/lib/loja-ativa";
 import type { OrdemServico, Orcamento } from "@/types/os";
 import { useOrdensV4, useOrdemV4 } from "./use-ordens-v4";
@@ -66,7 +67,6 @@ import type { EstornarRecebimentoInputV3, ReceberOSInputV3 } from "@/lib/operaco
 // GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006: action separada de `receberOSV3` —
 // nunca liquida título, nunca movimenta caixa, nunca exige caixa aberto.
 import { lancarOSAPrazoV3, type LancarAPrazoInputV3 } from "@/lib/operacoes-v3/pdv-servico-actions";
-import { lerAPrazoV3 } from "@/lib/operacoes-v3/payment-model";
 import {
   salvarIdentificacaoV3,
   salvarProvaEntradaV3,
@@ -93,12 +93,10 @@ import {
   adaptDiagnostico,
   adaptEntrega,
   adaptExecucao,
-  adaptFinanceiro,
   adaptFotosEntrada,
   adaptObservacoes,
   adaptOrcamento,
   adaptOsHeader,
-  adaptPag,
   adaptPosVenda,
   adaptSegurancaEntrada,
   adaptTimeline,
@@ -106,16 +104,18 @@ import {
   EMPTY_ENTREGA_VIEW,
   EMPTY_POSVENDA_VIEW,
   EMPTY_EXECUCAO_VIEW,
-  EMPTY_FINANCEIRO_VIEW,
   EMPTY_ORCAMENTO_VIEW,
   EMPTY_OS_VIEW,
-  EMPTY_PAG_VIEW,
   EMPTY_SEGURANCA_ENTRADA,
   realPrioridadeToV4,
   realStatusToV4,
-  resumoCobrancaV4,
   stageForStatus,
 } from "./os-adapter";
+import {
+  useFinancialProjectionV4,
+  useFinancialProjectionsV4,
+  type FinancialProjectionStateV4,
+} from "./use-financial-projection-v4";
 import {
   buildBancadaView,
   buildDashboardResumo,
@@ -144,6 +144,12 @@ export interface V4DataCtx {
   /** OS selecionada já hidratada (detalhe) ou linha da lista enquanto carrega. */
   realOS: OrdemServico | null;
   detailLoading: boolean;
+  /** Projeção financeira server-side da OS selecionada; nunca contém payload bruto. */
+  financialProjection: FinancialProjectionStateV4;
+  /** Projeções server-side carregadas em lote exclusivamente para o rail PDV. */
+  financialProjectionsByOsId: ReadonlyMap<string, FinancialProjectionOSV4>;
+  financialRailLoading: boolean;
+  financialRailError: string | null;
   // ---- Ações de escrita REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----
   // Cada uma chama uma action real da V3 (storeId+osId da loja/OS ativas),
   // recarrega lista+detalhe e devolve `true` em sucesso. Sem caixa/estoque/financeiro.
@@ -321,10 +327,6 @@ const EXECUCAO_NA_ABA_EXECUCAO = "Confirme a transição na aba Execução.";
  * caso (`pag` null) o default seguro é continuar tratando como saldo pendente.
  * Cobre também OS sem cobrança nenhuma (`saldo` já nasce 0 quando `total` é 0).
  */
-function pagamentoSemSaldoPendente(pag: { saldo: number } | null | undefined): boolean {
-  return !!pag && pag.saldo <= 0;
-}
-
 /**
  * Ação primária quando a OS está "pronta" E sem saldo pendente (ver
  * `pagamentoSemSaldoPendente`). Tipada a partir de `PRIMARY` (mock-data) para não
@@ -336,6 +338,27 @@ const PRIMARY_ENTREGAR_OS: NonNullable<(typeof PRIMARY)[keyof typeof PRIMARY]> =
   stage: "entrega",
 };
 
+const PRIMARY_REVISAR_COBRANCA: NonNullable<(typeof PRIMARY)[keyof typeof PRIMARY]> = {
+  label: "Revisar cobrança",
+  to: "pronta",
+  stage: "financeiro",
+};
+
+const FINANCIAL_STATUS_LABEL: Record<FinancialStatusV4, string> = {
+  UNKNOWN: "Financeiro indisponível",
+  NO_PRICE: "Sem preço autorizado",
+  PRICE_DEFINED: "Preço definido",
+  CHARGE_NOT_CREATED: "Cobrança não criada",
+  OPEN: "Em aberto",
+  PARTIAL: "Pagamento parcial",
+  PAID: "Quitado",
+  AUTHORIZED_CREDIT: "Autorizado a prazo",
+  AUTHORIZED_NO_CHARGE: "Sem cobrança autorizada",
+  INCONSISTENT: "Financeiro inconsistente",
+  CANCELLED: "Cobrança cancelada",
+  REVERSED: "Pagamento estornado",
+};
+
 export function buildVals(
   st: V4State,
   update: (p: Patch) => void,
@@ -344,15 +367,17 @@ export function buildVals(
 ) {
   // OS real selecionada → identidade/financeiro reais (vazio honesto quando ausente).
   const realOS = ctx.realOS;
+  const financialProjection = ctx.financialProjection.projection;
+  const financialStatusLabel = financialProjection
+    ? FINANCIAL_STATUS_LABEL[financialProjection.financialStatus]
+    : ctx.financialProjection.loading
+      ? "Carregando financeiro"
+      : "Financeiro indisponível";
+  const paymentMethodSummary = financialProjection?.paymentMethods.map((item) => item.label).join(" + ") || "Não registrada";
   const osView = realOS ? adaptOsHeader(realOS) : EMPTY_OS_VIEW;
-  const pagView = realOS ? adaptPag(realOS) : EMPTY_PAG_VIEW;
   const timelineReal = realOS ? adaptTimeline(realOS) : [];
   const anexosReais = realOS ? adaptAnexos(realOS) : [];
   const observacoesReais = realOS ? adaptObservacoes(realOS) : [];
-  // Financeiro REAL da OS (faturamento/parcelas) + histórico financeiro real
-  // derivado da própria timeline. Sem baixa fabricada, sem recibo inventado.
-  const financeiroReal = realOS ? adaptFinanceiro(realOS) : EMPTY_FINANCEIRO_VIEW;
-  const finHistReal = timelineReal.filter((e) => e.type === "financeiro");
   // Diagnóstico REAL (defeito/observações/anexos/eventos); vazio honesto sem dado.
   const diagnosticoReal = realOS ? adaptDiagnostico(realOS) : EMPTY_DIAGNOSTICO_VIEW;
   // Execução REAL (técnico/checklist técnico/apontamentos/estoque/anexos de bancada);
@@ -395,8 +420,14 @@ export function buildVals(
   // partir do header (a ação real fica no botão dedicado da aba Entrega, com seu
   // próprio busy-lock — ver `entregaAcoes`/`confirmarEntrega`).
   const advance = () => {
-    const semSaldoPendente = pagamentoSemSaldoPendente(ctx.pdvServico.pagamento);
-    const p = status === "pronta" && semSaldoPendente ? PRIMARY_ENTREGAR_OS : PRIMARY[status];
+    const canDeliver = financialProjection?.canDeliver === true;
+    const p = status === "pronta"
+      ? canDeliver
+        ? PRIMARY_ENTREGAR_OS
+        : financialProjection?.financialStatus === "OPEN" || financialProjection?.financialStatus === "PARTIAL"
+          ? PRIMARY[status]
+          : PRIMARY_REVISAR_COBRANCA
+      : PRIMARY[status];
     if (!p) return;
     if (status === "aberta") {
       void ctx.iniciarDiagnostico();
@@ -415,7 +446,7 @@ export function buildVals(
       return;
     }
     if (status === "pronta") {
-      if (semSaldoPendente) {
+      if (canDeliver) {
         // Quitada (sem saldo pendente confirmado): leva à Entrega, onde vive o
         // botão real de confirmação.
         update({ stage: "entrega" });
@@ -425,7 +456,11 @@ export function buildVals(
       // Saldo pendente — "Receber pagamento" leva ao Financeiro (o recebimento
       // real acontece lá, no card de recebimento; aqui só navegamos + avisamos).
       update({ stage: p.stage });
-      notify(RECEBIMENTO_NO_FINANCEIRO);
+      notify(
+        financialProjection?.financialStatus === "OPEN" || financialProjection?.financialStatus === "PARTIAL"
+          ? RECEBIMENTO_NO_FINANCEIRO
+          : "Revise a situação financeira antes de entregar.",
+      );
       return;
     }
     update({ stage: p.stage });
@@ -650,37 +685,36 @@ export function buildVals(
   };
 
   // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
-  // Gating derivado do estado REAL de `usePdvServicoV3` (pagamento + sessão de
-  // caixa da OS ativa) — nunca do snapshot local. `podeReceber` exige total>0,
-  // saldo>0 E caixa aberto ao mesmo tempo; sem isso, a Preview nunca chama `receber`.
-  const pdvPag = ctx.pdvServico.pagamento;
+  // Total, recebido, saldo e consistência vêm exclusivamente da projeção server-side.
+  // O hook do PDV fornece somente a sessão de caixa e as mutações já existentes.
   const pdvCaixaAberto = !!ctx.pdvServico.sessao?.aberta;
-  const semTotal = !!pdvPag && pdvPag.total <= 0;
+  const semTotal = !!financialProjection && financialProjection.expectedTotal === 0;
   // OPS-V4-RECEBIMENTO-PREVIA-HONESTY-002: o card de Faturamento mostra `financeiroReal.temTotal`
   // (aceita orçamento sintetizado pela hidratação — prévia, não materializado; ver
-  // `orcamentoMaterializado` acima). Quando esse total visível é > 0 mas o motor V3
+  // `orcamentoMaterializado` acima). Quando esse total visível é > 0 mas a projeção
   // não reconhece valor cobrável (`semTotal`), a causa é sempre a mesma: falta
   // materializar/aprovar o orçamento — nunca "a OS não tem valor". Sem essa distinção,
   // a tela contradiz a si mesma (Total R$ X + "não tem valor a cobrar"). Não muda o
-  // gate real (`podeReceber` continua exigindo `pdvPag.total > 0`, ou seja, nunca
+  // gate real (`podeReceber` continua exigindo projeção consistente, ou seja, nunca
   // habilita recebimento sobre prévia) — só corrige a mensagem.
-  const previaNaoMaterializada = semTotal && !orcamentoMaterializado && financeiroReal.temTotal;
+  const previaNaoMaterializada = financialProjection?.financialStatus === "PRICE_DEFINED";
   const recebimento = {
     semTotal,
     previaNaoMaterializada,
-    quitado: !!pdvPag && pdvPag.total > 0 && pdvPag.saldo <= 0,
+    quitado: financialProjection?.financialStatus === "PAID",
     caixaAberto: pdvCaixaAberto,
-    podeReceber: !!pdvPag && pdvPag.total > 0 && pdvPag.saldo > 0 && pdvCaixaAberto,
+    podeReceber: financialProjection?.canReceive === true && pdvCaixaAberto,
+    indisponivel: !financialProjection || financialProjection.financialStatus === "UNKNOWN" || financialProjection.financialStatus === "INCONSISTENT",
   };
 
   // ---- Estorno de recebimento (slice OPS-V4-RECEBIMENTO-ESTORNO-016) ----
-  // Mesma fonte real do recebimento (`pdvPag`/`pdvCaixaAberto`, sem novo read).
+  // Mesma projeção financeira do recebimento, combinada apenas com a sessão de caixa.
   // `estornarRecebimentoOSV3` (V3) exige `titulo.recebido > 0` E caixa aberto —
   // `temRecebido` espelha a primeira condição; `podeEstornar` as duas juntas.
   const estorno = {
-    temRecebido: !!pdvPag && pdvPag.recebido > 0,
+    temRecebido: (financialProjection?.receivedTotal ?? 0) > 0,
     caixaAberto: pdvCaixaAberto,
-    podeEstornar: !!pdvPag && pdvPag.recebido > 0 && pdvCaixaAberto,
+    podeEstornar: (financialProjection?.receivedTotal ?? 0) > 0 && pdvCaixaAberto,
   };
 
   // ---- Cancelamento de OS (slice OPS-V4-CANCELAR-OS-CONNECT-021) ----
@@ -688,15 +722,16 @@ export function buildVals(
   // (`podeTransicionarV3`, pura, importada da V3) — nunca inventa status; bloqueia
   // sozinha entregue/cancelada (estados finais). `statusMotivoBloqueio` guarda o
   // motivo exato que o servidor usaria, para a UI mostrar a mesma mensagem sem
-  // duplicar texto. `semPagamento` reaproveita `pdvPag` (mesma leitura de
-  // `recebimento`/`estorno`, sem novo read) — mesma regra que a V3 já aplica
+  // duplicar texto. `semPagamento` exige recebido conhecido pela projeção — mesma
+  // regra que a V3 já aplica
   // (bloqueia cancelamento com QUALQUER valor recebido, total ou parcial).
   const cancelamentoVeredito = podeTransicionarV3(status, "cancelada");
+  const semPagamentoConhecido = financialProjection?.receivedTotal != null && financialProjection.receivedTotal <= 0;
   const cancelamento = {
     statusPermite: !!realOS && cancelamentoVeredito.ok,
     statusMotivoBloqueio: cancelamentoVeredito.motivo,
-    semPagamento: !pdvPag || pdvPag.recebido <= 0,
-    podeCancelar: !!realOS && cancelamentoVeredito.ok && (!pdvPag || pdvPag.recebido <= 0),
+    semPagamento: semPagamentoConhecido,
+    podeCancelar: !!realOS && cancelamentoVeredito.ok && semPagamentoConhecido,
   };
 
   // ---- Entrega (GOAL OPS-V4-ENTREGA-REAL-E-CTA-QUITADO-008) ----
@@ -716,40 +751,45 @@ export function buildVals(
   // auditoria). Agora as três situações são distintas e a entrega sem cobrança exige
   // classificação + justificativa enviadas à action canônica, que deriva ator/horário,
   // persiste a autorização e decide novamente no servidor.
-  // Tudo derivado do MESMO `pdvPag` (sem novo read); com `pdvPag` null nada se decide
-  // (anti-flicker). `semSaldoPendenteEntrega` (quitada OU sem cobrança) segue
+  // Tudo derivado da mesma projeção server-side; sem projeção nada se decide
+  // (anti-flicker). `semSaldoPendenteEntrega` (quitada OU autorizada) segue
   // alimentando só o CTA global (`prim`), que apenas NAVEGA à aba Entrega — o guard
   // real mora lá.
-  const semSaldoPendenteEntrega = pagamentoSemSaldoPendente(pdvPag);
-  const cobrancaAusente = !!pdvPag && pdvPag.total <= 0;
-  const quitadoComCobranca = !!pdvPag && pdvPag.total > 0 && pdvPag.saldo <= 0;
-  // `bloqueadaPorSaldo` exige saldo > 0 CONFIRMADO (não é só "!semSaldoPendente" —
-  // isso incluiria o pagamento ainda não carregado, mostrando o aviso de bloqueio
-  // sem necessidade). Com `pdvPag` null, as duas ficam false (nada a decidir ainda).
-  const saldoPendenteConfirmado = !!pdvPag && pdvPag.saldo > 0;
+  const semSaldoPendenteEntrega = financialProjection?.canDeliver === true;
+  const cobrancaAusente = financialProjection?.deliveryDecision === "BLOCK_NO_CHARGE_AUTH_REQUIRED";
+  const saldoPendenteConfirmado =
+    financialProjection?.financialStatus === "OPEN" || financialProjection?.financialStatus === "PARTIAL";
   // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
-  // Espelho SEPARADO de `pagamentoV3` — NUNCA altera saldo/recebido. Só formaliza
-  // a autorização de entrega com dívida em aberto. `aPrazoAutorizado` exige o
-  // espelho pendente E o próprio saldo real ainda aberto (se a OS já foi quitada
-  // pelo fluxo normal depois, o saldo cai a 0 e esta exceção deixa de valer sozinha).
-  const aPrazo = realOS ? lerAPrazoV3(realOS) : null;
-  const aPrazoAutorizado = !!aPrazo && aPrazo.autorizadoEntrega && saldoPendenteConfirmado;
+  // A autorização a prazo já foi validada pelo núcleo compartilhado do guard.
+  // Se a OS for quitada depois, a projeção deixa de retornar AUTHORIZED_CREDIT.
+  const aPrazoAutorizado = financialProjection?.financialStatus === "AUTHORIZED_CREDIT";
   const leituraFinanceiraBloqueada =
-    !!realOS && status === "pronta" && (ctx.pdvServico.loading || !!ctx.pdvServico.error || !pdvPag);
+    !!realOS && status === "pronta" && (
+      ctx.financialProjection.loading ||
+      !!ctx.financialProjection.error ||
+      !financialProjection ||
+      financialProjection.financialStatus === "UNKNOWN" ||
+      financialProjection.financialStatus === "INCONSISTENT" ||
+      financialProjection.financialStatus === "CHARGE_NOT_CREATED" ||
+      financialProjection.financialStatus === "CANCELLED" ||
+      financialProjection.financialStatus === "REVERSED"
+    );
   const entregaAcoes = {
     // Confirmação DIRETA (sem passo extra) só na OS quitada de verdade (total>0,
     // saldo<=0) ou já autorizada a prazo. OS sem cobrança NÃO entra aqui — segue
     // pelo fluxo de cortesia (`semCobrancaLancada`), que exige "Entregar sem
     // cobrança" explícito na UI antes de liberar a confirmação real.
-    podeConfirmar: !!realOS && status === "pronta" && (quitadoComCobranca || aPrazoAutorizado),
+    podeConfirmar: !!realOS && status === "pronta" && financialProjection?.canDeliver === true,
     bloqueadaPorSaldo: !!realOS && status === "pronta" && saldoPendenteConfirmado && !aPrazoAutorizado,
     autorizadaAPrazo: !!realOS && status === "pronta" && aPrazoAutorizado,
+    autorizadaSemCobranca: !!realOS && status === "pronta" && financialProjection?.financialStatus === "AUTHORIZED_NO_CHARGE",
     // total<=0 (nenhuma cobrança lançada): a entrega só acontece após confirmação
     // explícita de cortesia na UI — nunca em silêncio.
     semCobrancaLancada: !!realOS && status === "pronta" && cobrancaAusente,
     leituraFinanceiraBloqueada,
-    financeiroCarregando: leituraFinanceiraBloqueada && ctx.pdvServico.loading,
-    financeiroErro: leituraFinanceiraBloqueada ? ctx.pdvServico.error : null,
+    financeiroCarregando: leituraFinanceiraBloqueada && ctx.financialProjection.loading,
+    financeiroErro: leituraFinanceiraBloqueada ? ctx.financialProjection.error : null,
+    financeiroMotivo: financialProjection?.consistencyIssues[0] ?? null,
   };
 
   // ---- Entrada/Recepção (slice 003): seed do editor a partir da OS real ----
@@ -765,7 +805,7 @@ export function buildVals(
   const filaItens = buildFilaItens(ctx.ordens);
   const bancadaView = buildBancadaView(ctx.ordens);
   const slaView = buildSlaView(ctx.ordens);
-  const pdvView = buildPdvView(ctx.ordens);
+  const pdvView = buildPdvView(ctx.ordens, ctx.financialProjectionsByOsId);
 
   // Seleciona a OS REAL (identidade/financeiro reais no workspace). Único caminho de
   // seleção — sempre por clique explícito do operador, nunca por fallback automático.
@@ -785,8 +825,8 @@ export function buildVals(
    * Abrir a OS de uma linha de rail (Fila/Bancada/SLA/PDV) → leva ao workspace real.
    *
    * GOAL OPS-V4-PDV-SERVICO-FINANCEIRO-SHORTCUT-005: quando a origem é o rail
-   * "PDV de serviço" (`fromPdv`) e a OS tem saldo real aberto — MESMA fonte do
-   * GOAL-003 (`resumoCobrancaV4`, nenhum cálculo novo) — abre direto na aba
+   * "PDV de serviço" (`fromPdv`) e a projeção server-side tem saldo real aberto,
+   * abre direto na aba
    * Financeiro em vez do `stageForStatus` genérico (que levaria "pronta" para
    * Entrega, escondendo o recebimento). Quitada/prévia/sem cobrança seguem o
    * stage normal — só existe atalho quando há saldo de verdade a receber.
@@ -794,7 +834,8 @@ export function buildVals(
   const openOSFromRail = (id: string, fromPdv = false) => {
     const o = ctx.ordens.find((x) => x.id === id);
     if (!o) return;
-    const temSaldoAberto = fromPdv && resumoCobrancaV4(o).saldo > 0;
+    const projection = ctx.financialProjectionsByOsId.get(o.id);
+    const temSaldoAberto = fromPdv && (projection?.financialStatus === "OPEN" || projection?.financialStatus === "PARTIAL");
     selectOS(o, temSaldoAberto ? "financeiro" : undefined);
   };
 
@@ -853,7 +894,13 @@ export function buildVals(
     notify("Orçamento rápido criado — OS aberta com orçamento em rascunho.");
   };
 
-  const prim = status === "pronta" && semSaldoPendenteEntrega ? PRIMARY_ENTREGAR_OS : PRIMARY[status];
+  const prim = status === "pronta"
+    ? semSaldoPendenteEntrega
+      ? PRIMARY_ENTREGAR_OS
+      : financialProjection?.financialStatus === "OPEN" || financialProjection?.financialStatus === "PARTIAL"
+        ? PRIMARY[status]
+        : PRIMARY_REVISAR_COBRANCA
+    : PRIMARY[status];
   const tone = TONE[status] || TONE.em_execucao;
   const prioM = PRIO[st.prioridade];
 
@@ -1007,7 +1054,15 @@ export function buildVals(
     prio: { label: prioM.label, fg: prioM.fg, dot: prioM.dot },
     checklist, check, checklistVazio,
     entradaAcessorios, entradaFotos, entradaSeguranca,
-    financeiro: financeiroReal, finHist: finHistReal, posVenda: posVendaReal,
+    posVenda: posVendaReal,
+    financial: {
+      projection: financialProjection,
+      loading: ctx.financialProjection.loading,
+      error: ctx.financialProjection.error,
+      reload: ctx.financialProjection.reload,
+      statusLabel: financialStatusLabel,
+      paymentMethodSummary,
+    },
     hist, histCount: hist.length, histFilters, anexos: anexosReais, observacoes: observacoesReais,
     resolved, pending: PENDING, act,
 
@@ -1084,7 +1139,7 @@ export function buildVals(
     openRecibo: () => update({ recibo: true }), closeRecibo: () => update({ recibo: false }), reciboOpen: st.recibo,
 
     diag: diagnosticoReal, execucao: execucaoReal, orcamento: orcamentoReal, entrega: entregaReal,
-    os: osView, pag: pagView,
+    os: osView,
 
     // ---- Execução REAL (slice OPS-V4-EXECUCAO-REAL-007) ----
     // Transições reais via `aplicarTransicaoStatusV3` (reuso, sem editar V3).
@@ -1120,16 +1175,13 @@ export function buildVals(
     realOS,
 
     // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
-    // Estado (pagamento/sessão de caixa/recibo) e ações (receber) do motor V3 —
-    // consumido por `ReceberPagamentoV4` dentro do FinanceiroStage. `recebimento`
-    // é o gating pré-computado (mesma regra do servidor: total>0 && saldo>0 && caixa aberto).
+    // Sessão de caixa/recibo e ações do motor V3; totais vêm da projeção server-side.
+    // `recebimento` é o gating pré-computado dessa projeção com a sessão do caixa.
     pdvServico: ctx.pdvServico,
     recebimento,
     estorno,
     // ---- "A prazo" (GOAL OPS-V4-RECEBIMENTO-A-PRAZO-MINIMO-006) ----
-    // `aPrazo` é o espelho de leitura (null quando não há autorização pendente);
-    // `lancarAPrazo` chama a action separada (nunca recebe dinheiro/movimenta caixa).
-    aPrazo,
+    // Action separada: nunca recebe dinheiro nem movimenta caixa.
     lancarAPrazo: ctx.lancarAPrazo,
 
     // ---- Diagnóstico / Orçamento REAIS (slice OPS-V4-ORCAMENTO-REAL-002) ----
@@ -1193,6 +1245,8 @@ export function buildVals(
     bancadaView,
     slaView,
     pdvView,
+    pdvFinancialLoading: ctx.financialRailLoading,
+    pdvFinancialError: ctx.financialRailError,
   };
 }
 
@@ -1212,13 +1266,38 @@ export function useV4Preview(): V4Vals {
     reload: reloadOrdens,
   } = useOrdensV4(lojaAtivaId);
   const { ordem: ordemDetail, loading: detailLoading, reload: reloadDetail } = useOrdemV4(lojaAtivaId, st.selectedOsId);
+  // Workspace lê a OS selecionada; o módulo PDV usa somente o reader em lote do rail.
+  // Assim uma mesma OS não dispara dois readers concorrentes na troca de módulo.
+  const selectedFinancial = useFinancialProjectionV4(
+    lojaAtivaId,
+    st.module === "workspace" ? st.selectedOsId : null,
+  );
+  const { reload: reloadSelectedFinancial } = selectedFinancial;
+  const railFinancialIds = useMemo(
+    () => st.module === "pdv" ? ordens.map((ordem) => ordem.id) : [],
+    [st.module, ordens],
+  );
+  const railFinancial = useFinancialProjectionsV4(lojaAtivaId, railFinancialIds);
+  const { reload: reloadRailFinancial } = railFinancial;
+  const reloadFinancial = useCallback(() => {
+    reloadSelectedFinancial();
+    if (railFinancialIds.length > 0) reloadRailFinancial();
+  }, [reloadSelectedFinancial, reloadRailFinancial, railFinancialIds.length]);
+  const financialProjection = useMemo<FinancialProjectionStateV4>(
+    () => ({ ...selectedFinancial, reload: reloadFinancial }),
+    [selectedFinancial, reloadFinancial],
+  );
 
   // ---- PDV de Serviço / recebimento real (slice PDV-SERVICO-OS-RECEBIMENTO-REAL-001) ----
   // Hook V3 já pronto: carrega pagamento (saldo/status) + sessão de caixa da OS
   // selecionada, e expõe receber/estornar/recibo. Sem motor novo — só envolvemos
   // `receber` abaixo para também recarregar a lista/detalhe da V4.
   const pdvServicoV3 = usePdvServicoV3(lojaAtivaId, st.selectedOsId);
-  const { limparRecibo: limparReciboPdvV3 } = pdvServicoV3;
+  const {
+    limparRecibo: limparReciboPdvV3,
+    receber: receberPdvV3,
+    estornar: estornarPdvV3,
+  } = pdvServicoV3;
   // Troca de OS não deve arrastar o recibo da OS anterior para a próxima seleção.
   useEffect(() => {
     limparReciboPdvV3();
@@ -1278,6 +1357,7 @@ export function useV4Preview(): V4Vals {
         await fn(sid, osId);
         reloadOrdens();
         reloadDetail();
+        reloadFinancial();
         if (after) after();
         notify(okMsg);
         return true;
@@ -1286,7 +1366,7 @@ export function useV4Preview(): V4Vals {
         return false;
       }
     },
-    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, notify],
+    [lojaAtivaId, selectedOsId, reloadOrdens, reloadDetail, reloadFinancial, notify],
   );
 
   // ---- PDV de Serviço / recebimento real: envolve `receber` para também
@@ -1295,30 +1375,35 @@ export function useV4Preview(): V4Vals {
   // NUNCA rodam se `receber` falhar, porque só entram no `if (ok)` abaixo).
   const receberPagamentoV4 = useCallback(
     async (input: ReceberOSInputV3) => {
-      const ok = await pdvServicoV3.receber(input);
+      const ok = await receberPdvV3(input);
       if (ok) {
         reloadOrdens();
         reloadDetail();
+        reloadFinancial();
       }
       return ok;
     },
-    [pdvServicoV3.receber, reloadOrdens, reloadDetail],
+    [receberPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
   );
   // ---- Estorno de recebimento (slice OPS-V4-RECEBIMENTO-ESTORNO-016): mesmo
   // padrão do `receberPagamentoV4` acima — envolve `estornar` (já pronto no hook
   // V3) só para também recarregar lista+detalhe da V4 depois do sucesso.
   const estornarRecebimentoV4 = useCallback(
     async (input: EstornarRecebimentoInputV3) => {
-      const ok = await pdvServicoV3.estornar(input);
+      const ok = await estornarPdvV3(input);
       if (ok) {
         reloadOrdens();
         reloadDetail();
+        reloadFinancial();
       }
       return ok;
     },
-    [pdvServicoV3.estornar, reloadOrdens, reloadDetail],
+    [estornarPdvV3, reloadOrdens, reloadDetail, reloadFinancial],
   );
-  const pdvServico: PdvServicoState = { ...pdvServicoV3, receber: receberPagamentoV4, estornar: estornarRecebimentoV4 };
+  const pdvServico = useMemo<PdvServicoState>(
+    () => ({ ...pdvServicoV3, receber: receberPagamentoV4, estornar: estornarRecebimentoV4 }),
+    [pdvServicoV3, receberPagamentoV4, estornarRecebimentoV4],
+  );
 
   const salvarDiagnostico = useCallback(
     (input: DiagnosticoInputV4) =>
@@ -1581,6 +1666,10 @@ export function useV4Preview(): V4Vals {
       reloadDetail,
       realOS,
       detailLoading,
+      financialProjection,
+      financialProjectionsByOsId: railFinancial.projectionsByOsId,
+      financialRailLoading: railFinancial.loading,
+      financialRailError: railFinancial.error,
       salvarDiagnostico,
       gerarOrcamento,
       salvarOrcamento,
@@ -1619,6 +1708,10 @@ export function useV4Preview(): V4Vals {
       reloadDetail,
       realOS,
       detailLoading,
+      financialProjection,
+      railFinancial.projectionsByOsId,
+      railFinancial.loading,
+      railFinancial.error,
       salvarDiagnostico,
       gerarOrcamento,
       salvarOrcamento,

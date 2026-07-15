@@ -11,9 +11,10 @@
  * Princípio (GOAL OPS-V4-REAL-SEARCH-AND-RAILS-001): só dado real ou vazio honesto.
  */
 import type { OrdemServico } from "@/types/os";
+import type { FinancialProjectionOSV4, FinancialStatusV4 } from "@/lib/operacoes-v4/financial-projection";
 import type { V4Status, V4Tone } from "./types";
 import { STATUS_LABEL, TONE } from "./mock-data";
-import { aparelhoLabel, fmtData, osTotalNumero, realStatusToV4, resumoCobrancaV4, type V4CobrancaResumo } from "./os-adapter";
+import { aparelhoLabel, fmtData, realStatusToV4 } from "./os-adapter";
 import { C, fmt } from "./tokens";
 
 function txt(v: unknown): string {
@@ -169,17 +170,16 @@ export function buildSlaView(ordens: OrdemServico[]): SlaView {
 }
 
 // ---- PDV de serviço ---------------------------------------------------------
-// GOAL OPS-V4-FIN-STATE-RECONCILE-003: o badge/saldo exibido aqui usa a MESMA
-// fonte que a aba Financeiro (`resumoCobrancaV4`, via `lerPagamentoV3`/
-// `totalCobravelV3`) — nunca a flag fraca `faturamentoPendente`, que ficava
-// "Sem pendência" mesmo com saldo real aberto (contradizia o Financeiro).
+// Badge, recebido e saldo usam a mesma projeção server-side da aba Financeiro.
+// Ausência/erro de projeção permanece indisponível, nunca "Sem pendência".
 
-const FATURA_TONE: Record<"aReceber" | "quitado" | "previa" | "cancelado" | "semCobranca", V4Tone> = {
+const FATURA_TONE: Record<"aReceber" | "quitado" | "incompleto" | "cancelado" | "semCobranca" | "indisponivel", V4Tone> = {
   aReceber: { bg: C.warnBg, fg: C.warnFg, dot: C.warn },
   quitado: { bg: C.successBg, fg: C.successFg, dot: C.success },
-  previa: { bg: C.infoBg, fg: C.infoFg, dot: C.info },
+  incompleto: { bg: C.infoBg, fg: C.infoFg, dot: C.info },
   cancelado: { bg: C.dangerBg, fg: C.dangerFg, dot: C.danger },
   semCobranca: { bg: C.line3, fg: C.bodySoft, dot: C.subtle },
+  indisponivel: { bg: C.dangerBg, fg: C.dangerFg, dot: C.danger },
 };
 
 export interface PdvRow {
@@ -187,7 +187,7 @@ export interface PdvRow {
   codigo: string;
   cliente: string;
   total: string;
-  totalNum: number;
+  totalNum: number | null;
   statusFaturamento: string;
   statusTone: V4Tone;
   /** "Saldo: R$ X" — só quando há cobrança real (aReceber/quitado); "" caso contrário. */
@@ -202,17 +202,7 @@ export interface PdvView {
   aReceberCount: number;
 }
 
-function temFinanceiroReal(os: OrdemServico): boolean {
-  return (
-    osTotalNumero(os) > 0 ||
-    resumoCobrancaV4(os).total > 0 ||
-    !!txt(os.faturamentoFormaPagamento) ||
-    !!os.faturamentoPendente ||
-    os.faturamentoStatus === "cancelado"
-  );
-}
-
-type ToneKey = "aReceber" | "quitado" | "previa" | "cancelado" | "semCobranca";
+type ToneKey = keyof typeof FATURA_TONE;
 
 /**
  * Prioridade do badge: cancelado > saldo REAL do motor V3 (autoritativo,
@@ -220,41 +210,46 @@ type ToneKey = "aReceber" | "quitado" | "previa" | "cancelado" | "semCobranca";
  * não há orçamento/pagamento V3 nenhum — mesmo sinal que o card Financeiro
  * mostra como "status do faturamento") > prévia sintetizada > sem cobrança.
  */
-function toneKeyDaOS(os: OrdemServico, cobranca: V4CobrancaResumo): ToneKey {
-  if (os.faturamentoStatus === "cancelado") return "cancelado";
-  if (cobranca.temCobrancaReal) return cobranca.saldo > 0 ? "aReceber" : "quitado";
-  if (os.faturamentoPendente) return "aReceber";
-  if (cobranca.ePrevia) return "previa";
-  return "semCobranca";
+function toneKeyDaProjecao(status: FinancialStatusV4): ToneKey {
+  if (status === "PAID") return "quitado";
+  if (status === "OPEN" || status === "PARTIAL" || status === "AUTHORIZED_CREDIT") return "aReceber";
+  if (status === "CANCELLED" || status === "REVERSED") return "cancelado";
+  if (status === "NO_PRICE" || status === "AUTHORIZED_NO_CHARGE") return "semCobranca";
+  if (status === "PRICE_DEFINED" || status === "CHARGE_NOT_CREATED") return "incompleto";
+  return "indisponivel";
 }
 
 const STATUS_FATURAMENTO_LABEL: Record<ToneKey, string> = {
   cancelado: "Faturamento cancelado",
   aReceber: "A receber",
   quitado: "Quitado",
-  previa: "Prévia sem cobrança",
+  incompleto: "Revisar cobrança",
   semCobranca: "Sem cobrança",
+  indisponivel: "Financeiro indisponível",
 };
 
-export function buildPdvView(ordens: OrdemServico[]): PdvView {
-  const comFin = ordens.filter(temFinanceiroReal);
+export function buildPdvView(
+  ordens: OrdemServico[],
+  projectionsByOsId: ReadonlyMap<string, FinancialProjectionOSV4>,
+): PdvView {
+  const comFin = ordens.filter((os) => projectionsByOsId.has(os.id));
   if (comFin.length === 0) {
-    return { temDados: false, itens: [], totalGeral: fmt(0), aReceberCount: 0 };
+    return { temDados: false, itens: [], totalGeral: "—", aReceberCount: 0 };
   }
 
   const itens: PdvRow[] = comFin
     .slice()
-    .sort((a, b) => osTotalNumero(b) - osTotalNumero(a))
+    .sort((a, b) => (projectionsByOsId.get(b.id)?.expectedTotal ?? -1) - (projectionsByOsId.get(a.id)?.expectedTotal ?? -1))
     .map((os) => {
-      const cobranca = resumoCobrancaV4(os);
-      const toneKey = toneKeyDaOS(os, cobranca);
-      const totalNum = cobranca.total;
-      const saldoLinha = toneKey === "aReceber" || toneKey === "quitado" ? `Saldo: ${fmt(cobranca.saldo)}` : "";
+      const projection = projectionsByOsId.get(os.id)!;
+      const toneKey = toneKeyDaProjecao(projection.financialStatus);
+      const totalNum = projection.expectedTotal;
+      const saldoLinha = projection.balance != null ? `Saldo: ${fmt(projection.balance)}` : "";
       return {
         id: os.id,
         codigo: txt(os.codigo) || "OS",
         cliente: txt(os.cliente?.nome) || "Cliente não informado",
-        total: totalNum > 0 ? fmt(totalNum) : "—",
+        total: totalNum != null ? fmt(totalNum) : "Indisponível",
         totalNum,
         statusFaturamento: STATUS_FATURAMENTO_LABEL[toneKey],
         statusTone: FATURA_TONE[toneKey],
@@ -262,7 +257,8 @@ export function buildPdvView(ordens: OrdemServico[]): PdvView {
       };
     });
 
-  const totalGeral = itens.reduce((acc, it) => acc + it.totalNum, 0);
-  const aReceberCount = comFin.filter((os) => toneKeyDaOS(os, resumoCobrancaV4(os)) === "aReceber").length;
-  return { temDados: true, itens, totalGeral: fmt(totalGeral), aReceberCount };
+  const totals = itens.map((item) => item.totalNum).filter((value): value is number => value != null);
+  const totalGeral = totals.length === itens.length ? fmt(totals.reduce((sum, value) => sum + value, 0)) : "Parcialmente indisponível";
+  const aReceberCount = comFin.filter((os) => toneKeyDaProjecao(projectionsByOsId.get(os.id)!.financialStatus) === "aReceber").length;
+  return { temDados: true, itens, totalGeral, aReceberCount };
 }

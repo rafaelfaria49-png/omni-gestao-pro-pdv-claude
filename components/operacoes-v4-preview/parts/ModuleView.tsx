@@ -225,12 +225,16 @@ function SlaSecao({ titulo, cor, count, children }: { titulo: string; cor: strin
 
 function PdvBody({ v }: { v: V4Vals }) {
   const p = v.pdvView;
+  if (v.pdvFinancialLoading) return <Mensagem texto="Carregando projeções financeiras…" />;
+  if (v.pdvFinancialError) {
+    return <EmptyBox titulo="Financeiro indisponível" texto={v.pdvFinancialError} sub="Nenhum valor anterior foi mantido." />;
+  }
   if (!p.temDados) {
     return (
       <EmptyBox
         titulo="PDV de serviço"
-        texto="PDV de serviço ainda não está ligado nesta Preview."
-        sub="Valores reais aparecem no Workspace/Financeiro da OS quando disponíveis. Esta tela é somente leitura — não vende nem recebe."
+        texto="Nenhuma projeção financeira disponível para as OS desta loja."
+        sub="Esta tela é somente leitura — não vende nem recebe."
       />
     );
   }

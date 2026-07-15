@@ -78,17 +78,25 @@ export interface ProjecaoEntregaFinanceiraV3 {
   decisao: EntregaFinanceiraDecisaoV3;
 }
 
-interface FonteTotal {
+export interface FonteTotalFinanceiroV3 {
   origem: string;
   centavos: number;
 }
 
-interface TotaisEsperados {
-  fontes: FonteTotal[];
+export interface ReconciliacaoTotaisFinanceirosV3 {
+  fontes: FonteTotalFinanceiroV3[];
   totalCentavos: number | null;
   temZeroComercialExplicito: boolean;
   desconhecido: boolean;
   inconsistencia?: string;
+}
+
+export interface ReconciliacaoRecebimentosFinanceirosV3 {
+  /** Soma líquida que o guard usa: pagamentos/liquidações menos estornos. */
+  centavos: number;
+  recebidoCentavos: number;
+  estornadoCentavos: number;
+  valido: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -109,8 +117,12 @@ function diverge(a: number, b: number): boolean {
   return Math.abs(a - b) > TOLERANCIA_CENTAVOS;
 }
 
-function coletarTotaisEsperados(input: ProjetarEntregaFinanceiraInputV3): TotaisEsperados {
-  const fontes: FonteTotal[] = [];
+/**
+ * Núcleo comercial compartilhado pelo guard de entrega e por leitores server-side.
+ * Os valores permanecem em centavos para preservar a tolerância funcional do P0.
+ */
+export function reconciliarTotaisFinanceirosV3(input: ProjetarEntregaFinanceiraInputV3): ReconciliacaoTotaisFinanceirosV3 {
+  const fontes: FonteTotalFinanceiroV3[] = [];
   let temZeroComercialExplicito = false;
   let desconhecido = false;
   const orcamento = orcamentoRealV3(input.payload);
@@ -177,21 +189,30 @@ function coletarTotaisEsperados(input: ProjetarEntregaFinanceiraInputV3): Totais
   return { fontes, totalCentavos: base, temZeroComercialExplicito, desconhecido };
 }
 
-function somarRecebimentosEstritos(payload: unknown): { centavos: number; valido: boolean } {
-  if (!isRecord(payload)) return { centavos: 0, valido: true };
+/** Núcleo de liquidação compartilhado; não interpreta snapshots da OS como baixa. */
+export function reconciliarRecebimentosFinanceirosV3(payload: unknown): ReconciliacaoRecebimentosFinanceirosV3 {
+  if (!isRecord(payload)) return { centavos: 0, recebidoCentavos: 0, estornadoCentavos: 0, valido: true };
   const historico = payload.historico;
-  if (historico == null) return { centavos: 0, valido: true };
-  if (!Array.isArray(historico)) return { centavos: 0, valido: false };
+  if (historico == null) return { centavos: 0, recebidoCentavos: 0, estornadoCentavos: 0, valido: true };
+  if (!Array.isArray(historico)) return { centavos: 0, recebidoCentavos: 0, estornadoCentavos: 0, valido: false };
   let centavos = 0;
+  let recebidoCentavos = 0;
+  let estornadoCentavos = 0;
   for (const evento of historico) {
     if (!isRecord(evento)) continue;
     const tipo = String(evento.tipo ?? "").trim().toLowerCase();
     if (tipo !== "pagamento" && tipo !== "liquidacao" && tipo !== "estorno_pagamento") continue;
     const valor = toCents(evento.valor);
-    if (valor == null) return { centavos: 0, valido: false };
-    centavos += tipo === "estorno_pagamento" ? -valor : valor;
+    if (valor == null) return { centavos: 0, recebidoCentavos: 0, estornadoCentavos: 0, valido: false };
+    if (tipo === "estorno_pagamento") {
+      centavos -= valor;
+      estornadoCentavos += valor;
+    } else {
+      centavos += valor;
+      recebidoCentavos += valor;
+    }
   }
-  return { centavos, valido: centavos >= -TOLERANCIA_CENTAVOS };
+  return { centavos, recebidoCentavos, estornadoCentavos, valido: centavos >= -TOLERANCIA_CENTAVOS };
 }
 
 function temMarcadorAPrazo(payload: unknown): boolean {
@@ -277,7 +298,7 @@ function bloquear(
 }
 
 export function projetarEntregaFinanceiraV3(input: ProjetarEntregaFinanceiraInputV3): ProjecaoEntregaFinanceiraV3 {
-  const totais = coletarTotaisEsperados(input);
+  const totais = reconciliarTotaisFinanceirosV3(input);
   const origensTotal = totais.fontes.map((fonte) => fonte.origem);
   const totalEsperado = fromCents(totais.totalCentavos);
   const tituloEncontrado = !!input.titulo;
@@ -355,7 +376,7 @@ export function projetarEntregaFinanceiraV3(input: ProjetarEntregaFinanceiraInpu
     return bloquear({ ...base, estadoCobranca: "inconsistente", consistencia: "inconsistente" }, "BLOCK_INCONSISTENT", "Valor do título diverge do total esperado da OS.");
   }
 
-  const recebimentos = somarRecebimentosEstritos(input.titulo.payload);
+  const recebimentos = reconciliarRecebimentosFinanceirosV3(input.titulo.payload);
   const recebidoCentavos = recebimentos.centavos;
   const saldoCentavos = Math.max(0, valorTituloCentavos - recebidoCentavos);
   const status = normalizeReceberStatus(input.titulo.status);
