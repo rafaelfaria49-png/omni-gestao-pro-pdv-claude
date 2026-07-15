@@ -185,6 +185,51 @@ describe("signNfceXml · adulteração detectada", () => {
     expect(v.assinaturaConfere).toBe(false)
     expect(v.valido).toBe(false)
   })
+
+  it("rejeita raiz fora do namespace fiscal", () => {
+    const signed = signNfceXml(nfceXml(), CERT_PLAIN, "", OPTS)
+    const tampered = signed.replace(
+      '<NFe xmlns="http://www.portalfiscal.inf.br/nfe">',
+      '<NFe xmlns="urn:nao-fiscal" xmlns:nfe="http://www.portalfiscal.inf.br/nfe">',
+    ).replace("<infNFe ", "<nfe:infNFe ").replace("</infNFe>", "</nfe:infNFe>")
+    expect(verifyNfceSignature(tampered)).toMatchObject({ valido: false, problemas: ["xml_invalido"] })
+  })
+
+  it("rejeita elementos extras em Transforms e KeyInfo", () => {
+    const signed = signNfceXml(nfceXml(), CERT_PLAIN, "", OPTS)
+    const extraTransform = signed.replace(
+      "</Transforms>",
+      '<extra:Transform xmlns:extra="urn:extra" Algorithm="urn:extra"></extra:Transform></Transforms>',
+    )
+    expect(verifyNfceSignature(extraTransform).problemas).toContain("estrutura_assinatura_invalida")
+
+    const extraKeyInfo = signed.replace(
+      "</KeyInfo>",
+      '<extra:KeyValue xmlns:extra="urn:extra"></extra:KeyValue></KeyInfo>',
+    )
+    expect(verifyNfceSignature(extraKeyInfo).problemas).toContain("estrutura_assinatura_invalida")
+  })
+
+  it("rejeita segundo infNFe fiscal mesmo com Id diferente", () => {
+    const signed = signNfceXml(nfceXml(), CERT_PLAIN, "", OPTS)
+    const duplicate = signed.replace(
+      "</NFe>",
+      '<infNFe Id="NFeSINTETICO-SECUNDARIO"><ide></ide></infNFe></NFe>',
+    )
+    expect(verifyNfceSignature(duplicate).problemas).toContain("referencia_ambigua")
+  })
+
+  it("assina e verifica NFe com prefixo fiscal na raiz", () => {
+    const prefixed = nfceXml()
+      .replace(
+        '<NFe xmlns="http://www.portalfiscal.inf.br/nfe">',
+        '<nfe:NFe xmlns:nfe="http://www.portalfiscal.inf.br/nfe" xmlns="http://www.portalfiscal.inf.br/nfe">',
+      )
+      .replace("</NFe>", "</nfe:NFe>")
+    const signed = signNfceXml(prefixed, CERT_PLAIN, "", OPTS)
+    expect(signed).toContain("</nfe:NFe>")
+    expect(verifyNfceSignature(signed).valido).toBe(true)
+  })
 })
 
 describe("signNfceXml · validações (TAREFA 5)", () => {
