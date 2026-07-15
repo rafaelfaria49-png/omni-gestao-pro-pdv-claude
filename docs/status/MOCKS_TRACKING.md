@@ -43,6 +43,7 @@ last_update: 2026-05-30
 | MOCK-06 | `/dashboard/cadastros-v2` dados de demo | Seed-mock | 🟢 | ⏳ | CRM | Substituídos quando há dados reais |
 | MOCK-07 | Marketplace (HUB inteiro) | Hub-mock | 🟢 | ⏳ | Marketplace | Greenfield — não há código, nem mock |
 | MOCK-08 | Marketing IA (campanha, atribuição, ROI) | Hub-mock | 🟡 | ⏳ | Marketing IA | Existe gerador de imagens real, mas orquestrador inexistente |
+| MOCK-09 | `/dashboard/contador` — seções preview (Fechamento, Documentos, Obrigações, Dossiês, Folha, Portal, Permissões, Timeline, Config) | UI-mock | 🟡 | 🔄 | Contador | GOAL 006 realificou **Visão Geral** e **Relatórios básicos** (dados reais read-only por competência, com selos real/parcial/indisponível). Demais seções seguem preview honesto com banner. |
 
 ---
 

@@ -47,6 +47,12 @@ import {
   labelCompetenciaCurta,
   type Competencia,
 } from "@/lib/contador/competencia"
+import type { ContadorDadosReais } from "@/lib/contador/readers/tipos"
+import {
+  VisaoGeralReal,
+  RelatoriosReal,
+  ContadorRealIndisponivel,
+} from "./contador-dados-reais"
 import {
   CONTADOR_SECTIONS,
   DOCUMENTOS_ROWS,
@@ -273,9 +279,16 @@ export type ContadorHubPreviewProps = {
    * Fonte da verdade da competência — sem useState espelhado.
    */
   competencia: Competencia
+  /**
+   * Dados reais da loja ativa na competência (GOAL 006). `null` quando o escopo não
+   * resolve ou a leitura falha — nesse caso `realErro` traz a mensagem honesta.
+   * `undefined` = página não forneceu (mantém apenas o preview).
+   */
+  realData?: ContadorDadosReais | null
+  realErro?: string | null
 }
 
-export function ContadorHubPreview({ competencia }: ContadorHubPreviewProps) {
+export function ContadorHubPreview({ competencia, realData, realErro }: ContadorHubPreviewProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -350,10 +363,21 @@ export function ContadorHubPreview({ competencia }: ContadorHubPreviewProps) {
           </>
         }
       />
-      <PreviewBanner
-        title="Preview — dados ilustrativos."
-        text="Pendências, KPIs, progresso do fechamento e alertas desta visão geral são fixos e exemplificam o layout. Nenhum valor aqui reflete seu Financeiro, Fiscal ou Caixa reais."
-      />
+
+      {realErro ? <ContadorRealIndisponivel motivo={realErro} /> : null}
+      {realData ? <VisaoGeralReal dados={realData} /> : null}
+
+      {realData ? (
+        <PreviewBanner
+          title="Cartões abaixo — dados ilustrativos."
+          text="O bloco “Resumo da competência” acima é leitura real da loja. Os cartões de pendências, progresso do fechamento, dossiês e pacote a seguir ainda são fixos e exemplificam o layout."
+        />
+      ) : (
+        <PreviewBanner
+          title="Preview — dados ilustrativos."
+          text="Pendências, KPIs, progresso do fechamento e alertas desta visão geral são fixos e exemplificam o layout. Nenhum valor aqui reflete seu Financeiro, Fiscal ou Caixa reais."
+        />
+      )}
 
       <div className="mb-4 mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {VISAO_KPIS.map((k) => {
@@ -713,14 +737,25 @@ export function ContadorHubPreview({ competencia }: ContadorHubPreviewProps) {
     <>
       <SectionHeader
         title="Relatórios para o contador"
-        desc="Exporte relatórios da competência ou monte o pacote completo do mês."
+        desc="Relatórios básicos com dados reais da competência. Exportação e pacote seguem em preview."
         actions={
           <Btn size="sm" onClick={() => goSection("dossies")}>
             Dossiês empresariais
           </Btn>
         }
       />
-      <div className="grid gap-4 lg:grid-cols-[1.45fr_1fr]">
+
+      {realErro ? <ContadorRealIndisponivel motivo={realErro} /> : null}
+      {realData ? <RelatoriosReal dados={realData} /> : null}
+
+      {realData ? (
+        <PreviewBanner
+          title="Exportações e pacote — em preview."
+          text="Os relatórios básicos acima são leitura real da loja. A exportação (CSV/PDF), o Pacote do Contador e os relatórios abaixo ainda não geram arquivo nesta fase."
+        />
+      ) : null}
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.45fr_1fr]">
         <PacoteCard
           items={PACOTE_ITEMS_RELATORIOS}
           count={compShort}
