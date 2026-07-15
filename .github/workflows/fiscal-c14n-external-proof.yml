@@ -81,7 +81,8 @@ jobs:
         run: |
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('$EVIDENCE_DIR/report.json'));if(!p.valid||!p.digestMatches||!p.signatureValueValid)process.exit(1)"
           node -e "const fs=require('fs');const m=JSON.parse(fs.readFileSync('$EVIDENCE_DIR/mutations.json'));if(m.length!==11||m.some(x=>x.expected!==x.actual))process.exit(1)"
-          sha256sum --check "$EVIDENCE_DIR/hashes.sha256"
+          cd "$EVIDENCE_DIR"
+          sha256sum --check hashes.sha256
       - name: Arquivar relatorio, hashes e bytes canonicos sinteticos
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
