@@ -1,28 +1,25 @@
 /**
- * Canonicalização XML para XMLDSig da NFC-e (BL-FISCAL-005 · TAREFA 1).
+ * Parser XML seguro + Canonical XML 1.0 para o signer fiscal.
  *
- * Parser XML mínimo + serializador CANÔNICO determinístico, PURO (sem libs, sem I/O). Produz
- * uma forma estável de um elemento (e seus descendentes) para cálculo de digest/assinatura,
- * de modo que `sign` e `verify` cheguem aos MESMOS bytes.
- *
- * Aderência ao C14N 1.0 (http://www.w3.org/TR/2001/REC-xml-c14n-20010315):
- *  - Declarações de namespace antes dos atributos; atributos ordenados por nome (Unicode).
- *  - Namespace default herdado é renderizado no ÁPICE do subconjunto (comportamento de subset C14N).
- *  - Elementos vazios expandidos (`<a></a>`).
- * Desvios CONSCIENTES (documentados — endurecer antes da homologação/F-SEFAZ):
- *  - Nós de texto compostos só por espaço em branco entre elementos são descartados (independe de
- *    indentação); texto significativo é preservado VERBATIM (entidades mantidas como vieram).
- *  - Não há normalização de fim de linha nem de referências de caractere.
- * Como `sign` e `verify` usam exatamente este canonicalizador, a assinatura é autoconsistente e
- * detecta adulteração (qualquer mudança em valor/atributo altera o digest).
+ * A canonicalizacao e delegada ao algoritmo inclusivo C14N 1.0 de `xml-crypto`. O DOM e criado
+ * por `@xmldom/xmldom`; DTD e declaracoes de entidade sao recusados antes do parser. O pequeno AST
+ * publico preserva a API historica usada pelas validacoes estruturais, mas os bytes canonicos sao
+ * sempre produzidos a partir do DOM namespace-aware original.
  */
+
+import { DOMParser, XMLSerializer } from "@xmldom/xmldom"
+import { C14nCanonicalization } from "xml-crypto"
 
 export type C14nText = { type: "text"; value: string }
 export type C14nElement = {
   type: "element"
+  /** Nome local, sem prefixo. */
   name: string
+  /** QName original, quando havia prefixo. */
+  qualifiedName: string
+  namespaceUri: string | null
   /** Atributos em ordem de origem (inclui `xmlns`/`xmlns:*`). */
-  attrs: Array<{ name: string; value: string }>
+  attrs: Array<{ name: string; value: string; namespaceUri: string | null; localName: string }>
   children: Array<C14nElement | C14nText>
 }
 
@@ -33,216 +30,213 @@ export class XmlParseError extends Error {
   }
 }
 
-const WS_ONLY = /^[\s﻿\xA0]*$/
+const DOM_NODE = Symbol("fiscal-c14n-dom-node")
+type DomBackedElement = C14nElement & { [DOM_NODE]: Element }
 
-function isWhitespaceOnly(s: string): boolean {
-  return WS_ONLY.test(s)
+function assertSafeXmlPolicy(xml: string): void {
+  if (/<!DOCTYPE\b/i.test(xml)) {
+    throw new XmlParseError("DOCTYPE/DTD nao e permitido no XML fiscal.")
+  }
+  if (/<!ENTITY\b/i.test(xml)) {
+    throw new XmlParseError("Declaracoes ENTITY nao sao permitidas no XML fiscal.")
+  }
 }
 
-/** Parser recursivo simples para XML bem-formado (sem CDATA/comentários/PI internos). */
+function parseDocument(xml: string): Document {
+  const issues: string[] = []
+  const parser = new DOMParser({
+    errorHandler: {
+      warning: (message: string) => issues.push(message),
+      error: (message: string) => issues.push(message),
+      fatalError: (message: string) => issues.push(message),
+    },
+  })
+  const document = parser.parseFromString(xml, "application/xml")
+  if (!document.documentElement || issues.length > 0) {
+    throw new XmlParseError(issues[0] ?? "Documento sem elemento raiz.")
+  }
+  return document
+}
+
+function toAst(node: Element): C14nElement {
+  const attrs: C14nElement["attrs"] = []
+  for (let index = 0; index < node.attributes.length; index += 1) {
+    const attr = node.attributes.item(index)
+    if (!attr) continue
+    attrs.push({
+      name: attr.name,
+      value: attr.value,
+      namespaceUri: attr.namespaceURI || null,
+      localName: attr.localName || attr.name,
+    })
+  }
+
+  const children: C14nElement["children"] = []
+  for (let index = 0; index < node.childNodes.length; index += 1) {
+    const child = node.childNodes.item(index)
+    if (!child) continue
+    if (child.nodeType === 1) {
+      children.push(toAst(child as Element))
+    } else if (child.nodeType === 3 || child.nodeType === 4) {
+      children.push({ type: "text", value: child.nodeValue ?? "" })
+    }
+  }
+
+  const ast: C14nElement = {
+    type: "element",
+    name: node.localName || node.tagName,
+    qualifiedName: node.tagName,
+    namespaceUri: node.namespaceURI || null,
+    attrs,
+    children,
+  }
+  Object.defineProperty(ast, DOM_NODE, { value: node, enumerable: false })
+  return ast
+}
+
+/** Parser XML namespace-aware. DTD/ENTITY falham fechados antes do DOM. */
 export function parseXml(xml: string): C14nElement {
-  const src = String(xml ?? "")
-  let i = 0
-  const n = src.length
-
-  const skipDeclAndProlog = () => {
-    while (i < n) {
-      // pula espaços
-      while (i < n && /\s/.test(src[i]!)) i++
-      if (src.startsWith("<?", i)) {
-        const end = src.indexOf("?>", i)
-        if (end < 0) throw new XmlParseError("Declaração XML não terminada.")
-        i = end + 2
-        continue
-      }
-      if (src.startsWith("<!--", i)) {
-        const end = src.indexOf("-->", i)
-        if (end < 0) throw new XmlParseError("Comentário não terminado.")
-        i = end + 3
-        continue
-      }
-      if (src.startsWith("<!", i)) {
-        const end = src.indexOf(">", i)
-        if (end < 0) throw new XmlParseError("Declaração DOCTYPE não terminada.")
-        i = end + 1
-        continue
-      }
-      break
-    }
+  const source = String(xml ?? "").replace(/^\uFEFF/, "")
+  if (!source.trim()) throw new XmlParseError("Documento sem elemento raiz.")
+  assertSafeXmlPolicy(source)
+  try {
+    return toAst(parseDocument(source).documentElement)
+  } catch (error) {
+    if (error instanceof XmlParseError) throw error
+    throw new XmlParseError("XML malformado ou recusado pela politica segura.")
   }
-
-  const parseName = (): string => {
-    const start = i
-    while (i < n && !/[\s/>=]/.test(src[i]!)) i++
-    if (i === start) throw new XmlParseError(`Nome de tag/atributo vazio na posição ${i}.`)
-    return src.slice(start, i)
-  }
-
-  const parseAttrs = (): Array<{ name: string; value: string }> => {
-    const attrs: Array<{ name: string; value: string }> = []
-    for (;;) {
-      while (i < n && /\s/.test(src[i]!)) i++
-      if (i >= n) throw new XmlParseError("Atributos não terminados.")
-      const c = src[i]!
-      if (c === ">" || c === "/") break
-      const name = parseName()
-      while (i < n && /\s/.test(src[i]!)) i++
-      let value = ""
-      if (src[i] === "=") {
-        i++ // '='
-        while (i < n && /\s/.test(src[i]!)) i++
-        const quote = src[i]
-        if (quote !== '"' && quote !== "'") throw new XmlParseError(`Valor de atributo "${name}" sem aspas.`)
-        i++ // abre aspas
-        const start = i
-        while (i < n && src[i] !== quote) i++
-        if (i >= n) throw new XmlParseError(`Valor de atributo "${name}" não terminado.`)
-        value = src.slice(start, i)
-        i++ // fecha aspas
-      }
-      attrs.push({ name, value })
-    }
-    return attrs
-  }
-
-  const parseElement = (): C14nElement => {
-    if (src[i] !== "<") throw new XmlParseError(`Esperado '<' na posição ${i}.`)
-    i++ // '<'
-    const name = parseName()
-    const attrs = parseAttrs()
-    while (i < n && /\s/.test(src[i]!)) i++
-    const el: C14nElement = { type: "element", name, attrs, children: [] }
-    if (src[i] === "/") {
-      i++ // '/'
-      if (src[i] !== ">") throw new XmlParseError("Self-closing malformado.")
-      i++ // '>'
-      return el
-    }
-    if (src[i] !== ">") throw new XmlParseError(`Tag <${name}> malformada.`)
-    i++ // '>'
-    // conteúdo
-    for (;;) {
-      if (i >= n) throw new XmlParseError(`Tag <${name}> não fechada.`)
-      if (src.startsWith("</", i)) {
-        i += 2
-        const closeName = parseName()
-        while (i < n && /\s/.test(src[i]!)) i++
-        if (src[i] !== ">") throw new XmlParseError(`Fechamento </${closeName}> malformado.`)
-        i++ // '>'
-        if (closeName !== name) throw new XmlParseError(`Fechamento </${closeName}> não casa com <${name}>.`)
-        return el
-      }
-      if (src.startsWith("<!--", i)) {
-        const end = src.indexOf("-->", i)
-        if (end < 0) throw new XmlParseError("Comentário não terminado.")
-        i = end + 3
-        continue
-      }
-      if (src[i] === "<") {
-        el.children.push(parseElement())
-        continue
-      }
-      // texto até o próximo '<'
-      const start = i
-      while (i < n && src[i] !== "<") i++
-      el.children.push({ type: "text", value: src.slice(start, i) })
-    }
-  }
-
-  skipDeclAndProlog()
-  if (i >= n || src[i] !== "<") throw new XmlParseError("Documento sem elemento raiz.")
-  const root = parseElement()
-  return root
 }
 
-/** xmlns default declarado diretamente no elemento (ou null). */
-function ownDefaultNs(el: C14nElement): string | null {
-  for (const a of el.attrs) if (a.name === "xmlns") return a.value
+function domNodeOf(element: C14nElement): Element {
+  const node = (element as Partial<DomBackedElement>)[DOM_NODE]
+  if (!node) throw new XmlParseError("Elemento nao possui o DOM original para canonicalizacao.")
+  return node
+}
+
+function escapeAttribute(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;")
+}
+
+function firstElementChild(node: Node): Element | null {
+  for (let child = node.firstChild; child; child = child.nextSibling) {
+    if (child.nodeType === 1) return child as Element
+  }
   return null
 }
 
-/** Atributos não-namespace (excluí xmlns e xmlns:*), ordenados por nome (codepoint). */
-function regularAttrsSorted(el: C14nElement): Array<{ name: string; value: string }> {
-  return el.attrs
-    .filter((a) => a.name !== "xmlns" && !a.name.startsWith("xmlns:"))
-    .slice()
-    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+function withInheritedDefaultNamespace(node: Element, namespaceUri: string): Element {
+  if (node.namespaceURI) return node
+  const serialized = new XMLSerializer().serializeToString(node)
+  const wrapper = parseDocument(`<fiscal-c14n-wrapper xmlns="${escapeAttribute(namespaceUri)}">${serialized}</fiscal-c14n-wrapper>`)
+  const child = firstElementChild(wrapper.documentElement)
+  if (!child) throw new XmlParseError("Falha ao aplicar namespace herdado ao subset.")
+  return child
 }
 
-function renderElement(el: C14nElement, renderedDefaultNs: string | null, isApex: boolean): string {
-  const own = ownDefaultNs(el)
-  const effective = own !== null ? own : renderedDefaultNs
-
-  // Decide se emite xmlns="...": no ápice, emite o default herdado/efetivo (se houver);
-  // em descendentes, só quando o default muda em relação ao já renderizado.
-  let nsDecl = ""
-  if (isApex) {
-    if (effective !== null && effective !== "") nsDecl = ` xmlns="${effective}"`
-  } else if (own !== null && own !== renderedDefaultNs) {
-    nsDecl = ` xmlns="${own}"`
+/** Namespaces prefixados em vigor nos ancestrais, com a declaracao mais proxima vencendo. */
+function collectAncestorNamespaces(node: Element): Array<{ prefix: string; namespaceURI: string }> {
+  const declaredOnNode = new Set<string>()
+  for (let index = 0; index < node.attributes.length; index += 1) {
+    const attr = node.attributes.item(index)
+    if (!attr) continue
+    if (attr.name === "xmlns") declaredOnNode.add("")
+    if (attr.prefix === "xmlns") declaredOnNode.add(attr.localName)
   }
 
-  let attrsStr = ""
-  for (const a of regularAttrsSorted(el)) attrsStr += ` ${a.name}="${a.value}"`
-
-  // filhos: descarta texto só-whitespace; preserva texto significativo verbatim.
-  const parts: string[] = []
-  for (const child of el.children) {
-    if (child.type === "text") {
-      if (!isWhitespaceOnly(child.value)) parts.push(child.value)
-    } else {
-      parts.push(renderElement(child, effective, false))
+  const seen = new Set<string>(declaredOnNode)
+  const result: Array<{ prefix: string; namespaceURI: string }> = []
+  let parent = node.parentNode
+  while (parent?.nodeType === 1) {
+    const element = parent as Element
+    for (let index = 0; index < element.attributes.length; index += 1) {
+      const attr = element.attributes.item(index)
+      if (!attr) continue
+      const prefix = attr.name === "xmlns" ? "" : attr.prefix === "xmlns" ? attr.localName : null
+      if (prefix === null || seen.has(prefix)) continue
+      seen.add(prefix)
+      // O canonicalizador ja renderiza o default a partir de `node.namespaceURI`; inclui-lo aqui
+      // produziria uma declaracao duplicada. Prefixos adicionais sao inclusivos no C14N 1.0.
+      if (prefix !== "") result.push({ prefix, namespaceURI: attr.value })
     }
+    parent = parent.parentNode
   }
-
-  const open = `<${el.name}${nsDecl}${attrsStr}>`
-  return `${open}${parts.join("")}</${el.name}>`
+  return result
 }
 
 /**
- * Canonicaliza um elemento (subconjunto), renderizando no ápice o namespace default herdado.
- * `inheritedDefaultNs` = o xmlns default em vigor no PAI do elemento (o que o C14N de subset
- * renderiza no topo). Para `infNFe`, é o `xmlns` do `<NFe>`; para `SignedInfo`, o da `<Signature>`.
+ * Canonicaliza o elemento com C14N 1.0 inclusivo, sem comentarios.
+ *
+ * `inheritedDefaultNs` existe por compatibilidade com a API anterior. Ele so e aplicado quando o
+ * elemento foi parseado isoladamente e, portanto, ainda nao possui namespace no DOM.
  */
-export function canonicalizeElement(el: C14nElement, inheritedDefaultNs: string | null = null): string {
-  return renderElement(el, inheritedDefaultNs, true)
+export function canonicalizeElement(element: C14nElement, inheritedDefaultNs: string | null = null): string {
+  let node = domNodeOf(element)
+  if (inheritedDefaultNs && !node.namespaceURI) {
+    node = withInheritedDefaultNamespace(node, inheritedDefaultNs)
+  }
+  return new C14nCanonicalization().process(node, {
+    ancestorNamespaces: collectAncestorNamespaces(node),
+  })
 }
 
-/** Busca, em profundidade, o primeiro elemento com o nome (tag) dado. */
-export function findFirst(el: C14nElement, name: string): C14nElement | null {
-  if (el.name === name) return el
-  for (const c of el.children) {
-    if (c.type === "element") {
-      const found = findFirst(c, name)
-      if (found) return found
-    }
+/** Busca, em profundidade, todos os elementos com o nome local dado. */
+export function findAll(element: C14nElement, name: string): C14nElement[] {
+  const found: C14nElement[] = []
+  if (element.name === name || element.qualifiedName === name) found.push(element)
+  for (const child of element.children) {
+    if (child.type === "element") found.push(...findAll(child, name))
   }
-  return null
+  return found
 }
 
-/** Busca o primeiro elemento cujo atributo `Id` é igual ao valor dado. */
-export function findById(el: C14nElement, id: string): C14nElement | null {
-  if (el.attrs.some((a) => a.name === "Id" && a.value === id)) return el
-  for (const c of el.children) {
-    if (c.type === "element") {
-      const found = findById(c, id)
-      if (found) return found
-    }
+/** Busca, em profundidade, o primeiro elemento com o nome local dado. */
+export function findFirst(element: C14nElement, name: string): C14nElement | null {
+  return findAll(element, name)[0] ?? null
+}
+
+/** Filhos-elemento diretos, opcionalmente filtrados por nome local e namespace. */
+export function childElements(
+  element: C14nElement,
+  name?: string,
+  namespaceUri?: string,
+): C14nElement[] {
+  return element.children.filter((child): child is C14nElement => {
+    if (child.type !== "element") return false
+    if (name && child.name !== name && child.qualifiedName !== name) return false
+    if (namespaceUri && child.namespaceUri !== namespaceUri) return false
+    return true
+  })
+}
+
+/** Busca todos os elementos cujo atributo nao-namespaced `Id` e igual ao valor dado. */
+export function findAllById(element: C14nElement, id: string): C14nElement[] {
+  const found: C14nElement[] = []
+  if (element.attrs.some((attr) => attr.name === "Id" && attr.namespaceUri === null && attr.value === id)) {
+    found.push(element)
   }
-  return null
+  for (const child of element.children) {
+    if (child.type === "element") found.push(...findAllById(child, id))
+  }
+  return found
+}
+
+/** Busca o primeiro elemento cujo atributo `Id` e igual ao valor dado. */
+export function findById(element: C14nElement, id: string): C14nElement | null {
+  return findAllById(element, id)[0] ?? null
 }
 
 /** Texto concatenado dos filhos-texto diretos de um elemento (trim). */
-export function textOf(el: C14nElement | null): string {
-  if (!el) return ""
-  let out = ""
-  for (const c of el.children) if (c.type === "text") out += c.value
-  return out.trim()
+export function textOf(element: C14nElement | null): string {
+  if (!element) return ""
+  return element.children
+    .filter((child): child is C14nText => child.type === "text")
+    .map((child) => child.value)
+    .join("")
+    .trim()
 }
 
-/** Valor de um atributo (ou ""). */
-export function attrOf(el: C14nElement | null, name: string): string {
-  if (!el) return ""
-  for (const a of el.attrs) if (a.name === name) return a.value
-  return ""
+/** Valor de um atributo (ou string vazia). */
+export function attrOf(element: C14nElement | null, name: string): string {
+  if (!element) return ""
+  return element.attrs.find((attr) => attr.name === name)?.value ?? ""
 }
