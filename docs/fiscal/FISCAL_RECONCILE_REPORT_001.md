@@ -362,26 +362,51 @@ Fonte detalhada: [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](./FISCAL_XSD_GOAL_002
 
 ---
 
-## 17. Atualização pós-reconciliação — GOAL-003 C14N/XMLDSig (15/07/2026)
+## 17. Atualização pós-reconciliação — GOAL-003 C14N/XMLDSig integrado (15/07/2026)
 
 | Campo | Valor |
 |---|---|
-| Evento | conclusão técnica de `FISCAL-XML-C14N-EXTERNAL-PROOF-003` |
-| Base auditada | `origin/main` contém `0b0d374521fca96f99f980bafabc226fa5784c56` |
-| Prova independente | Java 17 / JSR 105; implementação separada do signer TypeScript |
-| Positivos | C14N de `infNFe`, `DigestValue`, C14N de `SignedInfo` e assinatura verificados |
-| Negativos | 11/11 mutações rejeitadas, incluindo conteúdo, namespace, algoritmo, referência e DTD/XXE |
+| Evento | Integração + fechamento documental de `FISCAL-XML-C14N-EXTERNAL-PROOF-003` |
+| PR | #6 |
+| Merge commit | `e52d16b1ad62b5aa82dbd00e734e45af7e17f94c` |
+| HEAD fiscal integrado | `586c13526e940bed8f79df58b0b7886975db84bd` |
+| Run / artefato | `29450960130` / `8357457694` |
+| C14N anterior | **corrigido** — C14N 1.0 inclusivo oficial (não mais “C14N-lite” autoconsistente) |
+| Prova externa | **integrada** — Java 17 / JSR 105; não reutiliza código TypeScript do signer |
+| Signer | **dormente** — zero callers de venda; dry-run/testes apenas |
+| Positivos | C14N de `infNFe`, `DigestValue`, C14N de `SignedInfo` e `SignatureValue` verificados |
+| Negativos | 11/11 mutações rejeitadas (conteúdo, namespace, algoritmo, referência, DTD/XXE, …) |
 | P-05 | **fechado no eixo técnico C14N/XMLDSig**; GOALs históricos 007–008 cumpridos |
 | Nível N | **N4 no eixo C14N/XMLDSig**; N6=0 e N7=0 |
-| Gate técnico F4→F5 | critério C14N/XMLDSig fechado; **gate global ainda aberto** por lacunas não pertencentes ao GOAL-003 |
+| Critério técnico F4→F5 (C14N/XMLDSig) | **FECHADO** |
+| Gate Fiscal global | **ABERTO** (sem inventar G-C3; lacunas fora do GOAL-003) |
+| SEFAZ / homologação / produção | **nenhuma** chamada · **não** homologado · **não** produtivo |
 
-A prova usa somente XML e certificado explicitamente sintéticos, não consulta banco, não chama a
-SEFAZ, não usa certificado fiscal real e não ativa emissão. Não foi criado um gate nomeado novo:
-G-C1/G-C2 permanecem como registrados, e G-F5/G-F7/G-F12 permanecem abertos.
+### O que mudou vs. §8/§9 e §16
 
-O risco P-05 deixa de bloquear o gate por canonicalização/interoperabilidade. Permanecem, entre
-outros, paridade de produto, ST/CSOSN 500, casos-alvo integrais do dry-run, provider real, fila e
-estado incerto. O próximo passo é a merge readiness do GOAL-003; o GOAL-004 não foi iniciado.
+| Achado anterior | Estado pós PR #6 |
+|---|---|
+| C14N irregular / autoconsistente (P-05) | **C14N 1.0 inclusivo + prova externa independente** |
+| F4 apenas N3 interno | **N4 no eixo C14N/XMLDSig** (signer ainda dormente) |
+| Dry-run bloqueado por C14N | Bloqueio C14N **removido**; dry-run **global** ainda aberto por outras lacunas |
+| GOALs históricos 007–008 | **cumpridos no eixo C14N/XMLDSig** |
 
-Fonte detalhada:
-[`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](./FISCAL_XML_C14N_EXTERNAL_PROOF_003.md).
+### Gates atualizados
+
+- **G-C1:** fechado (GOAL-001) — inalterado.
+- **G-C2:** fechado (GOAL-002 XSD) — inalterado.
+- **Critério C14N/XMLDSig do F4→F5:** **fechado** (GOAL-003).
+- Gate Fiscal **global** F4→F5 e G-F5 / G-F7 / G-F12: **abertos**.
+- Homologação SEFAZ e produção: **proibidas** de serem presumidas. Prova externa **≠** homologação.
+
+### O que permanece aberto
+
+- dry-run auferível de ponta a ponta (casos-alvo integrais);
+- paridade `upsertProduto`, ST/CSOSN 500, provider real, fila, DANFCE, QR-Code;
+- política Trivy **HIGH** como follow-up separado;
+- qualquer transmissão SEFAZ;
+- callers produtivos de assinatura / emissão.
+
+Fontes:
+[`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](./FISCAL_XML_C14N_EXTERNAL_PROOF_003.md) ·
+[`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](./FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md).

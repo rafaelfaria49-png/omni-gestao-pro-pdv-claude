@@ -4,7 +4,7 @@ hub: fiscal
 status: vivo
 owner: produto/arquitetura
 last_update: 2026-07-15
-sprint_atual: GOAL-003 C14N/XMLDSig concluído tecnicamente; merge readiness em andamento
+sprint_atual: GOAL-003 C14N/XMLDSig FECHADO (PR #6); gate global F4→F5 ainda aberto
 ---
 
 # 🧾 Roadmap Fiscal — OmniGestão Pro
@@ -22,9 +22,11 @@ sprint_atual: GOAL-003 C14N/XMLDSig concluído tecnicamente; merge readiness em 
 
 > **Fonte factual:** [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
 > fechamento XSD [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
-> prova C14N/XMLDSig [`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](../fiscal/FISCAL_XML_C14N_EXTERNAL_PROOF_003.md).
+> prova C14N/XMLDSig [`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](../fiscal/FISCAL_XML_C14N_EXTERNAL_PROOF_003.md) ·
+> fechamento GOAL-003 [`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](../fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md).
 > O commit `ba0cc12` colocou F2–F4 e o dry-run no código. O merge `82c219c` (PR #4) integrou o
-> worker XSD B2 e `validarXsd` real. **Implementação ≠ homologação ≠ produção.**
+> worker XSD B2. O merge `e52d16b` (PR #6) integrou a prova externa C14N/XMLDSig.
+> **Prova técnica ≠ homologação ≠ produção.**
 
 | Fase | Código/teste | Runtime/banco | Evidência externa | Estado reconciliado |
 |---|---|---|---|---|
@@ -32,7 +34,7 @@ sprint_atual: GOAL-003 C14N/XMLDSig concluído tecnicamente; merge readiness em 
 | F1 | ADR-0009 + EnvVault testado | sem caller; 0 certificados | nenhuma | N3 interno |
 | F2 | tax-engine testado | sem caller | sem contador; sem ST | N3, lacuna CSOSN 500 |
 | F3 | XML/chave + **XSD oficial B2** | worker XSD sob demanda; sem caller de venda | schema oficial versionado; **sem SEFAZ** | **N4 no eixo XSD**; G-C2 **fechado** |
-| F4 | signer endurecido (RSA-SHA1) + C14N 1.0 | sem caller | prova independente Java/JSR 105; mutações negativas | **N4 no eixo C14N/XMLDSig**; P-05 fechado |
+| F4 | signer endurecido (RSA-SHA1) + C14N 1.0 **integrado** | **sem caller de venda** (dormente) | prova Java/JSR 105 + CI PR #6 + artefato | **N4 no eixo C14N/XMLDSig**; P-05 fechado |
 | F5 | contrato + stub | 0 notas; sem provider real | nenhuma SEFAZ | N1 |
 | F6 | ausente | ausente | nenhuma | N0 |
 | F7 | tabela da fila + guards | 0 jobs; sem produtor/worker | nenhuma | N1; ativação proibida |
@@ -42,12 +44,13 @@ sprint_atual: GOAL-003 C14N/XMLDSig concluído tecnicamente; merge readiness em 
 | F11 | ausente | zero evidência | nenhuma | N0; não homologado |
 | F12 | ausente | zero evidência | nenhuma | N0; não produtivo |
 
-**Gates:** G-C1 fechado (GOAL-001) · **G-C2 fechado** (XSD B2) · critério C14N/XMLDSig do gate
-técnico F4→F5 fechado · gate global F4→F5 e G-F5/G-F7/G-F12 ainda abertos.
+**Gates:** G-C1 fechado (GOAL-001) · **G-C2 fechado** (XSD B2) · **critério C14N/XMLDSig do gate
+técnico F4→F5 = FECHADO** (GOAL-003, PR #6) · gate Fiscal **global** F4→F5 e G-F5/G-F7/G-F12
+**ainda abertos**. Não existe G-C3.
 
-Próximo passo: **merge readiness documental e de CI do GOAL-003**. O GOAL-004 não foi iniciado.
-Backlog de cadastro (paridade `upsertProduto`) permanece distinto. Somente o GOAL 022 poderá
-construir ativação, restrita a `HOMOLOGACAO` e sujeita a G-F7.
+**GOAL-003:** **FECHADO** (implementação + merge + fechamento documental). GOAL-004 **não**
+iniciado. Backlog de cadastro (paridade `upsertProduto`) permanece distinto. Somente o GOAL 022
+poderá construir ativação, restrita a `HOMOLOGACAO` e sujeita a G-F7.
 
 ---
 
@@ -174,21 +177,22 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
 
 ## 11. Sprint atual
 
-**GOAL-003 C14N/XMLDSig (`FISCAL-XML-C14N-EXTERNAL-PROOF-003`) concluído tecnicamente em
-15/07/2026** — prova Java/JSR 105 independente, 16/16 testes e 11/11 mutações negativas. F1 segue
-resolvida pela ADR-0009; F3 tem validação XSD real (N4 no eixo) e F4 alcança N4 no eixo
-C14N/XMLDSig. O próximo passo é merge readiness do próprio GOAL-003; GOAL-004 não foi iniciado.
+**GOAL-003 C14N/XMLDSig (`FISCAL-XML-C14N-EXTERNAL-PROOF-003`) FECHADO em 15/07/2026** — integrado
+na `main` pelo PR #6 (`e52d16b`); prova Java/JSR 105 independente; 16/16 provas externas;
+workflow e artefato do PR verdes. F1 segue resolvida pela ADR-0009; F3 tem validação XSD real
+(N4 no eixo XSD) e F4 alcança N4 no eixo C14N/XMLDSig com signer **dormente**. Próximo passo:
+avaliação do GOAL seguinte (dry-run auferível / backlog); **GOAL-004 não iniciado**.
 Homologação e produção **não** foram abertas.
 
 ## 12. Status atual (1 parágrafo)
 
-A frente fiscal tem fundação dormente com **validação XSD oficial real** (worker B2, fail-closed,
-pacote `PL_010e_v1.02`, CI verde, G-C2 fechado). Schema, identidade, guards, snapshot, tax-engine,
-XML, assinatura (RSA-SHA1), vault, provider stub, pipeline e numeração existem; seis guards estão em
-rotas reais, mas o motor de emissão **não tem caller**; banco fiscal vazio; `fiscalEnabled`
-inalcançável. O critério C14N/XMLDSig do gate técnico F4→F5 foi fechado, mas o gate global ainda
-**não** está completo por lacunas não pertencentes ao GOAL-003. **N6=0 e N7=0.**
-Sequência oficial em `docs/fiscal/`.
+A frente fiscal tem fundação dormente com **validação XSD oficial real** (worker B2, G-C2) e
+**prova técnica externa de C14N/XMLDSig** (PR #6, critério C14N do F4→F5 fechado). Schema,
+identidade, guards, snapshot, tax-engine, XML, assinatura (RSA-SHA1), vault, provider stub,
+pipeline e numeração existem; o motor de emissão **não tem caller de venda**; banco fiscal vazio;
+`fiscalEnabled` inalcançável. O gate Fiscal **global** ainda **não** autoriza F5 (lacunas fora do
+GOAL-003). **Prova técnica ≠ homologação ≠ produção. N6=0 e N7=0.** Sequência oficial em
+`docs/fiscal/`.
 
 ## 13. Métricas de sucesso
 
