@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { prisma, prismaEnsureConnected } from "@/lib/prisma"
 import { requireOpsSubscription, opsLojaIdFromRequest } from "@/lib/ops-api-gate"
+import { auth } from "@/auth"
+import { canAccessStore } from "@/lib/auth/enterprise-permissions"
 import type { PaymentBreakdownFull, SaleLineRecord, SaleRecord } from "@/lib/operations-sale-types"
 
 export const runtime = "nodejs"
@@ -63,14 +65,21 @@ function saleFromDbRow(r: {
 }
 
 export async function GET(req: Request) {
+  // Autorização de loja (padrão da rota irmã `/api/ops/inventory`): sessão NextAuth →
+  // resolução da loja → ACL da loja → assinatura. `storeId` de query/header/cookie é apenas
+  // seleção, nunca autorização. Assinatura válida sem sessão/ACL não libera leitura (IDOR).
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 })
+
+  const lojaId = opsLojaIdFromRequest(req)
+  if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
+  if (!canAccessStore(session, lojaId)) return NextResponse.json({ error: "Sem acesso à loja" }, { status: 403 })
+
   const gate = await requireOpsSubscription()
   if (!gate.ok) {
     const dev = process.env.NODE_ENV === "development"
     if (!dev) return gate.res
   }
-
-  const lojaId = opsLojaIdFromRequest(req)
-  if (!lojaId) return NextResponse.json({ error: "storeId obrigatório" }, { status: 400 })
 
   try {
     await prismaEnsureConnected()
