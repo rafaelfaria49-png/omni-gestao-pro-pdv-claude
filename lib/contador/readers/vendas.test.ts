@@ -85,6 +85,24 @@ describe("agregarVendas", () => {
     expect(r.formaPagamentoDisponibilidade).toBe("parcial")
     expect(r.naoIdentificadoQuantidade.valor).toBe(1)
     expect(r.naoIdentificadoValor.valor).toBe(40)
+    expect(r.divergenciaPagamentoQuantidade.valor).toBe(1)
+    expect(r.divergenciaPagamentoValor.valor).toBe(40)
+  })
+
+  it("quantifica breakdown conhecido acima de Venda.total", () => {
+    const r = agregarVendas([{ total: 100, status: "concluida", payload: pb({ pix: 120 }) }])
+    expect(r.formaPagamentoDisponibilidade).toBe("parcial")
+    expect(r.naoIdentificadoQuantidade.valor).toBe(1)
+    expect(r.divergenciaPagamentoQuantidade.valor).toBe(1)
+    expect(r.divergenciaPagamentoValor.valor).toBe(20)
+  })
+
+  it("quantifica breakdown desconhecido acima de Venda.total sem inflar o faturamento", () => {
+    const r = agregarVendas([{ total: 100, status: "concluida", payload: pb({ boleto: 120 }) }])
+    expect(r.total.valor).toBe(100)
+    expect(r.formaPagamentoDisponibilidade).toBe("parcial")
+    expect(r.naoIdentificadoValor.valor).toBe(100)
+    expect(r.divergenciaPagamentoValor.valor).toBe(20)
   })
 
   it("reconhece o formato histórico cartao como débito sem perder disponibilidade", () => {

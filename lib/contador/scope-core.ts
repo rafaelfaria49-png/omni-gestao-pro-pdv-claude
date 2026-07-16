@@ -11,22 +11,35 @@ declare const CONTADOR_SCOPE_VALIDADO: unique symbol
 export type ContadorScopeInterno = Readonly<{
   ok: true
   storeId: string
+  userId: string
+  permissaoFinanceiro: true
   [CONTADOR_SCOPE_VALIDADO]: true
 }>
 
-export type EscopoContador =
-  | ContadorScopeInterno
-  | {
-      ok: false
-      motivo: "nao_autenticado" | "loja_ausente" | "sem_acesso_loja" | "sem_permissao"
-    }
+export type FalhaEscopoContador = Readonly<{
+  ok: false
+  motivo: "nao_autenticado" | "loja_ausente" | "sem_acesso_loja" | "sem_permissao"
+}>
+
+export type AvaliacaoAcessoContador =
+  | Readonly<{
+      ok: true
+      storeId: string
+      userId: string
+      permissaoFinanceiro: true
+    }>
+  | FalhaEscopoContador
+
+export type EscopoContador = ContadorScopeInterno | FalhaEscopoContador
 
 /** Avaliação pura de escopo/ACL da loja ativa para o Contador HUB interno. */
-export function avaliarEscopoContador(
+export function avaliarAcessoContador(
   session: Session | null,
   storeIdSelecionado: string | null | undefined,
-): EscopoContador {
+): AvaliacaoAcessoContador {
   if (!session?.user) return { ok: false, motivo: "nao_autenticado" }
+  const userId = String(session.user.id ?? "").trim()
+  if (!userId) return { ok: false, motivo: "nao_autenticado" }
   const storeId = (storeIdSelecionado ?? "").trim()
   if (!storeId) return { ok: false, motivo: "loja_ausente" }
   if (!canAccessStore(session, storeId)) return { ok: false, motivo: "sem_acesso_loja" }
@@ -34,6 +47,6 @@ export function avaliarEscopoContador(
     return { ok: false, motivo: "sem_permissao" }
   }
 
-  // O brand existe apenas no sistema de tipos; o valor serializavel nao vaza detalhes de ACL.
-  return Object.freeze({ ok: true, storeId }) as ContadorScopeInterno
+  // Decisao serializavel e ainda nao nominal; somente o gate com IO aplica o brand interno.
+  return Object.freeze({ ok: true, storeId, userId, permissaoFinanceiro: true })
 }

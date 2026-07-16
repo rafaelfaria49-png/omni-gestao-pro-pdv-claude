@@ -148,6 +148,18 @@ export function VisaoGeralReal({ dados }: { dados: ContadorDadosReais }) {
           disponibilidade={financeiro.saidasRealizadas.disponibilidade}
         />
         <Metric
+          label="Transferências internas"
+          value={fmtMoney(financeiro.transferencias)}
+          disponibilidade={financeiro.transferencias.disponibilidade}
+          observacao="Volume neutro no resultado econômico"
+        />
+        <Metric
+          label="Movimentos não classificados"
+          value={fmtMoney(financeiro.naoClassificados)}
+          disponibilidade={financeiro.naoClassificados.disponibilidade}
+          observacao={financeiro.naoClassificados.observacao}
+        />
+        <Metric
           label="A receber (aberto)"
           value={fmtMoney(financeiro.titulosReceberAberto)}
           disponibilidade={financeiro.titulosReceberAberto.disponibilidade}
@@ -259,6 +271,13 @@ export function RelatoriosReal({ dados }: { dados: ContadorDadosReais }) {
                 disp={vendas.naoIdentificadoValor.disponibilidade}
               />
             ) : null}
+            {(vendas.divergenciaPagamentoQuantidade.valor ?? 0) > 0 ? (
+              <LinhaKv
+                label="Divergência do breakdown"
+                value={`${fmtMoney(vendas.divergenciaPagamentoValor)} · ${fmtNum(vendas.divergenciaPagamentoQuantidade)} venda(s)`}
+                disp={vendas.divergenciaPagamentoValor.disponibilidade}
+              />
+            ) : null}
           </>
         )}
       </Bloco>
@@ -277,6 +296,16 @@ export function RelatoriosReal({ dados }: { dados: ContadorDadosReais }) {
         <LinhaKv label="Entradas" value={fmtMoney(financeiro.entradasRealizadas)} disp={financeiro.entradasRealizadas.disponibilidade} />
         <LinhaKv label="Saídas" value={fmtMoney(financeiro.saidasRealizadas)} disp={financeiro.saidasRealizadas.disponibilidade} />
         <LinhaKv label="Estornos (à parte)" value={fmtMoney(financeiro.estornos)} disp={financeiro.estornos.disponibilidade} />
+        <LinhaKv
+          label="Transferências internas (volume)"
+          value={`${fmtMoney(financeiro.transferencias)} · ${fmtNum(financeiro.transferenciasQuantidade)}`}
+          disp={financeiro.transferencias.disponibilidade}
+        />
+        <LinhaKv
+          label="Não classificados"
+          value={`${fmtMoney(financeiro.naoClassificados)} · ${fmtNum(financeiro.naoClassificadosQuantidade)}`}
+          disp={financeiro.naoClassificados.disponibilidade}
+        />
       </Bloco>
 
       <Bloco title="Títulos em aberto (posição na competência)">

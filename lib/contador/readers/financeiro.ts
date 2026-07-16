@@ -37,7 +37,7 @@ const STATUS_TITULO_FECHADO = new Set([
   "cancelada",
 ])
 
-export type MovimentacaoRow = { tipo: string; origem: string; valor: number }
+export type MovimentacaoRow = { tipo: string; origem: string | null; valor: number }
 export type TituloRow = { valor: number; status: string; vencimento: string }
 
 function numeroFinito(v: unknown): number {
@@ -54,9 +54,7 @@ function dataCalendarioValida(ano: number, mes: number, dia: number): boolean {
 /** Parse estrito de vencimento real (`YYYY-MM-DD` ou `DD/MM/YYYY`). */
 export function parseVencimento(venc: string): { ano: number; mes: number } | null {
   if (typeof venc !== "string") return null
-  const valor = venc.trim()
-
-  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor)
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(venc)
   if (iso) {
     const ano = Number(iso[1])
     const mes = Number(iso[2])
@@ -64,7 +62,7 @@ export function parseVencimento(venc: string): { ano: number; mes: number } | nu
     return dataCalendarioValida(ano, mes, dia) ? { ano, mes } : null
   }
 
-  const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(valor)
+  const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(venc)
   if (br) {
     const dia = Number(br[1])
     const mes = Number(br[2])
@@ -84,6 +82,37 @@ function isOrigemReversao(origem: string): boolean {
     isOrigemDevolucaoPdv(normalizada) ||
     normalizada === "cancelamento_pdv"
   )
+}
+
+type ClassificacaoMovimento =
+  | "entrada"
+  | "saida"
+  | "estorno"
+  | "transferencia"
+  | "nao_classificado"
+
+const ORIGENS_ENTRADA = new Set(["venda", "pdv", "os", "marketplace"])
+const ORIGENS_BIDIRECIONAIS = new Set(["manual", "ajuste", "importacao", "sistema", "legado"])
+
+/** `tipo` somente decide a direcao depois que a origem passa pela allowlist. */
+function classificarMovimento(m: MovimentacaoRow): ClassificacaoMovimento {
+  const origem = (m.origem ?? "").toLowerCase().trim()
+  const tipo = (m.tipo ?? "").toLowerCase().trim()
+
+  if (isOrigemReversao(origem)) return "estorno"
+  if (isOrigemTransferenciaInterna(origem)) return "transferencia"
+  if (ORIGENS_ENTRADA.has(origem)) return tipo === "entrada" ? "entrada" : "nao_classificado"
+  if (origem === "receber" || origem.startsWith("receber_")) {
+    return tipo === "entrada" ? "entrada" : "nao_classificado"
+  }
+  if (origem === "pagar" || origem.startsWith("pagar_")) {
+    return tipo === "saida" ? "saida" : "nao_classificado"
+  }
+  if (ORIGENS_BIDIRECIONAIS.has(origem)) {
+    if (tipo === "entrada") return "entrada"
+    if (tipo === "saida") return "saida"
+  }
+  return "nao_classificado"
 }
 
 function agregarTitulos(
@@ -134,18 +163,24 @@ export function agregarFinanceiro(input: {
   let entradas = 0
   let saidas = 0
   let estornos = 0
+  let transferencias = 0
+  let transferenciasQuantidade = 0
+  let naoClassificados = 0
+  let naoClassificadosQuantidade = 0
 
   for (const m of input.movimentacoes) {
-    const origem = (m.origem ?? "").toLowerCase().trim()
-    const tipo = (m.tipo ?? "").toLowerCase().trim()
     const valor = numeroFinito(m.valor)
-    if (isOrigemReversao(origem)) {
-      estornos += valor
-      continue
+    const classificacao = classificarMovimento(m)
+    if (classificacao === "entrada") entradas += valor
+    else if (classificacao === "saida") saidas += valor
+    else if (classificacao === "estorno") estornos += valor
+    else if (classificacao === "transferencia") {
+      transferencias += valor
+      transferenciasQuantidade += 1
+    } else {
+      naoClassificados += valor
+      naoClassificadosQuantidade += 1
     }
-    if (isOrigemTransferenciaInterna(origem)) continue
-    if (tipo === "entrada") entradas += valor
-    else if (tipo === "saida") saidas += valor
   }
 
   const cr = agregarTitulos(input.receber, input.competencia, FONTE_CR)
@@ -156,6 +191,28 @@ export function agregarFinanceiro(input: {
     entradasRealizadas: monetarioReal(entradas, FONTE_MOV, obsMov),
     saidasRealizadas: monetarioReal(saidas, FONTE_MOV, obsMov),
     estornos: monetarioReal(estornos, FONTE_MOV, "Classificado à parte; fora de entradas/saídas."),
+    transferencias: monetarioReal(
+      transferencias,
+      FONTE_MOV,
+      "Volume das pernas de transferencias internas; neutro no resultado economico.",
+    ),
+    transferenciasQuantidade: numericoReal(transferenciasQuantidade, FONTE_MOV),
+    naoClassificados:
+      naoClassificadosQuantidade === 0
+        ? monetarioReal(0, FONTE_MOV)
+        : monetarioParcial(
+            naoClassificados,
+            FONTE_MOV,
+            "Origens fora da allowlist economica; nao incorporadas a entradas/saidas.",
+          ),
+    naoClassificadosQuantidade:
+      naoClassificadosQuantidade === 0
+        ? numericoReal(0, FONTE_MOV)
+        : numericoParcial(
+            naoClassificadosQuantidade,
+            FONTE_MOV,
+            "Origens fora da allowlist economica.",
+          ),
     titulosReceberAberto: cr.total,
     titulosReceberQuantidade: cr.quantidade,
     titulosPagarAberto: cp.total,

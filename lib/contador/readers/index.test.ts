@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest"
 import type { Session } from "next-auth"
 import { resolvePeriodoUtc } from "@/lib/contador/competencia"
-import { avaliarEscopoContador, type ContadorScopeInterno } from "@/lib/contador/scope-core"
+import { avaliarAcessoContador, type ContadorScopeInterno } from "@/lib/contador/scope-core"
 import {
   carregarFontesComCliente,
   montarDados,
   type ContadorReaderClient,
+  type FonteContador,
   type FontesContador,
 } from "./index"
 
@@ -28,15 +29,16 @@ function scopeValido(
 ): ContadorScopeInterno {
   const session = {
     user: {
+      id: "user-reader-test",
       role: "ADMIN",
       storeAccess,
       allowedStoreIds: storeAccess === "restricted" ? [storeId] : [],
     },
     expires: "2999-01-01",
   } as unknown as Session
-  const scope = avaliarEscopoContador(session, storeId)
+  const scope = avaliarAcessoContador(session, storeId)
   if (!scope.ok) throw new Error(`scope de teste inválido: ${scope.motivo}`)
-  return scope
+  return scope as ContadorScopeInterno
 }
 
 function clienteVazio(): ContadorReaderClient {
@@ -168,5 +170,181 @@ describe("carregarFontesComCliente (fronteiras Prisma)", () => {
     expect(fontes.vendas).toHaveLength(1)
     expect(fontes.falhas).toEqual(["movimentacoes"])
     expect(JSON.stringify(montarDados(fontes, competencia))).not.toContain("detalhe interno")
+  })
+})
+
+type DelegateContador = keyof ContadorReaderClient
+
+function substituirFindMany(
+  db: ContadorReaderClient,
+  delegate: DelegateContador,
+  fn: (args: Record<string, unknown>) => Promise<unknown[]>,
+) {
+  ;(db[delegate] as { findMany: (args: Record<string, unknown>) => Promise<unknown[]> }).findMany = vi.fn(fn)
+}
+
+const CASOS_CROSS_STORE: readonly {
+  nome: string
+  delegate: DelegateContador
+  fonte: Exclude<FonteContador, never>
+  rows: readonly { storeId: string; dado: unknown }[]
+  esperado: unknown
+}[] = [
+  {
+    nome: "Venda",
+    delegate: "venda",
+    fonte: "vendas",
+    rows: [
+      { storeId: "loja-a", dado: { total: 11, status: "concluida", payload: { paymentBreakdown: { pix: 11 } } } },
+      { storeId: "loja-b", dado: { total: 911, status: "concluida", payload: { paymentBreakdown: { pix: 911 } } } },
+    ],
+    esperado: { total: 11, status: "concluida", payload: { paymentBreakdown: { pix: 11 } } },
+  },
+  {
+    nome: "DevolucaoVenda",
+    delegate: "devolucaoVenda",
+    fonte: "devolucoes",
+    rows: [
+      { storeId: "loja-a", dado: { valorTotal: 12 } },
+      { storeId: "loja-b", dado: { valorTotal: 912 } },
+    ],
+    esperado: { valorTotal: 12 },
+  },
+  {
+    nome: "MovimentacaoFinanceira",
+    delegate: "movimentacaoFinanceira",
+    fonte: "movimentacoes",
+    rows: [
+      { storeId: "loja-a", dado: { tipo: "entrada", origem: "venda", valor: 13 } },
+      { storeId: "loja-b", dado: { tipo: "entrada", origem: "venda", valor: 913 } },
+    ],
+    esperado: { tipo: "entrada", origem: "venda", valor: 13 },
+  },
+  {
+    nome: "ContaReceberTitulo",
+    delegate: "contaReceberTitulo",
+    fonte: "receber",
+    rows: [
+      { storeId: "loja-a", dado: { valor: 14, status: "pendente", vencimento: "2026-06-14" } },
+      { storeId: "loja-b", dado: { valor: 914, status: "pendente", vencimento: "2026-06-14" } },
+    ],
+    esperado: { valor: 14, status: "pendente", vencimento: "2026-06-14" },
+  },
+  {
+    nome: "ContaPagarTitulo",
+    delegate: "contaPagarTitulo",
+    fonte: "pagar",
+    rows: [
+      { storeId: "loja-a", dado: { valor: 15, status: "pendente", vencimento: "2026-06-15" } },
+      { storeId: "loja-b", dado: { valor: 915, status: "pendente", vencimento: "2026-06-15" } },
+    ],
+    esperado: { valor: 15, status: "pendente", vencimento: "2026-06-15" },
+  },
+  {
+    nome: "SessaoCaixa",
+    delegate: "sessaoCaixa",
+    fonte: "sessoes",
+    rows: [
+      { storeId: "loja-a", dado: { status: "fechada", saldoFinal: 16, saldoContado: 17 } },
+      { storeId: "loja-b", dado: { status: "aberta", saldoFinal: 916, saldoContado: 917 } },
+    ],
+    esperado: { status: "fechada", saldoFinal: 16, saldoContado: 17 },
+  },
+  {
+    nome: "CaixaOperacao",
+    delegate: "caixaOperacao",
+    fonte: "operacoes",
+    rows: [
+      { storeId: "loja-a", dado: { tipo: "sangria", valor: 18 } },
+      { storeId: "loja-b", dado: { tipo: "suprimento", valor: 918 } },
+    ],
+    esperado: { tipo: "sangria", valor: 18 },
+  },
+]
+
+describe("isolamento cross-store A/B por query", () => {
+  it.each(CASOS_CROSS_STORE)("$nome retorna somente a fixture da loja A", async (caso) => {
+    const db = clienteVazio()
+    substituirFindMany(db, caso.delegate, async (args) => {
+      const storeId = (args.where as { storeId: string }).storeId
+      return caso.rows.filter((row) => row.storeId === storeId).map((row) => row.dado)
+    })
+
+    const fontes = await carregarFontesComCliente(scopeValido("loja-a"), resolvePeriodoUtc(competencia), db)
+    expect(fontes[caso.fonte]).toEqual([caso.esperado])
+    expect(primeiraChamada(db[caso.delegate].findMany).where.storeId).toBe("loja-a")
+  })
+})
+
+const CASOS_TEMPORAIS: readonly {
+  nome: string
+  delegate: DelegateContador
+  fonte: "vendas" | "devolucoes" | "movimentacoes" | "sessoes" | "operacoes"
+  campo: "at" | "createdAt" | "abertaEm"
+  dado: (marcador: number) => unknown
+}[] = [
+  { nome: "Venda.at", delegate: "venda", fonte: "vendas", campo: "at", dado: (n) => ({ total: n, status: "concluida", payload: null }) },
+  { nome: "DevolucaoVenda.at", delegate: "devolucaoVenda", fonte: "devolucoes", campo: "at", dado: (n) => ({ valorTotal: n }) },
+  { nome: "MovimentacaoFinanceira.createdAt", delegate: "movimentacaoFinanceira", fonte: "movimentacoes", campo: "createdAt", dado: (n) => ({ tipo: "entrada", origem: "venda", valor: n }) },
+  { nome: "SessaoCaixa.abertaEm", delegate: "sessaoCaixa", fonte: "sessoes", campo: "abertaEm", dado: (n) => ({ status: "fechada", saldoFinal: n, saldoContado: n }) },
+  { nome: "CaixaOperacao.at", delegate: "caixaOperacao", fonte: "operacoes", campo: "at", dado: (n) => ({ tipo: "sangria", valor: n }) },
+]
+
+describe("fronteiras temporais semiabertas por query", () => {
+  it.each(CASOS_TEMPORAIS)("$nome inclui inicio/fim-1 e exclui inicio-1/fim", async (caso) => {
+    const periodo = resolvePeriodoUtc(competencia)
+    const eventos = [
+      { instante: new Date(periodo.inicio.getTime() - 1), dado: caso.dado(1) },
+      { instante: periodo.inicio, dado: caso.dado(2) },
+      { instante: new Date(periodo.fimExclusivo.getTime() - 1), dado: caso.dado(3) },
+      { instante: periodo.fimExclusivo, dado: caso.dado(4) },
+    ]
+    const db = clienteVazio()
+    substituirFindMany(db, caso.delegate, async (args) => {
+      const where = args.where as Record<string, unknown>
+      const faixa = where[caso.campo] as { gte: Date; lt: Date }
+      return eventos
+        .filter((evento) => evento.instante >= faixa.gte && evento.instante < faixa.lt)
+        .map((evento) => evento.dado)
+    })
+
+    const fontes = await carregarFontesComCliente(scopeValido(), periodo, db)
+    expect(fontes[caso.fonte]).toEqual([caso.dado(2), caso.dado(3)])
+    expect(primeiraChamada(db[caso.delegate].findMany).where[caso.campo]).toEqual({
+      gte: periodo.inicio,
+      lt: periodo.fimExclusivo,
+    })
+  })
+})
+
+const CASOS_FALHA: readonly {
+  nome: string
+  delegate: DelegateContador
+  fonte: FonteContador
+  disponibilidade: (dto: ReturnType<typeof montarDados>) => string
+}[] = [
+  { nome: "Venda", delegate: "venda", fonte: "vendas", disponibilidade: (d) => d.vendas.total.disponibilidade },
+  { nome: "DevolucaoVenda", delegate: "devolucaoVenda", fonte: "devolucoes", disponibilidade: (d) => d.devolucoes.total.disponibilidade },
+  { nome: "MovimentacaoFinanceira", delegate: "movimentacaoFinanceira", fonte: "movimentacoes", disponibilidade: (d) => d.financeiro.entradasRealizadas.disponibilidade },
+  { nome: "ContaReceberTitulo", delegate: "contaReceberTitulo", fonte: "receber", disponibilidade: (d) => d.financeiro.titulosReceberAberto.disponibilidade },
+  { nome: "ContaPagarTitulo", delegate: "contaPagarTitulo", fonte: "pagar", disponibilidade: (d) => d.financeiro.titulosPagarAberto.disponibilidade },
+  { nome: "SessaoCaixa", delegate: "sessaoCaixa", fonte: "sessoes", disponibilidade: (d) => d.caixa.sessoes.disponibilidade },
+  { nome: "CaixaOperacao", delegate: "caixaOperacao", fonte: "operacoes", disponibilidade: (d) => d.caixa.sangriasTotal.disponibilidade },
+]
+
+describe("falha parcial isolada por fonte", () => {
+  it.each(CASOS_FALHA)("$nome falha sem cancelar as outras seis fontes", async (caso) => {
+    const db = clienteVazio()
+    substituirFindMany(db, caso.delegate, async () => {
+      throw new Error(`segredo interno ${caso.nome}`)
+    })
+
+    const fontes = await carregarFontesComCliente(scopeValido(), resolvePeriodoUtc(competencia), db)
+    const dto = montarDados(fontes, competencia)
+    expect(fontes.falhas).toEqual([caso.fonte])
+    expect(caso.disponibilidade(dto)).toBe("indisponivel")
+    if (caso.fonte === "vendas") expect(dto.financeiro.entradasRealizadas.disponibilidade).toBe("real")
+    else expect(dto.vendas.total.disponibilidade).toBe("real")
+    expect(JSON.stringify(dto)).not.toContain("segredo interno")
   })
 })

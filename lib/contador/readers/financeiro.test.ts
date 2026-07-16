@@ -17,6 +17,8 @@ describe("parseVencimento", () => {
     expect(parseVencimento("00/06/2026")).toBeNull()
     expect(parseVencimento("2026-06-20T00:00:00Z")).toBeNull()
     expect(parseVencimento("20/06/2026 extra")).toBeNull()
+    expect(parseVencimento(" 2026-06-20 ")).toBeNull()
+    expect(parseVencimento(" 20/06/2026 ")).toBeNull()
   })
 })
 
@@ -36,6 +38,47 @@ describe("agregarFinanceiro", () => {
     expect(r.entradasRealizadas.valor).toBe(150)
     expect(r.saidasRealizadas.valor).toBe(40)
     expect(r.estornos.valor).toBe(65)
+    expect(r.transferencias.valor).toBe(999)
+    expect(r.transferenciasQuantidade.valor).toBe(1)
+    expect(r.naoClassificados.valor).toBe(0)
+  })
+
+  it("origens desconhecidas, nulas ou vazias nunca herdam tipo economico", () => {
+    const r = agregarFinanceiro({
+      movimentacoes: [
+        { tipo: "entrada", origem: "origem_futura", valor: 100 },
+        { tipo: "saida", origem: "origem_futura", valor: 50 },
+        { tipo: "entrada", origem: null, valor: 20 },
+        { tipo: "saida", origem: "", valor: 10 },
+        { tipo: "saida", origem: "venda", valor: 5 },
+      ],
+      receber: [],
+      pagar: [],
+      competencia: comp,
+    })
+    expect(r.entradasRealizadas.valor).toBe(0)
+    expect(r.saidasRealizadas.valor).toBe(0)
+    expect(r.naoClassificados).toMatchObject({ valor: 185, disponibilidade: "parcial" })
+    expect(r.naoClassificadosQuantidade.valor).toBe(5)
+  })
+
+  it("allowlist cobre familias derivadas e origens bidirecionais confirmadas", () => {
+    const r = agregarFinanceiro({
+      movimentacoes: [
+        { tipo: "entrada", origem: "receber_parcial", valor: 30 },
+        { tipo: "saida", origem: "pagar_parcial", valor: 12 },
+        { tipo: "entrada", origem: "marketplace", valor: 8 },
+        { tipo: "entrada", origem: "manual", valor: 7 },
+        { tipo: "saida", origem: "ajuste", valor: 3 },
+        { tipo: "entrada", origem: "legado", valor: 2 },
+      ],
+      receber: [],
+      pagar: [],
+      competencia: comp,
+    })
+    expect(r.entradasRealizadas.valor).toBe(47)
+    expect(r.saidasRealizadas.valor).toBe(15)
+    expect(r.naoClassificadosQuantidade.valor).toBe(0)
   })
 
   it("soma apenas títulos abertos com vencimento válido na competência", () => {
