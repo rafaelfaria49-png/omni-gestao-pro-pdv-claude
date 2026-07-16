@@ -109,7 +109,10 @@ export function agregarVendas(rows: readonly VendaRow[]): VendasContador {
   let naoIdentificadasQtd = 0
   let naoIdentificadoValor = 0
   let divergenciaPagamentoQtd = 0
-  let divergenciaPagamentoValor = 0
+  let totalBreakdown = 0
+  let residualNaoIdentificado = 0
+  let excedenteBreakdown = 0
+  let reconciliacaoInsegura = false
 
   for (const r of validas) {
     const totalVenda = Math.max(0, numeroFinito(r.total) ?? 0)
@@ -117,6 +120,7 @@ export function agregarVendas(rows: readonly VendaRow[]): VendasContador {
     if (!pb) {
       naoIdentificadasQtd += 1
       naoIdentificadoValor += totalVenda
+      residualNaoIdentificado += totalVenda
       continue
     }
 
@@ -128,11 +132,19 @@ export function agregarVendas(rows: readonly VendaRow[]): VendasContador {
       }
     }
 
+    const totalDeclarado = pb.somaConhecida + pb.somaDesconhecida
+    totalBreakdown += totalDeclarado
     const residual = Math.max(0, totalVenda - pb.somaConhecida)
-    const divergencia = Math.abs(totalVenda - (pb.somaConhecida + pb.somaDesconhecida))
+    const residualBruto = Math.max(0, totalVenda - totalDeclarado)
+    const excedenteBruto = Math.max(0, totalDeclarado - totalVenda)
+    const residualDirecional = residualBruto > TOLERANCIA_CENTAVO ? residualBruto : 0
+    const excedenteDirecional = excedenteBruto > TOLERANCIA_CENTAVO ? excedenteBruto : 0
+    const divergencia = residualDirecional + excedenteDirecional
+    residualNaoIdentificado += residualDirecional
+    excedenteBreakdown += excedenteDirecional
+    reconciliacaoInsegura ||= pb.temValorInvalido
     if (divergencia > TOLERANCIA_CENTAVO) {
       divergenciaPagamentoQtd += 1
-      divergenciaPagamentoValor += divergencia
     }
     const reconciliado = Math.abs(totalVenda - pb.somaConhecida) <= TOLERANCIA_CENTAVO
     const incompleto =
@@ -216,13 +228,16 @@ export function agregarVendas(rows: readonly VendaRow[]): VendasContador {
             "Venda.payload.paymentBreakdown",
             "Breakdown declarado difere de Venda.total.",
           ),
-    divergenciaPagamentoValor:
-      divergenciaPagamentoQtd === 0
-        ? monetarioReal(0, "Venda.payload.paymentBreakdown")
-        : monetarioParcial(
-            divergenciaPagamentoValor,
-            "Venda.payload.paymentBreakdown",
-            "Soma das divergencias absolutas, inclusive valores acima de Venda.total.",
-          ),
+    reconciliacaoPagamento: Object.freeze({
+      totalVendas: arred(total),
+      totalBreakdown: arred(totalBreakdown),
+      residualNaoIdentificado: arred(residualNaoIdentificado),
+      excedenteBreakdown: arred(excedenteBreakdown),
+      divergenciaAbsoluta: arred(residualNaoIdentificado + excedenteBreakdown),
+      reconciliado:
+        !reconciliacaoInsegura &&
+        residualNaoIdentificado <= TOLERANCIA_CENTAVO &&
+        excedenteBreakdown <= TOLERANCIA_CENTAVO,
+    }),
   })
 }

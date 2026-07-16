@@ -15,6 +15,7 @@ import { dirname, join } from "node:path"
 const DIR = dirname(fileURLToPath(import.meta.url))
 
 const hubSrc = readFileSync(join(DIR, "contador-hub-preview.tsx"), "utf8")
+const realSrc = readFileSync(join(DIR, "contador-dados-reais.tsx"), "utf8")
 const dataSrc = readFileSync(join(DIR, "contador-preview-data.ts"), "utf8")
 const legacySrc = readFileSync(join(DIR, "area-contador-pro.tsx"), "utf8")
 
@@ -57,6 +58,14 @@ describe("Contador HUB — banner global e persistente (Passo 1)", () => {
 describe("Contador HUB — competência em experiência híbrida (GOAL 006B)", () => {
   it("o aviso limita o efeito da competência aos blocos reais", () => {
     expect(norm(hubSrc)).toContain("a competência selecionada altera somente os blocos reais.")
+  })
+})
+
+describe("Contador HUB — reconciliação direcional de pagamentos (GOAL 006D)", () => {
+  it("Relatórios separa residual não identificado de excedente informado", () => {
+    expect(realSrc).toContain('label="Residual não identificado"')
+    expect(realSrc).toContain('label="Excedente informado no breakdown"')
+    expect(realSrc).not.toContain('label="Divergência do breakdown"')
   })
 })
 

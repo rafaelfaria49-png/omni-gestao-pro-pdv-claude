@@ -1,11 +1,11 @@
 ---
 title: Contador HUB — Dados Reais (read-only) · GOAL 006
-goal: CONTADOR-HUB-DADOS-REAIS-READONLY-006 + 006B-FIX-BLOCKERS + 006C-FINAL-BLOCKERS
-status: entregue · bloqueadores finais de merge corrigidos
+goal: CONTADOR-HUB-DADOS-REAIS-READONLY-006 + 006B + 006C + 006D-FINAL-CONTRACT-EVIDENCE
+status: entregue · contrato direcional e evidências finais versionadas
 base: origin/main = 50c1db8 (contém GOAL 004 = 066e9f2 · GOAL 005 = 50c1db8)
 branch: goal/contador-006-dados-reais
 escopo: auditoria de fontes + readers Prisma read-only + realificação parcial (Visão Geral + Relatórios básicos)
-last_update: 2026-07-15
+last_update: 2026-07-16
 ---
 
 # Contador HUB · Dados Reais (read-only) — GOAL 006
@@ -67,9 +67,11 @@ testado para `all`, `restricted`, falta de sessão/loja/permissão e cross-store
    **"não identificado"** (quantidade e valor reportados) e disponibilidade parcial; nunca
    permanece `real` escondendo uma forma nova. Não usa `MovimentacaoFinanceira` para quebrar
    a mesma venda. O alias histórico real `cartao` é reconhecido como `cartaoDebito`, alinhado
-   ao normalizador legado da plataforma. A divergência absoluta entre a soma declarada e
-   `Venda.total` também é quantificada; isso cobre breakdown abaixo e acima do total sem
-   inflar o faturamento.
+   ao normalizador legado da plataforma. A reconciliação é direcional e expõe, separadamente,
+   `residualNaoIdentificado` (breakdown abaixo da venda) e `excedenteBreakdown` (breakdown
+   acima da venda), além dos totais e da divergência absoluta. Os valores são calculados por
+   venda antes da soma: residual de uma venda nunca compensa excedente de outra. O total
+   autoritativo continua sendo `Venda.total`; o breakdown nunca infla o faturamento.
 5. **Devolução** — `DevolucaoVenda.valorTotal`/`at`. Reduz a competência em que **ocorreu**
    (não retroage). `Venda.total` **não** é reduzido pelo reader. Líquido =
    `vendas − devoluções` (subtração **única**; sem dupla subtração).
@@ -104,8 +106,10 @@ caixa indisponível, fonte fiscal indisponível).
   Visão Geral e Relatórios; demais seções seguem preview honesto.
 
 **Testes:** `vendas.test.ts`, `financeiro.test.ts`, `caixa.test.ts`, `index.test.ts`
-(agregação, dupla contagem, honestidade, falha parcial e queries com dados A/B, storeId e
-fronteiras UTC `gte`/`lt`) e `scope-core.test.ts` (permissão + ACL cross-store).
+(agregação, dupla contagem, honestidade, reconciliação direcional, falha parcial e queries
+com dados A/B, storeId e fronteiras UTC `gte`/`lt`) e `scope-core.test.ts` (permissão + ACL
+cross-store). Em `index.test.ts`, as sete fixtures A/B são passadas por `montarDados` e o
+valor relevante do DTO final é verificado; a prova não termina nas fontes brutas.
 
 ## 5. Fora de escopo (preservado)
 
@@ -120,8 +124,16 @@ comentários, obrigações/guias, **Fiscal** (NotaFiscal/XML/imposto), schema, q
 - **Cobertura de payload** (forma de pagamento, desconto): vendas legadas sem payload rico
   aparecem como parcial/não identificado — comportamento honesto, não bug.
 - **`vencimento` como String**: parser estrito aceita somente datas reais completas em
-  `YYYY-MM-DD` e `DD/MM/YYYY`; espaços externos, datas impossíveis, timestamps/sufixos e formatos ambíguos ficam
-  fora da competência e reduzem a disponibilidade para parcial.
+  `YYYY-MM-DD` e `DD/MM/YYYY`; espaços, tabs ou newlines externos, datas impossíveis,
+  timestamps/sufixos e formatos ambíguos ficam fora da competência e reduzem a
+  disponibilidade para parcial. A matriz versionada cobre cada rejeição individualmente,
+  competência anterior/atual/seguinte e virada de ano no parser e na agregação.
+- **Carga dos títulos**: `ContaReceberTitulo` e `ContaPagarTitulo` são consultadas apenas por
+  `storeId`, sem filtro temporal no banco e sem `take`; portanto todos os títulos da loja são
+  carregados e o status/vencimento é filtrado e agregado em memória. Isso preserva a
+  semântica atual da data-parede em String, mas o custo cresce com o histórico integral da
+  loja. Antes de escalar para lojas com alto volume, a modelagem deve ganhar data consultável
+  e índice/filtro no banco sem relaxar o isolamento por `storeId`.
 - **Origem de transferência/reversão em `MovimentacaoFinanceira`**: reutiliza os
   classificadores compartilhados e cobre `devolucao_pdv`, `cancelamento_pdv` e `estorno_*`;
   reversões ficam sempre no agregado `estornos`, fora de entradas/saídas normais.
@@ -160,3 +172,25 @@ comentários, obrigações/guias, **Fiscal** (NotaFiscal/XML/imposto), schema, q
   demais e sem vazar o erro bruto.
 - Build 006C: chunk client específico de `/dashboard/contador` com **79.387 bytes** e nenhuma
   ocorrência de `Prisma`, `@prisma` ou `query_engine`.
+
+## 9. Correção final de contrato e evidência 006D
+
+- `ReconciliacaoPagamento` substitui o valor absoluto sem direção: registra total de vendas,
+  total declarado, residual, excedente, divergência absoluta e estado reconciliado. Falha de
+  Venda produz `null`, não zeros artificiais. Alertas e Relatórios exibem residual e excedente
+  separadamente.
+- Cada uma das sete fixtures cross-store A/B chega ao DTO agregado de `montarDados`; o teste
+  verifica a métrica final correspondente à fonte da loja A.
+- A matriz versionada de vencimentos cobre ISO e BR, espaços/tabs/newlines em ambas as
+  direções, datas de calendário impossíveis, competência anterior/atual/seguinte, ano
+  bissexto e virada de ano. A agregação de títulos também prova os recortes mensal e anual.
+- Cada um dos sete cenários de falha parte das mesmas sete fontes não vazias. Todos os KPIs da
+  fonte afetada ficam `indisponivel`/`null`; as outras seis fontes e seus KPIs são comparados
+  integralmente com o DTO saudável; o líquido derivado respeita suas dependências; o DTO é
+  serializável e não contém mensagem nem stack do erro bruto.
+- Limite de desempenho documentado sem eufemismo: títulos continuam sendo carregados
+  integralmente por loja e filtrados/agregados em memória nesta fase read-only.
+- Build 006D: o chunk específico de `/dashboard/contador` ficou em **79.531 bytes**
+  (**+144 bytes** sobre o artefato 006C de 79.387 bytes). O conjunto de três chunks do
+  componente soma **122.643 bytes** e permanece sem `Prisma`, `@prisma`, `query_engine`,
+  `generated/prisma`, `server-only` ou `DATABASE_URL`.

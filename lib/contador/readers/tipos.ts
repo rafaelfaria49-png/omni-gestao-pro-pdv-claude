@@ -45,6 +45,20 @@ export type FormaPagamentoLinha = Readonly<{
   valor: number
 }>
 
+/**
+ * Reconciliação direcional do valor autoritativo das vendas com o breakdown declarado.
+ * Residual e excedente são somados por venda, portanto nunca se compensam entre si.
+ * `null` no DTO indica falha da fonte Venda, não um conjunto artificial de zeros.
+ */
+export type ReconciliacaoPagamento = Readonly<{
+  totalVendas: number
+  totalBreakdown: number
+  residualNaoIdentificado: number
+  excedenteBreakdown: number
+  divergenciaAbsoluta: number
+  reconciliado: boolean
+}>
+
 export type VendasContador = Readonly<{
   quantidade: DadoNumerico
   total: DadoMonetario
@@ -60,7 +74,7 @@ export type VendasContador = Readonly<{
   naoIdentificadoQuantidade: DadoNumerico
   naoIdentificadoValor: DadoMonetario
   divergenciaPagamentoQuantidade: DadoNumerico
-  divergenciaPagamentoValor: DadoMonetario
+  reconciliacaoPagamento: ReconciliacaoPagamento | null
 }>
 
 /* ─────────────────────────── Devoluções ─────────────────────────── */

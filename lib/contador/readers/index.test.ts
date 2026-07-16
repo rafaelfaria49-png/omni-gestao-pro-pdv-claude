@@ -101,6 +101,39 @@ describe("montarDados", () => {
     expect(dto.liquidoCompetencia).toMatchObject({ valor: null, disponibilidade: "indisponivel" })
     expect(dto.vendas.total.disponibilidade).toBe("real")
   })
+
+  it("mantém residual e excedente separados no DTO final e nos alertas", () => {
+    const dto = montarDados(
+      {
+        ...vazio,
+        vendas: [
+          { total: 100, status: "concluida", payload: { paymentBreakdown: { pix: 80 } } },
+          { total: 100, status: "concluida", payload: { paymentBreakdown: { dinheiro: 120 } } },
+        ],
+      },
+      competencia,
+    )
+    expect(dto.vendas.reconciliacaoPagamento).toEqual({
+      totalVendas: 200,
+      totalBreakdown: 200,
+      residualNaoIdentificado: 20,
+      excedenteBreakdown: 20,
+      divergenciaAbsoluta: 40,
+      reconciliado: false,
+    })
+    expect(dto.alertas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          titulo: "Residual não identificado no breakdown de pagamentos",
+          detalhe: expect.stringContaining("abaixo de Venda.total"),
+        }),
+        expect.objectContaining({
+          titulo: "Excedente no breakdown de pagamentos",
+          detalhe: expect.stringContaining("acima de Venda.total"),
+        }),
+      ]),
+    )
+  })
 })
 
 describe("carregarFontesComCliente (fronteiras Prisma)", () => {
@@ -189,6 +222,8 @@ const CASOS_CROSS_STORE: readonly {
   fonte: Exclude<FonteContador, never>
   rows: readonly { storeId: string; dado: unknown }[]
   esperado: unknown
+  valorDto: (dto: ReturnType<typeof montarDados>) => number | null
+  esperadoDto: number
 }[] = [
   {
     nome: "Venda",
@@ -199,6 +234,8 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-b", dado: { total: 911, status: "concluida", payload: { paymentBreakdown: { pix: 911 } } } },
     ],
     esperado: { total: 11, status: "concluida", payload: { paymentBreakdown: { pix: 11 } } },
+    valorDto: (dto) => dto.vendas.total.valor,
+    esperadoDto: 11,
   },
   {
     nome: "DevolucaoVenda",
@@ -209,6 +246,8 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-b", dado: { valorTotal: 912 } },
     ],
     esperado: { valorTotal: 12 },
+    valorDto: (dto) => dto.devolucoes.total.valor,
+    esperadoDto: 12,
   },
   {
     nome: "MovimentacaoFinanceira",
@@ -219,6 +258,8 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-b", dado: { tipo: "entrada", origem: "venda", valor: 913 } },
     ],
     esperado: { tipo: "entrada", origem: "venda", valor: 13 },
+    valorDto: (dto) => dto.financeiro.entradasRealizadas.valor,
+    esperadoDto: 13,
   },
   {
     nome: "ContaReceberTitulo",
@@ -229,6 +270,8 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-b", dado: { valor: 914, status: "pendente", vencimento: "2026-06-14" } },
     ],
     esperado: { valor: 14, status: "pendente", vencimento: "2026-06-14" },
+    valorDto: (dto) => dto.financeiro.titulosReceberAberto.valor,
+    esperadoDto: 14,
   },
   {
     nome: "ContaPagarTitulo",
@@ -239,6 +282,8 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-b", dado: { valor: 915, status: "pendente", vencimento: "2026-06-15" } },
     ],
     esperado: { valor: 15, status: "pendente", vencimento: "2026-06-15" },
+    valorDto: (dto) => dto.financeiro.titulosPagarAberto.valor,
+    esperadoDto: 15,
   },
   {
     nome: "SessaoCaixa",
@@ -246,9 +291,11 @@ const CASOS_CROSS_STORE: readonly {
     fonte: "sessoes",
     rows: [
       { storeId: "loja-a", dado: { status: "fechada", saldoFinal: 16, saldoContado: 17 } },
-      { storeId: "loja-b", dado: { status: "aberta", saldoFinal: 916, saldoContado: 917 } },
+      { storeId: "loja-b", dado: { status: "fechada", saldoFinal: 916, saldoContado: 999 } },
     ],
     esperado: { status: "fechada", saldoFinal: 16, saldoContado: 17 },
+    valorDto: (dto) => dto.caixa.diferencas.valor,
+    esperadoDto: 1,
   },
   {
     nome: "CaixaOperacao",
@@ -256,14 +303,16 @@ const CASOS_CROSS_STORE: readonly {
     fonte: "operacoes",
     rows: [
       { storeId: "loja-a", dado: { tipo: "sangria", valor: 18 } },
-      { storeId: "loja-b", dado: { tipo: "suprimento", valor: 918 } },
+      { storeId: "loja-b", dado: { tipo: "sangria", valor: 918 } },
     ],
     esperado: { tipo: "sangria", valor: 18 },
+    valorDto: (dto) => dto.caixa.sangriasTotal.valor,
+    esperadoDto: 18,
   },
 ]
 
 describe("isolamento cross-store A/B por query", () => {
-  it.each(CASOS_CROSS_STORE)("$nome retorna somente a fixture da loja A", async (caso) => {
+  it.each(CASOS_CROSS_STORE)("$nome chega ao DTO final somente com a fixture da loja A", async (caso) => {
     const db = clienteVazio()
     substituirFindMany(db, caso.delegate, async (args) => {
       const storeId = (args.where as { storeId: string }).storeId
@@ -273,6 +322,8 @@ describe("isolamento cross-store A/B por query", () => {
     const fontes = await carregarFontesComCliente(scopeValido("loja-a"), resolvePeriodoUtc(competencia), db)
     expect(fontes[caso.fonte]).toEqual([caso.esperado])
     expect(primeiraChamada(db[caso.delegate].findMany).where.storeId).toBe("loja-a")
+    const dto = montarDados(fontes, competencia)
+    expect(caso.valorDto(dto)).toBe(caso.esperadoDto)
   })
 })
 
@@ -317,34 +368,161 @@ describe("fronteiras temporais semiabertas por query", () => {
   })
 })
 
+const TODAS_FONTES: readonly FonteContador[] = [
+  "vendas",
+  "devolucoes",
+  "movimentacoes",
+  "receber",
+  "pagar",
+  "sessoes",
+  "operacoes",
+]
+
+function clienteComFixturesCompletas(): ContadorReaderClient {
+  const db = clienteVazio()
+  db.venda.findMany = vi.fn(async () => [
+    {
+      total: 101,
+      status: "concluida",
+      payload: { paymentBreakdown: { pix: 101 }, discountTotal: 7 },
+    },
+    {
+      total: 3,
+      status: "cancelada",
+      payload: { paymentBreakdown: { dinheiro: 3 }, discountTotal: 1 },
+    },
+  ])
+  db.devolucaoVenda.findMany = vi.fn(async () => [{ valorTotal: 11 }])
+  db.movimentacaoFinanceira.findMany = vi.fn(async () => [
+    { tipo: "entrada", origem: "venda", valor: 13 },
+    { tipo: "saida", origem: "pagar", valor: 4 },
+    { tipo: "saida", origem: "estorno", valor: 2 },
+    { tipo: "entrada", origem: "transferencia", valor: 5 },
+    { tipo: "entrada", origem: "origem_futura", valor: 7 },
+  ])
+  db.contaReceberTitulo.findMany = vi.fn(async () => [
+    { valor: 17, status: "pendente", vencimento: "2026-06-17" },
+  ])
+  db.contaPagarTitulo.findMany = vi.fn(async () => [
+    { valor: 19, status: "pendente", vencimento: "19/06/2026" },
+  ])
+  db.sessaoCaixa.findMany = vi.fn(async () => [
+    { status: "fechada", saldoFinal: 20, saldoContado: 23 },
+    { status: "aberta", saldoFinal: null, saldoContado: null },
+  ])
+  db.caixaOperacao.findMany = vi.fn(async () => [
+    { tipo: "sangria", valor: 23 },
+    { tipo: "suprimento", valor: 29 },
+  ])
+  return db
+}
+
+function recorteFonte(dto: ReturnType<typeof montarDados>, fonte: FonteContador): Record<string, unknown> {
+  if (fonte === "vendas") return dto.vendas
+  if (fonte === "devolucoes") return dto.devolucoes
+  if (fonte === "movimentacoes") {
+    return {
+      entradasRealizadas: dto.financeiro.entradasRealizadas,
+      saidasRealizadas: dto.financeiro.saidasRealizadas,
+      estornos: dto.financeiro.estornos,
+      transferencias: dto.financeiro.transferencias,
+      transferenciasQuantidade: dto.financeiro.transferenciasQuantidade,
+      naoClassificados: dto.financeiro.naoClassificados,
+      naoClassificadosQuantidade: dto.financeiro.naoClassificadosQuantidade,
+    }
+  }
+  if (fonte === "receber") {
+    return {
+      titulosReceberAberto: dto.financeiro.titulosReceberAberto,
+      titulosReceberQuantidade: dto.financeiro.titulosReceberQuantidade,
+    }
+  }
+  if (fonte === "pagar") {
+    return {
+      titulosPagarAberto: dto.financeiro.titulosPagarAberto,
+      titulosPagarQuantidade: dto.financeiro.titulosPagarQuantidade,
+    }
+  }
+  if (fonte === "sessoes") {
+    return {
+      sessoes: dto.caixa.sessoes,
+      sessoesAbertas: dto.caixa.sessoesAbertas,
+      diferencas: dto.caixa.diferencas,
+    }
+  }
+  return {
+    sangriasTotal: dto.caixa.sangriasTotal,
+    sangriasQuantidade: dto.caixa.sangriasQuantidade,
+    suprimentosTotal: dto.caixa.suprimentosTotal,
+    suprimentosQuantidade: dto.caixa.suprimentosQuantidade,
+  }
+}
+
+function expectFonteSemZeroFalso(dto: ReturnType<typeof montarDados>, fonte: FonteContador) {
+  const recorte = recorteFonte(dto, fonte)
+  const metricas = Object.values(recorte).filter(
+    (valor): valor is { valor: number | null; disponibilidade: string } =>
+      typeof valor === "object" &&
+      valor !== null &&
+      "valor" in valor &&
+      "disponibilidade" in valor,
+  )
+  expect(metricas.length).toBeGreaterThan(0)
+  for (const metrica of metricas) {
+    expect(metrica).toMatchObject({ valor: null, disponibilidade: "indisponivel" })
+  }
+  if (fonte === "vendas") {
+    expect(dto.vendas.formasPagamento).toEqual([])
+    expect(dto.vendas.formaPagamentoDisponibilidade).toBe("indisponivel")
+    expect(dto.vendas.reconciliacaoPagamento).toBeNull()
+  }
+}
+
 const CASOS_FALHA: readonly {
   nome: string
   delegate: DelegateContador
   fonte: FonteContador
-  disponibilidade: (dto: ReturnType<typeof montarDados>) => string
 }[] = [
-  { nome: "Venda", delegate: "venda", fonte: "vendas", disponibilidade: (d) => d.vendas.total.disponibilidade },
-  { nome: "DevolucaoVenda", delegate: "devolucaoVenda", fonte: "devolucoes", disponibilidade: (d) => d.devolucoes.total.disponibilidade },
-  { nome: "MovimentacaoFinanceira", delegate: "movimentacaoFinanceira", fonte: "movimentacoes", disponibilidade: (d) => d.financeiro.entradasRealizadas.disponibilidade },
-  { nome: "ContaReceberTitulo", delegate: "contaReceberTitulo", fonte: "receber", disponibilidade: (d) => d.financeiro.titulosReceberAberto.disponibilidade },
-  { nome: "ContaPagarTitulo", delegate: "contaPagarTitulo", fonte: "pagar", disponibilidade: (d) => d.financeiro.titulosPagarAberto.disponibilidade },
-  { nome: "SessaoCaixa", delegate: "sessaoCaixa", fonte: "sessoes", disponibilidade: (d) => d.caixa.sessoes.disponibilidade },
-  { nome: "CaixaOperacao", delegate: "caixaOperacao", fonte: "operacoes", disponibilidade: (d) => d.caixa.sangriasTotal.disponibilidade },
+  { nome: "Venda", delegate: "venda", fonte: "vendas" },
+  { nome: "DevolucaoVenda", delegate: "devolucaoVenda", fonte: "devolucoes" },
+  { nome: "MovimentacaoFinanceira", delegate: "movimentacaoFinanceira", fonte: "movimentacoes" },
+  { nome: "ContaReceberTitulo", delegate: "contaReceberTitulo", fonte: "receber" },
+  { nome: "ContaPagarTitulo", delegate: "contaPagarTitulo", fonte: "pagar" },
+  { nome: "SessaoCaixa", delegate: "sessaoCaixa", fonte: "sessoes" },
+  { nome: "CaixaOperacao", delegate: "caixaOperacao", fonte: "operacoes" },
 ]
 
 describe("falha parcial isolada por fonte", () => {
-  it.each(CASOS_FALHA)("$nome falha sem cancelar as outras seis fontes", async (caso) => {
-    const db = clienteVazio()
+  it.each(CASOS_FALHA)("$nome indisponibiliza só seus KPIs e preserva as outras seis fontes", async (caso) => {
+    const periodo = resolvePeriodoUtc(competencia)
+    const fontesBase = await carregarFontesComCliente(scopeValido(), periodo, clienteComFixturesCompletas())
+    const dtoBase = montarDados(fontesBase, competencia)
+
+    const db = clienteComFixturesCompletas()
     substituirFindMany(db, caso.delegate, async () => {
       throw new Error(`segredo interno ${caso.nome}`)
     })
 
-    const fontes = await carregarFontesComCliente(scopeValido(), resolvePeriodoUtc(competencia), db)
+    const fontes = await carregarFontesComCliente(scopeValido(), periodo, db)
     const dto = montarDados(fontes, competencia)
     expect(fontes.falhas).toEqual([caso.fonte])
-    expect(caso.disponibilidade(dto)).toBe("indisponivel")
-    if (caso.fonte === "vendas") expect(dto.financeiro.entradasRealizadas.disponibilidade).toBe("real")
-    else expect(dto.vendas.total.disponibilidade).toBe("real")
-    expect(JSON.stringify(dto)).not.toContain("segredo interno")
+    expect(fontes[caso.fonte]).toEqual([])
+    expectFonteSemZeroFalso(dto, caso.fonte)
+
+    for (const fonteSaudavel of TODAS_FONTES.filter((fonte) => fonte !== caso.fonte)) {
+      expect(fontes[fonteSaudavel]).toEqual(fontesBase[fonteSaudavel])
+      expect(recorteFonte(dto, fonteSaudavel)).toEqual(recorteFonte(dtoBase, fonteSaudavel))
+    }
+
+    if (caso.fonte === "vendas" || caso.fonte === "devolucoes") {
+      expect(dto.liquidoCompetencia).toMatchObject({ valor: null, disponibilidade: "indisponivel" })
+    } else {
+      expect(dto.liquidoCompetencia).toEqual(dtoBase.liquidoCompetencia)
+    }
+
+    const serializado = JSON.stringify(dto)
+    expect(() => JSON.parse(serializado)).not.toThrow()
+    expect(serializado).not.toContain("segredo interno")
+    expect(serializado).not.toContain("stack")
   })
 })

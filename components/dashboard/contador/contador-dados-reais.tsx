@@ -271,11 +271,18 @@ export function RelatoriosReal({ dados }: { dados: ContadorDadosReais }) {
                 disp={vendas.naoIdentificadoValor.disponibilidade}
               />
             ) : null}
-            {(vendas.divergenciaPagamentoQuantidade.valor ?? 0) > 0 ? (
+            {(vendas.reconciliacaoPagamento?.residualNaoIdentificado ?? 0) > 0 ? (
               <LinhaKv
-                label="Divergência do breakdown"
-                value={`${fmtMoney(vendas.divergenciaPagamentoValor)} · ${fmtNum(vendas.divergenciaPagamentoQuantidade)} venda(s)`}
-                disp={vendas.divergenciaPagamentoValor.disponibilidade}
+                label="Residual não identificado"
+                value={BRL.format(vendas.reconciliacaoPagamento?.residualNaoIdentificado ?? 0)}
+                disp="parcial"
+              />
+            ) : null}
+            {(vendas.reconciliacaoPagamento?.excedenteBreakdown ?? 0) > 0 ? (
+              <LinhaKv
+                label="Excedente informado no breakdown"
+                value={BRL.format(vendas.reconciliacaoPagamento?.excedenteBreakdown ?? 0)}
+                disp="parcial"
               />
             ) : null}
           </>

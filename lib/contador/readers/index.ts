@@ -86,7 +86,7 @@ function vendasIndisponiveis(): VendasContador {
     naoIdentificadoQuantidade: numericoIndisponivel(fonte, OBS_FONTE_INDISPONIVEL),
     naoIdentificadoValor: monetarioIndisponivel(fonte, OBS_FONTE_INDISPONIVEL),
     divergenciaPagamentoQuantidade: numericoIndisponivel(fonte, OBS_FONTE_INDISPONIVEL),
-    divergenciaPagamentoValor: monetarioIndisponivel(fonte, OBS_FONTE_INDISPONIVEL),
+    reconciliacaoPagamento: null,
   })
 }
 
@@ -198,11 +198,19 @@ export function montarDados(fontes: FontesContador, competencia: Competencia): C
       detalhe: vendas.descontoTotal.observacao ?? "Parte das vendas não registrou desconto no payload.",
     })
   }
-  if (!falhou("vendas") && (vendas.divergenciaPagamentoQuantidade.valor ?? 0) > 0) {
+  const reconciliacaoPagamento = vendas.reconciliacaoPagamento
+  if (!falhou("vendas") && (reconciliacaoPagamento?.residualNaoIdentificado ?? 0) > 0) {
     alertas.push({
       nivel: "atencao",
-      titulo: "Divergencia no breakdown de pagamentos",
-      detalhe: `${vendas.divergenciaPagamentoQuantidade.valor} venda(s), total absoluto de ${vendas.divergenciaPagamentoValor.valor}.`,
+      titulo: "Residual não identificado no breakdown de pagamentos",
+      detalhe: `Breakdown abaixo de Venda.total; residual total de ${reconciliacaoPagamento?.residualNaoIdentificado}.`,
+    })
+  }
+  if (!falhou("vendas") && (reconciliacaoPagamento?.excedenteBreakdown ?? 0) > 0) {
+    alertas.push({
+      nivel: "atencao",
+      titulo: "Excedente no breakdown de pagamentos",
+      detalhe: `Breakdown acima de Venda.total; excedente declarado de ${reconciliacaoPagamento?.excedenteBreakdown}.`,
     })
   }
   if (!falhou("movimentacoes") && (financeiro.naoClassificadosQuantidade.valor ?? 0) > 0) {
