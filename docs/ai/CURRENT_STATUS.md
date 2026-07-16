@@ -5,59 +5,71 @@
 
 ---
 
-## Fiscal — GOAL-003 C14N/XMLDSig FECHADO (integrado na main) · 15/07/2026
+## Fiscal — GOAL-004 paridade `upsertProduto` FECHADO (integrado na main) · 16/07/2026
 
 > Fontes: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
 > [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
-> [`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](../fiscal/FISCAL_XML_C14N_EXTERNAL_PROOF_003.md) ·
-> [`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](../fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md).
+> [`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](../fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md) ·
+> [`FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`](../fiscal/FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md).
 >
-> **PR #6** merge commit `e52d16b1ad62b5aa82dbd00e734e45af7e17f94c`
-> (parents `edc79de…` + `586c135…`). HEAD fiscal integrado:
-> `586c13526e940bed8f79df58b0b7886975db84bd`. Run `29450960130` · artefato `8357457694`.
-> **G-C2 fechado** (XSD). **Critério C14N/XMLDSig do F4→F5 = FECHADO.** Gate Fiscal **global
-> ABERTO**. Sem homologação SEFAZ (N6=0), sem produção (N7=0), sem emissão ativada. Signer
-> **dormente**. GOAL-003 **FECHADO**. GOAL-004 **não** iniciado.
+> **PR #8** merge commit `b307337ce89535355d18cd9138e17f635f1c1bf5`
+> (parents `5b96df7…` + `3f8928c…`). Commit de implementação:
+> `3f8928c0d8dc7361b6282cbb2b225ae04ed8a501`.
+> **G-C1/G-C2 fechados** (reconciliação + XSD). **Critério C14N/XMLDSig do F4→F5 = FECHADO**
+> (GOAL-003). Gate Fiscal **global ABERTO** (inalterado por este GOAL). Sem homologação SEFAZ
+> (N6=0), sem produção (N7=0), sem emissão ativada. Signer **dormente**. Callers produtivos **0**.
+> GOAL-004 **FECHADO**. GOAL-005 **não** iniciado.
 > A ocorrência “NF-e — mock” em seções de preview PDV **não** descreve o estado global da frente
 > fiscal.
 
-- **Worker XSD:** B2 integrado (`workers/fiscal-xsd`); non-root 10001:10001; read-only; tmpfs;
-  zero-egress; libxml2/xmllint 2.15.3; SBOM SPDX; Trivy **0 CRITICAL** (HIGH = follow-up separado).
-- **`validarXsd`:** **real e fail-closed** (no-op removido); adapter HTTP interno; pipeline exige
-  aprovação XSD antes de avançar no dry-run.
-- **XSD:** pacote oficial `PL_010e_v1.02` versionado + manifesto/hashes; schema oficial, validação
-  real; **sem** transmissão SEFAZ.
-- **Assinatura / C14N:** RSA-SHA1/SHA-1 conforme schema (ADR-0011); C14N 1.0 inclusivo
-  (`http://www.w3.org/TR/2001/REC-xml-c14n-20010315`); XMLDSig endurecido (URI local, Id único,
-  wrapping mitigado); XML assinado valida no XSD oficial.
-- **Prova externa:** Java 17 / JSR 105 **independente** do signer TypeScript; workflow
-  `fiscal-c14n-external-proof.yml` (container offline, read-only, cap-drop, digests fixos);
-  16/16 provas; 6/6 positivas; 11/11 negativas.
-- **Hashes de evidência (PR #6):** DigestValue `7FWU5UtPHiZypCWOmueZ+7mgmq0=` · SignedInfo
-  SHA-256 `9e9451b5dce5c6c775de1d12a36aff5a395bf8915d01f22bdf67a008b0cca16e` · XML assinado
-  SHA-256 `06b4bf15603894c113723f7e911f79318d0d8dc72579b92591c636aeb09a9f98` · Reference C14N
-  SHA-256 `e3e67530a0223eeb82dd70f875ccd1d89fbf82f14e11bcb9c3a1526e8eb9f604`.
-- **ADRs:** ADR-0010 (worker B2) e ADR-0011 (assinatura) **aceitas e implementadas**.
-- **Gates:** G-C2 **FECHADO** · critério C14N/XMLDSig F4→F5 **FECHADO** · gate Fiscal **global
-  ABERTO** (sem G-C3).
-- **Nível N:** **N4 nos eixos XSD e C14N/XMLDSig** (somente nesses eixos); N6=0 · N7=0.
-- **Signer:** **dormente** — zero callers de venda; uso restrito a dry-run/testes/prova.
-- **Código base:** F2–F4 desde `ba0cc12` + XSD B2 em `82c219c` + C14N/XMLDSig em `e52d16b`.
+### GOAL-004 — paridade fiscal do `upsertProduto` (Cadastros V2)
+
+- **Estado:** **FECHADO** — implementação + merge commit + fechamento documental.
+- **Equivalência histórica:** GOAL histórico **002 / P-04** (paridade `upsertProduto`); parcial
+  prévio `04ce54d` (contrato + REST/importadores). **Não** renumerar docs históricos.
+- **Arquivos (4):** `app/actions/cadastros.ts` · `produto-ia.tsx` ·
+  `lib/produtos/produto-fiscal-upsert.ts` · `lib/produtos/produto-fiscal-upsert.test.ts`
+  (+206 / −20).
+- **`metadata.fiscal`:** **única fonte fiscal canônica** do Produto (10 campos do contrato
+  `lib/produto-fiscal.ts` — **inalterado**): ncm, cest, cfop, cst, csosn, origemMercadoria,
+  unidadeComercial, unidadeTributavel, codigoAnp, exTipi.
+- **`metadata.fiscalRegime`:** namespace de **compatibilidade visual/textual** do Cadastros V2
+  (`tributacao`, `origem`, `atualizadoEm`) — **não** canônico; **não** lido por
+  `getProdutoFiscal`, motor Fiscal, APIs fiscais ou importadores; **não** autoriza emissão.
+- **Comportamento:** create canônico; update sem fiscal preserva bloco; update parcial
+  não-destrutivo; metadata não fiscal preservada; campos desconhecidos rejeitados; sem default
+  tributário falso.
+- **Barcode/Cosmos:** sugestões NCM/CEST sob **revisão humana** (não auto-confirmadas).
+- **Schema / migration / regra tributária:** não alterados · nenhuma · nenhuma.
+- **Nível N:** **N3** neste eixo cadastro; **N6=0**; **N7=0** (sem operação real / SEFAZ /
+  homologação / produção).
+- **Gates:** nenhum avançado por este GOAL (G-C1/G-C2/C14N inalterados; F4→F5 global, G-F5,
+  G-F7, G-F12 abertos).
+- **Checks do PR #8:** Vercel **success**; **sem** checks independentes de TypeScript, ESLint,
+  testes unitários ou build no GitHub — evidências **reutilizadas da auditoria** de merge
+  readiness (61/61 testes; TS/ESLint/build verdes).
+- **Follow-ups (não implementados):** R-1 legado `fiscal.tributacao` → `fiscalRegime`; R-2
+  exibição NCM/CEST via `getProdutoFiscal`; R-3 UI demais campos fiscais; R-4 status de
+  completude fiscal; R-5 sem caller produtivo/transmissão sem GOAL específico.
+- **Próximo passo:** auditoria documental de merge readiness deste fechamento; **não** iniciar
+  GOAL-005 automaticamente.
+
+### Base prévia (inalterada por GOAL-004)
+
+- **Worker XSD:** B2 integrado; G-C2 **FECHADO**; N4 no eixo XSD.
+- **Assinatura / C14N:** N4 no eixo C14N/XMLDSig; critério técnico F4→F5 **FECHADO** (GOAL-003).
+- **Signer:** **dormente** — zero callers de venda; dry-run/testes apenas.
 - **Runtime:** seis guards em rotas de correção/cancelamento. Snapshot, emissão, tax-engine, vault e
   numeração **sem** caller no fluxo de venda.
-- **Homologação / produção:** N6=0 · N7=0 · `fiscalEnabled` inalcançável · SEFAZ **não** chamada ·
-  prova externa **≠** homologação.
-- **Riscos remanescentes:** dry-run global ainda não é gate F4→F5 completo; ampliar vetores C14N;
-  Trivy HIGH fora do gate; paridade `upsertProduto`; ST/CSOSN 500; provider real; fila/eventos;
-  G-F5/G-F7/G-F12.
-- **Próximo passo:** avaliação do GOAL seguinte (dry-run auferível / backlog de integridade) —
-  **sujeito a gate humano**. GOAL-004 **não** iniciado.
+- **Homologação / produção:** N6=0 · N7=0 · `fiscalEnabled` inalcançável · SEFAZ **não** chamada.
+- **Riscos remanescentes:** dry-run global incompleto; ST/CSOSN 500; provider real; fila/eventos;
+  G-F5/G-F7/G-F12; follow-ups R-1…R-5 do GOAL-004.
 - **Documentos:** [roadmap](../roadmaps/ROADMAP_FISCAL.md) ·
   [plano mestre](../governance/MASTER_FISCAL_EXECUTION_PLAN.md) ·
   [continuação](../fiscal/FISCAL_CONTINUATION_IMPLEMENTATION_GOALS_001.md) ·
   [fechamento GOAL-002](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
-  [prova GOAL-003](../fiscal/FISCAL_XML_C14N_EXTERNAL_PROOF_003.md) ·
   [fechamento GOAL-003](../fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md) ·
+  [fechamento GOAL-004](../fiscal/FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md) ·
   [ADR-0010](../decisions/ADR-0010-validacao-xsd-worker-containerizado-xmllint-provisionado.md) ·
   [ADR-0011](../decisions/ADR-0011-assinatura-xmldsig-nfce-rsa-sha1-imposta-pelo-schema.md).
 

@@ -410,3 +410,64 @@ Fonte detalhada: [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](./FISCAL_XSD_GOAL_002
 Fontes:
 [`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](./FISCAL_XML_C14N_EXTERNAL_PROOF_003.md) ·
 [`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](./FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md).
+
+---
+
+## 18. Atualização pós-reconciliação — GOAL-004 paridade `upsertProduto` integrado (16/07/2026)
+
+| Campo | Valor |
+|---|---|
+| Evento | Integração + fechamento documental de `FISCAL-PRODUTO-UPSERT-PARITY-004` |
+| PR | #8 |
+| Commit de implementação | `3f8928c0d8dc7361b6282cbb2b225ae04ed8a501` |
+| Merge commit | `b307337ce89535355d18cd9138e17f635f1c1bf5` |
+| Parent main | `5b96df71a0b507c11785a043b49c6adb15ec26c8` |
+| Parent / HEAD fiscal | `3f8928c0d8dc7361b6282cbb2b225ae04ed8a501` |
+| Arquivos | 4 · +206 / −20 |
+| Achado §4.2 / D4 / P-04 | **RESOLVIDO** no eixo Cadastros V2 |
+| `metadata.fiscal` | **fonte canônica única** (10 campos; contrato `lib/produto-fiscal.ts` inalterado) |
+| `metadata.fiscalRegime` | compatibilidade visual/textual **não canônica** (não lida pelo motor / `getProdutoFiscal`) |
+| Schema / migration | **não** alterados · **nenhuma** migration |
+| Signer | **dormente** · callers produtivos **0** |
+| Nível N (eixo cadastro) | **N3**; N6=0; N7=0 |
+| Gates | G-C1/G-C2/C14N **inalterados**; F4→F5 global / G-F5 / G-F7 / G-F12 **inalterados** |
+| SEFAZ / homologação / produção | **nenhuma** chamada · **não** homologado · **não** produtivo |
+| GOAL-005 | **não iniciado** |
+
+### Colisão de numeração
+
+| Sistema | ID | Significado | Pós PR #8 |
+|---|---|---|---|
+| Tabela histórica | GOAL 002 / P-04 | Paridade `upsertProduto` | **resolvido** (porta Cadastros V2) |
+| Tabela histórica | GOAL 004 | ST mínima / CSOSN 500 | **aberto** (outro eixo) |
+| Código `04ce54d` | `GOAL_004` parcial | Contrato + REST/importadores | complementado pela porta V2 |
+| Sequência nomeada | `…-004` | Slot após XSD-002 e C14N-003 | **FECHADO** |
+
+Não renumerar documentos históricos; apenas registrar a equivalência.
+
+### O que mudou vs. §4.2 e P-04
+
+| Achado GOAL-001 | Estado pós PR #8 |
+|---|---|
+| `upsertProduto` não importa `produto-fiscal` / não normaliza `metadata.fiscal` | **RESOLVIDO** — `fiscalInputFromBody` + `canonicalizeProdutoFiscalMetadata` |
+| Cadastros V2 podia criar produto sem identidade fiscal canônica | Porta V2 grava `metadata.fiscal` canônica quando há sinal fiscal |
+| P-04 aberto (GOAL histórico 002) | **fechado no eixo cadastro**; ST/CSOSN 500 permanece backlog |
+
+### Gates atualizados
+
+- **G-C1:** fechado (GOAL-001) — inalterado.
+- **G-C2:** fechado (GOAL-002 XSD) — inalterado.
+- **Critério C14N/XMLDSig do F4→F5:** fechado (GOAL-003) — inalterado.
+- **F4→F5 global / G-F5 / G-F7 / G-F12:** **abertos** — **não** avançados por este GOAL.
+- Homologação SEFAZ e produção: **proibidas** de serem presumidas. Paridade de cadastro **≠** emissão.
+
+### O que permanece aberto
+
+- dry-run auferível de ponta a ponta;
+- ST/CSOSN 500 e autoridade tributária (GOAL histórico 003–004 da tabela);
+- provider real, fila, DANFCE, QR-Code;
+- follow-ups de UI/dados (legado `fiscal.tributacao` → `fiscalRegime`, exibição via
+  `getProdutoFiscal`, completude fiscal) — ver relatório de fechamento R-1…R-5;
+- qualquer transmissão SEFAZ; callers produtivos de assinatura/emissão.
+
+Fonte: [`FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`](./FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md).

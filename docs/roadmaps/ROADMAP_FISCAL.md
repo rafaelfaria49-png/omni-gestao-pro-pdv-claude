@@ -3,8 +3,8 @@ title: Roadmap Fiscal (NFC-e/SAT/NF-e) — OmniGestão Pro
 hub: fiscal
 status: vivo
 owner: produto/arquitetura
-last_update: 2026-07-15
-sprint_atual: GOAL-003 C14N/XMLDSig FECHADO (PR #6); gate global F4→F5 ainda aberto
+last_update: 2026-07-16
+sprint_atual: GOAL-004 paridade upsertProduto FECHADO (PR #8); gate global F4→F5 ainda aberto
 ---
 
 # 🧾 Roadmap Fiscal — OmniGestão Pro
@@ -18,15 +18,18 @@ sprint_atual: GOAL-003 C14N/XMLDSig FECHADO (PR #6); gate global F4→F5 ainda a
 > `docs/audits/AUDITORIA_FISCAL_GAPS_v01.md`. **Governa:**
 > `docs/governance/MASTER_FISCAL_EXECUTION_PLAN.md`.
 
-## 0. Reconciliação vigente — 2026-07-15
+## 0. Reconciliação vigente — 2026-07-16
 
 > **Fonte factual:** [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
 > fechamento XSD [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
 > prova C14N/XMLDSig [`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](../fiscal/FISCAL_XML_C14N_EXTERNAL_PROOF_003.md) ·
-> fechamento GOAL-003 [`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](../fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md).
+> fechamento GOAL-003 [`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](../fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md) ·
+> fechamento GOAL-004 [`FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`](../fiscal/FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md).
 > O commit `ba0cc12` colocou F2–F4 e o dry-run no código. O merge `82c219c` (PR #4) integrou o
-> worker XSD B2. O merge `e52d16b` (PR #6) integrou a prova externa C14N/XMLDSig.
-> **Prova técnica ≠ homologação ≠ produção.**
+> worker XSD B2. O merge `e52d16b` (PR #6) integrou a prova externa C14N/XMLDSig. O merge
+> `b307337` (PR #8) integrou a paridade fiscal do `upsertProduto` (Cadastros V2).
+> **Cadastro fiscal canônico ≠ regra tributária ≠ montagem de XML ≠ assinatura ≠ transmissão
+> ≠ homologação ≠ produção.**
 
 | Fase | Código/teste | Runtime/banco | Evidência externa | Estado reconciliado |
 |---|---|---|---|---|
@@ -35,6 +38,7 @@ sprint_atual: GOAL-003 C14N/XMLDSig FECHADO (PR #6); gate global F4→F5 ainda a
 | F2 | tax-engine testado | sem caller | sem contador; sem ST | N3, lacuna CSOSN 500 |
 | F3 | XML/chave + **XSD oficial B2** | worker XSD sob demanda; sem caller de venda | schema oficial versionado; **sem SEFAZ** | **N4 no eixo XSD**; G-C2 **fechado** |
 | F4 | signer endurecido (RSA-SHA1) + C14N 1.0 **integrado** | **sem caller de venda** (dormente) | prova Java/JSR 105 + CI PR #6 + artefato | **N4 no eixo C14N/XMLDSig**; P-05 fechado |
+| Cadastro produto | `metadata.fiscal` canônica em REST/importadores **e** Cadastros V2 | schema JSONB inalterado | testes N3 (PR #8) | **P-04 / GOAL-004 FECHADO**; N3 no eixo |
 | F5 | contrato + stub | 0 notas; sem provider real | nenhuma SEFAZ | N1 |
 | F6 | ausente | ausente | nenhuma | N0 |
 | F7 | tabela da fila + guards | 0 jobs; sem produtor/worker | nenhuma | N1; ativação proibida |
@@ -46,11 +50,13 @@ sprint_atual: GOAL-003 C14N/XMLDSig FECHADO (PR #6); gate global F4→F5 ainda a
 
 **Gates:** G-C1 fechado (GOAL-001) · **G-C2 fechado** (XSD B2) · **critério C14N/XMLDSig do gate
 técnico F4→F5 = FECHADO** (GOAL-003, PR #6) · gate Fiscal **global** F4→F5 e G-F5/G-F7/G-F12
-**ainda abertos**. Não existe G-C3.
+**ainda abertos** (**não** avançados pelo GOAL-004). Não existe G-C3.
 
-**GOAL-003:** **FECHADO** (implementação + merge + fechamento documental). GOAL-004 **não**
-iniciado. Backlog de cadastro (paridade `upsertProduto`) permanece distinto. Somente o GOAL 022
-poderá construir ativação, restrita a `HOMOLOGACAO` e sujeita a G-F7.
+**GOAL-004** (`FISCAL-PRODUTO-UPSERT-PARITY-004`): **FECHADO** (implementação + merge PR #8 +
+fechamento documental). Equivale ao GOAL histórico **002 / P-04** (não renumerar a tabela
+histórica). `metadata.fiscal` = fonte canônica; `metadata.fiscalRegime` = visual não canônico.
+Somente o GOAL 022 poderá construir ativação, restrita a `HOMOLOGACAO` e sujeita a G-F7.
+**GOAL-005 não iniciado.**
 
 ---
 
@@ -94,7 +100,8 @@ EnvVault e dry-run. Os guards da state machine têm seis callers reais; o restan
 sem caller no fluxo de venda e o banco fiscal está vazio.
 
 **Falta (o trabalho real):**
-- P0: paridade fiscal do `upsertProduto` · ST/CSOSN 500 · ~~XSD oficial~~ (**feito, G-C2**) ·
+- P0: ~~paridade fiscal do `upsertProduto`~~ (**feito, GOAL-004 / PR #8, N3 cadastro**) ·
+  ST/CSOSN 500 · ~~XSD oficial~~ (**feito, G-C2**) ·
   ~~C14N interoperável~~ (**feito no eixo técnico, GOAL-003**) · gate global de dry-run auferível.
 - P1: provider/transmissão em homologação · QR-Code/CSC · estado incerto · fila · DANFCE · eventos ·
   contingência · observabilidade. Ativação somente no GOAL 022 e mediante gate.
@@ -122,6 +129,9 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
 - [x] Worker XSD B2 + `validarXsd` real + pacote `PL_010e_v1.02` (merge `82c219c`, G-C2).
 - [x] `lib/fiscal/signing/*`: XMLDSig com RSA-SHA1/SHA-1 (ADR-0011), C14N 1.0 e prova externa
   Java/JSR 105; **N4 no eixo C14N/XMLDSig**, sem certificado real.
+- [x] Paridade fiscal do `upsertProduto` (Cadastros V2) — `metadata.fiscal` canônica (PR #8,
+  merge `b307337`); contrato `lib/produto-fiscal.ts` reutilizado; **N3 no eixo cadastro**;
+  `fiscalRegime` não canônico; sem schema/migration/emissão.
 - [ ] `lib/fiscal/provider/<impl>`: provider real (homologação) registrado no resolver.
 - [ ] `lib/fiscal/qrcode/*`: QR-Code NFC-e + URL consulta por UF/CSC.
 - [ ] Produtor pós-commit (enfileira `FiscalEmissaoJob`) + worker idempotente.
@@ -177,22 +187,23 @@ sem caller no fluxo de venda e o banco fiscal está vazio.
 
 ## 11. Sprint atual
 
-**GOAL-003 C14N/XMLDSig (`FISCAL-XML-C14N-EXTERNAL-PROOF-003`) FECHADO em 15/07/2026** — integrado
-na `main` pelo PR #6 (`e52d16b`); prova Java/JSR 105 independente; 16/16 provas externas;
-workflow e artefato do PR verdes. F1 segue resolvida pela ADR-0009; F3 tem validação XSD real
-(N4 no eixo XSD) e F4 alcança N4 no eixo C14N/XMLDSig com signer **dormente**. Próximo passo:
-avaliação do GOAL seguinte (dry-run auferível / backlog); **GOAL-004 não iniciado**.
-Homologação e produção **não** foram abertas.
+**GOAL-004 paridade `upsertProduto` (`FISCAL-PRODUTO-UPSERT-PARITY-004`) FECHADO em 16/07/2026** —
+integrado na `main` pelo PR #8 (merge `b307337`, implementação `3f8928c`); Cadastros V2 grava
+`metadata.fiscal` canônica com o contrato existente; create/update/parcial não destrutivos;
+`fiscalRegime` só visual; Barcode/Cosmos com revisão humana; **N3 no eixo cadastro**; N6=0;
+N7=0; signer dormente; sem schema/migration; sem emissão/SEFAZ. GOAL-003 (C14N) e GOAL-002 (XSD)
+permanecem fechados. Próximo passo: avaliação de backlog (dry-run auferível / ST / integridade)
+**sem** iniciar GOAL-005 automaticamente. Homologação e produção **não** foram abertas.
 
 ## 12. Status atual (1 parágrafo)
 
-A frente fiscal tem fundação dormente com **validação XSD oficial real** (worker B2, G-C2) e
-**prova técnica externa de C14N/XMLDSig** (PR #6, critério C14N do F4→F5 fechado). Schema,
-identidade, guards, snapshot, tax-engine, XML, assinatura (RSA-SHA1), vault, provider stub,
-pipeline e numeração existem; o motor de emissão **não tem caller de venda**; banco fiscal vazio;
-`fiscalEnabled` inalcançável. O gate Fiscal **global** ainda **não** autoriza F5 (lacunas fora do
-GOAL-003). **Prova técnica ≠ homologação ≠ produção. N6=0 e N7=0.** Sequência oficial em
-`docs/fiscal/`.
+A frente fiscal tem fundação dormente com **validação XSD oficial real** (worker B2, G-C2),
+**prova técnica externa de C14N/XMLDSig** (PR #6) e **cadastro fiscal canônico do produto** também
+na porta Cadastros V2 (PR #8 / GOAL-004, N3). Schema, identidade, guards, snapshot, tax-engine,
+XML, assinatura (RSA-SHA1), vault, provider stub, pipeline e numeração existem; o motor de emissão
+**não tem caller de venda**; banco fiscal vazio; `fiscalEnabled` inalcançável. O gate Fiscal
+**global** ainda **não** autoriza F5. **Cadastro canônico ≠ regra tributária ≠ XML ≠ assinatura ≠
+transmissão ≠ homologação ≠ produção. N6=0 e N7=0.** Sequência oficial em `docs/fiscal/`.
 
 ## 13. Métricas de sucesso
 

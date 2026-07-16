@@ -119,11 +119,57 @@ Os itens **007/008** da tabela histórica acima ficam **cumpridos no eixo C14N/X
 fecha dry-run global, homologação, produção, paridade de produto, ST, provider real nem
 G-F5/G-F7/G-F12.
 
-O **próximo GOAL técnico** permanece sujeito a avaliação (dry-run auferível / backlog de
-integridade); o GOAL nomeado **004 não foi iniciado** e não é autorizado por este fechamento.
+## Fechamento GOAL-004 — paridade fiscal do `upsertProduto` — 16/07/2026
 
-A sequência histórica **GOAL 002 — paridade fiscal do `upsertProduto`** permanece backlog de
-produto/cadastro, **distinta** dos identificadores nomeados XSD (002) e C14N (003) já fechados.
+| Campo | Valor |
+|---|---|
+| GOAL nomeado | `FISCAL-PRODUTO-UPSERT-PARITY-004` |
+| Estado | **FECHADO** (implementação + integração PR #8 + fechamento documental) |
+| Equivalência histórica | GOAL histórico **002** / **P-04** (paridade `upsertProduto`); parcial `04ce54d` |
+| PR | #8 |
+| Commit de implementação | `3f8928c0d8dc7361b6282cbb2b225ae04ed8a501` |
+| Merge commit | `b307337ce89535355d18cd9138e17f635f1c1bf5` |
+| Parent main | `5b96df71a0b507c11785a043b49c6adb15ec26c8` |
+| Parent / HEAD fiscal | `3f8928c0d8dc7361b6282cbb2b225ae04ed8a501` |
+| Arquivos integrados | 4 · +206 / −20 |
+| Fonte canônica | `metadata.fiscal` (10 campos do contrato `lib/produto-fiscal.ts`) |
+| `metadata.fiscalRegime` | compatibilidade visual/textual **não canônica** |
+| Nível N (eixo cadastro/produto) | **N3**; **não** N4/N6/N7 |
+| Gates | G-C1/G-C2 e critério C14N **inalterados**; F4→F5 global / G-F5 / G-F7 / G-F12 **inalterados** |
+| Homologação SEFAZ | **não** · N6=0 |
+| Produção / emissão | **não** · N7=0 · signer **dormente** · callers produtivos **0** |
+
+Evidências integradas na `main`:
+
+- helper puro `lib/produtos/produto-fiscal-upsert.ts` reutiliza `getProdutoFiscal` +
+  `sanitizeProdutoFiscal` + `mergeProdutoFiscalIntoMetadata` (sem contrato paralelo);
+- `upsertProduto` (`app/actions/cadastros.ts`) usa `fiscalInputFromBody` e canoniza
+  `metadata.fiscal` após merge de dois níveis + acessórios;
+- Cadastros V2 (`produto-ia.tsx`) envia NCM/CEST canônicos sob revisão humana (Barcode/Cosmos);
+  regime textual em `metadata.fiscalRegime` (`tributacao`, `origem`, `atualizadoEm`);
+- create canônico; update sem fiscal preserva bloco; update parcial não destrutivo; metadata
+  não fiscal preservada; campos desconhecidos rejeitados; sem default tributário falso;
+- **sem** alteração de `lib/produto-fiscal.ts`, schema, migration, motor Fiscal, PDV, Caixa,
+  Estoque, Inventário, Contador HUB;
+- testes do helper (10) + suíte da auditoria **61/61**; TypeScript / ESLint / build verdes na
+  auditoria de merge readiness (PR **sem** checks independentes de TS/ESLint/testes/build;
+  Vercel success).
+
+Relatório de fechamento:
+[`FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`](./FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md).
+
+### Colisão de numeração (não renumerar histórico)
+
+| Identificador | Significado | Estado pós PR #8 |
+|---|---|---|
+| Tabela histórica GOAL **002** | Paridade fiscal do `upsertProduto` / saída `metadata.fiscal` canônico | **cumprido no eixo cadastro V2** pelo GOAL nomeado 004 |
+| Tabela histórica GOAL **004** | ST mínima do mix piloto (CSOSN 500) | **não iniciado** (motor tributário F2) |
+| Rótulo código `GOAL_004` (`04ce54d`) | Contrato `lib/produto-fiscal.ts` + REST/importadores | **parcial prévio**; porta Cadastros V2 **fechada** pelo PR #8 |
+| GOAL nomeado `…-004` | Slot após XSD-002 e C14N-003 | **FECHADO** |
+
+O item **002** da tabela histórica (paridade `upsertProduto`) fica **cumprido no eixo Cadastros V2**.
+Isso **não** fecha ST/CSOSN 500 (GOAL histórico 003–004), dry-run global, homologação, produção,
+provider real nem G-F5/G-F7/G-F12. **GOAL-005 não foi iniciado.**
 
 ## Limites permanentes
 

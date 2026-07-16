@@ -116,3 +116,37 @@ fechado documentalmente**:
 
 Esta nota **não reescreve** comandos históricos de implementação; apenas reconcilia o estado
 pós-merge do GOAL-003. GOAL-004 **não iniciado** aqui.
+
+## Nota reconciliada — execução GOAL-004 paridade `upsertProduto` + P-04
+
+Em 16/07/2026, o GOAL nomeado `FISCAL-PRODUTO-UPSERT-PARITY-004` foi **implementado, integrado e
+fechado documentalmente**:
+
+- PR #8 mergeado por **merge commit** `b307337ce89535355d18cd9138e17f635f1c1bf5`
+  (parents `5b96df7…` + `3f8928c…`);
+- commit de implementação `3f8928c0d8dc7361b6282cbb2b225ae04ed8a501`
+  (`fix(cadastros-v2): canonizar dados fiscais no upsertProduto`);
+- 4 arquivos: `app/actions/cadastros.ts`, `produto-ia.tsx`,
+  `lib/produtos/produto-fiscal-upsert.ts`, `lib/produtos/produto-fiscal-upsert.test.ts`
+  (+206 / −20);
+- `metadata.fiscal` canônica na porta Cadastros V2; `metadata.fiscalRegime` **não canônico**;
+- N3 no eixo cadastro/produto; N6=0; N7=0; sem SEFAZ; sem emissão; signer dormente;
+- gates G-C1/G-C2/C14N e G-F5/G-F7/G-F12 **inalterados** por este GOAL;
+- relatório: `docs/fiscal/FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`;
+- branch documental de fechamento: `fiscal/goal-004-produto-upsert-close` (somente docs da
+  allowlist).
+
+### Colisão de numeração (registrar; não renumerar)
+
+Este GOAL nomeado **004** corresponde, por objetivo, ao **GOAL histórico 002 / P-04**
+(“paridade fiscal do `upsertProduto`”), com implementação parcial prévia em `04ce54d`
+(contrato + REST/importadores). Na sequência oficial de execução:
+
+- GOAL-002 nomeado = validação XSD oficial (FECHADO);
+- GOAL-003 nomeado = prova externa C14N/XMLDSig (FECHADO);
+- GOAL-004 nomeado = fechamento da paridade fiscal do `upsertProduto` (FECHADO aqui).
+
+O GOAL histórico **004** da tabela (ST mínima / CSOSN 500) **permanece distinto e não iniciado**.
+
+Esta nota **não reescreve** comandos históricos; apenas reconcilia o estado pós-merge.
+**GOAL-005 não iniciado.**
