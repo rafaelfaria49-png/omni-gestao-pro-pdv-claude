@@ -33,16 +33,18 @@ de NFC-e em produção**, sem quebrar uma única venda real no caminho.
 
 ---
 
-## 2. Estado atual (reconciliação de 2026-07-15)
+## 2. Estado atual (reconciliação de 2026-07-16)
 
 > **Nota de reconciliação:** seção de status atualizada por extensão pelo
-> `FISCAL-STATUS-RECONCILE-001`, pelo fechamento do `FISCAL-XSD-OFFICIAL-VALIDATION-002` (G-C2) e,
-> em 15/07/2026, pelo fechamento documental do `FISCAL-XML-C14N-EXTERNAL-PROOF-003` (PR #6).
+> `FISCAL-STATUS-RECONCILE-001`, pelo fechamento do `FISCAL-XSD-OFFICIAL-VALIDATION-002` (G-C2),
+> pelo fechamento do `FISCAL-XML-C14N-EXTERNAL-PROOF-003` (PR #6) e, em 16/07/2026, pelo
+> fechamento documental do `FISCAL-PRODUTO-UPSERT-PARITY-004` (PR #8).
 > **Arquitetura, decisões, sequência, princípios e histórico das demais seções permanecem
-> vigentes** — alteração somente de status. Fontes:
+> vigentes** — alteração somente de status / linha de evidência. Fontes:
 > `docs/fiscal/FISCAL_RECONCILE_REPORT_001.md` ·
 > `docs/fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md` ·
-> `docs/fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`.
+> `docs/fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md` ·
+> `docs/fiscal/FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`.
 
 | Fase | Estado factual | Evidência / bloqueio |
 |---|---|---|
@@ -51,6 +53,7 @@ de NFC-e em produção**, sem quebrar uma única venda real no caminho.
 | F2 | código/testes N3, sem caller | `ba0cc12`; sem ST/CSOSN 500 |
 | F3 | XML + **XSD oficial real (N4 no eixo)**; sem caller de venda | merge `82c219c` · worker B2 · G-C2 **fechado** · sem SEFAZ |
 | F4 | signer RSA-SHA1/C14N 1.0 **integrado e dormente** | merge `e52d16b` (PR #6) · **N4 no eixo C14N/XMLDSig** · prova Java/JSR 105 · **sem caller de venda** · sem certificado real |
+| Cadastro produto | **paridade `upsertProduto` FECHADA (N3)** | merge `b307337` (PR #8) · `metadata.fiscal` canônica · P-04 resolvido no eixo V2 · sem emissão |
 | F5 | contrato/stub N1 | provider real ausente; G-F5 aberto |
 | F6 | N0 | QR-Code/CSC operacional ausente |
 | F7 | contrato de fila N1; guards em seis rotas | 0 jobs; sem produtor/worker; G-F7 aberto |
@@ -62,10 +65,14 @@ de NFC-e em produção**, sem quebrar uma única venda real no caminho.
 
 XSD: no-op removido; validação real fail-closed; pacote `PL_010e_v1.02`; G-C2 fechado (PR #4).
 **Critério técnico C14N/XMLDSig do gate F4→F5 = FECHADO** (GOAL-003, PR #6, run `29450960130`,
-artefato `8357457694`). Gate Fiscal **global** permanece **ABERTO** — dry-run completo ainda não é
-N4 pleno por lacunas restantes (paridade produto, ST, casos-alvo, provider). N6=0 e N7=0.
-Prova externa **não** é homologação SEFAZ. **Não reimplementar F2–F4 do zero:** fechar lacunas
+artefato `8357457694`). **GOAL-004 / P-04 (paridade `upsertProduto`):** **FECHADO** na `main`
+(PR #8, merge `b307337`, implementação `3f8928c`); N3 no eixo cadastro; `metadata.fiscalRegime`
+não canônico; schema/migration intocados; signer dormente; callers produtivos = 0.
+Gate Fiscal **global** permanece **ABERTO** — dry-run completo ainda não é N4 pleno por lacunas
+restantes (ST, casos-alvo, provider, dry-run integral). N6=0 e N7=0. Prova externa e cadastro
+canônico **não** são homologação SEFAZ. **Não reimplementar F2–F4 do zero:** fechar lacunas
 internas remanescentes, tornar o dry-run auferível de ponta a ponta e somente então avançar para F5.
+**GOAL-005 não iniciado.**
 
 ---
 
