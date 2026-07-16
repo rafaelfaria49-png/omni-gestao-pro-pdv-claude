@@ -371,8 +371,17 @@ export function ProductAIModal({
     setAcessoriosValue(produtoAcessoriosFormFromMetadata(metadata));
     const atributos = metadataRecord(metadata?.atributos);
     const fiscal = metadataRecord(metadata?.fiscal);
+    const fiscalRegime = metadataRecord(metadata?.fiscalRegime);
     setModeloCompativel(typeof atributos?.modeloCompativel === "string" ? atributos.modeloCompativel : "");
-    setTributacao(typeof fiscal?.tributacao === "string" ? fiscal.tributacao : "");
+    // Regime tributário (texto livre) mora em `metadata.fiscalRegime`; fallback ao legado
+    // `metadata.fiscal.tributacao` para produtos salvos antes da canonização (GOAL-004).
+    setTributacao(
+      typeof fiscalRegime?.tributacao === "string"
+        ? fiscalRegime.tributacao
+        : typeof fiscal?.tributacao === "string"
+          ? fiscal.tributacao
+          : "",
+    );
     setTags(Array.isArray(atributos?.tags) ? atributos.tags.filter((tag): tag is string => typeof tag === "string").join(", ") : "");
     setDescricao(typeof atributos?.descricao === "string" ? atributos.descricao : "");
     setBarcodeScan("");
@@ -1026,14 +1035,6 @@ export function ProductAIModal({
                         })
                       : null;
                   const tributacaoNormalizada = tributacao.trim();
-                  const fiscalBarcodeSuggestion = cosmosFiscalApplied
-                    ? {
-                        ...cosmosFiscalApplied,
-                        origem: "barcode-lookup:cosmos",
-                        status: "revisado_operador",
-                        revisadoEm: barcodeSuggestionApplication?.aplicadoEm ?? new Date().toISOString(),
-                      }
-                    : null;
                   const barcodeLookupMetadata = externalBarcodeLookup
                     ? (() => {
                         const { result } = externalBarcodeLookup;
@@ -1089,17 +1090,19 @@ export function ProductAIModal({
                         tags: normalizeProdutoTags(tags),
                         modeloCompativel: modeloCompativel.trim(),
                       },
-                      ...(tributacaoNormalizada || fiscalBarcodeSuggestion
+                      // Identidade fiscal canônica (GOAL-004): manda só os campos do contrato
+                      // (ncm/cest sugeridos pelo Cosmos, revisados pelo operador) em
+                      // `metadata.fiscal`; a Server Action sanea e persiste na forma canônica. A
+                      // proveniência da sugestão já é auditada em `metadata.barcodeLookup`.
+                      ...(cosmosFiscalApplied ? { fiscal: { ...cosmosFiscalApplied } } : {}),
+                      // Regime tributário é texto livre do operador (fora do contrato fiscal
+                      // canônico): vive em `metadata.fiscalRegime` para não poluir `metadata.fiscal`.
+                      ...(tributacaoNormalizada
                         ? {
-                            fiscal: {
-                              ...(tributacaoNormalizada
-                                ? {
-                                    tributacao: tributacaoNormalizada,
-                                    tributacaoOrigem: "operador",
-                                    tributacaoAtualizadoEm: new Date().toISOString(),
-                                  }
-                                : {}),
-                              ...(fiscalBarcodeSuggestion ?? {}),
+                            fiscalRegime: {
+                              tributacao: tributacaoNormalizada,
+                              origem: "operador",
+                              atualizadoEm: new Date().toISOString(),
                             },
                           }
                         : {}),
