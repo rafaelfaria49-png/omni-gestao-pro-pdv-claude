@@ -80,24 +80,38 @@ describe("agregarVendas", () => {
     expect(r.naoIdentificadoValor.valor).toBe(70)
   })
 
-  it("breakdown conhecido que não reconcilia com Venda.total expõe o residual", () => {
-    const r = agregarVendas([{ total: 100, status: "concluida", payload: pb({ pix: 60 }) }])
+  it("breakdown conhecido abaixo de Venda.total expõe a tupla direcional completa", () => {
+    const r = agregarVendas([{ total: 100, status: "concluida", payload: pb({ pix: 80 }) }])
     expect(r.formaPagamentoDisponibilidade).toBe("parcial")
     expect(r.naoIdentificadoQuantidade.valor).toBe(1)
-    expect(r.naoIdentificadoValor.valor).toBe(40)
+    expect(r.naoIdentificadoValor.valor).toBe(20)
     expect(r.divergenciaPagamentoQuantidade.valor).toBe(1)
     expect(r.reconciliacaoPagamento).toEqual({
       totalVendas: 100,
-      totalBreakdown: 60,
-      residualNaoIdentificado: 40,
+      totalBreakdown: 80,
+      residualNaoIdentificado: 20,
       excedenteBreakdown: 0,
-      divergenciaAbsoluta: 40,
+      divergenciaAbsoluta: 20,
       reconciliado: false,
+    })
+  })
+
+  it("breakdown conhecido exato expõe a tupla reconciliada e disponibilidade real", () => {
+    const r = agregarVendas([{ total: 100, status: "concluida", payload: pb({ pix: 100 }) }])
+    expect(r.formaPagamentoDisponibilidade).toBe("real")
+    expect(r.reconciliacaoPagamento).toEqual({
+      totalVendas: 100,
+      totalBreakdown: 100,
+      residualNaoIdentificado: 0,
+      excedenteBreakdown: 0,
+      divergenciaAbsoluta: 0,
+      reconciliado: true,
     })
   })
 
   it("quantifica breakdown conhecido acima de Venda.total", () => {
     const r = agregarVendas([{ total: 100, status: "concluida", payload: pb({ pix: 120 }) }])
+    expect(r.total.valor).toBe(100)
     expect(r.formaPagamentoDisponibilidade).toBe("parcial")
     expect(r.naoIdentificadoQuantidade.valor).toBe(1)
     expect(r.divergenciaPagamentoQuantidade.valor).toBe(1)
@@ -107,6 +121,23 @@ describe("agregarVendas", () => {
       residualNaoIdentificado: 0,
       excedenteBreakdown: 20,
       divergenciaAbsoluta: 20,
+      reconciliado: false,
+    })
+  })
+
+  it("forma conhecida mais chave desconhecida reconcilia o valor sem fingir cobertura real", () => {
+    const r = agregarVendas([
+      { total: 100, status: "concluida", payload: pb({ pix: 50, novaForma: 50 }) },
+    ])
+    expect(r.formasPagamento.find((f) => f.chave === "pix")?.valor).toBe(50)
+    expect(r.naoIdentificadoValor.valor).toBe(50)
+    expect(r.formaPagamentoDisponibilidade).toBe("parcial")
+    expect(r.reconciliacaoPagamento).toEqual({
+      totalVendas: 100,
+      totalBreakdown: 100,
+      residualNaoIdentificado: 0,
+      excedenteBreakdown: 0,
+      divergenciaAbsoluta: 0,
       reconciliado: false,
     })
   })

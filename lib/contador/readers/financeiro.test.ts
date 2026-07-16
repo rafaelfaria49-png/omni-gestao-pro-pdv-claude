@@ -14,6 +14,8 @@ describe("parseVencimento", () => {
     ["último dia antes da virada do ano", "2026-12-31", { ano: 2026, mes: 12 }],
     ["primeiro dia após a virada do ano", "01/01/2027", { ano: 2027, mes: 1 }],
     ["ano bissexto real", "2024-02-29", { ano: 2024, mes: 2 }],
+    ["último dia real de fevereiro não bissexto", "2026-02-28", { ano: 2026, mes: 2 }],
+    ["último dia real de abril", "2026-04-30", { ano: 2026, mes: 4 }],
   ] as const
 
   it.each(validos)("aceita %s sem normalizar a data-parede", (_nome, entrada, esperado) => {
@@ -25,8 +27,10 @@ describe("parseVencimento", () => {
     ["texto livre", "junho"],
     ["espaço antes de ISO", " 2026-06-20"],
     ["espaço depois de ISO", "2026-06-20 "],
+    ["espaços ao redor de ISO", " 2026-06-20 "],
     ["espaço antes de BR", " 20/06/2026"],
     ["espaço depois de BR", "20/06/2026 "],
+    ["espaços ao redor de BR", " 20/06/2026 "],
     ["tab antes de ISO", "\t2026-06-20"],
     ["tab depois de ISO", "2026-06-20\t"],
     ["tab antes de BR", "\t20/06/2026"],
@@ -41,6 +45,7 @@ describe("parseVencimento", () => {
     ["mês ISO treze", "2026-13-01"],
     ["dia ISO zero", "2026-06-00"],
     ["dia ISO fora do mês", "2026-02-99"],
+    ["dia ISO inexistente em fevereiro", "2026-02-30"],
     ["29 de fevereiro em ano não bissexto ISO", "2026-02-29"],
     ["31 de abril ISO", "2026-04-31"],
     ["31 de junho ISO", "2026-06-31"],
@@ -52,6 +57,12 @@ describe("parseVencimento", () => {
     ["31 de junho BR", "31/06/2026"],
     ["timestamp ISO", "2026-06-20T00:00:00Z"],
     ["sufixo BR", "20/06/2026 extra"],
+    ["mês ISO sem zero à esquerda", "2026-6-20"],
+    ["ano ISO com dois dígitos", "26-06-20"],
+    ["ISO com barras", "2026/06/20"],
+    ["ISO sem dia", "2026-06"],
+    ["sufixo ISO", "2026-06-20-extra"],
+    ["alfabético", "abc"],
   ] as const
 
   it.each(invalidos)("rejeita individualmente %s", (_nome, entrada) => {
@@ -166,6 +177,8 @@ describe("agregarFinanceiro", () => {
     ]
     const r = agregarFinanceiro({ movimentacoes: [], receber: [], pagar, competencia: comp })
     expect(r.titulosPagarAberto.valor).toBe(80)
+    expect(r.titulosPagarQuantidade.valor).toBe(1)
     expect(r.titulosPagarAberto.disponibilidade).toBe("parcial")
+    expect(r.titulosPagarAberto.observacao).toContain("1 título(s) aberto(s) sem vencimento reconhecível")
   })
 })

@@ -1,7 +1,7 @@
 ---
 title: Contador HUB — Dados Reais (read-only) · GOAL 006
-goal: CONTADOR-HUB-DADOS-REAIS-READONLY-006 + 006B + 006C + 006D-FINAL-CONTRACT-EVIDENCE
-status: entregue · contrato direcional e evidências finais versionadas
+goal: CONTADOR-HUB-DADOS-REAIS-READONLY-006 + 006B + 006C + 006D-FINAL-CONTRACT-EVIDENCE + 006E-FINAL-EVIDENCE-CLOSEOUT
+status: entregue · contrato direcional e fechamento final de evidências versionados
 base: origin/main = 50c1db8 (contém GOAL 004 = 066e9f2 · GOAL 005 = 50c1db8)
 branch: goal/contador-006-dados-reais
 escopo: auditoria de fontes + readers Prisma read-only + realificação parcial (Visão Geral + Relatórios básicos)
@@ -105,11 +105,14 @@ caixa indisponível, fonte fiscal indisponível).
 - `components/dashboard/contador/contador-hub-preview.tsx` — injeta os blocos reais em
   Visão Geral e Relatórios; demais seções seguem preview honesto.
 
-**Testes:** `vendas.test.ts`, `financeiro.test.ts`, `caixa.test.ts`, `index.test.ts`
+**Testes:** `vendas.test.ts`, `financeiro.test.ts`, `caixa.test.ts`, `index.test.ts` e
+`serializacao.test.ts`
 (agregação, dupla contagem, honestidade, reconciliação direcional, falha parcial e queries
 com dados A/B, storeId e fronteiras UTC `gte`/`lt`) e `scope-core.test.ts` (permissão + ACL
 cross-store). Em `index.test.ts`, as sete fixtures A/B são passadas por `montarDados` e o
-valor relevante do DTO final é verificado; a prova não termina nas fontes brutas.
+valor relevante do DTO final é verificado; a prova não termina nas fontes brutas. Venda
+também prova quantidade e total agregados, e SessaoCaixa prova quantidade de sessões,
+quantidade aberta e diferenças de conferência.
 
 ## 5. Fora de escopo (preservado)
 
@@ -128,12 +131,16 @@ comentários, obrigações/guias, **Fiscal** (NotaFiscal/XML/imposto), schema, q
   timestamps/sufixos e formatos ambíguos ficam fora da competência e reduzem a
   disponibilidade para parcial. A matriz versionada cobre cada rejeição individualmente,
   competência anterior/atual/seguinte e virada de ano no parser e na agregação.
-- **Carga dos títulos**: `ContaReceberTitulo` e `ContaPagarTitulo` são consultadas apenas por
-  `storeId`, sem filtro temporal no banco e sem `take`; portanto todos os títulos da loja são
-  carregados e o status/vencimento é filtrado e agregado em memória. Isso preserva a
-  semântica atual da data-parede em String, mas o custo cresce com o histórico integral da
-  loja. Antes de escalar para lojas com alto volume, a modelagem deve ganhar data consultável
-  e índice/filtro no banco sem relaxar o isolamento por `storeId`.
+- **Perfil das queries e carga dos títulos**: as cinco queries com DateTime (`Venda`,
+  `DevolucaoVenda`, `MovimentacaoFinanceira`, `SessaoCaixa` e `CaixaOperacao`) são filtradas
+  no banco pelo intervalo mensal semiaberto. Em contraste, `ContaReceberTitulo` e
+  `ContaPagarTitulo` são consultadas apenas por `storeId`, sem filtro temporal no banco, sem
+  paginação e sem `take`: todos os títulos da loja são carregados, e status/vencimento são
+  filtrados e agregados em memória. O custo cresce com o histórico integral de títulos da
+  loja. Não há snapshot histórico da posição, truncamento silencioso nem limite artificial;
+  somente o DTO agregado, nunca as linhas brutas, chega ao cliente. Uma otimização futura
+  pode exigir mudança estrutural no modelo (data consultável/indexável ou snapshot), além de
+  filtro/paginação apropriados, sem relaxar o isolamento por `storeId`.
 - **Origem de transferência/reversão em `MovimentacaoFinanceira`**: reutiliza os
   classificadores compartilhados e cobre `devolucao_pdv`, `cancelamento_pdv` e `estorno_*`;
   reversões ficam sempre no agregado `estornos`, fora de entradas/saídas normais.
@@ -194,3 +201,43 @@ comentários, obrigações/guias, **Fiscal** (NotaFiscal/XML/imposto), schema, q
   (**+144 bytes** sobre o artefato 006C de 79.387 bytes). O conjunto de três chunks do
   componente soma **122.643 bytes** e permanece sem `Prisma`, `@prisma`, `query_engine`,
   `generated/prisma`, `server-only` ou `DATABASE_URL`.
+
+## 10. Fechamento final de evidências 006E
+
+- A UI de Relatórios apresenta três informações auxiliares e parciais, sem tratá-las como
+  receita, recebimento real ou KPI: valor sem forma identificada, excedente do breakdown e
+  divergência total (residual + excedente). A divergência absoluta só aparece quando positiva;
+  um zero reconciliado não gera linha duplicada.
+- A reconciliação versionada cobre as tuplas completas para `Venda.total/paymentBreakdown`
+  abaixo (`100/80`), exata (`100/100`) e acima (`100/120`), além de duas vendas cruzadas
+  (`80/120`) sem compensar residual e excedente. O caso `pix: 50 + novaForma: 50` mantém
+  total declarado 100, residual/excedente/divergência iguais a zero, mas fica parcial e
+  `reconciliado: false`, pois existe uma chave desconhecida.
+- A prova cross-store usa duas vendas válidas na loja A contra quatro na loja B e verifica no
+  DTO da loja A `quantidade = 2` e o total agregado próprio. Para SessaoCaixa, usa duas
+  sessões na loja A contra cinco na loja B e verifica `sessoes = 2`, `sessoesAbertas = 1` e
+  a diferença de conferência própria da loja A. As sete queries continuam verificando
+  `where.storeId = loja-a` e seus resultados agregados finais.
+- Matriz civil válida, enumerada literalmente: `2026-05-31`, `2026-06-20`, `2026-07-01`,
+  `31/05/2026`, `20/06/2026`, `01/07/2026`, `2026-12-31`, `01/01/2027`, `2024-02-29`,
+  `2026-02-28` e `2026-04-30`.
+- Matriz civil inválida, enumerada literalmente (aspas delimitam espaços): `""`, `junho`,
+  `" 2026-06-20"`, `"2026-06-20 "`, `" 2026-06-20 "`, `" 20/06/2026"`,
+  `"20/06/2026 "`, `" 20/06/2026 "`, `\t2026-06-20`, `2026-06-20\t`,
+  `\t20/06/2026`, `20/06/2026\t`, `\n2026-06-20`, `20/06/2026\n`,
+  `\n20/06/2026`, `2026-06-20\n`, `\r\n2026-06-20\r\n`,
+  `\r\n20/06/2026\r\n`, `2026-00-01`, `2026-13-01`, `2026-06-00`, `2026-02-99`,
+  `2026-02-30`, `2026-02-29`, `2026-04-31`, `2026-06-31`, `00/06/2026`,
+  `01/00/2026`, `01/13/2026`, `29/02/2026`, `31/04/2026`, `31/06/2026`,
+  `2026-06-20T00:00:00Z`, `20/06/2026 extra`, `2026-6-20`, `26-06-20`,
+  `2026/06/20`, `2026-06`, `2026-06-20-extra` e `abc`. Um título válido mais um inválido
+  prova que só o válido entra no valor/quantidade e que a observação parcial registra
+  exatamente um título excluído, sem fabricar zero nem transformar o caso em falha do reader.
+- A matriz dedicada de serialização cobre sucesso completo, dados parciais, origem financeira
+  desconhecida, título inválido, breakdown abaixo, acima e conhecido + desconhecido, além das
+  sete falhas individuais. Cada DTO passa por `JSON.stringify`/`JSON.parse` sem `Decimal`,
+  `Prisma`, `stack`, `storeId` ou campo bruto sentinela do payload.
+- Build 006E: o chunk específico de `/dashboard/contador` ficou em **79.779 bytes**
+  (**+248 bytes** sobre o artefato 006D de 79.531 bytes). O conjunto dos três chunks do
+  componente soma **122.891 bytes** e tem zero ocorrência de `Prisma`, `@prisma`,
+  `query_engine`, `generated/prisma`, `server-only` e `DATABASE_URL`.
