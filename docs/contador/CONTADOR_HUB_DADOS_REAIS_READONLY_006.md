@@ -134,13 +134,14 @@ comentários, obrigações/guias, **Fiscal** (NotaFiscal/XML/imposto), schema, q
 - **Perfil das queries e carga dos títulos**: as cinco queries com DateTime (`Venda`,
   `DevolucaoVenda`, `MovimentacaoFinanceira`, `SessaoCaixa` e `CaixaOperacao`) são filtradas
   no banco pelo intervalo mensal semiaberto. Em contraste, `ContaReceberTitulo` e
-  `ContaPagarTitulo` são consultadas apenas por `storeId`, sem filtro temporal no banco, sem
-  paginação e sem `take`: todos os títulos da loja são carregados, e status/vencimento são
-  filtrados e agregados em memória. O custo cresce com o histórico integral de títulos da
-  loja. Não há snapshot histórico da posição, truncamento silencioso nem limite artificial;
-  somente o DTO agregado, nunca as linhas brutas, chega ao cliente. Uma otimização futura
-  pode exigir mudança estrutural no modelo (data consultável/indexável ou snapshot), além de
-  filtro/paginação apropriados, sem relaxar o isolamento por `storeId`.
+  `ContaPagarTitulo` são consultadas integralmente por `storeId`, sem filtro temporal no
+  banco, sem paginação e sem `take`: todos os títulos da loja são carregados, e
+  status/vencimento são filtrados e agregados em memória. O custo é proporcional ao
+  histórico integral de títulos da loja. Não há snapshot histórico da posição, truncamento
+  silencioso nem limite artificial; somente o DTO agregado, nunca as linhas brutas, chega
+  ao cliente. A otimização estrutural da carga de títulos está fora do escopo do GOAL 006.
+  Uma otimização futura pode exigir mudança estrutural no modelo (data consultável/indexável
+  ou snapshot), além de filtro/paginação apropriados, sem relaxar o isolamento por `storeId`.
 - **Origem de transferência/reversão em `MovimentacaoFinanceira`**: reutiliza os
   classificadores compartilhados e cobre `devolucao_pdv`, `cancelamento_pdv` e `estorno_*`;
   reversões ficam sempre no agregado `estornos`, fora de entradas/saídas normais.
@@ -226,17 +227,25 @@ comentários, obrigações/guias, **Fiscal** (NotaFiscal/XML/imposto), schema, q
   `"20/06/2026 "`, `" 20/06/2026 "`, `\t2026-06-20`, `2026-06-20\t`,
   `\t20/06/2026`, `20/06/2026\t`, `\n2026-06-20`, `20/06/2026\n`,
   `\n20/06/2026`, `2026-06-20\n`, `\r\n2026-06-20\r\n`,
-  `\r\n20/06/2026\r\n`, `2026-00-01`, `2026-13-01`, `2026-06-00`, `2026-02-99`,
-  `2026-02-30`, `2026-02-29`, `2026-04-31`, `2026-06-31`, `00/06/2026`,
-  `01/00/2026`, `01/13/2026`, `29/02/2026`, `31/04/2026`, `31/06/2026`,
-  `2026-06-20T00:00:00Z`, `20/06/2026 extra`, `2026-6-20`, `26-06-20`,
-  `2026/06/20`, `2026-06`, `2026-06-20-extra` e `abc`. Um título válido mais um inválido
-  prova que só o válido entra no valor/quantidade e que a observação parcial registra
-  exatamente um título excluído, sem fabricar zero nem transformar o caso em falha do reader.
-- A matriz dedicada de serialização cobre sucesso completo, dados parciais, origem financeira
-  desconhecida, título inválido, breakdown abaixo, acima e conhecido + desconhecido, além das
-  sete falhas individuais. Cada DTO passa por `JSON.stringify`/`JSON.parse` sem `Decimal`,
-  `Prisma`, `stack`, `storeId` ou campo bruto sentinela do payload.
+  `\r\n20/06/2026\r\n`, `2026-00-01`, `2026-00-10`, `2026-13-01`,
+  `2026-06-00`, `2026-01-00`, `2026-02-99`, `2026-02-30`, `2026-02-29`,
+  `2026-04-31`, `2026-06-31`, `00/06/2026`, `01/00/2026`, `01/13/2026`,
+  `29/02/2026`, `31/04/2026`, `31/06/2026`, `2026-06-20T00:00:00Z`,
+  `20/06/2026 extra`, `2026-6-20`, `26-06-20`, `2026/06/20`, `2026-06`,
+  `2026-06-20-extra` e `abc`. Os literais exatos `2026-00-10` e `2026-01-00`
+  estão versionados junto com as demais datas impossíveis já existentes (`2026-00-01`,
+  `2026-06-00`, etc.): o parser retorna `null`, não entram no valor nem na quantidade
+  agregados, elevam a contagem de vencimentos inválidos, tornam a disponibilidade parcial
+  e não derrubam o reader. Um título válido mais um inválido prova que só o válido entra
+  no valor/quantidade e que a observação parcial registra exatamente um título excluído,
+  sem fabricar zero nem transformar o caso em falha do reader.
+- A matriz dedicada de serialização cobre **14 cenários**: sucesso completo, dados parciais,
+  origem financeira desconhecida, título inválido, breakdown abaixo, acima e conhecido +
+  desconhecido, além das sete falhas individuais (Venda, Devolução, Movimentação,
+  ContaReceber, ContaPagar, SessaoCaixa, CaixaOperacao). Cada DTO passa por
+  `JSON.stringify`/`JSON.parse` **e** por inspeção recursiva versionada (`validarValorSerializavel`
+  no arquivo de teste), que rejeita por tipo/chave — não só por texto — `Date`, `Decimal`,
+  `BigInt`, `Error`, `Session`, `storeId`, `stack`, payload bruto e objetos Prisma.
 - Build 006E: o chunk específico de `/dashboard/contador` ficou em **79.779 bytes**
   (**+248 bytes** sobre o artefato 006D de 79.531 bytes). O conjunto dos três chunks do
   componente soma **122.891 bytes** e tem zero ocorrência de `Prisma`, `@prisma`,

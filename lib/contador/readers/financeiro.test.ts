@@ -42,8 +42,10 @@ describe("parseVencimento", () => {
     ["CRLF ao redor de ISO", "\r\n2026-06-20\r\n"],
     ["CRLF ao redor de BR", "\r\n20/06/2026\r\n"],
     ["mês ISO zero", "2026-00-01"],
+    ["mês ISO zero com dia dez", "2026-00-10"],
     ["mês ISO treze", "2026-13-01"],
     ["dia ISO zero", "2026-06-00"],
+    ["dia ISO zero em janeiro", "2026-01-00"],
     ["dia ISO fora do mês", "2026-02-99"],
     ["dia ISO inexistente em fevereiro", "2026-02-30"],
     ["29 de fevereiro em ano não bissexto ISO", "2026-02-29"],
@@ -180,5 +182,24 @@ describe("agregarFinanceiro", () => {
     expect(r.titulosPagarQuantidade.valor).toBe(1)
     expect(r.titulosPagarAberto.disponibilidade).toBe("parcial")
     expect(r.titulosPagarAberto.observacao).toContain("1 título(s) aberto(s) sem vencimento reconhecível")
+  })
+
+  it("rejeita literais civis 2026-00-10 e 2026-01-00 no agregador sem derrubar o reader", () => {
+    expect(parseVencimento("2026-00-10")).toBeNull()
+    expect(parseVencimento("2026-01-00")).toBeNull()
+
+    const receber: TituloRow[] = [
+      { valor: 100, status: "pendente", vencimento: "2026-06-10" },
+      { valor: 50, status: "pendente", vencimento: "2026-00-10" },
+      { valor: 75, status: "pendente", vencimento: "2026-01-00" },
+    ]
+    const r = agregarFinanceiro({ movimentacoes: [], receber, pagar: [], competencia: comp })
+
+    expect(r.titulosReceberAberto.valor).toBe(100)
+    expect(r.titulosReceberQuantidade.valor).toBe(1)
+    expect(r.titulosReceberAberto.disponibilidade).toBe("parcial")
+    expect(r.titulosReceberAberto.observacao).toContain(
+      "2 título(s) aberto(s) sem vencimento reconhecível",
+    )
   })
 })

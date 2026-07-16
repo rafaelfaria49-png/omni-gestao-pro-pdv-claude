@@ -32,6 +32,109 @@ function fontesCompletas(): FontesContador {
   }
 }
 
+/**
+ * Walker recursivo versionado: inspeciona tipos e chaves do DTO (não só texto JSON).
+ * Permanece somente neste arquivo de teste — não é helper de produção.
+ *
+ * `visitados` atua como pilha de ancestrais: detecta ciclos reais (A→B→A).
+ * Referências compartilhadas legítimas (mesmo objeto folha em vários KPIs) NÃO
+ * são ciclo — o objeto sai da pilha ao concluir a subárvore.
+ */
+function validarValorSerializavel(
+  value: unknown,
+  caminho = "root",
+  visitados = new WeakSet<object>(),
+): void {
+  if (value === null) return
+  if (value === undefined) return
+
+  const tipo = typeof value
+  if (tipo === "string" || tipo === "boolean") return
+  if (tipo === "number") {
+    if (!Number.isFinite(value as number)) {
+      throw new Error(`${caminho}: number não finito`)
+    }
+    return
+  }
+  if (tipo === "bigint") {
+    throw new Error(`${caminho}: BigInt proibido no DTO público`)
+  }
+  if (tipo === "function") {
+    throw new Error(`${caminho}: função proibida no DTO público`)
+  }
+  if (tipo === "symbol") {
+    throw new Error(`${caminho}: símbolo proibido no DTO público`)
+  }
+  if (tipo !== "object") {
+    throw new Error(`${caminho}: tipo não serializável (${tipo})`)
+  }
+
+  const obj = value as object
+  if (visitados.has(obj)) {
+    throw new Error(`${caminho}: ciclo de referência proibido`)
+  }
+  visitados.add(obj)
+
+  try {
+    if (value instanceof Date) {
+      throw new Error(`${caminho}: Date proibida no DTO público`)
+    }
+    if (value instanceof Error) {
+      throw new Error(`${caminho}: Error proibido no DTO público`)
+    }
+
+    const ctor = (value as { constructor?: { name?: string } }).constructor?.name ?? ""
+    if (ctor === "Decimal" || ctor.includes("Decimal")) {
+      throw new Error(`${caminho}: objeto Decimal proibido no DTO público`)
+    }
+    if (ctor.startsWith("Prisma") || ctor.includes("PrismaClient") || ctor.includes("PrismaPromise")) {
+      throw new Error(`${caminho}: objeto Prisma proibido no DTO público`)
+    }
+
+    // Não confundir string comercial com objeto Prisma: só chaves/tipos estruturais.
+    if (Array.isArray(value)) {
+      value.forEach((item, i) => validarValorSerializavel(item, `${caminho}[${i}]`, visitados))
+      return
+    }
+
+    const record = value as Record<string, unknown>
+    const chaves = Object.keys(record)
+
+    // Sentinelas estruturais de vazamento (chaves, não substring de valor comercial).
+    for (const chave of chaves) {
+      if (chave === "storeId") {
+        throw new Error(`${caminho}.${chave}: storeId proibido no DTO público`)
+      }
+      if (chave === "stack") {
+        throw new Error(`${caminho}.${chave}: stack proibida no DTO público`)
+      }
+      if (chave === "payload") {
+        throw new Error(`${caminho}.${chave}: payload bruto proibido no DTO público`)
+      }
+      if (chave === "Session" || chave === "session") {
+        throw new Error(`${caminho}.${chave}: Session proibida no DTO público`)
+      }
+      if (chave === "prisma" || chave === "Prisma" || chave === "$prisma") {
+        throw new Error(`${caminho}.${chave}: objeto Prisma proibido no DTO público`)
+      }
+    }
+
+    // Heurística de instância Session-like (construtor ou shape mínimo).
+    if (
+      ctor === "Session" ||
+      (chaves.includes("user") && chaves.includes("expires") && chaves.includes("sessionToken"))
+    ) {
+      throw new Error(`${caminho}: Session proibida no DTO público`)
+    }
+
+    for (const chave of chaves) {
+      validarValorSerializavel(record[chave], `${caminho}.${chave}`, visitados)
+    }
+  } finally {
+    visitados.delete(obj)
+  }
+}
+
 function expectDtoSerializavel(dto: ReturnType<typeof montarDados>) {
   expect(() => JSON.stringify(dto)).not.toThrow()
   const json = JSON.stringify(dto)
@@ -41,6 +144,7 @@ function expectDtoSerializavel(dto: ReturnType<typeof montarDados>) {
   expect(json).not.toContain("stack")
   expect(json).not.toContain("segredo-do-banco")
   expect(json).not.toContain("storeId")
+  expect(() => validarValorSerializavel(dto)).not.toThrow()
 }
 
 describe("serialização do DTO público do Contador", () => {
