@@ -2,7 +2,7 @@
 title: Mocks Tracking — onde ainda há mock no projeto
 status: vivo
 owner: produto + Sonnet
-last_update: 2026-07-15
+last_update: 2026-07-16
 ---
 
 # 🎭 Mocks Tracking
@@ -43,7 +43,7 @@ last_update: 2026-07-15
 | MOCK-06 | `/dashboard/cadastros-v2` dados de demo | Seed-mock | 🟢 | ⏳ | CRM | Substituídos quando há dados reais |
 | MOCK-07 | Marketplace (HUB inteiro) | Hub-mock | 🟢 | ⏳ | Marketplace | Greenfield — não há código, nem mock |
 | MOCK-08 | Marketing IA (campanha, atribuição, ROI) | Hub-mock | 🟡 | ⏳ | Marketing IA | Existe gerador de imagens real, mas orquestrador inexistente |
-| MOCK-09 | `/dashboard/contador` — seções preview (Fechamento, Documentos, Obrigações, Dossiês, Folha, Portal, Permissões, Timeline, Config) | UI-mock | 🟡 | 🔄 | Contador | GOAL 006/006B/006C realificou **blocos identificados** da Visão Geral e dos Relatórios básicos (read-only por competência, com selos real/parcial/indisponível, transferências e origens não classificadas explícitas); ambas as áreas continuam **híbridas** porque preservam cartões ilustrativos. Demais seções seguem preview honesto com banner. |
+| MOCK-09 | `/dashboard/contador` — seções preview (Fechamento, Documentos, Obrigações, Dossiês, Folha, Portal, Permissões, Timeline, Config) | UI-mock | 🟡 | 🔄 | Contador | GOAL 006/006B/006C/006D realificou **blocos identificados** da Visão Geral e dos Relatórios básicos (read-only por competência, com selos real/parcial/indisponível, transferências, origens não classificadas e reconciliação direcional de pagamentos explícitas); ambas as áreas continuam **híbridas** porque preservam cartões ilustrativos. Demais seções seguem preview honesto com banner. |
 
 ---
 

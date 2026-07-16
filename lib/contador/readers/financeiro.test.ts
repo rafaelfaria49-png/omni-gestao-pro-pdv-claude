@@ -4,21 +4,58 @@ import { agregarFinanceiro, parseVencimento, type MovimentacaoRow, type TituloRo
 const comp = { ano: 2026, mes: 6 }
 
 describe("parseVencimento", () => {
-  it("aceita somente ISO e BR com data de calendário real", () => {
-    expect(parseVencimento("2026-06-20")).toEqual({ ano: 2026, mes: 6 })
-    expect(parseVencimento("20/06/2026")).toEqual({ ano: 2026, mes: 6 })
-    expect(parseVencimento("2024-02-29")).toEqual({ ano: 2024, mes: 2 })
-    expect(parseVencimento("")).toBeNull()
-    expect(parseVencimento("junho")).toBeNull()
-    expect(parseVencimento("2026-13-01")).toBeNull()
-    expect(parseVencimento("2026-02-99")).toBeNull()
-    expect(parseVencimento("2026-02-29")).toBeNull()
-    expect(parseVencimento("31/04/2026")).toBeNull()
-    expect(parseVencimento("00/06/2026")).toBeNull()
-    expect(parseVencimento("2026-06-20T00:00:00Z")).toBeNull()
-    expect(parseVencimento("20/06/2026 extra")).toBeNull()
-    expect(parseVencimento(" 2026-06-20 ")).toBeNull()
-    expect(parseVencimento(" 20/06/2026 ")).toBeNull()
+  const validos = [
+    ["ISO da competência anterior", "2026-05-31", { ano: 2026, mes: 5 }],
+    ["ISO da competência atual", "2026-06-20", { ano: 2026, mes: 6 }],
+    ["ISO da competência seguinte", "2026-07-01", { ano: 2026, mes: 7 }],
+    ["BR da competência anterior", "31/05/2026", { ano: 2026, mes: 5 }],
+    ["BR da competência atual", "20/06/2026", { ano: 2026, mes: 6 }],
+    ["BR da competência seguinte", "01/07/2026", { ano: 2026, mes: 7 }],
+    ["último dia antes da virada do ano", "2026-12-31", { ano: 2026, mes: 12 }],
+    ["primeiro dia após a virada do ano", "01/01/2027", { ano: 2027, mes: 1 }],
+    ["ano bissexto real", "2024-02-29", { ano: 2024, mes: 2 }],
+  ] as const
+
+  it.each(validos)("aceita %s sem normalizar a data-parede", (_nome, entrada, esperado) => {
+    expect(parseVencimento(entrada)).toEqual(esperado)
+  })
+
+  const invalidos = [
+    ["vazio", ""],
+    ["texto livre", "junho"],
+    ["espaço antes de ISO", " 2026-06-20"],
+    ["espaço depois de ISO", "2026-06-20 "],
+    ["espaço antes de BR", " 20/06/2026"],
+    ["espaço depois de BR", "20/06/2026 "],
+    ["tab antes de ISO", "\t2026-06-20"],
+    ["tab depois de ISO", "2026-06-20\t"],
+    ["tab antes de BR", "\t20/06/2026"],
+    ["tab depois de BR", "20/06/2026\t"],
+    ["newline antes de ISO", "\n2026-06-20"],
+    ["newline depois de BR", "20/06/2026\n"],
+    ["newline antes de BR", "\n20/06/2026"],
+    ["newline depois de ISO", "2026-06-20\n"],
+    ["CRLF ao redor de ISO", "\r\n2026-06-20\r\n"],
+    ["CRLF ao redor de BR", "\r\n20/06/2026\r\n"],
+    ["mês ISO zero", "2026-00-01"],
+    ["mês ISO treze", "2026-13-01"],
+    ["dia ISO zero", "2026-06-00"],
+    ["dia ISO fora do mês", "2026-02-99"],
+    ["29 de fevereiro em ano não bissexto ISO", "2026-02-29"],
+    ["31 de abril ISO", "2026-04-31"],
+    ["31 de junho ISO", "2026-06-31"],
+    ["dia BR zero", "00/06/2026"],
+    ["mês BR zero", "01/00/2026"],
+    ["mês BR treze", "01/13/2026"],
+    ["29 de fevereiro em ano não bissexto BR", "29/02/2026"],
+    ["31 de abril BR", "31/04/2026"],
+    ["31 de junho BR", "31/06/2026"],
+    ["timestamp ISO", "2026-06-20T00:00:00Z"],
+    ["sufixo BR", "20/06/2026 extra"],
+  ] as const
+
+  it.each(invalidos)("rejeita individualmente %s", (_nome, entrada) => {
+    expect(parseVencimento(entrada)).toBeNull()
   })
 })
 
@@ -91,6 +128,35 @@ describe("agregarFinanceiro", () => {
     expect(r.titulosReceberAberto.valor).toBe(200)
     expect(r.titulosReceberQuantidade.valor).toBe(1)
     expect(r.titulosReceberAberto.disponibilidade).toBe("real")
+  })
+
+  it("agrega somente a competência atual entre anterior, atual e seguinte", () => {
+    const receber: TituloRow[] = [
+      { valor: 501, status: "pendente", vencimento: "2026-05-31" },
+      { valor: 602, status: "pendente", vencimento: "2026-06-01" },
+      { valor: 603, status: "pendente", vencimento: "30/06/2026" },
+      { valor: 704, status: "pendente", vencimento: "01/07/2026" },
+    ]
+    const r = agregarFinanceiro({ movimentacoes: [], receber, pagar: [], competencia: comp })
+    expect(r.titulosReceberAberto).toMatchObject({ valor: 1205, disponibilidade: "real" })
+    expect(r.titulosReceberQuantidade.valor).toBe(2)
+  })
+
+  it("respeita a virada de ano na agregação da data-parede", () => {
+    const pagar: TituloRow[] = [
+      { valor: 120, status: "pendente", vencimento: "2026-12-31" },
+      { valor: 101, status: "pendente", vencimento: "2027-01-01" },
+      { valor: 102, status: "pendente", vencimento: "31/01/2027" },
+      { valor: 220, status: "pendente", vencimento: "2027-02-01" },
+    ]
+    const r = agregarFinanceiro({
+      movimentacoes: [],
+      receber: [],
+      pagar,
+      competencia: { ano: 2027, mes: 1 },
+    })
+    expect(r.titulosPagarAberto).toMatchObject({ valor: 203, disponibilidade: "real" })
+    expect(r.titulosPagarQuantidade.valor).toBe(2)
   })
 
   it("título aberto sem vencimento real reconhecível → parcial", () => {

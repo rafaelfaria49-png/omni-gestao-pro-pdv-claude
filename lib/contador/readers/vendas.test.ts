@@ -86,7 +86,14 @@ describe("agregarVendas", () => {
     expect(r.naoIdentificadoQuantidade.valor).toBe(1)
     expect(r.naoIdentificadoValor.valor).toBe(40)
     expect(r.divergenciaPagamentoQuantidade.valor).toBe(1)
-    expect(r.divergenciaPagamentoValor.valor).toBe(40)
+    expect(r.reconciliacaoPagamento).toEqual({
+      totalVendas: 100,
+      totalBreakdown: 60,
+      residualNaoIdentificado: 40,
+      excedenteBreakdown: 0,
+      divergenciaAbsoluta: 40,
+      reconciliado: false,
+    })
   })
 
   it("quantifica breakdown conhecido acima de Venda.total", () => {
@@ -94,7 +101,14 @@ describe("agregarVendas", () => {
     expect(r.formaPagamentoDisponibilidade).toBe("parcial")
     expect(r.naoIdentificadoQuantidade.valor).toBe(1)
     expect(r.divergenciaPagamentoQuantidade.valor).toBe(1)
-    expect(r.divergenciaPagamentoValor.valor).toBe(20)
+    expect(r.reconciliacaoPagamento).toEqual({
+      totalVendas: 100,
+      totalBreakdown: 120,
+      residualNaoIdentificado: 0,
+      excedenteBreakdown: 20,
+      divergenciaAbsoluta: 20,
+      reconciliado: false,
+    })
   })
 
   it("quantifica breakdown desconhecido acima de Venda.total sem inflar o faturamento", () => {
@@ -102,7 +116,24 @@ describe("agregarVendas", () => {
     expect(r.total.valor).toBe(100)
     expect(r.formaPagamentoDisponibilidade).toBe("parcial")
     expect(r.naoIdentificadoValor.valor).toBe(100)
-    expect(r.divergenciaPagamentoValor.valor).toBe(20)
+    expect(r.reconciliacaoPagamento?.excedenteBreakdown).toBe(20)
+    expect(r.reconciliacaoPagamento?.residualNaoIdentificado).toBe(0)
+  })
+
+  it("não compensa residual de uma venda com excedente de outra", () => {
+    const r = agregarVendas([
+      { total: 100, status: "concluida", payload: pb({ pix: 80 }) },
+      { total: 100, status: "concluida", payload: pb({ dinheiro: 120 }) },
+    ])
+    expect(r.reconciliacaoPagamento).toEqual({
+      totalVendas: 200,
+      totalBreakdown: 200,
+      residualNaoIdentificado: 20,
+      excedenteBreakdown: 20,
+      divergenciaAbsoluta: 40,
+      reconciliado: false,
+    })
+    expect(r.divergenciaPagamentoQuantidade.valor).toBe(2)
   })
 
   it("reconhece o formato histórico cartao como débito sem perder disponibilidade", () => {
@@ -110,5 +141,6 @@ describe("agregarVendas", () => {
     expect(r.formaPagamentoDisponibilidade).toBe("real")
     expect(r.formasPagamento.find((f) => f.chave === "cartaoDebito")?.valor).toBe(75)
     expect(r.naoIdentificadoQuantidade.valor).toBe(0)
+    expect(r.reconciliacaoPagamento?.reconciliado).toBe(true)
   })
 })
