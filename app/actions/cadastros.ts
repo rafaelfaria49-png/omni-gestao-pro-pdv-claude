@@ -13,6 +13,8 @@ import {
   mergeProdutoAcessoriosIntoMetadata,
   produtoAcessoriosInputFromBody,
 } from "@/lib/acessorios/metadata";
+import { fiscalInputFromBody } from "@/lib/produto-fiscal";
+import { canonicalizeProdutoFiscalMetadata } from "@/lib/produtos/produto-fiscal-upsert";
 import {
   duplicateProductDetails,
   PRODUTO_DUP_SELECT,
@@ -1609,12 +1611,21 @@ export async function upsertProduto(
   // A configuração específica é sempre saneada no servidor e substitui/remove somente
   // metadata.acessorios, inclusive para callers legados que ainda mandam o namespace bruto.
   const accessoryInput = produtoAcessoriosInputFromBody(input);
-  const shouldWriteMetadata = Boolean(input.metadata) || accessoryInput.provided;
+  // Identidade fiscal (GOAL-004): extrai campos fiscais canônicos (top-level ou metadata.fiscal)
+  // do body, reutilizando o mesmo contrato das portas REST/importador. null = sem sinal fiscal.
+  const fiscalInput = fiscalInputFromBody(input as Record<string, unknown>);
+  const shouldWriteMetadata = Boolean(input.metadata) || accessoryInput.provided || fiscalInput != null;
   let nextMetadata: unknown = input.id
     ? mergeProdutoMetadataTwoLevels(existing?.metadata, input.metadata)
     : { ...(input.metadata ?? {}) };
   if (accessoryInput.provided) {
     nextMetadata = mergeProdutoAcessoriosIntoMetadata(nextMetadata, accessoryInput.value);
+  }
+  // Canoniza `metadata.fiscal` sobre o metadata já mesclado: sanea, preserva os campos fiscais
+  // não reenviados e os demais namespaces, e descarta resíduo não canônico. Sem sinal fiscal, o
+  // merge de 2 níveis acima já preserva o `fiscal` existente (não recanoniza legado à toa).
+  if (fiscalInput) {
+    nextMetadata = canonicalizeProdutoFiscalMetadata(nextMetadata, fiscalInput);
   }
   const metadataPart: { metadata?: Prisma.InputJsonValue } = shouldWriteMetadata
     ? { metadata: nextMetadata as Prisma.InputJsonValue }
