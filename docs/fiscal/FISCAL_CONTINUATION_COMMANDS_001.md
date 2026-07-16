@@ -97,4 +97,22 @@ fechado documentalmente**:
 - branch documental de fechamento: `fiscal/goal-002-xsd-close` (somente docs da allowlist).
 
 Esta nota **não reescreve** o comando histórico acima; apenas reconcilia o estado pós-merge.
-Próximo GOAL técnico: `FISCAL-XML-C14N-EXTERNAL-PROOF-003` — **não iniciado** aqui.
+Próximo GOAL técnico à época: `FISCAL-XML-C14N-EXTERNAL-PROOF-003` — **não iniciado** naquele
+fechamento XSD.
+
+## Nota reconciliada — execução GOAL-003 C14N/XMLDSig + critério F4→F5
+
+Em 15/07/2026, o GOAL nomeado `FISCAL-XML-C14N-EXTERNAL-PROOF-003` foi **implementado, integrado e
+fechado documentalmente**:
+
+- PR #6 mergeado por **merge commit** `e52d16b1ad62b5aa82dbd00e734e45af7e17f94c`
+  (parents `edc79de…` + `586c135…`);
+- C14N 1.0 inclusivo + XMLDSig endurecido + prova externa Java JSR 105 na `main`;
+- run do PR `29450960130` · artefato `8357457694`;
+- **critério técnico C14N/XMLDSig do gate F4→F5 = FECHADO**; gate Fiscal **global permanece ABERTO**;
+- N4 somente no eixo C14N/XMLDSig; N6=0; N7=0; sem SEFAZ; sem emissão; signer dormente;
+- relatório: `docs/fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`;
+- branch documental de fechamento: `fiscal/goal-003-c14n-close` (somente docs da allowlist).
+
+Esta nota **não reescreve** comandos históricos de implementação; apenas reconcilia o estado
+pós-merge do GOAL-003. GOAL-004 **não iniciado** aqui.

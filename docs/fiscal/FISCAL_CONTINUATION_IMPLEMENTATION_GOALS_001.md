@@ -74,28 +74,56 @@ Relatório de fechamento:
 Os itens 005/006 da tabela histórica acima ficam **cumpridos no eixo XSD**. Isso **não** fecha
 homologação, produção, C14N, paridade de produto, ST, provider real nem G-F5/G-F7/G-F12.
 
-## Fechamento técnico GOAL-003 C14N/XMLDSig — 15/07/2026
+## Fechamento GOAL-003 C14N/XMLDSig — 15/07/2026
 
 | Campo | Valor |
 |---|---|
 | GOAL nomeado | `FISCAL-XML-C14N-EXTERNAL-PROOF-003` |
-| Estado técnico | **CONCLUÍDO**; aguardando apenas merge readiness desta branch |
+| Estado | **FECHADO** (implementação + integração PR #6 + fechamento documental) |
 | Escopo histórico | GOALs 007–008, eixo C14N/XMLDSig |
+| PR | #6 |
+| Merge commit | `e52d16b1ad62b5aa82dbd00e734e45af7e17f94c` |
+| Parent main | `edc79deb447380a7432220a7f5e7267212984490` |
+| Parent / HEAD fiscal integrado | `586c13526e940bed8f79df58b0b7886975db84bd` |
+| Run do PR | `29450960130` |
+| Artefato | `8357457694` (retenção 30 dias) |
 | Prova independente | Java 17 / JSR 105, sem importar o signer TypeScript |
-| Resultado local | 16/16 testes; 11/11 mutações negativas rejeitadas |
-| Nível N (eixo C14N/XMLDSig) | **N4**; não implica N6/N7 |
-| Gate | critério C14N/XMLDSig do gate técnico F4→F5 fechado; gate global permanece aberto |
+| Resultado | 16/16 provas externas; 6/6 positivas; 11/11 mutações negativas |
+| Nível N (eixo C14N/XMLDSig) | **N4**; **não** implica N6/N7 |
+| Critério técnico C14N/XMLDSig do F4→F5 | **FECHADO** |
+| Gate Fiscal global | **ABERTO** (lacunas fora do GOAL-003; sem G-C3 inventado) |
 | Homologação SEFAZ | **não** · N6=0 |
-| Produção / emissão | **não** · N7=0 |
+| Produção / emissão | **não** · N7=0 · signer **dormente** · zero callers de venda |
 
-Relatório técnico:
+Evidências integradas na `main`:
+
+- C14N 1.0 inclusivo (`xml-crypto` + `@xmldom/xmldom`) com URI oficial
+  `http://www.w3.org/TR/2001/REC-xml-c14n-20010315`;
+- XMLDSig endurecido: Reference `#Id` local única, Id único, wrapping mitigado, allowlist de
+  algoritmos (RSA-SHA1 / SHA-1 / enveloped + C14N);
+- DigestValue, SignedInfo C14N e SignatureValue reproduzidos/validados pela prova Java;
+- workflow `.github/workflows/fiscal-c14n-external-proof.yml` (container offline, read-only,
+  cap-drop, imagens e actions fixadas por digest/SHA);
+- quatro hashes de evidência conferidos no artefato da run do PR #6;
+- TypeScript, ESLint, testes focados, suíte fiscal, worker XSD e build Next verdes na esteira do PR;
+- material sintético apenas (`CN=NFCE-TESTE-NAO-FISCAL`); nenhum dado real, nenhuma chave operacional,
+  nenhuma chamada SEFAZ.
+
+Relatório técnico da implementação:
 [`FISCAL_XML_C14N_EXTERNAL_PROOF_003.md`](./FISCAL_XML_C14N_EXTERNAL_PROOF_003.md).
 
-O próximo passo é a **merge readiness documental e de CI do próprio GOAL-003**. O GOAL nomeado
-004 **não foi iniciado** e não é autorizado por este fechamento.
+Relatório de fechamento documental:
+[`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](./FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md).
+
+Os itens **007/008** da tabela histórica acima ficam **cumpridos no eixo C14N/XMLDSig**. Isso **não**
+fecha dry-run global, homologação, produção, paridade de produto, ST, provider real nem
+G-F5/G-F7/G-F12.
+
+O **próximo GOAL técnico** permanece sujeito a avaliação (dry-run auferível / backlog de
+integridade); o GOAL nomeado **004 não foi iniciado** e não é autorizado por este fechamento.
 
 A sequência histórica **GOAL 002 — paridade fiscal do `upsertProduto`** permanece backlog de
-produto/cadastro, **distinta** do identificador nomeado da trilha XSD já fechada.
+produto/cadastro, **distinta** dos identificadores nomeados XSD (002) e C14N (003) já fechados.
 
 ## Limites permanentes
 
