@@ -1,7 +1,7 @@
 ---
 title: Contador HUB — Dados Reais (read-only) · GOAL 006
-goal: CONTADOR-HUB-DADOS-REAIS-READONLY-006 + 006B-FIX-BLOCKERS
-status: entregue · bloqueadores de merge corrigidos
+goal: CONTADOR-HUB-DADOS-REAIS-READONLY-006 + 006B-FIX-BLOCKERS + 006C-FINAL-BLOCKERS
+status: entregue · bloqueadores finais de merge corrigidos
 base: origin/main = 50c1db8 (contém GOAL 004 = 066e9f2 · GOAL 005 = 50c1db8)
 branch: goal/contador-006-dados-reais
 escopo: auditoria de fontes + readers Prisma read-only + realificação parcial (Visão Geral + Relatórios básicos)
@@ -26,9 +26,11 @@ Todas as tabelas têm `storeId`. Toda leitura é escopada por loja e filtrada po
 | Devoluções | `DevolucaoVenda.valorTotal` | `DevolucaoVenda.at` | idem | reduz a competência da devolução |
 | Forma de pagamento | `Venda.payload.paymentBreakdown` | — | (herda da venda) | **só no payload JSON**; parser defensivo |
 | Desconto | `Venda.payload.discountTotal` | — | (herda da venda) | **só no payload**; informativo/parcial |
-| Entradas realizadas | `MovimentacaoFinanceira` (`tipo="entrada"`) | `createdAt` | `[inicio, fimExclusivo)` UTC | exclui transferência/estorno |
-| Saídas realizadas | `MovimentacaoFinanceira` (`tipo="saida"`) | `createdAt` | idem | exclui transferência/estorno |
+| Entradas realizadas | `MovimentacaoFinanceira` (origem em allowlist + direção válida) | `createdAt` | `[inicio, fimExclusivo)` UTC | origem desconhecida nunca herda `tipo` |
+| Saídas realizadas | `MovimentacaoFinanceira` (origem em allowlist + direção válida) | `createdAt` | idem | origem desconhecida nunca herda `tipo` |
 | Estornos | `MovimentacaoFinanceira` (origem estorno) | `createdAt` | idem | classificado à parte |
+| Transferências internas | `MovimentacaoFinanceira` (origem transferência) | `createdAt` | idem | agregado de volume separado; neutro no resultado |
+| Não classificados | `MovimentacaoFinanceira` (origem nula/vazia/desconhecida) | `createdAt` | idem | valor + quantidade separados; não entram nos KPIs econômicos |
 | Títulos a receber (aberto) | `ContaReceberTitulo` (status aberto) | `vencimento` (String) | ano/mês da competência (data-parede) | posição na competência |
 | Títulos a pagar (aberto) | `ContaPagarTitulo` (status aberto) | `vencimento` (String) | ano/mês da competência (data-parede) | posição na competência |
 | Sessões de caixa | `SessaoCaixa` | `abertaEm` | `[inicio, fimExclusivo)` UTC | caixa físico ≠ contábil |
@@ -43,7 +45,9 @@ tz `America/Sao_Paulo`, período semiaberto e `resolveCompetenciaFromSearchParam
 
 **Gate interno:** `auth()` → cookie de loja ativa → `canAccessStore(session, storeId)` →
 permissão existente `permissions.hubs.financeiro`. `requireContadorScope()` produz um
-`ContadorScopeInterno` nominal; readers públicos não aceitam `storeId: string`. O gate é
+`ContadorScopeInterno` nominal com `userId`, `storeId` e `permissaoFinanceiro: true`; readers
+públicos não aceitam `storeId: string`. A avaliação pura retorna somente uma decisão não
+nominal: apenas `requireContadorScope()` sela o scope depois de `auth()` e cookie. O gate é
 testado para `all`, `restricted`, falta de sessão/loja/permissão e cross-store.
 
 ## 2. Decisões de negócio (congeladas pelo usuário)
@@ -63,7 +67,9 @@ testado para `all`, `restricted`, falta de sessão/loja/permissão e cross-store
    **"não identificado"** (quantidade e valor reportados) e disponibilidade parcial; nunca
    permanece `real` escondendo uma forma nova. Não usa `MovimentacaoFinanceira` para quebrar
    a mesma venda. O alias histórico real `cartao` é reconhecido como `cartaoDebito`, alinhado
-   ao normalizador legado da plataforma.
+   ao normalizador legado da plataforma. A divergência absoluta entre a soma declarada e
+   `Venda.total` também é quantificada; isso cobre breakdown abaixo e acima do total sem
+   inflar o faturamento.
 5. **Devolução** — `DevolucaoVenda.valorTotal`/`at`. Reduz a competência em que **ocorreu**
    (não retroage). `Venda.total` **não** é reduzido pelo reader. Líquido =
    `vendas − devoluções` (subtração **única**; sem dupla subtração).
@@ -114,7 +120,7 @@ comentários, obrigações/guias, **Fiscal** (NotaFiscal/XML/imposto), schema, q
 - **Cobertura de payload** (forma de pagamento, desconto): vendas legadas sem payload rico
   aparecem como parcial/não identificado — comportamento honesto, não bug.
 - **`vencimento` como String**: parser estrito aceita somente datas reais completas em
-  `YYYY-MM-DD` e `DD/MM/YYYY`; datas impossíveis, timestamps/sufixos e formatos ambíguos ficam
+  `YYYY-MM-DD` e `DD/MM/YYYY`; espaços externos, datas impossíveis, timestamps/sufixos e formatos ambíguos ficam
   fora da competência e reduzem a disponibilidade para parcial.
 - **Origem de transferência/reversão em `MovimentacaoFinanceira`**: reutiliza os
   classificadores compartilhados e cobre `devolucao_pdv`, `cancelamento_pdv` e `estorno_*`;
@@ -133,3 +139,24 @@ comentários, obrigações/guias, **Fiscal** (NotaFiscal/XML/imposto), schema, q
   `@prisma`; o chunk auxiliar permaneceu idêntico. As nove ocorrências preexistentes em
   chunks compartilhados/outras rotas mantiveram nomes, tamanhos e hashes. Essa dívida global
   não foi ampliada nem tratada neste slice, conforme a allowlist.
+
+## 8. Correção final de merge-readiness 006C
+
+- Classificação financeira por allowlist confirmada no código: `venda`/`pdv`, `os`,
+  `marketplace`, famílias `receber*` e `pagar*`, além das origens explícitas bidirecionais
+  `manual`, `ajuste`, `importacao`, `sistema` e `legado`. Origem nula, vazia, desconhecida ou
+  conhecida com direção incompatível fica em `naoClassificados`; `tipo` sozinho nunca cria
+  entrada/saída econômica.
+- Transferências têm valor e quantidade próprios no DTO/UI. Estornos continuam separados.
+- `parseVencimento` não normaliza a entrada: formatos com espaços externos são inválidos.
+- O scope nominal agora registra usuário e evidência da permissão Financeiro. A factory
+  pública baseada em `Session` foi removida; o único gate nominal de produção é
+  `requireContadorScope()`.
+- A reconciliação de `paymentBreakdown` expõe quantidade e soma absoluta das divergências,
+  inclusive excedentes acima de `Venda.total`.
+- Cobertura versionada: fixture cross-store A/B separada para cada uma das sete queries;
+  quatro pontos de fronteira (`início−1`, `início`, `fim−1`, `fim`) para cada uma das cinco
+  queries DateTime; e falha isolada separada para cada uma das sete fontes, preservando as
+  demais e sem vazar o erro bruto.
+- Build 006C: chunk client específico de `/dashboard/contador` com **79.387 bytes** e nenhuma
+  ocorrência de `Prisma`, `@prisma` ou `query_engine`.

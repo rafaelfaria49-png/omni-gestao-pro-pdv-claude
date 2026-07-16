@@ -59,6 +59,8 @@ export type VendasContador = Readonly<{
   formaPagamentoDisponibilidade: DisponibilidadeDado
   naoIdentificadoQuantidade: DadoNumerico
   naoIdentificadoValor: DadoMonetario
+  divergenciaPagamentoQuantidade: DadoNumerico
+  divergenciaPagamentoValor: DadoMonetario
 }>
 
 /* ─────────────────────────── Devoluções ─────────────────────────── */
@@ -75,6 +77,10 @@ export type FinanceiroContador = Readonly<{
   saidasRealizadas: DadoMonetario
   /** Estornos classificados à parte (não entram em entradas/saídas). */
   estornos: DadoMonetario
+  transferencias: DadoMonetario
+  transferenciasQuantidade: DadoNumerico
+  naoClassificados: DadoMonetario
+  naoClassificadosQuantidade: DadoNumerico
   titulosReceberAberto: DadoMonetario
   titulosReceberQuantidade: DadoNumerico
   titulosPagarAberto: DadoMonetario

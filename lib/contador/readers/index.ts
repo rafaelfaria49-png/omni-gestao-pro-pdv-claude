@@ -85,6 +85,8 @@ function vendasIndisponiveis(): VendasContador {
     formaPagamentoDisponibilidade: "indisponivel",
     naoIdentificadoQuantidade: numericoIndisponivel(fonte, OBS_FONTE_INDISPONIVEL),
     naoIdentificadoValor: monetarioIndisponivel(fonte, OBS_FONTE_INDISPONIVEL),
+    divergenciaPagamentoQuantidade: numericoIndisponivel(fonte, OBS_FONTE_INDISPONIVEL),
+    divergenciaPagamentoValor: monetarioIndisponivel(fonte, OBS_FONTE_INDISPONIVEL),
   })
 }
 
@@ -109,6 +111,14 @@ function aplicarFalhasFinanceiro(
     entradasRealizadas: falhou("movimentacoes") ? movIndisponivel : base.entradasRealizadas,
     saidasRealizadas: falhou("movimentacoes") ? movIndisponivel : base.saidasRealizadas,
     estornos: falhou("movimentacoes") ? movIndisponivel : base.estornos,
+    transferencias: falhou("movimentacoes") ? movIndisponivel : base.transferencias,
+    transferenciasQuantidade: falhou("movimentacoes")
+      ? numericoIndisponivel(ROTULO_FONTE.movimentacoes, OBS_FONTE_INDISPONIVEL)
+      : base.transferenciasQuantidade,
+    naoClassificados: falhou("movimentacoes") ? movIndisponivel : base.naoClassificados,
+    naoClassificadosQuantidade: falhou("movimentacoes")
+      ? numericoIndisponivel(ROTULO_FONTE.movimentacoes, OBS_FONTE_INDISPONIVEL)
+      : base.naoClassificadosQuantidade,
     titulosReceberAberto: falhou("receber") ? crMon : base.titulosReceberAberto,
     titulosReceberQuantidade: falhou("receber") ? crNum : base.titulosReceberQuantidade,
     titulosPagarAberto: falhou("pagar") ? cpMon : base.titulosPagarAberto,
@@ -186,6 +196,20 @@ export function montarDados(fontes: FontesContador, competencia: Competencia): C
       nivel: "info",
       titulo: "Cobertura de desconto parcial",
       detalhe: vendas.descontoTotal.observacao ?? "Parte das vendas não registrou desconto no payload.",
+    })
+  }
+  if (!falhou("vendas") && (vendas.divergenciaPagamentoQuantidade.valor ?? 0) > 0) {
+    alertas.push({
+      nivel: "atencao",
+      titulo: "Divergencia no breakdown de pagamentos",
+      detalhe: `${vendas.divergenciaPagamentoQuantidade.valor} venda(s), total absoluto de ${vendas.divergenciaPagamentoValor.valor}.`,
+    })
+  }
+  if (!falhou("movimentacoes") && (financeiro.naoClassificadosQuantidade.valor ?? 0) > 0) {
+    alertas.push({
+      nivel: "atencao",
+      titulo: "Movimentacoes financeiras nao classificadas",
+      detalhe: `${financeiro.naoClassificadosQuantidade.valor} movimento(s) ficaram fora de entradas e saidas por origem nao reconhecida.`,
     })
   }
   if (!falhou("receber") && financeiro.titulosReceberAberto.disponibilidade === "parcial") {

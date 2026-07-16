@@ -9,14 +9,20 @@
 import { cookies } from "next/headers"
 import { auth } from "@/auth"
 import { ASSISTEC_ACTIVE_STORE_COOKIE } from "@/lib/store-defaults"
-import { avaliarEscopoContador, type EscopoContador } from "./scope-core"
+import {
+  avaliarAcessoContador,
+  type ContadorScopeInterno,
+  type EscopoContador,
+} from "./scope-core"
 
-export { avaliarEscopoContador } from "./scope-core"
 export type { ContadorScopeInterno, EscopoContador } from "./scope-core"
 
 /** Resolve o escopo real (sessão NextAuth + cookie de loja ativa + ACL). */
 export async function requireContadorScope(): Promise<EscopoContador> {
   const session = await auth()
   const store = (await cookies()).get(ASSISTEC_ACTIVE_STORE_COOKIE)?.value ?? null
-  return avaliarEscopoContador(session, store)
+  const avaliacao = avaliarAcessoContador(session, store)
+  if (!avaliacao.ok) return avaliacao
+  // Unico factory de producao do scope aceito pelos readers.
+  return Object.freeze(avaliacao) as ContadorScopeInterno
 }
