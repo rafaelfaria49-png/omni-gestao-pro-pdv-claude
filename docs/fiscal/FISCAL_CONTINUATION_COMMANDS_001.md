@@ -150,3 +150,27 @@ O GOAL histórico **004** da tabela (ST mínima / CSOSN 500) **permanece distint
 
 Esta nota **não reescreve** comandos históricos; apenas reconcilia o estado pós-merge.
 **GOAL-005 não iniciado.**
+
+## Nota reconciliada — escopo oficial do GOAL-005 (16/07/2026)
+
+Em 16/07/2026, após a auditoria formal `FISCAL-GOAL-005-FORMAL-EVALUATION` (classe **G**, branch
+`audit/fiscal-goal-005-formal-evaluation`, commit `f6d6f2a…`), o GOAL
+`FISCAL-GOAL-005-SCOPE-RECONCILIATION` **reconciliou documentalmente** a numeração “005”. Esta nota
+**não reescreve** os comandos históricos acima; apenas registra a decisão.
+
+- Slot nomeado **005** = **`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`** (“Prova de Integridade do Dry-Run
+  Fiscal”); rótulo provisório equivalente: `FISCAL-DRY-RUN-INTEGRITY-005`.
+- Estado: **definido documentalmente, NÃO iniciado**. Nenhuma implementação técnica autorizada por
+  esta nota.
+- Colisão “005” registrada e separada: XSD histórico (**cumprido**, GOAL nomeado 002); rótulo de
+  código `GOAL_005` snapshot (**dormente**, componente/pré-requisito); Contador HUB competência
+  (**trilho distinto**, read-only). **Não renumerar histórico.**
+- Proibições permanentes desta trilha: sem `git add .` / `git add -A` / `git commit -a`; sem reset,
+  stash, rebase, merge, force-push, push para `main`; sem PR nesta etapa documental.
+
+Quando o GOAL-005 técnico for autorizado (após merge readiness + PR + aprovação humana), a esteira
+segura de comandos é a mesma das notas acima: `git fetch origin --prune` → `git worktree add
+<worktree> -b <branch> origin/main` → pré-flight → allowlist literal → commit → push da branch
+própria. Execução **offline**; nenhuma credencial; nenhum caller produtivo.
+
+Fonte: [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).

@@ -5,7 +5,7 @@
 
 ---
 
-## Fiscal — GOAL-004 paridade `upsertProduto` FECHADO (integrado na main) · 16/07/2026
+## Fiscal — GOAL-004 FECHADO (main) + GOAL-005 reconciliado (definido, não iniciado) · 16/07/2026
 
 > Fontes: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
 > [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
@@ -18,7 +18,9 @@
 > **G-C1/G-C2 fechados** (reconciliação + XSD). **Critério C14N/XMLDSig do F4→F5 = FECHADO**
 > (GOAL-003). Gate Fiscal **global ABERTO** (inalterado por este GOAL). Sem homologação SEFAZ
 > (N6=0), sem produção (N7=0), sem emissão ativada. Signer **dormente**. Callers produtivos **0**.
-> GOAL-004 **FECHADO**. GOAL-005 **não** iniciado.
+> GOAL-004 **FECHADO**. GOAL-005 **reconciliado** documentalmente como
+> `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` (Prova de Integridade do Dry-Run Fiscal) — **definido, NÃO
+> iniciado**; nenhum gate fechado.
 > A ocorrência “NF-e — mock” em seções de preview PDV **não** descreve o estado global da frente
 > fiscal.
 
@@ -53,6 +55,27 @@
   completude fiscal; R-5 sem caller produtivo/transmissão sem GOAL específico.
 - **Próximo passo:** auditoria documental de merge readiness deste fechamento; **não** iniciar
   GOAL-005 automaticamente.
+
+### GOAL-005 — reconciliação de escopo (classe G → definido, não iniciado)
+
+- **Auditoria formal:** `FISCAL-GOAL-005-FORMAL-EVALUATION` (branch
+  `audit/fiscal-goal-005-formal-evaluation`, commit `f6d6f2a…`) — classificação **G — escopo
+  ambíguo**. **Não** integrada à main (evidência).
+- **Reconciliação:** `FISCAL-GOAL-005-SCOPE-RECONCILIATION` (16/07/2026) — resolve a colisão “005”.
+- **Nome oficial:** slot nomeado 005 = **`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`** — “Prova de
+  Integridade do Dry-Run Fiscal” (rótulo provisório equivalente: `FISCAL-DRY-RUN-INTEGRITY-005`).
+- **Colisão “005” separada (não renumerar histórico):** XSD histórico **cumprido** (GOAL nomeado
+  002); rótulo de código `GOAL_005` snapshot **dormente** (componente/pré-requisito); Contador HUB
+  competência = **trilho distinto** read-only; pendência P-05 (C14N) **fechada** (GOAL nomeado 003).
+- **Estado:** **definido documentalmente, NÃO iniciado.** Nenhum gate avançado; **N6=0**, **N7=0**;
+  sem emissão/SEFAZ; signer dormente; callers produtivos 0.
+- **Limites do futuro GOAL-005:** offline; fixtures sintéticas; sem caller produtivo/PDV/venda; sem
+  SEFAZ/homologação/produção; sem certificado/CSC/idToken; sem regra tributária; sem
+  schema/migration; sem tocar Contador HUB. Nível inicial N3; máximo N4 só no eixo integridade do
+  dry-run.
+- **Próximo passo:** auditoria documental de merge readiness da reconciliação; PR + aprovação
+  humana + merge controlado; só então implementação técnica em GOAL próprio.
+- **Fonte:** [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](../fiscal/FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
 
 ### Base prévia (inalterada por GOAL-004)
 

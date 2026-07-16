@@ -72,7 +72,20 @@ Gate Fiscal **global** permanece **ABERTO** — dry-run completo ainda não é N
 restantes (ST, casos-alvo, provider, dry-run integral). N6=0 e N7=0. Prova externa e cadastro
 canônico **não** são homologação SEFAZ. **Não reimplementar F2–F4 do zero:** fechar lacunas
 internas remanescentes, tornar o dry-run auferível de ponta a ponta e somente então avançar para F5.
-**GOAL-005 não iniciado.**
+
+**Reconciliação do GOAL-005 (16/07/2026, `FISCAL-GOAL-005-SCOPE-RECONCILIATION`):** após a auditoria
+formal (classe **G**, branch `audit/fiscal-goal-005-formal-evaluation`, commit `f6d6f2a…`), o slot
+nomeado 005 foi **definido documentalmente** como **`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`** — “Prova
+de Integridade do Dry-Run Fiscal” (rótulo provisório equivalente: `FISCAL-DRY-RUN-INTEGRITY-005`),
+**NÃO iniciado**. Colisão “005” separada e preservada: XSD histórico **cumprido** (GOAL nomeado 002);
+rótulo de código `GOAL_005` snapshot **dormente** (componente/pré-requisito, não GOAL a iniciar);
+Contador HUB competência = **trilho distinto** read-only. **Limites do futuro GOAL-005:** offline,
+fixtures sintéticas, sem caller produtivo, sem PDV/venda, sem SEFAZ/homologação/produção, sem
+certificado/CSC/idToken, sem regra tributária, sem schema/migration, sem tocar Contador HUB; nível
+inicial N3, máximo N4 só no eixo integridade do dry-run; N6=0; N7=0; **nenhum gate fechado** pela
+reconciliação. Fonte:
+[`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](../fiscal/FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
+**GOAL-005 técnico não iniciado.**
 
 ---
 

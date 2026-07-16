@@ -4,7 +4,7 @@ hub: fiscal
 status: vivo
 owner: produto/arquitetura
 last_update: 2026-07-16
-sprint_atual: GOAL-004 paridade upsertProduto FECHADO (PR #8); gate global F4→F5 ainda aberto
+sprint_atual: GOAL-004 FECHADO (PR #8); GOAL-005 reconciliado (FISCAL-DRY-RUN-INTEGRITY-PROOF-005 — definido, não iniciado); gate global F4→F5 aberto
 ---
 
 # 🧾 Roadmap Fiscal — OmniGestão Pro
@@ -56,7 +56,14 @@ técnico F4→F5 = FECHADO** (GOAL-003, PR #6) · gate Fiscal **global** F4→F5
 fechamento documental). Equivale ao GOAL histórico **002 / P-04** (não renumerar a tabela
 histórica). `metadata.fiscal` = fonte canônica; `metadata.fiscalRegime` = visual não canônico.
 Somente o GOAL 022 poderá construir ativação, restrita a `HOMOLOGACAO` e sujeita a G-F7.
-**GOAL-005 não iniciado.**
+
+**GOAL-005 reconciliado** (`FISCAL-GOAL-005-SCOPE-RECONCILIATION`, 16/07/2026): o slot nomeado 005 =
+**`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`** (“Prova de Integridade do Dry-Run Fiscal”), **definido
+documentalmente e NÃO iniciado**. Colisão “005” separada e preservada — XSD histórico **cumprido**
+(GOAL nomeado 002); rótulo de código `GOAL_005` snapshot **dormente** (componente/pré-requisito);
+Contador HUB competência = **trilho distinto** read-only. **Não renumerar histórico.** Nenhum gate
+fechado; N6=0; N7=0. Fonte:
+[`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](../fiscal/FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
 
 ---
 
@@ -192,8 +199,11 @@ integrado na `main` pelo PR #8 (merge `b307337`, implementação `3f8928c`); Cad
 `metadata.fiscal` canônica com o contrato existente; create/update/parcial não destrutivos;
 `fiscalRegime` só visual; Barcode/Cosmos com revisão humana; **N3 no eixo cadastro**; N6=0;
 N7=0; signer dormente; sem schema/migration; sem emissão/SEFAZ. GOAL-003 (C14N) e GOAL-002 (XSD)
-permanecem fechados. Próximo passo: avaliação de backlog (dry-run auferível / ST / integridade)
-**sem** iniciar GOAL-005 automaticamente. Homologação e produção **não** foram abertas.
+permanecem fechados. **GOAL-005 reconciliado** documentalmente como
+`FISCAL-DRY-RUN-INTEGRITY-PROOF-005` (Prova de Integridade do Dry-Run Fiscal) — **definido, não
+iniciado**. Próximo passo: **auditoria documental de merge readiness da reconciliação do GOAL-005**;
+a implementação técnica exige PR + aprovação humana + GOAL próprio. Homologação e produção **não**
+foram abertas.
 
 ## 12. Status atual (1 parágrafo)
 
