@@ -61,10 +61,14 @@ describe("Contador HUB — competência em experiência híbrida (GOAL 006B)", (
   })
 })
 
-describe("Contador HUB — reconciliação direcional de pagamentos (GOAL 006D)", () => {
-  it("Relatórios separa residual não identificado de excedente informado", () => {
-    expect(realSrc).toContain('label="Residual não identificado"')
-    expect(realSrc).toContain('label="Excedente informado no breakdown"')
+describe("Contador HUB — reconciliação direcional de pagamentos (GOAL 006E)", () => {
+  it("Relatórios separa residual, excedente e a soma absoluta sem transformá-los em receita", () => {
+    expect(realSrc).toContain('label="Valor sem forma de pagamento identificada"')
+    expect(realSrc).toContain('label="Breakdown de pagamentos excede o total das vendas"')
+    expect(realSrc).toContain('label="Divergência total do breakdown (residual + excedente)"')
+    expect(realSrc).toContain("vendas.reconciliacaoPagamento?.divergenciaAbsoluta")
+    expect(realSrc).toContain("(vendas.reconciliacaoPagamento?.divergenciaAbsoluta ?? 0) > 0")
+    expect(realSrc).toContain("BRL.format(vendas.reconciliacaoPagamento?.divergenciaAbsoluta ?? 0)")
     expect(realSrc).not.toContain('label="Divergência do breakdown"')
   })
 })

@@ -142,7 +142,7 @@ export function agregarVendas(rows: readonly VendaRow[]): VendasContador {
     const divergencia = residualDirecional + excedenteDirecional
     residualNaoIdentificado += residualDirecional
     excedenteBreakdown += excedenteDirecional
-    reconciliacaoInsegura ||= pb.temValorInvalido
+    reconciliacaoInsegura ||= pb.temValorInvalido || pb.temChaveDesconhecida
     if (divergencia > TOLERANCIA_CENTAVO) {
       divergenciaPagamentoQtd += 1
     }

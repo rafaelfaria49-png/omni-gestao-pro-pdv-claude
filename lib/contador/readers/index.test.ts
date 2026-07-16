@@ -221,21 +221,36 @@ const CASOS_CROSS_STORE: readonly {
   delegate: DelegateContador
   fonte: Exclude<FonteContador, never>
   rows: readonly { storeId: string; dado: unknown }[]
-  esperado: unknown
+  esperado: readonly unknown[]
   valorDto: (dto: ReturnType<typeof montarDados>) => number | null
   esperadoDto: number
+  assertDto?: (dto: ReturnType<typeof montarDados>) => void
 }[] = [
   {
     nome: "Venda",
     delegate: "venda",
     fonte: "vendas",
     rows: [
-      { storeId: "loja-a", dado: { total: 11, status: "concluida", payload: { paymentBreakdown: { pix: 11 } } } },
-      { storeId: "loja-b", dado: { total: 911, status: "concluida", payload: { paymentBreakdown: { pix: 911 } } } },
+      { storeId: "loja-a", dado: { total: 4, status: "concluida", payload: { paymentBreakdown: { pix: 4 } } } },
+      { storeId: "loja-a", dado: { total: 7, status: "concluida", payload: { paymentBreakdown: { pix: 7 } } } },
+      { storeId: "loja-b", dado: { total: 901, status: "concluida", payload: { paymentBreakdown: { pix: 901 } } } },
+      { storeId: "loja-b", dado: { total: 902, status: "concluida", payload: { paymentBreakdown: { pix: 902 } } } },
+      { storeId: "loja-b", dado: { total: 903, status: "concluida", payload: { paymentBreakdown: { pix: 903 } } } },
+      { storeId: "loja-b", dado: { total: 904, status: "concluida", payload: { paymentBreakdown: { pix: 904 } } } },
     ],
-    esperado: { total: 11, status: "concluida", payload: { paymentBreakdown: { pix: 11 } } },
+    esperado: [
+      { total: 4, status: "concluida", payload: { paymentBreakdown: { pix: 4 } } },
+      { total: 7, status: "concluida", payload: { paymentBreakdown: { pix: 7 } } },
+    ],
     valorDto: (dto) => dto.vendas.total.valor,
     esperadoDto: 11,
+    assertDto: (dto) => {
+      expect(dto.vendas.quantidade.valor).toBe(2)
+      expect(dto.vendas.quantidade.valor).not.toBe(4)
+      expect(dto.vendas.quantidade.valor).not.toBe(6)
+      expect(dto.vendas.total.valor).not.toBe(3610)
+      expect(dto.vendas.total.valor).not.toBe(3621)
+    },
   },
   {
     nome: "DevolucaoVenda",
@@ -245,7 +260,7 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-a", dado: { valorTotal: 12 } },
       { storeId: "loja-b", dado: { valorTotal: 912 } },
     ],
-    esperado: { valorTotal: 12 },
+    esperado: [{ valorTotal: 12 }],
     valorDto: (dto) => dto.devolucoes.total.valor,
     esperadoDto: 12,
   },
@@ -257,7 +272,7 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-a", dado: { tipo: "entrada", origem: "venda", valor: 13 } },
       { storeId: "loja-b", dado: { tipo: "entrada", origem: "venda", valor: 913 } },
     ],
-    esperado: { tipo: "entrada", origem: "venda", valor: 13 },
+    esperado: [{ tipo: "entrada", origem: "venda", valor: 13 }],
     valorDto: (dto) => dto.financeiro.entradasRealizadas.valor,
     esperadoDto: 13,
   },
@@ -269,7 +284,7 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-a", dado: { valor: 14, status: "pendente", vencimento: "2026-06-14" } },
       { storeId: "loja-b", dado: { valor: 914, status: "pendente", vencimento: "2026-06-14" } },
     ],
-    esperado: { valor: 14, status: "pendente", vencimento: "2026-06-14" },
+    esperado: [{ valor: 14, status: "pendente", vencimento: "2026-06-14" }],
     valorDto: (dto) => dto.financeiro.titulosReceberAberto.valor,
     esperadoDto: 14,
   },
@@ -281,7 +296,7 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-a", dado: { valor: 15, status: "pendente", vencimento: "2026-06-15" } },
       { storeId: "loja-b", dado: { valor: 915, status: "pendente", vencimento: "2026-06-15" } },
     ],
-    esperado: { valor: 15, status: "pendente", vencimento: "2026-06-15" },
+    esperado: [{ valor: 15, status: "pendente", vencimento: "2026-06-15" }],
     valorDto: (dto) => dto.financeiro.titulosPagarAberto.valor,
     esperadoDto: 15,
   },
@@ -291,11 +306,30 @@ const CASOS_CROSS_STORE: readonly {
     fonte: "sessoes",
     rows: [
       { storeId: "loja-a", dado: { status: "fechada", saldoFinal: 16, saldoContado: 17 } },
-      { storeId: "loja-b", dado: { status: "fechada", saldoFinal: 916, saldoContado: 999 } },
+      { storeId: "loja-a", dado: { status: "aberta", saldoFinal: null, saldoContado: null } },
+      { storeId: "loja-b", dado: { status: "fechada", saldoFinal: 900, saldoContado: 910 } },
+      { storeId: "loja-b", dado: { status: "fechada", saldoFinal: 900, saldoContado: 920 } },
+      { storeId: "loja-b", dado: { status: "fechada", saldoFinal: 900, saldoContado: 930 } },
+      { storeId: "loja-b", dado: { status: "aberta", saldoFinal: null, saldoContado: null } },
+      { storeId: "loja-b", dado: { status: "aberta", saldoFinal: null, saldoContado: null } },
     ],
-    esperado: { status: "fechada", saldoFinal: 16, saldoContado: 17 },
+    esperado: [
+      { status: "fechada", saldoFinal: 16, saldoContado: 17 },
+      { status: "aberta", saldoFinal: null, saldoContado: null },
+    ],
     valorDto: (dto) => dto.caixa.diferencas.valor,
     esperadoDto: 1,
+    assertDto: (dto) => {
+      expect(dto.caixa.sessoes.valor).toBe(2)
+      expect(dto.caixa.sessoesAbertas.valor).toBe(1)
+      expect(dto.caixa.diferencas.valor).toBe(1)
+      expect(dto.caixa.sessoes.valor).not.toBe(5)
+      expect(dto.caixa.sessoes.valor).not.toBe(7)
+      expect(dto.caixa.sessoesAbertas.valor).not.toBe(2)
+      expect(dto.caixa.sessoesAbertas.valor).not.toBe(3)
+      expect(dto.caixa.diferencas.valor).not.toBe(60)
+      expect(dto.caixa.diferencas.valor).not.toBe(61)
+    },
   },
   {
     nome: "CaixaOperacao",
@@ -305,7 +339,7 @@ const CASOS_CROSS_STORE: readonly {
       { storeId: "loja-a", dado: { tipo: "sangria", valor: 18 } },
       { storeId: "loja-b", dado: { tipo: "sangria", valor: 918 } },
     ],
-    esperado: { tipo: "sangria", valor: 18 },
+    esperado: [{ tipo: "sangria", valor: 18 }],
     valorDto: (dto) => dto.caixa.sangriasTotal.valor,
     esperadoDto: 18,
   },
@@ -320,10 +354,11 @@ describe("isolamento cross-store A/B por query", () => {
     })
 
     const fontes = await carregarFontesComCliente(scopeValido("loja-a"), resolvePeriodoUtc(competencia), db)
-    expect(fontes[caso.fonte]).toEqual([caso.esperado])
+    expect(fontes[caso.fonte]).toEqual(caso.esperado)
     expect(primeiraChamada(db[caso.delegate].findMany).where.storeId).toBe("loja-a")
     const dto = montarDados(fontes, competencia)
     expect(caso.valorDto(dto)).toBe(caso.esperadoDto)
+    caso.assertDto?.(dto)
   })
 })
 
