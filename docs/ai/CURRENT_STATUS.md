@@ -5,22 +5,23 @@
 
 ---
 
-## Fiscal — GOAL-004 FECHADO (main) + GOAL-005 reconciliado (definido, não iniciado) · 16/07/2026
+## Fiscal — GOAL-004 FECHADO · GOAL-005 prova de integridade do dry-run (implementada em branch) · 17/07/2026
 
 > Fontes: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
 > [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
 > [`FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md`](../fiscal/FISCAL_XML_C14N_GOAL_003_CLOSURE_REPORT.md) ·
-> [`FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`](../fiscal/FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md).
+> [`FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`](../fiscal/FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md) ·
+> [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](../fiscal/FISCAL_GOAL_005_SCOPE_RECONCILIATION.md) ·
+> [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md`](../fiscal/FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md).
 >
-> **PR #8** merge commit `b307337ce89535355d18cd9138e17f635f1c1bf5`
-> (parents `5b96df7…` + `3f8928c…`). Commit de implementação:
-> `3f8928c0d8dc7361b6282cbb2b225ae04ed8a501`.
-> **G-C1/G-C2 fechados** (reconciliação + XSD). **Critério C14N/XMLDSig do F4→F5 = FECHADO**
-> (GOAL-003). Gate Fiscal **global ABERTO** (inalterado por este GOAL). Sem homologação SEFAZ
-> (N6=0), sem produção (N7=0), sem emissão ativada. Signer **dormente**. Callers produtivos **0**.
-> GOAL-004 **FECHADO**. GOAL-005 **reconciliado** documentalmente como
-> `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` (Prova de Integridade do Dry-Run Fiscal) — **definido, NÃO
-> iniciado**; nenhum gate fechado.
+> **PR #10** merge documental `ccb8b0f…` (escopo GOAL-005). **G-C1/G-C2 fechados**.
+> **Critério C14N/XMLDSig do F4→F5 = FECHADO** (GOAL-003). Gate Fiscal **global ABERTO**.
+> Sem homologação SEFAZ (N6=0), sem produção (N7=0), sem emissão ativada. Signer **dormente**.
+> Callers produtivos **0**. GOAL-004 **FECHADO**. GOAL-005 técnico =
+> `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` — **implementado como harness offline** em
+> `tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`);
+> **sem** caller produtivo, **sem** SEFAZ, **sem** schema; nível **N3** (N4 no eixo dry-run
+> só após auditoria + merge).
 > A ocorrência “NF-e — mock” em seções de preview PDV **não** descreve o estado global da frente
 > fiscal.
 
@@ -56,26 +57,25 @@
 - **Próximo passo:** auditoria documental de merge readiness deste fechamento; **não** iniciar
   GOAL-005 automaticamente.
 
-### GOAL-005 — reconciliação de escopo (classe G → definido, não iniciado)
+### GOAL-005 — prova de integridade do dry-run (implementação em branch)
 
-- **Auditoria formal:** `FISCAL-GOAL-005-FORMAL-EVALUATION` (branch
-  `audit/fiscal-goal-005-formal-evaluation`, commit `f6d6f2a…`) — classificação **G — escopo
-  ambíguo**. **Não** integrada à main (evidência).
-- **Reconciliação:** `FISCAL-GOAL-005-SCOPE-RECONCILIATION` (16/07/2026) — resolve a colisão “005”.
-- **Nome oficial:** slot nomeado 005 = **`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`** — “Prova de
-  Integridade do Dry-Run Fiscal” (rótulo provisório equivalente: `FISCAL-DRY-RUN-INTEGRITY-005`).
-- **Colisão “005” separada (não renumerar histórico):** XSD histórico **cumprido** (GOAL nomeado
-  002); rótulo de código `GOAL_005` snapshot **dormente** (componente/pré-requisito); Contador HUB
-  competência = **trilho distinto** read-only; pendência P-05 (C14N) **fechada** (GOAL nomeado 003).
-- **Estado:** **definido documentalmente, NÃO iniciado.** Nenhum gate avançado; **N6=0**, **N7=0**;
-  sem emissão/SEFAZ; signer dormente; callers produtivos 0.
-- **Limites do futuro GOAL-005:** offline; fixtures sintéticas; sem caller produtivo/PDV/venda; sem
-  SEFAZ/homologação/produção; sem certificado/CSC/idToken; sem regra tributária; sem
-  schema/migration; sem tocar Contador HUB. Nível inicial N3; máximo N4 só no eixo integridade do
-  dry-run.
-- **Próximo passo:** auditoria documental de merge readiness da reconciliação; PR + aprovação
-  humana + merge controlado; só então implementação técnica em GOAL próprio.
-- **Fonte:** [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](../fiscal/FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
+- **Escopo oficial:** `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` — “Prova de Integridade do Dry-Run
+  Fiscal” (reconciliação documental PR #10 / merge `ccb8b0f…`).
+- **Estado:** **implementado como harness offline** em
+  `tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`).
+  **Não** é emissão; **não** é caller produtivo; **não** eleva gate global.
+- **Cadeia composta (componentes reais dormentes):** snapshot → XML → C14N → XMLDSig (RSA-SHA1) →
+  verifier interno → Java 17 (GOAL-003) → contrato XSD oficial → manifesto determinístico.
+- **Provas:** P-01..P-15 e N-01..N-14; determinismo 3×; A→B→A; zero DB/SEFAZ/egress;
+  material sintético GOAL-003; stores `store-fiscal-proof-a|b`.
+- **XSD:** adapter de composição do contrato oficial no CI; worker real opcional via
+  `FISCAL_XSD_WORKER_URL`.
+- **Evidência:** `tools/fiscal-dry-run-integrity-proof/evidence/manifest.json` · relatório
+  [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md`](../fiscal/FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md).
+- **Gates:** nenhum fechado por este GOAL; **N6=0**, **N7=0**; N3; teto futuro N4 só no eixo
+  dry-run após auditoria + merge.
+- **Próximo passo:** auditoria de merge readiness desta branch; PR + aprovação humana + merge
+  controlado; **não** abrir G-F5 automaticamente.
 
 ### Base prévia (inalterada por GOAL-004)
 

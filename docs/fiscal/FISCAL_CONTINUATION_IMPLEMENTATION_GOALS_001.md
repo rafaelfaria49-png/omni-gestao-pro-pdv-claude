@@ -196,7 +196,7 @@ reconciliado. **Não renumerar a tabela histórica; não apagar referências.**
 
 Pendência homônima **P-05** (“C14N interoperável”) = **FECHADA** via GOAL nomeado 003 (não é GOAL).
 
-**Decisão canônica (definido documentalmente, NÃO iniciado):**
+**Decisão canônica (definido documentalmente em 16/07/2026; implementação técnica 17/07/2026):**
 
 - GOAL nomeado **005** = **`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`** — “Prova de Integridade do
   Dry-Run Fiscal”. Rótulo provisório equivalente da auditoria: `FISCAL-DRY-RUN-INTEGRITY-005`
@@ -204,18 +204,17 @@ Pendência homônima **P-05** (“C14N interoperável”) = **FECHADA** via GOAL
 - **Objetivo:** provar, offline e sem caller produtivo, a integridade determinística da esteira
   dormente (entrada canônica → snapshot → XML → C14N → assinatura de teste → XSD → relatório),
   descartando o XML.
+- **Estado técnico (branch `work/fiscal-dry-run-integrity-proof-005`):** harness em
+  `tools/fiscal-dry-run-integrity-proof/` compõe snapshot/XML/signer/C14N/Java/XSD-contrato;
+  provas P-01..P-15 e N-01..N-14; manifesto golden versionado. **Sem** caller produtivo.
 - **Pré-requisitos:** GOAL-001/002/003/004 (fechados); snapshot/XML/signer/XSD/C14N/dry-run
   existentes e dormentes.
 - **Limites:** sem caller produtivo, sem PDV/venda, sem SEFAZ/homologação/produção, sem
   certificado/CSC/idToken, sem regra tributária, sem schema/migration, sem tocar Contador HUB.
 - **Gates:** G-C1/G-C2/C14N fechados; **F4→F5 global / G-F5 / G-F7 / G-F12 abertos**; a
-  reconciliação **não fecha gate**.
-- **Nível N:** inicial **N3**; máximo futuro **N4** só no eixo integridade do dry-run; **N6=0**,
-  **N7=0**.
-- **Stop conditions (implementação futura):** necessidade de schema/migration/novo estado/regra
-  tributária/autoridade contábil/certificado/CSC/idToken/chamada SEFAZ/caller produtivo/PDV/
-  persistência real/conflito com Contador HUB/dado real em fixture/segredo em log/divergência
-  snapshot×XML sem contrato/arquivo fora da allowlist.
+  implementação **não fecha gate**.
+- **Nível N:** **N3**; máximo futuro **N4** só no eixo integridade do dry-run (após auditoria +
+  merge); **N6=0**, **N7=0**.
 
-Fonte: [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
-**GOAL-005 técnico não iniciado.**
+Fonte: [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECONCILIATION.md) ·
+relatório: [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md`](./FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md).
