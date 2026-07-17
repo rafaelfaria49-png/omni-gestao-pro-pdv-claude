@@ -20,7 +20,6 @@ import { useCallback, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   AlertTriangle,
-  Check,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -28,6 +27,7 @@ import {
   Eye,
   FileText,
   Info,
+  Loader2,
   MessageSquare,
   Plus,
   Sparkles,
@@ -58,14 +58,17 @@ import {
   FECHAR_COMPETENCIA_TITLE,
 } from "./contador-fechamento-checklist"
 import {
+  ContadorPacoteDownload,
+  PACOTE_INDISPONIVEL_TITLE,
+  usePacoteDownload,
+} from "./contador-pacote-download"
+import {
   CONTADOR_SECTIONS,
   DOCUMENTOS_ROWS,
   DOSSIES,
   DOSSIE_FILTERS,
   FOLHA_FUNCIONARIOS,
   OBRIGACOES_ROWS,
-  PACOTE_ITEMS_RELATORIOS,
-  PACOTE_ITEMS_VISAO,
   PERMISSOES_ROWS,
   PORTAL_NAO_PODE,
   PORTAL_PODE,
@@ -83,7 +86,6 @@ import {
   type DocSeg,
   type DossieFilter,
   type DossieOrigem,
-  type PacoteItem,
 } from "./contador-preview-data"
 
 /* ───────────────────────── helpers de estilo (tokens semânticos) ───────────────────────── */
@@ -227,53 +229,6 @@ function Btn({ variant = "default", size = "md", className, children, ...rest }:
   )
 }
 
-/* Cartão "Pacote do Contador" (assinatura premium, on-brand) */
-function PacoteCard({
-  items,
-  count,
-  onDownload,
-}: {
-  items: PacoteItem[]
-  count: string
-  onDownload: () => void
-}) {
-  const done = items.filter((i) => i.on).length
-  const pct = Math.round((done / items.length) * 100)
-  return (
-    <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-primary/[0.04] to-transparent p-5">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="text-[17px] font-bold text-foreground">Pacote do Contador</h3>
-        <span className="rounded-md bg-primary/10 px-2 py-1 font-mono text-[11px] text-primary">{count}</span>
-      </div>
-      <div className="mb-1.5 h-2 overflow-hidden rounded-full bg-primary/15">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="mb-4 text-xs text-muted-foreground">
-        {done} de {items.length} itens reunidos para esta competência
-      </div>
-      <div className="mb-4 grid gap-2">
-        {items.map((it) => (
-          <div key={it.label} className={cn("flex items-center gap-2.5 text-[12.5px]", it.on ? "text-foreground" : "text-muted-foreground")}>
-            <span
-              className={cn(
-                "grid h-[18px] w-[18px] place-items-center rounded-md",
-                it.on ? "bg-primary text-primary-foreground" : "border border-dashed border-border",
-              )}
-            >
-              {it.on ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-            </span>
-            {it.label}
-          </div>
-        ))}
-      </div>
-      <Btn variant="primary" className="w-full" disabled title={CTA_INDISPONIVEL_TITLE} onClick={onDownload}>
-        <Download className="h-4 w-4" />
-        Baixar pacote · preview
-      </Btn>
-    </div>
-  )
-}
-
 /* ───────────────────────── componente principal ───────────────────────── */
 
 export type ContadorHubPreviewProps = {
@@ -305,6 +260,9 @@ export function ContadorHubPreview({
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+
+  // Download real do Pacote do Contador (GOAL 008) — estado único p/ cabeçalho + seções.
+  const pacoteDownload = usePacoteDownload(competencia)
 
   const [active, setActive] = useState<ContadorSectionId>("visao")
   const [modo, setModo] = useState(false)
@@ -383,7 +341,7 @@ export function ContadorHubPreview({
       {realData ? (
         <PreviewBanner
           title="Cartões abaixo — dados ilustrativos."
-          text="O bloco “Resumo da competência” acima é leitura real da loja. Os cartões de pendências, progresso do fechamento, dossiês e pacote a seguir ainda são fixos e exemplificam o layout."
+          text="O bloco “Resumo da competência” acima é leitura real da loja. Os cartões de pendências, progresso do fechamento e dossiês a seguir ainda são fixos e exemplificam o layout. O Pacote do Contador ao final gera um ZIP real da competência."
         />
       ) : (
         <PreviewBanner
@@ -518,15 +476,23 @@ export function ContadorHubPreview({
         Pacote do mês
       </div>
       <div className="grid gap-4 lg:grid-cols-[1.45fr_1fr]">
-        <PacoteCard items={PACOTE_ITEMS_VISAO} count={compShort} onDownload={() => noop("Baixar Pacote do Contador")} />
+        <ContadorPacoteDownload
+          competencia={competencia}
+          disponivel={!!realData}
+          motivoIndisponivel={realErro}
+          download={pacoteDownload}
+        />
         <Card className="flex flex-col justify-center gap-2.5 p-4">
           <h3 className="text-base font-semibold text-foreground">O que é o Pacote do Contador</h3>
           <p className="text-[13px] text-muted-foreground">
-            Um único pacote por competência reunindo o que o contador precisa: documentos, XMLs (quando existirem),
-            relatórios, checklist e suas observações. Em vez de mandar arquivos soltos por e-mail e WhatsApp, você gera um
-            pacote e o contador baixa de uma vez.
+            Um único ZIP por competência com a leitura real da loja: resumo, CSVs (vendas, devoluções,
+            financeiro, caixa), checklist de fechamento, avisos e um manifesto com o hash de cada arquivo.
+            Em vez de mandar arquivos soltos por e-mail e WhatsApp, você gera o pacote e o contador baixa de uma vez.
           </p>
-          <PreviewPill>Geração e download em pré-visualização</PreviewPill>
+          <p className="text-[12px] text-muted-foreground">
+            Notas fiscais (XML) e documentos anexos entram numa fase futura — por ora seguem como
+            placeholders honestos dentro do pacote.
+          </p>
         </Card>
       </div>
     </>
@@ -726,16 +692,17 @@ export function ContadorHubPreview({
 
       {realData ? (
         <PreviewBanner
-          title="Exportações e pacote — em preview."
-          text="Os relatórios básicos acima são leitura real da loja. A exportação (CSV/PDF), o Pacote do Contador e os relatórios abaixo ainda não geram arquivo nesta fase."
+          title="Exportações por relatório — em preview."
+          text="Os relatórios básicos acima são leitura real da loja. A exportação individual (CSV/PDF) dos cartões abaixo ainda não gera arquivo nesta fase. Já o Pacote do Contador ao lado gera um ZIP real da competência."
         />
       ) : null}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.45fr_1fr]">
-        <PacoteCard
-          items={PACOTE_ITEMS_RELATORIOS}
-          count={compShort}
-          onDownload={() => noop("Gerar e baixar Pacote do Contador")}
+        <ContadorPacoteDownload
+          competencia={competencia}
+          disponivel={!!realData}
+          motivoIndisponivel={realErro}
+          download={pacoteDownload}
         />
         <div className="grid content-start gap-3">
           {RELATORIO_CARDS.map((r) => {
@@ -1304,12 +1271,16 @@ export function ContadorHubPreview({
 
           <Btn
             variant="primary"
-            disabled
-            title={CTA_INDISPONIVEL_TITLE}
-            onClick={() => noop("Gerar pacote do contador")}
+            disabled={!realData || pacoteDownload.estado === "carregando"}
+            title={realData ? undefined : (realErro ?? PACOTE_INDISPONIVEL_TITLE)}
+            onClick={pacoteDownload.baixar}
           >
-            <Sparkles className="h-4 w-4" />
-            Gerar pacote · preview
+            {pacoteDownload.estado === "carregando" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {pacoteDownload.estado === "carregando" ? "Gerando pacote…" : "Baixar pacote"}
           </Btn>
         </div>
       </div>

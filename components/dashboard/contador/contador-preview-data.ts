@@ -142,16 +142,6 @@ export const VISAO_DOSSIE_PROGRESS: DossieProgress[] = [
   { label: "Fiscal / Regularidade", done: 7, total: 13, pct: 54 },
 ]
 
-export type PacoteItem = { label: string; on: boolean }
-export const PACOTE_ITEMS_VISAO: PacoteItem[] = [
-  { label: "Notas fiscais (XML)", on: true },
-  { label: "Relatório financeiro", on: true },
-  { label: "Contas a pagar e receber", on: true },
-  { label: "Extratos bancários", on: false },
-  { label: "Comprovantes de impostos", on: false },
-  { label: "Folha do mês (preview)", on: false },
-]
-
 /* ─────────────────────────── FECHAMENTO ─────────────────────────── */
 
 export type ChecklistItem = {
@@ -216,17 +206,6 @@ export const OBRIGACOES_ROWS: ObrigacaoRow[] = [
 ]
 
 /* ─────────────────────────── RELATÓRIOS ─────────────────────────── */
-
-export const PACOTE_ITEMS_RELATORIOS: PacoteItem[] = [
-  { label: "Notas fiscais (XML)", on: true },
-  { label: "Relatório financeiro", on: true },
-  { label: "Contas a pagar e receber", on: true },
-  { label: "Checklist de fechamento", on: true },
-  { label: "Observações ao contador", on: true },
-  { label: "Extratos bancários", on: false },
-  { label: "Comprovantes de impostos", on: false },
-  { label: "Folha do mês (preview)", on: false },
-]
 
 export type RelatorioCard = {
   title: string
