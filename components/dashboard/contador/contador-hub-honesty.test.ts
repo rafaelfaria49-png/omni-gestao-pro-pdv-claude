@@ -11,6 +11,8 @@ import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
+import { montarChecklistFechamento } from "@/lib/contador/fechamento"
+import { montarDados, type FontesContador } from "@/lib/contador/readers"
 
 const DIR = dirname(fileURLToPath(import.meta.url))
 
@@ -18,6 +20,7 @@ const hubSrc = readFileSync(join(DIR, "contador-hub-preview.tsx"), "utf8")
 const realSrc = readFileSync(join(DIR, "contador-dados-reais.tsx"), "utf8")
 const dataSrc = readFileSync(join(DIR, "contador-preview-data.ts"), "utf8")
 const legacySrc = readFileSync(join(DIR, "area-contador-pro.tsx"), "utf8")
+const checklistSrc = readFileSync(join(DIR, "contador-fechamento-checklist.tsx"), "utf8")
 
 /** Colapsa qualquer sequência de espaços/quebras de linha em um único espaço — o
  * JSX é quebrado em várias linhas por legibilidade, mas o texto renderizado (e o
@@ -215,5 +218,111 @@ describe("Contador HUB — checklist de fechamento derivado (GOAL 007)", () => {
     expect(callConstruir).toBeGreaterThan(-1)
     expect(callChecklist).toBeGreaterThan(callConstruir)
     expect(pageSrc).not.toMatch(/carregarFontes|prisma\./)
+  })
+})
+
+/* ─────────────────────── GOAL 007B — semântica honesta ─────────────────────── */
+
+const VAZIO: FontesContador = {
+  vendas: [],
+  devolucoes: [],
+  movimentacoes: [],
+  receber: [],
+  pagar: [],
+  sessoes: [],
+  operacoes: [],
+  falhas: [],
+}
+const AGORA = new Date("2026-07-16T12:00:00.000Z") // 09:00 America/Sao_Paulo → Julho/2026
+const ATUAL = { ano: 2026, mes: 7 }
+
+function checklistDe(fontes: Partial<FontesContador>, competencia = ATUAL) {
+  const dados = montarDados({ ...VAZIO, ...fontes }, competencia)
+  return montarChecklistFechamento({ dados, competencia, agora: AGORA })
+}
+function estado(checklist: ReturnType<typeof montarChecklistFechamento>, id: string) {
+  return checklist.itens.find((i) => i.id === id)?.estado
+}
+
+describe("Contador HUB — componente do checklist real (GOAL 007B)", () => {
+  it("exibe o título honesto 'Checklist de fechamento — somente leitura'", () => {
+    expect(checklistSrc).toContain("Checklist de fechamento — somente leitura")
+    expect(checklistSrc).toContain("somente leitura")
+  })
+
+  it("não exibe percentual/progresso: sem '%', sem ProgressRing, sem 'concluíd' hardcoded", () => {
+    expect(checklistSrc).not.toContain("ProgressRing")
+    expect(checklistSrc).not.toContain("%")
+    // O componente rotula estados por ESTADO_LABEL — nunca "concluída/concluído".
+    expect(checklistSrc.toLowerCase()).not.toContain("concluíd")
+    expect(checklistSrc).toContain('pendente: "pendente"')
+    expect(checklistSrc).toContain('nao_disponivel: "não disponível"')
+  })
+
+  it("é somente leitura: sem fetch/POST/localStorage/create/update no componente", () => {
+    expect(checklistSrc).not.toMatch(/fetch\(|POST|PUT|PATCH|DELETE|localStorage|sessionStorage|\.create\(|\.update\(|\.upsert\(/)
+  })
+})
+
+describe("Contador HUB — estados derivados que a UI renderiza (GOAL 007B, sem snapshot)", () => {
+  it("vendas zero → pendente (a UI não pode mostrar como concluída)", () => {
+    expect(estado(checklistDe({}), "vendas")).toBe("pendente")
+  })
+
+  it("sessão da competência atual aberta → pendente", () => {
+    const c = checklistDe({ sessoes: [{ status: "ABERTA", saldoFinal: null, saldoContado: null }] }, ATUAL)
+    expect(estado(c, "sessoes_caixa")).toBe("pendente")
+  })
+
+  it("títulos vencidos (a receber e a pagar) → não disponível", () => {
+    const c = checklistDe({
+      receber: [{ valor: 150, status: "aberto", vencimento: "2026-07-15" }],
+      pagar: [{ valor: 80, status: "aberto", vencimento: "2026-07-20" }],
+    })
+    expect(estado(c, "titulos_vencidos_receber")).toBe("nao_disponivel")
+    expect(estado(c, "titulos_vencidos_pagar")).toBe("nao_disponivel")
+  })
+
+  it("Documentos, Conferência e Fiscal → não disponível; Fechamento oficial → pendente", () => {
+    const c = checklistDe({})
+    expect(estado(c, "documentos")).toBe("nao_disponivel")
+    expect(estado(c, "conferencia_contador")).toBe("nao_disponivel")
+    expect(estado(c, "fiscal")).toBe("nao_disponivel")
+    expect(estado(c, "fechamento_oficial")).toBe("pendente")
+  })
+
+  it("o resumo não tem percentual: soma dos estados == total", () => {
+    const c = checklistDe({})
+    const { ok, atencao, pendente, nao_disponivel, total } = c.contagem
+    expect(ok + atencao + pendente + nao_disponivel).toBe(total)
+    expect(JSON.stringify(c.contagem)).not.toMatch(/percent|%|score/i)
+  })
+})
+
+describe("Contador HUB — card ilustrativo Preview ≠ checklist real derivado (CORREÇÃO 9)", () => {
+  it("o card '3 de 9 / 35%' da Visão geral está rotulado como Preview ilustrativo", () => {
+    const renderVisaoIdx = hubSrc.indexOf("const renderVisao = ()")
+    const renderFechamentoIdx = hubSrc.indexOf("const renderFechamento = ()")
+    const visao = hubSrc.slice(renderVisaoIdx, renderFechamentoIdx)
+    // A percentagem ilustrativa (ProgressRing/3 de 9) permanece SÓ na Visão geral…
+    expect(visao).toContain("ProgressRing")
+    expect(visao).toContain("3 de 9")
+    // …mas agora identificada como preview ilustrativo, apontando para o checklist real.
+    expect(visao).toContain("Preview ilustrativo")
+    expect(visao).toContain("Números ilustrativos de preview")
+  })
+
+  it("o checklist real derivado (seção Fechamento) não usa ProgressRing nem percentagem", () => {
+    const renderFechamentoIdx = hubSrc.indexOf("const renderFechamento = ()")
+    const renderDocsIdx = hubSrc.indexOf("const docsFiltered =")
+    const fechamento = hubSrc.slice(renderFechamentoIdx, renderDocsIdx)
+    expect(fechamento).toContain("ContadorFechamentoChecklist")
+    expect(fechamento).not.toContain("ProgressRing")
+    expect(fechamento).not.toContain("3 de 9")
+    expect(fechamento).not.toContain("35%")
+  })
+
+  it("o header do HUB não apresenta mais um percentual de fechamento fabricado", () => {
+    expect(hubSrc).not.toContain("Fechamento · 35%")
   })
 })

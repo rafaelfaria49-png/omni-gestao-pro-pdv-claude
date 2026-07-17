@@ -1,11 +1,15 @@
 /**
- * Contador HUB · montagem pura do checklist de fechamento (GOAL 007).
+ * Contador HUB · montagem pura do checklist de fechamento (GOAL 007 · 007B).
  *
  * Prefere o DTO já carregado pelo GOAL 006 — zero reconsulta Prisma/readers.
  * Sinais sem evidência suficiente → `nao_disponivel` (nunca inventados).
- * Fechamento real com snapshot permanece fora de escopo (GOAL 012).
+ * Semântica honesta (007B): vendas sem movimento ficam `pendente`; sessões
+ * respeitam competência passada/atual/futura via `agora`; vencimento de títulos
+ * permanece `nao_disponivel` sem prova agregada; Documentos e Conferência do
+ * contador ainda não têm domínio/persistência. Fechamento real com snapshot
+ * permanece fora de escopo (GOAL 012).
  */
-import type { Competencia } from "@/lib/contador/competencia"
+import { competenciaAtual, type Competencia } from "@/lib/contador/competencia"
 import type {
   ContadorDadosReais,
   DadoMonetario,
@@ -23,21 +27,53 @@ const DISCLAIMER =
   "Não constitui fechamento oficial, snapshot nem trava de competência. " +
   "O fechamento real com snapshot será implementado em fase posterior (GOAL 012)."
 
+/**
+ * Tolerância monetária de conferência de caixa (R$ 0,01 = 1 centavo).
+ * Diferença absoluta arredondada ≤ este limiar é considerada conciliada (`ok`).
+ */
+export const LIMIAR_DIVERGENCIA_CAIXA = 0.01
+
+/** Explicação fixa do sinal de títulos vencidos (o DTO não prova vencimento). */
+const EXPLICACAO_TITULOS_VENCIDOS =
+  "O resumo atual informa títulos em aberto na competência, mas não permite " +
+  "confirmar quais já estão vencidos em relação à data de hoje."
+
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
 
 export type MontarChecklistFechamentoInput = Readonly<{
   /** DTO do GOAL 006. `null` = escopo/leitura indisponível (todos os sinais sem evidência). */
   dados: ContadorDadosReais | null
   competencia: Competencia
-  /** Instante de montagem (injetável para testes). */
+  /** Instante de montagem (injetável para testes). Participa da decisão temporal das sessões. */
   agora?: Date
   /** Motivo honesto quando `dados` é null (escopo, cookie, ACL, falha). */
   motivoIndisponivel?: string | null
 }>
 
+type PosicaoCompetencia = "passada" | "atual" | "futura"
+
 function fmtMoney(valor: number | null | undefined): string {
   if (valor === null || valor === undefined || !Number.isFinite(valor)) return "—"
   return BRL.format(valor)
+}
+
+/** Arredondamento monetário consistente (2 casas), evitando ruído de ponto flutuante. */
+function arredCentavos(n: number): number {
+  return Math.round((n + Number.EPSILON) * 100) / 100
+}
+
+/**
+ * Posição temporal da competência selecionada em relação a `agora`,
+ * usando o contrato canônico (`competenciaAtual`, America/Sao_Paulo).
+ * Sem parser paralelo de competência.
+ */
+function posicaoCompetencia(alvo: Competencia, agora: Date): PosicaoCompetencia {
+  const atual = competenciaAtual(agora)
+  const a = alvo.ano * 12 + (alvo.mes - 1)
+  const b = atual.ano * 12 + (atual.mes - 1)
+  if (a < b) return "passada"
+  if (a > b) return "futura"
+  return "atual"
 }
 
 function contagemDe(itens: readonly ChecklistItemFechamento[]): ContagemChecklist {
@@ -68,24 +104,27 @@ export function montarChecklistFechamento(
   const { dados, competencia, motivoIndisponivel } = input
   const agora = input.agora ?? new Date()
   const geradoEm = agora.toISOString()
+  const posicao = posicaoCompetencia(competencia, agora)
+
+  // Sinais sem fonte de dados (Documentos, Conferência, Fechamento oficial) existem
+  // sempre — inclusive quando `dados` é null — com a mesma copy honesta.
+  const cauda = [derivarDocumentos(), derivarConferenciaContador(), derivarFechamentoOficial()]
 
   if (!dados) {
     const motivo =
       motivoIndisponivel?.trim() ||
       "Dados reais da competência não estão disponíveis (escopo ou leitura)."
-    const itens = SINAIS_BASE.map((s) =>
+    const derivados = SINAIS_DERIVADOS_BASE.map((s) =>
       item({
         id: s.id,
         titulo: s.titulo,
-        estado: s.id === "fechamento_oficial" ? "pendente" : "nao_disponivel",
-        origem: s.id === "fechamento_oficial" ? "GOAL 012 (não implementado)" : "ContadorDadosReais (ausente)",
-        explicacao:
-          s.id === "fechamento_oficial"
-            ? "Fechamento real com snapshot ainda não existe. O botão permanece desabilitado."
-            : motivo,
-        evidencia: s.id === "fechamento_oficial" ? "sem snapshot" : "sem DTO",
+        estado: "nao_disponivel",
+        origem: "ContadorDadosReais (ausente)",
+        explicacao: motivo,
+        evidencia: "sem DTO",
       }),
     )
+    const itens = [...derivados, ...cauda]
     return Object.freeze({
       competencia: Object.freeze({ ano: competencia.ano, mes: competencia.mes }),
       itens: Object.freeze(itens),
@@ -95,19 +134,19 @@ export function montarChecklistFechamento(
     })
   }
 
-  const itens: ChecklistItemFechamento[] = [
+  const derivados: ChecklistItemFechamento[] = [
     derivarVendas(dados),
     derivarDevolucoes(dados),
     derivarLiquido(dados),
     derivarFormasPagamento(dados),
     derivarMovimentacoes(dados),
-    derivarTitulosReceber(dados),
-    derivarTitulosPagar(dados),
-    derivarSessoesCaixa(dados),
+    derivarTitulosVencidosReceber(dados),
+    derivarTitulosVencidosPagar(dados),
+    derivarSessoesCaixa(dados, posicao),
     derivarDiferencasCaixa(dados),
     derivarFiscal(dados),
-    derivarFechamentoOficial(),
   ]
+  const itens = [...derivados, ...cauda]
 
   return Object.freeze({
     competencia: Object.freeze({
@@ -123,18 +162,18 @@ export function montarChecklistFechamento(
 
 /* ─────────────────────────── sinais ─────────────────────────── */
 
-const SINAIS_BASE = [
+/** Sinais derivados do DTO — quando `dados` é null viram `nao_disponivel`. */
+const SINAIS_DERIVADOS_BASE = [
   { id: "vendas", titulo: "Vendas da competência" },
   { id: "devolucoes", titulo: "Devoluções da competência" },
   { id: "liquido", titulo: "Líquido da competência" },
   { id: "formas_pagamento", titulo: "Formas de pagamento das vendas" },
   { id: "movimentacoes", titulo: "Movimentações financeiras" },
-  { id: "titulos_receber", titulo: "Títulos a receber em aberto" },
-  { id: "titulos_pagar", titulo: "Títulos a pagar em aberto" },
+  { id: "titulos_vencidos_receber", titulo: "Títulos vencidos a receber" },
+  { id: "titulos_vencidos_pagar", titulo: "Títulos vencidos a pagar" },
   { id: "sessoes_caixa", titulo: "Sessões de caixa da competência" },
   { id: "diferencas_caixa", titulo: "Diferenças de conferência de caixa" },
   { id: "fiscal", titulo: "Notas fiscais da competência" },
-  { id: "fechamento_oficial", titulo: "Fechamento oficial com snapshot" },
 ] as const
 
 function derivarVendas(dados: ContadorDadosReais): ChecklistItemFechamento {
@@ -152,15 +191,24 @@ function derivarVendas(dados: ContadorDadosReais): ChecklistItemFechamento {
   }
   const qtd = quantidade.valor ?? 0
   const valor = total.valor ?? 0
+  if (qtd === 0) {
+    // Zero real NÃO é conclusão de fechamento: exige confirmação humana.
+    return item({
+      id: "vendas",
+      titulo: "Vendas da competência",
+      estado: "pendente",
+      origem,
+      explicacao:
+        "Nenhuma venda foi registrada nesta competência. Confirme se o período realmente não teve movimento.",
+      evidencia: `${qtd} · ${fmtMoney(valor)}`,
+    })
+  }
   return item({
     id: "vendas",
     titulo: "Vendas da competência",
     estado: "ok",
     origem,
-    explicacao:
-      qtd === 0
-        ? "Nenhuma venda não-cancelada na competência (leitura real)."
-        : `${qtd} venda(s) não-cancelada(s) lidas de Venda.total (exclui canceladas).`,
+    explicacao: `${qtd} venda(s) não-cancelada(s) lidas de Venda.total (exclui canceladas).`,
     evidencia: `${qtd} · ${fmtMoney(valor)}`,
   })
 }
@@ -305,83 +353,61 @@ function derivarMovimentacoes(dados: ContadorDadosReais): ChecklistItemFechament
   })
 }
 
-function derivarTitulosReceber(dados: ContadorDadosReais): ChecklistItemFechamento {
-  const mon = dados.financeiro.titulosReceberAberto
-  const qtd = dados.financeiro.titulosReceberQuantidade
-  const origem = mon.fonte
-  if (dispDe(mon) === "indisponivel") {
-    return item({
-      id: "titulos_receber",
-      titulo: "Títulos a receber em aberto",
-      estado: "nao_disponivel",
-      origem,
-      explicacao: mon.observacao ?? "Fonte ContaReceberTitulo indisponível.",
-      evidencia: "—",
-    })
-  }
-  const n = qtd.valor ?? 0
-  if (dispDe(mon) === "parcial" || n > 0) {
-    return item({
-      id: "titulos_receber",
-      titulo: "Títulos a receber em aberto",
-      estado: "atencao",
-      origem,
-      explicacao:
-        dispDe(mon) === "parcial"
-          ? (mon.observacao ?? "Cobertura parcial de vencimentos; posição incompleta.")
-          : `${n} título(s) em aberto com vencimento na competência (posição, não realizado).`,
-      evidencia: `${n} · ${fmtMoney(mon.valor)}`,
-    })
+/**
+ * Títulos vencidos — o DTO só informa títulos em aberto com vencimento NA competência,
+ * não a posição comprovadamente vencida contra `agora`. Estado permanece `nao_disponivel`
+ * (não inferimos vencimento); a evidência reporta honestamente o que existe.
+ */
+function derivarTitulosVencidos(args: {
+  id: string
+  titulo: string
+  mon: DadoMonetario
+  qtd: DadoNumerico
+}): ChecklistItemFechamento {
+  const { id, titulo, mon, qtd } = args
+  const disp = dispDe(mon)
+  let evidencia: string
+  if (disp === "indisponivel") {
+    evidencia = "fonte de títulos indisponível — sem base para apurar vencimento"
+  } else {
+    const n = qtd.valor ?? 0
+    const partes = [`${n} em aberto`, fmtMoney(mon.valor)]
+    if (disp === "parcial") partes.push("cobertura parcial")
+    partes.push("vencimento não comprovado")
+    evidencia = partes.join(" · ")
   }
   return item({
-    id: "titulos_receber",
-    titulo: "Títulos a receber em aberto",
-    estado: "ok",
-    origem,
-    explicacao: "Nenhum título a receber em aberto com vencimento na competência.",
-    evidencia: `0 · ${fmtMoney(0)}`,
+    id,
+    titulo,
+    estado: "nao_disponivel",
+    origem: mon.fonte,
+    explicacao: EXPLICACAO_TITULOS_VENCIDOS,
+    evidencia,
   })
 }
 
-function derivarTitulosPagar(dados: ContadorDadosReais): ChecklistItemFechamento {
-  const mon = dados.financeiro.titulosPagarAberto
-  const qtd = dados.financeiro.titulosPagarQuantidade
-  const origem = mon.fonte
-  if (dispDe(mon) === "indisponivel") {
-    return item({
-      id: "titulos_pagar",
-      titulo: "Títulos a pagar em aberto",
-      estado: "nao_disponivel",
-      origem,
-      explicacao: mon.observacao ?? "Fonte ContaPagarTitulo indisponível.",
-      evidencia: "—",
-    })
-  }
-  const n = qtd.valor ?? 0
-  if (dispDe(mon) === "parcial" || n > 0) {
-    return item({
-      id: "titulos_pagar",
-      titulo: "Títulos a pagar em aberto",
-      estado: "atencao",
-      origem,
-      explicacao:
-        dispDe(mon) === "parcial"
-          ? (mon.observacao ?? "Cobertura parcial de vencimentos; posição incompleta.")
-          : `${n} título(s) a pagar em aberto com vencimento na competência (posição, não realizado).`,
-      evidencia: `${n} · ${fmtMoney(mon.valor)}`,
-    })
-  }
-  return item({
-    id: "titulos_pagar",
-    titulo: "Títulos a pagar em aberto",
-    estado: "ok",
-    origem,
-    explicacao: "Nenhum título a pagar em aberto com vencimento na competência.",
-    evidencia: `0 · ${fmtMoney(0)}`,
+function derivarTitulosVencidosReceber(dados: ContadorDadosReais): ChecklistItemFechamento {
+  return derivarTitulosVencidos({
+    id: "titulos_vencidos_receber",
+    titulo: "Títulos vencidos a receber",
+    mon: dados.financeiro.titulosReceberAberto,
+    qtd: dados.financeiro.titulosReceberQuantidade,
   })
 }
 
-function derivarSessoesCaixa(dados: ContadorDadosReais): ChecklistItemFechamento {
+function derivarTitulosVencidosPagar(dados: ContadorDadosReais): ChecklistItemFechamento {
+  return derivarTitulosVencidos({
+    id: "titulos_vencidos_pagar",
+    titulo: "Títulos vencidos a pagar",
+    mon: dados.financeiro.titulosPagarAberto,
+    qtd: dados.financeiro.titulosPagarQuantidade,
+  })
+}
+
+function derivarSessoesCaixa(
+  dados: ContadorDadosReais,
+  posicao: PosicaoCompetencia,
+): ChecklistItemFechamento {
   const sessoes = dados.caixa.sessoes
   const abertas = dados.caixa.sessoesAbertas
   const origem = sessoes.fonte
@@ -397,16 +423,44 @@ function derivarSessoesCaixa(dados: ContadorDadosReais): ChecklistItemFechamento
   }
   const total = sessoes.valor ?? 0
   const nAbertas = abertas.valor ?? 0
-  if (nAbertas > 0) {
+  const evidencia = `${total} sessão(ões) · ${nAbertas} aberta(s)`
+
+  // Competência futura nunca é `ok`: sinais de caixa não representam fechamento concluído.
+  if (posicao === "futura") {
     return item({
       id: "sessoes_caixa",
       titulo: "Sessões de caixa da competência",
-      estado: "atencao",
+      estado: "pendente",
       origem,
-      explicacao: `${nAbertas} sessão(ões) ainda aberta(s) na competência (caixa físico ≠ contábil).`,
-      evidencia: `${total} sessão(ões) · ${nAbertas} aberta(s)`,
+      explicacao:
+        "A competência ainda é futura; os sinais de caixa não representam um fechamento concluído.",
+      evidencia,
     })
   }
+
+  if (nAbertas > 0) {
+    if (posicao === "passada") {
+      return item({
+        id: "sessoes_caixa",
+        titulo: "Sessões de caixa da competência",
+        estado: "atencao",
+        origem,
+        explicacao: `Há ${nAbertas} sessão(ões) de caixa da competência passada ainda aberta(s).`,
+        evidencia,
+      })
+    }
+    // atual
+    return item({
+      id: "sessoes_caixa",
+      titulo: "Sessões de caixa da competência",
+      estado: "pendente",
+      origem,
+      explicacao: `Há ${nAbertas} sessão(ões) de caixa em andamento na competência atual.`,
+      evidencia,
+    })
+  }
+
+  // Passada ou atual, sem sessão aberta e com fonte disponível → ok.
   return item({
     id: "sessoes_caixa",
     titulo: "Sessões de caixa da competência",
@@ -414,9 +468,9 @@ function derivarSessoesCaixa(dados: ContadorDadosReais): ChecklistItemFechamento
     origem,
     explicacao:
       total === 0
-        ? "Nenhuma sessão de caixa aberta no período da competência."
+        ? "Nenhuma sessão de caixa no período da competência; nada em aberto."
         : `${total} sessão(ões) no período; nenhuma permanece aberta.`,
-    evidencia: `${total} sessão(ões) · 0 aberta(s)`,
+    evidencia,
   })
 }
 
@@ -433,27 +487,39 @@ function derivarDiferencasCaixa(dados: ContadorDadosReais): ChecklistItemFechame
       evidencia: "—",
     })
   }
-  const valor = d.valor ?? 0
-  if (valor !== 0 || dispDe(d) === "parcial") {
+  const valor = arredCentavos(d.valor ?? 0)
+  const abs = Math.abs(valor)
+  const tol = fmtMoney(LIMIAR_DIVERGENCIA_CAIXA)
+
+  if (dispDe(d) === "parcial") {
     return item({
       id: "diferencas_caixa",
       titulo: "Diferenças de conferência de caixa",
       estado: "atencao",
       origem,
-      explicacao:
-        dispDe(d) === "parcial"
-          ? (d.observacao ?? "Conferência parcial entre sessões fechadas.")
-          : `Há diferença de conferência (Σ saldoContado − saldoFinal = ${fmtMoney(valor)}).`,
+      explicacao: d.observacao ?? "Conferência parcial entre sessões fechadas.",
       evidencia: fmtMoney(valor),
     })
   }
+
+  if (abs > LIMIAR_DIVERGENCIA_CAIXA) {
+    return item({
+      id: "diferencas_caixa",
+      titulo: "Diferenças de conferência de caixa",
+      estado: "atencao",
+      origem,
+      explicacao: `Diferença de conferência acima da tolerância de ${tol} (Σ saldoContado − saldoFinal = ${fmtMoney(valor)}).`,
+      evidencia: fmtMoney(valor),
+    })
+  }
+
   return item({
     id: "diferencas_caixa",
     titulo: "Diferenças de conferência de caixa",
     estado: "ok",
     origem,
-    explicacao: "Sessões conferidas sem diferença (Σ saldoContado − saldoFinal = 0).",
-    evidencia: fmtMoney(0),
+    explicacao: `Sessões conferidas dentro da tolerância de ${tol} (Σ saldoContado − saldoFinal = ${fmtMoney(valor)}).`,
+    evidencia: fmtMoney(valor),
   })
 }
 
@@ -468,6 +534,32 @@ function derivarFiscal(dados: ContadorDadosReais): ChecklistItemFechamento {
       f.observacao ??
       "Fonte fiscal permanece atrás de CONTADOR_FISCAL_READER e não é consultada neste módulo.",
     evidencia: "não consultado",
+  })
+}
+
+/** Domínio de documentos do Contador ainda não existe (sem mock, sem portal externo). */
+function derivarDocumentos(): ChecklistItemFechamento {
+  return item({
+    id: "documentos",
+    titulo: "Documentos do fechamento",
+    estado: "nao_disponivel",
+    origem: "Domínio de documentos — ainda não implementado",
+    explicacao:
+      "O domínio real de documentos do Contador será implementado após o schema núcleo.",
+    evidencia: "sem domínio real",
+  })
+}
+
+/** Confirmação/conferência do contador ainda não tem persistência (sem checkbox/estado). */
+function derivarConferenciaContador(): ChecklistItemFechamento {
+  return item({
+    id: "conferencia_contador",
+    titulo: "Conferência pelo contador",
+    estado: "nao_disponivel",
+    origem: "Confirmação do contador — ainda sem persistência",
+    explicacao:
+      "Confirmação e conferência pelo contador ainda não possuem persistência real.",
+    evidencia: "sem confirmação persistida",
   })
 }
 

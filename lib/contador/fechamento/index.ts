@@ -1,5 +1,9 @@
-/** Contador HUB · checklist de fechamento read-only (GOAL 007). */
-export { montarChecklistFechamento, type MontarChecklistFechamentoInput } from "./montar-checklist"
+/** Contador HUB · checklist de fechamento read-only (GOAL 007 · 007B). */
+export {
+  montarChecklistFechamento,
+  LIMIAR_DIVERGENCIA_CAIXA,
+  type MontarChecklistFechamentoInput,
+} from "./montar-checklist"
 export type {
   ChecklistFechamento,
   ChecklistItemFechamento,

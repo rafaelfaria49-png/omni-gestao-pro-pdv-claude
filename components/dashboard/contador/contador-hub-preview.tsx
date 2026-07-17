@@ -414,13 +414,14 @@ export function ContadorHubPreview({
       <div className="grid gap-4 lg:grid-cols-[1.45fr_1fr]">
         <div className="grid gap-4">
           <Card>
-            <CardHead title={<>Fechamento de {compShort}</>} right={<Chip variant="env">Em andamento</Chip>} />
+            <CardHead title={<>Fechamento de {compShort}</>} right={<PreviewPill>Preview ilustrativo</PreviewPill>} />
             <div className="flex flex-wrap items-center gap-4 p-4">
               <ProgressRing pct={35} />
               <div className="min-w-[160px] flex-1">
                 <div className="mb-0.5 font-semibold text-foreground">3 de 9 itens concluídos</div>
                 <div className="text-[12.5px] text-muted-foreground">
-                  Faltam extratos bancários, conferência de despesas e o envio da folha.
+                  Números ilustrativos de preview — não é o fechamento real. O checklist derivado
+                  (somente leitura) está na aba <b className="text-foreground">Fechamento</b>.
                 </div>
               </div>
               <Btn variant="ghost" size="sm" onClick={() => goSection("fechamento")}>
@@ -1257,7 +1258,7 @@ export function ContadorHubPreview({
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-[23px] font-bold tracking-tight text-foreground">Contador HUB</h1>
             <HybridStatus />
-            <Chip variant="env">Fechamento · 35%</Chip>
+            <PreviewPill>Fechamento · preview</PreviewPill>
           </div>
           <span className="text-[12.5px] text-muted-foreground">
             Organize documentos, pendências e o fechamento do mês com seu contador.
