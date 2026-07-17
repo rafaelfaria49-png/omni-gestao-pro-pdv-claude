@@ -7,6 +7,11 @@
  *
  * Default: somente verificação (compara manifesto golden).
  * Não grava banco, não chama SEFAZ, não emite.
+ *
+ * Este runner conclui a PROVA INTEGRAL: enquanto o worker XSD real não rodar, a dependência
+ * obrigatória está ausente e o exit code é 2 — mesmo com manifesto byte-igual ao golden. A
+ * consistência do artefato é verificada à parte, pela suíte (`proof.test.ts` · P-10); um golden
+ * byte-igual NÃO significa GOAL concluído.
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs"
@@ -19,6 +24,7 @@ import {
   PROOF_SEED,
 } from "./fixtures"
 import {
+  blockingReasonsFrom,
   buildManifestFromProof,
   classifyProofExit,
   createCompositionXsdAdapter,
@@ -114,10 +120,11 @@ async function main(): Promise<void> {
   const signals: ProofExitSignals = {
     manifestMatches,
     dependencyAvailable: goldenPresent,
+    xsdWorkerReal: r1.xsdEvidence.workerReal,
     internal: r1.verification.internal,
     externalJava17: r1.verification.externalJava17,
     structural: r1.verification.structural,
-    xsdContract: r1.verification.xsd,
+    xsdContract: r1.xsdEvidence.contractPassed,
     deterministic,
     idempotent,
     tamperDetected,
@@ -129,13 +136,17 @@ async function main(): Promise<void> {
   const exitCode = classifyProofExit(signals)
 
   const publicView = toPublicProofView(r1)
+  const blockingReasons = blockingReasonsFrom(r1.xsdEvidence)
   console.log(
     JSON.stringify(
       {
         ok: exitCode === 0,
         exitCode,
+        proofState: blockingReasons.length === 0 ? "complete" : "partial",
+        blockingReasons,
         manifest: update ? "atualizado" : manifestMatches ? "byte-igual ao golden" : "DIVERGENTE",
         verification: publicView.verification,
+        xsdEvidence: publicView.xsdEvidence,
         integrity: { deterministic, idempotent, storeIsolation, tamperDetected },
         egress: { blockedAttempts: egressAttempts.length, external: externalEgress },
         hashes: publicView.hashes,

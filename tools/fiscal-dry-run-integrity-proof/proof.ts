@@ -22,8 +22,8 @@ import {
   type FiscalCertificateMaterial,
 } from "@/lib/fiscal/signing"
 import { buildNfceXmlResult, type NfceXmlContext } from "@/lib/fiscal/xml"
-import { validarEstruturaNfce, validarXsd } from "@/lib/fiscal/dry-run"
-import type { XsdValidationAdapter } from "@/lib/fiscal/xsd"
+import { validarEstruturaNfce, validarXsd, type DryRunXsd } from "@/lib/fiscal/dry-run"
+import type { XsdValidationAdapter, XsdValidationOutcome } from "@/lib/fiscal/xsd"
 import { XSD_SCHEMA_PACKAGE } from "@/lib/fiscal/xsd"
 import { OFFICIAL_XSD_MANIFEST_SHA256 } from "@/lib/fiscal/xsd/official-package"
 import type { VendaFiscalSnapshot } from "@/lib/fiscal/venda-fiscal-snapshot"
@@ -45,6 +45,46 @@ import {
 } from "./fixtures"
 import { verifySignedXmlExternalJava, type JavaExternalReport } from "./java-external"
 
+/** Motor por trás de uma evidência XSD. `composition-gate` NUNCA prova conformidade com o schema. */
+export type XsdEvidenceKind = "composition-gate" | "xmllint-worker"
+
+/** Adapter XSD do harness: declara o próprio motor — a prova nunca o infere do resultado. */
+export type ProofXsdAdapter = XsdValidationAdapter & { readonly kind: XsdEvidenceKind }
+
+type XsdEvidenceScope = {
+  package: typeof XSD_PACKAGE_ID
+  layout: typeof LAYOUT_VERSION
+  model: typeof MODEL_NFCE
+  schemaRoot: typeof XSD_SCHEMA_PACKAGE
+}
+
+/**
+ * Evidência XSD da prova, separada por motor — o eixo que o manifesto serializa.
+ *
+ * `composition-gate`: só o CONTRATO do pacote oficial foi conferido (schema root, hash do
+ * manifesto, escopo de loja, presença de assinatura). O XML nunca foi confrontado com o schema.
+ * `xmllint-worker`: um `xmllint`/libxml2 real (worker B2) processou o XML e emitiu veredito.
+ *
+ * A união torna impossível — por tipagem — afirmar validação real sem motor real.
+ */
+export type XsdEvidence =
+  | (XsdEvidenceScope & {
+      kind: "composition-gate"
+      contractPassed: boolean
+      realValidationPassed: false
+      engineName: "composition-gate"
+      engineVersion: null
+      workerReal: false
+    })
+  | (XsdEvidenceScope & {
+      kind: "xmllint-worker"
+      contractPassed: boolean
+      realValidationPassed: boolean
+      engineName: "xmllint"
+      engineVersion: string
+      workerReal: true
+    })
+
 export type ProofDependencies = {
   clockIso?: string
   seed?: string
@@ -52,7 +92,7 @@ export type ProofDependencies = {
   certificate?: FiscalCertificateMaterial
   senha?: string
   xmlContext?: NfceXmlContext
-  xsdAdapter?: XsdValidationAdapter
+  xsdAdapter?: ProofXsdAdapter
   /** Quando false, não invoca Java (default true). */
   runExternalJava?: boolean
   repoRoot?: string
@@ -94,9 +134,12 @@ export type IntegrityProofResult = {
   verification: {
     internal: boolean
     externalJava17: boolean
+    /** Validação XSD REAL. Só o worker `xmllint` pode torná-la true — ver `xsdEvidence`. */
     xsd: boolean
     structural: boolean
   }
+  /** Motor e alcance do veredito XSD — separa gate de composição de validação real. */
+  xsdEvidence: XsdEvidence
   integrity: {
     deterministic: boolean | null
     idempotent: boolean | null
@@ -124,6 +167,95 @@ export type IntegrityProofResult = {
 
 function sha256Hex(value: string): string {
   return createHash("sha256").update(Buffer.from(value, "utf8")).digest("hex")
+}
+
+/**
+ * Outcome do gate de composição quando o contrato confere: pacote/manifesto/escopo válidos, mas
+ * nenhum `xmllint` processou o XML → fail-closed no contrato compartilhado, com `engine: null`.
+ */
+const COMPOSITION_GATE_CONTRACT_OK: XsdValidationOutcome = "WORKER_INDISPONIVEL"
+
+const XSD_EVIDENCE_SCOPE: XsdEvidenceScope = {
+  package: XSD_PACKAGE_ID,
+  layout: LAYOUT_VERSION,
+  model: MODEL_NFCE,
+  schemaRoot: XSD_SCHEMA_PACKAGE,
+}
+
+/** Único predicado autorizado a afirmar XSD real aprovado. */
+export function xsdRealValidationPassed(evidence: XsdEvidence): boolean {
+  return evidence.kind === "xmllint-worker" && evidence.workerReal && evidence.realValidationPassed
+}
+
+/** Barreira de runtime contra combinação desonesta escapar para a serialização. */
+export function assertXsdEvidence(evidence: XsdEvidence): void {
+  if (evidence.kind === "composition-gate") {
+    if (evidence.workerReal || evidence.realValidationPassed) {
+      throw new Error("evidência XSD inválida: composition-gate não afirma worker/validação real.")
+    }
+    if (evidence.engineName !== "composition-gate" || evidence.engineVersion !== null) {
+      throw new Error("evidência XSD inválida: composition-gate não declara motor xmllint.")
+    }
+    return
+  }
+  if (!evidence.workerReal) {
+    throw new Error("evidência XSD inválida: xmllint-worker exige worker real.")
+  }
+  if (evidence.engineName !== "xmllint") {
+    throw new Error("evidência XSD inválida: xmllint-worker exige motor xmllint.")
+  }
+  if (!evidence.engineVersion || evidence.engineVersion === "composition-gate") {
+    throw new Error("evidência XSD inválida: motor xmllint exige versão real do binário.")
+  }
+}
+
+/**
+ * Traduz o resultado do contrato compartilhado na evidência tipada da prova.
+ *
+ * `engine` não nulo só existe quando um motor real respondeu — o contrato compartilhado
+ * (`XsdValidationResult`) o exige em `valid: true` e o tipa com `name: "xmllint"`. Worker
+ * configurado porém mudo (`engine: null`) degrada para gate sem contrato, nunca para evidência
+ * real: a prova prefere subdeclarar a superdeclarar.
+ */
+export function buildXsdEvidence(kind: XsdEvidenceKind, xsd: DryRunXsd): XsdEvidence {
+  const engine = kind === "xmllint-worker" ? xsd.engine : null
+  const evidence: XsdEvidence = engine
+    ? {
+        ...XSD_EVIDENCE_SCOPE,
+        kind: "xmllint-worker",
+        contractPassed: true,
+        realValidationPassed: xsd.status === "xsd_ok",
+        engineName: "xmllint",
+        engineVersion: engine.xmllintVersion,
+        workerReal: true,
+      }
+    : {
+        ...XSD_EVIDENCE_SCOPE,
+        kind: "composition-gate",
+        contractPassed: kind === "composition-gate" && xsd.outcome === COMPOSITION_GATE_CONTRACT_OK,
+        realValidationPassed: false,
+        engineName: "composition-gate",
+        engineVersion: null,
+        workerReal: false,
+      }
+  assertXsdEvidence(evidence)
+  return evidence
+}
+
+export type ProofState = "partial" | "complete"
+
+/** Bloqueio conhecido do GOAL-005: nenhum `xmllint` real confrontou o XML com o schema. */
+export const BLOCKER_XSD_WORKER_REAL_UNAVAILABLE = "XSD_WORKER_REAL_UNAVAILABLE" as const
+
+/** Motivos que impedem a prova integral. Vazio ⇒ elegível a `complete`, sujeito aos demais gates. */
+export function blockingReasonsFrom(evidence: XsdEvidence): string[] {
+  return xsdRealValidationPassed(evidence) ? [] : [BLOCKER_XSD_WORKER_REAL_UNAVAILABLE]
+}
+
+/** Estado do artefato no eixo XSD — gate de composição nunca vira "validated". */
+function manifestXsdStatus(evidence: XsdEvidence): string {
+  if (evidence.kind === "composition-gate") return "composition-gate"
+  return evidence.realValidationPassed ? "validated" : "rejected"
 }
 
 /**
@@ -219,7 +351,9 @@ export async function runFiscalDryRunIntegrityProof(
     correlationId: `proof-005:${storeId}:${unsignedXmlSha256.slice(0, 16)}`,
     jobId: `proof-005-${unsignedXmlSha256.slice(0, 24)}`,
   })
-  const xsdOk = xsd.status === "xsd_ok"
+  // Sem adapter injetado, `validarXsd` cai no cliente do worker real (`createConfiguredXsdWorkerClient`).
+  const xsdEvidence = buildXsdEvidence(deps.xsdAdapter?.kind ?? "xmllint-worker", xsd)
+  const xsdOk = xsdRealValidationPassed(xsdEvidence)
 
   const result: IntegrityProofResult = {
     goal: PROOF_GOAL,
@@ -255,6 +389,7 @@ export async function runFiscalDryRunIntegrityProof(
       xsd: xsdOk,
       structural: structural.ok,
     },
+    xsdEvidence,
     integrity: {
       deterministic: null,
       idempotent: null,
@@ -306,6 +441,9 @@ export type IntegrityManifest = {
   goal: typeof PROOF_GOAL
   proofVersion: typeof PROOF_VERSION
   fixtureVersion: typeof FIXTURE_VERSION
+  /** `partial` enquanto houver `blockingReasons`. Nunca inferir conclusão a partir dos booleanos. */
+  proofState: ProofState
+  blockingReasons: string[]
   clock: string
   seed: string
   layout: typeof LAYOUT_VERSION
@@ -322,7 +460,14 @@ export type IntegrityManifest = {
   verification: {
     internal: boolean
     externalJava17: boolean
+    /** Validação XSD REAL (`xmllint` sobre o schema). Gate de composição jamais a torna true. */
     xsd: boolean
+    /** Contrato do pacote XSD oficial conferido — evidência de composição, não de schema. */
+    xsdContract: boolean
+    xsdStatus: string
+    xsdEngineName: string
+    xsdEngineVersion: string | null
+    xsdWorkerReal: boolean
     structural: boolean
   }
   integrity: {
@@ -335,14 +480,26 @@ export type IntegrityManifest = {
   referenciaIdPrefix: string
 }
 
+/**
+ * Serializa a prova no manifesto versionado.
+ *
+ * `verification.xsd` passa por `xsdRealValidationPassed`: só evidência `xmllint-worker` a torna
+ * true. Lido isolado, o artefato precisa dizer qual motor respondeu e o que falta — daí
+ * `xsdEngineName`/`xsdWorkerReal`/`proofState`/`blockingReasons`.
+ */
 export function buildManifestFromProof(
   primary: IntegrityProofResult,
   integrity: IntegrityManifest["integrity"],
 ): IntegrityManifest {
+  const evidence = primary.xsdEvidence
+  assertXsdEvidence(evidence)
+  const blockingReasons = blockingReasonsFrom(evidence)
   return {
     goal: primary.goal,
     proofVersion: primary.proofVersion,
     fixtureVersion: primary.fixtureVersion,
+    proofState: blockingReasons.length === 0 ? "complete" : "partial",
+    blockingReasons,
     clock: primary.clock,
     seed: primary.seed,
     layout: primary.layout,
@@ -359,7 +516,12 @@ export function buildManifestFromProof(
     verification: {
       internal: primary.verification.internal,
       externalJava17: primary.verification.externalJava17,
-      xsd: primary.verification.xsd,
+      xsd: xsdRealValidationPassed(evidence),
+      xsdContract: evidence.contractPassed,
+      xsdStatus: manifestXsdStatus(evidence),
+      xsdEngineName: evidence.engineName,
+      xsdEngineVersion: evidence.engineVersion,
+      xsdWorkerReal: evidence.workerReal,
       structural: primary.verification.structural,
     },
     integrity,
@@ -372,9 +534,22 @@ export function stableStringify(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`
 }
 
-/** Adapter XSD de composição offline: valida contrato + presença de Signature (não substitui worker). */
-export function createCompositionXsdAdapter(): XsdValidationAdapter {
+/**
+ * Gate de composição offline — NÃO é validação XSD.
+ *
+ * Confere só o CONTRATO com que `lib/fiscal/dry-run` chama o pacote oficial (schema root, hash do
+ * manifesto, escopo sintético de loja) e a presença de `<Signature`. Nenhum `xmllint`, nenhum
+ * libxml2, nenhum worker B2: o XML não é confrontado com o schema.
+ *
+ * Por isso jamais devolve `VALIDACAO_APROVADA`. O contrato compartilhado (`XsdValidationResult`)
+ * só admite `valid: true` acompanhado de `XsdValidationEngine`, cujo `name` é o literal
+ * `"xmllint"` — aprovar aqui obrigaria a forjar esse motor, que foi exatamente o defeito
+ * corrigido. Contrato conferido → `WORKER_INDISPONIVEL` (fail-closed, `engine: null`);
+ * contrato rejeitado → `XML_INVALIDO`. Só `createConfiguredXsdWorkerClient` aprova XSD.
+ */
+export function createCompositionXsdAdapter(): ProofXsdAdapter {
   return {
+    kind: "composition-gate",
     async validate(request) {
       const hasSignature = request.xmlPayload.includes("<Signature")
       const contractOk =
@@ -385,23 +560,24 @@ export function createCompositionXsdAdapter(): XsdValidationAdapter {
         return {
           valid: false,
           outcome: "XML_INVALIDO",
-          issues: [{ message: "XML ou contrato XSD rejeitado no adapter de composição." }],
+          issues: [{ message: "XML ou contrato XSD rejeitado no gate de composição." }],
           engine: null,
           durationMs: 1,
         }
       }
       return {
-        valid: true,
-        outcome: "VALIDACAO_APROVADA",
-        issues: [],
-        engine: {
-          name: "xmllint",
-          xmllintVersion: "composition-gate",
-          libxml2Version: "composition-gate",
-          binaryHash: "c".repeat(64),
-          schemaPackage: XSD_SCHEMA_PACKAGE,
-          schemaManifestHash: OFFICIAL_XSD_MANIFEST_SHA256,
-        },
+        valid: false,
+        outcome: COMPOSITION_GATE_CONTRACT_OK,
+        issues: [
+          {
+            code: "XSD_COMPOSITION_GATE_ONLY",
+            category: "INFRASTRUCTURE",
+            message:
+              "Gate de composição aprovado (pacote, manifesto e escopo conferem); validação XSD real não executada — worker xmllint ausente.",
+            retryable: false,
+          },
+        ],
+        engine: null,
         durationMs: 1,
       }
     },
@@ -416,11 +592,13 @@ export function createForbiddenSefazAdapter(): never {
 /**
  * Sinais para classificação do código de saída do runner (FASE 12).
  * `dependencyAvailable` = verificador Java 17 + manifesto golden presentes.
+ * `xsdWorkerReal` = `xmllint` real executou — dependência obrigatória da prova integral.
  * `xsdContract` = gate de contrato do pacote XSD oficial no adapter (NÃO é xmllint real).
  */
 export type ProofExitSignals = {
   manifestMatches: boolean
   dependencyAvailable: boolean
+  xsdWorkerReal: boolean
   internal: boolean
   externalJava17: boolean
   structural: boolean
@@ -439,15 +617,16 @@ export type ProofExitCode = 0 | 1 | 2 | 3 | 4
 /**
  * Matriz oficial de exit codes (FASE 12), avaliada por prioridade:
  *   3 — violação de segurança (egress/persistência/SEFAZ) — nunca pode ser mascarada;
- *   2 — dependência técnica obrigatória indisponível (Java 17 / golden) — nunca retorna 0;
+ *   2 — dependência técnica obrigatória indisponível (Java 17 / golden / worker XSD real) —
+ *       nunca retorna 0: só gate de composição NÃO conclui a prova integral;
  *   4 — manifesto divergente do golden;
  *   1 — falha de integridade (interno/Java/estrutura/contrato XSD/determinismo/idempotência/
- *       adulteração/isolamento) — inclui XSD indisponível (contrato falso) → nunca retorna 0;
+ *       adulteração/isolamento) — inclui contrato XSD falso → nunca retorna 0;
  *   0 — todas as provas obrigatórias passaram.
  */
 export function classifyProofExit(signals: ProofExitSignals): ProofExitCode {
   if (signals.databaseWrites > 0 || signals.sefazCalls > 0 || signals.externalEgress > 0) return 3
-  if (!signals.dependencyAvailable) return 2
+  if (!signals.dependencyAvailable || !signals.xsdWorkerReal) return 2
   if (!signals.manifestMatches) return 4
   const integrityOk =
     signals.internal &&

@@ -60,12 +60,17 @@ Somente o GOAL 022 poderá construir ativação, restrita a `HOMOLOGACAO` e suje
 **GOAL-005** (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`, “Prova de Integridade do Dry-Run Fiscal”):
 escopo reconciliado no PR #10 (`ccb8b0f…`); harness offline em
 `tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`,
-commit `d5dc7ad…` + continuação aditiva 17/07) — **estado PARCIAL**: snapshot/XML/C14N/XMLDSig/Java
+commit `d5dc7ad…` + continuações aditivas 17/07) — **estado PARCIAL**: snapshot/XML/C14N/XMLDSig/Java
 + manifesto golden verdes; **egress intercept (FASE 7-8) e exit codes 0-4 (FASE 12) FECHADOS**
-(`net-guard.ts` + `classifyProofExit`; 53 tests); **XSD worker B2 real segue não executado**
-(Docker ausente + build do worker baixa `libxml2` externo — FASE 15). **Sem** caller
-produtivo, **sem** SEFAZ, **sem** emissão. Nível **N3** (teto N4 no eixo dry-run só após XSD
-real + auditoria + merge). Nenhum gate global fechado; N6=0; N7=0. Fontes:
+(`net-guard.ts` + `classifyProofExit`); **hardening de honestidade da evidência XSD CONCLUÍDO**
+(17/07: manifesto passou a declarar `verification.xsd: **false**` + `xsdContract: true` +
+`xsdEngineName: "composition-gate"` + `proofState: "partial"` + blocker explícito; só o worker real
+pode produzir `xsd: true`; runner integral → **exit 2**; 69 tests; hashes do XML inalterados);
+**XSD worker B2 real segue não executado** e **supply chain offline segue bloqueante**
+(Docker ausente + build do worker baixa `libxml2` externo — FASE 15) → próximo GOAL recomendado
+**`FISCAL-XSD-WORKER-OFFLINE-SUPPLY-CHAIN-005A`** (host com Docker + rede controlada → bundle OCI
+aprovado com digest). **Sem** caller produtivo, **sem** SEFAZ, **sem** emissão. Nível **N3** (teto
+N4 no eixo dry-run só após XSD real + auditoria + merge). Nenhum gate global fechado; N6=0; N7=0. Fontes:
 [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](../fiscal/FISCAL_GOAL_005_SCOPE_RECONCILIATION.md) ·
 [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md`](../fiscal/FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md).
 
@@ -204,9 +209,12 @@ integrado na `main` pelo PR #8 (merge `b307337`, implementação `3f8928c`); Cad
 `fiscalRegime` só visual; Barcode/Cosmos com revisão humana; **N3 no eixo cadastro**; N6=0;
 N7=0; signer dormente; sem schema/migration; sem emissão/SEFAZ. GOAL-003 (C14N) e GOAL-002 (XSD)
 permanecem fechados. **GOAL-005** (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`) está **PARCIAL** em branch
-(`tools/fiscal-dry-run-integrity-proof/`, `d5dc7ad…` + continuação 17/07) — snapshot→XML→C14N→
-XMLDSig→Java + manifesto verdes; **egress intercept + exit codes 0-4 FECHADOS**; **XSD worker real
-segue bloqueado** (Docker ausente + build com download externo). Próximo: worker XSD B2 local →
+(`tools/fiscal-dry-run-integrity-proof/`, `d5dc7ad…` + continuações 17/07) — snapshot→XML→C14N→
+XMLDSig→Java + manifesto verdes; **egress intercept + exit codes 0-4 FECHADOS**; **hardening de
+honestidade da evidência XSD CONCLUÍDO** (`verification.xsd: false` + gate de composição explícito
++ `proofState: partial` + blocker; runner integral → exit 2); **XSD worker real segue bloqueado e
+supply chain segue bloqueante** (Docker ausente + build com download externo). Próximo:
+**`FISCAL-XSD-WORKER-OFFLINE-SUPPLY-CHAIN-005A`** (bundle OCI aprovado) → worker XSD B2 local →
 auditoria de merge readiness → PR + aprovação humana + merge controlado; **não** abrir G-F5.
 Homologação e produção **não** foram abertas.
 

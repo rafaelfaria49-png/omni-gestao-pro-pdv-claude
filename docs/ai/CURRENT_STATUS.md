@@ -20,12 +20,17 @@
 > Callers produtivos **0**. GOAL-004 **FECHADO**. GOAL-005 técnico =
 > `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` — harness offline em
 > `tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`,
-> commit `d5dc7ad…` + continuação aditiva 17/07); **estado PARCIAL**: cadeia
+> commit `d5dc7ad…` + continuações aditivas 17/07); **estado PARCIAL**: cadeia
 > snapshot→XML→C14N→XMLDSig→Java 17 + manifesto golden verdes; **egress intercept (FASE 7-8) e
-> exit codes 0-4 (FASE 12) FECHADOS** (`net-guard.ts` + `classifyProofExit`; 53 tests);
+> exit codes 0-4 (FASE 12) FECHADOS** (`net-guard.ts` + `classifyProofExit`);
+> **manifesto corrigido (17/07)** — `verification.xsd: **false**`, gate de composição explícito
+> (`xsdContract: true` · `xsdEngineName: "composition-gate"` · `xsdWorkerReal: false`),
+> `proofState: "partial"` + `blockingReasons: ["XSD_WORKER_REAL_UNAVAILABLE"]`; runner integral
+> → **exit 2**; 69 tests; hashes do XML inalterados;
 > **worker XSD B2 real segue não executado** (Docker ausente + build do worker exige download
-> externo — FASE 15: não marcar XSD schema como aprovado). **sem** caller produtivo, **sem**
-> SEFAZ, **sem** schema; nível **N3** (N4 no eixo dry-run só após XSD real + auditoria + merge).
+> externo — FASE 15: não marcar XSD schema como aprovado) → **0 validações XSD reais**. **sem**
+> caller produtivo, **sem** SEFAZ, **sem** schema; nível **N3** (N4 no eixo dry-run só após XSD
+> real + auditoria + merge).
 > A ocorrência “NF-e — mock” em seções de preview PDV **não** descreve o estado global da frente
 > fiscal.
 
@@ -66,25 +71,36 @@
 - **Escopo oficial:** `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` — “Prova de Integridade do Dry-Run
   Fiscal” (reconciliação documental PR #10 / merge `ccb8b0f…`).
 - **Estado:** **PARCIAL** — harness offline em `tools/fiscal-dry-run-integrity-proof/`
-  (branch `work/fiscal-dry-run-integrity-proof-005`, commit `d5dc7ad…`). **Não** é emissão;
-  **não** é caller produtivo; **não** eleva gate global; **não** fecha o GOAL.
+  (branch `work/fiscal-dry-run-integrity-proof-005`, commit `d5dc7ad…` + continuações 17/07).
+  **Não** é emissão; **não** é caller produtivo; **não** eleva gate global; **não** fecha o GOAL.
 - **Cadeia composta (componentes reais dormentes):** snapshot → XML → C14N → XMLDSig (RSA-SHA1) →
   verifier interno → Java 17 (GOAL-003) → gate de **contrato** XSD → manifesto determinístico.
-- **Provas:** P-01..P-15 e N-01..N-14 + **NET-P01/02 + NET-N01..N10 + exit codes** no harness
-  (**53 passed**; 1 skipped = XSD worker real); determinismo 3×; A→B→A; zero DB/SEFAZ/egress;
-  material sintético GOAL-003; stores `store-fiscal-proof-a|b`.
+- **Provas:** P-01..P-15 e N-01..N-14 + **NET-P01/02 + NET-N01..N10 + exit codes + XSD-H01..H16**
+  no harness (**69 passed**; 1 skipped = XSD worker real); determinismo 3×; A→B→A; zero
+  DB/SEFAZ/egress; material sintético GOAL-003; stores `store-fiscal-proof-a|b`.
 - **Egress (FASE 7-8) — FECHADO:** `net-guard.ts` intercepta `fetch`/`http(s)`/`net`/`tls`/DNS
   (allowlist loopback + `.internal`), install/restore no `finally`, sem acúmulo; prova completa
   sob o guard = **0 tentativas**. **Exit codes 0-4 (FASE 12) — FECHADO:** `classifyProofExit`.
-- **XSD:** pacote `PL_010e_v1.02` presente; adapter de composição de contrato no CI;
+- **XSD — evidência explicitamente PARCIAL (corrigida em 17/07):** pacote `PL_010e_v1.02` presente;
+  no CI roda **gate de composição de contrato**, que **não** se declara `xmllint` e **não** aprova
+  (`WORKER_INDISPONIVEL`, fail-closed). Manifesto: `verification.xsd: **false**` ·
+  `xsdContract: true` · `xsdStatus/xsdEngineName: "composition-gate"` · `xsdWorkerReal: false` ·
+  `proofState: "partial"` · `blockingReasons: ["XSD_WORKER_REAL_UNAVAILABLE"]`. Só o adapter do
+  worker real pode produzir `xsd: true`; runner integral com só composition-gate → **exit 2**
+  (golden byte-igual **não** significa GOAL concluído). Hashes do XML **inalterados**.
   **worker B2/`xmllint` real = BLOQUEIO AMBIENTAL** (Docker ausente **+** build do worker baixa
-  `libxml2` externo). FASE 15: **não** marcar XSD schema real como aprovado neste host.
+  `libxml2` externo) → **0 validações XSD reais / 0 negativos XSD reais**. FASE 15: **não** marcar
+  XSD schema real como aprovado neste host.
 - **Evidência:** `tools/fiscal-dry-run-integrity-proof/evidence/manifest.json` · relatório
   [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md`](../fiscal/FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md).
 - **Gates:** nenhum fechado; **N6=0**, **N7=0**; N3; N4 no eixo dry-run só após XSD real +
   auditoria + merge.
-- **Próximo passo técnico residual:** rodar worker XSD B2 local (Docker) com
-  `FISCAL_XSD_WORKER_URL` e revalidar P-09 real; depois auditoria de merge readiness.
+- **Próximo passo técnico residual — supply chain, separado desta correção:**
+  **`FISCAL-XSD-WORKER-OFFLINE-SUPPLY-CHAIN-005A`** em host apropriado, com Docker e rede
+  controlada, para produzir imagem/bundle **OCI aprovado** (fontes com hash → build imutável →
+  SBOM + scan → digest registrado → execução offline provada). Só então rodar o worker via
+  `FISCAL_XSD_WORKER_URL`, obter validação XSD real e revalidar; depois auditoria de merge
+  readiness. Host com Docker **não** basta: o `Dockerfile` atual baixa `libxml2` externo.
 - **Próximo passo:** auditoria de merge readiness desta branch; PR + aprovação humana + merge
   controlado; **não** abrir G-F5 automaticamente.
 

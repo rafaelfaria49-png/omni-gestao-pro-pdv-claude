@@ -14,7 +14,12 @@ import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { verifyNfceSignature, parseXml, findFirst, ALG_SIGNATURE_RSA_SHA1 } from "@/lib/fiscal/signing"
 import { OFFICIAL_XSD_MANIFEST_SHA256 } from "@/lib/fiscal/xsd/official-package"
-import { XSD_SCHEMA_PACKAGE } from "@/lib/fiscal/xsd"
+import {
+  XSD_CONTRACT_VERSION,
+  XSD_MAX_PAYLOAD_BYTES,
+  XSD_SCHEMA_PACKAGE,
+  type XsdValidationRequest,
+} from "@/lib/fiscal/xsd"
 import {
   PROOF_CLOCK_ISO,
   PROOF_SEED,
@@ -25,16 +30,23 @@ import {
 } from "./fixtures"
 import { verifySignedXmlExternalJava, cleanupTempDir } from "./java-external"
 import {
+  BLOCKER_XSD_WORKER_REAL_UNAVAILABLE,
+  assertXsdEvidence,
+  blockingReasonsFrom,
   buildManifestFromProof,
+  buildXsdEvidence,
   classifyProofExit,
   createCompositionXsdAdapter,
   createForbiddenSefazAdapter,
   runFiscalDryRunIntegrityProof,
   stableStringify,
   toPublicProofView,
+  xsdRealValidationPassed,
   type IntegrityManifest,
   type IntegrityProofResult,
   type ProofExitSignals,
+  type ProofXsdAdapter,
+  type XsdEvidence,
 } from "./proof"
 import {
   EgressBlockedError,
@@ -136,9 +148,12 @@ describe("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · positivas", () => {
     expect(primary.javaReport?.calculatedDigestValue).toBe(primary.signature.digestValue)
   })
 
-  it("P-09 XML válido no contrato do pacote XSD oficial (adapter de composição)", () => {
-    expect(primary.verification.xsd).toBe(true)
-    expect(primary.xsdStatus).toBe("xsd_ok")
+  it("P-09 contrato do pacote XSD oficial conferido pelo gate — sem validação real", () => {
+    expect(primary.xsdEvidence.kind).toBe("composition-gate")
+    expect(primary.xsdEvidence.contractPassed).toBe(true)
+    // Gate de composição não valida schema: fail-closed no contrato compartilhado.
+    expect(primary.verification.xsd).toBe(false)
+    expect(primary.xsdStatus).toBe("xsd_falha_infraestrutura")
     expect(primary.schemaPackagePath).toBe(XSD_SCHEMA_PACKAGE)
     expect(primary.schemaManifestHash).toBe(OFFICIAL_XSD_MANIFEST_SHA256)
     expect(primary.xsdPackage).toBe("PL_010e_v1.02")
@@ -507,6 +522,7 @@ describe("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · exit codes (FASE 12)", () => {
   const green: ProofExitSignals = {
     manifestMatches: true,
     dependencyAvailable: true,
+    xsdWorkerReal: true,
     internal: true,
     externalJava17: true,
     structural: true,
@@ -563,18 +579,227 @@ describe("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · exit codes (FASE 12)", () => {
   })
 })
 
+describe("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · honestidade da evidência XSD", () => {
+  const integrityGreen = {
+    deterministic: true,
+    idempotent: true,
+    tamperDetected: true,
+    storeIsolation: true,
+  } as const
+
+  const goldenManifest = (): IntegrityManifest =>
+    JSON.parse(readFileSync(MANIFEST_PATH, "utf8")) as IntegrityManifest
+
+  /**
+   * Evidência sintética de worker real — UNITÁRIA, para provar o mapeamento da serialização.
+   * Nenhum xmllint executou: não vira golden e não é evidência de validação real.
+   */
+  const syntheticWorkerEvidence: XsdEvidence = {
+    kind: "xmllint-worker",
+    contractPassed: true,
+    realValidationPassed: true,
+    engineName: "xmllint",
+    engineVersion: "2.15.3",
+    workerReal: true,
+    package: "PL_010e_v1.02",
+    layout: "4.00",
+    model: "65",
+    schemaRoot: XSD_SCHEMA_PACKAGE,
+  }
+
+  function compositionRequest(xmlPayload: string, storeId: string = STORE_PROOF_A): XsdValidationRequest {
+    return {
+      jobId: "xsd-honesty",
+      storeId,
+      correlationId: "xsd-honesty",
+      contractVersion: XSD_CONTRACT_VERSION,
+      schemaVersion: XSD_SCHEMA_PACKAGE,
+      schemaManifestHash: OFFICIAL_XSD_MANIFEST_SHA256,
+      xmlSha256: "0".repeat(64),
+      xmlPayload,
+      payloadBytes: Buffer.byteLength(xmlPayload, "utf8"),
+      maxPayloadBytes: XSD_MAX_PAYLOAD_BYTES,
+      attempt: 1,
+      requestedAt: PROOF_CLOCK_ISO,
+      deadline: PROOF_CLOCK_ISO,
+    }
+  }
+
+  it("XSD-H01 adapter de composição declara kind composition-gate", () => {
+    expect(createCompositionXsdAdapter().kind).toBe("composition-gate")
+    expect(primary.xsdEvidence.kind).toBe("composition-gate")
+    expect(primary.xsdEvidence.contractPassed).toBe(true)
+  })
+
+  it("XSD-H02 adapter de composição nunca devolve motor xmllint", async () => {
+    const result = await createCompositionXsdAdapter().validate(
+      compositionRequest(primary.artifacts.signedXml),
+    )
+    expect(result.engine).toBeNull()
+    expect(result.valid).toBe(false)
+    expect(result.outcome).not.toBe("VALIDACAO_APROVADA")
+    expect(primary.xsdEvidence.engineName).toBe("composition-gate")
+    expect(primary.xsdEngineName).toBeNull()
+    expect(JSON.stringify(primary.xsdEvidence)).not.toContain("xmllint")
+  })
+
+  it("XSD-H03 adapter de composição não afirma validação real", () => {
+    expect(primary.xsdEvidence.realValidationPassed).toBe(false)
+    expect(primary.verification.xsd).toBe(false)
+    expect(primary.xsdStatus).toBe("xsd_falha_infraestrutura")
+  })
+
+  it("XSD-H04 adapter de composição não afirma worker real", () => {
+    expect(primary.xsdEvidence.workerReal).toBe(false)
+    expect(primary.xsdEvidence.engineVersion).toBeNull()
+  })
+
+  it("XSD-H05 manifesto parcial registra verification.xsd = false", () => {
+    expect(goldenManifest().verification.xsd).toBe(false)
+    expect(buildManifestFromProof(primary, integrityGreen).verification.xsd).toBe(false)
+  })
+
+  it("XSD-H06 manifesto parcial registra xsdContract = true", () => {
+    expect(goldenManifest().verification.xsdContract).toBe(true)
+  })
+
+  it("XSD-H07 manifesto identifica o motor composition-gate", () => {
+    const golden = goldenManifest()
+    expect(golden.verification.xsdEngineName).toBe("composition-gate")
+    expect(golden.verification.xsdStatus).toBe("composition-gate")
+    expect(golden.verification.xsdEngineVersion).toBeNull()
+    expect(golden.verification.xsdWorkerReal).toBe(false)
+  })
+
+  it("XSD-H08 manifesto declara estado partial", () => {
+    expect(goldenManifest().proofState).toBe("partial")
+  })
+
+  it("XSD-H09 manifesto declara o bloqueio do worker real", () => {
+    expect(goldenManifest().blockingReasons).toEqual([BLOCKER_XSD_WORKER_REAL_UNAVAILABLE])
+    expect(blockingReasonsFrom(primary.xsdEvidence)).toEqual([BLOCKER_XSD_WORKER_REAL_UNAVAILABLE])
+  })
+
+  it("XSD-H10 prova integral com somente composition-gate retorna exit 2", () => {
+    // Mesmos sinais que `run.ts` monta a partir da prova real (golden presente, tudo verde).
+    const signals: ProofExitSignals = {
+      manifestMatches: true,
+      dependencyAvailable: true,
+      xsdWorkerReal: primary.xsdEvidence.workerReal,
+      internal: primary.verification.internal,
+      externalJava17: primary.verification.externalJava17,
+      structural: primary.verification.structural,
+      xsdContract: primary.xsdEvidence.contractPassed,
+      deterministic: true,
+      idempotent: true,
+      tamperDetected: true,
+      storeIsolation: true,
+      databaseWrites: 0,
+      sefazCalls: 0,
+      externalEgress: 0,
+    }
+    expect(signals.xsdContract).toBe(true)
+    expect(classifyProofExit(signals)).toBe(2)
+    // O mesmo cenário só conclui quando o worker real entra.
+    expect(classifyProofExit({ ...signals, xsdWorkerReal: true })).toBe(0)
+  })
+
+  it("XSD-H11 combinação inválida de campos é rejeitada", () => {
+    const invalid = (evidence: unknown) => () => assertXsdEvidence(evidence as XsdEvidence)
+    expect(invalid({ ...syntheticWorkerEvidence, workerReal: false })).toThrow(/worker real/)
+    expect(invalid({ ...syntheticWorkerEvidence, engineVersion: "composition-gate" })).toThrow(
+      /versão real/,
+    )
+    expect(invalid({ ...primary.xsdEvidence, realValidationPassed: true })).toThrow(/validação real/)
+    expect(invalid({ ...primary.xsdEvidence, engineName: "xmllint" })).toThrow(/motor xmllint/)
+  })
+
+  it("XSD-H12 somente evidência xmllint-worker resulta em XSD true", () => {
+    expect(xsdRealValidationPassed(primary.xsdEvidence)).toBe(false)
+    expect(xsdRealValidationPassed(syntheticWorkerEvidence)).toBe(true)
+    // Worker configurado porém mudo (`engine: null`) nunca vira evidência real.
+    const mute = buildXsdEvidence("xmllint-worker", {
+      status: "xsd_falha_infraestrutura",
+      outcome: "WORKER_INDISPONIVEL",
+      engine: null,
+      mensagem: "worker ausente",
+      violacoes: [],
+    })
+    expect(mute.workerReal).toBe(false)
+    expect(xsdRealValidationPassed(mute)).toBe(false)
+    // Objeto sintético: prova o mapeamento da serialização, nunca substitui o worker.
+    const worker = buildManifestFromProof(
+      { ...primary, xsdEvidence: syntheticWorkerEvidence },
+      integrityGreen,
+    )
+    expect(worker.verification.xsd).toBe(true)
+    expect(worker.verification.xsdStatus).toBe("validated")
+    expect(worker.verification.xsdWorkerReal).toBe(true)
+    expect(worker.proofState).toBe("complete")
+    expect(worker.blockingReasons).toEqual([])
+  })
+
+  it("XSD-H13 manifesto lido isolado não afirma xmllint real", () => {
+    const raw = readFileSync(MANIFEST_PATH, "utf8")
+    expect(raw).not.toContain("xmllint")
+    expect(raw).toContain('"xsd": false')
+    expect(raw).toContain('"proofState": "partial"')
+    expect(raw).toContain(BLOCKER_XSD_WORKER_REAL_UNAVAILABLE)
+  })
+
+  it("XSD-H14 serialização da evidência é determinística", async () => {
+    const again = await runFiscalDryRunIntegrityProof(baseDeps)
+    expect(again.xsdEvidence).toEqual(primary.xsdEvidence)
+    expect(stableStringify(buildManifestFromProof(again, integrityGreen))).toBe(
+      stableStringify(buildManifestFromProof(primary, integrityGreen)),
+    )
+  }, 30_000)
+
+  it("XSD-H15 regenerar o manifesto mantém os bytes do golden", async () => {
+    const again = await runFiscalDryRunIntegrityProof(baseDeps)
+    const regenerated = stableStringify(buildManifestFromProof(again, integrityGreen))
+    expect(regenerated).toBe(readFileSync(MANIFEST_PATH, "utf8"))
+  }, 30_000)
+
+  it("XSD-H16 hashes criptográficos do XML permanecem os do GOAL-005", () => {
+    expect(primary.hashes.snapshotSha256).toBe(
+      "efd6f54c362bddb781395514112ff3540418b868c854b1444b1122e8159bae2e",
+    )
+    expect(primary.hashes.unsignedXmlSha256).toBe(
+      "5773978497ce4d63db0ca3e945f1df1306204b871d760bbf66d7e48cc9ffd488",
+    )
+    expect(primary.hashes.referencedNodeC14nSha256).toBe(
+      "5126ad4885f1a6f843a3d8b8e59c3afac33591d199533b8afea82616172233f7",
+    )
+    expect(primary.hashes.signedInfoSha256).toBe(
+      "449cc741f4187087090610abcaaf13195ee8fc82a045d8b91511254919421b69",
+    )
+    expect(primary.hashes.signedXmlSha256).toBe(
+      "d9a3eead89deba74dbf2d6cf54db1562a3ef67c1b671e24a927d72127f3c84a2",
+    )
+    expect(primary.signature.digestValue).toBe("C2JM/I4Y6H7n1G7YopYEiVLuASw=")
+  })
+})
+
 const realXsdSuite = process.env.FISCAL_XSD_WORKER_URL ? describe : describe.skip
 
 realXsdSuite("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · XSD worker real (opcional)", () => {
   it("aprova XML assinado no worker oficial quando disponível", async () => {
     const { createConfiguredXsdWorkerClient } = await import("@/lib/fiscal/xsd-worker")
+    const client = createConfiguredXsdWorkerClient()
+    const realAdapter: ProofXsdAdapter = {
+      kind: "xmllint-worker",
+      validate: (request) => client.validate(request),
+    }
     const result = await runFiscalDryRunIntegrityProof({
       ...baseDeps,
-      xsdAdapter: createConfiguredXsdWorkerClient(),
+      xsdAdapter: realAdapter,
       runExternalJava: false,
     })
     expect(result.verification.xsd).toBe(true)
     expect(result.xsdStatus).toBe("xsd_ok")
+    expect(result.xsdEvidence.kind).toBe("xmllint-worker")
+    expect(result.xsdEvidence.workerReal).toBe(true)
   }, 30_000)
 })
 

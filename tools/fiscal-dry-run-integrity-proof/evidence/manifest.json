@@ -2,6 +2,10 @@
   "goal": "FISCAL-DRY-RUN-INTEGRITY-PROOF-005",
   "proofVersion": "1",
   "fixtureVersion": "1",
+  "proofState": "partial",
+  "blockingReasons": [
+    "XSD_WORKER_REAL_UNAVAILABLE"
+  ],
   "clock": "2026-01-15T12:00:00.000Z",
   "seed": "FISCAL-DRY-RUN-INTEGRITY-PROOF-005/v1",
   "layout": "4.00",
@@ -29,7 +33,12 @@
   "verification": {
     "internal": true,
     "externalJava17": true,
-    "xsd": true,
+    "xsd": false,
+    "xsdContract": true,
+    "xsdStatus": "composition-gate",
+    "xsdEngineName": "composition-gate",
+    "xsdEngineVersion": null,
+    "xsdWorkerReal": false,
     "structural": true
   },
   "integrity": {
