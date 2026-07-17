@@ -20,10 +20,12 @@
 > Callers produtivos **0**. GOAL-004 **FECHADO**. GOAL-005 técnico =
 > `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` — harness offline em
 > `tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`,
-> commit `d5dc7ad…`); **estado PARCIAL**: cadeia snapshot→XML→C14N→XMLDSig→Java 17 +
-> manifesto golden verdes; **worker XSD B2 real não executado** (Docker ausente no host —
-> FASE 15: não marcar XSD schema como aprovado). **sem** caller produtivo, **sem** SEFAZ,
-> **sem** schema; nível **N3** (N4 no eixo dry-run só após XSD real + auditoria + merge).
+> commit `d5dc7ad…` + continuação aditiva 17/07); **estado PARCIAL**: cadeia
+> snapshot→XML→C14N→XMLDSig→Java 17 + manifesto golden verdes; **egress intercept (FASE 7-8) e
+> exit codes 0-4 (FASE 12) FECHADOS** (`net-guard.ts` + `classifyProofExit`; 53 tests);
+> **worker XSD B2 real segue não executado** (Docker ausente + build do worker exige download
+> externo — FASE 15: não marcar XSD schema como aprovado). **sem** caller produtivo, **sem**
+> SEFAZ, **sem** schema; nível **N3** (N4 no eixo dry-run só após XSD real + auditoria + merge).
 > A ocorrência “NF-e — mock” em seções de preview PDV **não** descreve o estado global da frente
 > fiscal.
 
@@ -68,12 +70,15 @@
   **não** é caller produtivo; **não** eleva gate global; **não** fecha o GOAL.
 - **Cadeia composta (componentes reais dormentes):** snapshot → XML → C14N → XMLDSig (RSA-SHA1) →
   verifier interno → Java 17 (GOAL-003) → gate de **contrato** XSD → manifesto determinístico.
-- **Provas:** P-01..P-15 e N-01..N-14 no harness (31 passed; 1 skipped = XSD worker real);
-  determinismo 3×; A→B→A; zero DB/SEFAZ/egress; material sintético GOAL-003;
-  stores `store-fiscal-proof-a|b`.
+- **Provas:** P-01..P-15 e N-01..N-14 + **NET-P01/02 + NET-N01..N10 + exit codes** no harness
+  (**53 passed**; 1 skipped = XSD worker real); determinismo 3×; A→B→A; zero DB/SEFAZ/egress;
+  material sintético GOAL-003; stores `store-fiscal-proof-a|b`.
+- **Egress (FASE 7-8) — FECHADO:** `net-guard.ts` intercepta `fetch`/`http(s)`/`net`/`tls`/DNS
+  (allowlist loopback + `.internal`), install/restore no `finally`, sem acúmulo; prova completa
+  sob o guard = **0 tentativas**. **Exit codes 0-4 (FASE 12) — FECHADO:** `classifyProofExit`.
 - **XSD:** pacote `PL_010e_v1.02` presente; adapter de composição de contrato no CI;
-  **worker B2/`xmllint` real = BLOQUEIO AMBIENTAL** (Docker ausente). FASE 15: **não** marcar
-  XSD schema real como aprovado neste host.
+  **worker B2/`xmllint` real = BLOQUEIO AMBIENTAL** (Docker ausente **+** build do worker baixa
+  `libxml2` externo). FASE 15: **não** marcar XSD schema real como aprovado neste host.
 - **Evidência:** `tools/fiscal-dry-run-integrity-proof/evidence/manifest.json` · relatório
   [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md`](../fiscal/FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md).
 - **Gates:** nenhum fechado; **N6=0**, **N7=0**; N3; N4 no eixo dry-run só após XSD real +

@@ -8,6 +8,7 @@
 
 import { createHash } from "node:crypto"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs"
+import { createRequire } from "node:module"
 import { resolve, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
@@ -25,6 +26,7 @@ import {
 import { verifySignedXmlExternalJava, cleanupTempDir } from "./java-external"
 import {
   buildManifestFromProof,
+  classifyProofExit,
   createCompositionXsdAdapter,
   createForbiddenSefazAdapter,
   runFiscalDryRunIntegrityProof,
@@ -32,7 +34,15 @@ import {
   toPublicProofView,
   type IntegrityManifest,
   type IntegrityProofResult,
+  type ProofExitSignals,
 } from "./proof"
+import {
+  EgressBlockedError,
+  installNetGuard,
+  isLoopbackTarget,
+  isNetGuardActive,
+  withNetGuard,
+} from "./net-guard"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MANIFEST_PATH = resolve(HERE, "evidence/manifest.json")
@@ -325,6 +335,231 @@ describe("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · Java negativo herdado", () => {
     })
     tempDirs.push(external.workDir)
     expect(external.report.valid).toBe(false)
+  })
+})
+
+describe("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · intercept de egress (FASE 7-8)", () => {
+  const nodeRequire = createRequire(import.meta.url)
+  const net = nodeRequire("node:net") as typeof import("node:net")
+  const dns = nodeRequire("node:dns") as typeof import("node:dns")
+  const http = nodeRequire("node:http") as typeof import("node:http")
+  const https = nodeRequire("node:https") as typeof import("node:https")
+  const tls = nodeRequire("node:tls") as typeof import("node:tls")
+
+  it("classifica loopback, IPC local e rede interna vs host público", () => {
+    expect(isLoopbackTarget("127.0.0.1")).toBe(true)
+    expect(isLoopbackTarget("::1")).toBe(true)
+    expect(isLoopbackTarget("localhost")).toBe(true)
+    expect(isLoopbackTarget("fiscal-xsd.internal")).toBe(true)
+    expect(isLoopbackTarget("/tmp/worker.sock")).toBe(true)
+    expect(isLoopbackTarget("example.com")).toBe(false)
+    expect(isLoopbackTarget("8.8.8.8")).toBe(false)
+    expect(isLoopbackTarget("nfce.sefaz.rs.gov.br")).toBe(false)
+  })
+
+  it("NET-P01 loopback autorizado (dns.lookup localhost resolve)", async () => {
+    const guard = installNetGuard()
+    try {
+      const address = await new Promise<string>((res, rej) =>
+        dns.lookup("localhost", (err, addr) => (err ? rej(err) : res(String(addr)))),
+      )
+      expect(address).toMatch(/^(127\.0\.0\.1|::1)$/)
+      expect(guard.attempts).toHaveLength(0)
+    } finally {
+      guard.restore()
+    }
+  })
+
+  it("NET-P02 transporte local do worker XSD (loopback TCP) autorizado", async () => {
+    const guard = installNetGuard()
+    const server = net.createServer()
+    try {
+      await new Promise<void>((res) => server.listen(0, "127.0.0.1", () => res()))
+      const port = (server.address() as import("node:net").AddressInfo).port
+      await new Promise<void>((res, rej) => {
+        const socket = net.connect(port, "127.0.0.1", () => {
+          socket.end()
+          res()
+        })
+        socket.on("error", rej)
+      })
+      expect(guard.attempts).toHaveLength(0)
+    } finally {
+      guard.restore()
+      await new Promise<void>((res) => server.close(() => res()))
+    }
+  })
+
+  it("NET-N01 fetch externo bloqueado (sem conexão real)", async () => {
+    const { attempts } = await withNetGuard(async () => {
+      await expect(fetch("https://example.com/")).rejects.toBeInstanceOf(EgressBlockedError)
+    })
+    expect(attempts).toContainEqual({ channel: "fetch", target: "example.com" })
+  })
+
+  it("NET-N02 http externo bloqueado", () => {
+    const guard = installNetGuard()
+    try {
+      expect(() => http.request("http://example.com/")).toThrow(/egress/i)
+    } finally {
+      guard.restore()
+    }
+  })
+
+  it("NET-N03 https externo bloqueado", () => {
+    const guard = installNetGuard()
+    try {
+      expect(() => https.request({ host: "example.com", port: 443 })).toThrow(EgressBlockedError)
+    } finally {
+      guard.restore()
+    }
+  })
+
+  it("NET-N04 net externo bloqueado", () => {
+    const guard = installNetGuard()
+    try {
+      expect(() => net.connect(443, "example.com")).toThrow(/egress/i)
+    } finally {
+      guard.restore()
+    }
+  })
+
+  it("NET-N05 tls externo bloqueado", () => {
+    const guard = installNetGuard()
+    try {
+      expect(() => tls.connect(443, "example.com")).toThrow(EgressBlockedError)
+    } finally {
+      guard.restore()
+    }
+  })
+
+  it("NET-N06 DNS externo bloqueado (lookup/resolve/reverse)", () => {
+    const guard = installNetGuard()
+    try {
+      expect(() => dns.resolve("example.com", () => {})).toThrow(/egress/i)
+      expect(() => dns.lookup("example.com", () => {})).toThrow(EgressBlockedError)
+      expect(() => dns.reverse("8.8.8.8", () => {})).toThrow(/egress/i)
+    } finally {
+      guard.restore()
+    }
+  })
+
+  it("NET-N07 endpoint SEFAZ bloqueado", async () => {
+    const { attempts } = await withNetGuard(async () => {
+      await expect(
+        fetch("https://nfce.sefaz.rs.gov.br/ws/NfeAutorizacao/NFeAutorizacao4.asmx"),
+      ).rejects.toBeInstanceOf(EgressBlockedError)
+    })
+    expect(attempts.some((a) => a.channel === "fetch" && /sefaz/i.test(a.target))).toBe(true)
+  })
+
+  it("NET-N08 intercept restaurado depois da prova", () => {
+    const originalFetch = globalThis.fetch
+    const originalHttpRequest = http.request
+    const originalDnsLookup = dns.lookup
+    const guard = installNetGuard()
+    expect(globalThis.fetch).not.toBe(originalFetch)
+    expect(http.request).not.toBe(originalHttpRequest)
+    expect(isNetGuardActive()).toBe(true)
+    guard.restore()
+    expect(globalThis.fetch).toBe(originalFetch)
+    expect(http.request).toBe(originalHttpRequest)
+    expect(dns.lookup).toBe(originalDnsLookup)
+    expect(isNetGuardActive()).toBe(false)
+  })
+
+  it("NET-N09 falha durante a prova ainda restaura intercepts", async () => {
+    const originalFetch = globalThis.fetch
+    await expect(
+      withNetGuard(async () => {
+        throw new Error("boom-proof")
+      }),
+    ).rejects.toThrow("boom-proof")
+    expect(globalThis.fetch).toBe(originalFetch)
+    expect(isNetGuardActive()).toBe(false)
+  })
+
+  it("NET-N10 segunda execução não acumula wrappers", async () => {
+    const originalFetch = globalThis.fetch
+    await withNetGuard(async () => {})
+    await withNetGuard(async () => {})
+    expect(globalThis.fetch).toBe(originalFetch)
+    const guard = installNetGuard()
+    try {
+      expect(() => installNetGuard()).toThrow(/já está instalado/)
+    } finally {
+      guard.restore()
+    }
+    expect(globalThis.fetch).toBe(originalFetch)
+    expect(isNetGuardActive()).toBe(false)
+  })
+
+  it("prova completa sob o guard não gera egress externo (0 tentativas)", async () => {
+    const { result, attempts } = await withNetGuard(() => runFiscalDryRunIntegrityProof(baseDeps))
+    expect(attempts).toHaveLength(0)
+    expect(result.safety.externalEgress).toBe(0)
+    expect(result.verification.internal).toBe(true)
+    expect(result.verification.externalJava17).toBe(true)
+  }, 60_000)
+})
+
+describe("FISCAL-DRY-RUN-INTEGRITY-PROOF-005 · exit codes (FASE 12)", () => {
+  const green: ProofExitSignals = {
+    manifestMatches: true,
+    dependencyAvailable: true,
+    internal: true,
+    externalJava17: true,
+    structural: true,
+    xsdContract: true,
+    deterministic: true,
+    idempotent: true,
+    tamperDetected: true,
+    storeIsolation: true,
+    databaseWrites: 0,
+    sefazCalls: 0,
+    externalEgress: 0,
+  }
+
+  it("EXIT-0 sucesso real", () => {
+    expect(classifyProofExit(green)).toBe(0)
+  })
+
+  it("EXIT-1 falha de integridade", () => {
+    expect(classifyProofExit({ ...green, tamperDetected: false })).toBe(1)
+    expect(classifyProofExit({ ...green, internal: false })).toBe(1)
+  })
+
+  it("EXIT-1 XSD indisponível (contrato falso) nunca retorna 0", () => {
+    expect(classifyProofExit({ ...green, xsdContract: false })).not.toBe(0)
+  })
+
+  it("EXIT-2 dependência obrigatória (Java 17 / golden) nunca retorna 0", () => {
+    expect(classifyProofExit({ ...green, dependencyAvailable: false })).toBe(2)
+  })
+
+  it("EXIT-3 violação de egress/persistência/SEFAZ", () => {
+    expect(classifyProofExit({ ...green, externalEgress: 1 })).toBe(3)
+    expect(classifyProofExit({ ...green, databaseWrites: 1 })).toBe(3)
+    expect(classifyProofExit({ ...green, sefazCalls: 1 })).toBe(3)
+  })
+
+  it("EXIT-3 egress bloqueado incorretamente nunca retorna 0", () => {
+    expect(classifyProofExit({ ...green, externalEgress: 2 })).not.toBe(0)
+  })
+
+  it("EXIT-4 manifesto divergente", () => {
+    expect(classifyProofExit({ ...green, manifestMatches: false })).toBe(4)
+  })
+
+  it("segurança tem prioridade sobre dependência e manifesto divergente", () => {
+    expect(
+      classifyProofExit({
+        ...green,
+        externalEgress: 1,
+        dependencyAvailable: false,
+        manifestMatches: false,
+      }),
+    ).toBe(3)
   })
 })
 

@@ -204,11 +204,15 @@ Pendência homônima **P-05** (“C14N interoperável”) = **FECHADA** via GOAL
 - **Objetivo:** provar, offline e sem caller produtivo, a integridade determinística da esteira
   dormente (entrada canônica → snapshot → XML → C14N → assinatura de teste → XSD → relatório),
   descartando o XML.
-- **Estado técnico (branch `work/fiscal-dry-run-integrity-proof-005`, commit `d5dc7ad…`):**
-  **PARCIAL**. Harness em `tools/fiscal-dry-run-integrity-proof/` compõe
-  snapshot/XML/signer/C14N/Java + gate de contrato XSD; provas P/N e manifesto golden.
-  **Worker XSD B2 real bloqueado** neste host (Docker ausente — FASE 15: XSD schema real
-  **não** aprovado). **Sem** caller produtivo; **não** integrado; **não** auditado.
+- **Estado técnico (branch `work/fiscal-dry-run-integrity-proof-005`, commit `d5dc7ad…` +
+  continuação aditiva 17/07):** **PARCIAL**. Harness em `tools/fiscal-dry-run-integrity-proof/`
+  compõe snapshot/XML/signer/C14N/Java + gate de contrato XSD; provas P/N e manifesto golden.
+  **Continuação (FASE 7-8/12):** intercept de egress real (`net-guard.ts` — fetch/http/https/net/
+  tls/DNS, allowlist loopback, install/restore, NET-P/N) e matriz de exit codes 0-4
+  (`classifyProofExit`) — **FECHADOS** (53 tests; tsc/eslint verdes; golden byte-igual).
+  **Worker XSD B2 real segue bloqueado** neste host (Docker ausente + build do worker exige
+  download externo — FASE 15: XSD schema real **não** aprovado). **Sem** caller produtivo;
+  **não** integrado; **não** auditado. Total do GOAL: **11 arquivos** (≤ 12).
 - **Pré-requisitos:** GOAL-001/002/003/004 (fechados); snapshot/XML/signer/XSD/C14N/dry-run
   existentes e dormentes.
 - **Limites:** sem caller produtivo, sem PDV/venda, sem SEFAZ/homologação/produção, sem

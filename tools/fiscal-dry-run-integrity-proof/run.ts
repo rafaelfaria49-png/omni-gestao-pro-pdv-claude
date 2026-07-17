@@ -20,11 +20,14 @@ import {
 } from "./fixtures"
 import {
   buildManifestFromProof,
+  classifyProofExit,
   createCompositionXsdAdapter,
   runFiscalDryRunIntegrityProof,
   stableStringify,
   toPublicProofView,
+  type ProofExitSignals,
 } from "./proof"
+import { withNetGuard, type EgressAttempt } from "./net-guard"
 import { verifyNfceSignature } from "@/lib/fiscal/signing"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -46,11 +49,37 @@ async function main(): Promise<void> {
     sefazProbe: { calls: 0 },
   }
 
-  const r1 = await runFiscalDryRunIntegrityProof(deps)
-  const r2 = await runFiscalDryRunIntegrityProof(deps)
-  const r3 = await runFiscalDryRunIntegrityProof(deps)
-  const b1 = await runFiscalDryRunIntegrityProof({ ...deps, storeId: STORE_PROOF_B })
-  const a2 = await runFiscalDryRunIntegrityProof(deps)
+  // FASE 7-8: a cadeia inteira roda sob o intercept de egress; qualquer tentativa de
+  // alcançar host externo é barrada e contada. Java (child_process) não é rede.
+  let egressAttempts: EgressAttempt[] = []
+  let runs: {
+    r1: Awaited<ReturnType<typeof runFiscalDryRunIntegrityProof>>
+    r2: Awaited<ReturnType<typeof runFiscalDryRunIntegrityProof>>
+    r3: Awaited<ReturnType<typeof runFiscalDryRunIntegrityProof>>
+    b1: Awaited<ReturnType<typeof runFiscalDryRunIntegrityProof>>
+    a2: Awaited<ReturnType<typeof runFiscalDryRunIntegrityProof>>
+  }
+  try {
+    const guarded = await withNetGuard(async () => {
+      const r1 = await runFiscalDryRunIntegrityProof(deps)
+      const r2 = await runFiscalDryRunIntegrityProof(deps)
+      const r3 = await runFiscalDryRunIntegrityProof(deps)
+      const b1 = await runFiscalDryRunIntegrityProof({ ...deps, storeId: STORE_PROOF_B })
+      const a2 = await runFiscalDryRunIntegrityProof(deps)
+      return { r1, r2, r3, b1, a2 }
+    })
+    runs = guarded.result
+    egressAttempts = guarded.attempts
+  } catch (error) {
+    // Dependência técnica obrigatória (verificador Java 17) indisponível → exit 2.
+    const message = error instanceof Error ? error.message : String(error)
+    if (/javac|FiscalXmlDsigVerifier|\bjava\b/i.test(message)) {
+      console.error(`dependência Java 17 indisponível (exit 2): ${message}`)
+      process.exit(2)
+    }
+    throw error
+  }
+  const { r1, r2, r3, b1, a2 } = runs
 
   const deterministic =
     r1.hashes.signedXmlSha256 === r2.hashes.signedXmlSha256 &&
@@ -70,38 +99,45 @@ async function main(): Promise<void> {
   })
   const serialized = stableStringify(manifest)
 
+  let manifestMatches: boolean
   if (update) {
     mkdirSync(dirname(MANIFEST_PATH), { recursive: true })
     writeFileSync(MANIFEST_PATH, serialized, "utf8")
     console.log(`manifest atualizado: ${MANIFEST_PATH}`)
+    manifestMatches = true
   } else {
-    if (!existsSync(MANIFEST_PATH)) {
-      console.error("manifest golden ausente — rode com --update-manifest uma vez")
-      process.exit(2)
-    }
-    const golden = readFileSync(MANIFEST_PATH, "utf8")
-    if (golden !== serialized) {
-      console.error("manifest divergente do golden")
-      console.error("esperado bytes:", golden.length, "obtido:", serialized.length)
-      process.exit(1)
-    }
-    console.log("manifest OK (byte-igual ao golden)")
+    manifestMatches = existsSync(MANIFEST_PATH) && readFileSync(MANIFEST_PATH, "utf8") === serialized
   }
+
+  const goldenPresent = existsSync(MANIFEST_PATH)
+  const externalEgress = egressAttempts.length + r1.safety.externalEgress
+  const signals: ProofExitSignals = {
+    manifestMatches,
+    dependencyAvailable: goldenPresent,
+    internal: r1.verification.internal,
+    externalJava17: r1.verification.externalJava17,
+    structural: r1.verification.structural,
+    xsdContract: r1.verification.xsd,
+    deterministic,
+    idempotent,
+    tamperDetected,
+    storeIsolation,
+    databaseWrites: r1.safety.databaseWrites,
+    sefazCalls: r1.safety.sefazCalls,
+    externalEgress,
+  }
+  const exitCode = classifyProofExit(signals)
 
   const publicView = toPublicProofView(r1)
   console.log(
     JSON.stringify(
       {
-        ok:
-          publicView.verification.internal &&
-          publicView.verification.externalJava17 &&
-          publicView.verification.xsd &&
-          deterministic &&
-          idempotent &&
-          storeIsolation &&
-          tamperDetected,
+        ok: exitCode === 0,
+        exitCode,
+        manifest: update ? "atualizado" : manifestMatches ? "byte-igual ao golden" : "DIVERGENTE",
         verification: publicView.verification,
         integrity: { deterministic, idempotent, storeIsolation, tamperDetected },
+        egress: { blockedAttempts: egressAttempts.length, external: externalEgress },
         hashes: publicView.hashes,
         safety: publicView.safety,
       },
@@ -109,6 +145,7 @@ async function main(): Promise<void> {
       2,
     ),
   )
+  process.exit(exitCode)
 }
 
 main().catch((error) => {

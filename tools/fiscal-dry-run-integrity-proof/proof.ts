@@ -413,4 +413,53 @@ export function createForbiddenSefazAdapter(): never {
   throw new Error("provider SEFAZ é proibido no harness da prova 005")
 }
 
+/**
+ * Sinais para classificação do código de saída do runner (FASE 12).
+ * `dependencyAvailable` = verificador Java 17 + manifesto golden presentes.
+ * `xsdContract` = gate de contrato do pacote XSD oficial no adapter (NÃO é xmllint real).
+ */
+export type ProofExitSignals = {
+  manifestMatches: boolean
+  dependencyAvailable: boolean
+  internal: boolean
+  externalJava17: boolean
+  structural: boolean
+  xsdContract: boolean
+  deterministic: boolean
+  idempotent: boolean
+  tamperDetected: boolean
+  storeIsolation: boolean
+  databaseWrites: number
+  sefazCalls: number
+  externalEgress: number
+}
+
+export type ProofExitCode = 0 | 1 | 2 | 3 | 4
+
+/**
+ * Matriz oficial de exit codes (FASE 12), avaliada por prioridade:
+ *   3 — violação de segurança (egress/persistência/SEFAZ) — nunca pode ser mascarada;
+ *   2 — dependência técnica obrigatória indisponível (Java 17 / golden) — nunca retorna 0;
+ *   4 — manifesto divergente do golden;
+ *   1 — falha de integridade (interno/Java/estrutura/contrato XSD/determinismo/idempotência/
+ *       adulteração/isolamento) — inclui XSD indisponível (contrato falso) → nunca retorna 0;
+ *   0 — todas as provas obrigatórias passaram.
+ */
+export function classifyProofExit(signals: ProofExitSignals): ProofExitCode {
+  if (signals.databaseWrites > 0 || signals.sefazCalls > 0 || signals.externalEgress > 0) return 3
+  if (!signals.dependencyAvailable) return 2
+  if (!signals.manifestMatches) return 4
+  const integrityOk =
+    signals.internal &&
+    signals.externalJava17 &&
+    signals.structural &&
+    signals.xsdContract &&
+    signals.deterministic &&
+    signals.idempotent &&
+    signals.tamperDetected &&
+    signals.storeIsolation
+  if (!integrityOk) return 1
+  return 0
+}
+
 export { loadCertificateMaterialFromPem, STORE_PROOF_A, STORE_PROOF_B, PROOF_CLOCK_ISO, PROOF_SEED }
