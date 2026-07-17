@@ -92,15 +92,13 @@ describe("Contador HUB — CTAs sem efeito real não podem parecer operacionais 
     expect(semDisabled, `CTA(s) sem "disabled": ${semDisabled.join(" | ")}`).toEqual([])
   })
 
-  it("o botão 'Baixar pacote' do PacoteCard (Visão + Relatórios) também está disabled", () => {
-    const fnStart = hubSrc.indexOf("function PacoteCard(")
-    const fnEnd = hubSrc.indexOf("\nfunction ", fnStart + 1)
-    expect(fnStart).toBeGreaterThan(-1)
-    expect(fnEnd).toBeGreaterThan(fnStart)
-    const fnBody = hubSrc.slice(fnStart, fnEnd)
-    const btnTag = fnBody.match(JSX_TAG)?.[0] ?? ""
-    expect(btnTag).toContain("disabled")
-    expect(btnTag).toContain("onClick={onDownload}")
+  it("o Pacote do Contador deixou de ser um CTA de preview desabilitado (GOAL 008)", () => {
+    // PacoteCard (lista ilustrativa + botão disabled) deu lugar ao download real
+    // (ContadorPacoteDownload). O antigo rótulo de preview não pode sobreviver.
+    expect(hubSrc).not.toContain("function PacoteCard(")
+    expect(hubSrc).not.toContain("Baixar pacote · preview")
+    expect(hubSrc).not.toContain("Gerar pacote · preview")
+    expect(hubSrc).toContain("<ContadorPacoteDownload")
   })
 
   it("nenhum CTA sem efeito real depende só do toast pós-clique: todos têm title/aux text acessível", () => {
@@ -324,5 +322,42 @@ describe("Contador HUB — card ilustrativo Preview ≠ checklist real derivado 
 
   it("o header do HUB não apresenta mais um percentual de fechamento fabricado", () => {
     expect(hubSrc).not.toContain("Fechamento · 35%")
+  })
+})
+
+/* ─────────────────────── GOAL 008 — Pacote do Contador (download real) ─────────────────────── */
+
+describe("Contador HUB — Pacote do Contador com download real (GOAL 008)", () => {
+  const downloadSrc = readFileSync(join(DIR, "contador-pacote-download.tsx"), "utf8")
+
+  it("o download real usa o endpoint interno autenticado GET /api/contador/pacote", () => {
+    expect(downloadSrc).toContain('PACOTE_ENDPOINT = "/api/contador/pacote"')
+    expect(downloadSrc).toContain("await fetch(")
+  })
+
+  it("não persiste nada no cliente (sem localStorage/sessionStorage/cache persistido)", () => {
+    expect(downloadSrc).not.toMatch(/localStorage|sessionStorage/)
+    // Blob temporário é revogado após o clique.
+    expect(downloadSrc).toContain("URL.revokeObjectURL")
+  })
+
+  it("o botão só habilita com dados reais e mostra o motivo honesto quando indisponível", () => {
+    expect(downloadSrc).toContain("disabled={!disponivel || carregando}")
+    expect(downloadSrc).toContain("PACOTE_INDISPONIVEL_TITLE")
+    // O cabeçalho do HUB condiciona o botão ao mesmo realData.
+    expect(hubSrc).toContain('disabled={!realData || pacoteDownload.estado === "carregando"}')
+  })
+
+  it("mantém a honestidade: não é fechamento oficial e não inclui XML nesta fase", () => {
+    expect(norm(downloadSrc)).toContain("não é fechamento oficial")
+    expect(downloadSrc).toContain("Notas fiscais (XML)")
+    expect(downloadSrc).toContain("placeholder honesto")
+  })
+
+  it("o HUB compartilha um único estado de download entre cabeçalho e seções", () => {
+    expect(hubSrc).toContain("const pacoteDownload = usePacoteDownload(competencia)")
+    // Duas seções (Visão geral + Relatórios) reutilizam o mesmo estado.
+    const usos = hubSrc.split("download={pacoteDownload}").length - 1
+    expect(usos).toBe(2)
   })
 })
