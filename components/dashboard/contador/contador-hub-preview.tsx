@@ -29,7 +29,6 @@ import {
   FileText,
   Info,
   MessageSquare,
-  Minus,
   Plus,
   Sparkles,
   Upload,
@@ -47,6 +46,7 @@ import {
   labelCompetenciaCurta,
   type Competencia,
 } from "@/lib/contador/competencia"
+import type { ChecklistFechamento } from "@/lib/contador/fechamento"
 import type { ContadorDadosReais } from "@/lib/contador/readers/tipos"
 import {
   VisaoGeralReal,
@@ -54,11 +54,14 @@ import {
   ContadorRealIndisponivel,
 } from "./contador-dados-reais"
 import {
+  ContadorFechamentoChecklist,
+  FECHAR_COMPETENCIA_TITLE,
+} from "./contador-fechamento-checklist"
+import {
   CONTADOR_SECTIONS,
   DOCUMENTOS_ROWS,
   DOSSIES,
   DOSSIE_FILTERS,
-  FECHAMENTO_CHECKLIST,
   FOLHA_FUNCIONARIOS,
   OBRIGACOES_ROWS,
   PACOTE_ITEMS_RELATORIOS,
@@ -286,9 +289,19 @@ export type ContadorHubPreviewProps = {
    */
   realData?: ContadorDadosReais | null
   realErro?: string | null
+  /**
+   * Checklist de fechamento derivado do DTO do GOAL 006 (GOAL 007).
+   * Montado na page em memória — nunca reconsulta readers.
+   */
+  checklistFechamento: ChecklistFechamento
 }
 
-export function ContadorHubPreview({ competencia, realData, realErro }: ContadorHubPreviewProps) {
+export function ContadorHubPreview({
+  competencia,
+  realData,
+  realErro,
+  checklistFechamento,
+}: ContadorHubPreviewProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -518,71 +531,33 @@ export function ContadorHubPreview({ competencia, realData, realErro }: Contador
     </>
   )
 
-  /* ── seção: Fechamento ── */
+  /* ── seção: Fechamento (GOAL 007 — checklist derivado, somente leitura) ── */
   const renderFechamento = () => (
     <>
       <SectionHeader
         title="Fechamento mensal"
         desc={
           <>
-            Checklist da competência de <b className="text-foreground">{compShort}</b>. Modelo do regime{" "}
-            <b className="text-foreground">Simples Nacional</b> —{" "}
-            <span className="text-amber-600 dark:text-amber-400">validar com contador</span>.
+            Sinais reais da competência de <b className="text-foreground">{compShort}</b>, derivados
+            do DTO já carregado.{" "}
+            <span className="text-amber-600 dark:text-amber-400">
+              Não é fechamento oficial — sem snapshot e sem trava.
+            </span>
           </>
         }
         actions={
-          <Btn disabled title={CTA_INDISPONIVEL_TITLE} onClick={() => noop("Fechar competência")}>
-            Fechar competência · preview
+          <Btn disabled title={FECHAR_COMPETENCIA_TITLE} onClick={() => noop("Fechar competência")}>
+            Fechar competência · GOAL 012
           </Btn>
         }
       />
       <PreviewBanner
-        title="Preview — o fechamento não é executado pelo sistema."
-        text="O progresso (3 de 9) e o checklist abaixo são ilustrativos. Fechar a competência de verdade continua sendo feito com o seu contador — nenhuma trava real é aplicada aqui."
+        title="Checklist derivado — o fechamento não é executado pelo sistema."
+        text="Cada item reflete um sinal real da competência (ou a ausência honesta de evidência). O botão «Fechar competência» permanece desabilitado: o fechamento real com snapshot será o GOAL 012."
       />
-      <Card className="mt-4">
-        <div className="flex flex-wrap items-center gap-4 border-b border-border/60 p-4">
-          <ProgressRing pct={35} />
-          <div className="min-w-[160px] flex-1">
-            <div className="font-semibold text-foreground">3 de 9 itens concluídos</div>
-            <div className="text-[12.5px] text-muted-foreground">Marque cada etapa conforme envia os documentos ao contador.</div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-1.5 text-xs text-muted-foreground">
-            <Chip variant="pend">pendente</Chip>
-            <span className="text-muted-foreground/60">→</span>
-            <Chip variant="env">enviado</Chip>
-            <span className="text-muted-foreground/60">→</span>
-            <Chip variant="conf">conferido</Chip>
-            <span className="text-muted-foreground/60">→</span>
-            <Chip variant="res">resolvido</Chip>
-          </div>
-        </div>
-        <ul>
-          {FECHAMENTO_CHECKLIST.map((c, i) => (
-            <li key={i} className="flex items-center gap-3.5 border-b border-border/60 p-4 last:border-b-0">
-              <span
-                className={cn(
-                  "grid h-[21px] w-[21px] shrink-0 place-items-center rounded-md border-2 text-primary-foreground",
-                  c.state === "done" && "border-emerald-500 bg-emerald-500",
-                  c.state === "partial" && "border-sky-500 bg-sky-500",
-                  c.state === "todo" && "border-border",
-                )}
-              >
-                {c.state === "done" ? <Check className="h-3 w-3" strokeWidth={3} /> : null}
-                {c.state === "partial" ? <Minus className="h-3 w-3" strokeWidth={3} /> : null}
-              </span>
-              <div className="min-w-0 flex-1">
-                <b className="flex flex-wrap items-center gap-2 text-[13.5px] font-semibold text-foreground">
-                  {c.label}
-                  {c.validar ? <ValidarBadge /> : null}
-                </b>
-                <small className="block text-[11.5px] text-muted-foreground">{c.sub}</small>
-              </div>
-              <Chip variant={c.status.variant}>{c.status.label}</Chip>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      <div className="mt-4">
+        <ContadorFechamentoChecklist checklist={checklistFechamento} />
+      </div>
     </>
   )
 

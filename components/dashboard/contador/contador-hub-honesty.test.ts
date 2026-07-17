@@ -103,7 +103,10 @@ describe("Contador HUB — CTAs sem efeito real não podem parecer operacionais 
   it("nenhum CTA sem efeito real depende só do toast pós-clique: todos têm title/aux text acessível", () => {
     const tags = hubSrc.match(JSX_TAG) ?? []
     const acaoTags = tags.filter((t) => /\bnoop\(|\bonNoop\(/.test(t))
-    const semTitle = acaoTags.filter((t) => !t.includes("CTA_INDISPONIVEL_TITLE"))
+    // GOAL 007: «Fechar competência» usa FECHAR_COMPETENCIA_TITLE (GOAL 012); demais usam CTA_INDISPONIVEL_TITLE.
+    const semTitle = acaoTags.filter(
+      (t) => !t.includes("CTA_INDISPONIVEL_TITLE") && !t.includes("FECHAR_COMPETENCIA_TITLE"),
+    )
     expect(semTitle, `CTA(s) sem title acessível: ${semTitle.join(" | ")}`).toEqual([])
   })
 
@@ -171,10 +174,46 @@ describe("Contador HUB — navegação não afirma ações reais sobre dados est
     expect(hubSrc.slice(fnStart, fnEnd)).toContain("Híbrido")
   })
 
-  it("'3 de 9 itens concluídos' (Visão/Fechamento) agora vem sempre acompanhado de um PreviewBanner local", () => {
+  it("'3 de 9 itens concluídos' (Visão geral, ainda preview) vem acompanhado de PreviewBanner local", () => {
+    // GOAL 007 removeu o mock «3 de 9» da seção Fechamento; permanece só na Visão geral (híbrida).
     const occurrences = [...hubSrc.matchAll(/itens concluídos/g)]
     expect(occurrences.length).toBeGreaterThanOrEqual(1)
-    // Ambas as seções que exibem essa contagem (Visão geral e Fechamento) precisam
-    // ter um PreviewBanner antes dela — checado de forma mais direta no describe do Passo 4.
+    const renderVisaoIdx = hubSrc.indexOf("const renderVisao = ()")
+    const renderFechamentoIdx = hubSrc.indexOf("const renderFechamento = ()")
+    expect(hubSrc.slice(renderVisaoIdx, renderFechamentoIdx)).toContain("itens concluídos")
+    expect(hubSrc.slice(renderFechamentoIdx, hubSrc.indexOf("const docsFiltered"))).not.toContain(
+      "itens concluídos",
+    )
+  })
+})
+
+describe("Contador HUB — checklist de fechamento derivado (GOAL 007)", () => {
+  it("Fechamento consome ContadorFechamentoChecklist e não o FECHAMENTO_CHECKLIST mock", () => {
+    expect(hubSrc).toContain("ContadorFechamentoChecklist")
+    expect(hubSrc).toContain("checklistFechamento")
+    expect(hubSrc).not.toContain("FECHAMENTO_CHECKLIST")
+  })
+
+  it("CTA Fechar competência aponta para GOAL 012 e permanece disabled", () => {
+    const renderFechamentoIdx = hubSrc.indexOf("const renderFechamento = ()")
+    const renderDocsIdx = hubSrc.indexOf("const docsFiltered =")
+    const body = hubSrc.slice(renderFechamentoIdx, renderDocsIdx)
+    expect(body).toContain("FECHAR_COMPETENCIA_TITLE")
+    expect(body).toContain("disabled")
+    expect(body).toContain("GOAL 012")
+    expect(body).not.toContain("ProgressRing")
+    expect(body).not.toContain("3 de 9")
+  })
+
+  it("page monta o checklist a partir do DTO (sem reconsultar readers)", () => {
+    const pageSrc = readFileSync(join(DIR, "../../../app/dashboard/contador/page.tsx"), "utf8")
+    expect(pageSrc).toContain("montarChecklistFechamento")
+    expect(pageSrc).toContain("construirDadosContador")
+    // Uso (não import): checklist depois da única carga do DTO.
+    const callConstruir = pageSrc.indexOf("realData = await construirDadosContador")
+    const callChecklist = pageSrc.indexOf("montarChecklistFechamento({")
+    expect(callConstruir).toBeGreaterThan(-1)
+    expect(callChecklist).toBeGreaterThan(callConstruir)
+    expect(pageSrc).not.toMatch(/carregarFontes|prisma\./)
   })
 })
