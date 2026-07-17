@@ -5,7 +5,7 @@
 
 ---
 
-## Fiscal — GOAL-004 FECHADO · GOAL-005 prova de integridade do dry-run (implementada em branch) · 17/07/2026
+## Fiscal — GOAL-004 FECHADO · GOAL-005 prova dry-run **PARCIAL** em branch (XSD worker real bloqueado no host) · 17/07/2026
 
 > Fontes: [`FISCAL_RECONCILE_REPORT_001.md`](../fiscal/FISCAL_RECONCILE_REPORT_001.md) ·
 > [`FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md`](../fiscal/FISCAL_XSD_GOAL_002_CLOSURE_REPORT.md) ·
@@ -18,10 +18,12 @@
 > **Critério C14N/XMLDSig do F4→F5 = FECHADO** (GOAL-003). Gate Fiscal **global ABERTO**.
 > Sem homologação SEFAZ (N6=0), sem produção (N7=0), sem emissão ativada. Signer **dormente**.
 > Callers produtivos **0**. GOAL-004 **FECHADO**. GOAL-005 técnico =
-> `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` — **implementado como harness offline** em
-> `tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`);
-> **sem** caller produtivo, **sem** SEFAZ, **sem** schema; nível **N3** (N4 no eixo dry-run
-> só após auditoria + merge).
+> `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` — harness offline em
+> `tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`,
+> commit `d5dc7ad…`); **estado PARCIAL**: cadeia snapshot→XML→C14N→XMLDSig→Java 17 +
+> manifesto golden verdes; **worker XSD B2 real não executado** (Docker ausente no host —
+> FASE 15: não marcar XSD schema como aprovado). **sem** caller produtivo, **sem** SEFAZ,
+> **sem** schema; nível **N3** (N4 no eixo dry-run só após XSD real + auditoria + merge).
 > A ocorrência “NF-e — mock” em seções de preview PDV **não** descreve o estado global da frente
 > fiscal.
 
@@ -57,23 +59,27 @@
 - **Próximo passo:** auditoria documental de merge readiness deste fechamento; **não** iniciar
   GOAL-005 automaticamente.
 
-### GOAL-005 — prova de integridade do dry-run (implementação em branch)
+### GOAL-005 — prova de integridade do dry-run (**PARCIAL** em branch)
 
 - **Escopo oficial:** `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` — “Prova de Integridade do Dry-Run
   Fiscal” (reconciliação documental PR #10 / merge `ccb8b0f…`).
-- **Estado:** **implementado como harness offline** em
-  `tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`).
-  **Não** é emissão; **não** é caller produtivo; **não** eleva gate global.
+- **Estado:** **PARCIAL** — harness offline em `tools/fiscal-dry-run-integrity-proof/`
+  (branch `work/fiscal-dry-run-integrity-proof-005`, commit `d5dc7ad…`). **Não** é emissão;
+  **não** é caller produtivo; **não** eleva gate global; **não** fecha o GOAL.
 - **Cadeia composta (componentes reais dormentes):** snapshot → XML → C14N → XMLDSig (RSA-SHA1) →
-  verifier interno → Java 17 (GOAL-003) → contrato XSD oficial → manifesto determinístico.
-- **Provas:** P-01..P-15 e N-01..N-14; determinismo 3×; A→B→A; zero DB/SEFAZ/egress;
-  material sintético GOAL-003; stores `store-fiscal-proof-a|b`.
-- **XSD:** adapter de composição do contrato oficial no CI; worker real opcional via
-  `FISCAL_XSD_WORKER_URL`.
+  verifier interno → Java 17 (GOAL-003) → gate de **contrato** XSD → manifesto determinístico.
+- **Provas:** P-01..P-15 e N-01..N-14 no harness (31 passed; 1 skipped = XSD worker real);
+  determinismo 3×; A→B→A; zero DB/SEFAZ/egress; material sintético GOAL-003;
+  stores `store-fiscal-proof-a|b`.
+- **XSD:** pacote `PL_010e_v1.02` presente; adapter de composição de contrato no CI;
+  **worker B2/`xmllint` real = BLOQUEIO AMBIENTAL** (Docker ausente). FASE 15: **não** marcar
+  XSD schema real como aprovado neste host.
 - **Evidência:** `tools/fiscal-dry-run-integrity-proof/evidence/manifest.json` · relatório
   [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md`](../fiscal/FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md).
-- **Gates:** nenhum fechado por este GOAL; **N6=0**, **N7=0**; N3; teto futuro N4 só no eixo
-  dry-run após auditoria + merge.
+- **Gates:** nenhum fechado; **N6=0**, **N7=0**; N3; N4 no eixo dry-run só após XSD real +
+  auditoria + merge.
+- **Próximo passo técnico residual:** rodar worker XSD B2 local (Docker) com
+  `FISCAL_XSD_WORKER_URL` e revalidar P-09 real; depois auditoria de merge readiness.
 - **Próximo passo:** auditoria de merge readiness desta branch; PR + aprovação humana + merge
   controlado; **não** abrir G-F5 automaticamente.
 

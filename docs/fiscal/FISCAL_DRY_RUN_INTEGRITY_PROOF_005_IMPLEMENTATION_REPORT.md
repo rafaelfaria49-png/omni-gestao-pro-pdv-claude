@@ -4,27 +4,58 @@
 |---|---|
 | GOAL | `FISCAL-DRY-RUN-INTEGRITY-PROOF-005` |
 | Nome humano | Prova de Integridade do Dry-Run Fiscal |
+| **Estado** | **PARCIAL** — harness offline entregue na branch; **bloqueio ambiental no eixo XSD worker real** (FASE 15) |
 | Tipo | Harness técnico **não produtivo** — composição offline de componentes dormentes |
 | Data | 2026-07-17 |
 | Branch | `work/fiscal-dry-run-integrity-proof-005` |
+| Commit | `d5dc7ad0be771b502b787b50e0acb667f5baf890` (+ commit de honestidade documental, se houver) |
 | Base documental | PR #10 · merge `ccb8b0f0bb19c4a1e201e78b3c290fa65fabe959` |
+| `origin/main` | `ccb8b0f0bb19c4a1e201e78b3c290fa65fabe959` (inalterada; ancestor do PR #10) |
 | Documento de escopo | [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECONCILIATION.md) |
-| Nível N | **N3** (implementação em branch); máximo futuro **N4** só no eixo dry-run **após** auditoria + merge |
+| Nível N | **N3** (oficial); **não** N4; candidato a N4 no eixo dry-run **somente após** XSD real + auditoria + merge |
 | N6 / N7 | **0** / **0** |
 | Emissão / SEFAZ / homologação / produção | **não** |
 | Callers produtivos | **0** |
 | Gates alterados | **nenhum** |
+| GOAL-005 fechado | **não** |
+
+### Bloqueio ambiental (FASE 15 — XSD oficial)
+
+No host de execução desta branch, **Docker CLI está ausente**. O worker B2 (`workers/fiscal-xsd`)
+**não** foi executado. Conforme o prompt oficial do GOAL:
+
+> Se Docker ou o worker não estiver disponível: **parar**; **não marcar XSD como aprovado**;
+> registrar bloqueio ambiental.
+
+Portanto:
+
+- **XSD worker real (`xmllint` no container B2):** **NÃO APROVADO** neste ambiente;
+- o harness usa adapter de **composição de contrato** (pacote `PL_010e_v1.02` +
+  `OFFICIAL_XSD_MANIFEST_SHA256` + exigência de `<Signature>`) — **não** substitui o worker;
+- a suite opcional `FISCAL_XSD_WORKER_URL` permanece **skipped**;
+- o manifesto golden registra `verification.xsd: true` apenas no sentido de **gate de contrato**
+  do dry-run adapter — **não** deve ser lido como validação schema `xmllint` real.
+
+### Lacunas menores vs prompt integral
+
+| Item | Status |
+|---|---|
+| Intercept runtime de `fetch`/`http`/`https`/`net`/`tls`/DNS externo (FASE 13) | **parcial** — probes de contador + imports sem rede; **sem** monkey-patch global de sockets |
+| Códigos de saída 0–4 completos no CLI (FASE 18) | **parcial** — 0/1/2 usados; matriz 3/4 não formalizada em todos os caminhos |
+| Mensagem de commit prescrita `feat(fiscal): provar integridade offline do dry-run` | commit técnico usou `test(fiscal): prove offline dry-run integrity (GOAL-005)` — **sem amend/force-push** (proibidos) |
 
 ---
 
-## 1. Objetivo cumprido
+## 1. Objetivo (o que a prova cobre)
 
-Provar, de forma **determinística, reproduzível e exclusivamente offline**, a cadeia íntegra:
+Provar, de forma **determinística, reproduzível e exclusivamente offline**, a cadeia:
 
 fixture sintética → snapshot → XML → C14N → DigestValue → SignedInfo → XMLDSig →
-verificação interna → verificação Java 17 (JSR 105) → contrato XSD oficial →
+verificação interna → verificação Java 17 (JSR 105) → **contrato** XSD oficial →
 manifesto de hashes → adulteração → idempotência → isolamento multi-loja →
 zero persistência / zero egress / zero SEFAZ.
+
+**Fora do atingido neste host:** validação schema XSD real via worker B2/`xmllint`.
 
 ---
 
@@ -107,10 +138,17 @@ Verificador `FiscalXmlDsigVerifier` (GOAL-003) em Java 17 — digest e validade 
 
 ### XSD
 
+| Camada | Resultado neste host |
+|---|---|
+| Pacote oficial `PL_010e_v1.02` versionado + hash de manifesto | presente e conferido |
+| Adapter de composição (contrato + Signature) | executado no harness |
+| Worker B2 `xmllint` real (Docker / `FISCAL_XSD_WORKER_URL`) | **BLOQUEIO AMBIENTAL** — Docker CLI ausente; suite skipped |
+| Classificação FASE 15 | **XSD real NÃO aprovado** neste ambiente |
+
 - **Composição offline (default CI):** adapter injeta o **mesmo contrato** do pacote oficial
   (`XSD_SCHEMA_PACKAGE` + `OFFICIAL_XSD_MANIFEST_SHA256`) e exige `<Signature>` no XML.
-  Não substitui o worker `xmllint`; prova o **gate de contrato** usado pelo dry-run.
-- **Worker real (opcional):** suite ativa com `FISCAL_XSD_WORKER_URL` (mesmo client B2).
+  **Não** substitui o worker `xmllint`.
+- **Worker real:** obrigatório para fechar o eixo XSD do GOAL; indisponível aqui → estado **PARCIAL**.
 
 ---
 

@@ -204,9 +204,11 @@ Pendência homônima **P-05** (“C14N interoperável”) = **FECHADA** via GOAL
 - **Objetivo:** provar, offline e sem caller produtivo, a integridade determinística da esteira
   dormente (entrada canônica → snapshot → XML → C14N → assinatura de teste → XSD → relatório),
   descartando o XML.
-- **Estado técnico (branch `work/fiscal-dry-run-integrity-proof-005`):** harness em
-  `tools/fiscal-dry-run-integrity-proof/` compõe snapshot/XML/signer/C14N/Java/XSD-contrato;
-  provas P-01..P-15 e N-01..N-14; manifesto golden versionado. **Sem** caller produtivo.
+- **Estado técnico (branch `work/fiscal-dry-run-integrity-proof-005`, commit `d5dc7ad…`):**
+  **PARCIAL**. Harness em `tools/fiscal-dry-run-integrity-proof/` compõe
+  snapshot/XML/signer/C14N/Java + gate de contrato XSD; provas P/N e manifesto golden.
+  **Worker XSD B2 real bloqueado** neste host (Docker ausente — FASE 15: XSD schema real
+  **não** aprovado). **Sem** caller produtivo; **não** integrado; **não** auditado.
 - **Pré-requisitos:** GOAL-001/002/003/004 (fechados); snapshot/XML/signer/XSD/C14N/dry-run
   existentes e dormentes.
 - **Limites:** sem caller produtivo, sem PDV/venda, sem SEFAZ/homologação/produção, sem

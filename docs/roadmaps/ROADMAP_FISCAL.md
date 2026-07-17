@@ -4,7 +4,7 @@ hub: fiscal
 status: vivo
 owner: produto/arquitetura
 last_update: 2026-07-17
-sprint_atual: GOAL-004 FECHADO (PR #8); GOAL-005 prova de integridade dry-run implementada em branch (harness offline); gate global F4→F5 aberto
+sprint_atual: GOAL-004 FECHADO (PR #8); GOAL-005 prova dry-run PARCIAL em branch (harness offline; XSD worker real bloqueado sem Docker); gate global F4→F5 aberto
 ---
 
 # 🧾 Roadmap Fiscal — OmniGestão Pro
@@ -58,11 +58,12 @@ histórica). `metadata.fiscal` = fonte canônica; `metadata.fiscalRegime` = visu
 Somente o GOAL 022 poderá construir ativação, restrita a `HOMOLOGACAO` e sujeita a G-F7.
 
 **GOAL-005** (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`, “Prova de Integridade do Dry-Run Fiscal”):
-escopo reconciliado no PR #10 (`ccb8b0f…`); **implementação técnica** do harness offline em
-`tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`) —
-composição de snapshot/XML/C14N/XMLDSig/Java/XSD-contrato, provas P/N, manifesto golden.
-**Sem** caller produtivo, **sem** SEFAZ, **sem** emissão. Nível **N3** (teto N4 no eixo dry-run
-após auditoria + merge). Nenhum gate global fechado; N6=0; N7=0. Fontes:
+escopo reconciliado no PR #10 (`ccb8b0f…`); harness offline em
+`tools/fiscal-dry-run-integrity-proof/` (branch `work/fiscal-dry-run-integrity-proof-005`,
+commit `d5dc7ad…`) — **estado PARCIAL**: snapshot/XML/C14N/XMLDSig/Java + manifesto golden
+verdes; **XSD worker B2 real não executado** (Docker ausente — FASE 15). **Sem** caller
+produtivo, **sem** SEFAZ, **sem** emissão. Nível **N3** (teto N4 no eixo dry-run só após XSD
+real + auditoria + merge). Nenhum gate global fechado; N6=0; N7=0. Fontes:
 [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](../fiscal/FISCAL_GOAL_005_SCOPE_RECONCILIATION.md) ·
 [`FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md`](../fiscal/FISCAL_DRY_RUN_INTEGRITY_PROOF_005_IMPLEMENTATION_REPORT.md).
 
@@ -200,18 +201,19 @@ integrado na `main` pelo PR #8 (merge `b307337`, implementação `3f8928c`); Cad
 `metadata.fiscal` canônica com o contrato existente; create/update/parcial não destrutivos;
 `fiscalRegime` só visual; Barcode/Cosmos com revisão humana; **N3 no eixo cadastro**; N6=0;
 N7=0; signer dormente; sem schema/migration; sem emissão/SEFAZ. GOAL-003 (C14N) e GOAL-002 (XSD)
-permanecem fechados. **GOAL-005** (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`) tem harness offline
-implementado em branch (`tools/fiscal-dry-run-integrity-proof/`) — prova de integridade
-snapshot→XML→C14N→XMLDSig→Java→XSD-contrato, sem caller produtivo. Próximo passo: **auditoria de
-merge readiness da branch de implementação** + PR + aprovação humana + merge controlado; **não**
-abrir G-F5. Homologação e produção **não** foram abertas.
+permanecem fechados. **GOAL-005** (`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`) está **PARCIAL** em branch
+(`tools/fiscal-dry-run-integrity-proof/`, `d5dc7ad…`) — snapshot→XML→C14N→XMLDSig→Java + manifesto
+verdes; **XSD worker real bloqueado** (Docker ausente). Próximo: worker XSD B2 local → auditoria
+de merge readiness → PR + aprovação humana + merge controlado; **não** abrir G-F5. Homologação e
+produção **não** foram abertas.
 
 ## 12. Status atual (1 parágrafo)
 
 A frente fiscal tem fundação dormente com **validação XSD oficial real** (worker B2, G-C2),
 **prova técnica externa de C14N/XMLDSig** (PR #6), **cadastro fiscal canônico do produto** na porta
-Cadastros V2 (PR #8 / GOAL-004, N3) e **prova de integridade do dry-run** (GOAL-005, harness
-offline em branch — composição snapshot→XML→assinatura→Java, sem emissão). Schema, identidade,
+Cadastros V2 (PR #8 / GOAL-004, N3) e **prova de integridade do dry-run PARCIAL** (GOAL-005,
+harness offline em branch — composição snapshot→XML→assinatura→Java; XSD schema real pendente
+de worker B2 no host). Schema, identidade,
 guards, snapshot, tax-engine, XML, assinatura (RSA-SHA1), vault, provider stub, pipeline e
 numeração existem; o motor de emissão **não tem caller de venda**; banco fiscal vazio;
 `fiscalEnabled` inalcançável. O gate Fiscal **global** ainda **não** autoriza F5.
