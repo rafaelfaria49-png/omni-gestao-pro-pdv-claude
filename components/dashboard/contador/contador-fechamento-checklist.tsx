@@ -79,7 +79,7 @@ export function ContadorFechamentoChecklist({ checklist }: { checklist: Checklis
       <div className="flex items-start gap-2.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.07] px-3 py-2.5">
         <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
         <div className="min-w-0 text-[13px] leading-relaxed text-foreground">
-          <b className="text-foreground">Sinais reais · somente leitura</b>
+          <b className="text-foreground">Checklist de fechamento — somente leitura</b>
           <span className="text-muted-foreground">
             {" "}
             — competência <b className="text-foreground">{compShort}</b>. Derivado do DTO já
