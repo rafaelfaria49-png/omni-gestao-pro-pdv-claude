@@ -177,3 +177,45 @@ provider real nem G-F5/G-F7/G-F12. **GOAL-005 não foi iniciado.**
 - Nenhum GOAL aponta para `PRODUCAO` antes de G-F12.
 - Certificado, senha, CSC e token nunca aparecem em código, log, fixture documental ou relatório.
 - GOAL que tocar regra tributária precisa nomear autoridade contábil/tributária; teste interno é N3.
+
+## Reconciliação do slot GOAL-005 — 16/07/2026
+
+Após a auditoria formal `FISCAL-GOAL-005-FORMAL-EVALUATION` (branch
+`audit/fiscal-goal-005-formal-evaluation`, commit `f6d6f2a…`, relatório
+`FISCAL_GOAL_005_FORMAL_EVALUATION.md`), classificada **G — escopo ambíguo**, o número “005” foi
+reconciliado. **Não renumerar a tabela histórica; não apagar referências.**
+
+**Colisão de numeração “005” (quatro sistemas):**
+
+| Sistema | ID “005” | Significado | Estado |
+|---|---|---|---|
+| Sequência **nomeada** de execução | `FISCAL-…-005` | **slot** | **DEFINIDO por esta reconciliação** (ver abaixo) |
+| Tabela histórica (001–022) | GOAL **005** | “Versionar pacote XSD oficial” | **CUMPRIDO** no eixo XSD (GOAL nomeado 002) |
+| Rótulo de código | `GOAL_005` | “Snapshot Fiscal da Venda” (`b5177cf`) | **DORMENTE** na main — **componente/pré-requisito**, não GOAL a iniciar |
+| Contador HUB | “GOAL 005” | competência mensal (read-only) | **trilho distinto** — não define o GOAL-005 Fiscal |
+
+Pendência homônima **P-05** (“C14N interoperável”) = **FECHADA** via GOAL nomeado 003 (não é GOAL).
+
+**Decisão canônica (definido documentalmente, NÃO iniciado):**
+
+- GOAL nomeado **005** = **`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`** — “Prova de Integridade do
+  Dry-Run Fiscal”. Rótulo provisório equivalente da auditoria: `FISCAL-DRY-RUN-INTEGRITY-005`
+  (mesmo escopo; o sufixo `-PROOF-` é a forma canônica).
+- **Objetivo:** provar, offline e sem caller produtivo, a integridade determinística da esteira
+  dormente (entrada canônica → snapshot → XML → C14N → assinatura de teste → XSD → relatório),
+  descartando o XML.
+- **Pré-requisitos:** GOAL-001/002/003/004 (fechados); snapshot/XML/signer/XSD/C14N/dry-run
+  existentes e dormentes.
+- **Limites:** sem caller produtivo, sem PDV/venda, sem SEFAZ/homologação/produção, sem
+  certificado/CSC/idToken, sem regra tributária, sem schema/migration, sem tocar Contador HUB.
+- **Gates:** G-C1/G-C2/C14N fechados; **F4→F5 global / G-F5 / G-F7 / G-F12 abertos**; a
+  reconciliação **não fecha gate**.
+- **Nível N:** inicial **N3**; máximo futuro **N4** só no eixo integridade do dry-run; **N6=0**,
+  **N7=0**.
+- **Stop conditions (implementação futura):** necessidade de schema/migration/novo estado/regra
+  tributária/autoridade contábil/certificado/CSC/idToken/chamada SEFAZ/caller produtivo/PDV/
+  persistência real/conflito com Contador HUB/dado real em fixture/segredo em log/divergência
+  snapshot×XML sem contrato/arquivo fora da allowlist.
+
+Fonte: [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECONCILIATION.md).
+**GOAL-005 técnico não iniciado.**

@@ -471,3 +471,49 @@ Não renumerar documentos históricos; apenas registrar a equivalência.
 - qualquer transmissão SEFAZ; callers produtivos de assinatura/emissão.
 
 Fonte: [`FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md`](./FISCAL_PRODUTO_UPSERT_PARITY_004_CLOSURE_REPORT.md).
+
+---
+
+## 19. Reconciliação de escopo do GOAL-005 (16/07/2026)
+
+| Campo | Valor |
+|---|---|
+| Evento | `FISCAL-GOAL-005-SCOPE-RECONCILIATION` (documental) |
+| Evidência | auditoria formal `FISCAL-GOAL-005-FORMAL-EVALUATION`, branch `audit/fiscal-goal-005-formal-evaluation`, commit `f6d6f2a…` |
+| Classificação de entrada | **G — escopo ambíguo** |
+| Decisão | slot nomeado 005 = **`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`** — **definido, NÃO iniciado** |
+| Gates | nenhum fechado; F4→F5 global / G-F5 / G-F7 / G-F12 **abertos** |
+| Nível N | reconciliação não eleva N; futuro GOAL-005: N3→N4-interno; **N6=0**, **N7=0** |
+
+### Ambiguidade encontrada
+
+O número “005” estava **vago** na sequência **nomeada** e **sobrecarregado** em três outros sistemas
+(mais a pendência homônima P-05). Sem decisão, arriscava reusar objetivo já cumprido, “reiniciar”
+componente dormente, ou confundir-se com o Contador HUB.
+
+### Equivalências e separação de trilhos (não renumerar histórico)
+
+| Sistema | ID “005” | Estado | Papel |
+|---|---|---|---|
+| Sequência nomeada | `FISCAL-…-005` | **definido** por esta reconciliação | slot de execução |
+| Tabela histórica | GOAL 005 (XSD oficial) | **cumprido** (GOAL nomeado 002) | histórico, intacto |
+| Rótulo de código | `GOAL_005` (snapshot, `b5177cf`) | **dormente** | componente/pré-requisito |
+| Contador HUB | “GOAL 005” (competência) | **trilho distinto** | read-only, externo |
+| Pendência | **P-05** (C14N) | **fechada** (GOAL nomeado 003) | não é GOAL |
+
+### Definição oficial proposta
+
+- **`FISCAL-DRY-RUN-INTEGRITY-PROOF-005`** — “Prova de Integridade do Dry-Run Fiscal”. Rótulo
+  provisório equivalente (auditoria): `FISCAL-DRY-RUN-INTEGRITY-005`. Prova determinística/offline
+  de integridade da esteira dormente (snapshot→XML→C14N→assinatura de teste→XSD→relatório),
+  descartando o XML; sem caller produtivo, sem SEFAZ, sem regra tributária, sem schema, sem
+  credenciais.
+
+### GOAL-005 ainda não implementado
+
+Nenhum código/teste/schema tocado. `_prisma_migrations` ausente permanece risco de governança
+(P-09), fora deste escopo. A implementação técnica exige merge readiness + PR + aprovação humana +
+GOAL próprio.
+
+Fonte: [`FISCAL_GOAL_005_SCOPE_RECONCILIATION.md`](./FISCAL_GOAL_005_SCOPE_RECONCILIATION.md) ·
+auditoria: `FISCAL_GOAL_005_FORMAL_EVALUATION.md` (branch de auditoria).
