@@ -3,6 +3,8 @@ import { Suspense } from "react"
 import { ContadorHubPreview } from "@/components/dashboard/contador/contador-hub-preview"
 import { APP_DISPLAY_NAME } from "@/lib/app-brand"
 import { resolveCompetenciaFromSearchParam } from "@/lib/contador/competencia"
+import { montarChecklistFechamento } from "@/lib/contador/fechamento"
+import type { ChecklistFechamento } from "@/lib/contador/fechamento"
 import { requireContadorScope } from "@/lib/contador/scope"
 import { construirDadosContador } from "@/lib/contador/readers"
 import type { ContadorDadosReais } from "@/lib/contador/readers/tipos"
@@ -32,12 +34,13 @@ const MOTIVO_MSG: Record<string, string> = {
 }
 
 /**
- * Contador HUB interno (lojista/equipe) · GOAL CONTADOR-HUB-DADOS-REAIS-READONLY-006.
+ * Contador HUB interno (lojista/equipe) · GOAL 006 + 007.
  *
  * A Visão Geral e os relatórios básicos leem DADOS REAIS (read-only) da loja ativa na
- * competência `?c=AAAA-MM`. Escopo por sessão NextAuth + cookie de loja + ACL multi-loja
- * (`requireContadorScope`). Fonte fiscal permanece indisponível nesta fase; as demais
- * seções seguem em preview visual honesto. Não confundir com o portal EXTERNO `/contador`.
+ * competência `?c=AAAA-MM`. O checklist de Fechamento (GOAL 007) é **derivado em memória**
+ * do mesmo DTO — sem reconsultar readers/Prisma. Escopo por sessão NextAuth + cookie de
+ * loja + ACL multi-loja. Fonte fiscal permanece indisponível; fechamento real = GOAL 012.
+ * Não confundir com o portal EXTERNO `/contador`.
  *
  * Fonte da competência: `searchParams.c` (AAAA-MM). Inválido/ausente → mês atual
  * em America/Sao_Paulo. Falha de escopo/leitura vira estado honesto (`realErro`), nunca zero.
@@ -54,12 +57,21 @@ export default async function ContadorHubPage({ searchParams }: ContadorHubPageP
     realErro = MOTIVO_MSG[escopo.motivo] ?? "Dados reais indisponíveis nesta fase."
   } else {
     try {
+      // Única carga das sete fontes (GOAL 006). O checklist (GOAL 007) reusa este DTO.
       realData = await construirDadosContador(escopo, competencia)
     } catch (e) {
       console.error("[contador/dados-reais]", e instanceof Error ? e.message : String(e))
       realErro = "Não foi possível carregar os dados reais desta competência agora. Tente novamente em instantes."
     }
   }
+
+  // Derivação pura em memória — zero IO adicional.
+  const checklistFechamento: ChecklistFechamento = montarChecklistFechamento({
+    dados: realData,
+    competencia,
+    agora: new Date(),
+    motivoIndisponivel: realErro,
+  })
 
   return (
     <div className="w-full min-w-0">
@@ -71,7 +83,12 @@ export default async function ContadorHubPage({ searchParams }: ContadorHubPageP
           </div>
         }
       >
-        <ContadorHubPreview competencia={competencia} realData={realData} realErro={realErro} />
+        <ContadorHubPreview
+          competencia={competencia}
+          realData={realData}
+          realErro={realErro}
+          checklistFechamento={checklistFechamento}
+        />
       </Suspense>
     </div>
   )
