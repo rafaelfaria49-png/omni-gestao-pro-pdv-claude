@@ -1,21 +1,25 @@
 /**
  * GET /api/contador/pacote?c=AAAA-MM
  *
- * Gera SOB DEMANDA o Pacote do Contador (MVP) da loja ativa na competência e devolve um
- * ZIP para download. Não persiste nada: sem storage, sem registro em banco, sem snapshot,
- * sem cache. Reflete os dados vivos da competência no instante da requisição.
+ * Gera SOB DEMANDA o Pacote do Contador (MVP) da loja ATIVA na competência e devolve um ZIP.
+ * Não persiste nada: sem storage, sem registro em banco, sem snapshot, sem cache.
  *
- * Autenticação: mesmo gate interno do Contador HUB (sessão NextAuth + cookie de loja
- * ativa + ACL multi-loja + permissão financeiro), via `requireContadorScope`. O escopo é
- * a única fonte de `storeId`; nunca vem da query.
+ * Autenticação: gate interno do Contador HUB (`requireContadorScope` = sessão NextAuth +
+ * cookie de loja ativa + ACL multi-loja + permissão financeiro). O `storeId` vem SOMENTE do
+ * escopo; qualquer `storeId`/`lojaId` na query é rejeitado (400). Header de loja não troca o
+ * escopo (o gate ignora headers).
  *
- * GOAL CONTADOR-HUB-PACOTE-EXPORT-MVP-008.
+ * GOAL CONTADOR-HUB-PACOTE-EXPORT-MVP-008 · 008B.
  */
 import { NextResponse } from "next/server"
-import { resolveCompetenciaFromSearchParam } from "@/lib/contador/competencia"
+import {
+  competenciaAtual,
+  formatCompetencia,
+  parseCompetencia,
+} from "@/lib/contador/competencia"
 import { requireContadorScope } from "@/lib/contador/scope"
 import type { FalhaEscopoContador } from "@/lib/contador/scope-core"
-import { gerarPacoteContador } from "@/lib/contador/pacote"
+import { gerarPacoteContador, PacoteLimiteExcedidoError } from "@/lib/contador/pacote"
 
 // jszip + Prisma exigem Node; o download é dinâmico e nunca cacheado.
 export const runtime = "nodejs"
@@ -36,7 +40,36 @@ const MOTIVO_MSG: Record<FalhaEscopoContador["motivo"], string> = {
   sem_permissao: "Sua conta não tem permissão para gerar o pacote do Contador HUB.",
 }
 
+/** Log estruturado server-side. Nunca inclui CSV, PII, payload, cookie, token nem stack. */
+function logEvento(evento: string, campos: Record<string, unknown>): void {
+  try {
+    console.info(JSON.stringify({ evento, ...campos }))
+  } catch {
+    console.info(evento)
+  }
+}
+
 export async function GET(req: Request) {
+  const url = new URL(req.url)
+
+  // Seleção de loja por parâmetro é proibida (o escopo é a única fonte de storeId).
+  if (url.searchParams.has("storeId") || url.searchParams.has("lojaId")) {
+    return NextResponse.json(
+      { ok: false, mensagem: "O endpoint não aceita seleção de loja por parâmetro." },
+      { status: 400 },
+    )
+  }
+
+  // Competência: ausência → atual; presente e inválida → 400 (sem fallback silencioso).
+  const cRaw = url.searchParams.get("c")
+  const competencia = cRaw === null ? competenciaAtual() : parseCompetencia(cRaw)
+  if (!competencia) {
+    return NextResponse.json(
+      { ok: false, mensagem: "Competência inválida. Use o formato AAAA-MM." },
+      { status: 400 },
+    )
+  }
+
   const escopo = await requireContadorScope()
   if (!escopo.ok) {
     return NextResponse.json(
@@ -45,29 +78,62 @@ export async function GET(req: Request) {
     )
   }
 
-  const url = new URL(req.url)
-  const competencia = resolveCompetenciaFromSearchParam(url.searchParams.get("c") ?? undefined)
+  const compCodigo = formatCompetencia(competencia)
+  const inicio = Date.now()
+  logEvento("contador_pacote_inicio", {
+    storeId: escopo.storeId,
+    userId: escopo.userId,
+    competencia: compCodigo,
+  })
 
   try {
     const pacote = await gerarPacoteContador({ scope: escopo, competencia, agora: new Date() })
+    logEvento("contador_pacote_gerado", {
+      storeId: escopo.storeId,
+      userId: escopo.userId,
+      competencia: compCodigo,
+      duracaoMs: Date.now() - inicio,
+      bytesZip: pacote.metricas.bytesZip,
+      bytesDescompactados: pacote.metricas.bytesDescompactados,
+      arquivos: pacote.metricas.arquivos,
+      contagens: pacote.metricas.contagens,
+      fontesParciais: pacote.metricas.fontesParciais,
+      fontesIndisponiveis: pacote.metricas.fontesIndisponiveis,
+    })
     return new NextResponse(Buffer.from(pacote.bytes), {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
         "Content-Disposition": `attachment; filename="${pacote.nomeArquivo}"`,
-        "Cache-Control": "no-store, max-age=0",
+        "Cache-Control": "private, no-store, max-age=0",
+        Pragma: "no-cache",
         "X-Content-Type-Options": "nosniff",
       },
     })
   } catch (e) {
-    console.error("[contador/pacote]", e instanceof Error ? e.message : String(e))
+    if (e instanceof PacoteLimiteExcedidoError) {
+      logEvento("contador_pacote_limite_excedido", {
+        storeId: escopo.storeId,
+        userId: escopo.userId,
+        competencia: compCodigo,
+        limite: e.limite,
+        duracaoMs: Date.now() - inicio,
+      })
+      return NextResponse.json(
+        { ok: false, mensagem: "O pacote desta competência é grande demais para geração sob demanda." },
+        { status: 413 },
+      )
+    }
+    logEvento("contador_pacote_falha", {
+      storeId: escopo.storeId,
+      userId: escopo.userId,
+      competencia: compCodigo,
+      erro: e instanceof Error ? e.name : "erro",
+      duracaoMs: Date.now() - inicio,
+    })
     return NextResponse.json(
-      {
-        ok: false,
-        mensagem:
-          "Não foi possível gerar o pacote desta competência agora. Tente novamente em instantes.",
-      },
-      { status: 503 },
+      { ok: false, mensagem: "Não foi possível gerar o pacote desta competência agora. Tente novamente em instantes." },
+      { status: 500 },
     )
   }
 }

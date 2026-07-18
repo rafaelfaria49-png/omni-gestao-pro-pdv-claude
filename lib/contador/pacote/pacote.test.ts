@@ -1,207 +1,323 @@
 /**
- * Contador HUB · Pacote do Contador (GOAL 008) — testes puros (sem banco/ZIP).
+ * Contador HUB · Pacote do Contador (GOAL 008 · 008B) — testes puros (sem banco/ZIP).
  *
- * Constrói o DTO real via `montarDados` (mesma convenção da suíte do GOAL 006/007) e monta
- * o conteúdo do pacote com `montarConteudoPacote`. Verifica: arquivos esperados, integridade
- * (sha256/bytes do manifesto), ausência de PII/segredo, honestidade (indisponível ≠ 0),
- * CSV seguro (injeção de fórmula) e a guarda anti-vazamento.
+ * Carrega fontes DETALHADAS via cliente injetável, deriva o agregado (montarDados) e o
+ * checklist, e monta o conteúdo. Verifica estrutura fixa, colunas, RFC 4180 (vírgula),
+ * minimização de PII, manifesto v1, estados por fonte, filename saneado e limites.
  */
 import { describe, it, expect } from "vitest"
-import { montarDados, type FontesContador } from "@/lib/contador/readers"
+import { resolvePeriodoUtc } from "@/lib/contador/competencia"
+import { montarDados } from "@/lib/contador/readers"
 import { montarChecklistFechamento } from "@/lib/contador/fechamento"
+import type { ContadorScopeInterno } from "@/lib/contador/scope-core"
+import {
+  carregarFontesPacoteComCliente,
+  type PacoteReaderClient,
+} from "./carregar-fontes"
 import { montarConteudoPacote } from "./builder"
 import { montarCsv, numero, texto } from "./csv"
 import {
-  assertPacoteSeguro,
-  bytesUtf8,
+  assertRegistrosFonte,
   neutralizarFormula,
-  PacoteInseguroError,
+  PacoteLimiteExcedidoError,
+  sanitizarStoreIdParaArquivo,
   sha256Hex,
 } from "./seguranca"
-import type { ArquivoPacote } from "./tipos"
 
 const competencia = { ano: 2026, mes: 6 }
+const periodo = resolvePeriodoUtc(competencia)
 const agora = new Date("2026-07-16T12:00:00.000Z")
-const STORE_SENTINELA = "loja-zzz-super-secreta-42"
+const STORE = "loja-teste-42"
+const USER = "user-abc"
+const scope = { ok: true, storeId: STORE, userId: USER, permissaoFinanceiro: true } as unknown as ContadorScopeInterno
 
-function fontesCompletas(): FontesContador {
-  return {
-    vendas: [
-      {
-        total: 100,
-        status: "concluida",
-        payload: {
-          paymentBreakdown: { pix: 100 },
-          discountTotal: 5,
-          segredoInterno: "segredo-do-banco",
+const J = (d: string) => new Date(`2026-06-${d}T12:00:00.000Z`)
+
+const CAMINHOS_ESPERADOS = [
+  "00-LEIA-ME/indice.md",
+  "00-LEIA-ME/pendencias.md",
+  "00-LEIA-ME/resumo.md",
+  "01-VENDAS/devolucoes.csv",
+  "01-VENDAS/itens.csv",
+  "01-VENDAS/vendas.csv",
+  "02-FINANCEIRO/contas_pagar.csv",
+  "02-FINANCEIRO/contas_receber.csv",
+  "02-FINANCEIRO/movimentacoes.csv",
+  "03-CAIXA/operacoes.csv",
+  "03-CAIXA/sessoes.csv",
+  "04-DOCUMENTOS/LEIA-ME.md",
+  "05-XML/LEIA-ME.md",
+  "manifest.json",
+]
+
+// PII sentinelas: presentes nas linhas cruas (campos NÃO selecionados/emitidos) — nunca podem vazar.
+const PII = ["João PII Silva", "segredo-do-banco", "OperadorPII", "MotivoPII", "111.222.333-44"]
+
+function clienteCompleto(overrides: Partial<PacoteReaderClient> = {}): PacoteReaderClient {
+  const base: PacoteReaderClient = {
+    venda: {
+      findMany: async () => [
+        {
+          id: "v1",
+          pedidoId: "VDA-1",
+          total: 100,
+          status: "concluida",
+          at: J("10"),
+          payload: { paymentBreakdown: { pix: 100 }, discountTotal: 5, segredo: "segredo-do-banco" },
+          ...({ clienteNome: "João PII Silva", clienteDoc: "111.222.333-44" } as object),
+          itens: [
+            { id: "i1", inventoryId: "p1", nome: "Produto A", quantidade: 2, precoUnitario: 30, lineTotal: 55 },
+          ],
         },
-      },
-    ],
-    devolucoes: [{ valorTotal: 10 }],
-    movimentacoes: [
-      { tipo: "entrada", origem: "venda", valor: 50 },
-      { tipo: "saida", origem: "pagar", valor: 20 },
-    ],
-    receber: [{ valor: 30, status: "pendente", vencimento: "2026-06-10" }],
-    pagar: [{ valor: 15, status: "pendente", vencimento: "20/06/2026" }],
-    sessoes: [{ status: "fechada", saldoFinal: 100, saldoContado: 101 }],
-    operacoes: [
-      { tipo: "sangria", valor: 5 },
-      { tipo: "suprimento", valor: 8 },
-    ],
-    falhas: [],
+        {
+          id: "v2",
+          pedidoId: "VDA-2",
+          total: 80,
+          status: "cancelada",
+          at: J("11"),
+          payload: {},
+          itens: [{ id: "i2", inventoryId: "p2", nome: "Cancelado", quantidade: 1, precoUnitario: 80, lineTotal: 80 }],
+        },
+      ],
+    },
+    produto: { findMany: async () => [{ id: "p1", sku: "SKU-A", barcode: "789" }] },
+    devolucaoVenda: {
+      findMany: async () => [
+        { id: "d1", localId: "DEV-1", vendaLocalId: "VDA-1", tipo: "vale_credito", valorTotal: 10, at: J("12"), ...({ operador: "OperadorPII" } as object) },
+      ],
+    },
+    movimentacaoFinanceira: {
+      findMany: async () => [
+        { id: "m1", tipo: "entrada", origem: "venda", valor: 100, createdAt: J("10") },
+        { id: "m2", tipo: "saida", origem: "pagar", valor: 20, createdAt: J("11") },
+        { id: "m3", tipo: "entrada", origem: "transferencia", valor: 50, createdAt: J("12") },
+        { id: "m4", tipo: "entrada", origem: "origem_futura", valor: 9, createdAt: J("13") },
+      ],
+    },
+    contaReceberTitulo: {
+      findMany: async () => [
+        { id: "r1", valor: 30, status: "pendente", vencimento: "2026-06-10" },
+        { id: "r2", valor: 99, status: "pendente", vencimento: "data-invalida" },
+      ],
+    },
+    contaPagarTitulo: {
+      findMany: async () => [{ id: "pg1", valor: 15, status: "pendente", vencimento: "20/06/2026" }],
+    },
+    sessaoCaixa: {
+      findMany: async () => [
+        { id: "s1", status: "FECHADA", saldoInicial: 100, saldoFinal: 100, saldoContado: 101, abertaEm: J("10"), fechadaEm: J("10"), ...({ operador: "OperadorPII" } as object) },
+        { id: "s2", status: "FECHADA", saldoInicial: 50, saldoFinal: 60, saldoContado: null, abertaEm: J("11"), fechadaEm: J("11") },
+      ],
+    },
+    caixaOperacao: {
+      findMany: async () => [
+        { id: "o1", sessaoId: "s1", tipo: "sangria", valor: 5, at: J("10"), ...({ motivo: "MotivoPII" } as object) },
+        { id: "o2", sessaoId: "s1", tipo: "desconhecido", valor: 3, at: J("11") },
+      ],
+    },
   }
+  return { ...base, ...overrides }
 }
 
-function montar(fontes: FontesContador = fontesCompletas(), storeId = STORE_SENTINELA) {
-  const dados = montarDados(fontes, competencia)
+async function montar(cliente: PacoteReaderClient = clienteCompleto()) {
+  const detalhadas = await carregarFontesPacoteComCliente(scope, periodo, competencia, cliente)
+  const dados = montarDados(detalhadas.agregado, competencia)
   const checklist = montarChecklistFechamento({ dados, competencia, agora })
-  return montarConteudoPacote({ dados, checklist, competencia, agora, storeId })
+  return { detalhadas, conteudo: montarConteudoPacote({ detalhadas, dados, checklist, competencia, agora, storeId: STORE, userId: USER }) }
 }
 
-function conteudoDe(pacote: ReturnType<typeof montar>, caminho: string): string {
-  const arquivo = pacote.arquivos.find((a) => a.caminho === caminho)
-  if (!arquivo) throw new Error(`arquivo ausente: ${caminho}`)
-  return arquivo.conteudo
+function arq(conteudo: Awaited<ReturnType<typeof montar>>["conteudo"], caminho: string): string {
+  const a = conteudo.arquivos.find((x) => x.caminho === caminho)
+  if (!a) throw new Error(`ausente: ${caminho}`)
+  return a.conteudo
 }
 
-describe("Pacote do Contador — estrutura de arquivos", () => {
-  it("inclui CSVs, resumo, índice, avisos, placeholders e manifesto", () => {
-    const pacote = montar()
-    const caminhos = pacote.arquivos.map((a) => a.caminho)
-    for (const esperado of [
-      "RESUMO.md",
-      "AVISOS-E-PENDENCIAS.md",
-      "INDICE.md",
-      "manifest.json",
-      "csv/resumo-competencia.csv",
-      "csv/vendas.csv",
-      "csv/vendas-formas-pagamento.csv",
-      "csv/devolucoes.csv",
-      "csv/financeiro.csv",
-      "csv/caixa.csv",
-      "csv/alertas.csv",
-      "csv/fechamento-checklist.csv",
-      "documentos/LEIA-ME.md",
-      "notas-fiscais-xml/LEIA-ME.md",
-    ]) {
-      expect(caminhos, `faltou ${esperado}`).toContain(esperado)
+describe("Pacote 008B — estrutura fixa de 14 arquivos", () => {
+  it("tem exatamente os 14 caminhos obrigatórios (sem os caminhos antigos)", async () => {
+    const { conteudo } = await montar()
+    const caminhos = conteudo.arquivos.map((a) => a.caminho).sort()
+    expect(caminhos).toEqual([...CAMINHOS_ESPERADOS].sort())
+    for (const antigo of ["RESUMO.md", "AVISOS-E-PENDENCIAS.md", "csv/vendas.csv", "documentos/LEIA-ME.md", "notas-fiscais-xml/LEIA-ME.md"]) {
+      expect(caminhos).not.toContain(antigo)
     }
   })
 
-  it("o nome do ZIP e o manifesto v1 refletem a competência", () => {
-    const pacote = montar()
-    expect(pacote.nomeArquivo).toBe("pacote-contador-2026-06.zip")
-    expect(pacote.manifesto.versao).toBe(1)
-    expect(pacote.manifesto.schema).toBe("omnigestao.contador.pacote")
-    expect(pacote.manifesto.competencia).toMatchObject({ ano: 2026, mes: 6, codigo: "2026-06" })
-    expect(pacote.manifesto.geradoEm).toBe(agora.toISOString())
-  })
-
-  it("os placeholders honestos deixam claro que XML e documentos não entram nesta fase", () => {
-    const pacote = montar()
-    expect(conteudoDe(pacote, "notas-fiscais-xml/LEIA-ME.md")).toContain("não contém XML")
-    expect(conteudoDe(pacote, "notas-fiscais-xml/LEIA-ME.md")).toContain("CONTADOR_FISCAL_READER")
-    expect(conteudoDe(pacote, "documentos/LEIA-ME.md")).toContain("não contém anexos")
+  it("filename com storeId saneado + competência", async () => {
+    const { conteudo } = await montar()
+    expect(conteudo.nomeArquivo).toBe("pacote-contador-loja-teste-42-2026-06.zip")
   })
 })
 
-describe("Pacote do Contador — integridade (manifesto v1)", () => {
-  it("o manifesto lista sha256 e bytes corretos de cada arquivo (menos o próprio manifest.json)", () => {
-    const pacote = montar()
-    const listados = pacote.manifesto.arquivos.map((a) => a.caminho)
-    // manifest.json é a raiz — não se auto-referencia; INDICE.md e conteúdo estão listados.
+describe("Pacote 008B — colunas dos CSVs (cabeçalhos congelados)", () => {
+  it("vendas/itens/devolucoes/movimentacoes/titulos/sessoes/operacoes", async () => {
+    const { conteudo } = await montar()
+    const head = (p: string) => arq(conteudo, p).replace(/^﻿/, "").split("\r\n")[0]
+    expect(head("01-VENDAS/vendas.csv")).toBe("venda_id,numero,data,status,total_bruto,desconto_informativo,devolucoes,total_liquido,forma_pagamento_status")
+    expect(head("01-VENDAS/itens.csv")).toBe("venda_id,item_id,produto_codigo,produto_descricao,quantidade,valor_unitario,desconto,total_item")
+    expect(head("01-VENDAS/devolucoes.csv")).toBe("devolucao_id,venda_id,data_devolucao,valor,status")
+    expect(head("02-FINANCEIRO/movimentacoes.csv")).toBe("movimentacao_id,data,tipo,classificacao,valor,origem")
+    expect(head("02-FINANCEIRO/contas_receber.csv")).toBe("titulo_id,vencimento,status,valor_original,valor_aberto,disponibilidade")
+    expect(head("02-FINANCEIRO/contas_pagar.csv")).toBe("titulo_id,vencimento,status,valor_original,valor_aberto,disponibilidade")
+    expect(head("03-CAIXA/sessoes.csv")).toBe("sessao_id,abertura,fechamento,status,saldo_inicial,saldo_final,saldo_contado,diferenca_disponivel,diferenca")
+    expect(head("03-CAIXA/operacoes.csv")).toBe("operacao_id,sessao_id,data,tipo,classificacao,valor")
+  })
+
+  it("BOM UTF-8 e CRLF em todos os CSVs", async () => {
+    const { conteudo } = await montar()
+    for (const a of conteudo.arquivos.filter((x) => x.caminho.endsWith(".csv"))) {
+      expect(a.conteudo.startsWith("﻿")).toBe(true)
+      expect(a.conteudo).toContain("\r\n")
+    }
+  })
+})
+
+describe("Pacote 008B — semântica das linhas", () => {
+  it("canceladas: listadas em vendas.csv (status=cancelada), fora do faturamento e sem itens", async () => {
+    const { conteudo } = await montar()
+    const vendas = arq(conteudo, "01-VENDAS/vendas.csv")
+    expect(vendas).toContain("VDA-2,")
+    expect(vendas).toContain(",cancelada,")
+    const itens = arq(conteudo, "01-VENDAS/itens.csv")
+    expect(itens).not.toContain("i2") // item da venda cancelada não entra
+    expect(itens).toContain("i1")
+    // faturamento autoritativo exclui cancelada (total = 100, não 180):
+    const resumo = arq(conteudo, "00-LEIA-ME/resumo.md")
+    expect(resumo).toContain("100,00")
+    expect(resumo).not.toContain("180,00")
+  })
+
+  it("diferença de caixa sem saldo contado → diferenca_disponivel=nao e célula vazia", async () => {
+    const { conteudo } = await montar()
+    const linhas = arq(conteudo, "03-CAIXA/sessoes.csv").split("\r\n")
+    const s2 = linhas.find((l) => l.startsWith("s2,"))!
+    expect(s2.endsWith(",nao,")).toBe(true)
+  })
+
+  it("classificação de movimentação: entrada/saida/transferencia/nao_classificado", async () => {
+    const { conteudo } = await montar()
+    const mv = arq(conteudo, "02-FINANCEIRO/movimentacoes.csv")
+    expect(mv).toContain(",entrada,")
+    expect(mv).toContain(",saida,")
+    expect(mv).toContain("transferencia")
+    expect(mv).toContain("nao_classificado")
+  })
+
+  it("operação de tipo desconhecido → nao_classificado (não silenciado)", async () => {
+    const { conteudo } = await montar()
+    expect(arq(conteudo, "03-CAIXA/operacoes.csv")).toContain("nao_classificado")
+  })
+
+  it("título sem vencimento reconhecível → disponibilidade parcial (não vira vencido)", async () => {
+    const { conteudo } = await montar()
+    const cr = arq(conteudo, "02-FINANCEIRO/contas_receber.csv")
+    expect(cr).toContain("r2,data-invalida,pendente,99,99,parcial")
+  })
+})
+
+describe("Pacote 008B — minimização de PII", () => {
+  it("nenhum arquivo contém nome/documento/segredo/operador/motivo", async () => {
+    const { conteudo } = await montar()
+    const tudo = conteudo.arquivos.map((a) => a.conteudo).join("\n")
+    for (const p of PII) expect(tudo, `vazou: ${p}`).not.toContain(p)
+  })
+
+  it("storeId só aparece no manifest.json (competencia.storeId)", async () => {
+    const { conteudo } = await montar()
+    for (const a of conteudo.arquivos) {
+      if (a.caminho === "manifest.json") continue
+      expect(a.conteudo, `storeId vazou em ${a.caminho}`).not.toContain(STORE)
+    }
+    const man = JSON.parse(arq(conteudo, "manifest.json"))
+    expect(man.competencia.storeId).toBe(STORE)
+  })
+})
+
+describe("Pacote 008B — manifesto v1 canônico", () => {
+  it("schema, versão, período UTC, geradoPor interno e integridade", async () => {
+    const { conteudo } = await montar()
+    const man = JSON.parse(arq(conteudo, "manifest.json"))
+    expect(man.schema).toBe("omni.contador.pacote.manifest/v1")
+    expect(man.pacoteVersao).toBe(1)
+    expect(man.competencia).toMatchObject({ storeId: STORE, ano: 2026, mes: 6, timezone: "America/Sao_Paulo" })
+    expect(man.competencia.periodoUtc.inicio).toBe(periodo.inicio.toISOString())
+    expect(man.competencia.periodoUtc.fimExclusivo).toBe(periodo.fimExclusivo.toISOString())
+    expect(man.geradoPor.tipo).toBe("interno")
+    expect(man.geradoPor.id).toMatch(/^u_[0-9a-f]{16}$/)
+    expect(man.geradoPor.id).not.toContain(USER) // pseudônimo, não o id cru
+    expect(man.fontes.map((f: { nome: string }) => f.nome)).toEqual([
+      "vendas", "itens", "devolucoes", "movimentacoes", "contas_receber", "contas_pagar", "sessoes", "operacoes",
+    ])
+    expect(man.fontes.find((f: { nome: string }) => f.nome === "vendas").registros).toBe(2)
+    const listados = man.arquivos.map((a: { caminho: string }) => a.caminho)
     expect(listados).not.toContain("manifest.json")
-    expect(listados).toContain("INDICE.md")
-
-    for (const entrada of pacote.manifesto.arquivos) {
-      const conteudo = conteudoDe(pacote, entrada.caminho)
-      expect(sha256Hex(conteudo), `hash ${entrada.caminho}`).toBe(entrada.sha256)
-      expect(bytesUtf8(conteudo), `bytes ${entrada.caminho}`).toBe(entrada.bytes)
+    expect(listados).toContain("00-LEIA-ME/indice.md")
+    for (const entrada of man.arquivos) {
+      expect(sha256Hex(arq(conteudo, entrada.caminho))).toBe(entrada.sha256)
     }
-    expect(pacote.manifesto.contagem.arquivos).toBe(pacote.arquivos.length - 1)
-  })
-
-  it("consolida avisos honestos (XML fora de escopo) no manifesto", () => {
-    const avisos = montar().manifesto.avisos.join(" · ")
-    expect(avisos).toContain("CONTADOR_FISCAL_READER")
-    expect(avisos.toLowerCase()).toContain("não é fechamento oficial")
+    expect(Array.isArray(man.pendencias)).toBe(true)
+    expect(Array.isArray(man.itensNaoDisponiveis)).toBe(true)
+    expect(man.avisos.join(" ")).toContain("CONTADOR_FISCAL_READER")
   })
 })
 
-describe("Pacote do Contador — sem PII/segredo", () => {
-  it("nenhum arquivo contém storeId, payload bruto nem o segredo do banco", () => {
-    const pacote = montar()
-    const tudo = pacote.arquivos.map((a) => a.conteudo).join("\n")
-    expect(tudo).not.toContain(STORE_SENTINELA)
-    expect(tudo).not.toContain("segredo-do-banco")
-    expect(tudo).not.toContain('"payload"')
-    expect(tudo).not.toContain('"storeId"')
-  })
-})
-
-describe("Pacote do Contador — honestidade (indisponível nunca vira 0)", () => {
-  it("fonte de vendas indisponível gera célula vazia com selo, não zero", () => {
-    const fontes = fontesCompletas()
-    fontes.falhas = ["vendas"]
-    const pacote = montar(fontes)
-    const csv = conteudoDe(pacote, "csv/vendas.csv")
-    // campo `total` sem valor (célula vazia) e disponibilidade "indisponível".
-    expect(csv).toContain("total;;indisponível")
-    expect(csv).not.toContain("total;0;")
+describe("Pacote 008B — fonte indisponível e competência vazia", () => {
+  it("uma fonte que falha vira indisponível, CSV mantém cabeçalho e ZIP segue válido (14 arquivos)", async () => {
+    const cliente = clienteCompleto({
+      devolucaoVenda: { findMany: async () => { throw new Error("boom") } },
+    })
+    const { conteudo } = await montar(cliente)
+    expect(conteudo.arquivos.length).toBe(14)
+    const dev = arq(conteudo, "01-VENDAS/devolucoes.csv")
+    expect(dev.replace(/^﻿/, "").split("\r\n")[0]).toBe("devolucao_id,venda_id,data_devolucao,valor,status")
+    const man = JSON.parse(arq(conteudo, "manifest.json"))
+    expect(man.fontes.find((f: { nome: string }) => f.nome === "devolucoes").estado).toBe("indisponivel")
   })
 
-  it("vendas zero (mês sem movimento) aparece como pendente nos avisos", () => {
-    const vazio: FontesContador = {
-      vendas: [],
-      devolucoes: [],
-      movimentacoes: [],
-      receber: [],
-      pagar: [],
-      sessoes: [],
-      operacoes: [],
-      falhas: [],
+  it("competência sem dados gera 14 arquivos válidos com CSVs só de cabeçalho", async () => {
+    const vazio: PacoteReaderClient = {
+      venda: { findMany: async () => [] },
+      produto: { findMany: async () => [] },
+      devolucaoVenda: { findMany: async () => [] },
+      movimentacaoFinanceira: { findMany: async () => [] },
+      contaReceberTitulo: { findMany: async () => [] },
+      contaPagarTitulo: { findMany: async () => [] },
+      sessaoCaixa: { findMany: async () => [] },
+      caixaOperacao: { findMany: async () => [] },
     }
-    const avisos = conteudoDe(montar(vazio), "AVISOS-E-PENDENCIAS.md")
-    expect(avisos).toContain("[pendente]")
-    expect(avisos).toContain("Vendas da competência")
+    const { conteudo } = await montar(vazio)
+    expect(conteudo.arquivos.length).toBe(14)
+    const vendas = arq(conteudo, "01-VENDAS/vendas.csv").replace(/^﻿/, "").split("\r\n").filter(Boolean)
+    expect(vendas.length).toBe(1) // só cabeçalho
   })
 })
 
-describe("Pacote do Contador — CSV seguro", () => {
-  it("neutraliza injeção de fórmula em células textuais, preservando números negativos", () => {
-    const csv = montarCsv(["campo", "valor"], [[texto("=CMD()"), numero(-5.5)]])
+describe("Pacote 008B — CSV RFC 4180 e limites", () => {
+  it("separador vírgula, injeção de fórmula neutralizada, negativos preservados, nulo vazio", () => {
+    const csv = montarCsv(["a", "b", "c"], [[texto("=CMD()"), numero(-5.5), numero(null)]])
+    expect(csv).toContain("a,b,c")
     expect(csv).toContain("'=CMD()")
     expect(csv).toContain("-5.5")
     expect(csv).not.toContain("'-5.5")
   })
 
-  it("valor numérico nulo vira célula vazia (nunca 0)", () => {
-    const csv = montarCsv(["v"], [[numero(null)]])
-    // Linha de dados: apenas a célula vazia após o BOM/cabeçalho.
-    expect(csv.split("\r\n")).toContain("")
+  it("campo com vírgula é citado (aspas)", () => {
+    const csv = montarCsv(["x"], [[texto("a,b")]])
+    expect(csv).toContain('"a,b"')
   })
 
-  it("neutralizarFormula só age em prefixos perigosos", () => {
-    expect(neutralizarFormula("=1+1")).toBe("'=1+1")
-    expect(neutralizarFormula("+55")).toBe("'+55")
-    expect(neutralizarFormula("@x")).toBe("'@x")
-    expect(neutralizarFormula("normal")).toBe("normal")
-  })
-})
-
-describe("Pacote do Contador — guarda anti-vazamento", () => {
-  it("assertPacoteSeguro rejeita conteúdo que contém o storeId da loja ativa", () => {
-    const arquivos: ArquivoPacote[] = [
-      { caminho: "x.csv", categoria: "csv", descricao: "", conteudo: "linha com loja-1 embutida" },
-    ]
-    expect(() => assertPacoteSeguro(arquivos, { storeId: "loja-1" })).toThrow(PacoteInseguroError)
+  it("neutralizarFormula cobre = + - @ e ignora texto comum", () => {
+    for (const s of ["=1", "+1", "-1", "@x"]) expect(neutralizarFormula(s)).toBe(`'${s}`)
+    expect(neutralizarFormula("ok")).toBe("ok")
   })
 
-  it("assertPacoteSeguro aceita conteúdo limpo", () => {
-    const arquivos: ArquivoPacote[] = [
-      { caminho: "x.csv", categoria: "csv", descricao: "", conteudo: "campo;valor\r\ntotal;100\r\n" },
-    ]
-    expect(() => assertPacoteSeguro(arquivos, { storeId: "loja-1" })).not.toThrow()
+  it("assertRegistrosFonte lança PacoteLimiteExcedidoError acima do teto", () => {
+    expect(() => assertRegistrosFonte("vendas", 999_999)).toThrow(PacoteLimiteExcedidoError)
+    expect(() => assertRegistrosFonte("vendas", 10)).not.toThrow()
+  })
+
+  it("sanitizarStoreIdParaArquivo remove barra/dois-pontos/.. e limita", () => {
+    expect(sanitizarStoreIdParaArquivo("loja/../:evil path")).toBe("loja-evil-path")
+    expect(sanitizarStoreIdParaArquivo("")).toBe("loja")
+    expect(sanitizarStoreIdParaArquivo("../../etc")).toBe("etc")
   })
 })

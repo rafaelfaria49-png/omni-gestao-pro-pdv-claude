@@ -1,18 +1,19 @@
 "use client"
 
 /**
- * Contador HUB · botão real de download do Pacote do Contador (GOAL 008).
+ * Contador HUB · botão real de download do Pacote do Contador (GOAL 008 · 008B).
  *
- * Substitui o CTA de preview: baixa de verdade o ZIP gerado sob demanda pelo endpoint
- * interno autenticado `GET /api/contador/pacote?c=AAAA-MM`. Nada persiste no cliente
- * (sem armazenamento local nem cache) — apenas um Blob temporário revogado após o clique.
+ * Download GET DIRETO para o endpoint interno autenticado `GET /api/contador/pacote?c=AAAA-MM`
+ * via âncora temporária — não usa requisição assíncrona nem cópia do arquivo em memória
+ * (o pacote detalhado pode crescer e não deve ser duplicado no heap do navegador). O request
+ * carrega apenas a competência `c`; a loja vem só do escopo do servidor. O endpoint é
+ * responsável pelo Content-Disposition.
  *
- * Honestidade: o pacote reflete os dados vivos da competência no momento do download,
- * NÃO é fechamento oficial e NÃO inclui XML fiscal nesta fase. Quando os dados reais não
- * estão disponíveis (escopo/leitura), o botão fica desabilitado com o motivo explícito.
+ * Estado local honesto: “Solicitação de download iniciada.” — nunca afirma “pacote gerado
+ * com sucesso”. Não é fechamento oficial e não inclui XML nesta fase.
  */
 import { useCallback, useState } from "react"
-import { AlertTriangle, Check, Download, FileArchive, Loader2 } from "lucide-react"
+import { AlertTriangle, Check, Download, FileArchive } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { formatCompetencia, type Competencia } from "@/lib/contador/competencia"
 
@@ -22,85 +23,48 @@ export const PACOTE_ENDPOINT = "/api/contador/pacote"
 export const PACOTE_INDISPONIVEL_TITLE =
   "Disponível quando os dados reais da competência carregam (sessão + loja ativa + permissão financeiro)."
 
-type EstadoDownload = "idle" | "carregando" | "erro"
+type EstadoDownload = "idle" | "solicitado"
 
 export type UsePacoteDownload = Readonly<{
   estado: EstadoDownload
-  erro: string | null
-  baixar: () => void
+  iniciar: () => void
 }>
 
-/** Extrai o filename do Content-Disposition, se presente. */
-function nomeDoDisposition(header: string | null): string | null {
-  if (!header) return null
-  const m = /filename="?([^"]+)"?/.exec(header)
-  return m ? m[1] : null
-}
-
 /**
- * Hook de download compartilhado: um único estado dá para o botão do cabeçalho e para o
- * cartão da seção, mantendo-os em sincronia. Sem persistência.
+ * Hook de download compartilhado (cabeçalho + cartão). Dispara um GET direto via âncora
+ * temporária (sem fetch/blob) e mantém apenas um estado local honesto.
  */
 export function usePacoteDownload(competencia: Competencia): UsePacoteDownload {
   const [estado, setEstado] = useState<EstadoDownload>("idle")
-  const [erro, setErro] = useState<string | null>(null)
 
-  const baixar = useCallback(() => {
+  const iniciar = useCallback(() => {
     const codigo = formatCompetencia(competencia)
-    setEstado("carregando")
-    setErro(null)
-    void (async () => {
-      try {
-        const res = await fetch(`${PACOTE_ENDPOINT}?c=${encodeURIComponent(codigo)}`, {
-          method: "GET",
-          headers: { Accept: "application/zip" },
-        })
-        if (!res.ok) {
-          let mensagem = "Não foi possível gerar o pacote agora. Tente novamente em instantes."
-          try {
-            const corpo = (await res.json()) as { mensagem?: unknown }
-            if (typeof corpo?.mensagem === "string" && corpo.mensagem.trim()) {
-              mensagem = corpo.mensagem
-            }
-          } catch {
-            /* resposta sem JSON — mantém a mensagem padrão */
-          }
-          setErro(mensagem)
-          setEstado("erro")
-          return
-        }
-        const blob = await res.blob()
-        const nome = nomeDoDisposition(res.headers.get("Content-Disposition")) ?? `pacote-contador-${codigo}.zip`
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement("a")
-        link.href = url
-        link.download = nome
-        document.body.appendChild(link)
-        link.click()
-        link.remove()
-        URL.revokeObjectURL(url)
-        setEstado("idle")
-      } catch {
-        setErro("Falha ao baixar o pacote. Verifique a conexão e tente novamente.")
-        setEstado("erro")
-      }
-    })()
+    // Âncora sem `download` para que o filename venha do Content-Disposition do servidor.
+    const link = document.createElement("a")
+    link.href = `${PACOTE_ENDPOINT}?c=${encodeURIComponent(codigo)}`
+    link.rel = "noopener"
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setEstado("solicitado")
+    window.setTimeout(() => setEstado("idle"), 4000)
   }, [competencia])
 
-  return { estado, erro, baixar }
+  return { estado, iniciar }
 }
 
 const INCLUIDO: readonly string[] = [
-  "Resumo da competência (RESUMO.md)",
-  "CSVs reais: vendas, devoluções, financeiro e caixa",
-  "Formas de pagamento e reconciliação",
-  "Alertas de qualidade e checklist de fechamento",
-  "Índice e manifesto com sha256 de cada arquivo",
+  "Vendas, itens e devoluções (linha a linha)",
+  "Movimentações, contas a receber e a pagar",
+  "Sessões e operações de caixa",
+  "Resumo, pendências e índice",
+  "Manifesto v1 com sha256 de cada arquivo",
 ]
 
 const NAO_INCLUIDO: readonly string[] = [
-  "Notas fiscais (XML) — placeholder honesto, próxima fase",
-  "Documentos anexos — placeholder honesto, próxima fase",
+  "Notas fiscais (XML) — placeholder honesto (após GOAL 018)",
+  "Documentos anexos — placeholder honesto (após GOAL 009/010)",
+  "Dados pessoais (nome, documento, contato) — minimizados",
 ]
 
 export type ContadorPacoteDownloadProps = Readonly<{
@@ -113,17 +77,13 @@ export type ContadorPacoteDownloadProps = Readonly<{
   download: UsePacoteDownload
 }>
 
-/**
- * Cartão premium on-brand do Pacote do Contador com download real. Substitui o antigo
- * `PacoteCard` de preview (lista ilustrativa + botão desabilitado).
- */
+/** Cartão premium on-brand do Pacote do Contador com download GET direto. */
 export function ContadorPacoteDownload({
   competencia,
   disponivel,
   motivoIndisponivel,
   download,
 }: ContadorPacoteDownloadProps) {
-  const carregando = download.estado === "carregando"
   const motivo = motivoIndisponivel?.trim() || PACOTE_INDISPONIVEL_TITLE
 
   return (
@@ -163,25 +123,16 @@ export function ContadorPacoteDownload({
 
       <button
         type="button"
-        disabled={!disponivel || carregando}
+        disabled={!disponivel}
         title={disponivel ? undefined : motivo}
-        onClick={download.baixar}
+        onClick={download.iniciar}
         className={cn(
           "inline-flex w-full items-center justify-center gap-2 rounded-lg border border-primary bg-primary px-3.5 py-2 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90",
           "disabled:cursor-not-allowed disabled:opacity-40",
         )}
       >
-        {carregando ? (
-          <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Gerando pacote…
-          </>
-        ) : (
-          <>
-            <Download className="h-4 w-4" />
-            Baixar pacote (.zip)
-          </>
-        )}
+        <Download className="h-4 w-4" />
+        Baixar pacote (.zip)
       </button>
 
       {!disponivel ? (
@@ -189,15 +140,9 @@ export function ContadorPacoteDownload({
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
           {motivo}
         </p>
-      ) : null}
-
-      {download.estado === "erro" && download.erro ? (
-        <p
-          role="alert"
-          className="mt-2.5 flex items-start gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-[11.5px] leading-snug text-foreground"
-        >
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" />
-          {download.erro}
+      ) : download.estado === "solicitado" ? (
+        <p className="mt-2.5 text-[11.5px] leading-snug text-muted-foreground">
+          Solicitação de download iniciada. Se o navegador não iniciar o download, verifique bloqueios de pop-up.
         </p>
       ) : null}
     </div>

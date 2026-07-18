@@ -325,27 +325,41 @@ describe("Contador HUB — card ilustrativo Preview ≠ checklist real derivado 
   })
 })
 
-/* ─────────────────────── GOAL 008 — Pacote do Contador (download real) ─────────────────────── */
+/* ────────────── GOAL 008B — Pacote do Contador (download GET direto, sem blob) ────────────── */
 
-describe("Contador HUB — Pacote do Contador com download real (GOAL 008)", () => {
+describe("Contador HUB — Pacote do Contador com download GET direto (GOAL 008B)", () => {
   const downloadSrc = readFileSync(join(DIR, "contador-pacote-download.tsx"), "utf8")
 
-  it("o download real usa o endpoint interno autenticado GET /api/contador/pacote", () => {
+  it("usa o endpoint interno autenticado GET /api/contador/pacote com competência canônica", () => {
     expect(downloadSrc).toContain('PACOTE_ENDPOINT = "/api/contador/pacote"')
-    expect(downloadSrc).toContain("await fetch(")
+    expect(downloadSrc).toContain("formatCompetencia(competencia)")
+    expect(downloadSrc).toContain("?c=")
   })
 
-  it("não persiste nada no cliente (sem localStorage/sessionStorage/cache persistido)", () => {
+  it("é download GET DIRETO: zero fetch, zero blob, zero objectURL", () => {
+    expect(downloadSrc).not.toMatch(/\bfetch\(/)
+    expect(downloadSrc).not.toMatch(/\.blob\(/)
+    expect(downloadSrc).not.toMatch(/createObjectURL|revokeObjectURL/)
+    // Âncora GET direta.
+    expect(downloadSrc).toContain('document.createElement("a")')
+  })
+
+  it("nunca envia storeId pelo cliente e não persiste estado local", () => {
+    expect(downloadSrc).not.toMatch(/storeId|lojaId/)
     expect(downloadSrc).not.toMatch(/localStorage|sessionStorage/)
-    // Blob temporário é revogado após o clique.
-    expect(downloadSrc).toContain("URL.revokeObjectURL")
   })
 
   it("o botão só habilita com dados reais e mostra o motivo honesto quando indisponível", () => {
-    expect(downloadSrc).toContain("disabled={!disponivel || carregando}")
+    expect(downloadSrc).toContain("disabled={!disponivel}")
     expect(downloadSrc).toContain("PACOTE_INDISPONIVEL_TITLE")
     // O cabeçalho do HUB condiciona o botão ao mesmo realData.
-    expect(hubSrc).toContain('disabled={!realData || pacoteDownload.estado === "carregando"}')
+    expect(hubSrc).toContain("disabled={!realData}")
+  })
+
+  it("estado honesto: 'Solicitação de download iniciada', sem afirmar sucesso/arquivamento", () => {
+    expect(downloadSrc).toContain("Solicitação de download iniciada")
+    expect(downloadSrc).not.toContain("gerado com sucesso")
+    expect(downloadSrc).not.toMatch(/arquivad|histórico|%/)
   })
 
   it("mantém a honestidade: não é fechamento oficial e não inclui XML nesta fase", () => {

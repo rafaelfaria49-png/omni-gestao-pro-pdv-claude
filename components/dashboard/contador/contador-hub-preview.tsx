@@ -27,7 +27,6 @@ import {
   Eye,
   FileText,
   Info,
-  Loader2,
   MessageSquare,
   Plus,
   Sparkles,
@@ -1271,16 +1270,12 @@ export function ContadorHubPreview({
 
           <Btn
             variant="primary"
-            disabled={!realData || pacoteDownload.estado === "carregando"}
+            disabled={!realData}
             title={realData ? undefined : (realErro ?? PACOTE_INDISPONIVEL_TITLE)}
-            onClick={pacoteDownload.baixar}
+            onClick={pacoteDownload.iniciar}
           >
-            {pacoteDownload.estado === "carregando" ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4" />
-            )}
-            {pacoteDownload.estado === "carregando" ? "Gerando pacote…" : "Baixar pacote"}
+            <Download className="h-4 w-4" />
+            Baixar pacote
           </Btn>
         </div>
       </div>
