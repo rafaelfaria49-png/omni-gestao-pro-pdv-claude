@@ -1,0 +1,211 @@
+name: Fiscal XSD Worker Supply Chain
+
+# GOAL FISCAL-XSD-WORKER-GITHUB-ACTIONS-SUPPLY-CHAIN-005A
+# Constrói o worker XSD B2 em fase conectada controlada num runner Linux do GitHub,
+# gera SBOM + scan HIGH/CRITICAL, exporta Docker/OCI archives + SHA256SUMS e, num
+# runner novo, carrega o archive e prova o runtime SEM egress (positivo + negativos
+# XSD). Não publica em registry, não acessa SEFAZ, não usa segredo Fiscal. Os
+# artefatos ficam apenas em GitHub Actions Artifacts (privados).
+
+on:
+  workflow_dispatch:
+    inputs:
+      allow_branch_override:
+        description: "Permitir execução fora da branch do GOAL-005A (uso futuro explicitamente autorizado)."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fiscal-xsd-worker-supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPECTED_REF: refs/heads/work/fiscal-xsd-worker-gha-supply-chain-005a
+  IMAGE_TAG: fiscal-xsd-worker:pl010e-v1.02-libxml2-2.15.3-goal005a
+  NODE_IMAGE: node:20.20.2-bookworm-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+  DOCKER_ARCHIVE: fiscal-xsd-worker-goal005a.docker.tar
+  OCI_ARCHIVE: fiscal-xsd-worker-goal005a.oci.tar
+  SBOM_FILE: fiscal-xsd-worker-goal005a.cyclonedx.json
+  TRIVY_JSON: fiscal-xsd-worker-goal005a.trivy.json
+  TRIVY_SUMMARY: fiscal-xsd-worker-goal005a.trivy.txt
+  INTERMEDIATE_ARTIFACT: fiscal-xsd-worker-supply-chain-intermediate-${{ github.sha }}
+  FINAL_ARTIFACT: fiscal-xsd-worker-offline-approved-${{ github.sha }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-connected:
+    name: Build conectado, SBOM, scan e bundles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Guard de branch do GOAL
+        run: |
+          if [ "${GITHUB_REF}" != "${EXPECTED_REF}" ] && [ "${{ inputs.allow_branch_override }}" != "true" ]; then
+            echo "::error::Este workflow deve rodar em ${EXPECTED_REF} (ref atual: ${GITHUB_REF})."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Preflight (docker/buildx/jq/tar)
+        run: bash workers/fiscal-xsd/ci/supply-chain.sh preflight
+
+      - name: Build conectado do worker (buildx --load, sem push)
+        run: bash workers/fiscal-xsd/ci/supply-chain.sh build
+
+      - name: Inspeção da imagem (xmllint 2.15.3, gate 21503, schema, non-root)
+        run: bash workers/fiscal-xsd/ci/supply-chain.sh inspect
+
+      - name: Registrar Actions pinadas (para o lock)
+        run: |
+          mkdir -p out
+          cat > out/actions.json <<'JSON'
+          [
+            {"action":"actions/checkout","sha":"9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0","release":"v7.0.0","purpose":"checkout"},
+            {"action":"actions/setup-node","sha":"820762786026740c76f36085b0efc47a31fe5020","release":"v7.0.0","purpose":"node-toolchain"},
+            {"action":"actions/download-artifact","sha":"37930b1c2abaa49bbe596cd826c3c89aef350131","release":"v7.0.0","purpose":"download-artifact"},
+            {"action":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","release":"v7.0.1","purpose":"upload-artifact"},
+            {"action":"anchore/sbom-action","sha":"e22c389904149dbc22b58101806040fa8d37a610","release":"v0.24.0","purpose":"sbom-cyclonedx"},
+            {"action":"aquasecurity/trivy-action","sha":"ed142fd0673e97e23eac54620cfb913e5ce36c25","release":"v0.36.0","purpose":"trivy-scan"}
+          ]
+          JSON
+
+      - name: SBOM CycloneDX JSON
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: ${{ env.IMAGE_TAG }}
+          format: cyclonedx-json
+          output-file: out/${{ env.SBOM_FILE }}
+          upload-artifact: false
+
+      - name: Trivy JSON (bloqueia HIGH e CRITICAL)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_TAG }}
+          format: json
+          output: out/${{ env.TRIVY_JSON }}
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
+      - name: Trivy resumo legível (formatação, não bloqueante)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_TAG }}
+          format: table
+          output: out/${{ env.TRIVY_SUMMARY }}
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+
+      - name: Empacotar Docker archive + OCI archive + SHA256SUMS
+        run: bash workers/fiscal-xsd/ci/supply-chain.sh package
+
+      - name: Upload artifact intermediário (privado)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.INTERMEDIATE_ARTIFACT }}
+          path: |
+            out/${{ env.DOCKER_ARCHIVE }}
+            out/${{ env.OCI_ARCHIVE }}
+            out/${{ env.SBOM_FILE }}
+            out/${{ env.TRIVY_JSON }}
+            out/${{ env.TRIVY_SUMMARY }}
+            out/SHA256SUMS
+            out/image-metadata.json
+            out/build-summary.txt
+            out/actions.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload diagnóstico em falha (não aprovado)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fiscal-xsd-worker-supply-chain-UNAPPROVED-${{ github.sha }}
+          path: |
+            out/${{ env.SBOM_FILE }}
+            out/${{ env.TRIVY_JSON }}
+            out/${{ env.TRIVY_SUMMARY }}
+            out/build-summary.txt
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Cleanup
+        if: always()
+        run: bash workers/fiscal-xsd/ci/supply-chain.sh cleanup
+
+  verify-offline:
+    name: Verificação offline em runner novo
+    runs-on: ubuntu-24.04
+    needs: build-connected
+    timeout-minutes: 30
+    env:
+      RUNNER_IMAGE: ubuntu-24.04
+      WORKER_URL: http://worker.internal:8080
+    steps:
+      - name: Checkout (harness de teste + script + manifest)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20.20.2
+          cache: npm
+
+      - name: Instalar dependências do harness
+        run: npm ci --ignore-scripts
+
+      - name: Prisma generate (dependência do harness)
+        run: npx prisma generate
+
+      - name: Reverificar hashes dos artefatos XSD
+        run: npm run fiscal:xsd:verify-hashes
+
+      - name: Baixar artifact intermediário (bundle)
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ${{ env.INTERMEDIATE_ARTIFACT }}
+          path: out
+
+      - name: Verificação offline (load, isolamento, zero egress, positivo + negativos)
+        run: bash workers/fiscal-xsd/ci/supply-chain.sh verify-offline
+
+      - name: Prova unitária do timeout fail-closed (determinística)
+        run: npm run test:fiscal-xsd:unit
+
+      - name: Gerar lock de supply chain
+        run: bash workers/fiscal-xsd/ci/supply-chain.sh generate-lock
+
+      - name: Upload artifact final aprovado (privado)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ env.FINAL_ARTIFACT }}
+          path: |
+            out/${{ env.DOCKER_ARCHIVE }}
+            out/${{ env.OCI_ARCHIVE }}
+            out/${{ env.SBOM_FILE }}
+            out/${{ env.TRIVY_JSON }}
+            out/SHA256SUMS
+            out/supply-chain.lock.generated.json
+            out/runtime-report.json
+            out/xsd-test-results.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Diagnóstico do worker em falha
+        if: failure()
+        run: docker logs fiscal-xsd-worker-005a || true
+
+      - name: Cleanup
+        if: always()
+        run: bash workers/fiscal-xsd/ci/supply-chain.sh cleanup
