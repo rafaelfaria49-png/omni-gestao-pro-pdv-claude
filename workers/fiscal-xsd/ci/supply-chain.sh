@@ -52,6 +52,7 @@ LIBXML2_SOURCE_SHA256="78262a6e7ac170d6528ebfe2efccdf220191a5af6a6cd61ea4a9a9a50
 LIBXML2_PATCH_URL="https://github.com/GNOME/libxml2/commit/d3352554e4c1f052b914cda7b415d06b7eab5dfa.patch"
 LIBXML2_PATCH_SHA256="ab319bb46b2aeb5f4311a12676b6b3eed1d18fb47721ae6274a849d31b96fb7c"
 LIBGNUTLS_VERSION="3.7.9-2+deb12u7"
+LIBCAP2_VERSION="1:2.66-4+deb12u3"
 XSD_PACKAGE="PL_010e_v1.02"
 XSD_LAYOUT="4.00"
 XSD_MODEL="65"
@@ -90,6 +91,70 @@ assert_xmllint_libxml_version_code() {
   [[ "${reported}" == "${expected}" ]] \
     || die "xmllint reportou LIBXML_VERSION=${reported}; esperado ${expected} (libxml2 ${LIBXML2_VERSION})."
   printf 'LIBXML_VERSION canônico confirmado: %s (libxml2 %s)\n' "${reported}" "${LIBXML2_VERSION}"
+}
+
+# Prova fail-closed de que o runtime foi endurecido (GOAL 005A FIX): binário node
+# preservado, entrypoint intacto, gerenciadores de pacote REMOVIDOS (npm/npx/yarn/
+# yarnpkg/corepack, diretórios globais e qualquer package.json sob o npm global) e os
+# pacotes Debian corrigidos em versão exata (libcap2 CVE-2026-4878; libgnutls30 pinado).
+# Qualquer ferramenta remanescente ou versão divergente ABORTA o pipeline — nunca vira
+# warning. Executa apenas inspeções read-only na própria imagem, como usuário 10001.
+assert_runtime_hardened() {
+  local node_version entrypoint libcap2_ver libgnutls_ver
+
+  node_version="$(
+    docker run --rm --entrypoint node "${IMAGE_TAG}" --version 2>&1
+  )" || die "Runtime não executa 'node --version' — binário node ausente/quebrado."
+  printf 'node runtime preservado: %s\n' "${node_version}"
+
+  entrypoint="$(docker image inspect "${IMAGE_TAG}" --format '{{json .Config.Entrypoint}}')"
+  printf '%s\n' "${entrypoint}" | grep --fixed-strings 'server.mjs' >/dev/null \
+    || die "Entrypoint do worker inesperado (esperado node .../server.mjs): ${entrypoint}"
+
+  # Ausência dos gerenciadores de pacote (comando no PATH, símbolo em disco e diretórios
+  # globais) e de qualquer package.json remanescente sob o npm global removido.
+  docker run --rm --entrypoint sh "${IMAGE_TAG}" -c '
+    set -eu
+    fail=0
+    for tool in npm npx yarn yarnpkg corepack; do
+      if command -v "$tool" >/dev/null 2>&1; then
+        echo "PRESENTE: comando $tool ainda resolve no PATH" >&2
+        fail=1
+      fi
+    done
+    for path in \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/yarn \
+      /usr/local/bin/yarnpkg /usr/local/bin/corepack \
+      /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack; do
+      if [ -e "$path" ]; then
+        echo "PRESENTE: caminho $path ainda existe" >&2
+        fail=1
+      fi
+    done
+    if [ -d /usr/local/lib/node_modules ] \
+       && find /usr/local/lib/node_modules -name package.json -print -quit 2>/dev/null | grep -q .; then
+      echo "PRESENTE: package.json remanescente sob o npm global" >&2
+      fail=1
+    fi
+    command -v node >/dev/null 2>&1 || { echo "AUSENTE: node no runtime" >&2; fail=1; }
+    exit "$fail"
+  ' || die "Runtime ainda contém gerenciador de pacote (npm/npx/yarn/yarnpkg/corepack) ou package.json global remanescente."
+  printf 'gerenciadores de pacote ausentes: npm, npx, yarn, yarnpkg, corepack\n'
+
+  # Pacotes Debian corrigidos, versões exatas (fail-closed).
+  libcap2_ver="$(
+    docker run --rm --entrypoint dpkg-query "${IMAGE_TAG}" -W -f='${Version}' libcap2 2>/dev/null
+  )" || die "libcap2 ausente na imagem."
+  test "${libcap2_ver}" = "${LIBCAP2_VERSION}" \
+    || die "libcap2=${libcap2_ver}; esperado ${LIBCAP2_VERSION} (CVE-2026-4878)."
+  printf 'libcap2 confirmado: %s (CVE-2026-4878 corrigido)\n' "${libcap2_ver}"
+
+  libgnutls_ver="$(
+    docker run --rm --entrypoint dpkg-query "${IMAGE_TAG}" -W -f='${Version}' libgnutls30 2>/dev/null
+  )" || die "libgnutls30 ausente na imagem."
+  test "${libgnutls_ver}" = "${LIBGNUTLS_VERSION}" \
+    || die "libgnutls30=${libgnutls_ver}; esperado ${LIBGNUTLS_VERSION} (pin preservado)."
+  printf 'libgnutls30 confirmado: %s (pin preservado)\n' "${libgnutls_ver}"
 }
 
 # Digest determinístico dos insumos reais do build (o que o Dockerfile COPIA),
@@ -204,6 +269,10 @@ mode_inspect() {
   docker image inspect "${IMAGE_TAG}" --format '{{json .Config.Env}}' \
     | grep -Eiq '(secret|token|password|senha|csc|certificad|api[_-]?key)' \
     && die "Env com padrão sensível detectada na imagem." || true
+
+  # Runtime endurecido: node preservado, package managers removidos, libcap2/libgnutls30
+  # corrigidos (fail-closed).
+  assert_runtime_hardened
   endlog
 }
 
@@ -303,6 +372,10 @@ mode_verify_offline() {
     | grep --fixed-strings "${EXPECTED_SCHEMA_MANIFEST_HASH}" || die "Schema manifest divergente na imagem carregada."
   test "$(docker image inspect "${IMAGE_TAG}" --format '{{.Config.User}}')" = "10001:10001" \
     || die "Imagem carregada não roda como 10001:10001."
+
+  # Runtime endurecido também na imagem carregada do archive: node preservado, package
+  # managers removidos, libcap2/libgnutls30 corrigidos (fail-closed).
+  assert_runtime_hardened
   endlog
 
   log "Criar rede sem egress e iniciar worker a partir do archive"
