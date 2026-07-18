@@ -67,6 +67,31 @@ sha256_of() { sha256sum "$1" | awk '{print $1}'; }
 
 ensure_out() { mkdir -p "${OUT_DIR}"; }
 
+# Valida a saída de `xmllint --version` contra o código canônico LIBXML_VERSION.
+# libxml2 2.15.3 => 21503 (major*10000 + minor*100 + patch).
+# Independente de idioma, acentuação, capitalização e de "libXML" vs "libxml2".
+# Não aceita a forma semântica "2.15.3" no lugar do código; exige exatamente 21503.
+assert_xmllint_libxml_version_code() {
+  local version_out="$1"
+  local expected="${EXPECTED_LIBXML_GATE}"
+  local first_line codes unique count reported
+
+  first_line="$(printf '%s\n' "${version_out}" | head -n 1)"
+  codes="$(printf '%s\n' "${first_line}" | grep -oE '[0-9]{5}' || true)"
+  if [[ -z "${codes}" ]]; then
+    die "xmllint reportou LIBXML_VERSION=ausente; esperado ${expected} (libxml2 ${LIBXML2_VERSION})."
+  fi
+  unique="$(printf '%s\n' "${codes}" | sort -u)"
+  count="$(printf '%s\n' "${unique}" | grep -c . || true)"
+  if [[ "${count}" -ne 1 ]]; then
+    die "xmllint reportou códigos LIBXML_VERSION conflitantes ($(printf '%s' "${unique}" | tr '\n' ' ')); esperado exatamente ${expected}."
+  fi
+  reported="$(printf '%s\n' "${unique}")"
+  [[ "${reported}" == "${expected}" ]] \
+    || die "xmllint reportou LIBXML_VERSION=${reported}; esperado ${expected} (libxml2 ${LIBXML2_VERSION})."
+  printf 'LIBXML_VERSION canônico confirmado: %s (libxml2 %s)\n' "${reported}" "${LIBXML2_VERSION}"
+}
+
 # Digest determinístico dos insumos reais do build (o que o Dockerfile COPIA),
 # via git ls-files -s (modo + blob sha + path), estável e content-addressed.
 build_context_digest() {
@@ -148,12 +173,15 @@ mode_build() {
 mode_inspect() {
   log "Inspeção da imagem construída (xmllint, versão, gate, schemas, isolamento)"
   local version_out user entrypoint manifest_hash_line
-  version_out="$(docker run --rm --entrypoint /opt/fiscal-xsd/bin/xmllint "${IMAGE_TAG}" --version 2>&1)"
-  echo "${version_out}"
-  echo "${version_out}" | grep --fixed-strings "${EXPECTED_LIBXML_GATE}" \
-    || die "Gate libxml ${EXPECTED_LIBXML_GATE} não confirmado."
-  echo "${version_out}" | grep --fixed-strings "${LIBXML2_VERSION}" \
-    || die "xmllint não reportou libxml2 ${LIBXML2_VERSION}."
+  # LC_ALL=C reduz variação de idioma; o gate ainda extrai o código numérico
+  # (21503) para não depender de "Usando"/"Using" nem de "libXML"/"libxml2".
+  version_out="$(
+    docker run --rm -e LC_ALL=C \
+      --entrypoint /opt/fiscal-xsd/bin/xmllint \
+      "${IMAGE_TAG}" --version 2>&1
+  )" || die "Falha ao executar /opt/fiscal-xsd/bin/xmllint --version na imagem ${IMAGE_TAG}."
+  printf '%s\n' "${version_out}"
+  assert_xmllint_libxml_version_code "${version_out}"
 
   user="$(docker image inspect "${IMAGE_TAG}" --format '{{.Config.User}}')"
   test "${user}" = "10001:10001" || die "Usuário runtime não é 10001:10001 (obtido: ${user})."
@@ -263,8 +291,14 @@ mode_verify_offline() {
   endlog
 
   log "Conferir xmllint/libxml2 e schema manifest na imagem carregada"
-  docker run --rm --entrypoint /opt/fiscal-xsd/bin/xmllint "${IMAGE_TAG}" --version 2>&1 \
-    | grep --fixed-strings "${EXPECTED_LIBXML_GATE}" || die "Gate libxml ausente na imagem carregada."
+  local loaded_version_out
+  loaded_version_out="$(
+    docker run --rm -e LC_ALL=C \
+      --entrypoint /opt/fiscal-xsd/bin/xmllint \
+      "${IMAGE_TAG}" --version 2>&1
+  )" || die "Falha ao executar xmllint --version na imagem carregada ${IMAGE_TAG}."
+  printf '%s\n' "${loaded_version_out}"
+  assert_xmllint_libxml_version_code "${loaded_version_out}"
   docker run --rm --entrypoint cat "${IMAGE_TAG}" /opt/fiscal-xsd/manifest/manifest.sha256 \
     | grep --fixed-strings "${EXPECTED_SCHEMA_MANIFEST_HASH}" || die "Schema manifest divergente na imagem carregada."
   test "$(docker image inspect "${IMAGE_TAG}" --format '{{.Config.User}}')" = "10001:10001" \
